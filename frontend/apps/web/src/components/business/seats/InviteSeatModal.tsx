@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
@@ -38,7 +39,12 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  // On document.body: AppShell's <main> is its own stacking context (relative z-0), so from inside it the
+  // backdrop could not cover the header and sidebar, which stayed clickable behind the dialog.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!open || !mounted) return null;
 
   const handleSubmit = async () => {
     if (!form.display_name.trim()) {
@@ -75,7 +81,7 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
     }
   };
 
-  return (
+  return createPortal(
     <>
       <div className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
       <div className="fixed inset-0 z-[71] flex items-center justify-center p-4">
@@ -161,6 +167,7 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }

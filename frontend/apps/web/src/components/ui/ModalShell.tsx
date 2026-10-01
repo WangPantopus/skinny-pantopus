@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useCallback, useId, type ReactNode } from 'react';
+import { useEffect, useCallback, useId, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
 
 interface ModalShellProps {
@@ -74,10 +75,16 @@ export default function ModalShell({
     };
   }, [open]);
 
-  if (!open) return null;
+  // Rendered on document.body, above the header (z-50) and sidebar (z-40, z-[60] hover-expanded) like SlidePanel:
+  // AppShell's <main> is its own stacking context (relative z-0), so from inside it the backdrop could not cover
+  // them, and they stayed clickable behind the dialog.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  if (!open || !mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
@@ -162,6 +169,7 @@ export default function ModalShell({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

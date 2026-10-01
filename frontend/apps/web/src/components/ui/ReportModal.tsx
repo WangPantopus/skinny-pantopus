@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Flag, X, Ban, Users, ShieldAlert, AlertTriangle, ShieldCheck, MessageCircle } from 'lucide-react';
 
 const REPORT_REASONS = [
@@ -61,7 +62,12 @@ export default function ReportModal({ open, onClose, onSubmit, entityType }: Rep
     return () => document.removeEventListener('keydown', onKey);
   }, [open, handleClose]);
 
-  if (!open) return null;
+  // On document.body: AppShell's <main> is its own stacking context (relative z-0), so from inside it the
+  // backdrop could not cover the header and sidebar, which stayed clickable behind the dialog.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!open || !mounted) return null;
 
   const label = ENTITY_LABELS[entityType] || 'Content';
   const reasons = entityType === 'listing' ? LISTING_REPORT_REASONS : REPORT_REASONS;
@@ -81,8 +87,8 @@ export default function ReportModal({ open, onClose, onSubmit, entityType }: Rep
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={handleClose}>
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={handleClose}>
       <div
         className="bg-app-surface rounded-2xl max-w-md w-full shadow-xl"
         role="dialog"
@@ -160,6 +166,7 @@ export default function ReportModal({ open, onClose, onSubmit, entityType }: Rep
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

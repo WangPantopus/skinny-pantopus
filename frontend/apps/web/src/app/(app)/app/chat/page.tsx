@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useId, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -507,7 +508,9 @@ export default function ChatListPage() {
         )}
       </main>
 
-      {newChatOpen && (
+      {/* On document.body: AppShell's <main> is its own stacking context, so from inside it this dialog's backdrop
+          could not cover the header and sidebar, which stayed clickable behind it. */}
+      {newChatOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[1000] bg-black/40 flex items-start justify-center p-4 sm:p-6">
           <div
             className="w-full max-w-lg rounded-2xl border border-app bg-surface shadow-2xl mt-8"
@@ -602,7 +605,8 @@ export default function ChatListPage() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
