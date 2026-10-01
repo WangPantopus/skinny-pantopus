@@ -21,11 +21,13 @@ function useDebounced<T>(value: T, delayMs: number) {
 }
 
 function AddressAutocomplete({
+  id,
   value,
   onChange,
   onSelectNormalized,
   placeholder = '123 Main St',
 }: {
+  id?: string;
   value: string;
   onChange: (v: string) => void;
   onSelectNormalized: (n: NormalizedAddress) => void;
@@ -85,6 +87,7 @@ function AddressAutocomplete({
   return (
     <div className="relative">
       <input
+        id={id}
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
@@ -185,8 +188,9 @@ export default function EditProfilePage() {
 
             <div className="grid md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">First Name</label>
+                <label htmlFor="profile-first-name" className="block text-sm font-medium text-app-strong mb-2">First Name</label>
                 <input
+                  id="profile-first-name"
                   type="text"
                   value={form.firstName}
                   onChange={(e) => setField('firstName', e.target.value)}
@@ -198,8 +202,9 @@ export default function EditProfilePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">Middle Name</label>
+                <label htmlFor="profile-middle-name" className="block text-sm font-medium text-app-strong mb-2">Middle Name</label>
                 <input
+                  id="profile-middle-name"
                   type="text"
                   value={form.middleName}
                   onChange={(e) => setField('middleName', e.target.value)}
@@ -212,8 +217,9 @@ export default function EditProfilePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">Last Name</label>
+                <label htmlFor="profile-last-name" className="block text-sm font-medium text-app-strong mb-2">Last Name</label>
                 <input
+                  id="profile-last-name"
                   type="text"
                   value={form.lastName}
                   onChange={(e) => setField('lastName', e.target.value)}
@@ -226,8 +232,9 @@ export default function EditProfilePage() {
             </div>
 
             <div className="mt-4">
-              <label className="block text-sm font-medium text-app-strong mb-2">Date of Birth</label>
+              <label htmlFor="profile-date-of-birth" className="block text-sm font-medium text-app-strong mb-2">Date of Birth</label>
               <input
+                id="profile-date-of-birth"
                 type="date"
                 value={form.dateOfBirth}
                 onChange={(e) => setField('dateOfBirth', e.target.value)}
@@ -239,8 +246,9 @@ export default function EditProfilePage() {
             </div>
 
             <div className="mt-4">
-              <label className="block text-sm font-medium text-app-strong mb-2">Tagline</label>
+              <label htmlFor="profile-tagline" className="block text-sm font-medium text-app-strong mb-2">Tagline</label>
               <input
+                id="profile-tagline"
                 type="text"
                 value={form.tagline}
                 onChange={(e) => setField('tagline', e.target.value)}
@@ -252,8 +260,9 @@ export default function EditProfilePage() {
             </div>
 
             <div className="mt-4">
-              <label className="block text-sm font-medium text-app-strong mb-2">Bio</label>
+              <label htmlFor="profile-bio" className="block text-sm font-medium text-app-strong mb-2">Bio</label>
               <textarea
+                id="profile-bio"
                 value={form.bio}
                 onChange={(e) => setField('bio', e.target.value)}
                 aria-invalid={fieldErrors.bio ? true : undefined}
@@ -272,8 +281,9 @@ export default function EditProfilePage() {
             <h2 className="text-lg font-semibold text-app mb-4">Location</h2>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-app-strong mb-2">Street Address</label>
+              <label htmlFor="profile-street-address" className="block text-sm font-medium text-app-strong mb-2">Street Address</label>
               <AddressAutocomplete
+                id="profile-street-address"
                 value={form.address}
                 onChange={(v) => {
                   setField('address', v);
@@ -314,8 +324,9 @@ export default function EditProfilePage() {
 
             <div className="grid md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">City</label>
+                <label htmlFor="profile-city" className="block text-sm font-medium text-app-strong mb-2">City</label>
                 <input
+                  id="profile-city"
                   type="text"
                   value={form.city}
                   onChange={(e) => setField('city', e.target.value)}
@@ -327,8 +338,9 @@ export default function EditProfilePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">State</label>
+                <label htmlFor="profile-state" className="block text-sm font-medium text-app-strong mb-2">State</label>
                 <select
+                  id="profile-state"
                   value={form.state}
                   onChange={(e) => setField('state', e.target.value.toUpperCase())}
                   aria-invalid={fieldErrors.state ? true : undefined}
@@ -345,8 +357,9 @@ export default function EditProfilePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">Zip</label>
+                <label htmlFor="profile-zip" className="block text-sm font-medium text-app-strong mb-2">Zip</label>
                 <input
+                  id="profile-zip"
                   type="text"
                   value={form.zipcode}
                   onChange={(e) => setField('zipcode', e.target.value)}
@@ -364,8 +377,9 @@ export default function EditProfilePage() {
             <h2 className="text-lg font-semibold text-app mb-4">Contact Information</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">Phone Number</label>
+                <label htmlFor="profile-phone-number" className="block text-sm font-medium text-app-strong mb-2">Phone Number</label>
                 <input
+                  id="profile-phone-number"
                   type="tel"
                   value={form.phoneNumber}
                   onChange={(e) => setField('phoneNumber', e.target.value)}
@@ -380,8 +394,9 @@ export default function EditProfilePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">Website</label>
+                <label htmlFor="profile-website" className="block text-sm font-medium text-app-strong mb-2">Website</label>
                 <input
+                  id="profile-website"
                   type="url"
                   value={form.website}
                   onChange={(e) => setField('website', e.target.value)}
@@ -410,6 +425,7 @@ export default function EditProfilePage() {
                   }
                 }}
                 className="flex-1 px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-app bg-surface"
+                aria-label="Add a skill"
                 placeholder="Add a skill..."
               />
               <button
@@ -447,8 +463,9 @@ export default function EditProfilePage() {
             <h2 className="text-lg font-semibold text-app mb-4">Social Media</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">LinkedIn</label>
+                <label htmlFor="profile-linkedin" className="block text-sm font-medium text-app-strong mb-2">LinkedIn</label>
                 <input
+                  id="profile-linkedin"
                   type="url"
                   value={form.linkedin}
                   onChange={(e) => setField('linkedin', e.target.value)}
@@ -459,8 +476,9 @@ export default function EditProfilePage() {
                 {fieldErrors.linkedin ? <p className={fieldErrorClass}>{fieldErrors.linkedin}</p> : null}
               </div>
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">Twitter</label>
+                <label htmlFor="profile-twitter" className="block text-sm font-medium text-app-strong mb-2">Twitter</label>
                 <input
+                  id="profile-twitter"
                   type="url"
                   value={form.twitter}
                   onChange={(e) => setField('twitter', e.target.value)}
@@ -471,8 +489,9 @@ export default function EditProfilePage() {
                 {fieldErrors.twitter ? <p className={fieldErrorClass}>{fieldErrors.twitter}</p> : null}
               </div>
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">Instagram</label>
+                <label htmlFor="profile-instagram" className="block text-sm font-medium text-app-strong mb-2">Instagram</label>
                 <input
+                  id="profile-instagram"
                   type="url"
                   value={form.instagram}
                   onChange={(e) => setField('instagram', e.target.value)}
@@ -483,8 +502,9 @@ export default function EditProfilePage() {
                 {fieldErrors.instagram ? <p className={fieldErrorClass}>{fieldErrors.instagram}</p> : null}
               </div>
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">Facebook</label>
+                <label htmlFor="profile-facebook" className="block text-sm font-medium text-app-strong mb-2">Facebook</label>
                 <input
+                  id="profile-facebook"
                   type="url"
                   value={form.facebook}
                   onChange={(e) => setField('facebook', e.target.value)}
