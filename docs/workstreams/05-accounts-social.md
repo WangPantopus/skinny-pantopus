@@ -9,6 +9,24 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1243 (b267), #1244 (b268), #1251 (b269) merged; #1238 sealed (devices pass); #1253 web profile Connect in CI; landlord findings routed, 2026-10-01T05:56:21Z
+
+- **Merged:**
+  - #1243 (name card, batch 267, master `361f07042`);
+  - #1244 (Discover connect, batch 268, `7a42f1d7a`);
+  - #1251 (crew forms part 2: Legal tab, new crew wizard, location Hours page; batch 269, `a411def0e`).
+- **Sealed and with Stream 1: #1238** (Android View as "Not shown"; seal `5d3c63f2…`).
+  - Devices pass, from Stream 1's `20261001-stream1-android-1238-1242-r1` (TalkBack: "Not shown. Verified neighbor"; a shown badge reads its name only).
+  - Sealed with `seal-pr-explained.sh`: the red unit job is master's Pulse snapshot from #1209.
+- **In CI: #1253** (the web public profile gets Connect, as the apps have it).
+  - Connect / Requested (disabled) / Accept / Connected, with Connections' removal confirmation. It shows only after a successful relationship read, never for a blocked person, the owner or a signed-out viewer.
+  - The full loop passed through the real API between hs12 and hs12b: request 201, Requested persists; accept 200, Connected; Cancel sends nothing; Remove sends the DELETE (200); then Connect.
+  - **Decision:** adding a control under the user's no-approval-gate UX direction, copying the apps' design and copy.
+- **Seen, not changed:** the API's accept creates mutual follows and a block deletes them, but `DELETE /api/relationships/:id` keeps them. Since `followers` visibility maps to connections, the privacy impact looks small. Recorded for a product call.
+- **Routed via Stream 1 to Stream 3:** the landlord portal's "End Lease" (ends the lease and notifies the tenant) and staff "Remove" (failure only console-logged) act in one click with no confirmation.
+- **Handoff:** [NEXT-STREAM5-PROMPT-2026-10-01.md](NEXT-STREAM5-PROMPT-2026-10-01.md) is written. The scan tools are in the kit's `tools/stream5-e2e/` with README notes.
+- **Runtime:** API 18134 on `7a42f1d7a` (receipt 05:45:46Z); web 18131 on `b37d34d09` (#1253's head). No fixtures remain: the run's 2 notifications and 2 follows were removed by exact id, and the state equals the pre-run state.
+
 ## LIVE — #1230 #1234 #1236 merged (batch 266); #1243 (name card) sealed, #1244 (Discover connect) in CI, #1238 (Android) waits for devices; master Android unit test broken by #1209 (Stream 2 re-recording), 2026-10-01T05:24:30Z
 
 - **Merged in batch 266** (PR #1240, master `2abd0edd4`): #1230 (chat Report under the drawer), #1234 (ModalShell semantics), #1236 (five Stream 5 dialogs).
