@@ -167,10 +167,13 @@ export default function HubPage() {
     );
   }
 
-  // Filter setup steps: remove attach_home (has its own CTA card) and complete_profile (has its own card)
-  const filteredSetupSteps = data.setup.steps.filter((s) => s.key !== 'attach_home' && s.key !== 'complete_profile');
-  const setupAllDone = filteredSetupSteps.every((s) => s.done);
+  // Filter setup steps: remove attach_home (has its own CTA card) and complete_profile (has its own card).
+  // While the profile card shows, it lists a missing photo and skills itself, so setup doesn't repeat them.
   const profileCompleteness = data.setup.profileCompleteness;
+  const profileCardShown = !!profileCompleteness && profileCompleteness.score < 100;
+  const filteredSetupSteps = data.setup.steps.filter((s) => s.key !== 'attach_home' && s.key !== 'complete_profile'
+    && !(profileCardShown && (s.key === 'profile_photo' || s.key === 'skills')));
+  const setupAllDone = filteredSetupSteps.every((s) => s.done);
 
   return (
     <div className="min-h-screen bg-app pb-24">
