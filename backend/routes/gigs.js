@@ -5532,6 +5532,35 @@ router.post('/:gigId/remind-worker', verifyToken, async (req, res) => {
         })} UTC.`
       : '';
 
+    // Claim this reminder before sending it (compare-and-set on the timestamp this request read):
+    // of two requests at once, such as a re-send, only one reminds the worker.
+    const sentAt = new Date(nowMs).toISOString();
+    let claim = supabaseAdmin.from('Gig').update({ last_worker_reminder_at: sentAt }).eq('id', gigId);
+    claim = gig.last_worker_reminder_at
+      ? claim.eq('last_worker_reminder_at', gig.last_worker_reminder_at)
+      : claim.is('last_worker_reminder_at', null);
+    const { data: claimed, error: claimErr } = await claim.select('id').maybeSingle();
+    if (claimErr) {
+      logger.error('Remind worker: failed to claim the reminder', { gigId, error: claimErr.message });
+      return res.status(500).json({ error: 'Failed to send reminder right now' });
+    }
+    if (!claimed) {
+      // Another request sent a reminder first (a re-send, or two at once).
+      const { data: current } = await supabaseAdmin
+        .from('Gig')
+        .select('last_worker_reminder_at')
+        .eq('id', gigId)
+        .maybeSingle();
+      const sentMs = current?.last_worker_reminder_at ? Date.parse(current.last_worker_reminder_at) : NaN;
+      return res.status(429).json({
+        error: 'A reminder was already sent recently. Please wait before sending another one.',
+        code: 'gig_start_reminder_rate_limited',
+        ...(Number.isFinite(sentMs)
+          ? { next_allowed_at: new Date(sentMs + GIG_START_REMINDER_COOLDOWN_MS).toISOString() }
+          : {}),
+      });
+    }
+
     const reminder = await createNotification({
       userId: gig.accepted_by,
       type: GIG_START_REMINDER_TYPE,
@@ -5547,22 +5576,12 @@ router.post('/:gigId/remind-worker', verifyToken, async (req, res) => {
     });
 
     if (!reminder) {
+      // Release the claim, so the owner can try again now.
+      await supabaseAdmin.from('Gig')
+        .update({ last_worker_reminder_at: gig.last_worker_reminder_at || null })
+        .eq('id', gigId)
+        .eq('last_worker_reminder_at', sentAt);
       return res.status(500).json({ error: 'Failed to send reminder right now' });
-    }
-
-    const sentAt = new Date(nowMs).toISOString();
-
-    // Persist the reminder timestamp on the Gig row for cooldown tracking
-    const { error: reminderUpdateErr } = await supabaseAdmin
-      .from('Gig')
-      .update({ last_worker_reminder_at: sentAt })
-      .eq('id', gigId);
-
-    if (reminderUpdateErr) {
-      logger.error('Remind worker: failed to persist reminder timestamp', {
-        gigId,
-        error: reminderUpdateErr.message,
-      });
     }
 
     return res.json({
@@ -5631,7 +5650,15 @@ router.post('/:gigId/worker-ack', verifyToken, async (req, res) => {
       worker_ack_updated_at: nowIso,
     };
 
-    const { error: ackUpdateErr } = await supabaseAdmin.from('Gig').update(updatePayload).eq('id', gigId);
+    // When the status changes, the update is conditional on the status this request read: of two
+    // requests at once (such as a re-send), only the one that changes it notifies the owner.
+    let ackUpdate = supabaseAdmin.from('Gig').update(updatePayload).eq('id', gigId);
+    if (statusChanged) {
+      ackUpdate = gig.worker_ack_status == null
+        ? ackUpdate.is('worker_ack_status', null)
+        : ackUpdate.eq('worker_ack_status', gig.worker_ack_status);
+    }
+    const { data: ackRows, error: ackUpdateErr } = await ackUpdate.select('id');
 
     if (ackUpdateErr) {
       logger.error('Worker ack: failed to persist acknowledgement', {
@@ -5641,9 +5668,22 @@ router.post('/:gigId/worker-ack', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to save acknowledgement' });
     }
 
-    // Notify the owner only if the status actually changed
+    const changedHere = statusChanged && (ackRows || []).length > 0;
+    if (statusChanged && !changedHere) {
+      // Another request changed the status first. With this same status it has told the owner already.
+      const { data: current } = await supabaseAdmin
+        .from('Gig')
+        .select('worker_ack_status')
+        .eq('id', gigId)
+        .maybeSingle();
+      if (current?.worker_ack_status !== status) {
+        return res.status(409).json({ error: 'Your update changed meanwhile. Refresh and try again.' });
+      }
+    }
+
+    // Notify the owner only if this request changed the status
     const isLate = status === 'running_late';
-    if (statusChanged) {
+    if (changedHere) {
       const ownerRecipients = await getGigOwnerNotificationRecipients(gig.user_id, workerId);
       if (ownerRecipients.length > 0) {
         const etaText = isLate && eta_minutes ? ` ETA: ~${eta_minutes} min.` : '';
@@ -6014,7 +6054,14 @@ router.post('/:gigId/reschedule', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Too close to the start time to reschedule' });
     }
 
-    const { data: updated, error: updateError } = await supabaseAdmin
+    // A re-sent reschedule (same start) changes nothing and doesn't notify the worker again.
+    if (gig.scheduled_start && new Date(gig.scheduled_start).getTime() === newStart.getTime()) {
+      return res.json({ message: 'Task rescheduled', gig: savedGigReply(gig, true) });
+    }
+
+    // Compare-and-set on the start this request read: of two requests at once, only one moves the
+    // task and notifies the worker.
+    let reschedule = supabaseAdmin
       .from('Gig')
       .update({
         scheduled_start: newStart.toISOString(),
@@ -6023,10 +6070,19 @@ router.post('/:gigId/reschedule', verifyToken, async (req, res) => {
         worker_ack_status: null,
         worker_ack_eta_minutes: null,
       })
-      .eq('id', gigId)
-      .select()
-      .single();
+      .eq('id', gigId);
+    reschedule = gig.scheduled_start
+      ? reschedule.eq('scheduled_start', gig.scheduled_start)
+      : reschedule.is('scheduled_start', null);
+    const { data: updated, error: updateError } = await reschedule.select().maybeSingle();
     if (updateError) throw updateError;
+    if (!updated) {
+      const { data: current } = await supabaseAdmin.from('Gig').select('*').eq('id', gigId).maybeSingle();
+      if (current && current.scheduled_start && new Date(current.scheduled_start).getTime() === newStart.getTime()) {
+        return res.json({ message: 'Task rescheduled', gig: savedGigReply(current, true) });
+      }
+      return res.status(409).json({ error: 'The task was rescheduled meanwhile. Refresh to see the new time.' });
+    }
 
     if (gig.accepted_by) {
       createNotification({
@@ -6342,6 +6398,23 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
 });
 
 /**
+ * A change order this request couldn't answer because it was no longer pending. The same person
+ * giving the same answer (a re-send, or two requests at once) gets the order back with 200, and
+ * only the request that answered it notified anyone; any other answer is a conflict.
+ */
+async function answeredChangeOrder(res, orderId, status, actorColumn, userId) {
+  const { data: current } = await supabaseAdmin
+    .from('GigChangeOrder')
+    .select('*')
+    .eq('id', orderId)
+    .maybeSingle();
+  if (current?.status === status && current[actorColumn] && String(current[actorColumn]) === String(userId)) {
+    return res.json({ change_order: current });
+  }
+  return res.status(409).json({ error: 'This change request was already answered.' });
+}
+
+/**
  * POST /api/gigs/:gigId/change-orders/:orderId/approve
  * Approve a change order (the OTHER party approves).
  */
@@ -6370,6 +6443,10 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
 
     if (!order) return res.status(404).json({ error: 'Change order not found' });
     if (order.status !== 'pending') {
+      // The same reviewer asking again (its reply was lost) gets the order back, with no second notice.
+      if (order.status === 'approved' && order.reviewed_by && String(order.reviewed_by) === String(userId)) {
+        return res.json({ change_order: order });
+      }
       return res.status(400).json({ error: `Change order is already ${order.status}` });
     }
 
@@ -6401,7 +6478,7 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
       return res.status(500).json({ error: 'Failed to approve change order' });
     }
     if (!updated) {
-      return res.status(409).json({ error: 'This change request was already answered.' });
+      return answeredChangeOrder(res, orderId, 'approved', 'reviewed_by', userId);
     }
 
     // Apply price change to gig if applicable. If the price can't be saved, the
@@ -6477,6 +6554,10 @@ router.post('/:gigId/change-orders/:orderId/reject', verifyToken, async (req, re
 
     if (!order) return res.status(404).json({ error: 'Change order not found' });
     if (order.status !== 'pending') {
+      // The same reviewer asking again (its reply was lost) gets the order back, with no second notice.
+      if (order.status === 'rejected' && order.reviewed_by && String(order.reviewed_by) === String(userId)) {
+        return res.json({ change_order: order });
+      }
       return res.status(400).json({ error: `Change order is already ${order.status}` });
     }
 
@@ -6503,11 +6584,16 @@ router.post('/:gigId/change-orders/:orderId/reject', verifyToken, async (req, re
         updated_at: nowIso,
       })
       .eq('id', orderId)
+      // Only a still-pending order: of two requests at once, one answers it and notifies.
+      .eq('status', 'pending')
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return res.status(500).json({ error: 'Failed to reject change order' });
+    }
+    if (!updated) {
+      return answeredChangeOrder(res, orderId, 'rejected', 'reviewed_by', userId);
     }
 
     if (order.requested_by) createNotification({
@@ -6546,6 +6632,10 @@ router.post('/:gigId/change-orders/:orderId/withdraw', verifyToken, async (req, 
 
     if (!order) return res.status(404).json({ error: 'Change order not found' });
     if (order.status !== 'pending') {
+      // The requester asking again (its reply was lost) gets the order back.
+      if (order.status === 'withdrawn' && order.requested_by && String(order.requested_by) === String(userId)) {
+        return res.json({ change_order: order });
+      }
       return res.status(400).json({ error: `Change order is already ${order.status}` });
     }
     if (String(order.requested_by) !== String(userId)) {
@@ -6557,11 +6647,16 @@ router.post('/:gigId/change-orders/:orderId/withdraw', verifyToken, async (req, 
       .from('GigChangeOrder')
       .update({ status: 'withdrawn', updated_at: nowIso })
       .eq('id', orderId)
+      // Only a still-pending order: an approval or rejection made meanwhile stands.
+      .eq('status', 'pending')
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return res.status(500).json({ error: 'Failed to withdraw change order' });
+    }
+    if (!updated) {
+      return answeredChangeOrder(res, orderId, 'withdrawn', 'requested_by', userId);
     }
     emitGigUpdate(req, gigId, 'status-change');
     res.json({ change_order: updated });
@@ -7278,9 +7373,10 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
     const feeFromHold = Boolean(feeReservation && !feeReservation.noHold && !feeReservation.belowMinimum);
     const feeBelowMinimum = !isPoster && noShowFeeCents > 0 && noShowFeeCents < 50;
 
-    // 1) Create the incident record (the worker's report reuses its own). The
-    // poster's incident is written only after its cancel succeeds, so a refused
-    // report leaves no incident behind.
+    // 1) Create the incident record (the worker's report reuses its own). An
+    // incident that no fee reservation wrote is written only after this
+    // request's cancel succeeds, so a refused report, or the loser of two
+    // reports at once, leaves no incident behind.
     const insertIncident = async () => {
       const { data: inserted, error: incidentErr } = await supabaseAdmin
         .from('GigIncident')
@@ -7304,8 +7400,11 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
         .eq('gig_id', gigId).eq('reported_by', userId).eq('type', incidentType)
         .order('created_at', { ascending: true }).limit(1).maybeSingle();
       if (existingErr) return res.status(503).json({ error: 'The no-show report could not be checked. Please retry.' });
-      incident = existing || await insertIncident();
-      if (!incident) return res.status(500).json({ error: 'Failed to report no-show' });
+      incident = existing;
+      if (!incident && (feeReservation || resumingPosterNoShow)) {
+        incident = await insertIncident();
+        if (!incident) return res.status(500).json({ error: 'Failed to report no-show' });
+      }
     }
 
     // 2) Cancel the gig with zone 3 (no-show)

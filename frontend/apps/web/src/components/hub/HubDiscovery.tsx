@@ -86,15 +86,15 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
           <div className="w-2 h-2 rounded-full bg-green-500" />
           <h2 className="text-base font-extrabold text-app-text">Discover</h2>
         </div>
-        {/* Launch cut #6 (Business directory): no business search or business map. */}
-        {launchFeatures.businessDirectory && <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/app/discover')} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+        <div className="flex items-center gap-3">
+          {/* Launch cut #6 (Business directory): no business search. */}
+          {launchFeatures.businessDirectory && <button onClick={() => router.push('/app/discover')} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
             Find Businesses
-          </button>
+          </button>}
           <button onClick={() => router.push('/app/map')} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
             Explore Map
           </button>
-        </div>}
+        </div>
       </div>
 
       {/* Filter tabs */}

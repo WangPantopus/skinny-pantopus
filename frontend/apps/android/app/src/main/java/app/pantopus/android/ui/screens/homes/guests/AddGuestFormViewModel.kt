@@ -22,10 +22,13 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
+import java.util.UUID
 import javax.inject.Inject
 
 /** Nav-arg key for the home id consumed via [SavedStateHandle]. */
 const val ADD_GUEST_HOME_ID_KEY = "homeId"
+
+private const val REQUEST_ID_KEY = "guestPassRequestId"
 
 /** Tone + text payload the form turns into a transient toast. */
 data class GuestToast(
@@ -60,6 +63,11 @@ data class AddGuestUiState(
      * the OS share sheet. Cleared by `acknowledgeShare()`.
      */
     val createdShare: GuestPassShare? = null,
+    /**
+     * Set once this form has created its pass. Create stays off afterwards: a repeat with this
+     * form's request id would rotate the pass's token and break the link being shared.
+     */
+    val didCreate: Boolean = false,
 ) {
     val durationOptions: List<ChipPickerOption> get() = AddGuestSampleData.durationOptions
     val sectionOptions: List<ChipPickerOption> get() = AddGuestSampleData.sectionOptions
@@ -76,6 +84,9 @@ data class AddGuestUiState(
                 isGuestContactValid(contactField.value) &&
                 duration != null &&
                 selectedSections.isNotEmpty()
+
+    /** Create is offered until this form's pass exists. */
+    val canSubmit: Boolean get() = isValid && !didCreate
 
     /** Any input touched — drives the dirty-close confirm in `FormShell`. */
     val isDirty: Boolean
@@ -134,6 +145,13 @@ class AddGuestFormViewModel
         private val homesRepository: HomesRepository,
     ) : ViewModel() {
         private val homeId: String = savedStateHandle.get<String>(ADD_GUEST_HOME_ID_KEY) ?: ""
+
+        // One create intent per form, kept across process restore: a retry after an error reuses it,
+        // so the server updates that intent's pass instead of minting a second link.
+        private val requestId: String =
+            savedStateHandle.get<String>(REQUEST_ID_KEY) ?: UUID.randomUUID().toString().also {
+                savedStateHandle[REQUEST_ID_KEY] = it
+            }
 
         // The strip names the Home this pass is for, from `GET /api/homes/:id`;
         // it stays hidden until that loads (and if it fails).
@@ -216,7 +234,7 @@ class AddGuestFormViewModel
 
         fun submit() {
             val current = _state.value
-            if (!current.isValid || current.isSaving) return
+            if (!current.isValid || current.isSaving || current.didCreate) return
             _state.update { it.copy(isSaving = true) }
             viewModelScope.launch {
                 val window = guestPassWindow(current)
@@ -228,6 +246,7 @@ class AddGuestFormViewModel
                         startAt = window.startAt,
                         endAt = window.endAt,
                         includedSections = current.sectionOptions.map { it.id }.filter { it in current.selectedSections },
+                        requestId = requestId,
                     )
                 when (val result = guestPassesRepo.create(homeId, request)) {
                     is NetworkResult.Success -> {
@@ -248,6 +267,7 @@ class AddGuestFormViewModel
                                 isSaving = false,
                                 toast = GuestToast("Pass created for $name", isError = false),
                                 createdShare = share,
+                                didCreate = true,
                             )
                         }
                     }
