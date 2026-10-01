@@ -26,8 +26,8 @@ export interface HeroCardProps {
   variant?: HeroVariant;
   /** The main reassuring / urgent line. */
   title: string;
-  /** Top-right status chip. */
-  chip: { label: string; icon?: LucideIcon };
+  /** Top-right status chip. `neutral` when the card can't vouch for the day (e.g. alerts weren't checked). */
+  chip: { label: string; icon?: LucideIcon; tone?: 'neutral' };
   /** Large glyph beside the title. */
   mainIcon: LucideIcon;
   nudge?: HeroNudge;
@@ -59,7 +59,7 @@ export default function HeroCard({ variant = 'allclear', title, chip, mainIcon: 
         <span className="text-[11px] font-bold uppercase tracking-[0.07em] text-app-text-secondary">
           Today&apos;s pulse
         </span>
-        <Chip label={chip.label} variant={alert ? 'warning' : 'success'} icon={chip.icon} />
+        <Chip label={chip.label} variant={chip.tone ?? (alert ? 'warning' : 'success')} icon={chip.icon} />
       </div>
 
       {onOpen ? (
