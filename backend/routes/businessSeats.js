@@ -28,6 +28,7 @@ const verifyToken = require('../middleware/verifyToken');
 const requireBusinessSeat = require('../middleware/requireBusinessSeat');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
+const { escapeIlike } = require('../utils/escapeIlike');
 const {
   getSeatForUser,
   getBusinessSeats,
@@ -512,25 +513,79 @@ router.post('/:businessId/seats/invite', verifyToken, requireBusinessSeat('team.
       return res.status(403).json({ error: 'Only the owner can invite another owner' });
     }
 
-    // Check if there's already a pending invite for this email at this business
-    const { data: existingInvite } = await supabaseAdmin
-      .from('BusinessSeat')
-      .select('id, invite_status')
-      .eq('business_user_id', businessId)
-      .eq('invite_email', invite_email)
-      .eq('invite_status', 'pending')
-      .maybeSingle();
+    // Invite expires in 14 days — AUTH-1.6
+    const inviteExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
-    if (existingInvite) {
-      return res.status(409).json({ error: 'A pending invite already exists for this email' });
-    }
+    // The newest pending invite for this email at this business, matched without regard to case as accepting
+    // one is. limit(1): simultaneous invites could leave several, and a one-row read would then let another in.
+    const findPendingInvite = async () => {
+      const { data, error } = await supabaseAdmin
+        .from('BusinessSeat')
+        .select('id, invited_by_seat_id, invite_token_hash')
+        .eq('business_user_id', businessId)
+        .ilike('invite_email', escapeIlike(invite_email))
+        .eq('invite_status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return data?.[0] || null;
+    };
+
+    // The same inviter inviting the same email again (a retry after a lost reply, or sending it again) renews that
+    // invite: a new link with these details and a fresh expiry. Another teammate's invite stays as it is, so the
+    // link they shared keeps working. The update is conditional on the link it read, so of renews at once one wins
+    // and the others renew again (up to three tries each).
+    const renewOrRefuse = async (existing) => {
+      let current = existing;
+      for (let attempt = 0; attempt < 3 && current; attempt += 1) {
+        if (current.invited_by_seat_id !== callerSeatId) {
+          return res.status(409).json({ error: 'A pending invite already exists for this email' });
+        }
+        const renewal = generateInviteToken();
+        const { data: renewed, error: renewErr } = await supabaseAdmin
+          .from('BusinessSeat')
+          .update({
+            display_name,
+            role_base,
+            contact_method: contact_method || null,
+            notes: notes || null,
+            invite_token_hash: renewal.hash,
+            invite_expires_at: inviteExpiresAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', current.id)
+          .eq('invite_status', 'pending')
+          .eq('invite_token_hash', current.invite_token_hash)
+          .select(SEAT_LIST);
+        if (renewErr) throw renewErr;
+        if (renewed && renewed.length > 0) {
+          await writeSeatAuditLog(
+            businessId,
+            callerSeatId,
+            'renew_invite',
+            'BusinessSeat',
+            renewed[0].id,
+            { display_name, role_base, invite_email },
+          );
+          return res.status(200).json({
+            message: 'Invite renewed',
+            seat: renewed[0],
+            invite_token: renewal.token, // the new link; the previous one no longer works
+            renewed: true,
+          });
+        }
+        current = await findPendingInvite();
+      }
+      return res.status(409).json({ error: 'This invite just changed. Refresh and try again.' });
+    };
+
+    const existingInvite = await findPendingInvite();
+    if (existingInvite) return await renewOrRefuse(existingInvite);
 
     // Generate token
     const { token, hash } = generateInviteToken();
 
-    // Create the seat (invite expires in 14 days — AUTH-1.6)
-    const inviteExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-
+    // Create the seat
     const { data: newSeat, error: insertErr } = await supabaseAdmin
       .from('BusinessSeat')
       .insert({
@@ -548,6 +603,11 @@ router.post('/:businessId/seats/invite', verifyToken, requireBusinessSeat('team.
       .select(SEAT_LIST)
       .single();
 
+    if (insertErr?.code === '23505') {
+      // A simultaneous invite for this email was created first (one pending invite per crew and email).
+      const raced = await findPendingInvite();
+      if (raced) return await renewOrRefuse(raced);
+    }
     if (insertErr) {
       logger.error('Error creating seat invite', { error: insertErr.message, businessId });
       return res.status(500).json({ error: 'Failed to create invite' });
