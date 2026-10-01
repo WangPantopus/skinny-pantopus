@@ -150,7 +150,9 @@ public struct PulseComposeView: View {
                 // Hold the success toast briefly so the user sees it.
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 onPosted(postId)
-                closeCompose()
+                // A host that owns dismissal closes the composer in onPosted; calling
+                // onCancel as well would pop the screen beneath it too.
+                if managesDismiss { dismiss() }
             }
         }
     }
