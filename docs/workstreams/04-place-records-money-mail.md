@@ -365,6 +365,13 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T11:10Z — Drift triage of Stream 5's rescan (`20261001-stream5-drift-rescan-r1`), routed by Stream 1: 15 candidates, no change.**
+  - **`public.js`, 8 hits:** real unknown columns in `GET /api/public/gigs|listings|posts/:id`, but the routes are dead.
+    - The web share pages use `/api/gigs|listings|posts/:id` (`lib/publicShare.ts`), and nothing else references them.
+    - Already recorded as dead in `docs/workstreams/README.md`.
+  - **`mailboxV2Phase3.js`, 7 hits:** all launch-cut mail extras (cut #8), so left for the user's flags. They are the
+    mailbox map pin, theme/stamp apply, and Mail Memory (on-this-day, year, dismiss).
+
 - **2026-10-01T11:00Z — [#1317](https://github.com/WangPantopus/skinny-pantopus/pull/1317) merged in batch 288 ([#1319](https://github.com/WangPantopus/skinny-pantopus/pull/1319), 10:58:17Z; master `cf62c83c4`). No Stream 4 PRs are open.**
   - **The created_at-only offset-paging finding, as Stream 1 routed it:**
     - `supportTrains.js` goes to Stream 1;
