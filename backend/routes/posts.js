@@ -845,27 +845,7 @@ router.post('/precheck', verifyToken, async (req, res) => {
     }
 
     // 3. Visitor post awareness
-    let isVisitor = false;
-    if (latitude && longitude) {
-      const { data: userHome } = await supabaseAdmin
-        .from('HomeOccupancy')
-        .select('home:home_id(location)')
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (userHome?.home?.location) {
-        const homeLat = userHome.home.location.coordinates
-          ? userHome.home.location.coordinates[1] : null;
-        const homeLon = userHome.home.location.coordinates
-          ? userHome.home.location.coordinates[0] : null;
-        if (homeLat != null && homeLon != null) {
-          const latDiff = Math.abs(parseFloat(latitude) - homeLat);
-          const lonDiff = Math.abs(parseFloat(longitude) - homeLon);
-          isVisitor = latDiff > 0.5 || lonDiff > 0.5; // ~35 miles
-        }
-      }
-    }
+    const isVisitor = latitude && longitude ? await isVisitorAt(userId, latitude, longitude) : false;
 
     if (isVisitor && surface === 'place') {
       suggestions.push({
@@ -926,6 +906,31 @@ function resolveHomeCoordinates(home) {
   const parsed = parsePostGISPoint(home.location);
   if (parsed) return { latitude: parsed.latitude, longitude: parsed.longitude };
   return { latitude: null, longitude: null };
+}
+
+// A poster is a visitor when every Home of their household is more than ~35 miles
+// (0.5° of latitude or longitude) from where they post; with no such Home they aren't one.
+// The household is the one shared rule (getAccessibleHomeIds: trusted, unexpired occupancies,
+// never a pending claim that anyone can file on any Home; fails closed).
+// Home.location arrives as WKB hex, so it goes through parsePostGISPoint.
+async function isVisitorAt(userId, latitude, longitude) {
+  const lat = parseFloat(latitude);
+  const lng = parseFloat(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+  const homeIds = await getAccessibleHomeIds(userId);
+  if (homeIds.length === 0) return false;
+  const { data, error } = await supabaseAdmin
+    .from('Home')
+    .select('id, location')
+    .in('id', homeIds);
+  if (error) {
+    logger.warn('Visitor detection failed', { error: error.message, userId });
+    return false;
+  }
+  const homes = (data || []).map((home) => parsePostGISPoint(home.location)).filter(Boolean);
+  return homes.length > 0
+    && homes.every((home) => Math.abs(lat - home.latitude) > 0.5 || Math.abs(lng - home.longitude) > 0.5);
 }
 
 router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
@@ -1365,22 +1370,8 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     // Curator accounts have no home — skip visitor detection (platform-owned, not a real neighbor)
     if (!isCurator && postAs !== 'persona' && (targetPlaceId || (effectiveLatitude != null && effectiveLongitude != null))) {
       try {
-        const { data: userHome } = await supabaseAdmin
-          .from('HomeOccupancy')
-          .select('home:home_id(location, city)')
-          .eq('user_id', userId)
-          .eq('status', 'active')
-          .maybeSingle();
-        if (userHome?.home?.location && effectiveLatitude != null && effectiveLongitude != null) {
-          const homeLat = userHome.home.location.coordinates
-            ? userHome.home.location.coordinates[1] : null;
-          const homeLon = userHome.home.location.coordinates
-            ? userHome.home.location.coordinates[0] : null;
-          if (homeLat != null && homeLon != null) {
-            const latDiff = Math.abs(parseFloat(effectiveLatitude) - homeLat);
-            const lonDiff = Math.abs(parseFloat(effectiveLongitude) - homeLon);
-            postData.is_visitor_post = latDiff > 0.5 || lonDiff > 0.5; // ~35 miles
-          }
+        if (effectiveLatitude != null && effectiveLongitude != null) {
+          postData.is_visitor_post = await isVisitorAt(userId, effectiveLatitude, effectiveLongitude);
         }
       } catch (visitorErr) {
         logger.warn('Visitor detection failed', { error: visitorErr.message, userId });
