@@ -425,13 +425,15 @@ const REPEAT_CREATE_WINDOW_MS = 30 * 60 * 1000;
 async function findOwnRepeatCreate(actorId, { username, name, email }) {
   const { data: account } = await supabaseAdmin
     .from('User')
-    .select('id, created_at')
+    .select('id, name, email, created_at')
     .eq('username', username)
     .eq('account_type', 'business')
-    .eq('name', name)
-    .eq('email', email)
     .maybeSingle();
-  if (!account || Date.now() - new Date(account.created_at).getTime() > REPEAT_CREATE_WINDOW_MS) return null;
+  // The create stores both as sent; a retyped retry may differ in outer spaces or the email's case.
+  const sameName = String(account?.name ?? '').trim() === String(name).trim();
+  const sameEmail = String(account?.email ?? '').trim().toLowerCase() === String(email).trim().toLowerCase();
+  if (!account || !sameName || !sameEmail
+    || Date.now() - new Date(account.created_at).getTime() > REPEAT_CREATE_WINDOW_MS) return null;
   const { data: owner } = await supabaseAdmin
     .from('BusinessTeam')
     .select('id')
