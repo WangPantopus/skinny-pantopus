@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
@@ -817,9 +818,15 @@ function ReserveSlotModal({
   });
   const canSubmit = !!selectedMode && !submitting;
 
-  return (
+  // On document.body, above the header and sidebar (as SlidePanel and the shared dialogs do): AppShell's <main>
+  // is its own stacking context (relative z-0), so from inside it this backdrop left them uncovered and clickable.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="reserve-slot-title"
@@ -936,7 +943,8 @@ function ReserveSlotModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
