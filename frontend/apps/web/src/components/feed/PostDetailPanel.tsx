@@ -592,11 +592,14 @@ export default function PostDetailPanel({
           )}
         </div>
 
-        {toast && (
-          <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-xl">
-            {toast}
-          </div>
-        )}
+        {/* The live region stays mounted so screen readers announce each message. */}
+        <div role="status" aria-live="polite">
+          {toast && (
+            <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-xl">
+              {toast}
+            </div>
+          )}
+        </div>
       </aside>
 
       {lightboxIndex !== null &&
