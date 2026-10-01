@@ -117,6 +117,7 @@ import app.pantopus.android.data.api.services.UsersApi
 import app.pantopus.android.data.api.services.ViewingLocationApi
 import app.pantopus.android.data.api.services.WalletApi
 import app.pantopus.android.data.auth.AuthInterceptor
+import app.pantopus.android.data.auth.DPoPReplayGuard
 import app.pantopus.android.data.auth.DeviceIdentityInterceptor
 import app.pantopus.android.data.auth.StepUpInterceptor
 import app.pantopus.android.data.auth.TokenAuthenticator
@@ -214,6 +215,7 @@ object NetworkModule {
         stepUpInterceptor: StepUpInterceptor,
         tokenAuthenticator: TokenAuthenticator,
         retryInterceptor: RetryInterceptor,
+        dpopReplayGuard: DPoPReplayGuard,
         cache: Cache,
     ): OkHttpClient {
         val logging = SafeHttpLoggingInterceptor(enabled = BuildConfig.DEBUG)
@@ -222,6 +224,8 @@ object NetworkModule {
             .cache(cache)
             // X-Client-Platform + X-Device-Id on every request (both clients).
             .addInterceptor(deviceIdentityInterceptor)
+            // Per network attempt: OkHttp's own re-send of a DPoP call gets a fresh proof.
+            .addNetworkInterceptor(dpopReplayGuard)
             // Bearer + pre-flight refresh when the access token is about to expire.
             .addInterceptor(authInterceptor)
             // 403 STEP_UP_REQUIRED -> step-up UI -> retry once with X-Step-Up.
@@ -262,10 +266,15 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named("authRefresh")
-    fun provideRefreshOkHttpClient(deviceIdentityInterceptor: DeviceIdentityInterceptor): OkHttpClient =
+    fun provideRefreshOkHttpClient(
+        deviceIdentityInterceptor: DeviceIdentityInterceptor,
+        dpopReplayGuard: DPoPReplayGuard,
+    ): OkHttpClient =
         OkHttpClient
             .Builder()
             .addInterceptor(deviceIdentityInterceptor)
+            // Per network attempt: OkHttp's own re-send of a refresh gets a fresh proof.
+            .addNetworkInterceptor(dpopReplayGuard)
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(READ_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .writeTimeout(READ_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
