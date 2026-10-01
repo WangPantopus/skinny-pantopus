@@ -46,6 +46,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.components.GhostButton
@@ -408,9 +410,11 @@ private fun WizardPrimaryCta(
                 .background(tint)
                 .clickable(enabled = clickable, onClick = onClick)
                 .padding(horizontal = Spacing.s4)
-                // One announcement: the visible title below would otherwise be read again ("Continue. Continue.").
+                // One announcement: the visible title below would otherwise be read again ("Continue. Continue."). The
+                // node keeps the title as its text, as the merged child gave it before.
                 .clearAndSetSemantics {
                     contentDescription = title
+                    text = AnnotatedString(title)
                     role = Role.Button
                 },
         contentAlignment = Alignment.Center,
