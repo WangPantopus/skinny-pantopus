@@ -4871,7 +4871,10 @@ router.get('/:id/activity', verifyToken, async (req, res) => {
         .from('HomeAuditLog')
         .select('*')
         .eq('home_id', homeId)
+        // Rows written in one transaction share created_at; id breaks the tie
+        // so offset pages neither repeat nor skip a row.
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(offset, offset + limit - 1),
       supabaseAdmin
         .from('HomeAuditLog')
@@ -5142,7 +5145,10 @@ router.get('/:id/timeline', verifyToken, async (req, res) => {
         .from('HomeAuditLog')
         .select('id, action, actor_user_id, metadata, created_at, actor:actor_user_id(id, username, name, first_name, middle_name, last_name)')
         .eq('home_id', homeId)
+        // Rows written in one transaction share created_at; id breaks the tie
+        // so offset pages neither repeat nor skip a row.
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(offset, offset + limit - 1),
       supabaseAdmin
         .from('HomeAuditLog')
