@@ -51,12 +51,15 @@ public struct MailboxRootView: View {
                         Label("Find a mailbox", systemImage: "map")
                     }
                     .accessibilityIdentifier("mailboxRootSettings.map")
-                    Button {
-                        viewModel.openUnboxing()
-                    } label: {
-                        Label("Scan an item", systemImage: "camera.viewfinder")
+                    // Launch cut #7 (Household extras): this opens package unboxing.
+                    if LaunchFeatures.householdExtras {
+                        Button {
+                            viewModel.openUnboxing()
+                        } label: {
+                            Label("Scan an item", systemImage: "camera.viewfinder")
+                        }
+                        .accessibilityIdentifier("mailboxRootSettings.scanUnboxing")
                     }
-                    .accessibilityIdentifier("mailboxRootSettings.scanUnboxing")
                     Button {
                         viewModel.openMailTasks()
                     } label: {

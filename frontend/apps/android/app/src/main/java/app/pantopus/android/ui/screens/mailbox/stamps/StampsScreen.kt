@@ -264,9 +264,12 @@ private fun StampsNav(onBack: () -> Unit) {
                 )
                 Text(text = "Mailbox", fontSize = 15.sp, color = PantopusColors.primary600)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                NavIcon(icon = PantopusIcon.Gift, label = "Gift a stamp", tag = "stampsNavGift")
-                NavIcon(icon = PantopusIcon.MoreHorizontal, label = "More actions", tag = "stampsNavMore")
+            // Launch cut #8 (Mail extras): gifting belongs to the postage wallet, which is hidden for the first launch.
+            if (LaunchFeatures.mailExtras) {
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    NavIcon(icon = PantopusIcon.Gift, label = "Gift a stamp", tag = "stampsNavGift")
+                    NavIcon(icon = PantopusIcon.MoreHorizontal, label = "More actions", tag = "stampsNavMore")
+                }
             }
         }
         Box(

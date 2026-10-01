@@ -3681,10 +3681,12 @@ extension HubRoute {
             LaunchFeatures.businessDirectory
         // Launch cut #7 (Household extras): pets, packages, bills, calendar, polls.
         case .homePets, .homePackages, .packageDetail, .logPackage, .homeBills, .billDetail, .addBill,
-             .homeCalendar, .addCalendarEvent, .calendarEventDetail, .homePolls, .pollDetail, .startPoll:
+             .homeCalendar, .addCalendarEvent, .calendarEventDetail, .homePolls, .pollDetail, .startPoll,
+             .unboxing:
             LaunchFeatures.householdExtras
-        // Launch cut #8 (Mail extras): letters, Mail Party, community mail, translations.
-        case .ceremonialMail, .ceremonialMailOpen, .mailParty, .communityMail, .mailTranslation:
+        // Launch cut #8 (Mail extras): letters, Mail Party, community mail,
+        // translations, and Earn (offers and ad earnings).
+        case .ceremonialMail, .ceremonialMailOpen, .mailParty, .communityMail, .mailTranslation, .earn:
             LaunchFeatures.mailExtras
         default:
             true

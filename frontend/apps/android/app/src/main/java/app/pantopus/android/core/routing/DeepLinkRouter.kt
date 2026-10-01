@@ -460,7 +460,9 @@ object DeepLinkRouter {
             Destination.DiscoverHub ->
                 setOf(LaunchFeature.BUSINESS_DIRECTORY, LaunchFeature.OPEN_GIGS, LaunchFeature.MARKETPLACE)
             is Destination.BookingDetail, Destination.MyBookings -> setOf(LaunchFeature.PUBLIC_SCHEDULING)
-            is Destination.MailTranslation -> setOf(LaunchFeature.MAIL_EXTRAS)
+            is Destination.MailTranslation, Destination.Earn -> setOf(LaunchFeature.MAIL_EXTRAS)
+            // Package unboxing is package tracking (#7), as on web.
+            is Destination.Unboxing -> setOf(LaunchFeature.HOUSEHOLD_EXTRAS)
             else -> emptySet()
         }
 

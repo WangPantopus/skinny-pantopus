@@ -119,8 +119,8 @@ const LAUNCH_CUT_ROUTES: ReadonlyArray<readonly [boolean, RegExp]> = [
   [launchFeatures.householdExtras, /^\/app\/mailbox\/(?:package|unboxing)(?:\/|$)/],
   // #4 + #7: a package's "Ask a neighbor" task post.
   [launchFeatures.openGigs && launchFeatures.householdExtras, /^\/app\/mailbox\/gig(?:\/|$)/],
-  // #8 Mail extras.
-  [launchFeatures.mailExtras, /^\/app\/mailbox\/(?:certified|community|party|translation)(?:\/|$)/],
+  // #8 Mail extras, incl. Earn (offers and ad earnings that never reach the withdrawable wallet).
+  [launchFeatures.mailExtras, /^\/app\/mailbox\/(?:certified|community|party|translation|earn)(?:\/|$)/],
 ];
 
 /** True when `path` opens a page of a feature hidden for the first launch. */
