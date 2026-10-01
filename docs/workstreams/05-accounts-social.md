@@ -9,6 +9,23 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1274 (briefing pushes honor the Push switch) sealed; #1277 (dialogs cover the header and sidebar) in CI; #1270 waits on iOS runners and Stream 1's devices, 2026-10-01T07:39:39Z
+
+- **Sealed and with Stream 1: #1274** (backend; seal `fcc41a28…`; CI 36829839687 green).
+  - The web Settings "Push Notifications" switch (`MailPreferences.push_notifications`) is honored by notificationService and chat pushes.
+  - `internalBriefing.js`'s briefing (`/send`), weather/AQI (`/alert-push`) and reminder (`/reminder-push`) pushes ignored it. Now each checks `isPushEnabled` (exported). `/send` skips `push_disabled` and keeps the text.
+  - Proof on the real endpoints, with the switch set through the real Settings page: master with the switch off sends 3 pushes; the head sends 0 off and 3 on. Stream 2 has been told.
+  - **Decision:** security notices still push with the switch off (safety; email is their main channel).
+- **In CI: #1277** (web, head `0e32a7521`). Six Stream 5 dialogs now portal to `document.body` (SlidePanel's pattern): ModalShell (incl. Security's step-up), ReportModal, AccountDeleteModal, Create/Edit Seat, and the chat page's Start new chat. ModalShell and ReportModal go to z-[60].
+  - AppShell's `<main>` (`relative z-0`) had kept them under the header, sidebar and "+" button, which stayed clickable.
+  - elementFromPoint probe: shell on top in 6/6 on master; the overlay on top in 6/6 on the head. Escape still closes each one.
+  - Cards are pixel-identical in 4/6; the seat cards differ only at the corners.
+  - 71 other files share the pattern (list in the bundle), sent to Stream 1 for their owners.
+  - **Decision:** a modal dims and blocks the whole app, not just the page area.
+- **#1270** (security notices open Devices): iOS CI jobs are queued (macOS capacity) and Android is running. Stream 1's candidate `3326f3ecc` has the device check queued. Seal after both.
+- **Backlog check:** `getPostingIdentities`' broken BusinessProfile query only costs crew logos in the "Post as" picker (the seat path still lists crews), so it's cosmetic and stays low. The orphan `/app/chat/new` and `MessageActionMenu` are dead code, so no change.
+- **Runtime:** API on master `dc878ddb5` (07:30:50Z); web on `0e32a7521` (#1277's head) after the after-run. No fixtures remain.
+
 ## LIVE — #1256 (b272), #1261 (b274), #1265 (b276) merged; #1270 (security notices open Devices) on Stream 1's devices; runtime hollowed by the macOS tmp sweep and repaired, 2026-10-01T07:12:50Z
 
 - **Merged:** #1256 (crew Stripe return, b272), #1261 (monthly summary email opt-out, b274, ahead of today's 17:00Z run), #1265 (crew page editor row names, b276; master `dc878ddb5`).
