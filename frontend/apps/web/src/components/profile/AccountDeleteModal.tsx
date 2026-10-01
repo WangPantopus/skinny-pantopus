@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as api from '@pantopus/api';
 
 // Trains the person is the primary organizer of that are live. When their account
@@ -65,7 +66,12 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
     return () => document.removeEventListener('keydown', onKey);
   }, [open, handleClose]);
 
-  if (!open) return null;
+  // On document.body: AppShell's <main> is its own stacking context (relative z-0), so from inside it the
+  // backdrop could not cover the header and sidebar, which stayed clickable behind the dialog.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!open || !mounted) return null;
 
   const isConfirmed = confirmText === 'DELETE';
 
@@ -79,7 +85,7 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
     }
   };
 
-  return (
+  return createPortal(
     <>
       <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-[2px]" onClick={handleClose} />
 
@@ -193,6 +199,7 @@ export default function AccountDeleteModal({ open, onClose, onConfirm }: Account
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
