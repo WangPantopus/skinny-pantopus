@@ -29,8 +29,8 @@ export default function HeroSection() {
               <span
                 className="inline-block w-[6px] h-[6px] rounded-full"
                 style={{
-                  background: 'var(--color-primary)',
-                  boxShadow: '0 0 0 4px rgba(2,132,199,0.14)',
+                  background: 'var(--color-primary-700)',
+                  boxShadow: '0 0 0 4px rgba(3,105,161,0.14)',
                 }}
                 aria-hidden="true"
               />
@@ -58,14 +58,14 @@ export default function HeroSection() {
                 }}
                 aria-label="Type your address to see your free preview"
               >
-                <span aria-hidden="true" style={{ color: 'var(--color-primary)', fontSize: '20px' }}>⌖</span>
+                <span aria-hidden="true" style={{ color: 'var(--color-primary-700)', fontSize: '20px' }}>⌖</span>
                 <span className="flex-1" style={{ color: 'var(--ink-3)', fontSize: '16px' }}>
                   Type your address…
                 </span>
                 <span
                   className="inline-flex items-center justify-center h-11 px-5 rounded-[12px] text-white font-semibold text-[15px]"
                   style={{
-                    background: 'var(--color-primary)',
+                    background: 'var(--color-primary-700)',
                     boxShadow: '0 1px 0 rgba(255,255,255,0.2) inset, var(--shadow-primary)',
                     letterSpacing: '-0.005em',
                   }}
@@ -76,7 +76,7 @@ export default function HeroSection() {
               <a
                 href="#primitive"
                 className="inline-flex items-center gap-2 font-semibold text-[15px] no-underline group"
-                style={{ color: 'var(--color-primary)' }}
+                style={{ color: 'var(--color-primary-700)' }}
               >
                 See how it works
                 <span className="inline-block transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>

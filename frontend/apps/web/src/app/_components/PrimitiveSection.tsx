@@ -48,7 +48,7 @@ export default function PrimitiveSection() {
                 <g fontFamily="ui-monospace, Menlo, monospace" fontSize="14" fill="#1B1815" stroke="none" fontWeight="600">
                   <text x="14" y="35">7M·QH4·9V</text>
                 </g>
-                <text x="14" y="98" fontFamily="var(--font-serif)" fontSize="9" fill="#7A736A" stroke="none">
+                <text x="14" y="98" fontFamily="var(--font-serif)" fontSize="9" fill="#736C63" stroke="none">
                   VERIFICATION POSTCARD
                 </text>
               </g>
@@ -59,7 +59,7 @@ export default function PrimitiveSection() {
                 <path d="M0 30 L80 90 L160 30" />
                 <circle cx="80" cy="90" r="11" />
                 <text x="80" y="94" textAnchor="middle" fontFamily="Iowan Old Style, Georgia, serif" fontStyle="italic" fontSize="10" stroke="none" fill="#1B1815">P</text>
-                <text x="0" y="160" fontFamily="var(--font-serif)" fontSize="9" fill="#7A736A" stroke="none">
+                <text x="0" y="160" fontFamily="var(--font-serif)" fontSize="9" fill="#736C63" stroke="none">
                   DEED · LEASE · UTILITY
                 </text>
               </g>
@@ -76,7 +76,7 @@ export default function PrimitiveSection() {
                 <line x1="125" y1="29" x2="142" y2="29" />
                 <line x1="125" y1="36" x2="145" y2="36" />
                 <line x1="125" y1="43" x2="138" y2="43" />
-                <text x="0" y="100" fontFamily="var(--font-serif)" fontSize="9" fill="#7A736A" stroke="none">
+                <text x="0" y="100" fontFamily="var(--font-serif)" fontSize="9" fill="#736C63" stroke="none">
                   PROFILE · ADDRESS · MATCH
                 </text>
               </g>
