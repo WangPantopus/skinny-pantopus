@@ -565,6 +565,27 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-10-01T12:56:00Z — Guest-pass duplicate (security, routed by Stream 1 from Stream 5's audit) fixed on a branch; D05 native verified on iOS with its repair; window 12:35:37–12:55:29Z (lease; iOS slot 4).**
+  - **Guest passes** (stage `stream3-home-guest-pass-idempotency-r1`, DECISION 12:28:01Z): the same create sent twice made **two live passes**.
+    - **Branch `claude/stream3-guest-pass-request-key`** (head `0f70fca2386d57b417ec8aaf9f280fbef8ae3a11`, based on master `8ce4089a9`):
+      - **Migration `20261001131000` (number from Stream 1):** `HomeGuestPass.request_id`, a partial unique index, and `mutate_home_external_share` replaced so a guest create repeating the actor's key updates that pass. It takes the fresh token and the latest validated details and returns `replayed: true`, which keeps exactly one live link. A revoked or expired pass answers 409; no key behaves as before.
+      - **Apps:** one key per form (iOS, Android, web panel and Settings page). Native Create stays off after success, so a late tap can't rotate the shown link (Stream 1's edge).
+      - **Checks:** web ESLint 0 errors, tsc clean, Jest 2343/2343 (1 existing test now expects the key).
+    - **SQL check** inside a rolled-back transaction in the runtime DB: same key → 1 pass, token rotated, label updated; another key → a second pass; no key → unchanged; revoked → 409; a malformed key or a key on a scoped grant → 400. Nothing persisted.
+    - **Next:** the builds (queued); then the migration applied in a window announced to Stream 4; then API and three-app E2E (double tap → the shown link opens); then seal and PR.
+  - **D05 Home settings** (stage `stream3-home-d05-native-r1`; repair branch `claude/stream3-d05-rename-permission` `604c0ca0b`):
+    - **iOS E4 reproduced:** B as admin (made admin through the real API) is offered Rename; saving gets PATCH 403 "You do not have permission to update this home".
+      - **After:** no pencil for the admin, and 0 PATCH. The owner keeps the pencil, and 120 characters save.
+    - **iOS E6:** 121 characters → before "Keep the name under 120 characters." while exactly 120 saves (PATCH 200, length 120); after, "Keep the name to 120 characters or fewer.".
+    - **iOS R1 E2 E5 pass:**
+      - R1: a persistent 503 → "Couldn't load" + Try again → loads.
+      - E2: held reply, app killed after the commit → the new name after relaunch, one PATCH.
+      - E5: a rename elsewhere shows after returning to the screen.
+    - **Builds:** Android ktlint/detekt/settings tests (15) and assemble pass; iOS builds.
+    - **Android afters:** wait for the S34 emulator (Stream 4 holds it for its accessibility after run).
+  - **Recorded, not changed:** iOS settings says "Check your connection" for a server error too.
+  - **Runtime:** back on `a0eba5315` per Stream 4's request (PID 52719). Every fixture was cleaned exactly; B's lazy MailPreferences row was deleted at 12:49Z. The iOS simulator is shut down.
+
 - **2026-10-01T12:08:11Z — #1327 and #1328 merged; U02 web pass on 17 Home screens done; [#1333](https://github.com/WangPantopus/skinny-pantopus/pull/1333) sent (three accessibility repairs); window 11:38:03–12:02:08Z (lease, no device).**
   - **[#1327](https://github.com/WangPantopus/skinny-pantopus/pull/1327) and [#1328](https://github.com/WangPantopus/skinny-pantopus/pull/1328) merged** in batch 292 (11:38:18Z, master `a0eba5315`). Stream 1 checked the seals and the native sources.
   - **U02 web pass** (`20261001-stream3-home-u02-web-r1`, MANIFEST `e68238ea94179d79b43751b379d343d50990915db66cdf093fa62bddbdfa4d3b`; master `a0eba5315`):
