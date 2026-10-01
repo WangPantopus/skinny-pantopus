@@ -397,6 +397,46 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T16:18:16Z — Three more branches, two decisions on Stream 1's Mail Day follow-ups, and new findings. Waiting on the runtime (Stream 3's lease since 15:23Z) and the build slot.**
+  - **Flag gaps** (`claude/stream4-mail-flag-gaps`): master `215f6d747` is merged in, because the branch lacked #1374's
+    collection-only Stamps; head `f431deec2`. The rebuild's iOS app is done (dylib `cb9d6af7…`); Android and an Android
+    master "before" are building.
+    - **Found while preparing evidence:** neither app ever shows the native package-tracking layout for real mail. Both
+      decode tracking from `GET /api/mailbox/:id`'s `object`, which is the MailObject row, with no carrier or tracking
+      keys. So the branch's package guard is parity with web, not a visible change. Package tracking is cut #7, so this is
+      recorded for when #7 returns, not fixed.
+  - **New branches (pushed; evidence in the next window):**
+    - `claude/stream4-mailday-personal-fallback` (`322c55b2b`), Stream 1's follow-up (a): an explicit
+      `drawer: personal` with no matched member keeps the letter with the household (it was private mail with no
+      recipient).
+    - `claude/stream4-themes-apply` (`217649ee7`): the Stamps Themes view's Apply never worked on either app.
+      `themes/apply` validated `themeId` as a UUID, but theme ids are slugs (`autumn_2026`, migration 048), and it selected
+      the nonexistent `MailDaySettings.id` with errors ignored ("Theme applied" with nothing saved). It now takes the
+      slug, applies only an existing unlocked theme (404/403) and saves by `user_id`, as PATCH settings already does.
+    - `claude/stream4-mailday-dead-controls` (`b5f2be447`, iOS + Android): My Mail Day's "Scan today's stack" (the
+      empty day's main button), "Scan more mail", "See full history" and both setup nudges did nothing (hosts passed
+      no-op "Out of scope" handlers), and the reminder nudge promised a 5:00 PM reminder that doesn't exist. Each control
+      now shows only when its host gives it a destination (none does yet); the empty day says "No mail needs a call
+      right now." Build queued.
+  - **Decided by Stream 4:**
+    - **Exact Undo (Stream 1's follow-up b): no migration.** Only Mail Day's route writes `routing_method` and
+      `routing_confidence`, and nothing reads them except Undo's own guard. Undo already restores everything a user sees:
+      the letter is household-shared, unassigned and back in the queue.
+    - **`POST /memory/dismiss` stays as is.** It is broken (the UUID validator rejects the `otd-…` ids and it writes a
+      `reference_id` column that doesn't exist), but no client calls it.
+    - **My Mail Day hides controls that have no destination** rather than getting new scanner, history or setup screens.
+  - **Found, not changed:**
+    - **Mail Day settings are inert.** Nothing outside the settings routes reads `MailDaySettings`; the Mail Day push
+      follows `UserNotificationPreferences` (timezone, quiet hours, the mail-summary type). Turning Mail Day off doesn't
+      stop its push. Next: honor `enabled` in the job, or hide the rows that do nothing.
+    - **Opening Earn creates a wallet.** `GET /api/wallet` runs `getOrCreateWallet`, so a fixture that opens Earn
+      creates a Wallet row; my window fault-injects that read instead.
+  - **Next, in the runtime window (run sheet ready):**
+    - the #1375 recheck;
+    - flag-gap before/after on both apps;
+    - themes and personal-fallback API probes plus devices;
+    - dead-controls before/after once built.
+
 - **2026-10-01T15:39:03Z — Merges, #1375 work, and a re-triage of Phase-3 mail drift now that Mail Day, Stamps, themes and Mail Memory stay in launch scope.**
   - **Merged:** [#1372](https://github.com/WangPantopus/skinny-pantopus/pull/1372) (batch 304) and #1373 + #1374 (batch 305), so
     master is `215f6d747`.
