@@ -384,10 +384,12 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
           </div>
 
           {/* Tab bar */}
-          <div className="mt-6 -mb-px flex gap-1 overflow-x-auto">
+          <div role="tablist" aria-label="Business page" className="mt-6 -mb-px flex gap-1 overflow-x-auto">
             {tabs.map((t) => (
               <button
                 key={t.key}
+                role="tab"
+                aria-selected={activeTab === t.key}
                 onClick={() => setActiveTab(t.key)}
                 className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition whitespace-nowrap ${
                   activeTab === t.key
