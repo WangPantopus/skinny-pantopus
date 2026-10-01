@@ -397,6 +397,45 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T17:24:00Z — Window r2 sealed (`20261001-stream4-flaggaps-themes-r2`, MANIFEST `35b44f01…`, 369 files). #1375 rechecked; four new PRs with the queue owner.**
+  - **Window:** 16:29:33Z–16:48:50Z and 17:07:44Z–17:19:24Z. Stream 3 held the runtime in between, for its TalkBack probe and
+    Stream 1's race proofs (migration 20261001137000 stays applied, agreed).
+    - Exact cleanup at 17:19:05Z: 349 of 353 tables equal the baseline; the other four are Auth* history.
+    - The backend rests on master `726510e65`, fault rules are empty, and both devices are shut down.
+  - **#1375 (iOS Mail Day error state), head `fe4d2a880`:**
+    - 503×3 on today shows the error and Try again; Try again loads the real day.
+    - A reviewed row's Undo reverts the letter and reopens the queue.
+    - Commented on the PR.
+  - **New PRs, all on this seal:**
+
+    | PR | What | Evidence |
+    |---|---|---|
+    | [#1400](https://github.com/WangPantopus/skinny-pantopus/pull/1400) | Mail Day "personal" route with no match: on master the letter left every drawer list; it now stays with the household (Stream 1's follow-up a) | API |
+    | [#1401](https://github.com/WangPantopus/skinny-pantopus/pull/1401) | Stamps themes Apply never worked: 400 "themeId must be a valid GUID", shown raw as an iOS toast. The `select('id')` behind it also gave a false success. Apply now works and persists | API, iOS, Android |
+    | [#1402](https://github.com/WangPantopus/skinny-pantopus/pull/1402) | "Mail Day enabled" off now stops the Mail Day push. One-off job runs: master notified the owner with it off; the fix skips them; the on-control notifies | job |
+    | [#1403](https://github.com/WangPantopus/skinny-pantopus/pull/1403) | A letter needing a call after the day's first read now joins today's Mail Day and the push, instead of waiting until tomorrow | API |
+
+  - **Flag gaps (`claude/stream4-mail-flag-gaps`):** before/after passed on iOS, web and Android, with all-features controls.
+    - The Android pass found that a cut Earn or unboxing link opened "Beacons isn't in the app yet". `launchCutLabel` fell
+      through to its Beacon fallback.
+    - Fixed in `360f2fb02`; the Android rebuild is queued. The PR opens with that frame.
+  - **Built or building:** My Mail Day dead controls (`b5f2be447`) and the mail-task dock stubs (`9baca534a`); the combined
+    build `s4-build-dc-mt` is in the heavy slot.
+  - **Decided by Stream 4:**
+    - The mail-task dock shows only "Mark done" on live tasks. Snooze, Delegate and Calendar have no backend; Calendar showed
+      "Added to calendar" for nothing.
+    - The sample design data keeps the chips, as the screen already does for its other slots with no backend.
+  - **Found, not changed:**
+    - **Mail Day settings beyond "enabled" do nothing on any client:** delivery time, timezone, include, interrupt, sound and
+      haptics. Next: honor the delivery time and hide or define the rest.
+    - **iOS reviewed rows:** each is one VoiceOver button whose label omits Undo.
+    - **Unreachable with real data:** Android records mail's no-ops. Its layout needs payload keys the MailObject row never
+      has.
+    - **Issue rows on both apps:** no detail screen; their actions are in the row footer. Parity, no change.
+    - **Web "Seed Inbox":** dev-only (`NODE_ENV`).
+  - **U05:** a read-only inventory of every reachable action on this stream's screens (all three clients, release build) is
+    being compiled for Stream 1's manifest.
+
 - **2026-10-01T16:18:16Z — Three more branches, two decisions on Stream 1's Mail Day follow-ups, and new findings. Waiting on the runtime (Stream 3's lease since 15:23Z) and the build slot.**
   - **Flag gaps** (`claude/stream4-mail-flag-gaps`): master `215f6d747` is merged in, because the branch lacked #1374's
     collection-only Stamps; head `f431deec2`. The rebuild's iOS app is done (dylib `cb9d6af7…`); Android and an Android
