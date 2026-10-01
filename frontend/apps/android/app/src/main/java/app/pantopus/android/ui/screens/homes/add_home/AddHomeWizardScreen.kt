@@ -47,10 +47,13 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -1160,7 +1163,13 @@ private fun UseCurrentLocationPill(onClick: () -> Unit) {
                 .clickable(role = Role.Button, onClick = onClick)
                 .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
                 .testTag("addHome_useCurrentLocation")
-                .semantics { contentDescription = "Use current location" },
+                // One announcement: TalkBack read the label, then the visible label again ("Use current location. Use
+                // current location. Button"). Last in the chain so the click, role and test tag stay; the node keeps
+                // the label as its text, as the merged child gave it.
+                .clearAndSetSemantics {
+                    contentDescription = "Use current location"
+                    text = AnnotatedString("Use current location")
+                },
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
