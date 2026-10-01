@@ -139,12 +139,14 @@ public struct PasswordChangeView: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             SectionHeader("Choose a new one")
             VStack(alignment: .leading, spacing: Spacing.s2) {
+                // Masked until the person taps Show password. Revealing it once it
+                // became valid swapped the secure field mid-typing: the password
+                // showed on screen and the keyboard lost the field.
                 PasswordEntryField(
                     "New password",
                     text: binding(.new),
                     state: state(for: .new),
                     isRequired: true,
-                    revealedByDefault: viewModel.isNewValid,
                     contentType: .newPassword,
                     identifier: "field_new"
                 )
