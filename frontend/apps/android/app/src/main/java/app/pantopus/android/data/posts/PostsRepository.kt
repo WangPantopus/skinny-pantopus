@@ -21,6 +21,7 @@ import app.pantopus.android.data.api.models.posts.PostShareRequest
 import app.pantopus.android.data.api.models.posts.PostShareResponse
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateResponse
+import app.pantopus.android.data.api.models.posts.SavedPostsResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.PostsApi
@@ -106,6 +107,12 @@ class PostsRepository
             includeArchived: Boolean = false,
         ): NetworkResult<MyPostsResponse> =
             safeApiCall { api.userPosts(userId, limit, cursorCreatedAt, cursorId, includeArchived.takeIf { it }) }
+
+        /** `GET /api/posts/saved` — My posts' Saved tab. */
+        suspend fun savedPosts(
+            limit: Int = 50,
+            offset: Int = 0,
+        ): NetworkResult<SavedPostsResponse> = safeApiCall { api.savedPosts(limit, offset) }
 
         /** `DELETE /api/posts/:id`. */
         suspend fun deletePost(id: String): NetworkResult<Unit> = safeApiCall { api.deletePost(id) }

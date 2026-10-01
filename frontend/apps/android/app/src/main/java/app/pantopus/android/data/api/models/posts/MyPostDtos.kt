@@ -28,6 +28,28 @@ data class MyPostDto(
     @Json(name = "lost_found_type") val lostFoundType: String? = null,
     /** `archived_at`; set on the owner's archived posts (`include_archived=true`). */
     @Json(name = "archived_at") val archivedAt: String? = null,
+    /** Who wrote it; the Saved tab's rows (other people's posts) name the author. */
+    val author: PostAuthorBriefDto? = null,
+)
+
+/** The author field a saved-post row shows (`author.displayName` on `GET /api/posts/saved`). */
+@JsonClass(generateAdapter = true)
+data class PostAuthorBriefDto(
+    val displayName: String? = null,
+)
+
+/** Offset paging of `GET /api/posts/saved`: offsets count saves, so a short page isn't the end. */
+@JsonClass(generateAdapter = true)
+data class SavedPostsPagination(
+    val nextOffset: Int? = null,
+    val hasMore: Boolean? = null,
+)
+
+/** Envelope for `GET /api/posts/saved`: the viewer's saved posts they can still open, newest save first. */
+@JsonClass(generateAdapter = true)
+data class SavedPostsResponse(
+    val posts: List<MyPostDto> = emptyList(),
+    val pagination: SavedPostsPagination? = null,
 )
 
 /** Envelope for `GET /api/posts/user/:userId`. */

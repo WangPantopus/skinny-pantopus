@@ -32,6 +32,8 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
     /// `GET /api/posts/me?status=archived` lands, the decoder will start
     /// populating this field automatically.
     public let archivedAt: String?
+    /// Who wrote it (`author.displayName`); the Saved tab's rows name the author.
+    public let authorName: String?
 
     public init(
         id: String,
@@ -47,7 +49,8 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         eventDate: String? = nil,
         eventVenue: String? = nil,
         lostFoundType: String? = nil,
-        archivedAt: String? = nil
+        archivedAt: String? = nil,
+        authorName: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -63,6 +66,7 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         self.eventVenue = eventVenue
         self.lostFoundType = lostFoundType
         self.archivedAt = archivedAt
+        self.authorName = authorName
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -79,6 +83,11 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case eventVenue = "event_venue"
         case lostFoundType = "lost_found_type"
         case archivedAt = "archived_at"
+        case author
+    }
+
+    private struct AuthorBrief: Decodable {
+        let displayName: String?
     }
 
     public init(from decoder: any Decoder) throws {
@@ -97,6 +106,35 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         eventVenue = try c.decodeIfPresent(String.self, forKey: .eventVenue)
         lostFoundType = try c.decodeIfPresent(String.self, forKey: .lostFoundType)
         archivedAt = try c.decodeIfPresent(String.self, forKey: .archivedAt)
+        authorName = (try? c.decodeIfPresent(AuthorBrief.self, forKey: .author))?.displayName
+    }
+}
+
+/// `GET /api/posts/saved` envelope: the viewer's saved posts they can still
+/// open, newest save first. Offsets count saves, so a short page isn't the end.
+public struct SavedPostsResponse: Decodable, Sendable {
+    public struct Pagination: Decodable, Sendable {
+        public let nextOffset: Int?
+        public let hasMore: Bool?
+    }
+
+    public let posts: [MyPostDTO]
+    public let pagination: Pagination?
+
+    private enum CodingKeys: String, CodingKey {
+        case posts
+        case pagination
+    }
+
+    public init(posts: [MyPostDTO], pagination: Pagination? = nil) {
+        self.posts = posts
+        self.pagination = pagination
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        posts = try c.decodeIfPresent([MyPostDTO].self, forKey: .posts) ?? []
+        pagination = try? c.decodeIfPresent(Pagination.self, forKey: .pagination)
     }
 }
 
