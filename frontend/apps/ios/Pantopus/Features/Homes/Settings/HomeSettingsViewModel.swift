@@ -291,14 +291,14 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         return words.prefix(1).uppercased() + words.dropFirst()
     }
 
-    /// RN's `canEdit` (`settings/index.tsx:47`): owner, an explicit
-    /// `home.edit` permission, or an owner/admin base role. `GET /:id/me`
-    /// is best-effort, so fall back to the detail payload's `isOwner`.
+    /// The owner, or the effective `home.edit` permission from `GET /:id/me` — the right
+    /// `PATCH /api/homes/:id` checks. A role name alone doesn't grant it (the seeded admin role has
+    /// no `home.edit`, and the server refuses its rename with 403). `/me` is best-effort, so fall
+    /// back to the detail payload's `isOwner`.
     private static func canEdit(detail: HomeDetail, access: HomeAccessDTO?) -> Bool {
         guard let access else { return detail.isOwner }
         if access.isOwner || detail.isOwner { return true }
-        if access.permissions.contains("home.edit") { return true }
-        return access.roleBase == "owner" || access.roleBase == "admin"
+        return access.permissions.contains("home.edit")
     }
 
     private static func addressLine(for home: HomeDTO) -> String? {
