@@ -37,6 +37,7 @@ import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilterSheet
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsTab
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -65,6 +66,7 @@ fun MyPostsScreen(
     onCompose: () -> Unit = {},
     onEditPost: (MyPostDto) -> Unit = {},
     viewModel: MyPostsViewModel = hiltViewModel(),
+    savedViewModel: SavedPostsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val topBarAction by viewModel.topBarAction.collectAsStateWithLifecycle()
@@ -76,6 +78,9 @@ fun MyPostsScreen(
     val showFilterSheet by viewModel.showFilterSheet.collectAsStateWithLifecycle()
     val activityFilter by viewModel.activityFilter.collectAsStateWithLifecycle()
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
+    val savedState by savedViewModel.state.collectAsStateWithLifecycle()
+    val savedToast by savedViewModel.toastMessage.collectAsStateWithLifecycle()
+    val onSaved = selectedTab == MyPostsTab.SAVED
 
     LaunchedEffect(Unit) {
         viewModel.bindCallbacks(
@@ -84,6 +89,19 @@ fun MyPostsScreen(
             onEditPost = onEditPost,
         )
         viewModel.load()
+        savedViewModel.bindCallbacks(onOpenPost = onOpenPost)
+    }
+
+    // Every visit to the Saved tab re-reads it, so posts saved elsewhere since show up.
+    LaunchedEffect(onSaved) {
+        if (onSaved) savedViewModel.load()
+    }
+
+    LaunchedEffect(savedToast) {
+        if (savedToast != null) {
+            delay(TOAST_MILLIS)
+            savedViewModel.dismissToast()
+        }
     }
 
     LaunchedEffect(toast) {
@@ -96,17 +114,18 @@ fun MyPostsScreen(
     Box(modifier = Modifier.fillMaxSize().testTag(MY_POSTS_TAG)) {
         ListOfRowsScreen(
             title = "My posts",
-            state = state,
-            onRefresh = { viewModel.refresh() },
-            onEndReached = { viewModel.loadMoreIfNeeded() },
-            tabs = tabs,
+            state = if (onSaved) savedState else state,
+            onRefresh = { if (onSaved) savedViewModel.load() else viewModel.refresh() },
+            onEndReached = { if (onSaved) savedViewModel.loadMoreIfNeeded() else viewModel.loadMoreIfNeeded() },
+            tabs = tabs + ListOfRowsTab(id = MyPostsTab.SAVED, label = "Saved"),
             selectedTab = selectedTab,
             onSelectTab = { viewModel.selectTab(it) },
-            topBarAction = topBarAction,
+            // The type/date filter applies to your own posts only.
+            topBarAction = if (onSaved) null else topBarAction,
             fab = fab,
             onBack = onBack,
         )
-        toast?.let { message ->
+        (if (onSaved) savedToast else toast)?.let { message ->
             Toast(
                 message = ToastMessage(text = message, kind = ToastKind.Error),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),

@@ -60,6 +60,9 @@ import javax.inject.Inject
 object MyPostsTab {
     const val ACTIVE = "active"
     const val ARCHIVED = "archived"
+
+    /** Saved posts; its list lives in [SavedPostsViewModel]. */
+    const val SAVED = "saved"
 }
 
 /** Lightweight presentation contract for the per-row kebab action sheet. */

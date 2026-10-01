@@ -36,6 +36,18 @@ public struct MyPostsView: View {
                         }
                 }
             }
+            .overlay(alignment: .bottom) {
+                // A failed Remove on the Saved tab says so (the row stays).
+                if let toast = viewModel.saved.toastMessage {
+                    ToastView(message: ToastMessage(text: toast, kind: .error))
+                        .padding(.bottom, 96)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .task(id: toast) {
+                            try? await Task.sleep(nanoseconds: 2_500_000_000)
+                            viewModel.saved.toastMessage = nil
+                        }
+                }
+            }
             .accessibilityIdentifier("my-posts")
             .onReceive(NotificationCenter.default.publisher(for: .pulsePostsDidChange)) { _ in
                 Task { await viewModel.refresh() }
