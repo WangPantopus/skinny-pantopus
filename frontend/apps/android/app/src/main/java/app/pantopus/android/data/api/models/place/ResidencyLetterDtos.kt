@@ -56,6 +56,7 @@ data class ResidencyLetter(
 @JsonClass(generateAdapter = true)
 data class IssueResidencyLetterRequest(
     val purpose: String? = null,
+    val clientRequestId: String? = null,
 )
 
 /** `{ letter: … }` envelope (issue / revoke responses). */

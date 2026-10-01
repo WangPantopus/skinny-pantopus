@@ -4063,26 +4063,21 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
       }
     }
 
-    // Create new chat room
-    const { data: room, error: roomErr } = await supabaseAdmin
-      .from('ChatRoom')
-      .insert({
-        type: 'direct',
-        name: subject || `Inquiry to ${biz.name}`,
-      })
-      .select('id')
-      .single();
-    if (roomErr) throw roomErr;
-
-    // Add participants
+    // Create it under the pair lock (get_or_create_direct_chat): inquiries sent at once (a double
+    // tap, a silent re-send) find one room instead of each making their own. A new room takes the
+    // inquiry's name.
+    const { data: roomId, error: roomErr } = await supabaseAdmin.rpc('get_or_create_direct_chat', {
+      p_user_id_1: userId,
+      p_user_id_2: businessId,
+    });
+    if (roomErr || !roomId) throw roomErr || new Error('No inquiry room returned');
     await supabaseAdmin
-      .from('ChatParticipant')
-      .insert([
-        { room_id: room.id, user_id: userId, role: 'member' },
-        { room_id: room.id, user_id: businessId, role: 'member' },
-      ]);
+      .from('ChatRoom')
+      .update({ name: subject || `Inquiry to ${biz.name}` })
+      .eq('id', roomId)
+      .is('name', null);
 
-    res.json({ roomId: room.id, existing: false });
+    res.json({ roomId, existing: false });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Business inbox start error', { error: err.message });

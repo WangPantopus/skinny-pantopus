@@ -173,6 +173,25 @@ async function claimMailDay(userId, today, claimedAt, existingSession) {
   return Array.isArray(data) ? data.length > 0 : Boolean(data);
 }
 
+/**
+ * Users among `userIds` who switched My Mail Day off in its settings
+ * (MailDaySettings.enabled; a user with no settings row has it on). Read in
+ * chunks so a long candidate list stays within the request URL.
+ */
+async function usersWithMailDayOff(userIds) {
+  const off = new Set();
+  for (let i = 0; i < userIds.length; i += 200) {
+    const { data, error } = await supabaseAdmin
+      .from('MailDaySettings')
+      .select('user_id')
+      .in('user_id', userIds.slice(i, i + 200))
+      .eq('enabled', false);
+    if (error) throw new Error(error.message);
+    for (const row of data || []) off.add(row.user_id);
+  }
+  return off;
+}
+
 /** Hand the day back when dispatch failed, so a later run can retry. */
 async function releaseMailDay(userId, today) {
   await supabaseAdmin
@@ -225,12 +244,28 @@ async function mailDayNotification() {
 
   logger.info(`[MailDay] ${byUser.size} users with unreviewed mail today`);
 
+  // "Mail Day enabled" off in the settings means no Mail Day push. If the
+  // settings can't be read, this run sends nothing: the next run retries, and a
+  // push to someone who switched it off can't be taken back.
+  let mailDayOff;
+  try {
+    mailDayOff = await usersWithMailDayOff([...byUser.keys()]);
+  } catch (err) {
+    logger.error('[MailDay] Failed to read Mail Day settings', { error: err.message });
+    return;
+  }
+
   let notified = 0;
   let deferred = 0;
   let skipped = 0;
 
   for (const [userId, userItems] of byUser) {
     try {
+      if (mailDayOff.has(userId)) {
+        skipped++;
+        continue;
+      }
+
       // Already notified, or the user already finished the day on their own.
       const { data: session } = await supabaseAdmin
         .from('MailDaySession')

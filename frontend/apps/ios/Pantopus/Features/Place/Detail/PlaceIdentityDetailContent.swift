@@ -26,6 +26,7 @@ final class PlaceResidencyLetterViewModel {
 
     private(set) var state: State = .loading
     private(set) var isIssuing = false
+    private var pendingIssue: (purpose: String, id: String)?
     /// (message, isError) — a failed revoke must never be silent.
     private(set) var toast: (message: String, isError: Bool)?
     var purpose = ""
@@ -71,16 +72,22 @@ final class PlaceResidencyLetterViewModel {
     }
 
     func issue() async {
-        guard !purpose.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        // One letter per request, as with claims: a tap while an issue is in flight is ignored, and a retry with the
+        // same purpose reuses its request id, so the server returns the letter it already issued.
+        guard !isIssuing, !purpose.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         isIssuing = true
         defer { isIssuing = false }
+        if pendingIssue?.purpose != purpose {
+            pendingIssue = (purpose, UUID().uuidString)
+        }
         do {
             _ = try await api.request(
                 ResidencyLettersEndpoints.issue(
                     homeId: homeId,
-                    request: IssueResidencyLetterRequest(purpose: purpose)
+                    request: IssueResidencyLetterRequest(purpose: purpose, clientRequestId: pendingIssue?.id)
                 )
             ) as ResidencyLetterResponse
+            pendingIssue = nil
             purpose = ""
             await load()
         } catch let error as APIError {

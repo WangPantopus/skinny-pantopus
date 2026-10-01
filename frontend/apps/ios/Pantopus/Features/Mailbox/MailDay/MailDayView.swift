@@ -630,7 +630,7 @@ struct FinishDayBar: View {
 #Preview("Populated") {
     NavigationStack {
         MailDayView(
-            viewModel: MailDayViewModel(variant: .populated) {},
+            viewModel: MailDayViewModel(variant: .populated, content: MailDaySampleData.populated) {},
             onSeeHistory: {},
             onOpenNudge: { _ in }
         )
@@ -640,7 +640,7 @@ struct FinishDayBar: View {
 #Preview("Empty") {
     NavigationStack {
         MailDayView(
-            viewModel: MailDayViewModel(variant: .empty) {},
+            viewModel: MailDayViewModel(variant: .empty, content: MailDaySampleData.empty) {},
             onSeeHistory: {},
             onOpenNudge: { _ in }
         )

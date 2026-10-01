@@ -510,10 +510,13 @@ async function applyDecision(req, res, action) {
       return res.status(500).json({ error: 'Failed to record decision' });
     }
 
-    const drawer = ['personal', 'home', 'business'].includes(body.drawer)
-      ? body.drawer
-      : target ? target.drawer
-        : decision.routed_tint === 'household_home' ? 'home' : 'personal';
+    const asked = ['personal', 'home', 'business'].includes(body.drawer) ? body.drawer : null;
+    // A letter is only personal to someone: with no matched member, "personal"
+    // keeps it with the household instead of filing it as nobody's private mail.
+    const drawer = asked === 'personal' && target && !target.userId
+      ? 'home'
+      : asked || (target ? target.drawer
+        : decision.routed_tint === 'household_home' ? 'home' : 'personal');
     await resolveLinkedMail(item, action, drawer, userId, target ? target.userId : userId);
     await logMailEvent(`mailday_${action}`, item.mail_id || null, userId, { item_id: item.id });
 

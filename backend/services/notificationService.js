@@ -1283,6 +1283,7 @@ async function notifyHouseholdAccessRequest({
   homeId,
   requesterUserId,
   requestedIdentity,
+  requestId,
 }) {
   const roleLabels = {
     owner: 'an owner',
@@ -1305,6 +1306,9 @@ async function notifyHouseholdAccessRequest({
         requester_user_id: requesterUserId,
         requested_identity: requestedIdentity,
       },
+      // A repeat of the same pending request (a re-sent request or a second tap) tells each owner once; a request that
+      // changes the asked-for role tells them again.
+      ...(requestId ? { idempotencyKey: `home-access-request:${requestId}:${requestedIdentity}:${uid}` } : {}),
     });
   }
 }
