@@ -9,6 +9,39 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1349 (b301) and #1362 (b303) merged; device passes for #1356 #1357; new #1366 #1367 (invoice recipient picker), #1371 (crew inquiry once), #1380 #1381 (seat invites); all waiting on CI, 2026-10-01T15:44:00Z
+
+- **Merged:**
+  - **#1349** (b301): Android sends a fresh DPoP proof when OkHttp re-sends, so a dropped connection no longer signs you out. Stream 1's emulator check passed.
+  - **#1362** (b303): trustState.
+    - Someone who has filed a home claim is computed as an incoming resident and told "Complete your home verification to unlock posting"; before, they were told to "be physically present".
+    - The "Questions/Recommendations only" rule is retired. It would have taken visitor rights from claimants who have a fresh GPS fix.
+    - Verified residents and plain visitors are unchanged.
+- **Device passes (Stream 1):**
+  - #1338: password change keeps your session;
+  - #1356: the new-password field stays masked; iOS keeps focus;
+  - #1357: one invoice and one notification per retried send.
+  - All three wait only on iOS CI. Master's raw-hex comments failed every iOS lint job until Stream 1's #1369; I merged master into each branch, and each PR's own diff is the same patch-id.
+- **New, decided under the standing direction (Stream 1 approved each):**
+  - **Invoice recipient picker:**
+    - **#1366** (backend + web, stacked on #1357): GET /:businessId/invoice-recipients returns only people the crew knows (invoiced, booked, hired it, messaged it) plus the sender's connections. No open member search; blocks are excluded; editors and up only.
+    - **#1367** (iOS + Android): the same picker replaces "Paste user ID".
+    - Verified through the real web app; device check requested.
+  - **#1371:** opening a crew inquiry twice at once makes one chat (get_or_create_direct_chat). On master, 4 at once made 4 rooms.
+  - **Seat invites:**
+    - Invites made on iOS or Android could never be accepted: the link is returned once, the apps dropped it, and no email is sent.
+    - **#1380** (server + migration 20261001136000): the same inviter's repeat renews the invite with a new link instead of a 409. A partial unique index keeps one pending invite per crew + email; 4 at once now leave 1.
+    - **#1381** (iOS + Android): the apps copy the link with "Invite link copied — share it with <name>".
+    - Server-sent invite email stays a product decision.
+- **Decisions recorded:**
+  - **Picker scope:** only people the crew already knows.
+  - **Invite renew:** same inviter only, so another teammate's shared link keeps working.
+  - **Claimant posting:** claimants keep visitor rights with a fresh GPS fix.
+- **Next:** seal each PR as its CI turns green. Then the remaining audit items:
+  - the chat reaction toggle re-send;
+  - catalog, package and scheduling-invoice re-sends.
+- **Runtime:** API 18134 on #1380's head. The web tree is on master, with paid scheduling on. No fixtures; every bundle's rows-since scan is empty. The DB has master's #1351 function; #1380's index was dropped after its test.
+
 ## LIVE — #1346 (b299), #1351 and #1353 (b300) merged; #1338 passed on devices (seal waits on iOS CI); #1349 detekt fixed; new #1356 (password field stays hidden) and #1357 (crew intent keys), 2026-10-01T14:30:51Z
 
 - **Merged:**
