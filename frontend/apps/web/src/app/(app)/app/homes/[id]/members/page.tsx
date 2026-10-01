@@ -21,14 +21,15 @@ const ROLE_RANK: Record<string, number> = {
   service_provider: 5, guest: 10, restricted_member: 20, member: 30, lease_resident: 35, manager: 40, admin: 50, owner: 60,
 };
 const DISPLAY_ROLE_ORDER = ['owner', 'admin', 'manager', 'lease_resident', 'member', 'restricted_member', 'guest', 'service_provider'];
+// `color` is a shade that keeps 12px bold text at WCAG AA (4.5:1) on the page and card backgrounds;
 // `dark` is a lighter shade of the same hue, for text on dark mode's dark surfaces.
 const ROLE_META: Record<string, { icon: typeof ShieldCheck; color: string; dark: string; label: string }> = {
   owner:             { icon: ShieldCheck, color: '#7c3aed', dark: '#a78bfa', label: 'Owner' },
-  admin:             { icon: Shield,      color: '#0284c7', dark: '#38bdf8', label: 'Admin' },
-  manager:           { icon: Key,         color: '#0891b2', dark: '#22d3ee', label: 'Manager' },
-  lease_resident:    { icon: User,        color: '#059669', dark: '#34d399', label: 'Lease member' },
-  member:            { icon: User,        color: '#059669', dark: '#34d399', label: 'Member' },
-  restricted_member: { icon: Lock,        color: '#d97706', dark: '#fbbf24', label: 'Restricted' },
+  admin:             { icon: Shield,      color: '#0369a1', dark: '#38bdf8', label: 'Admin' },
+  manager:           { icon: Key,         color: '#0e7490', dark: '#22d3ee', label: 'Manager' },
+  lease_resident:    { icon: User,        color: '#047857', dark: '#34d399', label: 'Lease member' },
+  member:            { icon: User,        color: '#047857', dark: '#34d399', label: 'Member' },
+  restricted_member: { icon: Lock,        color: '#b45309', dark: '#fbbf24', label: 'Restricted' },
   guest:             { icon: Clock,       color: '#6b7280', dark: '#9ca3af', label: 'Guest' },
   service_provider:  { icon: Key,         color: '#6b7280', dark: '#9ca3af', label: 'Service provider' },
 };
