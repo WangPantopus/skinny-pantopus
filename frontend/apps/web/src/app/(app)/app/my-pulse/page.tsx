@@ -162,6 +162,12 @@ export default function MyPulsePage() {
     }
   }, [savedNextOffset, savedLoadingMore]);
 
+  // A page the visibility check (or Remove) left empty isn't the end of the list: read on.
+  const savedReadingOn = saved.length === 0 && savedNextOffset != null && !savedLoadMoreFailed;
+  useEffect(() => {
+    if (tab === 'saved' && !savedLoading && savedReadingOn) void loadMoreSaved();
+  }, [tab, savedLoading, savedReadingOn, loadMoreSaved]);
+
   // ── Post actions ─────────────────────────────────────────
   const likeMutation = useMutation({
     mutationFn: (postId: string) => api.posts.toggleLike(postId),
@@ -193,11 +199,19 @@ export default function MyPulsePage() {
     likeMutation.mutate(postId);
   };
 
+  // A listed save that goes (unsaved, or its post deleted) moves every later save up one,
+  // so the next page starts one earlier or Load more would skip a saved post.
+  const dropFromSaved = (postId: string) => {
+    if (!saved.some((p) => p.id === postId)) return;
+    setSaved((prev) => prev.filter((p) => p.id !== postId));
+    setSavedNextOffset((offset) => (offset == null ? offset : Math.max(0, offset - 1)));
+  };
+
   const handleDelete = async (postId: string) => {
     try {
       await api.posts.deletePost(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
-      setSaved((prev) => prev.filter((p) => p.id !== postId));
+      dropFromSaved(postId);
       toast.success('Post deleted');
     } catch {
       toast.error('Failed to delete post');
@@ -213,9 +227,8 @@ export default function MyPulsePage() {
         ),
       );
       // Unsaving from the Saved tab takes the post off that list.
-      setSaved((prev) => (res.saved
-        ? prev.map((p) => (p.id === postId ? { ...p, userHasSaved: true } : p))
-        : prev.filter((p) => p.id !== postId)));
+      if (res.saved) setSaved((prev) => prev.map((p) => (p.id === postId ? { ...p, userHasSaved: true } : p)));
+      else dropFromSaved(postId);
     },
     onError: () => {
       toast.error('Failed to save post');
@@ -236,7 +249,8 @@ export default function MyPulsePage() {
 
   const onSaved = tab === 'saved';
   const shown = onSaved ? saved : posts;
-  const shownError = onSaved ? savedLoadError : loadError;
+  // A failed read past an emptied page is a failed load, not "nothing saved".
+  const shownError = onSaved ? savedLoadError || (saved.length === 0 && savedLoadMoreFailed) : loadError;
   const shownMore = onSaved ? savedNextOffset != null : nextCursor != null;
   const shownLoadingMore = onSaved ? savedLoadingMore : loadingMore;
   const shownLoadMoreFailed = onSaved ? savedLoadMoreFailed : loadMoreFailed;
@@ -263,7 +277,7 @@ export default function MyPulsePage() {
           ]}
           activeTabKey={tab}
           onTabChange={(key) => setTab(key as Tab)}
-          loading={onSaved ? savedLoading : loading}
+          loading={onSaved ? savedLoading || savedReadingOn : loading}
           rows={shown}
           rowSpacing={4}
           keyExtractor={(post) => post.id}
@@ -305,7 +319,7 @@ export default function MyPulsePage() {
               />
             </div>
           ) : undefined}
-          renderFooter={shownMore || shownLoadMoreFailed ? () => (
+          renderFooter={(shownMore || shownLoadMoreFailed) && !shownError ? () => (
             <>
               {shownLoadMoreFailed && (
                 <div role="alert" className="my-4 flex items-center justify-between gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text-strong">
@@ -359,7 +373,7 @@ export default function MyPulsePage() {
           }}
           onGone={(postId) => {
             setPosts((prev) => prev.filter((p) => p.id !== postId));
-            setSaved((prev) => prev.filter((p) => p.id !== postId));
+            dropFromSaved(postId);
             setEditingPost(null);
             toast.info('This post was deleted, so it can’t be edited.');
           }}
