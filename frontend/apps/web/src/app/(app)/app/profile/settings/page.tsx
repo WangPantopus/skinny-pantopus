@@ -237,10 +237,11 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold text-app mb-4">Privacy</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-app-strong mb-2">
+                <label htmlFor="settings-profile-visibility" className="block text-sm font-medium text-app-strong mb-2">
                   Profile Visibility
                 </label>
                 <select
+                  id="settings-profile-visibility"
                   value={profileVisibility}
                   onChange={(e) => setProfileVisibility(e.target.value)}
                   className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
