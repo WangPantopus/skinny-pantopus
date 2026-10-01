@@ -351,6 +351,8 @@ const reportPostSchema = Joi.object({
 
 const sharePostSchema = Joi.object({
   shareType: Joi.string().valid('repost', 'external').default('external'),
+  // The repost state the client wants; without it, a repost request toggles (older installs).
+  reposted: Joi.boolean().allow(null),
 });
 
 // ============ HELPER FUNCTIONS ============
@@ -2846,11 +2848,17 @@ router.post('/:id/like', verifyToken, async (req, res) => {
     const post = await requireVisiblePost({ postId: id, userId, res, select: POST_REFS_SELECT });
     if (!post) return;
 
-    const { data, error } = await supabaseAdmin.rpc('toggle_post_like', { p_post_id: id, p_user_id: userId });
+    // A client that sends the state it wants gets that state, so a request re-sent after its reply
+    // was lost changes nothing instead of flipping the like back. Without it the legacy toggle runs
+    // (older app installs).
+    const wantsLiked = typeof req.body?.liked === 'boolean' ? req.body.liked : null;
+    const { data, error } = wantsLiked === null
+      ? await supabaseAdmin.rpc('toggle_post_like', { p_post_id: id, p_user_id: userId })
+      : await supabaseAdmin.rpc('set_post_like', { p_post_id: id, p_user_id: userId, p_liked: wantsLiked });
     if (error) { logger.error('Error toggling like', { error: error.message, postId: id }); return res.status(500).json({ error: 'Failed to toggle like' }); }
 
-    // Notify post owner on new like (not on unlike, not on own post)
-    if (data.liked && post.user_id !== userId) {
+    // Notify post owner on new like (not on unlike, not on own post, not on a repeated request)
+    if (data.liked && data.changed !== false && post.user_id !== userId) {
       getUserDisplayName(userId).then(name => {
         const { link, extraMeta } = postEngagementNotificationLink(post, id);
         notificationService.createNotification({
@@ -3069,6 +3077,22 @@ router.get('/:id/comments', verifyToken, async (req, res) => {
   }
 });
 
+function notifyRepost(post, postId, userId) {
+  getUserDisplayName(userId).then(name => {
+    const { link, extraMeta } = postEngagementNotificationLink(post, postId);
+    notificationService.createNotification({
+      userId: post.user_id,
+      type: 'post_reposted',
+      title: `${name} shared your post`,
+      icon: '🔁',
+      link,
+      metadata: { post_id: postId, user_id: userId, ...extraMeta },
+    });
+  }).catch(err => {
+    logger.warn('Repost notification failed (non-blocking)', { error: err.message, postId });
+  });
+}
+
 router.post('/:id/share', verifyToken, validate(sharePostSchema), async (req, res) => {
   try {
     const { id: postId } = req.params;
@@ -3076,6 +3100,19 @@ router.post('/:id/share', verifyToken, validate(sharePostSchema), async (req, re
     const { shareType = 'external' } = req.body || {};
     const post = await requireVisiblePost({ postId, userId, res, select: POST_REFS_SELECT });
     if (!post) return;
+
+    if (shareType === 'repost' && typeof req.body.reposted === 'boolean') {
+      // The repost state the client wants: a repeated request changes nothing and notifies no one.
+      const { data, error } = await supabaseAdmin.rpc('set_post_repost', {
+        p_post_id: postId, p_user_id: userId, p_reposted: req.body.reposted,
+      });
+      if (error) {
+        logger.error('Repost set error', { error: error.message, postId, userId });
+        return res.status(500).json({ error: 'Failed to repost post' });
+      }
+      if (data.changed && data.reposted && post.user_id !== userId) notifyRepost(post, postId, userId);
+      return res.json({ reposted: data.reposted, shareCount: data.shareCount });
+    }
 
     if (shareType === 'repost') {
       const { data: existing, error: existingErr } = await supabaseAdmin
@@ -3112,21 +3149,7 @@ router.post('/:id/share', verifyToken, validate(sharePostSchema), async (req, re
         }
 
         // Notify post owner of repost (not on own post)
-        if (post.user_id !== userId) {
-          getUserDisplayName(userId).then(name => {
-            const { link, extraMeta } = postEngagementNotificationLink(post, postId);
-            notificationService.createNotification({
-              userId: post.user_id,
-              type: 'post_reposted',
-              title: `${name} shared your post`,
-              icon: '🔁',
-              link,
-              metadata: { post_id: postId, user_id: userId, ...extraMeta },
-            });
-          }).catch(err => {
-            logger.warn('Repost notification failed (non-blocking)', { error: err.message, postId });
-          });
-        }
+        if (post.user_id !== userId) notifyRepost(post, postId, userId);
       }
 
       const { data: updatedPost } = await supabaseAdmin
@@ -3141,24 +3164,20 @@ router.post('/:id/share', verifyToken, validate(sharePostSchema), async (req, re
       });
     }
 
-    const { error: insertErr } = await supabaseAdmin
-      .from('PostShare')
-      .insert({ post_id: postId, user_id: userId, share_type: 'external' });
+    // One external share per person, post and 10 minutes, so a retry or a double tap doesn't
+    // inflate the share count.
+    const { data: share, error: shareErr } = await supabaseAdmin.rpc('record_post_share', {
+      p_post_id: postId, p_user_id: userId,
+    });
 
-    if (insertErr) {
-      logger.error('External share insert error', { error: insertErr.message, postId, userId });
+    if (shareErr) {
+      logger.error('External share insert error', { error: shareErr.message, postId, userId });
       return res.status(500).json({ error: 'Failed to record share' });
     }
 
-    const { data: updatedPost } = await supabaseAdmin
-      .from('Post')
-      .select('share_count')
-      .eq('id', postId)
-      .single();
-
     res.json({
       shared: true,
-      shareCount: updatedPost?.share_count || 0,
+      shareCount: share?.shareCount || 0,
     });
   } catch (err) {
     logger.error('Post share error', { error: err.message, postId: req.params.id, userId: req.user?.id });
@@ -3298,6 +3317,18 @@ router.post('/:postId/comments/:commentId/like', verifyToken, async (req, res) =
       return res.status(500).json({ error: 'Failed to toggle comment like' });
     }
     if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    // The like state the client wants: a repeated request changes nothing. Without it, the toggle below.
+    if (typeof req.body?.liked === 'boolean') {
+      const { data, error } = await supabaseAdmin.rpc('set_comment_like', {
+        p_comment_id: commentId, p_user_id: userId, p_liked: req.body.liked,
+      });
+      if (error) {
+        logger.error('Error setting comment like', { error: error.message, commentId });
+        return res.status(500).json({ error: 'Failed to toggle comment like' });
+      }
+      return res.json({ liked: data.liked, likeCount: data.likeCount });
+    }
 
     // Check if user already liked this comment
     const { data: existingLike } = await supabaseAdmin
@@ -3594,10 +3625,22 @@ router.post('/:id/save', verifyToken, async (req, res) => {
     const post = await requireVisiblePost({ postId: id, userId, res });
     if (!post) return;
 
-    const { data: saved, error } = await supabaseAdmin.rpc('toggle_post_save', {
-      p_post_id: id,
-      p_user_id: userId,
-    });
+    // The save state the client wants (a repeated request changes nothing), or the legacy toggle.
+    const wantsSaved = typeof req.body?.saved === 'boolean' ? req.body.saved : null;
+    let saved;
+    let error;
+    if (wantsSaved === null) {
+      ({ data: saved, error } = await supabaseAdmin.rpc('toggle_post_save', {
+        p_post_id: id,
+        p_user_id: userId,
+      }));
+    } else {
+      ({ error } = wantsSaved
+        ? await supabaseAdmin.from('PostSave')
+          .upsert({ post_id: id, user_id: userId }, { onConflict: 'post_id,user_id', ignoreDuplicates: true })
+        : await supabaseAdmin.from('PostSave').delete().eq('post_id', id).eq('user_id', userId));
+      saved = wantsSaved;
+    }
 
     if (error) {
       logger.error('Error toggling post save', { error: error.message, postId: id });
