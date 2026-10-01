@@ -353,10 +353,21 @@ module.exports = (io) => {
       socket.broadcast.emit('user:online', { userId });
     }
     
+    // Every event's arguments come from the client. Hand each handler an object payload and a callable ack, and keep
+    // its errors here: app.js exits the API on any uncaught exception or unhandled rejection.
+    const on = (event, handler) => socket.on(event, (...args) => {
+      const last = args[args.length - 1];
+      const ack = typeof last === 'function' ? last : () => {};
+      const payload = args[0] !== null && typeof args[0] === 'object' ? args[0] : {};
+      // The executor turns a synchronous throw into a rejection too; the returned promise never rejects.
+      return new Promise((resolve) => { resolve(handler(payload, ack)); })
+        .catch((err) => logger.error('Socket event failed', { sessionId, userId, event, error: err?.message }));
+    });
+
     // ============ GIG DETAIL ROOMS ============
 
     // Join a gig detail room for real-time updates
-    socket.on('gig:join', ({ gigId }) => {
+    on('gig:join', ({ gigId }) => {
       if (!gigId) return;
       const room = `gig:${gigId}`;
       socket.join(room);
@@ -364,7 +375,7 @@ module.exports = (io) => {
     });
 
     // Leave a gig detail room
-    socket.on('gig:leave', ({ gigId }) => {
+    on('gig:leave', ({ gigId }) => {
       if (!gigId) return;
       const room = `gig:${gigId}`;
       socket.leave(room);
@@ -376,7 +387,7 @@ module.exports = (io) => {
     /**
      * Join a specific room
      */
-    socket.on('room:join', async ({ roomId }, callback) => {
+    on('room:join', async ({ roomId }, callback) => {
       try {
         // Verify user has access to room
         const { data: participant } = await supabaseAdmin
@@ -458,7 +469,7 @@ module.exports = (io) => {
     /**
      * Typing indicator
      */
-    socket.on('typing:start', async ({ roomId }) => {
+    on('typing:start', async ({ roomId }) => {
       try {
         if (socketRateLimited(socket.id, 'typing:start')) return;
 
@@ -492,7 +503,7 @@ module.exports = (io) => {
     /**
      * Stop typing
      */
-    socket.on('typing:stop', async ({ roomId }) => {
+    on('typing:stop', async ({ roomId }) => {
       try {
         // Verify the socket has joined this room
         if (!socket.rooms.has(roomId)) {
@@ -515,7 +526,7 @@ module.exports = (io) => {
     /**
      * Mark messages as read
      */
-    socket.on('messages:read', async ({ roomId }, callback) => {
+    on('messages:read', async ({ roomId }, callback) => {
       try {
         // Verify the socket has joined this room
         if (!socket.rooms.has(roomId)) {
@@ -565,10 +576,14 @@ module.exports = (io) => {
      * Emits 'message:reaction_updated' with full reaction summary — same
      * format as the REST POST /messages/:messageId/react endpoint.
      */
-    socket.on('message:react', async ({ messageId, reaction }, callback) => {
+    on('message:react', async ({ messageId, reaction }, callback) => {
       try {
         if (socketRateLimited(socket.id, 'message:react')) {
           return callback({ error: 'Rate limit exceeded' });
+        }
+        // The REST route's rule (reactToMessageSchema): a reaction is a string of 1 to 8 characters.
+        if (typeof reaction !== 'string' || reaction.length === 0 || reaction.length > 8) {
+          return callback({ error: 'Invalid reaction' });
         }
 
         // Verify message exists and is not deleted
@@ -643,7 +658,7 @@ module.exports = (io) => {
      * Kept for backwards compatibility — prefer message:react toggle instead.
      * Now emits 'message:reaction_updated' (same event as message:react).
      */
-    socket.on('message:unreact', async ({ reactionId }, callback) => {
+    on('message:unreact', async ({ reactionId }, callback) => {
       try {
         // Get reaction details before deleting
         const { data: reactionRow } = await supabaseAdmin
@@ -688,7 +703,7 @@ module.exports = (io) => {
     /**
      * Create direct chat
      */
-    socket.on('chat:create_direct', async ({ otherUserId }, callback) => {
+    on('chat:create_direct', async ({ otherUserId }, callback) => {
       try {
         // Block check: prevent direct chat creation between blocked users
         if (await isBlocked(userId, otherUserId)) {
