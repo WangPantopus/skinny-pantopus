@@ -53,6 +53,7 @@
  *   GET    /public/:username                          — Public business profile (no auth)
  */
 
+const { createHash } = require('node:crypto');
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -4638,6 +4639,7 @@ const createInvoiceSchema = Joi.object({
   })).min(1).max(50).required(),
   due_date: Joi.date().iso().allow(null).optional(),
   memo: Joi.string().max(1000).allow('', null).optional(),
+  client_request_id: Joi.string().uuid().optional(),
 });
 
 /**
@@ -4901,7 +4903,7 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       return res.status(403).json({ error: 'Editor role or above required to create invoices' });
     }
 
-    const { recipient_user_id, gig_id, line_items, due_date, memo } = req.body;
+    const { recipient_user_id, gig_id, line_items, due_date, memo, client_request_id } = req.body;
 
     // Validate recipient exists
     const { data: recipient } = await supabaseAdmin
@@ -4921,6 +4923,38 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       return res.status(422).json({ error: 'Unable to send an invoice to this person.' });
     }
 
+    // A send keeps its identity through an uncertain reply: a retry with the same
+    // client_request_id answers with the invoice the first attempt made, and the
+    // recipient is notified once. Scoped to the business and the sender, using the
+    // existing primary key for races.
+    const requestInvoiceId = client_request_id ? createHash('sha256')
+      .update(`pantopus:business-invoice:v1:${businessId.toLowerCase()}:${userId.toLowerCase()}:${client_request_id.toLowerCase()}`)
+      .digest('hex').slice(0, 32) : null;
+    const readRequestInvoice = async () => {
+      const { data, error } = await supabaseAdmin.from('BusinessInvoice')
+        .select('*').eq('id', requestInvoiceId).maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const sameId = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+    const itemsKey = (items) => JSON.stringify((items || []).map((item) => [item.description, item.amount_cents, item.quantity || 1]));
+    const acknowledgeRetry = (existing) => {
+      const sameInvoice = sameId(existing.business_user_id, businessId)
+        && sameId(existing.recipient_user_id, recipient_user_id)
+        && sameId(existing.gig_id, gig_id)
+        && itemsKey(existing.line_items) === itemsKey(line_items)
+        && (existing.due_date ? Date.parse(existing.due_date) : null) === (due_date ? new Date(due_date).getTime() : null)
+        && (existing.memo || null) === (memo || null);
+      if (!sameInvoice) {
+        return res.status(409).json({ error: 'This invoice request was already used for a different invoice.', code: 'INVOICE_REQUEST_REUSED' });
+      }
+      return res.status(201).json({ invoice: existing });
+    };
+    if (requestInvoiceId) {
+      const existing = await readRequestInvoice();
+      if (existing) return acknowledgeRetry(existing);
+    }
+
     // Calculate totals — fee is deducted from business payout, not added to customer total
     const subtotal_cents = line_items.reduce(
       (sum, item) => sum + item.amount_cents * (item.quantity || 1), 0
@@ -4931,26 +4965,35 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
     const fee_cents = fees.platformFee;
     const total_cents = subtotal_cents; // Customer pays subtotal; fee deducted from business share
 
-    const { data: invoice, error: insertErr } = await supabaseAdmin
-      .from('BusinessInvoice')
-      .insert({
-        business_user_id: businessId,
-        recipient_user_id,
-        gig_id: gig_id || null,
-        line_items,
-        subtotal_cents,
-        fee_cents,
-        total_cents,
-        currency: 'usd',
-        status: 'sent',
-        due_date: due_date || null,
-        memo: memo || null,
-      })
+    const invoiceRow = {
+      business_user_id: businessId,
+      recipient_user_id,
+      gig_id: gig_id || null,
+      line_items,
+      subtotal_cents,
+      fee_cents,
+      total_cents,
+      currency: 'usd',
+      status: 'sent',
+      due_date: due_date || null,
+      memo: memo || null,
+    };
+    const { data: invoice, error: insertErr } = await (requestInvoiceId
+      ? supabaseAdmin.from('BusinessInvoice')
+        .upsert({ ...invoiceRow, id: requestInvoiceId }, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('BusinessInvoice').insert(invoiceRow))
       .select()
-      .single();
+      .maybeSingle();
 
     if (insertErr) {
       logger.error('Invoice creation failed', { error: insertErr.message });
+      return res.status(500).json({ error: 'Failed to create invoice', code: 'INSERT_FAILED' });
+    }
+    if (!invoice) {
+      // A concurrent retry of the same send inserted it first.
+      const existing = requestInvoiceId ? await readRequestInvoice() : null;
+      if (existing) return acknowledgeRetry(existing);
+      logger.error('Invoice creation returned no row', { businessId });
       return res.status(500).json({ error: 'Failed to create invoice', code: 'INSERT_FAILED' });
     }
 
