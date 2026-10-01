@@ -397,6 +397,31 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T15:26:02Z — Four PRs are with the queue owner. Seal `20261001-stream4-flags-mailday-r1` (`eb58ee9a…`), window 14:46:35Z–15:23:06Z, S34 pair and API/SQL, launch features off.**
+  - **[#1372](https://github.com/WangPantopus/skinny-pantopus/pull/1372) (privacy, merge first):** Mail Day "Route to <name>"
+    made a household letter the triager's private mail.
+    - Before: member B (the addressee and the router's match) got 403 after the owner routed it, through the API and through
+      an iOS tap.
+    - Now it goes to the matched occupant, or with no match to the shared household drawer with a "Household" chip.
+  - **[#1373](https://github.com/WangPantopus/skinny-pantopus/pull/1373) (stacked on #1372):** Mail Day Undo, Undo all and
+    Other… now work on both apps.
+    - Undo reverts the letter and reopens the queue row.
+    - Other… offers "Keep for the household" or "Junk it".
+  - **[#1374](https://github.com/WangPantopus/skinny-pantopus/pull/1374):** the Stamps sample postage wallet is hidden while
+    `mail_extras` is off.
+  - **[#1375](https://github.com/WangPantopus/skinny-pantopus/pull/1375):** iOS Mail Day shows its error state, not an
+    invented day.
+  - **Parked:** the iOS maintenance reminder flag (`7f492bb31`). The iOS Log maintenance form can't be reached in a release
+    build, which is a U05 finding.
+  - **Found, for follow-ups:**
+    - Mail Day fills today's queue only on the first read of the day.
+    - The iOS reviewed row hides Undo from VoiceOver.
+    - The Stamps header's "Gift a stamp" and "More actions" are no-ops.
+    - iOS My homes "More actions" opens "Delete home" directly.
+  - **Next:**
+    - F+G, approved by Stream 1: Earn and package tracking hidden with the flags off, plus the Stamps header icons;
+    - then the U05 release walk.
+
 - **2026-10-01T14:28:58Z — U05 groundwork: a read-only sweep (origin/master `3dc6b089e`, all launch features off) for reachable controls that do nothing and for sample data on production paths in this stream's screens.**
   - **Being fixed now** (branches pushed, devices next):
     - Mail Day "Route to <name>" files the letter as the triager's private mail (`claude/stream4-mailday-route-to-addressee`).
