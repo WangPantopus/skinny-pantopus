@@ -16,6 +16,7 @@ const {
   serializeUserAsLocalIdentity,
   serializeUserIdentityForViewer,
 } = require('../serializers/identitySerializers');
+const { verifiedResidentUserIds } = require('../utils/identityProfiles');
 const { hasPermission } = require('../utils/businessPermissions');
 const s3Service = require('../services/s3Service');
 const { isBlocked, blockCheckUnavailable } = require('../services/blockService');
@@ -46,7 +47,6 @@ const LOCAL_PROFILE_IDENTITY_SELECT = [
   'show_neighborhood',
   'show_verified_resident_badge',
   'show_gig_history',
-  'verified_resident',
   'review_count',
   'gigs_completed',
   'marketplace_sales',
@@ -73,15 +73,17 @@ async function loadLocalIdentityMapForUsers(users) {
   for (const profile of profiles || []) {
     if (profile?.user_id) profilesByUserId.set(String(profile.user_id), profile);
   }
+  const residents = await verifiedResidentUserIds([...usersById.keys()]);
 
   const identitiesByUserId = new Map();
   for (const [userId, user] of usersById) {
     const profile = profilesByUserId.get(userId);
+    const verified_resident = residents.has(userId);
     identitiesByUserId.set(
       userId,
       profile
-        ? serializeLocalProfileForViewer({ ...profile, user })
-        : serializeUserAsLocalIdentity(user)
+        ? serializeLocalProfileForViewer({ ...profile, user, verified_resident })
+        : serializeUserAsLocalIdentity({ ...user, verified_resident })
     );
   }
   return identitiesByUserId;

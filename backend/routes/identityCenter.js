@@ -14,6 +14,7 @@ const {
   getPersonaByHandle,
   getPersonaById,
   getBridgeSetting,
+  verifiedResidentUserIds,
 } = require('../utils/identityProfiles');
 const {
   serializePrivateAccount,
@@ -357,7 +358,8 @@ async function getLocalPreview({ profile, viewer }) {
     .limit(20);
   const allPosts = posts || [];
   const visiblePosts = allPosts.filter((post) => localPostVisibleToViewer(post, context));
-  const localAuthor = serializeLocalProfileForViewer(profile, {
+  const residents = await verifiedResidentUserIds([profile.user_id]);
+  const localAuthor = serializeLocalProfileForViewer({ ...profile, verified_resident: residents.has(String(profile.user_id)) }, {
     relationshipStatus: context.isConnection ? 'accepted' : 'none',
     isFollowingLocal: context.isNeighbor || context.isConnection,
     canMessage: context.isConnection || context.isGigParticipant,
@@ -478,7 +480,9 @@ router.get('/', verifyToken, async (req, res) => {
 
     res.json({
       privateAccount: serializePrivateAccount(user),
-      localProfile: serializeLocalProfileForViewer(localProfile, { includeLegacyUserId: true }),
+      localProfile: localProfile
+        ? serializeLocalProfileForViewer({ ...localProfile, verified_resident: (await verifiedResidentUserIds([userId])).has(String(userId)) }, { includeLegacyUserId: true })
+        : null,
       audienceProfile: persona ? serializeAudienceProfileForViewer(persona, { isOwner: true }) : null,
       bridges: bridge || {
         show_persona_on_local: false,
