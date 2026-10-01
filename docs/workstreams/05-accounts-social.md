@@ -9,6 +9,36 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — whole sweep backlog merged (#1158 in batch 250); a11y + overlay sweep: #1165/#1167/#1168/#1170 merged (batch 248), #1182 (chat overlays + names) sealed, #1190 (privacy switches) in CI, 2026-10-01T02:43:51Z
+
+- **Merged:**
+  - batch 248: #1165 (Connections: a person's card is a real profile link; keyboard users can open a requester's profile before Accept/Decline), #1167 (Getting Started arrows named after their task), #1168 (empty crew Reviews tab uses the native wording instead of "Be the first to leave a review!"), #1170 (four crew-tools close buttons named);
+  - batch 250: #1158 (native 4b, no Padding/Background chips), sealed against Stream 1's device bundle `20261001-stream1-native-1158-1159-1161-devices-r1`.
+  - Stream 1 verified every seal.
+- **Sealed and handed: #1182** (chat), head `187d7d0af`, CI 36805798401, seal `d4826d8b…`, bundle `20261001-stream5-chat-icon-names-r1`.
+  - **Functional:** the chat image viewer and the conversation's "Chat details" drawer rendered inside AppShell's `<main>` (`relative z-0`, its own stacking context). The fixed header and sidebar (z-50) covered them, and their ✕ clicks were intercepted by the header's Profile button.
+  - Fix: portal to `document.body` (the SlidePanel/PostDetailPanel pattern). The bundle proves raising the z-index alone didn't help.
+  - Also: 10 chat controls named, and the reaction button shows on keyboard focus.
+- **In CI: #1190** (settings), bundle `20261001-stream5-settings-controls-r1`. The Privacy and account-settings toggles ("Findable by email/phone", "Show Email/Phone on Profile", notifications) were plain buttons with no name or state. They now use the app's own `role="switch"` + `aria-checked` + name pattern; back buttons and the notification close are named.
+- **Decisions:**
+  - Overlays leave `<main>` through the existing portal pattern, not a new layering scheme.
+  - Names reuse the codebase's words ("Close", "Back", "Close …").
+  - Truthful empty-state copy uses the native wording, with no new control.
+  - Blocked cards stay non-navigating.
+- **Routed:**
+  - Other streams' overlays inside `<main>` share the root cause (Stream 2's post-page image viewer, noted by Stream 1 for the hub).
+  - Master's SwiftFormat breakage (#1103/#1105) was fixed by Stream 4's #1163.
+- **Harness note:** the runtime's no-send proxy refuses `GET /api/privacy/settings` for fixture users (`implicit-write-privacySettings`; the route creates a default row). The Privacy page then shows "couldn't load". That's the guard, not the app.
+- **Candidates left:**
+  - native: a hidden block's row doesn't announce "hidden" on iOS/Android (Stream 1's 1158 run);
+  - web page editor: canvas blocks are mouse-only to select, and their toolbars are invisible on keyboard focus;
+  - crew seat modals (z-[70]) don't cover the app chrome (centred, so still usable);
+  - `getPostingIdentities` drift;
+  - the logo route keeps the replaced File;
+  - web portfolio upload parity.
+  - Skipped: `/app/chat/new` (no caller) and `MessageActionMenu` (not imported).
+- **Runtime:** API 18134 on master `e318f26e9` (receipt 02:28:19Z); web 18131 on `fa69b4aed` (#1190's head); DB at `20260930184000`. No fixtures remain.
+
 ## LIVE — sweep backlog items 1–8 all merged except native 4b (#1158, in Stream 1's next candidate); drift triage done; new: #1165 (Connections cards keyboard-reachable) in CI, 2026-10-01T01:35:25Z
 
 - **Merged since the last block:**
