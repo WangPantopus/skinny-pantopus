@@ -82,6 +82,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -314,7 +315,8 @@ private fun TabStrip(
                         .sizeIn(minHeight = 44.dp)
                         .padding(vertical = Spacing.s2)
                         .testTag("tab.${tab.id}")
-                        .semantics { contentDescription = tab.count?.let { "${tab.label}, $it" } ?: tab.label },
+                        // One announcement: the label and count texts below would otherwise be read again.
+                        .clearAndSetSemantics { contentDescription = tab.count?.let { "${tab.label}, $it" } ?: tab.label },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
@@ -2216,7 +2218,8 @@ private fun TopBarActionButton(action: TopBarAction) {
                     .clip(RoundedCornerShape(Radii.sm))
                     .clickable(enabled = action.isEnabled, onClick = action.onClick)
                     .padding(horizontal = Spacing.s2, vertical = Spacing.s1)
-                    .semantics { contentDescription = action.contentDescription }
+                    // One announcement: the visible label would otherwise be read again.
+                    .clearAndSetSemantics { contentDescription = action.contentDescription }
                     .testTag("listOfRowsTopBarAction"),
             contentAlignment = Alignment.Center,
         ) {
@@ -2324,7 +2327,8 @@ private fun FabComposable(fab: FabAction) {
                         .background(tintColor)
                         .clickable(onClick = fab.onClick)
                         .padding(horizontal = Spacing.s5, vertical = Spacing.s2)
-                        .semantics { contentDescription = fab.contentDescription },
+                        // One announcement: the visible label would otherwise be read again.
+                        .clearAndSetSemantics { contentDescription = fab.contentDescription },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
             ) {
