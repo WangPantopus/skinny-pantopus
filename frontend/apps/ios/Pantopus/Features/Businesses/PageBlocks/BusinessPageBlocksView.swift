@@ -270,6 +270,8 @@ public struct BusinessPageBlocksView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // A hidden block says so: the eye-off icon alone is not announced.
+            .accessibilityValue(block.isVisible ? "" : "Hidden from visitors")
             .accessibilityIdentifier("businessPageBlocks.block.\(index)")
 
             Divider().overlay(Theme.Color.appBorderSubtle)
