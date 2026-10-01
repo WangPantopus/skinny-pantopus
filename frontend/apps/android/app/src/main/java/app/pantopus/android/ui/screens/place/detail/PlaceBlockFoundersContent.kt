@@ -335,7 +335,9 @@ private fun BlockInviteForm(
         )
         return
     }
-    val draft = remember { BlockInviteDraft() }
+    // Keyed on the budget: a sent card lowers it and the panel reloads, so the address just mailed is cleared, as on web
+    // and iOS. A refusal leaves the budget alone and keeps the typed address to correct.
+    val draft = remember(block.invitesRemaining) { BlockInviteDraft() }
     val isSending by viewModel.isSendingInvite.collectAsStateWithLifecycle()
 
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
