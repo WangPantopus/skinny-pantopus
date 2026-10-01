@@ -16,7 +16,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { composeScheduledBriefing } = require('../services/context/providerOrchestrator');
 const pushService = require('../services/pushService');
-const { createNotification } = require('../services/notificationService');
+const { createNotification, isPushEnabled } = require('../services/notificationService');
 
 // ── Internal API key auth ───────────────────────────────────────────
 
@@ -251,7 +251,16 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
       return res.json({ status: 'skipped', skip_reason: result.skip_reason });
     }
 
-    // 8. Check push tokens
+    // 8. Check the account's Push Notifications switch (Settings), as every other push does, then push tokens
+    if (!(await isPushEnabled(userId))) {
+      await supabaseAdmin
+        .from('DailyBriefingDelivery')
+        .update({ status: 'skipped', skip_reason: 'push_disabled', summary_text: result.text })
+        .eq('id', deliveryId);
+
+      return res.json({ status: 'skipped', skip_reason: 'push_disabled' });
+    }
+
     const { data: tokens } = await supabaseAdmin
       .from('PushToken')
       .select('token')
@@ -410,6 +419,12 @@ router.post('/alert-push', verifyInternalApiKey, async (req, res) => {
         continue;
       }
 
+      // The account's Push Notifications switch (Settings) turns these off too.
+      if (!(await isPushEnabled(userId))) {
+        skipped++;
+        continue;
+      }
+
       // Check push tokens
       const { data: tokens } = await supabaseAdmin
         .from('PushToken')
@@ -488,6 +503,11 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
 
     if (prefs && isInQuietHours(prefs)) {
       return res.json({ status: 'skipped', reason: 'quiet_hours' });
+    }
+
+    // The account's Push Notifications switch (Settings) turns these off too.
+    if (!(await isPushEnabled(userId))) {
+      return res.json({ status: 'skipped', reason: 'push_disabled' });
     }
 
     // Check push tokens
