@@ -7,6 +7,8 @@ interface TabButtonProps {
 export default function TabButton({ label, active, onClick }: TabButtonProps) {
   return (
     <button
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
       className={`py-4 px-2 border-b-2 font-medium transition ${
         active

@@ -164,10 +164,12 @@ function ConnectionsPageContent() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-app-surface-sunken rounded-xl p-1">
+      <div role="tablist" aria-label="Connections" className="flex gap-1 mb-6 bg-app-surface-sunken rounded-xl p-1">
         {tabs.map((tab) => (
           <button
             key={tab.key}
+            role="tab"
+            aria-selected={activeTab === tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition ${
               activeTab === tab.key

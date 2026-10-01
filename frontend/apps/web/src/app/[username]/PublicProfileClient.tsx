@@ -636,7 +636,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
       <div className="bg-surface border-b border-app mt-6">
         <div className="w-full px-4 sm:px-6 lg:px-10 xl:px-12 overflow-x-auto">
-          <div className="flex gap-6 min-w-max">
+          <div role="tablist" aria-label="Profile" className="flex gap-6 min-w-max">
             {tabOptions
               .filter((tab) => !tab.ownerOnly || showOwnerOnly)
               .map((tab) => (
