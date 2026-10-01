@@ -34,6 +34,9 @@ export default defineConfig({
     reuseExistingServer: true,
     env: {
       NEXT_PUBLIC_API_URL: 'http://localhost:8000',
+      // The first-launch cut hides eight features unless this lists them; like Jest
+      // (tests/setup.ts), the browser tests run with every feature on.
+      NEXT_PUBLIC_LAUNCH_FEATURES: process.env.NEXT_PUBLIC_LAUNCH_FEATURES ?? 'all',
     },
   },
 });
