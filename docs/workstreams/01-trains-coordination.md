@@ -9,6 +9,45 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T11:12Z (Stream 1).**
+  - **Merged** (each seal verified, every failed CI job read, verify-batch RESULT OK):
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 283 | #1305 | 10:09:08Z | Stream 5's **#1304**: the privacy preview only previews your own profile (any signed-in user could read anyone's connections-only posts). Alone, ahead of the queue |
+    | 284 | #1307 | 10:20:13Z | Stream 5's **#1306**: Private and Registered-only profiles stay hidden on the local profile and in search |
+    | 285 | #1309 | 10:29:14Z | Stream 5's **#1308** + migration **20261001100000** (assigned by me): "Only me" for Neighborhood hides your city, a move shows the new one, and a hide-only backfill |
+    | 286 | #1315 | 10:47:54Z | Stream 5's **#1313** (a block hides you in app search and on your local profile) and **#1310** (the false P0.2 email retired) |
+    | 287 | #1316 | 10:55:14Z | Stream 2's **#1299**: Pulse card VoiceOver actions. My cells r1 `3bca977e` and r2 `a72658ef`: changes requested ("helpful" lost the count), then fixed; a SwiftFormat `docComments` finding was fixed too |
+    | 288 | #1319 | 10:58:17Z | Stream 5's **#1314** (dead Default profile visibility removed) and Stream 4's **#1317** (Home activity pages tie-break by id) |
+    | 289 | #1321 | 11:06:44Z | Stream 2's **#1311** (gone post leaves Pulse; my iOS cell `438c341b`) and **#1312** ("Posted to your connections"; my iOS cell `208560df`), plus Stream 5's **#1318** (dead findable switches removed) |
+
+    Master is **`6d3d05b9d`**; the next batch is **290**.
+  - **Trains cells sealed:**
+    - Android co-organizers E1–E5 (`0ba9c231`);
+    - iOS gift fund E1–E3 (`0b082b86`);
+    - Android gift fund E1–E3 (`6e5cc551`);
+    - iOS U04 L3 and L4 (`0f496730`).
+
+    U03 has 1 cell left (Android dates remove E2). U04 has iOS done, with Android L1, L3 and L4 left.
+  - **Defect found (L3) and repaired, mine:** branch `codex/trains-manage-nonorganizer-20261001`, commit `8ddda924e`.
+    - A Manage link opened by a non-organizer rendered every organizer control on iOS and Android. The server 403s all of them; the web already redirects to the train page.
+    - Fix: Manage hands a non-organizer to the train's own page.
+    - Candidate 25 (iOS + Android + ktlint/detekt + Trains tests) is queued in the heavy slot. The before is recorded in `20261001-stream1-ios-u04-l3l4-r1` and `20261001-stream1-trains-manage-nonorganizer-r1`.
+  - **Findings routed:**
+    - Android OkHttp silently re-sends a POST after a dropped connection. The creates carry `client_request_id`, so they're safe; new creates need idempotency keys.
+    - Stream 4's created_at-only offset pagination: mine (`supportTrains.js:2251`) is to fix. Stream 5 has reviews (#1320) and notifications/relationships (#1322). Stream 3 has the admin queue. The cut lists stay untouched.
+    - Stream 3's iOS confirmationDialog double-tap dead dialog: fix with `.alert`. A cross-stream list will follow.
+  - **Decisions recorded (the user's standing direction):**
+    - persona view-as is guarded like local (authorization, not Persona work);
+    - the hide-only backfill is approved;
+    - the false P0.2 email is retired;
+    - landing page palette: `#0369A1` and muted `#736C63`, implemented by Stream 2;
+    - a non-organizer opening Manage goes to the train page.
+  - **Runtime:**
+    - The backend runs `686ea0427`.
+    - I hold device slots 2 (sim) and 3 (emulator-5558).
+    - My heavy-slot job: cand25.
 - **Update 2026-10-01T09:54Z (Stream 1).**
   - **Merged:** batch 282 (#1303, 09:52:50Z): Stream 2's #1296 and #1298 (web Posts), Stream 4's #1300 and #1301 (native Documents replace headline, native Place refusal), and Stream 5's #1302 (Edit profile reaches the public LocalProfile copies). Master is **`bbd6b72d0`**; the next batch is **283**.
     - Stream 4's one bundle (`df72ad06`) records their combined build `4312e6f71`. Every #1300/#1301 file is blob-equal to it, and master changed none of those files or the symbols they use after its base.
@@ -725,7 +764,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T09:54Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T11:11Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -746,15 +785,15 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Send update and push choice | ✅ E1 E2 E3 (#762)<br>✅ Push choice (#778) | ✅ E1 E2 E3 (#762)<br>✅ Push choice (#778) | – Updates are read-only on web |
 | Signups: edit, remove helper, share address | ✅ Edit: E1-E6 (#741)<br>✅ Remove: E1 E2 E3 (Sep28)<br>✅ Address: E1 E2 E3 E4 (#747) | ✅ Remove: E1 E2 E3 (Sep28)<br>✅ Address: E1 E2 E3 E4 (#747)<br>– Edit not offered | ✅ Roster and per-helper privacy (#747)<br>– Edit, remove, address are app-only |
 | Pause, resume, back to draft, archive, delete, close | ✅ E2 pause and delete (#783)<br>✅ E5 after delete (#789)<br>✅ Close: E1 E2 E3 (#765)<br>✅ E1 E3 pause, resume, back to draft, archive, delete; E2 resume, back to draft, archive: one request each, retries are no-ops (7e842b1f) | ✅ E2 all five (#783)<br>✅ E5 after delete (#789)<br>✅ Close: E1 E2 E3 (#765)<br>✅ E1 E3 pause, resume, back to draft, archive, delete: one request each (42c3f579) | ✅ Delete: E2 E5 (#783)<br>✅ Delete: E1 E3 (U03 web bundle bbdbf2d2)<br>– Close, pause, resume, back to draft, archive not offered |
-| Co-organizers (People picker (approved)) | ✅ Picker add, remove, empty state, invite share (#812)<br>✅ E1 E2 E3 E4 E5: retries are upserts or no-ops, one request per double tap, a co-organizer sees no add or remove (c3bf7bcc) | ✅ Picker add, remove, empty state, invite share (#812)<br>✅ Remove no longer crashes the app (#813)<br>⬜ E1 E2 E3 E4 E5 | – No co-organizer editor on web |
+| Co-organizers (People picker (approved)) | ✅ Picker add, remove, empty state, invite share (#812)<br>✅ E1 E2 E3 E4 E5: retries are upserts or no-ops, one request per double tap, a co-organizer sees no add or remove (c3bf7bcc) | ✅ Picker add, remove, empty state, invite share (#812)<br>✅ Remove no longer crashes the app (#813)<br>✅ E1 E2 E3 E4 E5: retries are upserts or no-ops, one request per double tap, a co-organizer sees no add or remove; OkHttp re-sends a POST after a dropped connection (safe here) (0ba9c231) | – No co-organizer editor on web |
 | Remind helpers (Nudge draft and send) | ⛔ Needs an AI provider | ⛔ Needs an AI provider | ⛔ Needs an AI provider |
-| Gift fund: turn on, turn off | ⬜ E1 E2 E3<br>⛔ Contributions move money | ⬜ E1 E2 E3<br>⛔ Contributions move money | ✅ Turn on from Start a train; the pages follow on/off; a failed fund step removes the draft (#877)<br>– Turning it off or on later is app-only<br>⛔ Contributions move money |
+| Gift fund: turn on, turn off | ✅ E1 E2 E3: one request per double tap, honest lost-reply error, idempotent retry; goal stored in cents (0b082b86)<br>⛔ Contributions move money | ✅ E1 E2 E3: one request per double tap, honest lost-reply error, idempotent retry; goal stored in cents (6e5cc551)<br>⛔ Contributions move money | ✅ Turn on from Start a train; the pages follow on/off; a failed fund step removes the draft (#877)<br>– Turning it off or on later is app-only<br>⛔ Contributions move money |
 
 **U04 lifetimes** — L1 background and return; L2 cold restart; L3 switch account; L4 session refresh.
 
 | Area | iOS | Android | Web |
 |---|---|---|---|
-| Support Trains (Lists, detail, Manage, signups) | ✅ L2 (#733-#778)<br>✅ L1 typed text survives background and return: sign-up sheet details, Manage update draft, Start short note (a8bf8e36)<br>⬜ L3<br>⬜ L4 | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 reload (Sep28)<br>✅ L4 (#785)<br>✅ L3 switch account: nothing from the previous account shows (20260930 web switch 73f2bc13) |
+| Support Trains (Lists, detail, Manage, signups) | ✅ L2 (#733-#778)<br>✅ L1 typed text survives background and return: sign-up sheet details, Manage update draft, Start short note (a8bf8e36)<br>✅ L3 switch account: nothing of the previous account in My trains or train pages (0f496730)<br>✅ L4 expired-token 401 on a signup and Send update: refresh, one replay, one row each (0f496730) | ✅ L2 (#733-#778)<br>⬜ L1 typed text survives<br>⬜ L3<br>⬜ L4 | ✅ L2 reload (Sep28)<br>✅ L4 (#785)<br>✅ L3 switch account: nothing from the previous account shows (20260930 web switch 73f2bc13) |
 
 **U02 accessibility** — A1 largest text; A2 dark mode; A3 contrast; A4 screen reader; A5 keyboard (web).
 
@@ -773,8 +812,8 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
 
-- U03 items: done 68, confirm from existing evidence 0, to do 4, your call 0, boundary 6, not offered 9
-- U04 items: done 6, confirm from existing evidence 0, to do 5, your call 0, boundary 0, not offered 0
+- U03 items: done 71, confirm from existing evidence 0, to do 1, your call 0, boundary 6, not offered 9
+- U04 items: done 8, confirm from existing evidence 0, to do 3, your call 0, boundary 0, not offered 0
 - U02 items: done 22, confirm from existing evidence 0, to do 3, your call 6, boundary 0, not offered 4
 
 ## History
