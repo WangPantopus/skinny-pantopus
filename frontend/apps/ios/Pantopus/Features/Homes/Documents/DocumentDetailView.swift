@@ -577,7 +577,8 @@ private struct PreviewPane: View {
                 UnsupportedPreview(fileType: fileType, onOpenExternally: onOpenExternally)
             }
         } else {
-            UnsupportedPreview(fileType: fileType, onOpenExternally: onOpenExternally)
+            // A document saved with details only has no file for another app to open.
+            UnsupportedPreview(fileType: fileType, onOpenExternally: dto.contentURL != nil ? onOpenExternally : nil)
         }
     }
 }
@@ -616,38 +617,45 @@ private struct ImagePreview: View {
     }
 }
 
+/// With no `onOpenExternally`, the document has no file: it says so and offers nothing to open.
 private struct UnsupportedPreview: View {
     let fileType: DocumentFileType
-    let onOpenExternally: () -> Void
+    let onOpenExternally: (() -> Void)?
 
     var body: some View {
         VStack(spacing: Spacing.s3) {
             FileTypeTile(fileType: fileType, width: 56, height: 68)
-            Text("Preview not supported")
+            Text(onOpenExternally != nil ? "Preview not supported" : "No file attached")
                 .pantopusTextStyle(.body)
                 .foregroundStyle(Theme.Color.appText)
-            Text("Open the file in another app to view its contents.")
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, Spacing.s5)
-            Button(action: onOpenExternally) {
-                HStack(spacing: Spacing.s1) {
-                    Icon(.externalLink, size: 14, color: Theme.Color.primaryInk)
-                    Text("Open externally")
-                        .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.primaryInk)
+            Text(
+                onOpenExternally != nil
+                    ? "Open the file in another app to view its contents."
+                    : "This document has details only, so there's nothing to open."
+            )
+            .pantopusTextStyle(.caption)
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, Spacing.s5)
+            if let onOpenExternally {
+                Button(action: onOpenExternally) {
+                    HStack(spacing: Spacing.s1) {
+                        Icon(.externalLink, size: 14, color: Theme.Color.primaryInk)
+                        Text("Open externally")
+                            .pantopusTextStyle(.caption)
+                            .foregroundStyle(Theme.Color.primaryInk)
+                    }
+                    .padding(.horizontal, Spacing.s3)
+                    .padding(.vertical, Spacing.s2)
+                    .background(Theme.Color.appSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radii.pill)
+                            .stroke(Theme.Color.appBorder, lineWidth: 1)
+                    )
                 }
-                .padding(.horizontal, Spacing.s3)
-                .padding(.vertical, Spacing.s2)
-                .background(Theme.Color.appSurface)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Radii.pill)
-                        .stroke(Theme.Color.appBorder, lineWidth: 1)
-                )
+                .accessibilityIdentifier("documentDetailPreviewOpenExternally")
             }
-            .accessibilityIdentifier("documentDetailPreviewOpenExternally")
         }
         .padding(Spacing.s5)
     }

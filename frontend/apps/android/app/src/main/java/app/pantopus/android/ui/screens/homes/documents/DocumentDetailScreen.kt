@@ -50,6 +50,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -373,6 +374,7 @@ private fun LoadedShell(
                     PreviewPane(
                         bytes = content,
                         fileType = fileType,
+                        hasFile = dto.contentUrl != null,
                         onOpenExternally = onOpenExternally,
                         modifier = Modifier.padding(horizontal = Spacing.s4),
                     )
@@ -393,6 +395,7 @@ private fun LoadedShell(
         )
         StickyActionFooter(
             isMutating = isMutating,
+            hasFile = content != null,
             canReplace = dto.fileVersion != null,
             onOpenExternally = onOpenExternally,
             onShare = onShare,
@@ -488,6 +491,7 @@ private fun CategoryBadge(category: DocumentCategory) {
 private fun PreviewPane(
     bytes: ByteString?,
     fileType: DocumentFileType,
+    hasFile: Boolean,
     onOpenExternally: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -510,8 +514,9 @@ private fun PreviewPane(
             bytes != null && (fileType == DocumentFileType.Pdf || fileType == DocumentFileType.Scan) ->
                 PdfPreview(bytes = bytes)
             bytes != null && fileType == DocumentFileType.Image ->
-                ImagePreview(bytes = bytes)
-            else -> UnsupportedPreview(fileType = fileType, onOpenExternally = onOpenExternally)
+                ImagePreview(bytes = bytes, onOpenExternally = onOpenExternally)
+            // A document saved with details only has no file for another app to open.
+            else -> UnsupportedPreview(fileType = fileType, onOpenExternally = onOpenExternally.takeIf { hasFile })
         }
     }
 }
@@ -541,7 +546,10 @@ private fun PdfPreview(bytes: ByteString) {
 }
 
 @Composable
-private fun ImagePreview(bytes: ByteString) {
+private fun ImagePreview(
+    bytes: ByteString,
+    onOpenExternally: () -> Unit,
+) {
     SubcomposeAsyncImage(
         model =
             ImageRequest.Builder(LocalContext.current).data(bytes.toByteArray())
@@ -556,15 +564,17 @@ private fun ImagePreview(bytes: ByteString) {
             )
         },
         error = {
-            UnsupportedPreview(fileType = DocumentFileType.Image, onOpenExternally = {})
+            // The bytes arrived but don't decode here; another app may still open them.
+            UnsupportedPreview(fileType = DocumentFileType.Image, onOpenExternally = onOpenExternally)
         },
     )
 }
 
+/** With no [onOpenExternally], the document has no file: it says so and offers nothing to open. */
 @Composable
 private fun UnsupportedPreview(
     fileType: DocumentFileType,
-    onOpenExternally: () -> Unit,
+    onOpenExternally: (() -> Unit)?,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -573,38 +583,45 @@ private fun UnsupportedPreview(
     ) {
         FileTypeTile(fileType = fileType, width = 56.dp, height = 68.dp)
         Text(
-            text = "Preview not supported",
+            text = if (onOpenExternally != null) "Preview not supported" else "No file attached",
             style = PantopusTextStyle.body,
             color = PantopusColors.appText,
         )
         Text(
-            text = "Open the file in another app to view its contents.",
+            text =
+                if (onOpenExternally != null) {
+                    "Open the file in another app to view its contents."
+                } else {
+                    "This document has details only, so there's nothing to open."
+                },
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )
-        Row(
-            modifier =
-                Modifier
-                    .clip(RoundedCornerShape(Radii.pill))
-                    .background(PantopusColors.appSurface)
-                    .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
-                    .clickable(onClick = onOpenExternally)
-                    .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
-                    .testTag("documentDetailPreviewOpenExternally"),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.ExternalLink,
-                contentDescription = null,
-                size = 14.dp,
-                tint = PantopusColors.primary600,
-            )
-            Text(
-                text = "Open externally",
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.primary600,
-            )
+        if (onOpenExternally != null) {
+            Row(
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(Radii.pill))
+                        .background(PantopusColors.appSurface)
+                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
+                        .clickable(onClick = onOpenExternally)
+                        .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
+                        .testTag("documentDetailPreviewOpenExternally"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.ExternalLink,
+                    contentDescription = null,
+                    size = 14.dp,
+                    tint = PantopusColors.primary600,
+                )
+                Text(
+                    text = "Open externally",
+                    style = PantopusTextStyle.caption,
+                    color = PantopusColors.primary600,
+                )
+            }
         }
     }
 }
@@ -786,6 +803,7 @@ private fun LinkedToCard(
 @Composable
 private fun StickyActionFooter(
     isMutating: Boolean,
+    hasFile: Boolean,
     canReplace: Boolean,
     onOpenExternally: () -> Unit,
     onShare: () -> Unit,
@@ -810,7 +828,7 @@ private fun StickyActionFooter(
                 testTag = "documentDetailOpenExternally",
                 tint = PantopusColors.appText,
                 modifier = Modifier.weight(1f),
-                enabled = !isMutating,
+                enabled = !isMutating && hasFile,
                 onClick = onOpenExternally,
             )
             FooterButton(
@@ -820,7 +838,7 @@ private fun StickyActionFooter(
                 testTag = "documentDetailShare",
                 tint = PantopusColors.appText,
                 modifier = Modifier.weight(1f),
-                enabled = !isMutating,
+                enabled = !isMutating && hasFile,
                 onClick = onShare,
             )
             FooterButton(
@@ -864,6 +882,8 @@ private fun FooterButton(
                 .clickable(enabled = enabled, onClick = onClick)
                 .testTag(testTag)
                 .semantics { contentDescription = contentDesc }
+                // An action that can't run looks unavailable, as on iOS: the design system's disabled alpha (Buttons.kt).
+                .alpha(if (enabled) 1f else 0.5f)
                 .padding(vertical = Spacing.s2),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Spacing.s1),
