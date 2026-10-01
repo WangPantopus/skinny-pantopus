@@ -34,6 +34,75 @@ function getStripeClient() {
   return stripeCtor(process.env.STRIPE_SECRET_KEY);
 }
 
+// A withdrawal's outcome is final: nothing moved, or the request can't go ahead. The client
+// should start a new withdrawal (with a new key) next time.
+const WITHDRAWAL_NOT_COMPLETED = "The withdrawal didn't go through, and your balance wasn't charged. Please try again later or contact support if it keeps happening.";
+
+function withdrawalError(code, message) {
+  return Object.assign(new Error(message), { code });
+}
+
+/**
+ * Settle a withdrawal request whose key an earlier request already used. wallet_debit returned
+ * that earlier attempt's ledger row instead of debiting again, so this request reports that
+ * attempt's outcome and never moves money a second time.
+ */
+async function settleRepeatedWithdrawal(tx, { userId, amount, stripe, stripeAccount, idempotencyKey }) {
+  if (Number(tx.amount) !== Number(amount)) {
+    throw withdrawalError('WITHDRAWAL_KEY_REUSED', 'This withdrawal request was already used for a different amount. Please start a new withdrawal.');
+  }
+  if (tx.status === 'reversed') throw withdrawalError('WITHDRAWAL_NOT_COMPLETED', WITHDRAWAL_NOT_COMPLETED);
+  if (tx.stripe_transfer_id) return tx;
+
+  // The earlier attempt debited the wallet but hasn't recorded its transfer: it is still running,
+  // or it stopped between the two steps. The same transfer call with the same key returns that
+  // attempt's transfer, or makes the one it never made. Only the attempt that debited may reverse.
+  try {
+    const transfer = await stripe.transfers.create({
+      amount,
+      currency: 'usd',
+      destination: stripeAccount.stripe_account_id,
+      metadata: {
+        type: 'wallet_withdrawal',
+        user_id: userId,
+        wallet_tx_id: tx.id,
+      },
+    }, {
+      idempotencyKey,
+    });
+    const { error: updateErr } = await supabaseAdmin
+      .from('WalletTransaction')
+      .update({
+        stripe_transfer_id: transfer.id,
+        metadata: { ...tx.metadata, stripe_transfer_id: transfer.id },
+      })
+      .eq('id', tx.id);
+    if (updateErr) {
+      logger.error('Failed to update WalletTransaction with Stripe transfer ID', {
+        txId: tx.id, transferId: transfer.id, error: updateErr.message,
+      });
+    }
+    return { ...tx, stripe_transfer_id: transfer.id };
+  } catch (stripeErr) {
+    logger.warn('Repeated withdrawal request could not settle yet', { userId, txId: tx.id, error: stripeErr.message });
+    throw withdrawalError('WITHDRAWAL_PENDING', 'This withdrawal is still being processed. Check your wallet in a moment.');
+  }
+}
+
+/** The withdrawal ledger row an earlier request made with this key, if any. */
+async function findWithdrawalByKey(idempotencyKey) {
+  const { data, error } = await supabaseAdmin
+    .from('WalletTransaction')
+    .select('id, amount, status, stripe_transfer_id, metadata')
+    .eq('idempotency_key', idempotencyKey)
+    .maybeSingle();
+  if (error) {
+    logger.error('Failed to look up withdrawal by key', { error: error.message });
+    throw new Error('Failed to check the withdrawal');
+  }
+  return data;
+}
+
 class WalletService {
 
   // ============ WALLET LIFECYCLE ============
@@ -114,6 +183,14 @@ class WalletService {
     // Use client-provided key (deduplicates double-taps) or generate a unique one per request
     const requestId = clientKey || crypto.randomUUID();
     const idempotencyKey = `withdraw:${userId}:${requestId}`;
+    // Marks the ledger row this request creates. For a key used before, wallet_debit returns the
+    // earlier row instead, and this request settles on that attempt's outcome.
+    const requestNonce = crypto.randomUUID();
+
+    // wallet_debit's own replay check doesn't find an earlier row (`v_tx IS NOT NULL` is false when any
+    // column is null), so a repeated key would hit the unique key and fail. Look the row up first.
+    const earlier = await findWithdrawalByKey(idempotencyKey);
+    if (earlier) return settleRepeatedWithdrawal(earlier, { userId, amount, stripe, stripeAccount, idempotencyKey });
 
     // Debit wallet first (atomic, will throw if insufficient balance)
     const { data: tx, error } = await supabaseAdmin.rpc('wallet_debit', {
@@ -123,12 +200,21 @@ class WalletService {
       p_description: `Withdrawal of $${(amount / 100).toFixed(2)} to bank account`,
       p_stripe_transfer: null,
       p_idempotency_key: idempotencyKey,
-      p_metadata: { stripe_account_id: stripeAccount.stripe_account_id },
+      p_metadata: { stripe_account_id: stripeAccount.stripe_account_id, request_nonce: requestNonce },
     });
 
     if (error) {
+      // A concurrent request with the same key inserted first (unique idempotency_key).
+      if (error.code === '23505' || /WalletTransaction_idempotency_key/.test(error.message || '')) {
+        const raced = await findWithdrawalByKey(idempotencyKey);
+        if (raced) return settleRepeatedWithdrawal(raced, { userId, amount, stripe, stripeAccount, idempotencyKey });
+      }
       logger.error('Failed to debit wallet for withdrawal', { userId, amount, error: error.message });
       throw new Error(error.message || 'Insufficient balance');
+    }
+
+    if (tx.metadata?.request_nonce !== requestNonce) {
+      return settleRepeatedWithdrawal(tx, { userId, amount, stripe, stripeAccount, idempotencyKey });
     }
 
     // Create Stripe Transfer to their Connect account
@@ -178,6 +264,7 @@ class WalletService {
         error: stripeErr.message,
       });
 
+      let reversed = false;
       try {
         // supabase-js reports a failed RPC in `error` rather than throwing; only a
         // recorded credit may mark the debit reversed.
@@ -190,6 +277,7 @@ class WalletService {
           p_metadata: { original_tx_id: tx.id, error: stripeErr.message },
         });
         if (reversalError) throw new Error(reversalError.message);
+        reversed = true;
 
         // Mark original tx as reversed
         const { error: reverseUpdateErr } = await supabaseAdmin
@@ -213,6 +301,9 @@ class WalletService {
         });
       }
 
+      // Reversed: nothing moved, so the outcome is final. Not reversed: the debit stands, and a
+      // retry with the same key completes the transfer.
+      if (reversed) throw withdrawalError('WITHDRAWAL_NOT_COMPLETED', WITHDRAWAL_NOT_COMPLETED);
       throw new Error(`Withdrawal failed: ${stripeErr.message}`);
     }
   }

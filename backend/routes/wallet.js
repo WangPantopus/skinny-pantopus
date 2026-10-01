@@ -109,6 +109,14 @@ router.post('/withdraw', verifyToken, validate(withdrawSchema), async (req, res)
     if (err.message?.includes('Minimum')) {
       return res.status(400).json({ error: err.message });
     }
+    // A repeated request settles on the first attempt's outcome. Final outcomes are 409 (start a new
+    // withdrawal); a first attempt still settling is 503 (retry with the same key).
+    if (err.code === 'WITHDRAWAL_NOT_COMPLETED' || err.code === 'WITHDRAWAL_KEY_REUSED') {
+      return res.status(409).json({ error: err.message, code: err.code.toLowerCase() });
+    }
+    if (err.code === 'WITHDRAWAL_PENDING') {
+      return res.status(503).json({ error: err.message, code: 'withdrawal_pending' });
+    }
 
     // Don't leak internal Stripe errors to the client
     res.status(500).json({

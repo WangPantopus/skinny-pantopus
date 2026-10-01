@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.wallet
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.wallet.WalletWithdrawRequest
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.connect.ConnectRepository
 import app.pantopus.android.data.wallet.WalletRepository
@@ -63,6 +64,9 @@ class WalletViewModel
          * leaves the form up) instead of dismissing it with a toast.
          */
         private val _withdrawError = MutableStateFlow<String?>(null)
+
+        /** The withdrawal in progress (idempotency key, amount), kept until a final outcome; see [withdraw]. */
+        private var pendingWithdrawal: Pair<String, Int>? = null
         val withdrawError: StateFlow<String?> = _withdrawError.asStateFlow()
 
         /** Drives the pull-to-refresh indicator. */
@@ -180,15 +184,22 @@ class WalletViewModel
                         }
                     }
                 }
+            // One withdrawal, one idempotency key: a retry after a failed or lost reply resends the same key,
+            // so the server settles on the first attempt and can't pay out twice. Replaced after a final
+            // outcome (paid out, or refused) or when the amount changes.
+            val key = pendingWithdrawal?.takeIf { it.second == amountCents }?.first ?: UUID.randomUUID().toString()
+            pendingWithdrawal = key to amountCents
             _action.value = WalletAction.Withdrawing
             viewModelScope.launch {
-                val request = WalletWithdrawRequest(amount = amountCents, idempotencyKey = UUID.randomUUID().toString())
+                val request = WalletWithdrawRequest(amount = amountCents, idempotencyKey = key)
                 when (val result = repository.withdraw(request)) {
                     is NetworkResult.Success -> {
+                        pendingWithdrawal = null
                         _action.value = WalletAction.WithdrawSucceeded(result.data.message ?: "Withdrawal initiated.")
                         loadInternal(showLoading = false)
                     }
                     is NetworkResult.Failure -> {
+                        if (!result.error.leavesWithdrawalUnsettled()) pendingWithdrawal = null
                         _action.value = WalletAction.WithdrawFailed(result.error.message)
                     }
                 }
@@ -299,4 +310,12 @@ class WalletViewModel
                     else -> "No funds to withdraw."
                 }
         }
+    }
+
+/** No reply, a timeout, rate limiting or a server error: the first attempt's outcome is unknown, so a retry keeps its key. */
+private fun NetworkError.leavesWithdrawalUnsettled(): Boolean =
+    when (this) {
+        is NetworkError.Server, is NetworkError.Transport, is NetworkError.Decoding, NetworkError.RetriesExhausted -> true
+        is NetworkError.ClientError -> code == 408 || code == 429
+        else -> false
     }

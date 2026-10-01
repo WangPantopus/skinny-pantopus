@@ -63,6 +63,8 @@ public final class WalletViewModel {
     /// is rejected by `POST /api/wallet/withdraw` (403), so the client must
     /// not offer the action — RN's `canWithdraw` rule.
     private var walletFrozen: Bool = false
+    /// The withdrawal in progress (idempotency key, amount), kept until a final outcome; see `withdraw`.
+    private var pendingWithdrawal: (key: String, amountCents: Int)?
 
     /// Inline validation error for the withdraw amount field. Distinct from
     /// `action` so a bad amount keeps the sheet open (RN re-alerts and leaves
@@ -217,20 +219,43 @@ public final class WalletViewModel {
         } else {
             amountCents = availableCents
         }
+        // One withdrawal, one idempotency key: a retry after a failed or lost reply resends the same key,
+        // so the server settles on the first attempt and can't pay out twice. Replaced after a final
+        // outcome (paid out, or refused) or when the amount changes.
+        let key: String
+        if let pending = pendingWithdrawal, pending.amountCents == amountCents {
+            key = pending.key
+        } else {
+            key = UUID().uuidString
+            pendingWithdrawal = (key, amountCents)
+        }
         action = .withdrawing
         do {
             let response: WalletWithdrawResponse = try await api.request(
                 WalletEndpoints.withdraw(
-                    body: WalletWithdrawRequest(amount: amountCents, idempotencyKey: UUID().uuidString)
+                    body: WalletWithdrawRequest(amount: amountCents, idempotencyKey: key)
                 )
             )
+            pendingWithdrawal = nil
             action = .withdrawSucceeded(message: response.message ?? "Withdrawal initiated.")
             // Re-read balance + activity (server is the source of truth).
             await fetchLive(showLoading: false)
         } catch {
+            if !Self.leavesWithdrawalUnsettled(error) { pendingWithdrawal = nil }
             action = .withdrawFailed(
                 message: (error as? APIError)?.errorDescription ?? "Couldn't process the withdrawal."
             )
+        }
+    }
+
+    /// No reply, a timeout, rate limiting or a server error: the first attempt's outcome is unknown,
+    /// so a retry keeps its key.
+    static func leavesWithdrawalUnsettled(_ error: Error) -> Bool {
+        guard let apiError = error as? APIError else { return true }
+        switch apiError {
+        case .server, .transport, .retriesExhausted, .decoding, .invalidResponse: return true
+        case let .clientError(status, _): return status == 408 || status == 429
+        default: return false
         }
     }
 
