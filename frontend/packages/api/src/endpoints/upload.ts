@@ -311,7 +311,22 @@ export async function uploadChatMedia(
   }>;
 }> {
   const formData = new FormData();
-  await appendMultipartFiles(formData, files as any[], 'chat-media');
+  for (const [index, file] of files.entries()) {
+    const mime = normalizeMime(file);
+    if (clientRequestId && isMediaMime(mime)) {
+      // Keep camera filenames private and the multipart payload stable across
+      // retries of this send. A later send has a different request ID.
+      const ext = randomUploadName('chat-media', file.name || mime).split('.').pop();
+      const name = `chat-media-${clientRequestId}-${index}.${ext}`;
+      if (isUriFile(file)) {
+        formData.append('files', { uri: (file as any).uri, name, type: mime } as any);
+      } else {
+        formData.append('files', file, name);
+      }
+    } else {
+      await appendMultipartFile(formData, 'files', file, 'chat-media');
+    }
+  }
   if (clientRequestId) formData.append('client_request_id', clientRequestId);
 
   // Must explicitly set multipart/form-data so axios doesn't use the default
