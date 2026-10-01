@@ -3589,6 +3589,11 @@ router.post('/resend-verification', resendVerificationLimiter, validate(resendVe
       return res.json({ message: 'If that email needs verification, we will attempt to send a new link.' });
     }
 
+    if (await authLinkSentRecently(email)) {
+      logger.info('Resend verification: a link was just sent; not sending another', { email });
+      return res.json({ message: 'If that email needs verification, we will attempt to send a new link.' });
+    }
+
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email,
@@ -3718,6 +3723,26 @@ router.post('/verify-email', validate(verifyEmailSchema), async (req, res) => {
   }
 });
 
+// A reset or verification link sent within this window is a repeat of one request.
+const AUTH_LINK_RESEND_COOLDOWN_MS = 60 * 1000;
+
+/**
+ * True when GoTrue sent this account a recovery or magic link in the last minute. A new link
+ * would replace that one (GoTrue keeps one link token), so the email just sent would stop
+ * working; a repeat (a re-sent request or a second tap) sends nothing new instead.
+ */
+async function authLinkSentRecently(email) {
+  try {
+    const { data: account } = await supabaseAdmin.from('User').select('id').eq('email', email).maybeSingle();
+    if (!account?.id) return false;
+    const { data } = await supabaseAdmin.auth.admin.getUserById(account.id);
+    const sentAt = Date.parse(data?.user?.recovery_sent_at || '');
+    return Number.isFinite(sentAt) && Date.now() - sentAt < AUTH_LINK_RESEND_COOLDOWN_MS;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * POST /api/users/forgot-password
  * Generate a recovery link via Supabase admin API and deliver it through
@@ -3736,6 +3761,13 @@ router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSc
       return res.status(503).json({
         code: 'EMAIL_UNAVAILABLE',
         error: 'Email delivery is temporarily unavailable. Please try again later.',
+      });
+    }
+
+    if (await authLinkSentRecently(email)) {
+      logger.info('Forgot password: a reset link was just sent; not sending another', { email });
+      return res.json({
+        message: 'If that email is eligible, we will attempt to send a password reset link.',
       });
     }
 
