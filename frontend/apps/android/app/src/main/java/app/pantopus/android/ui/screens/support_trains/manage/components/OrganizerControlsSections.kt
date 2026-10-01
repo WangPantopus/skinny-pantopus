@@ -524,6 +524,7 @@ fun ManageLifecycleSection(
     status: String,
     viewerRole: SupportTrainViewerRole,
     isBusy: Boolean,
+    onPublish: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onUnpublish: () -> Unit,
@@ -538,6 +539,16 @@ fun ManageLifecycleSection(
     ) {
         ManageSectionHeader(title = "Train status · ${status.replaceFirstChar { it.uppercase() }}")
         ManageCard {
+            // Back to draft is reversible: organizers can publish the draft again.
+            if (status == "draft" && viewerRole.isOrganizer) {
+                ManagePillButton(
+                    label = "Publish train",
+                    icon = PantopusIcon.Eye,
+                    tag = "manageTrainPublishButton",
+                    isEnabled = !isBusy,
+                    onClick = onPublish,
+                )
+            }
             if (isLive) {
                 ManagePillButton(
                     label = "Pause train",

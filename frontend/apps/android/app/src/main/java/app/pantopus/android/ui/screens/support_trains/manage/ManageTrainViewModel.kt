@@ -453,6 +453,12 @@ class ManageTrainViewModel
 
         // ─── S1 · organizer actions ────────────────────────────────────
 
+        /**
+         * `POST /:id/publish` — a draft (back from Unpublish) goes live again;
+         * primary or co-organizer. The server's 422s surface verbatim.
+         */
+        fun publishTrain() = runAction("Train published", "Couldn't publish this train.") { repo.publish(trainId) }
+
         /** `POST /:id/pause` — primary or co-organizer. */
         fun pauseTrain() = runAction("Train paused", "Couldn't pause this train.") { repo.pause(trainId) }
 
