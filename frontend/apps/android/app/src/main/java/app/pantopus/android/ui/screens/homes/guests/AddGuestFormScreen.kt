@@ -220,7 +220,7 @@ internal fun AddGuestFormLoaded(
         rightActionLabel = null,
         bottomActionLabel = "Send pass",
         bottomActionIcon = PantopusIcon.KeyRound,
-        isValid = state.isValid,
+        isValid = state.canSubmit,
         isDirty = state.isDirty,
         isSaving = state.isSaving,
         onClose = onClose,
