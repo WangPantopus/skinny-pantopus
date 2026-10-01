@@ -12,6 +12,11 @@ Stream 3 is an independent peer. It reports to the user; Stream 1 runs the seria
 ## LIVE — HANDOFF (the user asked this session to wrap up): #1395 merged; #1380 re-sealed at the renumbered migration 20261001138000; #1396 sealed; new #1408 (catalog/package keys); resume from NEXT-STREAM5-PROMPT-2026-10-01-evening.md, 2026-10-01T17:53:44Z
 
 - **Resume:** [NEXT-STREAM5-PROMPT-2026-10-01-evening.md](NEXT-STREAM5-PROMPT-2026-10-01-evening.md) has every open PR's head, bundle, seal state and remaining step, plus the runtime, rules and ordered backlog.
+- **Amended 17:59Z, from Stream 1:**
+  - #1396 merged in batch 316 (PR #1411, master `f88f74641`).
+  - #1380 is held to merge **together with #1381**: alone, a native re-invite would kill the web-shared link without showing a new one. Seal #1381 the moment its iOS CI is green.
+  - #1408's device run is in Stream 1's successor's queue.
+  - Stream 1 is handing off too. Its successor works from NEXT-STREAM1-PROMPT-2026-10-01-evening.md and the hub's HANDOFF entry.
 - **Merged since the last block:** #1395 (b312: sign-up repeat; an overlapping sign-up no longer deletes the account).
 - **Sealed and with Stream 1:**
   - **#1380:** re-sealed at `80f2d5822` (`0e248f90`). The migration was renumbered to the reserved **20261001138000** after Stream 3's 137000; same blob, same route patch-id, migration policy and DB replay green. It merges with #1381.

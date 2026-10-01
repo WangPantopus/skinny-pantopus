@@ -15,7 +15,7 @@ You are **Stream 5**, one of the user's parallel workstreams.
 3. **`AGENTS.md` and `docs/PROJECT_HANDOFF.md`** in the app repo: the verification-first rules.
 4. **The private kit:** `…/.pantopus-recovery/stream3-runtime-kit/README.md` and `tools/stream5-e2e/README.md`. Never print or dump the fixture credential files.
 
-## 2. State at 2026-10-01T17:52Z (master `c5ab503df`, batch 314)
+## 2. State at 2026-10-01T17:52Z (master `c5ab503df`, batch 314; amended 17:59Z: master `f88f74641` after batch 316)
 ### Merged today (Stream 5)
 - #1341 #1342 #1343 #1344 #1346 #1349 #1351 #1353 #1362 #1371 #1382 #1395, and earlier ones (see the LIVE blocks).
 - **#1382 is a SECURITY fix.** One malformed chat socket event could stop the whole API.
@@ -29,8 +29,8 @@ Bundles are under `…/.pantopus-recovery/audits/<bundle>`, each with RESULT.md 
 
 | PR | What | Head | Bundle | Needs |
 |---|---|---|---|---|
-| #1380 | seat-invite renew + one pending invite per email (migration **20261001138000**, renumbered from 136000) | `80f2d5822` | `20261001-stream5-seat-invite-renew-r1` | **Sealed `0e248f90…`**. Merges with #1381. Stream 1 has it. |
-| #1396 | a repeated crew create gets the first 201 | `51cad4882` | `20261001-stream5-crew-create-repeat-r1` | **Sealed `28b1b171…`**. Stream 1 has it. |
+| #1380 | seat-invite renew + one pending invite per email (migration **20261001138000**, renumbered from 136000) | `80f2d5822` | `20261001-stream5-seat-invite-renew-r1` | **Sealed `0e248f90…`**, CI green, verified by Stream 1. **Held to merge together with #1381** (Stream 1, 17:58Z): on its own, a re-invite from a current native app would renew the seat and kill the link already shared from web, without showing a new one. So seal #1381 as soon as its iOS CI is green. |
+| #1396 | a repeated crew create gets the first 201 | `51cad4882` | `20261001-stream5-crew-create-repeat-r1` | **Merged** in batch 316 (PR #1411, master `f88f74641`, 17:58:13Z). |
 | #1366 | invoice recipient endpoint + web picker | `ab5c3470c` | `20261001-stream5-invoice-recipient-picker-r1` | **Sealed `090059b6…`**, but its base is #1357's branch. After #1357 merges: `gh pr edit 1366 --base master`, prove the merge with `git merge-tree`, re-seal if master moved. |
 | #1381 | native: copy the seat-invite link | `736d38fea` | `20261001-stream5-seat-invite-link-native-r1` | Device pass recorded (Stream 1 `20261001-stream1-cand31-device-cells-r1`, seal `2a8dd3c0…`). **Seal when iOS CI is green**; it merges with #1380. |
 | #1387 | a reaction retry keeps the reaction (`reacted`) | `f8fbea665` | `20261001-stream5-reaction-intended-state-r1` | Device pass recorded (same cand31 bundle). **Seal when iOS CI is green.** |
@@ -38,7 +38,7 @@ Bundles are under `…/.pantopus-recovery/audits/<bundle>`, each with RESULT.md 
 | #1356 | the new-password field stays masked | `09e1ab26a` | `20261001-stream5-password-field-masked-r1` | Device pass recorded. **Seal when iOS CI is green.** |
 | #1357 | crew invoice create + package buy take `client_request_id` | `88d7fedd9` | `20261001-stream5-crew-intent-keys-r1` | Device pass recorded. **Seal when iOS CI is green.** If the emulator job fails on infrastructure: `gh run rerun <id> --failed`. |
 | #1367 | native invoice recipient picker (stacked on #1366) | `0c655233f` | `20261001-stream5-invoice-recipient-picker-native-r1` | Device pass recorded (`20261001-stream1-cand30-device-cells-r1`). Seal when iOS CI is green. After #1366 merges, retarget to master and prove the merge. |
-| #1408 | catalog category/item + package creates take `client_request_id` (server, web, iOS, Android) | `46ae1afbc` | `20261001-stream5-catalog-package-keys-r1` | CI was running at handoff. **Device check requested from Stream 1** (add an item, a category and a package; a lost-reply retry of each ends with one row). Seal after CI is green and Stream 1's bundle has been recorded in the RESULT's Native section. |
+| #1408 | catalog category/item + package creates take `client_request_id` (server, web, iOS, Android) | `46ae1afbc` | `20261001-stream5-catalog-package-keys-r1` | CI was running at handoff; the web job had already passed. **Device check requested from Stream 1** (it's in Stream 1's successor's queue as one candidate with #1408) (add an item, a category and a package; a lost-reply retry of each ends with one row). Seal after CI is green and Stream 1's bundle has been recorded in the RESULT's Native section. |
 | #842 | draft | – | – | Stays a draft. |
 
 **At handoff,** only the macOS (iOS) CI jobs were pending on #1338, #1356, #1357, #1367, #1381 and #1387. Check each once with `gh pr view N --json statusCheckRollup`; don't poll in loops.
