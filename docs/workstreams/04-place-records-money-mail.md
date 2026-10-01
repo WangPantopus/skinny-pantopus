@@ -397,7 +397,7 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
-- **2026-10-01T13:36Z — [#1354](https://github.com/WangPantopus/skinny-pantopus/pull/1354) is with the queue owner: shared Android controls read once in TalkBack, and the wizard title clears its step count at large text.** Head `b170f1ccc` on `a0eba5315`, Android only, three shared files. Seal `20261001-stream4-android-shared-a11y-r1` (`d52978cb…`).
+- **2026-10-01T13:34:08Z — [#1354](https://github.com/WangPantopus/skinny-pantopus/pull/1354) is with the queue owner: shared Android controls read once in TalkBack, and the wizard title clears its step count at large text.** Head `b170f1ccc` on `a0eba5315`, Android only, three shared files. Seal `20261001-stream4-android-shared-a11y-r1` (`d52978cb…`).
   - **What changed:** ListOfRows tabs, the extended FAB and the labelled top-bar action; the WizardShell CTA; and the
     app-wide `PantopusButton`, which covers every EmptyState CTA.
     - `clearAndSetSemantics` sits last in each chain, so click, role, state, test tag and text are kept.
