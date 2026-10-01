@@ -495,7 +495,7 @@ public struct PulsePostCard: View {
     }
 }
 
-// The card's VoiceOver actions sit in an extension so the card's body stays within SwiftLint's type length.
+/// The card's VoiceOver actions sit in an extension so the card's body stays within SwiftLint's type length.
 private extension PulsePostCard {
     /// The card's controls as VoiceOver actions, named as their buttons are.
     @ViewBuilder var cardActions: some View {
