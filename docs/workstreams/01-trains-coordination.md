@@ -9,6 +9,7 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T12:10Z (Stream 1), batch 293.** Merged #1335 at 12:08:55Z: **my #1334** (no self-notifications for organizer-helpers on address share and confirm; seal `6faa66b5`) and Stream 3's #1333 (Home members web a11y). Master is **`1eaa12827`**; the next batch is **294**. The runtime worktree is on master, and its backend code is identical.
 - **Update 2026-10-01T12:10Z (Stream 1).** Android "Review signups, edit signup" A1–A4 is **not applicable** (seal `4b48bf0a`). The route is registered, but it has no caller and no deep link, and organizers manage signups in Manage, as on iOS. Stream 1's U02 is now done apart from Stream 4's 2 shared Android items.
 - **Update 2026-10-01T12:05Z (Stream 1).**
   - **The six "A3 brand-blue token" decide cells are closed** (seal `749e0d21`). On master `a0eba5315`, axe finds 0 violations in light and 0 contrast violations in dark across 12 Trains web screens, so the 2026-09-30 AA accent utilities resolved them.
