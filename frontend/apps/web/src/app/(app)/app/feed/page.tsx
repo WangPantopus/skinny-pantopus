@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -623,9 +624,10 @@ export default function FeedPage() {
         </>
       )}
 
-      {/* Feed Preferences Modal */}
-      {prefs.showPrefs && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
+      {/* Feed Preferences Modal. Rendered into document.body: inside the app's <main> (its own stacking context) the
+          phone tab bar and the floating chat and + buttons stayed on top of it and covered its close button and checkboxes. */}
+      {prefs.showPrefs && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/40 z-[60] flex items-end sm:items-center justify-center p-4">
           <div className="bg-surface rounded-2xl border border-app shadow-2xl p-6 w-full max-w-sm space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-app">Pulse Preferences</h3>
@@ -686,7 +688,8 @@ export default function FeedPage() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Post Detail Slide Panel */}

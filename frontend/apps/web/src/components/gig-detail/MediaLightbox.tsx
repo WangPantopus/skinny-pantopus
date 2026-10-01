@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import Image from 'next/image';
+import { createPortal } from 'react-dom';
 
 // ─── Types ───
 
@@ -40,9 +41,11 @@ export default function MediaLightbox({
   }, [currentIndex, images.length, onClose, onNavigate]);
 
   const current = images[currentIndex];
-  if (!current) return null;
+  if (!current || typeof document === 'undefined') return null;
 
-  return (
+  // Rendered into document.body: inside the app's <main> (its own stacking context) the app header stayed on top
+  // of the viewer and covered its close button.
+  return createPortal(
     <div
       className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center"
       onClick={onClose}
@@ -99,6 +102,7 @@ export default function MediaLightbox({
           ›
         </button>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
