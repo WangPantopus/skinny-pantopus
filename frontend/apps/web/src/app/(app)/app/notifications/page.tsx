@@ -460,7 +460,7 @@ export default function NotificationsPage() {
                 <p className="text-xs text-app-text-muted mt-0.5">{formatDate(selectedNotif.created_at)}</p>
               </div>
             </div>
-            <button onClick={() => setSelectedNotif(null)} className="p-1.5 hover:bg-app-hover rounded-lg transition text-app-text-muted hover:text-app-text-secondary">
+            <button onClick={() => setSelectedNotif(null)} className="p-1.5 hover:bg-app-hover rounded-lg transition text-app-text-muted hover:text-app-text-secondary" aria-label="Close">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>

@@ -118,7 +118,7 @@ export default function NotificationPreferencesPage() {
         {/* Header */}
         <div className="flex items-center gap-3">
           <button onClick={() => router.back()}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition" aria-label="Back">
             <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Notification Preferences</h1>
