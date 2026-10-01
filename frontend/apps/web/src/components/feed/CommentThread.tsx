@@ -282,6 +282,9 @@ export default function CommentThread({
                 <span className="text-[10px] text-app-muted italic">edited</span>
               )}
               <button
+                type="button"
+                aria-label="Like comment"
+                aria-pressed={!!comment.userHasLiked}
                 onClick={() => onLikeComment?.(comment.id)}
                 className={`flex items-center gap-1 text-[11px] font-semibold transition px-1 py-0.5 -mx-1 rounded-md ${
                   comment.userHasLiked ? 'text-red-500' : 'text-app-muted hover:text-red-400'
@@ -381,7 +384,7 @@ export default function CommentThread({
             {replyTo && (
               <div className="mb-2 flex items-center gap-2 rounded-lg border border-app bg-surface-muted px-2.5 py-1.5 text-[10px] text-app-muted">
                 <span>Replying to <strong>{replyTo.name}</strong></span>
-                <button onClick={() => { draftRevision.current += 1; setReplyTo(null); }} className="ml-auto text-app-muted hover:text-app">
+                <button type="button" aria-label="Cancel reply" onClick={() => { draftRevision.current += 1; setReplyTo(null); }} className="ml-auto text-app-muted hover:text-app">
                   <X className="h-3 w-3" />
                 </button>
               </div>
@@ -409,6 +412,7 @@ export default function CommentThread({
                     )}
                     <button
                       type="button"
+                      aria-label={`Remove ${file.name}`}
                       onClick={() => handleRemoveFile(idx)}
                       className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white"
                     >
