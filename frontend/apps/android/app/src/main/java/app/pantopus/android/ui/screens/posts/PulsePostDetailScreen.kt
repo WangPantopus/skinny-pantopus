@@ -21,7 +21,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -114,10 +113,10 @@ fun PulsePostDetailScreen(
     val replyTarget by viewModel.replyTarget.collectAsStateWithLifecycle()
     val nearbyProviders by viewModel.nearbyProviders.collectAsStateWithLifecycle()
 
-    // Saveable, so an open Report or Delete dialog survives a theme, font-size or rotation change.
+    // Saveable, so an open Report, Delete or reply Delete dialog survives a theme, font-size or rotation change.
     var showsReportReasons by rememberSaveable { mutableStateOf(false) }
     var showsDeleteConfirm by rememberSaveable { mutableStateOf(false) }
-    var commentPendingDelete by remember { mutableStateOf<PostCommentRow?>(null) }
+    var commentPendingDeleteId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(Unit) { viewModel.loadNearbyProviders() }
@@ -187,7 +186,7 @@ fun PulsePostDetailScreen(
                     onCancelReply = { viewModel.cancelReply() },
                     onCommentReply = { row -> viewModel.beginReply(row.id, row.authorName) },
                     onCommentLike = { row -> viewModel.toggleCommentLike(row.id) },
-                    onCommentDelete = { row -> commentPendingDelete = row },
+                    onCommentDelete = { row -> commentPendingDeleteId = row.id },
                 )
             }
         }
@@ -318,16 +317,16 @@ fun PulsePostDetailScreen(
         )
     }
 
-    commentPendingDelete?.let { pending ->
+    commentPendingDeleteId?.let { pendingId ->
         AlertDialog(
-            onDismissRequest = { commentPendingDelete = null },
+            onDismissRequest = { commentPendingDeleteId = null },
             title = { Text("Delete this reply?") },
             text = { Text("This can't be undone.") },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteComment(pending.id)
-                        commentPendingDelete = null
+                        viewModel.deleteComment(pendingId)
+                        commentPendingDeleteId = null
                     },
                     modifier = Modifier.testTag("pulsePostDetail-commentDeleteConfirm"),
                 ) {
@@ -335,7 +334,7 @@ fun PulsePostDetailScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { commentPendingDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { commentPendingDeleteId = null }) { Text("Cancel") }
             },
         )
     }
