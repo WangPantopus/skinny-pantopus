@@ -127,7 +127,7 @@ function PaymentSettingsPageContent() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-app-surface-sunken p-1 rounded-lg w-fit">
+        <div className="flex gap-1 mb-6 bg-app-surface-sunken p-1 rounded-lg w-fit max-w-full overflow-x-auto">
           {(showScheduling
             ? ["wallet", "methods", "payouts", "history", "scheduling"]
             : ["wallet", "methods", "payouts", "history"]
@@ -135,7 +135,7 @@ function PaymentSettingsPageContent() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+              className={`whitespace-nowrap px-4 py-2 rounded-md text-sm font-medium transition ${
                 activeTab === tab
                   ? "bg-app-surface text-app-text shadow-sm"
                   : "text-app-text-secondary hover:text-app-text-strong"
