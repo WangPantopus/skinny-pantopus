@@ -715,6 +715,19 @@ router.post('/home/:homeId', verifyToken, upload.single('file'), validate(upload
   }
 });
 
+// GET /api/files/home/:homeId?visibility=public answers any signed-in account, so it sends only what a public photo or file
+// needs: never the uploader's id, the stored or original file name (an original name often carries a person's name), the
+// storage path, the category or processing details. The household's private listing keeps its full rows.
+const PUBLIC_HOME_FILE_COLUMNS = 'id, file_url, file_type, mime_type, metadata, created_at';
+const PUBLIC_HOME_FILE_METADATA = ['title', 'description', 'width', 'height', 'thumbnails'];
+
+function toPublicHomeFile(file) {
+  const metadata = file.metadata && typeof file.metadata === 'object'
+    ? Object.fromEntries(PUBLIC_HOME_FILE_METADATA.filter((key) => file.metadata[key] !== undefined).map((key) => [key, file.metadata[key]]))
+    : null;
+  return { ...file, metadata };
+}
+
 /**
  * GET /api/files/home/:homeId
  * Get home's files
@@ -751,7 +764,7 @@ router.get('/home/:homeId', verifyToken, async (req, res) => {
     
     const { data: files, error } = await supabaseAdmin
       .from('File')
-      .select('*')
+      .select(visibility === 'public' ? PUBLIC_HOME_FILE_COLUMNS : '*')
       .eq('home_id', homeId)
       .eq('visibility', visibility)
       .eq('is_deleted', false)
@@ -765,7 +778,7 @@ router.get('/home/:homeId', verifyToken, async (req, res) => {
     // Byte-contract documents have their own current HomeDocument visibility.
     // Only that API may expose their metadata; legacy File visibility is broader.
     const legacyFiles = (files || []).filter(file => !['home_document_v1', 'home_task_media_v1', 'home_claim_evidence_v1', 'home_lease_evidence_v1'].includes(file.metadata?.storage_contract));
-    res.json({ files: legacyFiles });
+    res.json({ files: visibility === 'public' ? legacyFiles.map(toPublicHomeFile) : legacyFiles });
     
   } catch (err) {
     logger.error('Home files fetch error', { error: err.message });
