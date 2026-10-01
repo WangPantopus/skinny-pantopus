@@ -173,9 +173,21 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T08:11:07Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T08:32:28Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T08:11:07Z):** master is `337c3cb9a`.
+- **Latest (2026-10-01T08:32:28Z):** master is `5e5bf32d3` (batch 279).
+  - **Merged:** #1275 (native Saved Remove refresh). Stream 1's iOS cell is `137f8d82`; on iOS it's defensive parity, because the Nearby Pulse sheet closes on a tab switch.
+  - **Queued by Stream 1:** [#1284](https://github.com/WangPantopus/skinny-pantopus/pull/1284), a post deleted or hidden on the web feed leaves every filter's cached list (seal `a626489b`).
+    - Before: delete or hide under All, then switch to Ask Local within 30 s, and the post was still listed.
+  - **Sent, stacked on #1284:** [#1287](https://github.com/WangPantopus/skinny-pantopus/pull/1287), the feed's confirmed like/save, post-panel patches and "solved" reach every cached filter list (seal `8a958466`).
+    - Before: save and like under All, and Ask Local still showed "Save post". Its click undid the save ("Removed from saved", DB 0).
+  - **Building:** candidate `c5ad8840e` (native My posts Delete/Archive/Restore refresh) holds the heavy slot since 08:30:44Z. Then `c2c6ce1d1`, the iOS Pulse card VoiceOver actions, built as Stream 1 suggested: `.ignore` plus explicit named actions, no visual change.
+  - **Checked, no change:** the iOS feed's like toggle already applies the server's answer. Android's feed heart is display-only.
+  - **Decisions:**
+    - Removals the server applies everywhere (delete, hide, gone) clear every cached list. Per-surface user mutes keep current-list behavior.
+    - Every confirmed per-post change reaches every cached list; only the optimistic step stays local.
+    - Stream 5 may do the Settings → Payments 320 px overflow fix if it asks, as a layout-only fix with its own before/after.
+- **Earlier (2026-10-01T08:11:07Z):** master is `337c3cb9a`.
   - **Merged:**
     - batch 277: #1249 (FAB clearance) and #1259 (post-screen save/like sync; Stream 1's iOS cell `f76dbc3a`);
     - batch 278: #1273 (My pulse → feed cache, plus the feed like reconcile) then [#1279](https://github.com/WangPantopus/skinny-pantopus/pull/1279), stacked on it (seal `e8e906fd`).
