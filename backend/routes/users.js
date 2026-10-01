@@ -1181,6 +1181,8 @@ const REGISTRATION_AUTH_RETRY_ATTEMPTS = Number(
 const REGISTRATION_AUTH_RETRY_DELAY_MS = Number(
   process.env.AUTH_SIGNUP_RETRY_DELAY_MS || 400
 );
+// How long a sign-up that lost the address to an identical one at the same moment waits for that one's User row.
+const REGISTRATION_REPEAT_SETTLE_MS = 500;
 
 const wait = (ms) =>
   new Promise((resolve) => {
@@ -1402,6 +1404,84 @@ const isEmailAvailable = async (email, excludeUserId = null) => {
   return false;
 };
 
+/**
+ * The same person's sign-up arriving again (a phone's silent re-send, or a retry after a lost reply): the address
+ * belongs to an account whose email isn't confirmed yet, and this request holds its password. GoTrue checks the
+ * password before it refuses an unconfirmed address, and opens no session for one. Returns the account's User row.
+ */
+const findRepeatSignup = async (email, password) => {
+  const { data: row } = await supabaseAdmin
+    .from('User')
+    .select('id, username, name, first_name, middle_name, last_name, account_type, created_at')
+    .eq('email', email)
+    .limit(1)
+    .maybeSingle();
+  if (!row) return null;
+  const { data: auth } = await supabaseAdmin.auth.admin.getUserById(row.id);
+  if (!auth?.user || auth.user.email_confirmed_at) return null;
+  const { data, error } = await createAuthClient().auth.signInWithPassword({ email, password });
+  if (data?.session) {
+    // Confirmed in the meantime: not a sign-up any more. Close the session this check opened.
+    await revokeSessionByAccessToken(data.session.access_token, { source: 'register_repeat_check', userId: row.id });
+    return null;
+  }
+  return /email not confirmed/i.test(error?.message || '') ? row : null;
+};
+
+/** Sends the sign-up verification email for a generateLink token; true when it went out. */
+const sendSignupVerification = async (req, email, hashedToken) => {
+  if (!hashedToken) {
+    logger.error('No hashedToken from signup — verification email not sent', { email });
+    return false;
+  }
+  try {
+    const verifyLink = buildVerifyEmailUrl(req, hashedToken, email, 'signup');
+    const sendResult = await emailService.sendVerificationEmail({
+      toEmail: email,
+      verifyLink,
+      isResend: false,
+    });
+    if (!sendResult?.success) {
+      logger.error('Verification email send failed', { email, error: sendResult?.error });
+    }
+    return sendResult?.success === true;
+  } catch (mailErr) {
+    logger.error('Verification email send threw', { email, error: mailErr.message });
+    return false;
+  }
+};
+
+const VERIFICATION_EMAIL_UNAVAILABLE_REPLY = {
+  code: 'VERIFICATION_EMAIL_UNAVAILABLE',
+  accountCreated: true,
+  requiresEmailVerification: true,
+  error: 'Your account was created, but the verification email could not be sent. Request a new link from the sign-in screen.',
+};
+
+/** The 201 answer to a sign-up: the account as stored, and the optional profile fields as the request sent them. */
+const registrationReply = (body, account) => ({
+  message: 'Registration successful. Please verify your email before signing in.',
+  requiresEmailVerification: true,
+  user: {
+    id: account.id,
+    email: body.email,
+    username: account.username,
+    name: account.name || null,
+    firstName: account.first_name || null,
+    middleName: account.middle_name || null,
+    lastName: account.last_name || null,
+    phoneNumber: body.phoneNumber,
+    address: body.address,
+    city: body.city,
+    state: body.state,
+    zipcode: body.zipcode,
+    accountType: account.account_type || 'individual',
+    role: 'user',
+    verified: false,
+    createdAt: account.created_at,
+  },
+});
+
 // ============ ROUTES ============
 
 /**
@@ -1458,6 +1538,20 @@ router.post(
         }
       }
 
+      // The address first: a repeat of this person's own sign-up gets the first answer again, before its username or
+      // phone number (its own) could be reported as taken. Anyone else still hears that the address is registered.
+      logger.info('Checking email availability', { email });
+      const emailAvailable = await isEmailAvailable(email);
+      if (!emailAvailable) {
+        const repeat = await findRepeatSignup(email, password);
+        if (repeat) {
+          logger.info('Registration repeated - answering as the first', { userId: repeat.id });
+          return res.status(201).json(registrationReply(req.body, repeat));
+        }
+        logger.warn('Registration rejected - email in use', { email });
+        return res.status(400).json({ error: 'Email already registered' });
+      }
+
       // Resolve the username. Native clients send one explicitly; the web
       // wedge signup (email+password only) omits it and gets a generated
       // handle — usernames belong to the creator layer, not to signup.
@@ -1480,13 +1574,6 @@ router.post(
       if (!phoneAvailable) {
         logger.warn('Registration rejected - phone in use', { phoneNumber });
         return res.status(400).json({ error: 'Phone number already in use' });
-      }
-
-      logger.info('Checking email availability', { email });
-      const emailAvailable = await isEmailAvailable(email);
-      if (!emailAvailable) {
-        logger.warn('Registration rejected - email in use', { email });
-        return res.status(400).json({ error: 'Email already registered' });
       }
 
       // ============ CREATE AUTH USER ============
@@ -1513,6 +1600,17 @@ router.post(
           errorCode: authError.code,
           email,
         });
+
+        // An identical sign-up that started at the same moment can win the address; GoTrue then refuses this one
+        // ("Database error saving new user"), and the winner's User row follows within moments.
+        if (authError.message?.includes('already registered') || authError.code === 'unexpected_failure') {
+          await wait(REGISTRATION_REPEAT_SETTLE_MS);
+          const repeat = await findRepeatSignup(email, password);
+          if (repeat) {
+            logger.info('Registration repeated at the same moment - answering as the first', { userId: repeat.id });
+            return res.status(201).json(registrationReply(req.body, repeat));
+          }
+        }
 
         if (authError.message?.includes('already registered')) {
           return res.status(400).json({ error: 'Email already registered' });
@@ -1592,6 +1690,20 @@ router.post(
           userId,
           email,
         });
+
+        // generateLink hands back the existing auth user when the address already has an unconfirmed one: an
+        // identical sign-up created it moments ago, and that sign-up's User row owns it, so never delete it. This
+        // request's generateLink replaced that sign-up's verification link, so this request sends the email.
+        const { data: owner } = await supabaseAdmin.from('User').select('id').eq('id', userId).maybeSingle();
+        if (owner) {
+          const repeat = await findRepeatSignup(email, password);
+          if (!repeat) return res.status(400).json({ error: 'Email already registered' });
+          if (!(await sendSignupVerification(req, email, authData.hashedToken))) {
+            return res.status(503).json(VERIFICATION_EMAIL_UNAVAILABLE_REPLY);
+          }
+          logger.info('Registration repeated at the same moment - answering as the first', { userId });
+          return res.status(201).json(registrationReply(req.body, repeat));
+        }
 
         // Rollback: delete auth user if database insert fails
         logger.info('Rolling back - deleting auth user', { userId });
@@ -1674,35 +1786,10 @@ router.post(
       // ============ SEND VERIFICATION EMAIL ============
       // Sent through our own SMTP (admin.generateLink already returned
       // the hashed token when the auth user was created).
-      let verificationEmailSent = false;
-      if (authData.hashedToken) {
-        try {
-          const verifyLink = buildVerifyEmailUrl(req, authData.hashedToken, email, 'signup');
-          const sendResult = await emailService.sendVerificationEmail({
-            toEmail: email,
-            verifyLink,
-            isResend: false,
-          });
-          verificationEmailSent = sendResult?.success === true;
-          if (!sendResult?.success) {
-            logger.error('Verification email send failed', { email, error: sendResult?.error });
-          }
-        } catch (mailErr) {
-          logger.error('Verification email send threw', { email, error: mailErr.message });
-        }
-      } else {
-        logger.error('No hashedToken from signup — verification email not sent', { email });
-      }
-
-      if (!verificationEmailSent) {
+      if (!(await sendSignupVerification(req, email, authData.hashedToken))) {
         // Preserve the account: delivery can fail after SMTP accepts a message.
         // A resend can recover without creating or deleting another identity.
-        return res.status(503).json({
-          code: 'VERIFICATION_EMAIL_UNAVAILABLE',
-          accountCreated: true,
-          requiresEmailVerification: true,
-          error: 'Your account was created, but the verification email could not be sent. Request a new link from the sign-in screen.',
-        });
+        return res.status(503).json(VERIFICATION_EMAIL_UNAVAILABLE_REPLY);
       }
 
       res.status(201).json({
