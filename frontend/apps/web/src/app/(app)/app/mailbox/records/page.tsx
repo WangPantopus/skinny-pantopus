@@ -331,7 +331,7 @@ export default function MailRecordsPage() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Left: Room filter + Asset list ────────────────────── */}
-      <div className="flex flex-col h-full flex-shrink-0 border-r border-app-border bg-app-surface w-full md:w-[360px]">
+      <div className={`${showAddForm ? 'hidden md:flex' : 'flex'} flex-col h-full flex-shrink-0 border-r border-app-border bg-app-surface w-full md:w-[360px]`}>
         {/* Header */}
         <div className="px-4 py-3 border-b border-app-border-subtle flex-shrink-0">
           <h1 className="text-base font-semibold text-app-text">
@@ -411,7 +411,7 @@ export default function MailRecordsPage() {
       </div>
 
       {/* ── Right: Detail panel ──────────────────────────────── */}
-      <div className="flex-1 min-w-0 overflow-hidden hidden md:block">
+      <div className={`flex-1 min-w-0 overflow-hidden ${showAddForm ? 'block' : 'hidden md:block'}`}>
         {aiSuggestion ? (
           <AiSuggestionPanel
             suggestion={aiSuggestion}
