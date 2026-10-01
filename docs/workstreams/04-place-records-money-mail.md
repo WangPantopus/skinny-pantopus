@@ -15,9 +15,113 @@
 >   - audit bundles `YYYYMMDD-stream4-<topic>-rN`;
 >   - device and heavy lease label `stream4:`, which is also its runtime-lease label;
 >   - session name "Stream 4: Place, records, money and mail";
->   - resume prompt [`NEXT-STREAM4-PROMPT-2026-09-30.md`](NEXT-STREAM4-PROMPT-2026-09-30.md).
+>   - resume prompt [`NEXT-STREAM4-PROMPT-2026-10-01.md`](NEXT-STREAM4-PROMPT-2026-10-01.md) (the 2026-09-30 one is history).
 
-## CURRENT RESUME — Stream 4 (start here; handoff written 2026-09-30T22:19:24Z)
+## CURRENT RESUME — Stream 4 (start here; handoff written 2026-10-01T17:54:23Z)
+
+The resume prompt is [`NEXT-STREAM4-PROMPT-2026-10-01.md`](NEXT-STREAM4-PROMPT-2026-10-01.md). The 2026-09-30 resume below
+this one is kept for its still-valid recipes and lessons; its state is superseded.
+
+### State at handoff
+
+- **Master:** `5051c2b79` or newer. Merged today from this stream:
+
+  | PR | What | Batch |
+  |---|---|---|
+  | #1282, #1300, #1301, #1317 | morning PRs | earlier batches |
+  | #1354 | Android TalkBack in shared components | 300 |
+  | #1372 | Mail Day routes to the addressee | 304 |
+  | #1373 | Mail Day Undo, Undo all, Other… | 305 |
+  | #1374 | Stamps wallet hidden with `mail_extras` | 305 |
+  | #1375 | iOS Mail Day error state | 313 |
+  | #1400 | Mail Day personal fallback | 313 |
+  | #1401 | Stamps themes apply | 313 |
+  | #1402 | Mail Day off switch stops the push | 313 |
+  | #1403 | same-day letters join Mail Day | 313 |
+
+- **Open with the queue owner** (Stream 1, "Stream 1 resume: Support Trains and merge queue"):
+
+  | PR | Branch | What | Evidence |
+  |---|---|---|---|
+  | [#1406](https://github.com/WangPantopus/skinny-pantopus/pull/1406) | `claude/stream4-mailday-dead-controls`, head `68eba7522` (master merged for a preview conflict with #1375) | My Mail Day hides its dead scan, history and setup controls | `20261001-stream4-mailday-controls-r3` (`c685c3a8…`) |
+  | [#1410](https://github.com/WangPantopus/skinny-pantopus/pull/1410) | `claude/stream4-mail-flag-gaps`, head `360f2fb02` | Earn, package tracking and the Stamps gift icons hidden with their launch features off (iOS, Android, web) | `20261001-stream4-flaggaps-themes-r2` (`35b44f01…`) and `20261001-stream4-flaggaps-placeholder-r4` (`ce96a419…`) |
+
+- **Pushed, not yet a PR:** `claude/stream4-mail-task-stubs`, head `d378fee78`. Live tasks hide the dock's Snooze, Delegate
+  and Calendar and the header's Share and More.
+  - **Before evidence:** done, all in r3 (`c685c3a8…`). Calendar showed "Added to calendar" for nothing; Snooze only
+    toasted; Delegate's button only closed its sheet; Share and More did nothing.
+  - **After evidence:** r3 has the dock-only after from build `4c38e8fef`. The header change (`d378fee78`) needs its own
+    build and after frames on iOS and Android.
+  - **Remaining steps:** build, frames, seal, PR, then Stream 1.
+- **Runtime:**
+  - The lease and device slots are free.
+  - The backend is on master `726510e65` (or whatever Stream 3's successor leaves).
+  - No Stream 4 fixture exists; every window was cleaned exactly (349/353 tables equal, the rest Auth* history).
+  - Fault rules are empty.
+- **Devices:**
+  - The iOS sim "Pantopus S34" is shut down with the owner signed in.
+  - The emulator `pantopus_s34` is stopped with the master APK `215f6d747` installed and TalkBack off.
+  - Always verify the installed APK hash after booting.
+- **Builds kept** in `/private/tmp/pantopus-stream4-builds` (each has a `HEAD` file):
+
+  | Build | Source |
+  |---|---|
+  | `ios-c1-merged` | master `215f6d747` + #1375 |
+  | `ios-flaggaps` | G `f431deec2` |
+  | `ios-dcmt` | `4c38e8fef` (dead controls + mail-task dock) |
+  | `android-flaggaps-before` | master `215f6d747` |
+  | `android-flaggaps` | `f431deec2` |
+  | `android-flaggaps-all` | control |
+  | `android-dcmt` | `4c38e8fef` |
+  | `android-flaggaps2` | `360f2fb02` |
+
+  Delete the ones you no longer need; iOS apps are about 920 MB each.
+- **Worktrees:**
+  - `…/stream-4-workstream-4a5d06`: `claude/stream4-mail-flag-gaps`;
+  - `…/stream-4-workstream-a16d86`: `claude/stream4-mailday-dead-controls`;
+  - `…/stream-4-workstream-c3e7`: `claude/stream4-mail-task-stubs`.
+
+### Next, in order
+
+1. **Follow #1406 and #1410** through Stream 1's queue, and answer reviews.
+2. **Finish the mail-task stubs.**
+   - Build it: `zsh tools/build-s4-native.sh <c3e7> claude/stream4-mail-task-stubs mailtask both ktlintCheck detekt :app:testDebugUnitTest --tests '*MailTask*' :app:verifyPaparazziDebug --tests '*MailTask*'`.
+   - Capture after frames on both apps: open a task fixture via `pantopus://mailbox/tasks/<id>` and show only Mark done in
+     the dock and no Share or More in the header.
+   - Seal, open the PR (problem and before evidence from r3), and hand it to Stream 1.
+3. **U05.** Verify the agent-gathered draft
+   [`stream4-u05-inventory-draft-2026-10-01.md`](stream4-u05-inventory-draft-2026-10-01.md) item by item on master. Fix the
+   real defects (smallest repair, with evidence), record each disposition, and fill this stream's U05 row for Stream 1's
+   release manifest.
+   - **First check:** whether the iOS maintenance form is reachable from the profile cover's Maintenance tile, as the draft
+     says. If it is, the parked `claude/stream4-ios-maintenance-reminder-flag` (`7f492bb31`) and Android's calendar POST
+     matter again.
+4. **Mail Day settings honesty.** Nothing reads delivery time, timezone, include, interrupt, sound or haptics on any client.
+   - Decide and record.
+   - The recommendation: honor delivery time as "not before" in the push's timezone, and hide the inert rows on iOS, Android
+     and web.
+5. **iOS VoiceOver:** a reviewed Mail Day row is one button whose label omits Undo. Add an Undo hint or action, and verify it
+   with VoiceOver or the Accessibility Inspector.
+6. **Android:** the mail task's "Pulled from this mail" card renders solid orange, while iOS shows a white card with an orange
+   stripe. Check the tokens first; this is a presentation change.
+
+### Lessons (2026-10-01; more in the prompt's §7)
+
+- **Bursts:**
+  - iOS toasts (2.2 s) outlast neither the step driver's round trip (about 2.6 s) nor Android driver taps (up to 30 s while
+    it searches and scrolls).
+  - Use a `simctl io screenshot` burst on iOS, or a `screencap` burst plus `adb shell input tap` with bounds from the saved
+    tree on Android.
+- **Emulator state:**
+  - An emulator boot may bring back an older APK, so verify the installed APK's sha256 before capturing.
+  - Check the first frame's text tree for a sign-in screen before viewing it.
+- **Next dev** redirects to host `localhost` and lands on sign-in. Record redirects without following them.
+- **Earn creates a wallet.** Opening Earn (`GET /api/wallet`) creates a Wallet row; fault the read first.
+- **Integration commits:** cherry-pick single commits; never merge branches cut from a newer master into an older
+  integration commit.
+- **Coordination pushes** can race other streams: fetch, rebase your one commit, push.
+
+## PREVIOUS RESUME — Stream 4 (handoff 2026-09-30T22:19:24Z; state superseded, recipes and lessons still valid)
 
 **Scope.** What a home knows and keeps:
 - Place and home intelligence: the health score and seasonal checklist, the address calendar, property data, weather/air/alerts/civic, and timeline freshness (I01–I07);
@@ -396,6 +500,24 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+- **2026-10-01T17:54:23Z — Handoff (user's request). Stream 4's state and the ordered next list are in the CURRENT RESUME at the top; the prompt is `NEXT-STREAM4-PROMPT-2026-10-01.md`.**
+  - **Open with the queue owner:**
+    - [#1406](https://github.com/WangPantopus/skinny-pantopus/pull/1406), Mail Day dead controls: head `68eba7522`; seal
+      `20261001-stream4-mailday-controls-r3` (`c685c3a8…`).
+    - [#1410](https://github.com/WangPantopus/skinny-pantopus/pull/1410), flag gaps: head `360f2fb02`; seals r2
+      (`35b44f01…`) and `20261001-stream4-flaggaps-placeholder-r4` (`ce96a419…`). Android's cut-link placeholder now names
+      "Earn" and "Package unboxing", not "Beacons".
+  - **Pushed, not yet a PR:** `claude/stream4-mail-task-stubs` (`d378fee78`). It needs a build plus after frames for the
+    header; the before evidence is in r3.
+  - **New:** an agent-gathered U05 inventory,
+    [`stream4-u05-inventory-draft-2026-10-01.md`](stream4-u05-inventory-draft-2026-10-01.md). **Unverified**: the next
+    session checks each item on master before recording or fixing it.
+  - **Runtime:**
+    - The lease and slots are free. Windows r3 (17:24:54Z–17:41:24Z) and r4 (17:51:10Z–17:53Z) were cleaned exactly; r4
+      changed no row.
+    - The backend is on master `726510e65`, with no fault rules.
+    - Both devices are shut down; the emulator has the master APK `215f6d747`.
 
 - **2026-10-01T17:22:43Z — Window r2 sealed (`20261001-stream4-flaggaps-themes-r2`, MANIFEST `35b44f01…`, 369 files). #1375 rechecked; four new PRs with the queue owner.**
   - **Window:** 16:29:33Z–16:48:50Z and 17:07:44Z–17:19:24Z. Stream 3 held the runtime in between, for its TalkBack probe and
