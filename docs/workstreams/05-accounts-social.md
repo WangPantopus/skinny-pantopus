@@ -9,6 +9,25 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1285 #1288 #1289 (b280) and #1290 (b281) merged; #1302 (profile edits reach posts, search and the privacy preview) sealed; static a11y list shared; privacy findings next, 2026-10-01T09:49:57Z
+
+- **Merged:** batch 280 (#1285, #1288, #1289 for Stream 1) and batch 281 (#1290 for Stream 2). Master is `e333507a9`.
+- **Sealed and with Stream 1: #1302** (seal `51e894a2…`, head `95ee50e4d`, bundle `20261001-stream5-profile-edit-public-r1`).
+  - **The bug:** after someone changed their name, bio or photo in Edit profile, their posts, comments, search and the privacy preview kept the old ones. Only their own profile changed. Search found them by the old name and not by the new one.
+  - **The cause:** the public LocalProfile holds a copy of the name, photo and bio, made on the first post, Identity Center or Privacy preview. The account writes (`PATCH /api/users/profile`, `POST /api/upload/profile-picture`) never touched it.
+  - **The fix:** both routes update the copy of what they changed. Backend only; iOS and Android use the same routes.
+  - **Reproduced** on master, and verified on the head, on the real web: preview, post, search, own profile, and a user without a LocalProfile. Full backend Jest and the privacy gates pass. CI run 36844528213 succeeded. No fixtures remain.
+- **Decisions (standing direction):**
+  - The LocalProfile copy follows the account, because Edit profile is the only place anyone manages how they appear.
+  - No backfill. Stale copies heal on the person's next save; a production rewrite is left as a founder call.
+- **Static a11y list** (record, `20261001-stream5-app-a11y-static-scan-r1`): 58 unnamed buttons, 3 unnamed links and 191 unlabeled fields outside the launch cuts. Shared with Stream 1 for owners; Stream 5 takes a batch only with the owner's OK.
+- **BottomSheet close name:** Stream 1 agreed to leave it (only cut scheduling callers show the X).
+- **Next (privacy; reproduce first, then send the shape to Stream 1):**
+  - **Private profiles leak through one route.** With Profile Visibility "Private – Only you", signed-out `GET /api/local-profiles/<username>` returns 200 with name, photo, bio and stats, while `/api/users/username/<u>` returns 403. Its checks read `LocalProfile.profile_visibility`, a copy that never follows Settings. No app screen calls the route today (API-level exposure).
+  - **Neighborhood copy drift.** The "Neighborhood" privacy setting and city/state copies never resync. Someone who was public when their LocalProfile was made keeps showing their city after choosing "Only me".
+  - **The one-off P0.2 display-name email** (`backend/scripts/p0-2-send-display-name-migration-emails.js`) is obsolete. Migration 146 reverted 133's switch to usernames, so the email would now say something untrue, and its link is a 404. The Phase 0 runbook still lists it. Retire it.
+- **Runtime:** API on master `e333507a9` (09:46:43Z); web on `e333507a9`. The launcher gained an opt-in `S3_PUBLIC_URL_HOST=localhost` for upload checks. No fixtures; the `pantopus-uploads` bucket was removed again.
+
 ## LIVE — #1270 #1274 #1277 #1278 (b278) and #1281 (b279) merged; #1285 #1288 sealed; cross-stream #1289 (Trains, for Stream 1) sealed and #1290 (Payments, for Stream 2) in CI, 2026-10-01T08:51:14Z
 
 - **Merged:** batch 278 (#1270, #1274, #1277, #1278) and batch 279 (#1281). Master is `5e5bf32d3`.
