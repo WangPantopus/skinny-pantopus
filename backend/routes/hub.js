@@ -902,39 +902,10 @@ router.get('/discovery', verifyToken, async (req, res) => {
       }
 
       case 'people': {
-        let query = supabaseAdmin
-          .from('User')
-          .select('id, username, name, first_name, last_name, profile_picture_url, average_rating, city, state, created_at')
-          .eq('account_type', 'personal')
-          .neq('id', userId)
-          .not('name', 'is', null)
-          .order('average_rating', { ascending: false, nullsFirst: false })
-          .limit(parsedLimit);
-        if (sinceToday) query = query.gte('created_at', todayCutoff);
-        const { data: users } = await query;
-
-        items = (users || []).map((u) => {
-          const displayName = u.name || [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username;
-          const ratingStr = u.average_rating ? `${u.average_rating.toFixed(1)} stars` : null;
-          const locality = [u.city, u.state].filter(Boolean).join(', ') || null;
-          // The current schema doesn't expose a per-user verification
-          // flag yet; rating presence is the honest stand-in until
-          // identity verification ships through here.
-          const isVerified = u.average_rating != null;
-          return {
-            id: u.id,
-            type: 'person',
-            title: displayName,
-            meta: [ratingStr, u.city].filter(Boolean).join(' · '),
-            subtitle: locality,
-            rating: u.average_rating != null ? Number(u.average_rating.toFixed(1)) : null,
-            avatarUrl: u.profile_picture_url,
-            category: 'People',
-            createdAt: u.created_at,
-            verified: isVerified,
-            route: `/user/${u.id}`,
-          };
-        }).filter((p) => !verifiedOnly || p.verified);
+        // No people directory: this query had no area, privacy or block rule and only ever
+        // matched no one ('personal' isn't an account_type the column allows). Correcting the
+        // value would list every account to any caller, so the lane lists no one.
+        items = [];
         break;
       }
 
