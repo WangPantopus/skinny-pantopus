@@ -845,7 +845,7 @@ class ChatConversationViewModel
             if (context.messageType == null && context.fileIds == null) {
                 context =
                     try {
-                        context.copy(fileIds = uploadQueuedAttachmentsIfNeeded(roomId))
+                        context.copy(fileIds = uploadQueuedAttachmentsIfNeeded(roomId, clientId))
                     } catch (error: IllegalStateException) {
                         Timber.w(error, "chat attachment upload failed")
                         failedClientIds.add(clientId)
@@ -1949,7 +1949,7 @@ class ChatConversationViewModel
             }
         }
 
-        private suspend fun uploadQueuedAttachmentsIfNeeded(roomId: String): List<String> {
+        private suspend fun uploadQueuedAttachmentsIfNeeded(roomId: String, clientId: String): List<String> {
             val files =
                 _queuedAttachments.value.mapNotNull { attachment ->
                     val bytes = attachment.bytes ?: return@mapNotNull null
@@ -1960,7 +1960,7 @@ class ChatConversationViewModel
                     )
                 }
             if (files.isEmpty()) return emptyList()
-            return when (val result = uploadRepo.uploadChatMedia(roomId, files)) {
+            return when (val result = uploadRepo.uploadChatMedia(roomId, files, clientRequestId = clientId)) {
                 is NetworkResult.Success -> result.data.media.map { it.id }
                 is NetworkResult.Failure -> throw IllegalStateException(result.error.message)
             }

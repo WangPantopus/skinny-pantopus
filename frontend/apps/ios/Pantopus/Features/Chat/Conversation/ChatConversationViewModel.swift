@@ -730,7 +730,7 @@ public final class ChatConversationViewModel {
         do {
             let roomId = try await ensureRoomId()
             if context.messageType == nil, context.fileIds == nil {
-                context.fileIds = try await uploadQueuedAttachmentsIfNeeded(roomId: roomId)
+                context.fileIds = try await uploadQueuedAttachmentsIfNeeded(roomId: roomId, clientId: clientId)
                 sendContextsByClientId[clientId] = context
             }
             let fileIds = context.fileIds ?? []
@@ -1400,7 +1400,7 @@ public final class ChatConversationViewModel {
         queuedAttachments = Array((queuedAttachments + [attachment]).prefix(5))
     }
 
-    private func uploadQueuedAttachmentsIfNeeded(roomId: String) async throws -> [String] {
+    private func uploadQueuedAttachmentsIfNeeded(roomId: String, clientId: String) async throws -> [String] {
         let files = queuedAttachments.compactMap { attachment -> MultipartFile? in
             guard let data = attachment.data else { return nil }
             return MultipartFile(
@@ -1411,7 +1411,7 @@ public final class ChatConversationViewModel {
             )
         }
         guard !files.isEmpty else { return [] }
-        let response = try await uploader.uploadChatMedia(roomId: roomId, files: files)
+        let response = try await uploader.uploadChatMedia(roomId: roomId, files: files, clientRequestId: clientId)
         return response.media.map(\.id)
     }
 

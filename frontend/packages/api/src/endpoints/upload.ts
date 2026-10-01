@@ -297,7 +297,8 @@ export async function uploadHomeTaskMedia(
  */
 export async function uploadChatMedia(
   roomId: string,
-  files: File[]
+  files: File[],
+  clientRequestId?: string
 ): Promise<{
   message: string;
   media: Array<{
@@ -311,6 +312,7 @@ export async function uploadChatMedia(
 }> {
   const formData = new FormData();
   await appendMultipartFiles(formData, files as any[], 'chat-media');
+  if (clientRequestId) formData.append('client_request_id', clientRequestId);
 
   // Must explicitly set multipart/form-data so axios doesn't use the default
   // application/json content-type which causes multer to skip file parsing.
