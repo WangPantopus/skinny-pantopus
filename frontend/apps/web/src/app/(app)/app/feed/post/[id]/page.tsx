@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { Post, PostComment, MatchedBusiness } from '@pantopus/api';
@@ -23,6 +23,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
 import { lostFoundContactLabel } from '@/components/feed/composer/LostFoundFields';
+import { patchPostInFeedCaches } from '@/hooks/useFeedData';
 
 // ─── Icon lookup (data from shared config, React icons stay local) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -149,6 +150,7 @@ export default function PostDetailPage() {
   }, [post, postId]);
 
   // ─── Actions ───────────────────────────────────────────────
+  const queryClient = useQueryClient();
   const likeMutation = useMutation({
     mutationFn: (postId: string) => api.posts.toggleLike(postId),
     onMutate: () => {
@@ -158,8 +160,9 @@ export default function PostDetailPage() {
           : p
       );
     },
-    onSuccess: (res) => {
+    onSuccess: (res, postId) => {
       setPost((p: Post | null) => (p ? { ...p, userHasLiked: res.liked, like_count: res.likeCount } : p));
+      patchPostInFeedCaches(queryClient, postId, { userHasLiked: res.liked, like_count: res.likeCount });
     },
     onError: () => {
       // Revert, and say so — a silent revert looks like the tap did nothing.
@@ -184,8 +187,9 @@ export default function PostDetailPage() {
       setPost((p: Post | null) => (p ? { ...p, userHasSaved: !prevSaved } : p));
       return { prevSaved };
     },
-    onSuccess: (res) => {
+    onSuccess: (res, postId) => {
       setPost((p: Post | null) => (p ? { ...p, userHasSaved: res.saved } : p));
+      patchPostInFeedCaches(queryClient, postId, { userHasSaved: res.saved });
       showToast(res.saved ? 'Post saved' : 'Removed from saved');
     },
     onError: (_err, _vars, context) => {

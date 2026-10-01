@@ -27,6 +27,10 @@ interface ProfileHeaderProps {
   followState: boolean;
   /** False for a personally blocked target, or while that check is unavailable. */
   canFollow?: boolean;
+  /** The viewer's connection with this person, once read; Connect shows only then, as in the apps. */
+  connectionState?: 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
+  canConnect?: boolean;
+  onConnect?: () => void;
   actionLoading: boolean;
   shareCopied: boolean;
   onFollow: () => void;
@@ -65,6 +69,9 @@ export default function ProfileHeader({
   reliabilityDetail,
   followState,
   canFollow = true,
+  connectionState = 'none',
+  canConnect = false,
+  onConnect,
   actionLoading,
   shareCopied,
   onFollow,
@@ -162,6 +169,26 @@ export default function ProfileHeader({
                 <>
                   <button onClick={onMessage} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium">Message</button>
                   <button onClick={onRequestHire} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium">Request / Hire</button>
+                  {canConnect && onConnect && (
+                    <button
+                      onClick={onConnect}
+                      disabled={actionLoading || connectionState === 'pending_sent'}
+                      aria-label={connectionState === 'connected' ? 'Connected. Remove this connection' : undefined}
+                      className={`px-4 py-2 border rounded-lg font-medium transition disabled:opacity-60 ${
+                        connectionState === 'connected'
+                          ? 'bg-primary-50 text-primary-700 border-primary-300 hover:bg-primary-100'
+                          : 'bg-surface text-app-strong border-app-strong hover:bg-surface-raised'
+                      }`}
+                    >
+                      {connectionState === 'connected'
+                        ? 'Connected'
+                        : connectionState === 'pending_sent'
+                          ? 'Requested'
+                          : connectionState === 'pending_received'
+                            ? 'Accept'
+                            : 'Connect'}
+                    </button>
+                  )}
                   {canFollow && (
                     <button
                       onClick={onFollow}
