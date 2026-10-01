@@ -354,11 +354,13 @@ export default function NewSupportTrainPage() {
         </button>
 
         <h1 className="text-3xl font-bold text-app-text mb-2">Start a Support Train</h1>
-        <p className="text-app-text-secondary mb-8">
+        <p id="support-train-story-prompt" className="text-app-text-secondary mb-8">
           What&apos;s happening, and what kind of support would help most right now?
         </p>
 
+        {/* Named by the prompt above it, not only by its placeholder. */}
         <textarea
+          aria-labelledby="support-train-story-prompt"
           value={story}
           onChange={(e) => setStory(e.target.value)}
           placeholder="My sister just had a baby. Family of 4. Dinners for two weeks would really help. No peanuts. Contactless after 5pm."
@@ -505,7 +507,7 @@ export default function NewSupportTrainPage() {
               {restrictions.map((r) => (
                 <span key={r} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 capitalize">
                   {r.replace(/_/g, ' ')}
-                  <button onClick={() => setRestrictions((prev) => prev.filter((x) => x !== r))}>
+                  <button aria-label={`Remove ${r.replace(/_/g, ' ')}`} onClick={() => setRestrictions((prev) => prev.filter((x) => x !== r))}>
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -550,6 +552,7 @@ export default function NewSupportTrainPage() {
           <ToggleRow label="Contactless preferred" checked={contactless} onChange={setContactless} />
           <FieldLabel>Special instructions</FieldLabel>
           <textarea
+            aria-label="Special instructions"
             value={specialInstructions}
             onChange={(e) => setSpecialInstructions(e.target.value)}
             className="w-full p-3 bg-app-surface-sunken border border-app-border rounded-lg text-sm text-app-text resize-y h-20 focus:outline-none focus:ring-2 focus:ring-primary-500"

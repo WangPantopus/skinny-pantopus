@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
@@ -40,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
@@ -403,7 +405,8 @@ private fun SheetFooter(
                         .clip(RoundedCornerShape(Radii.lg))
                         .background(PantopusColors.appSurface)
                         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
-                        .clickable(onClick = onBack)
+                        // A button: TalkBack said only "Back".
+                        .clickable(role = Role.Button, onClick = onBack)
                         .padding(horizontal = Spacing.s5)
                         .testTag("supportTrainReserveBackButton"),
                 contentAlignment = Alignment.Center,
@@ -423,7 +426,7 @@ private fun SheetFooter(
                     .height(48.dp)
                     .clip(RoundedCornerShape(Radii.lg))
                     .background(if (canAdvance) PantopusColors.primary600 else PantopusColors.appBorderStrong)
-                    .clickable(enabled = canAdvance, onClick = onAdvance)
+                    .clickable(enabled = canAdvance, role = Role.Button, onClick = onAdvance)
                     .testTag("supportTrainReservePrimaryCTA"),
             contentAlignment = Alignment.Center,
         ) {
@@ -472,7 +475,8 @@ private fun SelectableCard(
                     if (isSelected) PantopusColors.primary600 else PantopusColors.appBorder,
                     RoundedCornerShape(Radii.md),
                 )
-                .clickable(onClick = onClick)
+                // One choice of several (a date, or how to help): TalkBack now says which one is selected.
+                .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
                 .padding(Spacing.s3)
                 .testTag(tag),
         verticalAlignment = Alignment.CenterVertically,
@@ -532,16 +536,19 @@ private fun SheetField(
     minHeight: androidx.compose.ui.unit.Dp = 56.dp,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+        // The label names the field below, so TalkBack doesn't read it as a separate stop.
         Text(
             text = label,
             color = PantopusColors.appTextSecondary,
             fontSize = 12.5.sp,
             fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.clearAndSetSemantics {},
         )
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth().heightIn(min = minHeight).testTag(tag),
+            // Named by its label (TalkBack read only the placeholder, "Edit box. e.g. Chicken soup").
+            modifier = Modifier.fillMaxWidth().heightIn(min = minHeight).testTag(tag).semantics { contentDescription = label },
             colors =
                 OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = PantopusColors.appSurface,
@@ -562,7 +569,8 @@ private fun SummaryRow(
     value: String,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s2),
+        // One stop per row ("Date, Friday, October 9"), not the label and the value apart.
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s2).semantics(mergeDescendants = true) {},
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text = label, color = PantopusColors.appTextSecondary, fontSize = 13.5.sp)
