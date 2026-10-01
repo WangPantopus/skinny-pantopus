@@ -512,21 +512,32 @@ extension PlacePresentation {
         // 3) All clear — assert only what we actually know.
         let airGood = aqiData != nil && (aqiData?.category == .good || aqiData?.category == .moderate)
         let alertsKnownClear = alerts?.status == .ready && (alerts?.alerts?.active.isEmpty ?? true)
-        var clauses: [String] = []
-        if airGood { clauses.append("air is good") }
-        if alertsKnownClear { clauses.append("there are no active alerts") }
-        var tail = ""
-        if !clauses.isEmpty {
-            let joined = clauses.joined(separator: " and ")
-            tail = " " + joined.prefix(1).uppercased() + joined.dropFirst() + "."
-        }
-        let title = "All clear on your block today.\(tail)"
 
         let billData = bill?.status == .ready ? bill?.billBenchmark : nil
         let nudge: String? = {
             guard let b = billData, b.comparison == .higher else { return nil }
             return "\(b.summary). Worth a look."
         }()
+
+        // Alerts that weren't checked are never an all-clear: say what's unknown, in a neutral chip.
+        guard alertsKnownClear else {
+            return PlaceDerivedPulse(
+                variant: .allClear,
+                title: airGood
+                    ? "Air is good on your block today. Weather alerts aren't available right now."
+                    : "Air quality and weather alerts aren't available for your block right now.",
+                chip: PlaceChipModel(tone: .neutral, text: "Alerts unavailable"),
+                heroIcon: .cloudOff,
+                nudgeIcon: .lightbulb,
+                nudgeText: nudge
+            )
+        }
+
+        var clauses: [String] = []
+        if airGood { clauses.append("air is good") }
+        clauses.append("there are no active alerts")
+        let joined = clauses.joined(separator: " and ")
+        let title = "All clear on your block today. " + joined.prefix(1).uppercased() + joined.dropFirst() + "."
 
         return PlaceDerivedPulse(
             variant: .allClear,
