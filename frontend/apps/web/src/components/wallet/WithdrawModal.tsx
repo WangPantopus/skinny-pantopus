@@ -20,16 +20,19 @@ interface WithdrawModalProps {
   balance: number; // in cents
   onClose: () => void;
   onSuccess: () => void;
+  /** The outcome is unknown (no reply, a timeout, a 5xx, a held debit): re-read the balance behind the modal. */
+  onUnsettled?: () => void;
 }
 
-export default function WithdrawModal({ balance, onClose, onSuccess }: WithdrawModalProps) {
+export default function WithdrawModal({ balance, onClose, onSuccess, onUnsettled }: WithdrawModalProps) {
   const [amount, setAmount] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const amountCents = Math.round(parseFloat(amount || '0') * 100);
-  const isValid = amountCents >= 100 && amountCents <= balance;
+  // A retry of the withdrawal in progress may exceed the refreshed balance: its held debit is that money.
+  const isValid = amountCents >= 100 && (amountCents <= balance || pendingWithdrawal?.amountCents === amountCents);
 
   const handleWithdrawAll = () => {
     setAmount((balance / 100).toFixed(2));
@@ -52,13 +55,15 @@ export default function WithdrawModal({ balance, onClose, onSuccess }: WithdrawM
       setSuccess(true);
       setTimeout(() => onSuccess(), 2000);
     } catch (err: unknown) {
-      if (!leavesWithdrawalUnsettled(err)) pendingWithdrawal = null;
+      const unsettled = leavesWithdrawalUnsettled(err);
+      if (!unsettled) pendingWithdrawal = null;
       const message = getErrorMessage(err).trim();
       setError(message || 'Withdrawal failed. Please try again.');
+      if (unsettled) onUnsettled?.();
     } finally {
       setProcessing(false);
     }
-  }, [amountCents, isValid, onSuccess]);
+  }, [amountCents, isValid, onSuccess, onUnsettled]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">

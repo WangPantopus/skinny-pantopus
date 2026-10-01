@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.util.UUID
 import javax.inject.Inject
 
@@ -167,23 +168,14 @@ class WalletViewModel
         fun withdraw(amountText: String? = null) {
             if (fixture != null) return
             _withdrawError.value = null
-            if (!payoutsEnabled || walletFrozen || availableCents < MIN_WITHDRAW_CENTS) {
+            // A withdrawal in progress can be retried even when its held debit leaves less than $1.00 available.
+            val belowMinimum = availableCents < MIN_WITHDRAW_CENTS && pendingWithdrawal == null
+            if (!payoutsEnabled || walletFrozen || belowMinimum) {
                 _action.value =
                     WalletAction.WithdrawFailed(withdrawGateMessage(payoutsEnabled, walletFrozen))
                 return
             }
-            val amountCents =
-                if (amountText == null) {
-                    availableCents
-                } else {
-                    when (val parsed = parseWithdrawAmount(amountText, availableCents)) {
-                        is WithdrawAmount.Valid -> parsed.cents
-                        is WithdrawAmount.Invalid -> {
-                            _withdrawError.value = parsed.message
-                            return
-                        }
-                    }
-                }
+            val amountCents = withdrawAmountCents(amountText) ?: return
             // One withdrawal, one idempotency key: a retry after a failed or lost reply resends the same key,
             // so the server settles on the first attempt and can't pay out twice. Replaced after a final
             // outcome (paid out, or refused) or when the amount changes.
@@ -198,12 +190,39 @@ class WalletViewModel
                         _action.value = WalletAction.WithdrawSucceeded(result.data.message ?: "Withdrawal initiated.")
                         loadInternal(showLoading = false)
                     }
-                    is NetworkResult.Failure -> {
-                        if (!result.error.leavesWithdrawalUnsettled()) pendingWithdrawal = null
-                        _action.value = WalletAction.WithdrawFailed(result.error.message)
+                    is NetworkResult.Failure -> onWithdrawFailed(result.error)
+                }
+            }
+        }
+
+        /**
+         * The amount to send, in cents: the whole available balance for `null` [amountText]. Returns `null`
+         * after showing why the typed amount can't be sent.
+         */
+        private fun withdrawAmountCents(amountText: String?): Long? {
+            if (amountText == null) return availableCents
+            return when (val parsed = parseWithdrawAmount(amountText, availableCents)) {
+                is WithdrawAmount.Valid -> parsed.cents
+                is WithdrawAmount.Invalid -> {
+                    // A retry of the withdrawal in progress may exceed what's available now: its held debit
+                    // is that money, and the server settles the same key without debiting again.
+                    val held = pendingWithdrawal?.second
+                    if (held != null && parseWithdrawAmount(amountText, held) == WithdrawAmount.Valid(held)) {
+                        held
+                    } else {
+                        _withdrawError.value = parsed.message
+                        null
                     }
                 }
             }
+        }
+
+        private fun onWithdrawFailed(error: NetworkError) {
+            val unsettled = error.leavesWithdrawalUnsettled()
+            if (!unsettled) pendingWithdrawal = null
+            _action.value = WalletAction.WithdrawFailed(error.withdrawalPendingMessage() ?: error.message)
+            // The server may have acted (no reply, a timeout, a 5xx, a held debit): re-read the balance and activity.
+            if (unsettled) loadInternal(showLoading = false)
         }
 
         /** Drop the inline amount error once the user edits the field. */
@@ -314,6 +333,7 @@ class WalletViewModel
 
 private const val HTTP_REQUEST_TIMEOUT = 408
 private const val HTTP_TOO_MANY_REQUESTS = 429
+private const val HTTP_SERVICE_UNAVAILABLE = 503
 
 /** No reply, a timeout, rate limiting or a server error: the first attempt's outcome is unknown, so a retry keeps its key. */
 private fun NetworkError.leavesWithdrawalUnsettled(): Boolean =
@@ -322,3 +342,13 @@ private fun NetworkError.leavesWithdrawalUnsettled(): Boolean =
         is NetworkError.ClientError -> code == HTTP_REQUEST_TIMEOUT || code == HTTP_TOO_MANY_REQUESTS
         else -> false
     }
+
+/**
+ * The server's sentence for a withdrawal it's still settling (503 `withdrawal_pending`): the debit is held
+ * and the next request with the same key settles it, so it isn't a failure. Null for anything else.
+ */
+private fun NetworkError.withdrawalPendingMessage(): String? {
+    val body = (this as? NetworkError.Server)?.takeIf { it.code == HTTP_SERVICE_UNAVAILABLE }?.body ?: return null
+    val json = runCatching { JSONObject(body) }.getOrNull() ?: return null
+    return json.optString("error").takeIf { json.optString("code") == "withdrawal_pending" && it.isNotBlank() }
+}
