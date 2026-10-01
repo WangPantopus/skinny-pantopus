@@ -198,6 +198,7 @@ private fun PopulatedLayout(
                 onFindBusinesses = { onIntent(HubNavigationIntent.OpenFindBusinesses) },
                 loadFailed = discoveryFailed,
                 onRetry = onRetryDiscovery,
+                onBrowsePulse = { onIntent(HubNavigationIntent.PillarTapped(PillarTile.Pillar.Pulse)) },
             )
         }
         if (content.jumpBackIn.isNotEmpty()) {
@@ -259,6 +260,7 @@ private fun FirstRunLayout(
                 onFindBusinesses = { onIntent(HubNavigationIntent.OpenFindBusinesses) },
                 loadFailed = discoveryFailed,
                 onRetry = onRetryDiscovery,
+                onBrowsePulse = { onIntent(HubNavigationIntent.PillarTapped(PillarTile.Pillar.Pulse)) },
             )
             // Bottom padding leaves room for the floating progress card.
             Spacer(Modifier.height(96.dp))

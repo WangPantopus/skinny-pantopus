@@ -482,6 +482,8 @@ struct HubDiscoveryRail: View {
     var onExploreMap: (() -> Void)?
     /// "Find Businesses" header link — RN `(tabs)/index.tsx:506`.
     var onFindBusinesses: (() -> Void)?
+    /// Posts tab: posts live in Pulse, which applies the viewer's area and each post's visibility.
+    var onBrowsePulse: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -489,7 +491,9 @@ struct HubDiscoveryRail: View {
             if onFilterChange != nil {
                 filterTabs
             }
-            if isLoading {
+            if activeFilter == .posts, let onBrowsePulse {
+                postsInPulseRow(onBrowsePulse)
+            } else if isLoading {
                 skeletonRail
             } else if loadFailed {
                 failedRow
@@ -660,6 +664,32 @@ struct HubDiscoveryRail: View {
         .padding(.horizontal, Spacing.s4)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("hubDiscoveryFailed")
+    }
+
+    /// The Posts tab points to Pulse instead of reporting a false "Nothing nearby yet" (web does the same).
+    private func postsInPulseRow(_ onBrowsePulse: @escaping () -> Void) -> some View {
+        VStack(spacing: Spacing.s2) {
+            Text("Local posts are in Pulse, where you choose the area.")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .multilineTextAlignment(.center)
+            Button("Browse Pulse", action: onBrowsePulse)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.Color.primaryInk)
+                .accessibilityIdentifier("hubDiscoveryBrowsePulse")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Spacing.s6)
+        .padding(.horizontal, Spacing.s4)
+        .background(Theme.Color.appSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                .stroke(Theme.Color.appBorder, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+        .padding(.horizontal, Spacing.s4)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("hubDiscoveryPostsInPulse")
     }
 
     private var emptyRow: some View {
