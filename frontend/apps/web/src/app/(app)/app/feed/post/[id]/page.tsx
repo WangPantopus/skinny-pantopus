@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -68,6 +69,13 @@ export default function PostDetailPage() {
 
   // Lightbox
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  // Escape closes the media viewer, as it does in the feed's PostMediaLightbox.
+  useEffect(() => {
+    if (lightboxIdx === null) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxIdx(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [lightboxIdx]);
 
   // ─── Load user ─────────────────────────────────────────────
   useEffect(() => {
@@ -858,15 +866,21 @@ export default function PostDetailPage() {
       </div>
 
       {/* ─── Media Lightbox ───────────────────────────────── */}
-      {lightboxIdx !== null && post.media_urls && (
+      {/* Rendered into document.body, like the feed's post panel: inside the app's <main> (its own stacking context)
+          the viewer stayed under the header and sidebar, and the header covered its close button. */}
+      {lightboxIdx !== null && post.media_urls && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center"
           onClick={() => setLightboxIdx(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full size media"
         >
           {/* Close */}
           <button
             onClick={() => setLightboxIdx(null)}
             className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition"
+            aria-label="Close"
           >
             <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -878,6 +892,7 @@ export default function PostDetailPage() {
             <button
               onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx - 1); }}
               className="absolute left-4 p-2 text-white/70 hover:text-white transition"
+              aria-label="Previous media"
             >
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -898,6 +913,7 @@ export default function PostDetailPage() {
             <button
               onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx + 1); }}
               className="absolute right-4 p-2 text-white/70 hover:text-white transition"
+              aria-label="Next media"
             >
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -911,7 +927,8 @@ export default function PostDetailPage() {
               {lightboxIdx + 1} / {post.media_urls.length}
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* ─── Report Modal ─────────────────────────────────── */}
