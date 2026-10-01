@@ -115,8 +115,12 @@ class SavedPostsViewModel
                 removing.remove(postId)
                 when {
                     result is NetworkResult.Success && !result.data.saved -> {
-                        posts = posts.filterNot { it.id == postId }
-                        applyState()
+                        if (posts.any { it.id == postId }) {
+                            posts = posts.filterNot { it.id == postId }
+                            // The saves after it move up one, so the next page starts one earlier or it would skip one.
+                            nextOffset = nextOffset?.let { maxOf(0, it - 1) }
+                            applyState()
+                        }
                     }
                     // The toggle saved it again (it had been unsaved elsewhere): re-read the list.
                     result is NetworkResult.Success -> load()
@@ -130,10 +134,15 @@ class SavedPostsViewModel
         }
 
         private fun applyState() {
-            if (posts.isEmpty() && nextOffset != null && !loadMoreFailed) {
-                // A page the visibility check emptied isn't the end of the list.
-                _state.value = ListOfRowsUiState.Loading
-                loadMoreIfNeeded()
+            if (posts.isEmpty() && nextOffset != null) {
+                if (loadMoreFailed) {
+                    // Reading on failed, which isn't "nothing saved": say so, with Try again.
+                    _state.value = ListOfRowsUiState.Error(LOAD_FAILED)
+                } else {
+                    // A page the visibility check emptied isn't the end of the list.
+                    _state.value = ListOfRowsUiState.Loading
+                    loadMoreIfNeeded()
+                }
                 return
             }
             if (posts.isEmpty()) {

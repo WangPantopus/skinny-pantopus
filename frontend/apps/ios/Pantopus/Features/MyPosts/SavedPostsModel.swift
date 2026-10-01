@@ -103,8 +103,10 @@ public final class SavedPostsModel {
             if response.saved {
                 // The toggle saved it again (it had been unsaved elsewhere): re-read the list.
                 await load()
-            } else {
+            } else if posts.contains(where: { $0.id == postId }) {
                 posts.removeAll { $0.id == postId }
+                // The saves after it move up one, so the next page starts one earlier or it would skip one.
+                nextOffset = nextOffset.map { max(0, $0 - 1) }
                 await rebuild()
             }
         } catch {
@@ -113,10 +115,15 @@ public final class SavedPostsModel {
     }
 
     private func rebuild() async {
-        if posts.isEmpty, nextOffset != nil, loadMoreError == nil {
-            // A page the visibility check emptied isn't the end of the list.
-            state = .loading
-            await loadMoreIfNeeded()
+        if posts.isEmpty, nextOffset != nil {
+            if loadMoreError != nil {
+                // Reading on failed, which isn't "nothing saved": say so, with Try again.
+                state = .error(message: "Couldn't load your saved posts.")
+            } else {
+                // A page the visibility check emptied isn't the end of the list.
+                state = .loading
+                await loadMoreIfNeeded()
+            }
             return
         }
         if posts.isEmpty {
