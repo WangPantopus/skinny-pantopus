@@ -183,7 +183,7 @@ public struct VerifyLandlordValidationErrors: Sendable, Equatable {
     /// ("Email format · Lease unit mismatch").
     public var compactSummary: String {
         var parts: [String] = []
-        if email != nil { parts.append("Email format") }
+        if let emailError = email { parts.append(emailError == "Required" ? "Email" : "Email format") }
         if lease != nil { parts.append("Lease unit mismatch") }
         if ownerName != nil { parts.append("Owner name") }
         if contactName != nil { parts.append("Contact name") }

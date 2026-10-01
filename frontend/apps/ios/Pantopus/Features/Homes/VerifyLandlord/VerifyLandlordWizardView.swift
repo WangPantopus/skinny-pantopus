@@ -121,7 +121,7 @@ private struct StickyAttentionHint: View {
     var body: some View {
         HStack(spacing: Spacing.s1) {
             Icon(.alertCircle, size: 12, color: Theme.Color.error)
-            Text("\(count) field\(count == 1 ? "" : "s") need attention")
+            Text("\(count) field\(count == 1 ? " needs" : "s need") attention")
                 .pantopusTextStyle(.caption)
                 .fontWeight(.semibold)
                 .foregroundStyle(Theme.Color.error)

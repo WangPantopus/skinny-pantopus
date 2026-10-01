@@ -143,7 +143,7 @@ data class VerifyLandlordValidationErrors(
     val compactSummary: String
         get() =
             buildList {
-                if (email != null) add("Email format")
+                if (email != null) add(if (email == "Required") "Email" else "Email format")
                 if (lease != null) add("Lease unit mismatch")
                 if (ownerName != null) add("Owner name")
                 if (contactName != null) add("Contact name")
