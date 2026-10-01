@@ -176,11 +176,7 @@ class MembersListViewModel
         private var loadInFlight = false
         private var readError: String? = null
 
-        /**
-         * The server refused this viewer the member list (403) on its latest answer. The invite
-         * and add-guest FAB is then an action they can't take; "Recover a member removal" stays,
-         * since it also covers the viewer's own leave. A refresh keeps it until a new answer.
-         */
+        /** The latest member-list answer was a 403: no invite or add-guest FAB (removal recovery stays in the header). */
         private var memberListRefused = false
         private var busyRequestId: String? = null
 
@@ -208,33 +204,20 @@ class MembersListViewModel
 
         /** 52dp home-green secondary-create FAB. Contextual on Guests:
          *  issue a guest pass; otherwise invite a household member. The
-         *  Requests tab is a review queue — no create affordance. */
+         *  Requests tab is a review queue — no create affordance, and a
+         *  viewer refused the member list can't invite or add a guest. */
         val fab: FabAction?
-            get() =
-                if (memberListRefused) {
-                    null
-                } else {
-                    when (_selectedTab.value) {
-                        // Review / read-only queues carry no create affordance.
-                        MembersTab.REQUESTS, MembersTab.AUDIT -> null
-                        MembersTab.GUESTS ->
-                            FabAction(
-                                icon = PantopusIcon.UserPlus,
-                                contentDescription = "Add guest",
-                                variant = FabVariant.SecondaryCreate,
-                                tint = FabTint.Home,
-                                onClick = ::requestAddGuest,
-                            )
-                        else ->
-                            FabAction(
-                                icon = PantopusIcon.UserPlus,
-                                contentDescription = "Invite member",
-                                variant = FabVariant.SecondaryCreate,
-                                tint = FabTint.Home,
-                                onClick = ::requestInvite,
-                            )
-                    }
-                }
+            get() {
+                val tab = _selectedTab.value
+                if (memberListRefused || tab == MembersTab.REQUESTS || tab == MembersTab.AUDIT) return null
+                return FabAction(
+                    icon = PantopusIcon.UserPlus,
+                    contentDescription = if (tab == MembersTab.GUESTS) "Add guest" else "Invite member",
+                    variant = FabVariant.SecondaryCreate,
+                    tint = FabTint.Home,
+                    onClick = if (tab == MembersTab.GUESTS) ::requestAddGuest else ::requestInvite,
+                )
+            }
 
         /** Idempotent — re-running won't refetch once content is loaded. */
         fun load() {
@@ -419,8 +402,8 @@ class MembersListViewModel
                     if (roster is NetworkResult.Failure) {
                         session.requireCurrent()
                         if (generation == readGeneration) {
-                            memberListRefused = roster.error is NetworkError.Forbidden
-                            publishReadFailure(roster.error.displayMessage("Couldn't load the list."))
+                            val refused = roster.error is NetworkError.Forbidden
+                            publishReadFailure(roster.error.displayMessage("Couldn't load the list."), refused)
                         }
                         return@coroutineScope
                     }
@@ -449,17 +432,18 @@ class MembersListViewModel
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    if (generation == readGeneration) {
-                        memberListRefused = false
-                        publishReadFailure("Current members could not be loaded. Retry to refresh this Home.")
-                    }
+                    if (generation == readGeneration) publishReadFailure("Current members could not be loaded. Retry to refresh this Home.")
                 } finally {
                     if (generation == readGeneration) loadInFlight = false
                     coroutineContext.cancelChildren()
                 }
             }
 
-        private fun publishReadFailure(message: String) {
+        private fun publishReadFailure(
+            message: String,
+            refused: Boolean = false,
+        ) {
+            memberListRefused = refused
             rosterConfirmed = false
             access = null
             occupants = emptyList()
