@@ -565,6 +565,30 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-10-01T17:22:54Z — Add Home TalkBack [#1397](https://github.com/WangPantopus/skinny-pantopus/pull/1397) and the ownership race [#1398](https://github.com/WangPantopus/skinny-pantopus/pull/1398) sent to Stream 1. Window: Stream 4's handover 16:49:10–17:07:14Z (lease; device slot 1), plus a disposable DB replay 17:16–17:20Z.**
+  - **Add Home TalkBack, #1397** (head `8a500d9cf`; seal `20261001-stream3-home-add-home-talkback-r1`, `7d818180…`):
+    - "Use current location. Use current location. Button" → "Use current location. Button";
+    - the manual fields: "Edit box. Street address. Street address" → read once (Unit, City, State and ZIP too);
+    - the role rows weren't probed, because they need an address to resolve first. They stay a U02 item.
+  - **Ownership race, #1398** (head `8809907f0`; seals `…-ownership-race-r1` `3622cc46…` and `…-ownership-race-cleanup-r1` `716a1f84…`):
+    - **master:** a simultaneous pair of invites, claims or transfers opened 2 rows each, and an invite followed by a single-owner transfer opened 2 claims;
+    - **branch plus migration 20261001137000:** 1 row each, and a repeat returns the same id. An expired proposal is closed and replaced;
+    - **cleanup rule:** changed after a replay with real duplicate rows. Keeping the newest would have set aside documents, a claim in review or its challenge window, and co-owners' votes. It now keeps the row by review progress, then evidence or votes, then the newest;
+    - **merge condition:** it waits for CI's DB job before batching (Stream 1's condition).
+  - **Runtime:**
+    - migration 20261001137000 is applied on DB 64554 (Stream 4 agreed), with 0 duplicates closed;
+    - the backend went back to Stream 4's `4311a430d` at 17:06:19Z;
+    - Stream 4 released the runtime at 17:19:24Z, with the backend on master `726510e65`.
+  - **Notes sent:**
+    - to Stream 1: `SET LOCAL lock_timeout` has no effect under the Supabase CLI. This is repo-wide and needs a policy decision;
+    - to Stream 5: the index's open states are the policies' open set, so trustState is unaffected.
+  - **Next:**
+    1. follow #1397 and #1398 to merge;
+    2. then the §4 backlog: U02 native A1–A4 (including the Add Home role rows' selected state), native joining E1/E3/E6, departed-applicant E5, the landlord wizard (U03), the web Homes list reload (L2), R03/R04 and U05.
+  - **Lessons:**
+    - an empty DB can't exercise a duplicate cleanup. Replay it on seeded duplicates and compare it with the old rule in a rolled-back transaction;
+    - for backend Jest, export `backend`, `supabase` and `frontend/packages`, because 3 suites read sibling files.
+
 - **2026-10-01T16:48:59Z — Residency letters [#1388](https://github.com/WangPantopus/skinny-pantopus/pull/1388), POST repeats [#1390](https://github.com/WangPantopus/skinny-pantopus/pull/1390) and D05 [#1393](https://github.com/WangPantopus/skinny-pantopus/pull/1393) merged (batches 309–311, master `ed3ed7ad6`); #1361 merged in batch 303; window 15:23:25–16:29:00Z (lease; device slot 1).**
   - **Residency letters, #1388** (seal `20261001-stream3-home-residency-letter-idempotency-r1`, `b19b68a5…`):
     - a lost reply then a retry made 2 letters → **1**, on API, web, Android and iOS;
