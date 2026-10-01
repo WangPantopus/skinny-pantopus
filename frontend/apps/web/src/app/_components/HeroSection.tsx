@@ -104,7 +104,7 @@ export default function HeroSection() {
           </div>
 
           {/* Envelope visual */}
-          <div className="relative w-full aspect-square max-w-[560px] ml-auto mh-reveal mh-reveal-d2" aria-hidden="true">
+          <div className="relative w-full aspect-square max-w-[560px] mx-auto lg:mr-0 lg:ml-auto mh-reveal mh-reveal-d2" aria-hidden="true">
             <div
               className="mh-hero-glow absolute inset-0 rounded-full pointer-events-none"
               style={{
