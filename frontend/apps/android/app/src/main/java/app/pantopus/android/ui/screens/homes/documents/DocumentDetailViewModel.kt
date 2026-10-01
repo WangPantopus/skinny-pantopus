@@ -36,7 +36,8 @@ sealed interface DocumentDetailUiState {
         val content: ByteString? = null,
     ) : DocumentDetailUiState
 
-    data class Error(val message: String) : DocumentDetailUiState
+    /** [headline] names what failed: loading the document, or a delete that didn't confirm. */
+    data class Error(val message: String, val headline: String = "Couldn't load this document") : DocumentDetailUiState
 }
 
 /** Transient toast surfaced by the screen. */
@@ -70,6 +71,10 @@ class DocumentDetailViewModel
         private var loadId = 0
         private var mutating = false
         private var deleted = false
+
+        // A delete that didn't confirm may still have gone through (a lost reply). If the next load no longer finds the
+        // document, it was deleted: finish as deleted instead of showing it as unavailable.
+        private var deleteFailed = false
         private var replacementDocument: HomeDocumentDto? = null
         private var replacementSelection = UUID.randomUUID()
         private var replacementAttempt: Triple<PickedFile, String, String>? = null
@@ -101,7 +106,12 @@ class DocumentDetailViewModel
                 is NetworkResult.Success -> {
                     if (requestId != loadId) return
                     val match = result.data.documents.firstOrNull { it.id.equals(documentId, ignoreCase = true) }
-                    if (match == null) {
+                    if (match != null) deleteFailed = false
+                    if (match == null && deleteFailed) {
+                        deleteFailed = false
+                        deleted = true
+                        _shouldDismiss.value = true
+                    } else if (match == null) {
                         _state.value = DocumentDetailUiState.Error("This document is no longer available.")
                     } else if (match.contentUrl == null) {
                         _state.value = DocumentDetailUiState.Loaded(match)
@@ -217,15 +227,18 @@ class DocumentDetailViewModel
                             clearContent()
                             _shouldDismiss.value = true
                         } else {
-                            _state.value = DocumentDetailUiState.Error("Couldn't delete this document. Try again.")
+                            failDelete("Couldn't delete this document. Try again.")
                         }
                     }
-                    is NetworkResult.Failure -> {
-                        _state.value = DocumentDetailUiState.Error(result.error.displayMessage("Couldn't delete this document."))
-                    }
+                    is NetworkResult.Failure -> failDelete(result.error.displayMessage("Couldn't delete this document."))
                 }
                 mutating = false
             }
+        }
+
+        private fun failDelete(message: String) {
+            deleteFailed = true
+            _state.value = DocumentDetailUiState.Error(message, headline = "Couldn't delete this document")
         }
 
         fun acknowledgeDismiss() {

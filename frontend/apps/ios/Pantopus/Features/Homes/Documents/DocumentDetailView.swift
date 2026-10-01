@@ -47,6 +47,11 @@ final class DocumentDetailViewModel {
     private(set) var isMutating: Bool = false
     var toast: ToastMessage?
     private(set) var shouldDismiss: Bool = false
+    /// The error screen's headline names what failed: loading, or a delete that didn't confirm.
+    private(set) var errorHeadline = "Couldn't load this document"
+    /// A delete that didn't confirm may still have gone through (a lost reply). If the next load no longer
+    /// finds the document, it was deleted: finish as deleted instead of showing it as unavailable.
+    private var deleteFailed = false
 
     private let homeId: String
     private let documentId: String
@@ -85,6 +90,7 @@ final class DocumentDetailViewModel {
     func load() async {
         guard !deleted, !isMutating else { return }
         clearContent()
+        errorHeadline = "Couldn't load this document"
         let requestId = loadId
         do {
             let response: GetHomeDocumentsResponse = try await api.request(
@@ -92,9 +98,17 @@ final class DocumentDetailViewModel {
             )
             guard requestId == loadId else { return }
             guard let dto = response.documents.first(where: { $0.id.lowercased() == documentId.lowercased() }) else {
+                if deleteFailed {
+                    deleteFailed = false
+                    deleted = true
+                    onChanged()
+                    shouldDismiss = true
+                    return
+                }
                 state = .error(message: "This document is no longer available.")
                 return
             }
+            deleteFailed = false
             var bytes: Data?
             if dto.contentURL != nil {
                 // Construct the path from this Home and document, not a response URL.
@@ -231,7 +245,7 @@ final class DocumentDetailViewModel {
                 HomesEndpoints.deleteDocument(homeId: homeId, documentId: documentId)
             )
             guard response.deleted else {
-                state = .error(message: "Couldn't delete this document. Try again.")
+                failDelete(message: "Couldn't delete this document. Try again.")
                 return
             }
             deleted = true
@@ -239,8 +253,14 @@ final class DocumentDetailViewModel {
             onChanged()
             shouldDismiss = true
         } catch {
-            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't delete this document. Try again.")
+            failDelete(message: (error as? APIError)?.errorDescription ?? "Couldn't delete this document. Try again.")
         }
+    }
+
+    private func failDelete(message: String) {
+        deleteFailed = true
+        errorHeadline = "Couldn't delete this document"
+        state = .error(message: message)
     }
 
     func acknowledgeDismiss() {
@@ -293,7 +313,7 @@ public struct DocumentDetailView: View {
                     onDelete: { showsDeleteConfirm = true }
                 )
             case let .error(message):
-                ErrorShell(message: message, onBack: onBack) {
+                ErrorShell(headline: viewModel.errorHeadline, message: message, onBack: onBack) {
                     Task { await viewModel.refresh() }
                 }
             }
@@ -393,6 +413,7 @@ private struct LoadingShell: View {
 }
 
 private struct ErrorShell: View {
+    let headline: String
     let message: String
     let onBack: () -> Void
     let onRetry: () -> Void
@@ -405,7 +426,7 @@ private struct ErrorShell: View {
             body: {
                 EmptyState(
                     icon: .alertCircle,
-                    headline: "Couldn't load this document",
+                    headline: headline,
                     subcopy: message,
                     cta: EmptyState.CTA(title: "Try again") { onRetry() }
                 )
