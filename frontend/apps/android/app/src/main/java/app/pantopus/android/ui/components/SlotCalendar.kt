@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,9 +29,9 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -107,11 +109,14 @@ private fun WeekdayHeader() {
                 modifier = Modifier.width(CellSide),
                 contentAlignment = Alignment.Center,
             ) {
+                // Hidden from screen readers, as on iOS: single letters read as "capital S", and
+                // each day cell already says its date and state.
                 Text(
                     text = WeekdayLetters[i],
                     color = PantopusColors.appTextSecondary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clearAndSetSemantics {},
                 )
             }
         }
@@ -182,11 +187,15 @@ private fun Cell(
 
     box =
         box
-            .semantics {
+            .let { m -> if (tappable) m.clickable { onSelectDate(day.date) } else m }
+            // One element per cell, as on iOS (children ignored): TalkBack read only the inner number,
+            // so a covered or own day sounded like any other. It follows `clickable` so the click
+            // action survives (semantics after a clearing modifier are cleared too).
+            .clearAndSetSemantics {
                 val label = if (day.state == SlotCalendarState.Unscheduled) "no slot scheduled" else day.state.name.lowercase()
                 contentDescription = "${day.dayNumber}, $label"
                 if (tappable) role = Role.Button
-            }.let { m -> if (tappable) m.clickable { onSelectDate(day.date) } else m }
+            }
 
     Box(modifier = box, contentAlignment = Alignment.Center) {
         Text(
@@ -260,11 +269,14 @@ private fun cellStyleOf(state: SlotCalendarState): CellStyle =
 
 // MARK: - Legend
 
+// Wraps, so large text moves a key to the next line instead of pushing "Mine" off the card.
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Legend() {
-    Row(
+    FlowRow(
         modifier = Modifier.padding(top = Spacing.s1),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
         for (state in SlotCalendarState.entries.filter { it != SlotCalendarState.Unscheduled }) {
             LegendChip(state = state)

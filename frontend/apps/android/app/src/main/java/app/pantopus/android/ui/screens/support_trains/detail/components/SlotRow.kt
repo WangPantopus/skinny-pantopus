@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,10 +30,12 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,6 +95,8 @@ private fun DateColumn(content: SlotRowContent) {
     Box(
         modifier =
             Modifier
+                // The row's label already says the day; TalkBack read it again after it.
+                .clearAndSetSemantics {}
                 .width(42.dp)
                 .clip(shape)
                 .background(background)
@@ -141,7 +145,8 @@ private fun DateColumn(content: SlotRowContent) {
 @Composable
 private fun RowScope.Body(content: SlotRowContent) {
     Column(
-        modifier = Modifier.weight(1f),
+        // The row's label already says who and what; TalkBack read the texts again after it.
+        modifier = Modifier.weight(1f).clearAndSetSemantics {},
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         when (content.state) {
@@ -152,13 +157,16 @@ private fun RowScope.Body(content: SlotRowContent) {
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.5.sp,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 content.subtitle?.let {
+                    // Two lines, as on a covered row, so large text keeps the whole time ("7:00 pm", not "7:00").
                     Text(
                         text = it,
                         color = PantopusColors.appTextSecondary,
                         fontSize = 12.sp,
-                        maxLines = 1,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -174,6 +182,7 @@ private fun RowScope.Body(content: SlotRowContent) {
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 12.5.sp,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     if (content.mine) {
                         Text(
@@ -231,12 +240,14 @@ private fun Trailing(
                 modifier =
                     Modifier
                         .testTag("supportTrainSlotRowSignUp-${content.id}")
-                        .height(30.dp)
+                        // At least 30dp, so a large font grows the pill instead of clipping "Sign up".
+                        .heightIn(min = 30.dp)
                         .clip(RoundedCornerShape(Radii.md))
                         .background(if (onSignUp != null) PantopusColors.primary600 else PantopusColors.appBorderStrong)
                         .clickable(enabled = onSignUp != null) { onSignUp?.invoke() }
                         .padding(horizontal = Spacing.s3)
-                        .semantics {
+                        // The label names the day; the child "Sign up" would be read again after it.
+                        .clearAndSetSemantics {
                             role = Role.Button
                             contentDescription = "Sign up for ${content.dayLabel} ${content.dateLabel}"
                         },
@@ -255,13 +266,13 @@ private fun Trailing(
                 modifier =
                     Modifier
                         .testTag("supportTrainSlotRowEdit-${content.id}")
-                        .height(30.dp)
+                        .heightIn(min = 30.dp)
                         .clip(RoundedCornerShape(Radii.md))
                         .background(PantopusColors.appSurface)
                         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))
                         .clickable(enabled = onEdit != null) { onEdit?.invoke() }
                         .padding(horizontal = Spacing.s2)
-                        .semantics {
+                        .clearAndSetSemantics {
                             role = Role.Button
                             contentDescription = "Edit your slot"
                         },
