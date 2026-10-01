@@ -13,7 +13,7 @@ import * as api from '@pantopus/api';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import FeedMediaImage from './FeedMediaImage';
 import LinkPreviewCard from './LinkPreviewCard';
-import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
+import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
 import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { lostFoundContactLabel } from './composer/LostFoundFields';
@@ -305,9 +305,7 @@ function PostCard({
             {post.location_name || 'Pinned location'}
             {post.distance_meters != null && post.distance_meters > 0 && (
               <span className="text-app-muted">
-                · {post.distance_meters < 1000
-                    ? `${post.distance_meters}m away`
-                    : `${(post.distance_meters / 1609.34).toFixed(1)} mi away`}
+                · {formatDistance(post.distance_meters) === 'nearby' ? 'nearby' : `${formatDistance(post.distance_meters)} away`}
               </span>
             )}
           </span>
