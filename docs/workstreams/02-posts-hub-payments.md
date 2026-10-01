@@ -173,9 +173,30 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T09:34:28Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T10:32:53Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T09:34:28Z):** master is `e333507a9` (batch 281).
+- **Latest (2026-10-01T10:32:53Z):** master is `6b528c74f` or later.
+  - **Merged:** batch 282, #1296 (a new post shows only in a feed list it belongs to) and #1298 (composer label "Shown on your profile to:").
+  - **With Stream 1** (all three iOS cells go on its combined candidate 24, `7ee25bf94`):
+    - [#1299](https://github.com/WangPantopus/skinny-pantopus/pull/1299): iOS card VoiceOver actions, head now `64cab2740`.
+      - Stream 1's cell (seal `3bca977e`) found that master's `.combine` already exposed the actions on iOS 27; this makes them explicit.
+      - The reaction action now carries its count, as its button does.
+      - My r2 bundle follows my queued build.
+    - [#1311](https://github.com/WangPantopus/skinny-pantopus/pull/1311): a post found gone (404/403) on its screen sends the refresh signal, so the stale Pulse card leaves (seal `b9ff59e9`).
+      - Android before/after: before, the card stayed; after, it's gone, with two 404s and no loop.
+      - Android notifies only on entering the gone state, because its detail VM also listens.
+    - [#1312](https://github.com/WangPantopus/skinny-pantopus/pull/1312): "Posted to your connections" for connections-only posts on all three clients, Stream 1's decision (seal `7007eb52`). Web and Android before/after.
+  - **Decisions:**
+    - A gone post refreshes the lists that still show it, natively too.
+    - A connections-only post's success message says where it went.
+    - VoiceOver action names equal the button labels, counts included.
+  - **Lessons:**
+    - Stream 1's Sim helper raw tree exposes `custom_actions`, so iOS VoiceOver actions are checkable.
+    - Before adding a notify in a VM, check whether it also listens to the same signal.
+    - Android compose toasts last 700 ms; capture them with rapid screencaps.
+    - adb `input text` can't take parentheses.
+  - **Runtime:** the emulator is stopped and the slot released; APKs deleted; no live fixtures. Only my #1299 build (`64cab2740`) is still queued in the heavy slot.
+- **Earlier (2026-10-01T09:34:28Z):** master is `e333507a9` (batch 281).
   - **Merged:**
     - batch 280: #1284 (feed delete/hide clear every filter list) and #1287 (feed confirmed changes reach every list);
     - batch 281: #1293, native My posts Delete/Archive/Restore refresh a live Pulse. Android was verified, including Restore. Stream 1's iOS cell is `e379c329`; on iOS it's defensive parity.
