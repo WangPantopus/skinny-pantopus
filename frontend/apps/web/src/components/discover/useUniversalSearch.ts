@@ -3,7 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { SearchScope, UnifiedResult } from './discoverTypes';
+import { SHOW_BEACON_RESULTS } from './discoverTypes';
 import { queryKeys } from '@/lib/query-keys';
+import { launchFeatures } from '@/lib/featureFlags';
 
 /**
  * Performs universal search across profile identities, businesses, tasks, and
@@ -33,9 +35,10 @@ export function useUniversalSearch(
       const limit = scope === 'all' ? 5 : 20;
 
       const shouldSearchProfiles = scope === 'all' || scope === 'local_profiles' || scope === 'public_profiles';
-      const shouldSearchBiz = scope === 'all';
-      const shouldSearchTasks = scope === 'all' || scope === 'tasks';
-      const shouldSearchListings = scope === 'all' || scope === 'listings';
+      // Launch cuts #6, #4 and #3: no business, task or listing results.
+      const shouldSearchBiz = scope === 'all' && launchFeatures.businessDirectory;
+      const shouldSearchTasks = (scope === 'all' || scope === 'tasks') && launchFeatures.openGigs;
+      const shouldSearchListings = (scope === 'all' || scope === 'listings') && launchFeatures.marketplace;
 
       const promises: Promise<void>[] = [];
 
@@ -43,11 +46,13 @@ export function useUniversalSearch(
         promises.push(
           api.identitySearch.searchProfiles({
             q: trimmed,
-            scope: scope === 'local_profiles' || scope === 'public_profiles' ? scope : 'all',
+            // Launch cuts #1 + #2: Beacons (public personas) are left out.
+            scope: scope === 'local_profiles' || scope === 'public_profiles' ? scope : SHOW_BEACON_RESULTS ? 'all' : 'local_profiles',
             limit,
           }).then((res) => {
             for (const profile of res?.results || []) {
               if (profile.type !== 'local_profile' && profile.type !== 'public_profile') continue;
+              if (profile.type === 'public_profile' && !SHOW_BEACON_RESULTS) continue;
               unified.push({
                 id: profile.id,
                 type: profile.type,
@@ -57,7 +62,7 @@ export function useUniversalSearch(
                 imageUrl: profile.imageUrl ?? null,
                 href: profile.href,
                 badges: profile.badges ?? [],
-                linkedProfile: profile.linkedProfile ?? null,
+                linkedProfile: profile.linkedProfile?.type === 'public_profile' && !SHOW_BEACON_RESULTS ? null : profile.linkedProfile ?? null,
               });
             }
           }).catch(() => {}),

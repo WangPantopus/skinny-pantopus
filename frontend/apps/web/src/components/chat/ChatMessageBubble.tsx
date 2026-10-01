@@ -8,6 +8,7 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import MessageReactionBar from './MessageReactionBar';
 import QuickReactionPicker from './QuickReactionPicker';
 import EmojiPickerPopover from './EmojiPickerPopover';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const EMOJI_ONLY_REGEX = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?){1,5}$/u;
 function isEmojiOnly(text?: string): boolean {
@@ -44,6 +45,8 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
   const isOptimistic = msg._optimistic;
   const isFailed = msg._failed;
   const isRefused = msg._refused;
+  // Launch cut #3 (Marketplace): a shared listing card is not shown.
+  if (msgType === 'listing_offer' && !launchFeatures.marketplace) return null;
 
   const isEdited = msg.edited || msg.is_edited;
   const replyMeta = msg.reply_to_id ? (metadata as Record<string, any>)?.replyContext : null;

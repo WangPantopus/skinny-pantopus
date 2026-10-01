@@ -9,6 +9,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import { failureMessage } from '../share/shareFailure';
 import { toast } from '@/components/ui/toast-store';
 import { notifyHomesChanged } from '@/components/ProfileToggle';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ---- Constants ----
 
@@ -460,7 +461,8 @@ export default function HomeSettingsTab({
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
-              <p className="text-[10px] text-app-text-muted mt-0.5">Applies to new tasks, bills, documents, etc.</p>
+              {/* Launch cut #7 (Household extras): the copy leaves bills out. */}
+              <p className="text-[10px] text-app-text-muted mt-0.5">{launchFeatures.householdExtras ? 'Applies to new tasks, bills, documents, etc.' : 'Applies to new tasks, documents, etc.'}</p>
             </div>
 
             <div>
@@ -558,10 +560,11 @@ export default function HomeSettingsTab({
       {/* ===== Section 4: Notifications ===== */}
       <SettingsSection title="Notifications" icon="🔔">
         <div className="space-y-1">
-          <NotificationToggle label="Bill reminders" description="Get notified about upcoming due dates" checked={notifBills} onChange={setNotifBills} />
+          {/* Launch cut #7 (Household extras): bill and package-delivery toggles are hidden. */}
+          {launchFeatures.householdExtras && <NotificationToggle label="Bill reminders" description="Get notified about upcoming due dates" checked={notifBills} onChange={setNotifBills} />}
           <NotificationToggle label="Task reminders" description="Reminders for assigned and overdue tasks" disabled={saving} checked={notifTasks} onChange={setNotifTasks} />
-          <NotificationToggle label="Mail alerts" description="New mail and package notifications" checked={notifMail} onChange={setNotifMail} />
-          <NotificationToggle label="Delivery alerts" description="Package delivery status updates" checked={notifDelivery} onChange={setNotifDelivery} />
+          <NotificationToggle label="Mail alerts" description={launchFeatures.householdExtras ? 'New mail and package notifications' : 'New mail notifications'} checked={notifMail} onChange={setNotifMail} />
+          {launchFeatures.householdExtras && <NotificationToggle label="Delivery alerts" description="Package delivery status updates" checked={notifDelivery} onChange={setNotifDelivery} />}
           <NotificationToggle label="Guest pass activity" description="When someone views a guest pass" disabled={saving} checked={notifGuestPass} onChange={setNotifGuestPass} />
         </div>
         {/* These choices are saved, but no notification reads them yet (the same

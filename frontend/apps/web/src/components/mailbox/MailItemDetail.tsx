@@ -14,6 +14,22 @@ import TrustBadge from './TrustBadge';
 import UrgencyIndicator from './UrgencyIndicator';
 import DrawerBadge from './DrawerBadge';
 import AIElfStrip from './AIElfStrip';
+import { launchFeatures } from '@/lib/featureFlags';
+
+// Launch cuts: mail actions of hidden features are not offered — a package's
+// task post (#4 + #7), bill payment (#7), certified signing, translation, RSVP
+// by mail and sharing to the community stream (#8).
+export function isLaunchCutMailAction(type: MailAction['action_type']): boolean {
+  switch (type) {
+    case 'create_gig': return !(launchFeatures.openGigs && launchFeatures.householdExtras);
+    case 'pay_bill': return !launchFeatures.householdExtras;
+    case 'acknowledge':
+    case 'translate':
+    case 'rsvp':
+    case 'share_to_community': return !launchFeatures.mailExtras;
+    default: return false;
+  }
+}
 
 type MailItemDetailProps = {
   detail: MailItemDetailResponse;
@@ -240,7 +256,7 @@ function renderBlock(block: InsideBlock, onAction?: (a: MailAction) => void) {
     case 'table': return <TableBlockView key={block.id} block={block} />;
     case 'amount_due': return <AmountDueBlockView key={block.id} block={block} />;
     case 'tracking': return <TrackingBlockView key={block.id} block={block} />;
-    case 'action_prompt': return <ActionPromptBlockView key={block.id} block={block} onAction={onAction} />;
+    case 'action_prompt': return isLaunchCutMailAction(block.action.action_type) ? null : <ActionPromptBlockView key={block.id} block={block} onAction={onAction} />;
     case 'document': return <DocumentBlockView key={block.id} block={block} />;
     case 'rich_content': return <RichContentBlockView key={block.id} block={block} />;
     default: return null;
@@ -347,7 +363,8 @@ export default function MailItemDetail({ detail, onAction }: MailItemDetailProps
         )}
 
         {/* Certified banner, until the named recipient signs */}
-        {policy.certified && !wrapper.acknowledged_at && (
+        {/* Launch cut #8 (Mail extras): certified mail and e-signing are hidden. */}
+        {launchFeatures.mailExtras && policy.certified && !wrapper.acknowledged_at && (
           <div className="mt-3 p-2 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
             <p className="text-xs font-semibold text-red-700 dark:text-red-400">
               Certified Mail — Signature required
@@ -371,7 +388,7 @@ export default function MailItemDetail({ detail, onAction }: MailItemDetailProps
         <AttachmentList attachments={inside.attachments} />
 
         {/* Actions */}
-        <ActionBar actions={inside.actions} onAction={onAction} />
+        <ActionBar actions={inside.actions.filter((a) => !isLaunchCutMailAction(a.action_type))} onAction={onAction} />
       </div>
     </div>
   );

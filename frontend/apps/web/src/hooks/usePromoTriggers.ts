@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import type { UserProfile } from '@pantopus/types';
 import { promoModalStore } from '@/components/ui/promo-modal-store';
 import { openMagicTaskComposer } from '@/lib/feedComposerEvents';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -56,7 +57,10 @@ const triggers: TriggerDef[] = [
       id: 'welcome-new-user-v1',
       badge: 'Welcome to Pantopus',
       title: 'Verify your address to unlock your neighborhood',
-      body: 'Connect with neighbors, post gigs, and discover local services — all tied to your verified home address for trust and safety.',
+      // Launch cuts #4/#6: the copy names only features still shown.
+      body: launchFeatures.openGigs && launchFeatures.businessDirectory
+        ? 'Connect with neighbors, post gigs, and discover local services — all tied to your verified home address for trust and safety.'
+        : 'Connect with neighbors — all tied to your verified home address for trust and safety.',
       ctaLabel: 'Verify My Address',
       onAction: () => router.push('/app/homes'),
       variant: 'bottom-sheet',
@@ -74,7 +78,9 @@ const triggers: TriggerDef[] = [
       id: 'verify-address-nudge-v1',
       badge: 'Complete Your Profile',
       title: 'Unlock full access with a verified address',
-      body: 'Verified addresses let you post gigs, join your neighborhood feed, and build trust with your community.',
+      body: launchFeatures.openGigs
+        ? 'Verified addresses let you post gigs, join your neighborhood feed, and build trust with your community.'
+        : 'Verified addresses let you join your neighborhood feed and build trust with your community.',
       ctaLabel: 'Get Verified',
       onAction: () => router.push('/app/homes'),
       variant: 'center',
@@ -98,7 +104,10 @@ const triggers: TriggerDef[] = [
       id: 'welcome-back-v1',
       badge: 'Welcome Back',
       title: "See what's new in your neighborhood",
-      body: "Your neighbors have been busy while you were away. Check out new gigs, listings, and posts near you.",
+      // Launch cuts #3/#4: no gigs or listings to point to.
+      body: launchFeatures.openGigs && launchFeatures.marketplace
+        ? "Your neighbors have been busy while you were away. Check out new gigs, listings, and posts near you."
+        : "Your neighbors have been busy while you were away. Check out new posts near you.",
       ctaLabel: 'Explore Now',
       onAction: () => router.push('/app/feed'),
       dismissLabel: 'Maybe Later',
@@ -113,7 +122,9 @@ const triggers: TriggerDef[] = [
   {
     id: 'first-gig-prompt-v1',
     priority: 4,
+    // Launch cut #4 (Open Gigs): no prompt to post an open gig.
     shouldShow: (u) =>
+      launchFeatures.openGigs &&
       !!u.address_verified &&
       (u.gigs_posted ?? u.total_gigs_posted ?? 0) === 0 &&
       daysSince(u.created_at) >= 2,
@@ -163,7 +174,9 @@ const triggers: TriggerDef[] = [
       id: 'complete-profile-v1',
       badge: 'Build Trust',
       title: 'Complete your profile',
-      body: 'Profiles with a photo and bio get 3x more responses on gigs. Take a minute to stand out in your neighborhood.',
+      body: launchFeatures.openGigs
+        ? 'Profiles with a photo and bio get 3x more responses on gigs. Take a minute to stand out in your neighborhood.'
+        : 'Profiles with a photo and bio get 3x more responses. Take a minute to stand out in your neighborhood.',
       ctaLabel: 'Edit Profile',
       onAction: () => router.push('/app/profile/edit'),
       variant: 'center',
@@ -183,7 +196,10 @@ const triggers: TriggerDef[] = [
       id: 'enable-morning-briefing-v1',
       badge: 'Stay Informed',
       title: 'Get a personalized morning briefing',
-      body: 'Start your day with local weather, air quality, and what needs your attention — bills, tasks, and neighborhood updates delivered to your phone.',
+      // Launch cut #7 (Household extras): bills are not in the briefing.
+      body: launchFeatures.householdExtras
+        ? 'Start your day with local weather, air quality, and what needs your attention — bills, tasks, and neighborhood updates delivered to your phone.'
+        : 'Start your day with local weather, air quality, and what needs your attention — tasks and neighborhood updates delivered to your phone.',
       ctaLabel: 'Set Up Briefing',
       onAction: () => router.push('/app/settings/notifications'),
       dismissLabel: 'Not Now',

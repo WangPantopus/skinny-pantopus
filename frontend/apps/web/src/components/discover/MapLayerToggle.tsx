@@ -1,12 +1,14 @@
 'use client';
 
 import type { MapLayerKey } from './DiscoverMap';
+import { launchFeatures } from '@/lib/featureFlags';
 
-const LAYER_CONFIG: { key: MapLayerKey; label: string; emoji: string; color: string }[] = [
+const LAYER_CONFIG: { key: MapLayerKey; label: string; emoji: string; color: string }[] = ([
   { key: 'businesses', label: 'Businesses', emoji: '🏪', color: 'bg-primary-100 text-primary-700 border-primary-300' },
   { key: 'gigs', label: 'Active Tasks', emoji: '📋', color: 'bg-amber-100 text-amber-700 border-amber-300' },
   { key: 'posts', label: 'Posts', emoji: '💬', color: 'bg-surface-muted text-app-strong border-app-strong' },
-];
+// Launch cut #4 (Open Gigs): no open-task layer.
+] satisfies { key: MapLayerKey; label: string; emoji: string; color: string }[]).filter(({ key }) => key !== 'gigs' || launchFeatures.openGigs);
 
 interface MapLayerToggleProps {
   activeLayers: Set<MapLayerKey>;

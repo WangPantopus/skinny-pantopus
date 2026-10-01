@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { User, GigListItem } from '@pantopus/types';
+import { launchFeatures } from '@/lib/featureFlags';
+import { openFeedComposer } from '@/lib/feedComposerEvents';
 
 type Priority = 'high' | 'medium' | 'low';
 
@@ -86,7 +88,8 @@ export default function ActionQueueCard() {
         failures.gigs = true;
         setGigs([]);
       }),
-      api.gigs.getMyBids({ limit: 200, status: ['pending', 'accepted', 'rejected'] }).then((r: Record<string, any>) => {
+      // Launch cut #4 (Open Gigs): bids are hidden, so they are not loaded.
+      Promise.resolve(launchFeatures.openGigs ? api.gigs.getMyBids({ limit: 200, status: ['pending', 'accepted', 'rejected'] }) : { bids: [] }).then((r: Record<string, any>) => {
         const bids = (r?.bids || []) as Record<string, any>[];
         const map: Record<string, Record<string, any>> = {};
         for (const b of bids) {
@@ -182,7 +185,8 @@ export default function ActionQueueCard() {
         onClick: () => router.push('/app/my-gigs'),
       });
     }
-    if (openMineNoOffers > 0) {
+    // Launch cut #4 (Open Gigs): offers on open tasks are hidden.
+    if (launchFeatures.openGigs && openMineNoOffers > 0) {
       items.push({
         id: 'boost',
         icon: '📣',
@@ -213,7 +217,8 @@ export default function ActionQueueCard() {
         subtitle: 'No urgent actions right now.',
         cta: 'Post',
         priority: 'low',
-        onClick: () => router.push('/app/gigs-v2/new'),
+        // Launch cut #4 (Open Gigs): "Post" opens the Pulse composer, not an open task post.
+        onClick: () => (launchFeatures.openGigs ? router.push('/app/gigs-v2/new') : openFeedComposer()),
       });
     }
 

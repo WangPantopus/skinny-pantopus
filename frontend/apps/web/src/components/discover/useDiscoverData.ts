@@ -14,10 +14,14 @@ import type { DiscoveryFilters } from './DiscoveryFilterPanel';
 import type { DiscoverySort } from './constants';
 import type { MapLayerKey, MeasureFrom } from './DiscoverMap';
 import type { ViewMode, SearchScope, UnifiedResult } from './discoverTypes';
-import { PAGE_SIZE } from './discoverTypes';
+import { PAGE_SIZE, isSearchScopeAvailable } from './discoverTypes';
+import { launchFeatures } from '@/lib/featureFlags';
 import { useUniversalSearch } from './useUniversalSearch';
 
 const URL_SEARCH_SCOPES: SearchScope[] = ['all', 'local_profiles', 'public_profiles', 'businesses', 'tasks', 'listings'];
+// Launch cuts: a link to a hidden scope opens the search across the rest.
+const isUrlSearchScope = (scope: string) =>
+  URL_SEARCH_SCOPES.includes(scope as SearchScope) && isSearchScopeAvailable(scope as SearchScope);
 
 function loadTrustLens(): DiscoverySort {
   if (typeof window === 'undefined') return 'relevance';
@@ -35,9 +39,10 @@ export function useDiscoverData() {
   const searchParams = useSearchParams();
   const urlQuery = searchParams.get('q')?.trim() ?? '';
   const urlScope = searchParams.get('scope') ?? '';
-  const initialScope = URL_SEARCH_SCOPES.includes(urlScope as SearchScope)
+  // Launch cut #6 (Business directory): without it the page opens on people search.
+  const initialScope = isUrlSearchScope(urlScope)
     ? (urlScope as SearchScope)
-    : urlQuery
+    : urlQuery || !launchFeatures.businessDirectory
       ? 'all'
       : 'businesses';
   const { viewerHome, loading: homeLoading, hasHome } = useViewerHome();
@@ -97,7 +102,7 @@ export function useDiscoverData() {
       setDebouncedQuery(urlQuery);
     }
 
-    if (URL_SEARCH_SCOPES.includes(urlScope as SearchScope)) {
+    if (isUrlSearchScope(urlScope)) {
       setScope(urlScope as SearchScope);
     } else if (urlQuery) {
       setScope('all');

@@ -26,6 +26,7 @@ import type {
   PostDraft,
   MailSummary,
 } from '@pantopus/types';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface AIDraftCardProps {
   draft: AIChatDraft;
@@ -33,10 +34,11 @@ interface AIDraftCardProps {
 
 export function AIDraftCard({ draft }: AIDraftCardProps) {
   switch (draft.type) {
+    // Launch cuts #4 (open task posts) and #3 (listings): their drafts are not shown.
     case 'gig':
-      return <GigDraftCard draft={draft.draft as GigDraft} />;
+      return launchFeatures.openGigs ? <GigDraftCard draft={draft.draft as GigDraft} /> : null;
     case 'listing':
-      return <ListingDraftCard draft={draft.draft as ListingDraft} />;
+      return launchFeatures.marketplace ? <ListingDraftCard draft={draft.draft as ListingDraft} /> : null;
     case 'post':
       return <PostDraftCard draft={draft.draft as PostDraft} />;
     case 'mail_summary':

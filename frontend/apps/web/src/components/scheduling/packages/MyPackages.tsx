@@ -30,6 +30,7 @@ import {
   sortCredits,
 } from "@/components/scheduling/packages/credits";
 import { EmptyHero } from "@/components/scheduling/packages/ui";
+import { launchFeatures } from "@/lib/featureFlags";
 
 export default function MyPackages() {
   const router = useRouter();
@@ -85,7 +86,8 @@ export default function MyPackages() {
           pillar="personal"
           title="No packages yet"
           body="When you buy a package, your credits show up here."
-          action={
+          // Launch cut #5 (Public scheduling): no browsing booking pages.
+          action={launchFeatures.publicScheduling &&
             <button
               type="button"
               onClick={() => router.push("/app/scheduling")}
@@ -213,7 +215,8 @@ function CreditCard({
           </p>
         )}
 
-        {spent ? (
+        {/* Launch cut #5 (Public scheduling): booking with a credit is hidden. */}
+        {!launchFeatures.publicScheduling ? null : spent ? (
           <button
             type="button"
             onClick={onBook}

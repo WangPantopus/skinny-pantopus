@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type { NeighborhoodPulse, PulseSignal } from '@pantopus/types';
 import { getGreeting } from './HubTopBar';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface PlaceBriefCardProps {
   homeId: string;
@@ -306,7 +307,8 @@ export function PlaceBriefCard({ homeId, homeName }: PlaceBriefCardProps) {
                     </p>
                   )}
                 </div>
-                {signal.actions && signal.actions.length > 0 && (
+                {/* Launch cut #4 (Open Gigs): every signal action posts an open task. */}
+                {launchFeatures.openGigs && signal.actions && signal.actions.length > 0 && (
                   <div className="flex gap-1 flex-shrink-0 mt-0.5">
                     {signal.actions.map((action, j) => (
                       <button
@@ -358,7 +360,8 @@ export function PlaceBriefCard({ homeId, homeName }: PlaceBriefCardProps) {
                 </p>
               </div>
               <div className="flex gap-2">
-                {pulse.seasonal_context?.first_action_nudge && (
+                {/* Launch cut #4 (Open Gigs): no "Post your first gig". */}
+                {launchFeatures.openGigs && pulse.seasonal_context?.first_action_nudge && (
                   <button
                     onClick={() => {
                       const nudge = pulse.seasonal_context?.first_action_nudge;
