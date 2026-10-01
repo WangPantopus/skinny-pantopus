@@ -602,6 +602,8 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
                 PostsEndpoints.archive(id: dto.id),
                 as: PostArchiveResponse.self
             )
+            // A Pulse feed still listing it would show it until its next read: lists refetch.
+            PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             localArchiveOverrides = previousOverrides
             rebuild()
@@ -620,6 +622,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
                 PostsEndpoints.unarchive(id: dto.id),
                 as: PostArchiveResponse.self
             )
+            PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             localArchiveOverrides = previousOverrides
             rebuild()
@@ -640,6 +643,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         rebuild()
         do {
             let _: EmptyResponse = try await api.request(PostsEndpoints.deletePost(id: target.postId))
+            PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             posts = previousPosts
             localArchiveOverrides = previousOverrides
