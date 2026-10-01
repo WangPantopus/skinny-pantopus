@@ -84,6 +84,12 @@ function homesFromApi(raw: any): HomeInfo[] {
     .filter((h: HomeInfo | null): h is HomeInfo => !!h && !!h.id);
 }
 
+// The draft delete was refused because the train is already published (its publish went through).
+function isNotADraft(err: unknown): boolean {
+  const e = err as { statusCode?: number; code?: string } | null;
+  return e?.statusCode === 409 && e?.code === 'NOT_A_DRAFT';
+}
+
 export default function NewSupportTrainPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>('story');
@@ -260,9 +266,14 @@ export default function NewSupportTrainPage() {
     try {
       if (leftoverTrainId.current) {
         try {
-          await api.supportTrains.deleteSupportTrain(leftoverTrainId.current);
+          await api.supportTrains.deleteSupportTrain(leftoverTrainId.current, { draftOnly: true });
           leftoverTrainId.current = null;
-        } catch {
+        } catch (deleteErr) {
+          // The last attempt went live after all; only its reply was lost.
+          if (isNotADraft(deleteErr)) {
+            router.replace(`/app/support-trains/${leftoverTrainId.current}`);
+            return;
+          }
           // Still unreachable; keep it for the next attempt.
         }
       }
@@ -329,8 +340,13 @@ export default function NewSupportTrainPage() {
       // trying again makes one train, with whatever the organizer changes in between.
       if (createdTrainId) {
         try {
-          await api.supportTrains.deleteSupportTrain(createdTrainId);
-        } catch {
+          await api.supportTrains.deleteSupportTrain(createdTrainId, { draftOnly: true });
+        } catch (deleteErr) {
+          // Publish went through; only its reply was lost. The train is live.
+          if (isNotADraft(deleteErr)) {
+            router.replace(`/app/support-trains/${createdTrainId}`);
+            return;
+          }
           leftoverTrainId.current = createdTrainId;
         }
       }
