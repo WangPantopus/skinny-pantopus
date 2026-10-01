@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, type ReactNode } from 'react';
+import { useEffect, useCallback, useId, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 interface ModalShellProps {
@@ -47,6 +47,9 @@ export default function ModalShell({
   maxWidth = 'max-w-lg',
   children,
 }: ModalShellProps) {
+  const titleId = useId();
+  const subtitleId = useId();
+
   // Close on Escape
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -84,6 +87,10 @@ export default function ModalShell({
       {/* Modal */}
       <div
         className={`relative w-full ${maxWidth} bg-app-surface rounded-2xl shadow-2xl border border-app-border-subtle overflow-hidden flex flex-col max-h-[90vh]`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={subtitle ? subtitleId : undefined}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Scrollable header + body */}
@@ -100,15 +107,16 @@ export default function ModalShell({
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-semibold text-app-text">{title}</h2>
+                <h2 id={titleId} className="text-lg font-semibold text-app-text">{title}</h2>
                 {subtitle && (
-                  <p className="text-sm text-app-text-secondary mt-0.5">{subtitle}</p>
+                  <p id={subtitleId} className="text-sm text-app-text-secondary mt-0.5">{subtitle}</p>
                 )}
               </div>
               {/* Close button */}
               <button
                 onClick={() => { if (!submitting) onClose(); }}
                 disabled={submitting}
+                aria-label="Close"
                 className="flex-shrink-0 p-1.5 text-app-text-muted hover:text-app-text hover:bg-app-hover rounded-lg transition disabled:opacity-50"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
