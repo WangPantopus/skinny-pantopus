@@ -21,9 +21,9 @@ internal fun senderInvitationSummary(
         (invite["proposed_preset_key"] as? String)?.let {
             if (it.startsWith("access_request:")) "Household approval" else "Permission preset: $it"
         },
-        dates["access_start_at"]?.let { "Access begins: $it" },
-        dates["access_end_at"]?.let { "Access ends: $it" },
-        dates["expires_at"]?.let { "Invitation expires: $it" },
+        dates["access_start_at"]?.let { "Access begins: ${reviewedDateLabel(it)}" },
+        dates["access_end_at"]?.let { "Access ends: ${reviewedDateLabel(it)}" },
+        dates["expires_at"]?.let { "Invitation expires: ${reviewedDateLabel(it)}" },
     ).joinToString("\n")
 }
 

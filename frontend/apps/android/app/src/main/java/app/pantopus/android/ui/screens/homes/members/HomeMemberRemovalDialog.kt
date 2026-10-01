@@ -29,6 +29,7 @@ import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.data.homes.HomeMemberRemovalCurrent
 import app.pantopus.android.data.homes.HomeMemberRemovalRecovery
 import app.pantopus.android.data.homes.memberRemovalRefusalMessage
+import app.pantopus.android.data.homes.reviewedDateLabel
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskResumeEffect
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
@@ -183,7 +184,7 @@ private fun RemovalOriginal(
             modifier = Modifier.testTag("homeMemberRemovalTerminal"),
         )
         if (outcome.state == "rejected") Text(memberRemovalRefusalMessage(outcome.code))
-        if (outcome.state == "completed") Text("Original removal completed: ${outcome.completedAt}")
+        if (outcome.state == "completed") Text("Original removal completed: ${outcome.completedAt?.let(::reviewedDateLabel)}")
         if (outcome.state == "cancelled") Text("This result did not restore membership or undo a completed removal.")
         Text("This is the historical result of the saved original. Current membership is checked separately.")
         TextButton(

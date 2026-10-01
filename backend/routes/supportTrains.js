@@ -1201,6 +1201,25 @@ router.post(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to add organizer.' });
     }
 
+    // A co-organizer added after publishing joins the campaign chat, as publish does for earlier ones.
+    try {
+      const chatThreadId = req.activity?.chat_thread_id;
+      if (chatThreadId) {
+        await supabaseAdmin
+          .from('ChatParticipant')
+          .upsert(
+            { room_id: chatThreadId, user_id, role: 'member', is_active: true },
+            { onConflict: 'room_id,user_id' }
+          );
+      }
+    } catch (chatErr) {
+      logger.error('Add organizer to chat failed (non-fatal)', {
+        supportTrainId: st.id,
+        userId: user_id,
+        error: chatErr.message,
+      });
+    }
+
     res.status(201).json(data);
   })
 );
@@ -1236,6 +1255,34 @@ router.delete(
         error: error.message,
       });
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to remove organizer.' });
+    }
+
+    // A removed co-organizer leaves the campaign chat unless they are still the recipient or a helper
+    // with an active signup (the same rule as a helper's cancel).
+    try {
+      const chatThreadId = req.activity?.chat_thread_id;
+      if (chatThreadId && targetUserId !== st.recipient_user_id) {
+        const { count: activeRes } = await supabaseAdmin
+          .from('SupportTrainReservation')
+          .select('id', { count: 'exact', head: true })
+          .eq('support_train_id', st.id)
+          .eq('user_id', targetUserId)
+          .neq('status', 'canceled');
+
+        if ((activeRes || 0) === 0) {
+          await supabaseAdmin
+            .from('ChatParticipant')
+            .delete()
+            .eq('room_id', chatThreadId)
+            .eq('user_id', targetUserId);
+        }
+      }
+    } catch (chatErr) {
+      logger.error('Remove organizer from chat failed (non-fatal)', {
+        supportTrainId: st.id,
+        targetUserId,
+        error: chatErr.message,
+      });
     }
 
     res.status(204).end();
@@ -1419,21 +1466,37 @@ router.post(
       });
     }
 
-    // Create campaign chat thread
+    // Create campaign chat thread. A train that went back to draft keeps its thread,
+    // so publishing again reuses it instead of splitting the conversation.
     try {
       const activityTitle = req.activity?.title || 'Support Train';
 
-      const { data: chatRoom } = await supabaseAdmin
+      const { data: existingRoom } = await supabaseAdmin
         .from('ChatRoom')
-        .insert({
-          type: 'support_train',
-          support_train_id: st.id,
-          name: activityTitle,
-          description: 'Support Train coordination thread',
-          is_active: true,
-        })
         .select('id')
-        .single();
+        .eq('type', 'support_train')
+        .eq('support_train_id', st.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      let chatRoom = existingRoom;
+      if (chatRoom) {
+        await supabaseAdmin.from('ChatRoom').update({ is_active: true }).eq('id', chatRoom.id);
+      } else {
+        const { data: createdRoom } = await supabaseAdmin
+          .from('ChatRoom')
+          .insert({
+            type: 'support_train',
+            support_train_id: st.id,
+            name: activityTitle,
+            description: 'Support Train coordination thread',
+            is_active: true,
+          })
+          .select('id')
+          .single();
+        chatRoom = createdRoom;
+      }
 
       if (chatRoom) {
         // Add participants: primary organizer + co-organizers + recipient

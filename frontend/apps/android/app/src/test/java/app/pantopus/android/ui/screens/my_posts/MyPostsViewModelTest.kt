@@ -266,8 +266,13 @@ class MyPostsViewModelTest {
     @Test
     fun archiveOptimisticallyFlipsRowToArchivedTab() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
-                NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
+            // A confirmed archive tells the lists to refetch; this one then reads the post archived.
+            val archivedP1 = dto(id = "p1", archivedAt = fixedNow.toString())
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returnsMany
+                listOf(
+                    NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1")))),
+                    NetworkResult.Success(MyPostsResponse(posts = listOf(archivedP1))),
+                )
             coEvery { postsRepo.archivePost("p1") } returns
                 NetworkResult.Success(PostArchiveResponse(archived = true, archivedAt = fixedNow.toString()))
             val vm = makeVM()
@@ -278,14 +283,21 @@ class MyPostsViewModelTest {
             vm.archive("p1")
             assertEquals(0, vm.tabs.value[0].count)
             assertEquals(1, vm.tabs.value[1].count)
-            assertTrue(vm.isArchived(dto(id = "p1")))
+            vm.selectTab(MyPostsTab.ARCHIVED)
+            assertEquals("p1", (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.first().id)
         }
 
     @Test
     fun unarchiveFlipsRowBackToActive() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
-                NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
+            // Each confirmed change refetches the list: active, then archived, then active again.
+            val archivedP1 = dto(id = "p1", archivedAt = fixedNow.toString())
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returnsMany
+                listOf(
+                    NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1")))),
+                    NetworkResult.Success(MyPostsResponse(posts = listOf(archivedP1))),
+                    NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1")))),
+                )
             coEvery { postsRepo.archivePost("p1") } returns
                 NetworkResult.Success(PostArchiveResponse(archived = true, archivedAt = fixedNow.toString()))
             coEvery { postsRepo.unarchivePost("p1") } returns
@@ -302,8 +314,12 @@ class MyPostsViewModelTest {
     @Test
     fun confirmDeleteRemovesRowOnSuccess() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
-                NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
+            // The confirmed delete refetches the list, which no longer has the post.
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returnsMany
+                listOf(
+                    NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1")))),
+                    NetworkResult.Success(MyPostsResponse(posts = emptyList())),
+                )
             coEvery { postsRepo.deletePost("p1") } returns NetworkResult.Success(Unit)
             val vm = makeVM()
             vm.load()

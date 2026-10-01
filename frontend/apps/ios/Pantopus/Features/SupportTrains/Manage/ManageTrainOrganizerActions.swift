@@ -245,6 +245,17 @@ public extension ManageTrainViewModel {
 
     // MARK: Lifecycle
 
+    /// `POST /:id/publish` — a draft (back from Unpublish) goes live again;
+    /// primary or co-organizer. The server's 422s (no open date, no recipient
+    /// details) surface verbatim.
+    func publishTrain() async {
+        await run(
+            SupportTrainsEndpoints.publish(supportTrainId: supportTrainId),
+            success: "Train published",
+            failure: "Couldn't publish this train."
+        )
+    }
+
     func pauseTrain() async {
         await run(
             SupportTrainActionsEndpoints.pause(supportTrainId: supportTrainId),

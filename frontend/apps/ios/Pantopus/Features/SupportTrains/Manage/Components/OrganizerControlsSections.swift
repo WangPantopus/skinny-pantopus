@@ -467,6 +467,7 @@ struct ManageLifecycleSection: View {
     let status: String
     let viewerRole: SupportTrainViewerRole
     let isBusy: Bool
+    let onPublish: @MainActor () -> Void
     let onPause: @MainActor () -> Void
     let onResume: @MainActor () -> Void
     let onUnpublish: @MainActor () -> Void
@@ -485,6 +486,15 @@ struct ManageLifecycleSection: View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             ManageSectionHeader(title: "Train status · \(status.capitalized)")
             OrganizerSectionCard {
+                // Back to draft is reversible: organizers can publish the draft again.
+                if status == "draft", viewerRole.isOrganizer {
+                    ManagePillButton(
+                        title: "Publish train",
+                        icon: .eye,
+                        identifier: "manageTrainPublishButton",
+                        isDisabled: isBusy
+                    ) { onPublish() }
+                }
                 if isLive {
                     ManagePillButton(
                         title: "Pause train",

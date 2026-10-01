@@ -282,6 +282,7 @@ public struct ManageTrainView: View {
                     status: content.status,
                     viewerRole: content.viewerRole,
                     isBusy: viewModel.isSubmitting,
+                    onPublish: { Task { await viewModel.publishTrain() } },
                     onPause: { Task { await viewModel.pauseTrain() } },
                     onResume: { Task { await viewModel.resumeTrain() } },
                     onUnpublish: {

@@ -88,10 +88,10 @@ class HomeMemberRemovalCodec(moshi: Moshi) {
             "Role: ${role ?: "Unconfirmed historical role"}",
             "Membership active: ${if (target["is_active"] == true) "Yes" else "No"}",
             status?.let { "Membership status: $it" },
-            dates["start_at"]?.let { "Membership begins: $it" },
-            dates["end_at"]?.let { "Membership ends: $it" },
-            dates["access_start_at"]?.let { "Access begins: $it" },
-            dates["access_end_at"]?.let { "Access ends: $it" },
+            dates["start_at"]?.let { "Membership begins: ${reviewedDateLabel(it)}" },
+            dates["end_at"]?.let { "Membership ends: ${reviewedDateLabel(it)}" },
+            dates["access_start_at"]?.let { "Access begins: ${reviewedDateLabel(it)}" },
+            dates["access_end_at"]?.let { "Access ends: ${reviewedDateLabel(it)}" },
         ).joinToString("\n")
     }
 

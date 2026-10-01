@@ -437,6 +437,7 @@ private fun LoadedBody(
                 status = content.status,
                 viewerRole = content.viewerRole,
                 isBusy = ui.isSubmitting,
+                onPublish = { viewModel.publishTrain() },
                 onPause = { viewModel.pauseTrain() },
                 onResume = { viewModel.resumeTrain() },
                 onUnpublish = {

@@ -35,6 +35,7 @@ import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.data.homes.HomeInvitationRecoveryAction
 import app.pantopus.android.data.homes.PendingHomeInvitationDecision
 import app.pantopus.android.data.homes.invitationRefusalMessage
+import app.pantopus.android.data.homes.reviewedDateLabel
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
@@ -99,9 +100,9 @@ fun HomeInvitationDecisionScreen(
             Text("Invited by ${context.inviter}")
             Text("Offered role: ${TokenAcceptViewModel.humanRole(context.role)}")
             Text("Household permissions and access dates still apply. This invitation does not grant ownership.")
-            context.accessStart?.let { Text("Access starts: $it") }
-            context.accessEnd?.let { Text("Access ends: $it") }
-            context.expiresAt?.let { Text("Invitation expires: $it") }
+            context.accessStart?.let { Text("Access starts: ${reviewedDateLabel(it)}") }
+            context.accessEnd?.let { Text("Access ends: ${reviewedDateLabel(it)}") }
+            context.expiresAt?.let { Text("Invitation expires: ${reviewedDateLabel(it)}") }
             InvitationButton("Accept invitation", "homeInvitationAccept", state.canDecide) {
                 confirmation = InvitationConfirmation("accept", context.decisionToken, "", state.generation)
             }
