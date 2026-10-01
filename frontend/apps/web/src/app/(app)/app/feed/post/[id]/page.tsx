@@ -15,7 +15,7 @@ import type { LucideIcon } from 'lucide-react';
 import { CommentThread, EditPostDialog } from '@/components/feed';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import FeedMediaImage from '@/components/feed/FeedMediaImage';
-import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
+import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
 import { buildCanonicalShareUrlForPost, getErrorMessage } from '@pantopus/utils';
 import Image from 'next/image';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -583,9 +583,7 @@ export default function PostDetailPage() {
                 {post.location_name || post.location_address || 'Pinned location'}
                 {post.distance_meters != null && post.distance_meters > 0 && (
                   <span className="text-app-muted">
-                    · {post.distance_meters < 1000
-                        ? `${post.distance_meters}m away`
-                        : `${(post.distance_meters / 1609.34).toFixed(1)} mi away`}
+                    · {formatDistance(post.distance_meters) === 'nearby' ? 'nearby' : `${formatDistance(post.distance_meters)} away`}
                   </span>
                 )}
               </span>
