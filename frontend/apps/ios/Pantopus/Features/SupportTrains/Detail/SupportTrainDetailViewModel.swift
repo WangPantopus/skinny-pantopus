@@ -516,7 +516,16 @@ extension SupportTrainDetailViewModel {
             ))
         }
 
-        let sortedCovered = slots.filter(\.isCovered).sorted { ($0.slotDate ?? "") < ($1.slotDate ?? "") }
+        // The viewer's own signups are listed under "Your commitment". A slot only
+        // they fill isn't repeated here, where it would read as a neighbor's.
+        let mineCountBySlot = reservations.compactMap(\.slotId).reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
+        let sortedCovered = slots
+            .filter { slot in
+                guard slot.isCovered else { return false }
+                let mine = mineCountBySlot[slot.id] ?? 0
+                return mine == 0 || (slot.filledCount ?? 0) > mine
+            }
+            .sorted { ($0.slotDate ?? "") < ($1.slotDate ?? "") }
         if !sortedCovered.isEmpty {
             let shown = Array(sortedCovered.prefix(4)).map { slotRow($0, covered: true) }
             sections.append(SlotSection(
