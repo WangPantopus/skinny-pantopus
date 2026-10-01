@@ -474,7 +474,7 @@ export default function GigDetailsPage() {
     <div className="bg-app-surface-raised">
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <GigStopRecoveryEntry key={gigId} gigId={gigId} />
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left */}
           <div className="lg:col-span-2 space-y-6">
             {/* ─── Status Timeline ─── */}
