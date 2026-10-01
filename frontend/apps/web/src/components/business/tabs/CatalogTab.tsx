@@ -67,8 +67,9 @@ export default function CatalogTab({ catalog: initialCatalog, businessId, onUpda
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-5 space-y-3">
           <Field label="Name *" value={addForm.name} onChange={(v) => setAddForm({ ...addForm, name: v })} placeholder="e.g. Haircut, Large Pizza" />
           <div>
-            <label className="block text-sm font-medium text-app-strong mb-1">Type</label>
+            <label htmlFor="catalog-add-type" className="block text-sm font-medium text-app-strong mb-1">Type</label>
             <select
+              id="catalog-add-type"
               value={addForm.kind}
               onChange={(e) => setAddForm({ ...addForm, kind: e.target.value })}
               className="w-full rounded-lg border border-app-strong px-3 py-2 text-sm"
@@ -80,8 +81,9 @@ export default function CatalogTab({ catalog: initialCatalog, businessId, onUpda
           </div>
           <Field label="Price (cents)" value={addForm.price_cents} onChange={(v) => setAddForm({ ...addForm, price_cents: v })} placeholder="1500 = $15.00" type="number" />
           <div>
-            <label className="block text-sm font-medium text-app-strong mb-1">Description</label>
+            <label htmlFor="catalog-add-description" className="block text-sm font-medium text-app-strong mb-1">Description</label>
             <textarea
+              id="catalog-add-description"
               value={addForm.description}
               onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
               rows={2}
