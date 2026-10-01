@@ -533,11 +533,11 @@ router.post('/:businessId/seats/invite', verifyToken, requireBusinessSeat('team.
 
     // The same inviter inviting the same email again (a retry after a lost reply, or sending it again) renews that
     // invite: a new link with these details and a fresh expiry. Another teammate's invite stays as it is, so the
-    // link they shared keeps working. The update is conditional on the link it read, so of two renews at once one
-    // wins; the other renews again.
+    // link they shared keeps working. The update is conditional on the link it read, so of renews at once one wins
+    // and the others renew again (up to three tries each).
     const renewOrRefuse = async (existing) => {
       let current = existing;
-      for (let attempt = 0; attempt < 2 && current; attempt += 1) {
+      for (let attempt = 0; attempt < 3 && current; attempt += 1) {
         if (current.invited_by_seat_id !== callerSeatId) {
           return res.status(409).json({ error: 'A pending invite already exists for this email' });
         }
