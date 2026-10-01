@@ -9,6 +9,30 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1115 merged (batch 225); #1126 (profile portfolio + no dead Services tab) sealed and handed; #1119 + #1121 in Stream 1's combined device candidate; CI blocker fix #1128 approved, 2026-10-01T00:18:48Z
+
+- **Merged:** #1115, crew page placeholder blocks and the contact form, in batch 225 (PR #1120, 23:48:30Z, master `0256c4f35`). Stream 1 verified seal `da24054b`.
+- **#1126, sweep item 3 (web): sealed and handed to Stream 1.**
+  - Head `e37139db1bfd0f7cd7c98d5271d4e3cd4a86b728`; CI 36795049577 success; seal `b79abfdc9f2fb22237b1c49e941ae1fc11c0306dd59d532499ae1953978ed213`; bundle `20261001-stream5-profile-portfolio-r1`; base `e7fc87cda`.
+  - **Reproduced on master:** the web profile never requested the existing public portfolio (`GET /api/files/portfolio/:userId`, which iOS and Android use), so a user with a portfolio photo showed "No portfolio items". The Services tab could never list anything, and the owner's "Add your first service" opened an Edit Profile with no service field.
+  - **Fix:** the real portfolio is shown, with loading, failure and empty states. The Services tab and Overview's "Featured Services" are removed (native has no such tab). Owner Insights counts only what can be filled in.
+- **#1119 (page-editor a11y) and #1121 (item 1b, native page blocks truth)** are both open. Stream 1 put them into one combined device candidate (`e12254b59`). I seal both after its run.
+  - #1121 head `0b4524e2f`. It stops iOS named pages showing visitors placeholders, owner notes and dead button pills, and stops the iOS/Android editors offering Gallery, Team and Pulse, with truthful hints. Its web palette string was checked on my runtime (bundle `20260930-stream5-native-page-blocks-truth-r1`).
+- **CI blocker found:** `LogMaintenanceFormSnapshotTest.log_maintenance_form_minimal` renders `Instant.now()` against a golden re-recorded on 09-30.
+  - Every Android PR whose unit tests ran after 00:00Z on 10-01 failed it (#1119 and Stream 1's Trains branch). Master looked green only through a cached test task.
+  - Fix #1128 pins the dates (test only). Stream 1 approved it and merges it alone once its Android job is green; Streams 3/4 were told.
+- **Decisions recorded** (also in the PRs):
+  1. Show the real portfolio from the endpoint native already uses (no new exposure).
+  2. Remove the Services tab (no data source; native parity).
+  3. Point owners to the app to add portfolio photos, since the web has no uploader.
+  4. On the iOS named page, show only working link buttons.
+- **Candidates recorded:**
+  - `GET /api/files/portfolio/:userId` returns every File column to anonymous callers (low; native shows `original_filename` as a caption fallback).
+  - Web portfolio upload and delete (parity).
+- **Runtime:** API 18134 on `a211e1f48` (receipt 00:02:17Z; backend equals master's); web 18131 on #1126's head; DB at `20260930184000`.
+  - The local storage has no `pantopus-uploads` bucket. Create it for upload checks and remove it afterwards, as in the #1126 bundle.
+  - No fixtures remain; "S5 Crew Biz" was left alone.
+
 ## LIVE — takeover session: #1115 (crew page blocks + contact form, web) sealed and handed to Stream 1; #1119 (native page-editor a11y) open, waiting for Stream 1's device run together with item 1b, 2026-09-30T23:46:02Z
 
 - **Session:** "Stream 5 Accounts and Social takeover" [a14d84], started about 23:10Z from [NEXT-STREAM5-PROMPT-2026-09-30.md](NEXT-STREAM5-PROMPT-2026-09-30.md).
