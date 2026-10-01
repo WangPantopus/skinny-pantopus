@@ -9,6 +9,30 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T07:25Z (Stream 1).**
+  - **Trains cells closed (iOS, sealed):**
+    - `20261001-stream1-ios-u03-signup-e3-r1` (`f161eeee`): **Helper sign-up, cancel, leave — E3.**
+      - A double tap on "Confirm signup" makes one signup, both at normal speed and with the reply held 5 s; the button reads "Signing up…" and is disabled.
+      - A double tap on the "Leave slot" alert sends one cancel.
+      - Fixtures removed: 351/353 tables equal the baseline, then 353/353.
+    - `20261001-stream1-ios-u03-delivery-e3-r1` (`d440ae05`): **Delivery and organizer confirmation — E3.** Each double tap sends one POST, with every reply held 5 s:
+      - Mark delivered;
+      - Confirm delivery on the train page;
+      - Manage's Confirm delivery for another helper.
+
+      353/353 tables equal the baseline.
+  - **Defect found, repair in progress (mine):**
+    - **The defect:** after any helper action (Mark delivered, Confirm delivery, Leave slot, or closing the sign-up sheet), the train page reloads through its skeleton and comes back at the top. The row just changed is off screen.
+      - Reproduced on iOS: YOUR COMMITMENT is at y=363 before Mark delivered and y=846 after.
+      - Android uses the same `load()` pattern.
+    - **The repair:** both train-page view models now keep loaded content while reloading, as both Manage view models already do. It's one guard per platform, with the skeleton kept for the first load and after errors.
+      - Branch `codex/trains-detail-keeps-place-20261001`, commit `be27fb16f`.
+      - Build queued in the heavy slot behind candidate 20 and Stream 3.
+      - An Android before and both afters will follow.
+  - **Noted for the backlog (not fixed):** when an organizer confirms their own delivery, they get a "Delivery Confirmed" notification about themselves. Their own signup and their own "delivered" don't notify them.
+  - **Queue:**
+    - Stream 2's #1273 (web My pulse → feed cache, head `6200b4b37`, seal `568930b2`) goes into the next batch.
+    - Candidate `3326f3ecc` (#1249, #1259, #1270) is first in the heavy slot.
 - **Update 2026-10-01T07:12Z (Stream 1).**
   - **Merged:** each seal verified, each PR's failed CI jobs read, verify-batch RESULT OK.
 
@@ -612,7 +636,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T07:12Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T07:25Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -627,8 +651,8 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Train lists and search (My trains, Nearby, Invitations, search) | ✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load the list with Try again, which recovers; R2 Invitations empty state, Nearby asks for location (5a740586) | ✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load the list with Try again, which recovers; R2 Invitations empty state, Nearby asks for location (f439d4b5) | ✅ R1 (#662)<br>✅ E5 (#783)<br>✅ R2 (#662) |
 | Start a train (Wizard: create and publish) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>✅ E1 failed step deletes its draft; E2 lost create reply reuses it; E3 double tap makes one train (#841, f98672ab) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>✅ E1 publish 503 retry, E2 lost create reply, E3 double tap: each ends with one train (#841, f98672ab) | ✅ E1 failed publish removes its draft (#817)<br>✅ E3 double-click publish; E6 missing fields (U03 web bundle bbdbf2d2)<br>✅ E6 Edit Manually selects the preset's days (#890)<br>✅ E2 lost create reply reaches the same draft (#836) |
 | Train detail and share link | ✅ E4 share link and privacy (Sep24)<br>✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load support train with Try again, which recovers; no partial train (5a740586) | ✅ R1 E4 (Sep24)<br>✅ E5 (#789) | ✅ R1 E5 on Manage (Sep28)<br>✅ E4 public page privacy (Sep24, PR402)<br>✅ E4 a draft or back-to-draft train is closed to its link (#883)<br>✅ R1 on detail (U03 web bundle bbdbf2d2) |
-| Helper: sign up, cancel, leave | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up (#720)<br>– Cancel and leave not offered<br>✅ E3 double-click sign-up (U03 web bundle bbdbf2d2)<br>✅ E4 greyed button with the reason on non-live trains (#811) |
-| Delivery and organizer confirmation | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | – Read-only on web |
+| Helper: sign up, cancel, leave | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>✅ E3 double tap on Confirm signup (also with the reply held) and on Leave slot: one request each (f161eeee)<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>⬜ E3<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up (#720)<br>– Cancel and leave not offered<br>✅ E3 double-click sign-up (U03 web bundle bbdbf2d2)<br>✅ E4 greyed button with the reason on non-live trains (#811) |
+| Delivery and organizer confirmation | ✅ E1 E2 E5 (#733, Sep28)<br>✅ E3 double tap on Mark delivered, Confirm delivery and Manage's Confirm delivery, reply held: one request each (d440ae05) | ✅ E1 E2 E5 (#733, Sep28)<br>⬜ E3 | – Read-only on web |
 | Organizer dates: add, edit, remove | ✅ Add and edit: E1 E2 E3 E6 (#759)<br>⬜ Remove: E1 E2 | ✅ Add and edit: E1 E2 E3 E6 (#759)<br>✅ Remove: E1 (#759)<br>⬜ Remove: E2 | – Calendar is read-only on web |
 | Send update and push choice | ✅ E1 E2 E3 (#762)<br>✅ Push choice (#778) | ✅ E1 E2 E3 (#762)<br>✅ Push choice (#778) | – Updates are read-only on web |
 | Signups: edit, remove helper, share address | ✅ Edit: E1-E6 (#741)<br>✅ Remove: E1 E2 E3 (Sep28)<br>✅ Address: E1 E2 E3 E4 (#747) | ✅ Remove: E1 E2 E3 (Sep28)<br>✅ Address: E1 E2 E3 E4 (#747)<br>– Edit not offered | ✅ Roster and per-helper privacy (#747)<br>– Edit, remove, address are app-only |
@@ -660,7 +684,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
 
-- U03 items: done 60, confirm from existing evidence 0, to do 12, your call 0, boundary 6, not offered 9
+- U03 items: done 62, confirm from existing evidence 0, to do 10, your call 0, boundary 6, not offered 9
 - U04 items: done 6, confirm from existing evidence 0, to do 5, your call 0, boundary 0, not offered 0
 - U02 items: done 22, confirm from existing evidence 0, to do 3, your call 6, boundary 0, not offered 4
 
