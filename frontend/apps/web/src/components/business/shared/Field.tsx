@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 interface FieldProps {
   label: string;
   value: string;
@@ -7,10 +9,12 @@ interface FieldProps {
 }
 
 export default function Field({ label, value, onChange, placeholder, type = 'text' }: FieldProps) {
+  const id = useId();
   return (
     <div>
-      <label className="block text-sm font-medium text-app-strong mb-1">{label}</label>
+      <label htmlFor={id} className="block text-sm font-medium text-app-strong mb-1">{label}</label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}

@@ -1,5 +1,35 @@
 const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
+const logger = require('./logger');
+const verificationAge = require('./verificationAge');
+
+/**
+ * Which of these users are verified residents, for the public "verified_resident" badge: an ACTIVE HomeOccupancy
+ * whose verification_status is 'verified' and whose verification has not gone stale (verificationAge). Stricter than
+ * household access (homeMailAccess.getAccessibleHomeIds also admits the provisional states a home's creator gets
+ * before any verification). User.verified is an email confirmation, never residency. Fails closed: on a read error
+ * nobody is a verified resident.
+ *
+ * @param {string[]} userIds
+ * @returns {Promise<Set<string>>}
+ */
+async function verifiedResidentUserIds(userIds) {
+  const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
+  if (ids.length === 0) return new Set();
+  const { data, error } = await supabaseAdmin
+    .from('HomeOccupancy')
+    .select('user_id, verified_at')
+    .in('user_id', ids)
+    .eq('is_active', true)
+    .eq('verification_status', 'verified');
+  if (error) {
+    logger.warn('identity.verified_resident_lookup_error', { error: error.message });
+    return new Set();
+  }
+  return new Set((data || [])
+    .filter((row) => !verificationAge.staleAffectsTrust(row.verified_at))
+    .map((row) => String(row.user_id)));
+}
 
 // PersonaMembership.fan_handle is intentionally NOT derived from User.username,
 // LocalProfile.handle, or any other personal-side identifier — that is the
@@ -138,7 +168,7 @@ async function getLocalProfileByHandle(handle) {
     public_city: exposeLocality ? (user.city || null) : null,
     public_state: exposeLocality ? (user.state || null) : null,
     show_neighborhood: exposeLocality,
-    verified_resident: !!user.verified,
+    verified_resident: (await verifiedResidentUserIds([user.id])).has(String(user.id)),
     user,
   };
 }
@@ -539,6 +569,7 @@ async function getOrCreateAudienceIdentityForUser(userId, options = {}) {
 }
 
 module.exports = {
+  verifiedResidentUserIds,
   normalizeHandle,
   sanitizeHandle,
   displayNameFromUser,

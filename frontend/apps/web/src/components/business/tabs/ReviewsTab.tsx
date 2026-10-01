@@ -71,6 +71,7 @@ export default function ReviewsTab({ businessId, businessName }: ReviewsTabProps
           <select
             value={ratingFilter}
             onChange={(e) => setRatingFilter(e.target.value ? Number(e.target.value) : '')}
+            aria-label="Filter by rating"
             className="rounded-lg border border-app-strong px-2 py-1.5 text-sm"
           >
             <option value="">All ratings</option>

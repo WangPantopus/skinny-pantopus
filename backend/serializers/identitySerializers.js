@@ -174,7 +174,9 @@ function serializeLocalProfileForViewer(profile, options = {}) {
   const handle = profile.handle || user?.username || '';
   const displayName = displayNameFromLocalProfile(profile, user, handle);
   const badges = [];
-  if (profile.show_verified_resident_badge !== false && (profile.verified_resident || user?.verified)) {
+  // Only an explicit residency fact (identityProfiles.verifiedResidentUserIds) earns the badge. User.verified is an
+  // email confirmation and must never read as "verified resident".
+  if (profile.show_verified_resident_badge !== false && profile.verified_resident === true) {
     badges.push('verified_resident');
   }
 
@@ -477,7 +479,7 @@ function serializeUserAsLocalIdentity(user, options = {}) {
     avatar_url: user.avatar_url || user.profile_picture_url || null,
     public_city: options.includeLocality ? (user.public_city || user.city || null) : null,
     public_state: options.includeLocality ? (user.public_state || user.state || null) : null,
-    verified_resident: user.verified_resident || user.verified || false,
+    verified_resident: user.verified_resident === true,
     review_count: user.review_count,
     gigs_completed: user.gigs_completed,
     user,
