@@ -173,9 +173,36 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T01:20:07Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T01:51:27Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T01:20:07Z):**
+- **Latest (2026-10-01T01:51:27Z):** master is `b6419009f` (batch 243; #1150 merged in batch 242).
+  - **With Stream 1:**
+    - [#1159](https://github.com/WangPantopus/skinny-pantopus/pull/1159) Hub Discover "Posts" tab, head `36c906d3e`, seal `eb5bfd27242a62e2e9b62549e034844b57d73bae36b3af5421453d52d2e7470c`.
+      - Android before/after verified: master says "Nothing nearby yet" while Pulse lists 3 posts; after, the pointer row and Browse Pulse (a Button) open Pulse.
+      - 350/353 tables equal the baseline; the 3 that differ are sign-in bookkeeping.
+      - In Stream 1's native candidate `80dd2e7cd` for its iOS steps.
+    - [#1161](https://github.com/WangPantopus/skinny-pantopus/pull/1161) native Visitor meta, head `213a3cd26`. Also in that candidate; iOS steps sent.
+      - My Android build is running (heavy slot since 01:44Z).
+      - Android "before" reproduced: Dana's visitor post reads "Just now · Vancouver, WA" and has no "Visitor" in its screen-reader label, while the feed API returns `is_visitor_post: true`.
+      - The owned fixture stays live until the "after".
+  - **Sent:**
+    - [#1166](https://github.com/WangPantopus/skinny-pantopus/pull/1166) **web composer date labels**, head `76e7bebd2`, seal `eb50a83207e7c1e044cfaf9bb220c8b3cbd7f02ecc6e2bddc061915fe3bb0236`.
+      - Chrome drew no placeholder on date inputs, so Event Details showed two identical unlabeled boxes and Deal Info a bare date.
+      - Now: "Date & time", "End time (optional)" and "Deal ends" ("(optional)" for Connections deals), in the composer's caption style. axe 0/0; Jest 122/2343.
+    - [#1169](https://github.com/WangPantopus/skinny-pantopus/pull/1169) **Hub People lane**, head `83677827e`, seal `0d7481d91a5107fa1f051212896647013248dacab229082f518c6f7b3017eaed`.
+      - `filter=people` matched no one (`account_type='personal'` isn't an allowed value), but correcting the value would list every account to any caller.
+      - The lane now returns [] without querying. Behaviour is unchanged (native hides an empty People section).
+  - **New tool:** a value-drift scan (`audits/20261001-stream2-value-drift-scan-r1`) checks enum/CHECK literals in filters and writes. 968 checks, 6 candidates (TRIAGE.md):
+    - the People lane (#1169);
+    - **Block Founders invitations always fail**: the `BlockInvite.status 'reserved'` insert violates the CHECK (proved in a rolled-back insert). Not my area; routed via Stream 1;
+    - 4 harmless extra values.
+  - **Decisions (standing direction):**
+    - #1166 adds visible text (presentation), justified as an accessibility fix (WCAG 3.3.2, 2.5.3) and parity with the apps' own labels. No tokens change; Stream 1 can hold it for design.
+    - #1169 removes the unfiltered query rather than fixing the value.
+    - Item 7's EPA radon link is a new feature (optional), so no change.
+    - L125 (location resolve) is a parity note, not a defect.
+  - **Waiting:** Stream 4's AI Pulse summary change (its item 5, still a draft) before I check the Hub PlaceBriefCard.
+- **Earlier (2026-10-01T01:20:07Z):**
   - **Merged:** #1156 web visitor note in batch 241 (`deaa98176`; master `4123bd455`).
   - **Open, evidence in progress (not yet sent for merge):**
     - [#1159](https://github.com/WangPantopus/skinny-pantopus/pull/1159) Hub Discover "Posts" tab, head `36c906d3e878324feb2ebcb934390ed5e6d9d096` (merge-tree with `4123bd455` clean). Android ktlint/detekt/`assembleDebug` pass. iOS lint is clean and build-for-testing is running. The Android before/after waits for a device slot (all four held at 01:17Z); the iOS cells go to Stream 1.
