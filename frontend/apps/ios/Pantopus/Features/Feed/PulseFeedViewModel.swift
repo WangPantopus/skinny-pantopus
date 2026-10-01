@@ -863,7 +863,8 @@ public final class PulseFeedViewModel {
                 postType: post.postType,
                 topicLabel: intent.cardChipLabel
             ),
-            chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType)
+            chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
+            isVisitor: post.isVisitorPost
         )
     }
 
@@ -874,11 +875,11 @@ public final class PulseFeedViewModel {
     }
 
     private static func metaString(post: FeedPostDTO, intent _: PulseIntent) -> String {
-        let relative = relative(timestamp: post.createdAt)
-        if let locality = post.locationName, !locality.isEmpty {
-            return "\(relative) · \(locality)"
-        }
-        return relative
+        var parts = [relative(timestamp: post.createdAt)]
+        // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
+        if post.isVisitorPost { parts.append("Visitor") }
+        if let locality = post.locationName, !locality.isEmpty { parts.append(locality) }
+        return parts.joined(separator: " · ")
     }
 
     private static func relative(timestamp: String) -> String {

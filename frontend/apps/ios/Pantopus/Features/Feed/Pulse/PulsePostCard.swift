@@ -114,6 +114,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     /// The chip's word; a found Lost & Found post says "Found"
     /// (`PulseIntent.chipLabel(lostFoundType:)`).
     public let chipLabel: String
+    /// Posted far from the author's homes; the meta line says Visitor (web shows a Visitor badge).
+    public let isVisitor: Bool
 
     /// Still-image URLs — kept for call sites (and tests) that only care
     /// about what the card displays, not the attachment kinds.
@@ -137,7 +139,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         media: [PostMediaItem] = [],
         commentCount: Int = 0,
         actions: PulsePostActions = PulsePostActions(),
-        chipLabel: String? = nil
+        chipLabel: String? = nil,
+        isVisitor: Bool = false
     ) {
         self.id = id
         self.authorName = authorName
@@ -155,6 +158,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.commentCount = commentCount
         self.actions = actions
         self.chipLabel = chipLabel ?? intent.cardChipLabel
+        self.isVisitor = isVisitor
     }
 }
 
@@ -476,6 +480,7 @@ public struct PulsePostCard: View {
 
     private var a11yLabel: String {
         var parts = [content.authorName, content.chipLabel]
+        if content.isVisitor { parts.append("Visitor") }
         if let title = content.title, !title.isEmpty { parts.append(title) }
         if !content.body.isEmpty { parts.append(content.body) }
         if !content.media.isEmpty {
