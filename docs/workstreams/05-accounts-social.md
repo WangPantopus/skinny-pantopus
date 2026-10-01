@@ -9,6 +9,30 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1238 (b270) and #1253 (b271) merged; #1256 (crew Stripe return) sealed; #1261 (monthly summary email opt-out) in CI; app-wide page-health scan clean, 2026-10-01T06:36:50Z
+
+- **Merged:** #1238 (Android View as "Not shown", batch 270, master `7c249e7d3`); #1253 (web profile Connect, batch 271, `12013a711`).
+- **Sealed and with Stream 1: #1256** (seal `e332e433…`, backend only, no device run).
+  - Crew owners who finish or refresh Stripe onboarding from the native crew Payments screen now return to `/app/businesses/<id>/dashboard?tab=payments`. They used to land on `/app/businesses/<id>?tab=payments`, which is a 404 on the web.
+  - The Stripe hop itself is unverified: Stripe is disabled on the runtime. Stream 2 has been told (payments area).
+- **In CI: #1261** (the monthly summary email, `monthlyReceiptJob`, which runs on the 1st at 17:00 UTC). It is the only recurring email in scope that isn't transactional, and nobody could turn it off:
+  - its "Unsubscribe from monthly receipts" link was `/settings/notifications`, a web 404;
+  - the job checked only `MailPreferences.email_receipts`, which no screen or API sets;
+  - the account's Email Notifications switch (web Settings) was ignored;
+  - a failed preference read counted as a yes.
+- **#1261's fix:**
+  - the job also honors `email_notifications`, and sends nothing when the read fails;
+  - the link opens `/app/profile/settings`;
+  - the switch's description reads "Receive email updates, like your monthly summary" (it was "gigs and bids", which describes no email the app sends).
+- **#1261's proof** (the real job for hs12 with the transport captured, plus the real Settings page and API): on master, the link is a 404, and the email still goes out with the switch off. On the head, the link opens Settings; switch off, saved and read back; the job then sends 0 emails.
+  - **Decision (standing direction):** use the existing account switch rather than add a new "monthly summary" control. No new control, no API change. `email_receipts` is still honored.
+- **Seen, not changed:**
+  - **No web summary view.** The email's "Share your Pantopus month" button and the web notification both redirect to `/app/profile`, which doesn't show the summary. iOS and Android do show it. Deferred: the summary's content is mostly Gigs and Marketplace numbers (launch cuts #3 and #4), which is the user's call.
+  - **`emailed_at` on failed sends.** The job sets it even when the send fails.
+  - **The one-off P0.2 display-name notice** (`p0-2-send-display-name-migration-emails.js`): its "Settings → Profile" link `/settings/profile` is a 404, and no client can change the display name it mentions. Fix both before any rerun.
+- **Scan:** the app-wide web page-health scan (45 static, in-scope pages as hs12) found no new defect (`20261001-stream5-app-page-health-r1`).
+- **Runtime:** API 18134 and web 18131 both on `a9d195999` (#1261's head; API receipt 06:30:37Z). No fixtures remain: every row from the runs was removed or restored by exact id, and the state equals the pre-run state.
+
 ## LIVE — #1243 (b267), #1244 (b268), #1251 (b269) merged; #1238 sealed (devices pass); #1253 web profile Connect in CI; landlord findings routed, 2026-10-01T05:56:21Z
 
 - **Merged:**
