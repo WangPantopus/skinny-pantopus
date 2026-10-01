@@ -274,7 +274,7 @@ async function getNameDiscoverableLocalCandidates({
     .filter(Boolean);
 }
 
-async function canDiscoverLocalProfileForUserSearch(profile, viewerId) {
+async function canDiscoverLocalProfileForUserSearch(profile, viewerId, account = null) {
   if (!profile?.user_id || profile.user_id === viewerId) return false;
   if (!(await isSearchable(viewerId, profile.user_id))) return false;
   if (await isScopedBlocked(viewerId, profile.user_id, 'search_only')) return false;
@@ -285,7 +285,7 @@ async function canDiscoverLocalProfileForUserSearch(profile, viewerId) {
     return false;
   }
 
-  const profileVisibility = profile.profile_visibility || 'public';
+  const profileVisibility = await require('../utils/identityProfiles').localProfileVisibilityFor(profile, viewerId, account);
   if (profileVisibility === 'private') return false;
   if (profileVisibility === 'connections' && !(await isConnected(viewerId, profile.user_id))) {
     return false;
@@ -2891,7 +2891,7 @@ router.get('/search', verifyToken, async (req, res) => {
     const accountRows = (data || []).length
       ? await supabaseAdmin
         .from('User')
-        .select('id, account_type')
+        .select('id, account_type, profile_visibility')
         .in('id', [...new Set((data || []).map((profile) => profile.user_id).filter(Boolean))])
       : { data: [], error: null };
     if (accountRows.error) {
@@ -2938,7 +2938,7 @@ router.get('/search', verifyToken, async (req, res) => {
       if (blockers.has(String(profile.user_id))) continue;
       if (normalizedType === 'people' && accountType === 'business') continue;
       if (normalizedType === 'business' && accountType !== 'business') continue;
-      if (!(await canDiscoverLocalProfileForUserSearch(profile, userId))) continue;
+      if (!(await canDiscoverLocalProfileForUserSearch(profile, userId, account))) continue;
       visibleCandidates.push({ profile, account, nameSearchText: candidate.nameSearchText || '' });
     }
 

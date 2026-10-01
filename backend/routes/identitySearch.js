@@ -10,6 +10,7 @@ const {
   getBridgeSetting,
   getPersonaFollow,
   getLocalProfileByUserId,
+  localProfileVisibilityFor,
 } = require('../utils/identityProfiles');
 const {
   serializeAudienceProfileForViewer,
@@ -252,7 +253,7 @@ async function canDiscoverLocalProfile(profile, viewerId) {
     return false;
   }
 
-  const profileVisibility = profile.profile_visibility || 'public';
+  const profileVisibility = await localProfileVisibilityFor(profile, viewerId);
   if (profileVisibility === 'private') return false;
   if (profileVisibility === 'connections' && !(await isConnected(viewerId, profile.user_id))) {
     return false;
