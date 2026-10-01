@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.posts.PostsRepository
+import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowBodyEmphasis
@@ -39,6 +40,7 @@ class SavedPostsViewModel
     @Inject
     constructor(
         private val postsRepo: PostsRepository,
+        private val postsRefresh: PulsePostsRefreshNotifier,
     ) : ViewModel() {
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
@@ -115,6 +117,8 @@ class SavedPostsViewModel
                 removing.remove(postId)
                 when {
                     result is NetworkResult.Success && !result.data.saved -> {
+                        // A Pulse card still showing it saved would re-save it on its next tap: lists refetch.
+                        postsRefresh.notifyPostsDidChange()
                         if (posts.any { it.id == postId }) {
                             posts = posts.filterNot { it.id == postId }
                             // The saves after it move up one, so the next page starts one earlier or it would skip one.
