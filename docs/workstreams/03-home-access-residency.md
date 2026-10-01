@@ -565,6 +565,54 @@ The 390×844 no-overflow sweep (#819 bundle) is a narrow-layout check, not A1.
 
 ## Live continuation — Stream 3 (newest first)
 
+- **2026-10-01T10:51:32Z — Window 09:33:15–10:48:47Z (lease, slots 3 and 4): iOS D07 and the removal double-tap probe pass and are sealed; the access fixes pass on iOS; the invitation-link fixes pass except the iOS double-tapped Accept, which needed a different repair (now building).**
+  - **[#1295](https://github.com/WangPantopus/skinny-pantopus/pull/1295) merged** in batch 281 (master `e333507a9`).
+  - **iOS D07 role change, verification only** (`20261001-stream3-home-d07-native-r2`, MANIFEST `8fcaea1a2e87f9fb81c5a5147252fda1803c060acf07491bcbe5decbd2440028`):
+    - E1: a 503 → error, B unchanged; the retry → one change.
+    - E2: held reply, app terminated after the commit → "Limited" after relaunch, one request.
+    - E3: double tap → one POST.
+    - With r1 (Android), D07 E1/E2/E3 pass on both apps.
+  - **iOS removal double-tap probe** (`20261001-stream3-home-removal-opener-ios-r1`, MANIFEST `439ec735abef83caaa30ba095facd4ada7072f88a599d6f633329248f177287d`): a double-tapped "Remove reviewed member", then one "Confirm removal" → one completed command. The removal's `.alert` is immune to the race below.
+  - **Access dead-ends, `claude/stream3-access-dead-ends`** (head `5928507c6e5a8e3f605cdd7039fba331ea3e53f9` = `d718db964` dashboard copy + `821d329d5` Change role + `5928507c6` the 2 existing Members tests per app updated; no new tests):
+    - **Befores** (stage `stream3-home-change-role-owner-r1`): on both apps, "Owner" was offered, and any role change on a co-owner was offered. Each POST got 403 "Use the ownership flow for owners. You cannot change your own role here." Cleanups 09:44–09:47Z, 353/353.
+    - **Builds:**
+      - Android at `5928507c6`: ktlint, detekt, MembersListViewModelTest 48/0, HomeDashboard 15+3/0 and assemble pass (APK `6ff135df…`).
+      - iOS: the `821d329d5` build serves (app sources unchanged since).
+    - **iOS afters:**
+      - Change role offers "Admin, Manager, Limited, Guest", and Limited still works (1 POST, 1 audit row).
+      - A co-owner's row has no "…" (0 writes).
+      - B on the owner's dashboard reads "You don't have access to this Home.", with the reload kept.
+      - A persistent 503 still shows "Couldn't load this home" with Try again. A one-time 503 is absorbed by the client's GET retry.
+      - The owner's dashboard loads.
+    - **Android afters:** next window, then seal and PR.
+  - **Invitation links, `claude/stream3-invite-link-fixes`** (afters on `30e39e566`, stage `stream3-home-invite-link-fixes-r1`, not sealed yet):
+    - **Pass:** a malformed link reads "Link no longer valid" with no retry (both apps); iOS opens a second link over an open one (the new token is checked); a single accept → one decision (both apps).
+    - **Did not pass:** the iOS double-tapped "Accept invitation", then one confirm → 0 decisions, the same as before the fix.
+      - Real cause: the `confirmationDialog` popover is dismissed by the second tap while it is still opening. SwiftUI drops the confirmation while the popover stays shown, so its button does nothing. My first guard only prevented replacement.
+      - Repair `80bc6a29cbc4639c513d8b202e167943701e12ab` (iOS, 1 file): the confirmation is an `.alert` with "Keep reviewing", the wording of Android's dialog and the pattern of iOS removal. Its iOS build is queued in the heavy slot (built from a `git archive` export, so my worktree stays pinned).
+  - **Decisions (standing instruction):**
+    - The iOS invitation confirmation becomes an alert. A dropped acceptance is worse than this small presentation change, which matches Android and the iOS removal flow.
+    - The dashboard keeps its reload button (UI journeys use it; access can change while the screen is open).
+    - A co-owner's row offers no actions, because nothing on it can succeed; ownership moves through Owners and Transfer.
+  - **Observations, not fixed:**
+    - TokenAccept loads twice at once on first appearance: Android LaunchedEffect + ON_RESUME; iOS sometimes `.task` + scene phase. These are idempotent reads with no visible effect.
+    - The iOS dashboard error view is one accessibility element that includes "Try again".
+    - The iOS "Use another account?" confirmation on the invitation screen is still a `confirmationDialog` (the same race is possible; a retry works). Lead.
+  - **Process:**
+    - The iOS accessibility read stalled after D07 E2's relaunch (screenshots are the evidence; the simulator was rebooted at 10:07:46Z).
+    - The iOS "Log in" was hidden under the Passwords bar twice (visible-strip tap).
+    - The load reached 98–157 and stalled adb, so I waited.
+    - **B's lazy MailPreferences rows:** the 10:22:07Z one was in a case's cleanup; the 10:25:28Z and 10:40:54Z ones were deleted exactly before release (10:34:22Z, 10:47:22Z).
+  - **Runtime:**
+    - The shared worktree was on `e333507a9` (09:34:15–10:47:57Z) and is restored to `00bf2d6ff` (HEAD, status and launch.json equal).
+    - Backend PID 37129 on `00bf2d6ff` (10:48:09Z).
+    - Devices shut down at 10:48:47Z: Android has the owner on my `30e39e566` APK; iOS has the owner on `821d329d5`.
+    - No fixtures, fault rules or token file remain. Stream 4 has the lease.
+  - **Next:**
+    1. The access dead-ends Android afters, then seal and PR.
+    2. The iOS invitation decision rerun on `80bc6a29c` (opener double tap + one confirm; opener double tap + confirm double tap; "Keep reviewing"; a single accept), then seal and PR (with the `RootTabView` note).
+    3. The U02 web pass.
+
 - **2026-10-01T09:16:04Z — Window 07:58:52–08:55:26Z (lease, slots 3 and 1): native joining and D07 verified, three invitation-link defects found and fixed (fix building), and the Android review-dates fix sent ([#1295](https://github.com/WangPantopus/skinny-pantopus/pull/1295)).**
   - **Joining** (`20261001-stream3-home-joining-native-r1`, MANIFEST `dcdcc2b9e3dd6386f4ef0e87f299e7e1b66f58d8602bfe55cc2dc657e960087d`):
     - E1 passes on both apps: a one-time 503 → recover → Check (404) → Retry → one decision with the same request id.
