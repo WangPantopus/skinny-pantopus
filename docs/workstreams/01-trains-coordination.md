@@ -9,6 +9,28 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T13:46Z (Stream 1), batches 299–300.**
+  - **Merged:**
+
+    | Batch | PR | Merged | Contents |
+    |---|---|---|---|
+    | 299 | #1350 | 13:14:00Z | Stream 5's #1346: one reset or verification email per request, so its link keeps working |
+    | 300 | #1355 | 13:43:49Z | Stream 5's **#1351** (one direct chat per pair; migration **20261001130000**), Stream 5's **#1353** (an invoice is paid only once its payment is captured), **my #1352** (publish-retry data loss; seal `c6919ebd`), and Stream 4's **#1354** (shared Android TalkBack: ListOfRows, WizardShell, PantopusButton) |
+
+    Master is **`ff08ed75b`**; the next batch is **301**.
+  - **Stream 1's exit checklists:** U02, U03 and U04 now have **todo 0 and decide 0**. #1354 closed the two shared Android U02 items, and Start a train gained E4 chips for #1352.
+  - **#1338** (Stream 5, password change keeps the session) **passes my device check** on iOS and Android (seal `ca7e7b07`):
+    - a wrong current password answers 401 with a field error, and the app stays signed in;
+    - a correct change keeps the changing app signed in while the other device and an API session are revoked.
+
+    It's **held only for Stream 5's own seal** (two iOS CI jobs pending).
+  - **Found while testing (pre-existing; Stream 5 is fixing it on both apps):** Change password's **New password field reveals itself in plain text at 12 characters** (the minimum, when it turns valid) on iOS and Android, and **on iOS it also loses focus there**.
+  - **Waiting:**
+    - #1349 (Stream 5, Android DPoP per attempt): I'll build its APK and force a re-send with the fault proxy;
+    - Stream 2's Connections and wallet cells (candidate m's .app);
+    - Stream 3's guest-pass PR (131000);
+    - Stream 2's toggles PR (134000).
+  - **Runtime:** the backend runs candidate 27 `e3aa58e1c` from d2cb25. Its Trains code equals master's (#1347 + #1352), and #1338 is extra. Both devices carry candidate 26.
 - **Update 2026-10-01T12:56Z (Stream 1), batches 294–296.**
   - **Merged:**
 
@@ -832,7 +854,7 @@ For the shared U rows, Stream 1 owns only the Support Trains cells (checklist be
 - No bare stash, gc, maintenance, repack or worktree removal. Times from `date -u`, SHAs from `git rev-parse`; never estimate them.
 - Launch-cut features: never verify, test or fix them. Design changes need the user's approval (AGENTS.md); otherwise follow the recommendation and record the decision.
 
-## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T12:03Z
+## Stream 1 exit checklists (U02–U04) — split from the former Stream 1 on 2026-09-30, updated 2026-10-01T13:45Z
 
 **Stream 1: Support Trains and coordination.** Review page: https://claude.ai/artifact/FQw1gNR2vwNNKw9cGSxsT2. This section is Stream 1's canonical copy; progress is tracked here only.
 These rows came from the former Stream 1's approved checklists (2026-09-29). With the other stream's section they add up exactly to the pre-split totals; the reconciliation is frozen in `former-stream1-gigs-payments.md`.
@@ -845,7 +867,7 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 |---|---|---|---|
 | **Support Trains** | | | |
 | Train lists and search (My trains, Nearby, Invitations, search) | ✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load the list with Try again, which recovers; R2 Invitations empty state, Nearby asks for location (5a740586) | ✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load the list with Try again, which recovers; R2 Invitations empty state, Nearby asks for location (f439d4b5) | ✅ R1 (#662)<br>✅ E5 (#783)<br>✅ R2 (#662) |
-| Start a train (Wizard: create and publish) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>✅ E1 failed step deletes its draft; E2 lost create reply reuses it; E3 double tap makes one train (#841, f98672ab) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>✅ E1 publish 503 retry, E2 lost create reply, E3 double tap: each ends with one train (#841, f98672ab) | ✅ E1 failed publish removes its draft (#817)<br>✅ E3 double-click publish; E6 missing fields (U03 web bundle bbdbf2d2)<br>✅ E6 Edit Manually selects the preset's days (#890)<br>✅ E2 lost create reply reaches the same draft (#836) |
+| Start a train (Wizard: create and publish) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>✅ E1 failed step deletes its draft; E2 lost create reply reuses it; E3 double tap makes one train (#841, f98672ab)<br>✅ E4 lost publish reply keeps the live train and shows it launched; E5 the next launch opens it (#1352, c6919ebd) | ✅ E6 recipient search and no match (Sep23 Train UX)<br>✅ E1 publish 503 retry, E2 lost create reply, E3 double tap: each ends with one train (#841, f98672ab)<br>✅ E4 lost publish reply: the re-sent publish answers 200 and the train stays live (#1352, c6919ebd) | ✅ E1 failed publish removes its draft (#817)<br>✅ E3 double-click publish; E6 missing fields (U03 web bundle bbdbf2d2)<br>✅ E6 Edit Manually selects the preset's days (#890)<br>✅ E2 lost create reply reaches the same draft (#836)<br>✅ E4 lost publish reply keeps the live train and opens its page (#1352, c6919ebd) |
 | Train detail and share link | ✅ E4 share link and privacy (Sep24)<br>✅ E5 (#789)<br>✅ R1 an injected 500 shows Couldn't load support train with Try again, which recovers; no partial train (5a740586) | ✅ R1 E4 (Sep24)<br>✅ E5 (#789) | ✅ R1 E5 on Manage (Sep28)<br>✅ E4 public page privacy (Sep24, PR402)<br>✅ E4 a draft or back-to-draft train is closed to its link (#883)<br>✅ R1 on detail (U03 web bundle bbdbf2d2) |
 | Helper: sign up, cancel, leave | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>✅ E3 double tap on Confirm signup (also with the reply held) and on Leave slot: one request each (f161eeee)<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up and cancel (#720)<br>✅ Leave (#747)<br>✅ E3 double tap on Confirm signup (normal and held) and on the Leave slot dialog: one request each (e5894f97)<br>✅ E4 greyed button with the reason on non-live trains (#811) | ✅ E1 E2 sign up (#720)<br>– Cancel and leave not offered<br>✅ E3 double-click sign-up (U03 web bundle bbdbf2d2)<br>✅ E4 greyed button with the reason on non-live trains (#811) |
 | Delivery and organizer confirmation | ✅ E1 E2 E5 (#733, Sep28)<br>✅ E3 double tap on Mark delivered, Confirm delivery and Manage's Confirm delivery, reply held: one request each (d440ae05) | ✅ E1 E2 E5 (#733, Sep28)<br>✅ E3 double tap on Mark delivered, Confirm delivery and Manage's Confirm delivery, reply held: one request each (e5894f97) | – Read-only on web |
@@ -868,10 +890,10 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 | Screen | iOS | Android | Web |
 |---|---|---|---|
 | **Support Trains** | | | |
-| My trains, Nearby, Invitations | ✅ A1 A2 A4; A3 selected tab and FAB fixed in dark (#1061) (#1061, #1093, 054245b5) | ✅ A1 A2 A3; A4 tabs say selected, rows read once (#1211, ac43ecdb)<br>⬜ A4 shared ListOfRows repeats its tab, FAB and Nearby button labels (app-wide) | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
+| My trains, Nearby, Invitations | ✅ A1 A2 A4; A3 selected tab and FAB fixed in dark (#1061) (#1061, #1093, 054245b5) | ✅ A1 A2 A3; A4 tabs say selected, rows read once (#1211, ac43ecdb)<br>✅ A4 shared ListOfRows tabs, FAB and top-bar action, and every PantopusButton, read once (Stream 4) (#1354, d52978cb) | ✅ A1 A2 A4 A5; chip contrast fixed (#814)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
 | Train search | ✅ A1 A2 A3; A4 search field named (#1093, 054245b5) | ✅ A1 A2 A3 A4: field named, results read once (#1211, ac43ecdb) | – No Train search on web |
 | Train detail and sign-up sheet | ✅ A1 A2; A3 Hosted by at full strength; A4 sheet fields named; signup strip truthful (#1093, 054245b5)<br>✅ A3 covered slot date tiles (T7) and A4 card status (T8) fixed (#1099, 087226fa) | ✅ Detail: A1 legend wraps, times and end date kept, pills grow, names ellipsize; A2; A3 (HOME 4.57, the 4.42 was the scanner); A4 day states, one-stop cards, no repeats (#1211, ac43ecdb)<br>✅ Sign-up sheet: A4 options are radio buttons with their state, Back/Next/Review/Confirm are buttons, fields named by their labels, review rows one stop; A1 wraps at 2.0 with nothing cut; A2; A3 only the disabled Next and the scrim (#1239, f6db8244)<br>✅ Sign-up sheet keeps its draft through rotation, dark mode and font changes: held outside the sheet, one per opening (#1262, 96676bc0) | ✅ A1 A2 A4 A5; dark selection fixed (#814)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
-| Start a train | ✅ A1 A2 A3; A4 recipient and short note named (#1093, 054245b5) | ✅ Step 1: A1 A2 A3; A4 reason tiles selected, fields named (#1211, ac43ecdb)<br>⬜ Steps 2-5; shared WizardShell repeats Continue and its title meets the step count at 2.0 | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>✅ A4 story field, restriction chip remove buttons and special instructions named (#1239, f6db8244)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
+| Start a train | ✅ A1 A2 A3; A4 recipient and short note named (#1093, 054245b5) | ✅ Step 1: A1 A2 A3; A4 reason tiles selected, fields named (#1211, ac43ecdb)<br>✅ Steps 2-5: the shared WizardShell CTA reads once; the title gets its own row from 1.3x text (Stream 4) (#1354, d52978cb) | ✅ Step 1: A1 A2 A3 A4 A5; dark selection fixed (#814)<br>✅ Later steps: A1 A2 A4 A5; field and weekday names added (#829)<br>✅ Schedule shortcuts expose their chosen state (A2) (#892)<br>✅ A4 story field, restriction chip remove buttons and special instructions named (#1239, f6db8244)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
 | Manage train | ✅ A1 A4; A2 A3 chip and date line fixed in dark; times formatted (#1093, 054245b5) | ✅ A1 stat labels whole (default-size clipping fixed), pills grow; A2; A3; A4 Back, tiles, field, switch and chips named with state (#1211, ac43ecdb) | ✅ A1 A2 A4 A5; share-link label added (#814)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
 | Review signups, edit signup | – Not reachable on iOS since 70d2a8822: organizers manage signups in Manage (covered there) | – Not reachable on Android: the route has no caller or deep link; organizers manage signups in Manage (covered there) (4b48bf0a) | ✅ Signups tab: A1 A2 A4 A5 (20260930 web a11y 73f2bc13)<br>✅ Signups tab A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
 | Updates and details tabs, calendar | – Web-only screens | – Web-only screens | ✅ A1 A2 A4 A5; calendar button names added (#814)<br>✅ A3: 0 axe contrast findings light and dark (AA accent utilities) (749e0d21) |
@@ -880,9 +902,9 @@ A row closes when every client cell is ✅, –, ⛔ with its named boundary, or
 
 **Decisions:** (1) Approved 2026-09-29: these checklists, the greyed sign-up button (merged, #811), and the people picker for co-organizers (merged, #812). [both streams] (2) Co-organizer email invites: not now (my recommendation; the existing share link covers people not on Pantopus). (3) Open for you: one design-token decision for every accent under AA's 4.5:1. That covers white on primary-600 (4.09:1) and primary-600 text on greys (3.8-4.35:1); emerald-600 fills and text (3.51-3.77:1); and the post-type accent fills with white text, meaning avatar initials, the composer's submit button (amber-500 is 2.15:1), the active feed-filter chips (2.15-4.23:1) and map pins. Stream 2 adds the header badge (3.76) and the Members tab (3.52). My recommendation: one step darker per fill, keeping each hue (primary-700 is about 5.9:1). It's app-wide and visible, so it needs your approval. [both streams] (4) Open for you: web Manage 'Send invite' delivers nothing. Email invites have no sender, and user-id invites on a live train notify no one. My recommendation: hide Send invite on web and keep Copy link, the path iOS and Android already use.
 
-- U03 items: done 72, confirm from existing evidence 0, to do 0, your call 0, boundary 6, not offered 9
+- U03 items: done 75, confirm from existing evidence 0, to do 0, your call 0, boundary 6, not offered 9
 - U04 items: done 11, confirm from existing evidence 0, to do 0, your call 0, boundary 0, not offered 0
-- U02 items: done 28, confirm from existing evidence 0, to do 2, your call 0, boundary 0, not offered 5
+- U02 items: done 30, confirm from existing evidence 0, to do 0, your call 0, boundary 0, not offered 5
 
 ## History
 
