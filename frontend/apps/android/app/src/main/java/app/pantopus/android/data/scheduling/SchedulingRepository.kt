@@ -464,8 +464,7 @@ open class SchedulingRepository
             owner: SchedulingOwner,
             packageId: String,
             clientRequestId: String? = null,
-        ): NetworkResult<BuyPackageResponse> =
-            safeApiCall { api.buyPackage(owner.basePath, packageId, BuyPackageRequest(clientRequestId)) }
+        ): NetworkResult<BuyPackageResponse> = safeApiCall { api.buyPackage(owner.basePath, packageId, BuyPackageRequest(clientRequestId)) }
 
         open suspend fun getMyPackages(): NetworkResult<MyPackagesResponse> = safeApiCall { api.getMyPackages() }
 
