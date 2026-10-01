@@ -21,9 +21,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.theme.PantopusColors
@@ -90,8 +92,11 @@ fun PantopusButton(
                     },
                 ).clickable(enabled = clickable, onClick = onClick)
                 .padding(horizontal = Spacing.s4)
-                .semantics {
+                // One announcement: TalkBack read the title, then the visible title again ("Use my location. Use my
+                // location. Button"). The node keeps the title as its text while it shows, as the merged child gave it.
+                .clearAndSetSemantics {
                     contentDescription = title
+                    if (!isLoading) text = AnnotatedString(title)
                     role = Role.Button
                 },
         contentAlignment = Alignment.Center,
