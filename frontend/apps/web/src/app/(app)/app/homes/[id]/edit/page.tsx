@@ -1,12 +1,12 @@
 // @ts-nocheck
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { Home } from '@pantopus/types';
-import { toast } from '@/components/ui/toast-store';
+import { toast, toastStore } from '@/components/ui/toast-store';
 import { notifyHomesChanged } from '@/components/ProfileToggle';
 
 const HOME_TYPES = [
@@ -55,6 +55,7 @@ export default function EditHomePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const saveErrorToast = useRef<number | null>(null);
 
   // Form fields
   const [name, setName] = useState('');
@@ -148,6 +149,10 @@ export default function EditHomePage() {
     e.preventDefault();
     setSaving(true);
     setSuccessMsg('');
+    if (saveErrorToast.current !== null) {
+      toastStore.dismiss(saveErrorToast.current);
+      saveErrorToast.current = null;
+    }
     try {
       const payload: Record<string, any> = {
         name: name.trim() || null,
@@ -182,7 +187,7 @@ export default function EditHomePage() {
       setTimeout(() => setSuccessMsg(''), 3000);
       await load();
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Failed to save');
+      saveErrorToast.current = toast.error(e instanceof Error ? e.message : 'Failed to save');
     } finally {
       setSaving(false);
     }
