@@ -64,10 +64,10 @@ class WalletViewModel
          * leaves the form up) instead of dismissing it with a toast.
          */
         private val _withdrawError = MutableStateFlow<String?>(null)
-
-        /** The withdrawal in progress (idempotency key, amount), kept until a final outcome; see [withdraw]. */
-        private var pendingWithdrawal: Pair<String, Int>? = null
         val withdrawError: StateFlow<String?> = _withdrawError.asStateFlow()
+
+        /** The withdrawal in progress (idempotency key, amount in cents), kept until a final outcome; see [withdraw]. */
+        private var pendingWithdrawal: Pair<String, Long>? = null
 
         /** Drives the pull-to-refresh indicator. */
         private val _refreshing = MutableStateFlow(false)
