@@ -9,6 +9,23 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1270 (devices pass), #1277 and #1278 sealed; #1281 (phone width) in CI; decisions on the remaining backlog, 2026-10-01T08:01:26Z
+
+- **Sealed and with Stream 1:**
+  - **#1270** (security notices open Devices; seal `74a2ce3e…`). Stream 1's devices pass: iOS openurl opens Security & devices; Android's https and custom links open Devices, and Back goes to Settings (bundle `20261001-stream1-native-1270-r1`). Sealed with `seal-pr-explained.sh`, because the iOS CI jobs were still queued for macOS (required CI is off).
+  - **#1277** (dialogs cover the header and sidebar; seal `75e7e4a4…`).
+  - **#1278** (the profile's "⋯" is named "More actions"; Chrome AX name "⋯" → "More actions"; seal `f89fd1de…`).
+- **In CI: #1281** (web, head `0b4f5af2b`): at phone width, Connections (375 and 320), Network (320) and Edit profile (320) scrolled sideways.
+  - Fix: Connections' tab row scrolls on its own, Network's chips wrap, and the skill input gets `min-w-0`.
+  - Scan of 16 pages at 375 and 320: 4 overflows on master, 0 on the head. At 320, "Blocked" can be tapped and selected (on master the tap timed out).
+  - Desktop: pixel-identical apart from 5 sidebar pixels.
+- **Decisions (standing direction):**
+  - The name card stays hover-only. Since #1253, Connect, Message and Follow are on the profile, one link away.
+  - `getPostingIdentities`' broken query only costs crew logos in the "Post as" picker (cosmetic), so it stays low.
+  - `BottomSheet`'s unnamed close button was handed to Stream 4 via Stream 1 (its only in-scope caller is on Place; not reachable on Stream 5's runtime).
+- **Kit:** `seal-pr.sh` and `seal-pr-explained.sh` now build the MANIFEST's extra JSON escaped and exit 1 if make-manifest fails. A verdict with double quotes had silently skipped a MANIFEST, so #1278 was resealed.
+- **Runtime:** API on master `dc878ddb5` (07:52:04Z); web on `0b4f5af2b` (#1281's head). No fixtures remain.
+
 ## LIVE — #1274 (briefing pushes honor the Push switch) sealed; #1277 (dialogs cover the header and sidebar) in CI; #1270 waits on iOS runners and Stream 1's devices, 2026-10-01T07:39:39Z
 
 - **Sealed and with Stream 1: #1274** (backend; seal `fcc41a28…`; CI 36829839687 green).
