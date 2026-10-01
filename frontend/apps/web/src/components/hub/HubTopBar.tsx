@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Home, Plus, User, Building2 } from 'lucide-react';
 import type { HubHome, HubBusiness, Persona } from './types';
 
-function getGreeting(): string {
+export function getGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';

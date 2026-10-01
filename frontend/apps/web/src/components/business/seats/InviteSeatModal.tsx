@@ -77,7 +77,7 @@ export default function InviteSeatModal({ open, onClose, businessId, onSuccess }
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-app">
             <h3 className="text-lg font-semibold text-app">Create Seat & Invite</h3>
-            <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-raised transition">
+            <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-raised transition" aria-label="Close">
               <X className="w-5 h-5 text-app-secondary" />
             </button>
           </div>

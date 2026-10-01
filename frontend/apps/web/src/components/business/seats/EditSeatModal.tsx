@@ -72,7 +72,7 @@ export default function EditSeatModal({ open, onClose, businessId, seat, onSucce
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-app">
             <h3 className="text-lg font-semibold text-app">Edit Seat</h3>
-            <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-raised transition">
+            <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-raised transition" aria-label="Close">
               <X className="w-5 h-5 text-app-secondary" />
             </button>
           </div>
