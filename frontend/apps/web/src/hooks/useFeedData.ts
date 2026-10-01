@@ -55,8 +55,8 @@ function buildFeedKey(
 }
 
 /**
- * Patch one post in every cached feed list. A save or like made on the post's own page
- * then shows on its feed card when you come back; a stale card's next click would undo it.
+ * Patch one post in every cached feed list. A save or like made on the post's own page or
+ * in My pulse then shows on its feed card when you come back; a stale card's next click would undo it.
  */
 export function patchPostInFeedCaches(queryClient: QueryClient, postId: string, patch: Partial<Post>) {
   queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ['feed'] }, (old) => {
@@ -401,6 +401,10 @@ export function useFeedData({
           : p;
       updatePostsInCache(toggleLike);
       return { toggleLike };
+    },
+    onSuccess: (res, postId) => {
+      // The server's answer wins, as for saves: a card that was stale when clicked shows what the toggle did.
+      updatePostsInCache((p) => (p.id === postId ? { ...p, userHasLiked: res.liked, like_count: res.likeCount } : p));
     },
     onError: (_err, _postId, context) => {
       if (context) updatePostsInCache(context.toggleLike);
