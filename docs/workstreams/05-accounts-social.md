@@ -9,6 +9,31 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — sweep items 3, 4 and 7 merged or sealed (#1126, #1133, #1135, #1139, #1143); #1149 (item 6) and #1150 (business trust drift) in CI; #1119/#1121 on Stream 1's devices, 2026-10-01T00:58:55Z
+
+- **Merged:**
+  - #1126, the profile shows its real portfolio and the dead Services tab is gone (batch 228);
+  - #1133, no Appearance controls that change nothing (batch 233);
+  - #1135, a privacy fix: the anonymous portfolio read sends 7 columns instead of 27, with no file names, path or owner ids (batch 235, a security batch).
+  - Stream 1 verified each seal.
+- **Sealed and handed to Stream 1:**
+  - **#1139 (item 7).** A seat's "⋮" menu opens by click, tap and keyboard (named, `aria-expanded`, menu roles). Head `319e78a10`, CI 36797043515, seal `1d78d1fe…`, bundle `20261001-stream5-seat-menu-r1`.
+  - **#1143 (item 8).** The builder's edit preview no longer invents 9–5 hours and five stars. Head `0626f39a8`, CI 36797437407, seal `5f74e454…`, bundle `20261001-stream5-builder-preview-r1`.
+  - **#1128.** The CI unblocker that pins the date-dependent Log-maintenance golden. Its Android unit tests ran and passed on 10-01; Stream 1 merges it alone.
+- **In CI:**
+  - **#1149 (item 6), crew checklist dead ends.** Each location gets an "Hours" link to the existing hours editor; the Profile tab gets a Logo upload through the creation flow's own `uploadBusinessMedia`. E2E: both steps complete (PUT hours 200, logo upload 200) and both items are ticked.
+  - **#1150, business trust step drift** (from Stream 2's scan). It read `BusinessProfile.user_id` and `BusinessLocation.latitude`/`longitude`, which don't exist, so no crew member was ever `verified_business`.
+    - **Decision:** only crews that are `document_verified` or stronger count. Self-attested crews don't, because owner-entered locations would make the rule gameable. Stream 2 agreed.
+    - E2E via `place-eligibility`: master gave `remote_viewer` even for a document-verified crew; the fix gives `verified_business` at the storefront and `remote_viewer` 250 km away. Unverified and self-attested crews stay `remote_viewer`.
+- **On Stream 1's devices:** #1119 and #1121, in combined candidate `68b8ac1ec`. Stream 1 asked for, and got, the editor tap path and the block data keys. I seal both after its bundle.
+- **Next:**
+  - item 5 (the dead hero "Background image" upload box);
+  - native item 4b: the iOS/Android editors' Padding/Background chips, plus the untitled caption showing nothing instead of "Untitled";
+  - then the lower-confidence candidates and a drift-scanner rerun.
+- **Runtime:** API 18134 back on master `b494ba75e` (receipt 00:55:37Z); DB at `20260930184000`.
+  - No fixtures remain. The local `pantopus-uploads` bucket is created per check and removed through the Storage API.
+  - Seal helper: `scratchpad/seal-pr.sh` this session; copy it to the kit at handoff.
+
 ## LIVE — #1115 merged (batch 225); #1126 (profile portfolio + no dead Services tab) sealed and handed; #1119 + #1121 in Stream 1's combined device candidate; CI blocker fix #1128 approved, 2026-10-01T00:18:48Z
 
 - **Merged:** #1115, crew page placeholder blocks and the contact form, in batch 225 (PR #1120, 23:48:30Z, master `0256c4f35`). Stream 1 verified seal `da24054b`.
