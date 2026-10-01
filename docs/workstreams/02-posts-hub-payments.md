@@ -173,9 +173,17 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T01:03Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T01:20:07Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T01:03Z):**
+- **Latest (2026-10-01T01:20:07Z):**
+  - **Merged:** #1156 web visitor note in batch 241 (`deaa98176`; master `4123bd455`).
+  - **Open, evidence in progress (not yet sent for merge):**
+    - [#1159](https://github.com/WangPantopus/skinny-pantopus/pull/1159) Hub Discover "Posts" tab, head `36c906d3e878324feb2ebcb934390ed5e6d9d096` (merge-tree with `4123bd455` clean). Android ktlint/detekt/`assembleDebug` pass. iOS lint is clean and build-for-testing is running. The Android before/after waits for a device slot (all four held at 01:17Z); the iOS cells go to Stream 1.
+    - [#1161](https://github.com/WangPantopus/skinny-pantopus/pull/1161) **native Pulse cards say Visitor**, head `213a3cd267f51c142194b47717032ba2906d0d83`. iOS/Android dropped `is_visitor_post`, so #1156's "your post will carry a Visitor badge" was false on native. Now: meta line `time · Visitor · place` plus the screen-reader label. iOS lint is clean; the build is queued in the heavy slot behind Stream 4.
+  - **Decisions (standing direction):**
+    - Native Visitor is text in the existing meta line, not a new chip (no layout change). It sits ahead of the place because the line ellipsizes and a long place name must never hide it; web draws its badge beside the time.
+    - **trustState step 3** (pending claim → `incoming_resident`) **stays unrevived.** Stream 5 corrected my TRIAGE: #1148 fixed step 1 only, and step 3 still reads the nonexistent `Home.latitude/longitude`, so it is never reached. Reviving it grants nothing; it would only limit a mover on site with fresh GPS to Questions/Recommendations in Nearby and reword the no-GPS refusal. It would rest on a claim anyone can file on any Home, and `canCommentOnPost` has no callers. Pending claimants stay `remote_viewer`, matching the household rule. TRIAGE rows split and corrected.
+- **Earlier (2026-10-01T01:03Z):**
   - **Merged:** #1129 iOS Today Manage (batch 237; Stream 1's iOS run passed the Today-tab briefing and Settings paths; the Hub-card path was a boundary on its stack), #1148 resident trust (batch 240). Master is `2dc6b9747` or later. Stream 5 fixed the business half of the trust check in #1150 (document-verified crews only).
   - **Sent: [#1156](https://github.com/WangPantopus/skinny-pantopus/pull/1156)** head `fe48f4914662e071545099591401a978279c270a`, seal `674aecaf0fda3e05de09aeb6bf712c6c8351ef564eeacb6d52849f3946288de4`: web tells a visitor their post will carry a Visitor badge (the web precheck now sends the post's location; only the latest check speaks). axe on the note 0/0; 353/353 tables equal after cleanup.
   - **Building:** the Hub Discover "Posts" tab fix, `claude/stream2-hub-discover-posts-pulse` `36c906d3e` (approved by Stream 1): iOS/Android show web's "Local posts are in Pulse, where you choose the area." with "Browse Pulse"; the backend posts lane returns [] without its unfiltered query (a PostgREST probe showed the old query minus the bad column would serve Bob's connections-only post to anyone). Android APK + iOS build-for-testing are next in the heavy slot; the Android emulator run needs a free device slot.
