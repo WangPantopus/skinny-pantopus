@@ -334,8 +334,9 @@ extension SupportTrainDetailViewModel {
             celebrationBanner: isFull
                 ? SupportTrainDetailContent.CelebrationBanner(
                     title: "Every slot is covered",
-                    // No backup sign-up exists yet (see the dock), so don't offer one.
-                    body: "Every slot is spoken for."
+                    // No backup sign-up exists yet (see the dock), so don't offer one,
+                    // and don't repeat the title.
+                    body: "Thanks, neighbors. No more sign-ups are needed right now."
                 )
                 : nil,
             reserveOptions: openSlots.map(reserveOption(for:)),

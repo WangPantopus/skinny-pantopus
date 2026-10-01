@@ -203,7 +203,7 @@ data class StartSupportTrainSlot(
 data class StartSupportTrainFormState(
     val step: StartSupportTrainStep = StartSupportTrainStep.WhoAndWhy,
     val beneficiaryQuery: String = "",
-    val selectedReason: StartSupportTrainReason = StartSupportTrainReason.Surgery,
+    val selectedReason: StartSupportTrainReason = StartSupportTrainReason.MealTrain,
     val reason: String = "",
     val inviteOnly: Boolean = true,
     val blockVisible: Boolean = false,
