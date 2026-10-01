@@ -173,9 +173,28 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T15:41:33Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T17:32:15Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T15:41:33Z):** master is `215f6d747` or later.
+- **Latest (2026-10-01T17:32:15Z):** master is `38c214b50` or later.
+  - **Merged since the last entry:**
+    - batch 306 (#1384, 16:09:31Z): [#1359](https://github.com/WangPantopus/skinny-pantopus/pull/1359) withdraw idempotency, [#1360](https://github.com/WangPantopus/skinny-pantopus/pull/1360) Connections general form, [#1365](https://github.com/WangPantopus/skinny-pantopus/pull/1365) post toggles, [#1377](https://github.com/WangPantopus/skinny-pantopus/pull/1377) Feed toast;
+    - batch 307 (#1385, 16:19:05Z): [#1379](https://github.com/WangPantopus/skinny-pantopus/pull/1379) wallet_credit replay (migration `20261001135000`) and [#1383](https://github.com/WangPantopus/skinny-pantopus/pull/1383) Android reply Delete confirmation survives a theme or font change (seal `e6e0f085`);
+    - batch 310 (#1392, 16:37:04Z): [#1391](https://github.com/WangPantopus/skinny-pantopus/pull/1391) a web video re-sent after a lost upload reply is attached once (content-addressed per owner+post keys; opt-in in-memory S3 stub; seal `f8f8e4b4`).
+  - **Stream 5's idempotency audit:** every Stream 2 row is closed. #1359, #1363, #1365 and #1391 are merged. `connect/account` (orphan Stripe account race) and `payment-sheet-add-card` (orphan SetupIntent, no money) are provider-bound and recorded, not changed.
+  - **In flight:**
+    1. **Withdraw client follow-up** (`claude/stream2-money-withdraw-pending-message`, now `8a98dc894`): iOS and Android show the server's "still being processed" sentence for a 503 `withdrawal_pending` and reload; a held amount can be retried with its key. Web before/after done. Candidate q failed Android detekt (`withdraw` complexity 18 and a four-part condition, both from the follow-up); `8a98dc894` moves the amount parsing and the failure branch into helpers, with no behaviour change. Candidate q2 (`e64ea253e` = master `38c214b50` + `8a98dc894`, Android only) is building; iOS passed on q (strict lint 0, build-for-testing OK). The withdraw fixture is live (Alice's credit and StripeAccount row) until the Android after-run.
+    2. **iOS composer live text** (`claude/stream2-posts-ios-compose-live-text` `f238536a7`): in Stream 1's candidate 31; its iOS cell decides the seal and PR.
+    3. **Web dialogs covered by the app shell** (Stream 2's share of Stream 5's 71-file unportalled-overlay list; Stream 1 approved per-file portals with seven rules and no AppShell change). Branch `claude/stream2-web-overlays-above-shell` `7b9ad6b37`, bundle `20261001-stream2-web-overlays-under-shell-r1` (open). On master at 390×844 the tab bar, header and floating chat/+ buttons covered controls in eight dialogs: Pulse Preferences (close and both checkboxes), the task media viewer (close, at every width), Submit Completion, Review Work, Report No-Show, Cancel task (not started), the tip dialog and Edit post (event). Each now renders into `document.body`. Before captures done at 390/768/1280; after captures and coordinate taps are running. Unchanged controls: Withdraw, Change location, Cancel task (started) and Edit post (short).
+  - **Decisions (recorded):**
+    - Stream 1: per-file portals, not an AppShell change; portal only overlays with a covered control. A shared portaling Dialog/Sheet primitive is a later refactor (note only).
+    - Portaled z-50 overlays move to z-[60], #1277's layer, above the hover-expanded sidebar.
+    - The task dialogs now centre in the viewport. Their backdrop had started 24 px low because of the parent's `space-y-6` margin; the card is 12 px higher at 844 px tall.
+  - **Found, not changed (follow-ups):**
+    - the task page scrolls sideways at 390 px (the body was scrolled 23 px horizontally after a tap);
+    - Pulse Preferences' "Show in Connections" toggle has no accessible name;
+    - GigPaymentSetup (tip/authorization card step) can't be opened without a real Stripe client secret, so its coverage is unverified at the provider boundary.
+  - **Runtime:** backend 18160 on master `38c214b50` (restarted 16:50:03Z); Next 18169 serves worktree 29bc9a on the overlays branch; photo server `[::1]:64585` (fixture image); emulator-5560 holds slot 4. Live fixtures: overlay tasks T1–T4, T2b–T2g and T3b, event post E1, and the withdraw fixture. All are cleaned by exact id at the end of their bundles.
+- **Earlier (2026-10-01T15:41:33Z):** master is `215f6d747` or later.
   - **Merged:** [#1363](https://github.com/WangPantopus/skinny-pantopus/pull/1363), racy task actions (batch 302).
   - **#1359 withdraw, re-fixed after Stream 1's review:** head `93f75ff1a`, re-sealed `206c18bd`.
     - The finding: attempt 1 reversed on any Stripe error, so a same-key retry that completed the transfer left the person paid and credited back.
