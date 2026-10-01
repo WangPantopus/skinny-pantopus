@@ -71,7 +71,9 @@ function ApproveModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    // The second click of the double-click that opened this modal lands on the backdrop; only a fresh click closes it
+    // (the shared confirmation dialog does the same).
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={(e) => { if (e.detail <= 1) onClose(); }}>
       <div className="bg-app-surface rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-app-text mb-1">Confirm Lease Dates</h3>
         <p className="text-sm text-app-text-secondary mb-4">
