@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AUTH_SESSION_CHANGE_KEY, getApiBaseUrl, getAuthToken, onTokenChange, payments } from '@pantopus/api';
 import type { GigTipTerms, GigTipPreview, GigTipRequest, GigTipProgress, GigTipCheckout } from '@pantopus/api';
 import { ProtectedRecoverySlot, type ProtectedRecoverySnapshot } from '../home/tasks/TaskRecoveryStorage';
@@ -354,8 +355,11 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
     </StripeProvider>;
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+  // Rendered into document.body: inside the app's <main> (its own stacking context) the phone tab bar and the
+  // floating chat and + buttons stayed on top of the dialog and covered its buttons.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -458,6 +462,7 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

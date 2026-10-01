@@ -2,6 +2,7 @@
 
 import { getErrorMessage } from '@pantopus/utils';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Wrench,
   CheckCircle,
@@ -562,8 +563,10 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       )}
 
       {/* ─── Worker Completion Proof Modal ─── */}
-      {showCompletionModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      {/* This dialog and the two below render into document.body: inside the app's <main> (its own stacking context)
+          the header, the phone tab bar and the floating chat and + buttons stayed on top of them and covered their buttons. */}
+      {showCompletionModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
           <div className="bg-app-surface rounded-2xl max-w-lg w-full shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="px-6 pt-6 pb-3">
               <div className="flex items-center gap-3">
@@ -625,12 +628,13 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* ─── Poster Confirm Completion Modal ─── */}
-      {showConfirmModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      {showConfirmModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
           <div className="bg-app-surface rounded-2xl max-w-lg w-full shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="px-6 pt-6 pb-3">
               <div className="flex items-center gap-3">
@@ -754,12 +758,13 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* ─── No-Show Report Modal ─── */}
-      {showNoShowModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      {showNoShowModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
           <div className="bg-app-surface rounded-2xl max-w-md w-full shadow-xl">
             <div className="px-6 pt-6 pb-3">
               <div className="flex items-center gap-3">
@@ -830,7 +835,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {stopAction && currentUserId && canCancel && <GigStopDialog

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { GigStopReason } from '@pantopus/api';
 import { RefreshCw, Hand, DollarSign, Siren, Calendar, XCircle, AlertTriangle, MessageCircle } from 'lucide-react';
 import { stopActionLabel, stopProgressMessage } from './gigStopRecovery';
@@ -57,7 +58,10 @@ export default function GigStopDialog(props: Props) {
     };
   }, []);
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+  // Rendered into document.body: inside the app's <main> (its own stacking context) the header, the phone tab bar
+  // and the floating chat and + buttons stayed on top of the dialog and covered its buttons.
+  if (typeof document === 'undefined') return null;
+  return createPortal(<div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
     <section ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
       className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-app-surface shadow-2xl">
       <div className="px-6 py-5 border-b border-app-border-subtle">
@@ -150,5 +154,5 @@ export default function GigStopDialog(props: Props) {
         </p>}
       </div>
     </section>
-  </div>;
+  </div>, document.body);
 }

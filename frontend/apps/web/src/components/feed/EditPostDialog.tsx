@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { Post } from '@pantopus/api';
@@ -115,7 +116,10 @@ export default function EditPostDialog({ post, user, onClose, onSaved, onGone }:
     }
   };
 
-  return (
+  // Rendered into document.body: inside the app's <main> (its own stacking context) the phone tab bar and the
+  // floating chat and + buttons stayed on top of the dialog and covered its Save button.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
       <div
         ref={dialogRef}
@@ -141,6 +145,7 @@ export default function EditPostDialog({ post, user, onClose, onSaved, onGone }:
           <PostComposer editPost={post} onSaveEdit={save} onCancelEdit={onClose} user={user} />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
