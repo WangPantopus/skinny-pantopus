@@ -506,7 +506,7 @@ export default function MailTasksPage() {
                     task={task}
                     onClick={() => { setShowCreate(false); setSelectedId(task.id); }}
                     onComplete={() => handleComplete(task)}
-                    onEscalate={() => handleEscalate(task)}
+                    onEscalate={launchFeatures.openGigs ? () => handleEscalate(task) : undefined}
                   />
                 </div>
               ))}
