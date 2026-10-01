@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 import { Lock, Award, CheckCircle, Clock } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
@@ -15,6 +15,7 @@ export default function LegalTab({ businessId, businessType }: Props) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ legal_name: '', tax_id_last4: '', support_email: '' });
   const [hasData, setHasData] = useState(false);
+  const fieldId = useId();
 
   // Nonprofit verification
   const [nonprofitStatus, setNonprofitStatus] = useState<{
@@ -166,18 +167,18 @@ export default function LegalTab({ businessId, businessType }: Props) {
       {/* Legal form */}
       <div className="bg-app-surface border border-app-border rounded-xl p-5 space-y-4">
         <div>
-          <label className="text-xs text-app-text-secondary mb-1 block">Legal Business Name</label>
-          <input type="text" value={form.legal_name} onChange={e => setForm(f => ({ ...f, legal_name: e.target.value }))} placeholder="Registered business name"
+          <label htmlFor={`${fieldId}-legal-name`} className="text-xs text-app-text-secondary mb-1 block">Legal Business Name</label>
+          <input id={`${fieldId}-legal-name`} type="text" value={form.legal_name} onChange={e => setForm(f => ({ ...f, legal_name: e.target.value }))} placeholder="Registered business name"
             className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
         </div>
         <div>
-          <label className="text-xs text-app-text-secondary mb-1 block">Tax ID (last 4 digits)</label>
-          <input type="text" value={form.tax_id_last4} onChange={e => setForm(f => ({ ...f, tax_id_last4: e.target.value.replace(/\D/g, '').slice(0, 4) }))} placeholder="e.g. 1234" maxLength={4}
+          <label htmlFor={`${fieldId}-tax-id`} className="text-xs text-app-text-secondary mb-1 block">Tax ID (last 4 digits)</label>
+          <input id={`${fieldId}-tax-id`} type="text" value={form.tax_id_last4} onChange={e => setForm(f => ({ ...f, tax_id_last4: e.target.value.replace(/\D/g, '').slice(0, 4) }))} placeholder="e.g. 1234" maxLength={4}
             className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
         </div>
         <div>
-          <label className="text-xs text-app-text-secondary mb-1 block">Support Email</label>
-          <input type="email" value={form.support_email} onChange={e => setForm(f => ({ ...f, support_email: e.target.value }))} placeholder="support@yourbusiness.com"
+          <label htmlFor={`${fieldId}-support-email`} className="text-xs text-app-text-secondary mb-1 block">Support Email</label>
+          <input id={`${fieldId}-support-email`} type="email" value={form.support_email} onChange={e => setForm(f => ({ ...f, support_email: e.target.value }))} placeholder="support@yourbusiness.com"
             className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
         </div>
         <button onClick={handleSave} disabled={saving}

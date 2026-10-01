@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useId, useState, type ReactNode } from 'react';
 import { Store, Building2, Factory, Home, Truck, Mailbox } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import * as api from '@pantopus/api';
@@ -66,6 +66,7 @@ export default function BusinessAddressFlow({
 }) {
   const [flowState, setFlowState] = useState<FlowState>('IDLE');
   const [error, setError] = useState('');
+  const fieldId = useId();
 
   // Address fields
   const [addressText, setAddressText] = useState('');
@@ -301,8 +302,9 @@ export default function BusinessAddressFlow({
 
       {/* Address search */}
       <div data-testid="address-flow-search">
-        <label className="block text-sm font-medium text-app-text-strong mb-1">Business address</label>
+        <label id={`${fieldId}-address`} className="block text-sm font-medium text-app-text-strong mb-1">Business address</label>
         <AddressAutocomplete
+          labelId={`${fieldId}-address`}
           value={addressText}
           onChange={setAddressText}
           onSelectNormalized={handleAddressSelected}
@@ -312,10 +314,11 @@ export default function BusinessAddressFlow({
 
       {/* Suite / Unit */}
       <div data-testid="address-flow-suite">
-        <label className="block text-sm font-medium text-app-text-strong mb-1">
+        <label htmlFor={`${fieldId}-suite`} className="block text-sm font-medium text-app-text-strong mb-1">
           Suite / Unit <span className="text-app-text-muted font-normal">(optional)</span>
         </label>
         <input
+          id={`${fieldId}-suite`}
           type="text"
           value={suite}
           onChange={(e) => setSuite(e.target.value)}
@@ -404,6 +407,7 @@ export default function BusinessAddressFlow({
             value={suite}
             onChange={(e) => setSuite(e.target.value)}
             autoFocus
+            aria-label="Suite / Unit"
             placeholder="Suite 200, Unit B, etc."
             className="mt-2 w-full rounded-lg border border-app-border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
             data-testid="suite-prompt-input"
