@@ -12,6 +12,7 @@ const {
   getActivePersonaForUser,
   getBridgeSetting,
   normalizeHandle,
+  localProfileVisibilityFor,
 } = require('../utils/identityProfiles');
 const {
   serializeLocalProfileForViewer,
@@ -203,7 +204,7 @@ async function canViewLocalProfile(profile, context) {
   if (!(await isSearchable(context.viewerId, profile.user_id))) return false;
   if (context.viewerId && await isScopedBlocked(context.viewerId, profile.user_id, 'search_only')) return false;
 
-  const profileVisibility = profile.profile_visibility || 'public';
+  const profileVisibility = await localProfileVisibilityFor(profile, context.viewerId);
   if (profileVisibility === 'private') return false;
   if (profileVisibility === 'connections') return context.isConnection;
   // Legacy 'followers' value is treated as 'connections' after peer-follow
