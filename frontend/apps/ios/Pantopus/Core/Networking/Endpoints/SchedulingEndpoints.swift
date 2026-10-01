@@ -607,8 +607,13 @@ public enum SchedulingEndpoints {
     }
 
     /// `POST /invoices/:id/send` — `{ ok: true }`.
-    public static func sendInvoice(owner: SchedulingOwner, id: String) -> Endpoint {
-        Endpoint(method: .post, path: "\(owner.pathPrefix)/invoices/\(id)/send", query: query(owner))
+    public static func sendInvoice(owner: SchedulingOwner, id: String, clientRequestId: String? = nil) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "\(owner.pathPrefix)/invoices/\(id)/send",
+            query: query(owner),
+            body: ["client_request_id": clientRequestId].compactMapValues { $0 }
+        )
     }
 
     // MARK: - Packages

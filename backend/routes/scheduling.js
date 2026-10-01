@@ -1307,7 +1307,12 @@ router.get('/invoices/:id', withOwner('view'), asyncHandler(async (req, res) => 
   if (!data || data.business_user_id !== req.scheduling.ownerId) return res.status(404).json({ error: 'NOT_FOUND' });
   res.json({ invoice: data });
 }));
-router.post('/invoices/:id/send', withOwner('edit'), asyncHandler(async (req, res) => {
+const invoiceSendSchema = Joi.object({
+  owner_type: Joi.string().valid('user', 'home', 'business'),
+  owner_id: Joi.string(),
+  client_request_id: Joi.string().uuid(),
+});
+router.post('/invoices/:id/send', validate(invoiceSendSchema), withOwner('edit'), asyncHandler(async (req, res) => {
   const { data: inv } = await supabaseAdmin.from('BusinessInvoice').select('*').eq('id', req.params.id).maybeSingle();
   if (!inv || inv.business_user_id !== req.scheduling.ownerId) return res.status(404).json({ error: 'NOT_FOUND' });
   // Same rule as creating the invoice: someone who has blocked the business
@@ -1329,6 +1334,11 @@ router.post('/invoices/:id/send', withOwner('edit'), asyncHandler(async (req, re
       userId: inv.recipient_user_id, type: 'invoice_sent', title: 'You have a new invoice',
       body: currency === 'USD' ? `Invoice for $${amount}` : `Invoice for ${amount} ${currency}`, icon: '🧾',
       link: `/app/invoice/${inv.id}`, metadata: { invoice_id: inv.id }, context: 'personal',
+      // A retry of this send preserves the notice and its read state. A later
+      // deliberate Resend has a fresh key; older clients retain their behavior.
+      ...(req.body?.client_request_id ? {
+        idempotencyKey: `invoice-send:${inv.id}:${inv.recipient_user_id}:${req.body.client_request_id.toLowerCase()}`,
+      } : {}),
     });
   }
   res.json({ ok: true });

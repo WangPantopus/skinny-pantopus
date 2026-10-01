@@ -671,11 +671,12 @@ export function getInvoice(id: string, owner?: SchedulingOwnerRef) {
   );
 }
 
-export function sendInvoice(id: string, owner?: SchedulingOwnerRef) {
+export function sendInvoice(id: string, owner?: SchedulingOwnerRef, clientRequestId?: string) {
   return post<{ ok: true }>(
     `${ownerBase(owner)}/invoices/${encodeURIComponent(id)}/send`,
     {
       ...ownerParams(owner),
+      ...(clientRequestId ? { client_request_id: clientRequestId } : {}),
     },
   );
 }

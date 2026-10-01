@@ -435,7 +435,12 @@ open class SchedulingRepository
         open suspend fun sendInvoice(
             owner: SchedulingOwner,
             invoiceId: String,
-        ): NetworkResult<SchedulingOkResponse> = safeApiCall { api.sendInvoice(owner.basePath, invoiceId, owner.ownerType, owner.ownerId) }
+            clientRequestId: String? = null,
+        ): NetworkResult<SchedulingOkResponse> =
+            safeApiCall {
+                val body = clientRequestId?.let { mapOf("client_request_id" to it) } ?: emptyMap()
+                api.sendInvoice(owner.basePath, invoiceId, owner.ownerType, owner.ownerId, body)
+            }
 
         // ─── Packages ─────────────────────────────────────────────────────────
 

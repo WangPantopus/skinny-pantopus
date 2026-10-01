@@ -31,6 +31,7 @@ final class SchedulingInvoiceDetailViewModel {
     private(set) var invoice: InvoiceDTO?
     private(set) var lineItems: [InvoiceLineItem] = []
     private(set) var sending = false
+    private var sendRequestId: String?
     private(set) var showSentToast = false
     /// Inline send failure — keeps the loaded invoice mounted (phase `.error`
     /// is reserved for load failures; blanking a loaded invoice on a failed
@@ -225,11 +226,14 @@ final class SchedulingInvoiceDetailViewModel {
     /// Send the invoice to its recipient (in-app notification; does not mutate
     /// invoice state server-side).
     func send() async {
+        guard !sending else { return }
+        if sendRequestId == nil { sendRequestId = UUID().uuidString }
         sending = true
         sendError = nil
         defer { sending = false }
         do {
-            try await client.send(SchedulingEndpoints.sendInvoice(owner: owner, id: invoiceId))
+            try await client.send(SchedulingEndpoints.sendInvoice(owner: owner, id: invoiceId, clientRequestId: sendRequestId))
+            sendRequestId = nil
             didSend = true
             sentLabel = SchedulingTime.localString(
                 date: Date(),
