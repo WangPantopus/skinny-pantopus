@@ -231,25 +231,6 @@ public struct PulsePostCard: View {
         }
     }
 
-    /// The card's controls as VoiceOver actions, named as their buttons are.
-    @ViewBuilder private var cardActions: some View {
-        if let reaction = content.reactions.first(where: \.isInteractive) {
-            Button(reaction.label.isEmpty ? "Heart reaction" : reaction.label, action: onPrimaryReaction)
-        }
-        if let onToggleSave {
-            Button(content.actions.isSaved ? "Remove bookmark" : "Save post", action: onToggleSave)
-        }
-        if let onToggleRepost {
-            Button(content.actions.isReposted ? "Undo repost" : "Repost", action: onToggleRepost)
-        }
-        if let onRSVP, let attendees = content.attendees {
-            Button(attendees.userIsGoing ? "Going" : "RSVP", action: onRSVP)
-        }
-        if let onOverflow {
-            Button("Post options", action: onOverflow)
-        }
-    }
-
     private var card: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             header
@@ -511,6 +492,28 @@ public struct PulsePostCard: View {
             parts.append("\(content.media.count) attached \(content.media.count == 1 ? "photo" : "photos")")
         }
         return parts.joined(separator: ". ")
+    }
+}
+
+// The card's VoiceOver actions sit in an extension so the card's body stays within SwiftLint's type length.
+private extension PulsePostCard {
+    /// The card's controls as VoiceOver actions, named as their buttons are.
+    @ViewBuilder var cardActions: some View {
+        if let reaction = content.reactions.first(where: \.isInteractive) {
+            Button(reaction.label.isEmpty ? "Heart reaction" : reaction.label, action: onPrimaryReaction)
+        }
+        if let onToggleSave {
+            Button(content.actions.isSaved ? "Remove bookmark" : "Save post", action: onToggleSave)
+        }
+        if let onToggleRepost {
+            Button(content.actions.isReposted ? "Undo repost" : "Repost", action: onToggleRepost)
+        }
+        if let onRSVP, let attendees = content.attendees {
+            Button(attendees.userIsGoing ? "Going" : "RSVP", action: onRSVP)
+        }
+        if let onOverflow {
+            Button("Post options", action: onOverflow)
+        }
     }
 }
 
