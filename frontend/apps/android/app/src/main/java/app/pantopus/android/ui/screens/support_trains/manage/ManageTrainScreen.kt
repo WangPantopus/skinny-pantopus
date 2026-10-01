@@ -101,6 +101,10 @@ fun ManageTrainScreen(
     // Runs after a successful delete instead of onBack, so a host can leave
     // the deleted train's own screens too.
     onDeleted: () -> Unit = onBack,
+    // Runs when the viewer isn't one of the train's organizers (a link to
+    // Manage they no longer have, say), so a host can show the train's own
+    // page instead, as the web does.
+    onNotOrganizer: () -> Unit = onBack,
     // Organize rows. A null handler hides its row: there is no analytics
     // backend or native date editor yet, so hosts leave those null.
     onOpenAnalytics: ((String) -> Unit)? = null,
@@ -205,6 +209,13 @@ fun ManageTrainScreen(
     LaunchedEffect(state.didDeleteTrain) {
         if (state.didDeleteTrain) onDeleted()
     }
+
+    // Only organizers manage a train, and the server refuses everyone else,
+    // so hand off rather than show controls that can only fail.
+    val notOrganizer = (state.state as? ManageTrainState.Loaded)?.content?.viewerRole?.isOrganizer == false
+    LaunchedEffect(notOrganizer) {
+        if (notOrganizer) onNotOrganizer()
+    }
 }
 
 @Composable
@@ -263,14 +274,19 @@ private fun Body(
         is ManageTrainState.Loading -> LoadingBody()
         is ManageTrainState.Error -> ErrorBody(message = s.message, onRetry = { viewModel.load() })
         is ManageTrainState.Loaded ->
-            LoadedBody(
-                content = s.content,
-                ui = state,
-                viewModel = viewModel,
-                onOpenAnalytics = onOpenAnalytics,
-                onEditDates = onEditDates,
-                onInviteHelpers = onInviteHelpers,
-            )
+            if (!s.content.viewerRole.isOrganizer) {
+                // Handed off to the train's page (see ManageTrainScreen).
+                LoadingBody()
+            } else {
+                LoadedBody(
+                    content = s.content,
+                    ui = state,
+                    viewModel = viewModel,
+                    onOpenAnalytics = onOpenAnalytics,
+                    onEditDates = onEditDates,
+                    onInviteHelpers = onInviteHelpers,
+                )
+            }
     }
 }
 
