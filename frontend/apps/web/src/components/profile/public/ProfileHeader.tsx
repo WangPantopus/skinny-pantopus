@@ -206,7 +206,7 @@ export default function ProfileHeader({
                     {shareCopied ? 'Copied' : 'Share'}
                   </button>
                   <details className="relative">
-                    <summary className="list-none px-3 py-2 bg-surface text-app-strong border border-app-strong rounded-lg hover:bg-surface-raised cursor-pointer">⋯</summary>
+                    <summary aria-label="More actions" className="list-none px-3 py-2 bg-surface text-app-strong border border-app-strong rounded-lg hover:bg-surface-raised cursor-pointer">⋯</summary>
                     <div className="absolute right-0 mt-2 w-40 bg-surface border border-app rounded-lg shadow-sm p-1 z-20">
                       <button onClick={onReport} className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded">Report profile</button>
                       <button

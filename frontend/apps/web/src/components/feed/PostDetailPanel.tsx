@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
   AlertTriangle, PenLine, Pencil, Heart, Siren, Tag, Wrench, Newspaper,
@@ -17,6 +17,7 @@ import FeedMediaImage from './FeedMediaImage';
 import LinkPreviewCard from './LinkPreviewCard';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
 import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
+import { removePostFromFeedCaches } from '@/hooks/useFeedData';
 import type { Post, PostComment as PostCommentType } from '@pantopus/types';
 
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -28,6 +29,11 @@ function typeIcon(type: string): ReactNode {
   const name = POST_TYPE_ICONS_LUCIDE[type] || 'Pencil';
   const Icon = LUCIDE_MAP[name] || PenLine;
   return <Icon className="w-4 h-4" />;
+}
+
+function statusOf(err: unknown): number | undefined {
+  const status = (err as { statusCode?: unknown } | null)?.statusCode;
+  return typeof status === 'number' ? status : undefined;
 }
 
 interface PostDetailPanelProps {
@@ -51,6 +57,7 @@ export default function PostDetailPanel({
   canComment = true,
   commentDisabledMessage = null,
 }: PostDetailPanelProps) {
+  const queryClient = useQueryClient();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const [post, setPost] = useState<Post | null>(initialPost);
@@ -91,6 +98,16 @@ export default function PostDetailPanel({
       ]);
       if (!isCurrent()) return;
 
+      // Deleted, or no longer visible to you: say so rather than showing the card's copy as a live post,
+      // and stop the feed listing it.
+      const readStatus = postRes.status === 'rejected' ? statusOf(postRes.reason) : undefined;
+      if (readStatus === 404 || readStatus === 403) {
+        setPost(null);
+        setComments([]);
+        removePostFromFeedCaches(queryClient, id);
+        return;
+      }
+
       if (postRes.status === 'fulfilled') {
         setPost(postRes.value.post);
       }
@@ -125,7 +142,7 @@ export default function PostDetailPanel({
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [initialPost]);
+  }, [initialPost, queryClient]);
 
   useEffect(() => {
     if (open && postId) {

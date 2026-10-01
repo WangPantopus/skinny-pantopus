@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { Post } from '@pantopus/types';
 import { EditPostDialog, PostCard, PostDetailPanel } from '@/components/feed';
+import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
 import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
 import ErrorState from '@/components/ui/ErrorState';
@@ -20,6 +21,7 @@ type Tab = 'mine' | 'saved';
 
 export default function MyPulsePage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -179,6 +181,7 @@ export default function MyPulsePage() {
       const liked = (p: Post) => (p.id === postId ? { ...p, userHasLiked: res.liked, like_count: res.likeCount } : p);
       setPosts((prev) => prev.map(liked));
       setSaved((prev) => prev.map(liked));
+      patchPostInFeedCaches(queryClient, postId, { userHasLiked: res.liked, like_count: res.likeCount });
     },
     onError: () => {
       toast.error('Failed to like post');
@@ -209,6 +212,7 @@ export default function MyPulsePage() {
       await api.posts.deletePost(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
       dropFromSaved(postId);
+      removePostFromFeedCaches(queryClient, postId);
       toast.success('Post deleted');
     } catch {
       toast.error('Failed to delete post');
@@ -226,6 +230,7 @@ export default function MyPulsePage() {
       // Unsaving from the Saved tab takes the post off that list.
       if (res.saved) setSaved((prev) => prev.map((p) => (p.id === postId ? { ...p, userHasSaved: true } : p)));
       else dropFromSaved(postId);
+      patchPostInFeedCaches(queryClient, postId, { userHasSaved: res.saved });
     },
     onError: () => {
       toast.error('Failed to save post');
@@ -357,10 +362,11 @@ export default function MyPulsePage() {
           if (detailPostId && saved.some((p) => p.id === detailPostId && !p.userHasSaved)) dropFromSaved(detailPostId);
           setDetailPostId(null);
         }}
-        // Likes, saves, comments and shares made in the panel show on the cards too.
+        // Likes, saves, comments and shares made in the panel show on the cards too, and in the feed.
         onPostChange={(postId, patch) => {
           setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, ...patch } : p)));
           setSaved((prev) => prev.map((p) => (p.id === postId ? { ...p, ...patch } : p)));
+          patchPostInFeedCaches(queryClient, postId, patch);
         }}
         currentUserId={userId || undefined}
       />
@@ -374,12 +380,14 @@ export default function MyPulsePage() {
           onSaved={(postId, changes) => {
             setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, ...changes } : p)));
             setSaved((prev) => prev.map((p) => (p.id === postId ? { ...p, ...changes } : p)));
+            patchPostInFeedCaches(queryClient, postId, changes);
             setEditingPost(null);
             toast.success('Post updated');
           }}
           onGone={(postId) => {
             setPosts((prev) => prev.filter((p) => p.id !== postId));
             dropFromSaved(postId);
+            removePostFromFeedCaches(queryClient, postId);
             setEditingPost(null);
             toast.info('This post was deleted, so it can’t be edited.');
           }}
