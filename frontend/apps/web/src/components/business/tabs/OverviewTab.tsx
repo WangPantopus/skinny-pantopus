@@ -192,6 +192,7 @@ export default function OverviewTab({
                     <button
                       onClick={() => router.push(`${dashPath}?tab=${targetTab}`)}
                       className="text-sky-600 hover:text-sky-800 text-xs"
+                      aria-label={item.label}
                     >
                       &rarr;
                     </button>
