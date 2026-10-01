@@ -9,6 +9,39 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — sweep backlog items 1–8 all merged except native 4b (#1158, in Stream 1's next candidate); drift triage done; new: #1165 (Connections cards keyboard-reachable) in CI, 2026-10-01T01:35:25Z
+
+- **Merged since the last block:**
+  - batch 239: #1139 (item 7, seat "⋮" menu) and #1143 (item 8, builder preview without invented hours/stars);
+  - batch 241: #1149 (item 6, crew checklist Hours link + Logo upload);
+  - batch 242: #1150 (business trust drift: `verified_business` for document-verified crews);
+  - batch 243: #1119 (item 2, page-editor names + chip selection), #1121 (item 1b, iOS named pages + native editors tell the truth) and #1155 (item 5, dead hero "Background image" box removed).
+  - Stream 1 verified every seal.
+- **#1119/#1121 sealed against Stream 1's device bundle** `20261001-stream1-native-1119-1121-devices-r1` (MANIFEST `e5c7c502…`):
+  - #1121: seal `909ce171…`, bundle `20260930-stream5-native-page-blocks-truth-r1`;
+  - #1119: seal `4a940931…`, bundle `20261001-stream5-page-blocks-a11y-r1`.
+  - Their PR CI was red only from stale merge bases (the #1128 golden; the HubTabRoot SwiftLint violation). Each bundle records CI's own iOS lint on the master+PR merge tree.
+- **Found and routed:** master `c107890f8` failed CI's `swiftformat --lint .` on two Stream 4 files (from #1103 and #1105). Stream 4's #1163 fixed them in batch 243.
+- **Drift triage** (Stream 2's scan at `e32f321b6`, no rescan; `audits/20261001-stream5-drift-triage-r1/RESULT.md`):
+  - Stream 5's only actionable rows were fixed by #1150.
+  - `getPostingIdentities` (trustState 300/343) stays a low-impact candidate.
+  - `BusinessBooking` is launch cut #5.
+  - Out-of-scope rows were routed: gigs `find_homes_nearby` (an RPC no migration defines), Home media, mail.
+  - Correction sent to Stream 2: #1148 fixed only trustState step 1. Stream 2 decided to leave step 3 (`incoming_resident`) unrevived.
+- **New, in CI: #1165** (web, `connections/page.tsx`).
+  - On Connections, a person's card was a click-only `div`, so keyboard and screen-reader users couldn't open a requester's profile (Requests offered only Accept/Decline; Sent had no focus stop). Blocked cards showed a pointer over a no-op.
+  - Fix: the avatar and name are one profile link. The blocked card has no link and no pointer.
+  - E2E before/after on the runtime; accessibility tree checked; a visible focus ring; card lists pixel-identical. Bundle `20261001-stream5-connections-links-r1`. I seal it after CI.
+  - **Decision:** blocked cards stay non-navigating (the existing intent); the link carries the card's identity, with no new control.
+- **Open:** #1165 (CI), #1158 (native 4b; Stream 1's next candidate), draft #842 (stays out).
+- **Candidates left** (lower confidence):
+  - the crew Reviews tab says "Be the first to leave a review!" with no review action (native says "Be the first to hire …" with a contact CTA);
+  - `/app/chat/new` sends a new chat to `/app/mailbox?roomId=…`, but nothing links to that page;
+  - checklist "→" buttons have no names;
+  - the logo route keeps the replaced File;
+  - web portfolio upload parity.
+- **Runtime:** API 18134 on master `4123bd455` (receipt 01:14:44Z); web 18131 on `4078fcc82` (#1165's head); DB at `20260930184000`. No fixtures remain.
+
 ## LIVE — sweep items 3, 4 and 7 merged or sealed (#1126, #1133, #1135, #1139, #1143); #1149 (item 6) and #1150 (business trust drift) in CI; #1119/#1121 on Stream 1's devices, 2026-10-01T00:58:55Z
 
 - **Merged:**
