@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -475,6 +476,8 @@ private fun ViewAsBadgePill(badge: ViewAsBadge) {
                 .background(bg)
                 .border(1.dp, border, RoundedCornerShape(Radii.pill))
                 .padding(horizontal = Spacing.s2)
+                // One TalkBack stop per badge; a hidden one says so, as iOS does ("…, not shown").
+                .semantics(mergeDescendants = true) { if (!badge.isOn) stateDescription = "Not shown" }
                 .testTag("viewAsBadge_${badge.id}"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),

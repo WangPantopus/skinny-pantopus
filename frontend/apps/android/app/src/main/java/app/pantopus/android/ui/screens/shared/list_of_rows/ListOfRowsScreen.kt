@@ -65,10 +65,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -877,6 +879,9 @@ private fun LoadedList(
     onEndReached: () -> Unit,
 ) {
     val listState = rememberLazyListState()
+    // The remembered check reads the current list: a list first shown with no more pages that later
+    // gains some (a refresh or a tab change while this screen stays open) must still page.
+    val currentState by rememberUpdatedState(state)
     val shouldLoadMore by remember {
         derivedStateOf {
             val total = listState.layoutInfo.totalItemsCount
@@ -884,10 +889,24 @@ private fun LoadedList(
                 listState.layoutInfo.visibleItemsInfo
                     .lastOrNull()
                     ?.index ?: return@derivedStateOf false
-            state.hasMore && total > 0 && last >= total - 3
+            currentState.hasMore && total > 0 && last >= total - 3
         }
     }
     LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) onEndReached() }
+
+    // A re-read that puts new rows above the first one shows them when the list was at the very top;
+    // otherwise the list stays on the old first row and the new ones sit out of sight above it. A list
+    // scrolled down keeps its place.
+    val firstRowKey = state.sections.firstOrNull()?.rows?.firstOrNull()?.id
+    val shownFirstRowKey = remember { arrayOf(firstRowKey) }
+    SideEffect {
+        if (firstRowKey != shownFirstRowKey[0]) {
+            if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
+                listState.requestScrollToItem(0)
+            }
+            shownFirstRowKey[0] = firstRowKey
+        }
+    }
 
     LazyColumn(
         state = listState,
