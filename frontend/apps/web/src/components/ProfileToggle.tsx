@@ -32,6 +32,23 @@ type ProfessionalOption = {
   verificationTier?: number;
 };
 
+/** Fired after a Home's name is saved, so the switcher shows it without a reload. */
+export const HOMES_CHANGED_EVENT = 'pantopus:homes-changed';
+
+export function notifyHomesChanged(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(HOMES_CHANGED_EVENT));
+}
+
+function toHomeOptions(list: Record<string, unknown>[]): HomeOption[] {
+  return list.map((h: Record<string, unknown>) => ({
+    id: h.id as string,
+    label: (h.name as string) || [h.address, h.address2].filter(Boolean).join(' ') || 'Home',
+    city: [h.city, h.state].filter(Boolean).join(', '),
+    role: (h.occupancy as Record<string, unknown>)?.role as string || 'member',
+  }));
+}
+
 export default function ProfileToggle({
   activeHomeId,
   activeBusinessId,
@@ -78,14 +95,7 @@ export default function ProfileToggle({
 
         if (homesRes.status === 'fulfilled') {
           const list = (homesRes.value as Record<string, unknown>)?.homes as Record<string, unknown>[] ?? [];
-          setHomes(
-            list.map((h: Record<string, unknown>) => ({
-              id: h.id as string,
-              label: (h.name as string) || [h.address, h.address2].filter(Boolean).join(' ') || 'Home',
-              city: [h.city, h.state].filter(Boolean).join(', '),
-              role: (h.occupancy as Record<string, unknown>)?.role as string || 'member',
-            }))
-          );
+          setHomes(toHomeOptions(list));
         }
 
         if (bizRes.status === 'fulfilled') {
@@ -125,6 +135,23 @@ export default function ProfileToggle({
         setLoading(false);
       }
     })();
+  }, []);
+
+  // A rename saved elsewhere in the app re-reads the Homes; a failed read keeps the last list.
+  useEffect(() => {
+    let generation = 0;
+    const reread = async () => {
+      const current = ++generation;
+      try {
+        const res = await api.homes.getMyHomes();
+        if (current !== generation) return;
+        setHomes(toHomeOptions((res as Record<string, unknown>)?.homes as Record<string, unknown>[] ?? []));
+      } catch {
+        // The next full load corrects it.
+      }
+    };
+    window.addEventListener(HOMES_CHANGED_EVENT, reread);
+    return () => { generation++; window.removeEventListener(HOMES_CHANGED_EVENT, reread); };
   }, []);
 
   // Dropdown dimensions (w-64 = 16rem = 256px)

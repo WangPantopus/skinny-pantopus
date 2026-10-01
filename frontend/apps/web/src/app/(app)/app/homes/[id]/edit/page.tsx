@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { Home } from '@pantopus/types';
 import { toast } from '@/components/ui/toast-store';
+import { notifyHomesChanged } from '@/components/ProfileToggle';
 
 const HOME_TYPES = [
   { value: 'house', label: 'House' },
@@ -176,6 +177,7 @@ export default function EditHomePage() {
       }
 
       await api.homes.updateHome(homeId, payload);
+      if (payload.name !== (home?.name || null)) notifyHomesChanged();
       setSuccessMsg('Saved successfully!');
       setTimeout(() => setSuccessMsg(''), 3000);
       await load();
