@@ -42,6 +42,78 @@ function withdrawalError(code, message) {
   return Object.assign(new Error(message), { code });
 }
 
+const WITHDRAWAL_PENDING = 'This withdrawal is still being processed. Check your wallet in a moment.';
+
+// Stripe refused the transfer request itself, so the same key and parameters get the same refusal:
+// no transfer exists, and none can be made with this key. Any other error (no reply, a timeout, a
+// 5xx, rate limiting, the key in use by another request) leaves the transfer's outcome unknown.
+const DEFINITE_TRANSFER_FAILURES = new Set([
+  'StripeInvalidRequestError',
+  'StripeCardError',
+  'StripePermissionError',
+  'StripeAuthenticationError',
+]);
+
+/**
+ * Settle a withdrawal whose transfer call failed. A request with the same key may have completed
+ * the transfer meanwhile: then the withdrawal is paid out. A refusal for good reverses the debit
+ * (the reversal credit has its own key, so it credits once). Anything else keeps the debit: the
+ * outcome is unknown, and the next request with this key settles it (503, the client keeps the key).
+ */
+async function settleFailedTransfer(tx, stripeErr, { userId, amount, idempotencyKey }) {
+  const { data: current, error: readErr } = await supabaseAdmin
+    .from('WalletTransaction')
+    .select('id, amount, status, stripe_transfer_id, metadata')
+    .eq('id', tx.id)
+    .maybeSingle();
+  if (readErr) {
+    logger.error('withdrawal transfer outcome unknown', { userId, txId: tx.id, error: readErr.message });
+    throw withdrawalError('WITHDRAWAL_PENDING', WITHDRAWAL_PENDING);
+  }
+  if (current?.stripe_transfer_id) return current;
+  if (current?.status === 'reversed') throw withdrawalError('WITHDRAWAL_NOT_COMPLETED', WITHDRAWAL_NOT_COMPLETED);
+  if (!DEFINITE_TRANSFER_FAILURES.has(stripeErr?.type)) {
+    logger.error('withdrawal transfer outcome unknown', {
+      userId, amount, txId: tx.id, errorType: stripeErr?.type || null, error: stripeErr?.message,
+    });
+    throw withdrawalError('WITHDRAWAL_PENDING', WITHDRAWAL_PENDING);
+  }
+
+  // supabase-js reports a failed RPC in `error` rather than throwing; only a recorded credit may
+  // mark the debit reversed. A credit already recorded under the reversal key (an earlier request
+  // reversed it) is refused by the unique key, which also counts as reversed.
+  const reversalKey = `${idempotencyKey}:reversal`;
+  const { error: reversalError } = await supabaseAdmin.rpc('wallet_credit', {
+    p_user_id: userId,
+    p_amount: amount,
+    p_type: 'withdrawal_reversal',
+    p_description: `Reversal: withdrawal failed — ${stripeErr.message}`,
+    p_idempotency_key: reversalKey,
+    p_metadata: { original_tx_id: tx.id, error: stripeErr.message },
+  });
+  if (reversalError) {
+    const keyTaken = reversalError.code === '23505' || /WalletTransaction_idempotency_key/.test(reversalError.message || '');
+    const earlierReversal = keyTaken ? await findWithdrawalByKey(reversalKey).catch(() => null) : null;
+    if (!earlierReversal) {
+      // CRITICAL: the debit stands and nothing was paid out. The client keeps its key, and its next
+      // request reaches this reversal again.
+      logger.error('CRITICAL: Failed to reverse wallet debit after failed withdrawal', {
+        userId, amount, txId: tx.id, error: reversalError.message,
+      });
+      throw withdrawalError('WITHDRAWAL_PENDING', WITHDRAWAL_PENDING);
+    }
+  }
+
+  const { error: reverseUpdateErr } = await supabaseAdmin
+    .from('WalletTransaction')
+    .update({ status: 'reversed' })
+    .eq('id', tx.id);
+  if (reverseUpdateErr) {
+    logger.error('Failed to mark WalletTransaction as reversed', { txId: tx.id, error: reverseUpdateErr.message });
+  }
+  throw withdrawalError('WITHDRAWAL_NOT_COMPLETED', WITHDRAWAL_NOT_COMPLETED);
+}
+
 /**
  * Settle a withdrawal request whose key an earlier request already used. wallet_debit returned
  * that earlier attempt's ledger row instead of debiting again, so this request reports that
@@ -56,7 +128,7 @@ async function settleRepeatedWithdrawal(tx, { userId, amount, stripe, stripeAcco
 
   // The earlier attempt debited the wallet but hasn't recorded its transfer: it is still running,
   // or it stopped between the two steps. The same transfer call with the same key returns that
-  // attempt's transfer, or makes the one it never made. Only the attempt that debited may reverse.
+  // attempt's transfer, or makes the one it never made.
   try {
     const transfer = await stripe.transfers.create({
       amount,
@@ -84,8 +156,8 @@ async function settleRepeatedWithdrawal(tx, { userId, amount, stripe, stripeAcco
     }
     return { ...tx, stripe_transfer_id: transfer.id };
   } catch (stripeErr) {
-    logger.warn('Repeated withdrawal request could not settle yet', { userId, txId: tx.id, error: stripeErr.message });
-    throw withdrawalError('WITHDRAWAL_PENDING', 'This withdrawal is still being processed. Check your wallet in a moment.');
+    logger.warn('Repeated withdrawal request could not settle yet', { userId, txId: tx.id, errorType: stripeErr?.type || null, error: stripeErr.message });
+    return settleFailedTransfer(tx, stripeErr, { userId, amount, idempotencyKey });
   }
 }
 
@@ -257,54 +329,11 @@ class WalletService {
       return { ...tx, stripe_transfer_id: transfer.id };
 
     } catch (stripeErr) {
-      // Stripe transfer failed — reverse the wallet debit
-      logger.error('Stripe transfer failed, reversing wallet debit', {
-        userId,
-        amount,
-        error: stripeErr.message,
+      // Reverse only when Stripe refused the transfer for good; never when it might exist.
+      logger.error('Stripe transfer failed', {
+        userId, amount, txId: tx.id, errorType: stripeErr?.type || null, error: stripeErr.message,
       });
-
-      let reversed = false;
-      try {
-        // supabase-js reports a failed RPC in `error` rather than throwing; only a
-        // recorded credit may mark the debit reversed.
-        const { error: reversalError } = await supabaseAdmin.rpc('wallet_credit', {
-          p_user_id: userId,
-          p_amount: amount,
-          p_type: 'withdrawal_reversal',
-          p_description: `Reversal: withdrawal failed — ${stripeErr.message}`,
-          p_idempotency_key: `${idempotencyKey}:reversal`,
-          p_metadata: { original_tx_id: tx.id, error: stripeErr.message },
-        });
-        if (reversalError) throw new Error(reversalError.message);
-        reversed = true;
-
-        // Mark original tx as reversed
-        const { error: reverseUpdateErr } = await supabaseAdmin
-          .from('WalletTransaction')
-          .update({ status: 'reversed' })
-          .eq('id', tx.id);
-
-        if (reverseUpdateErr) {
-          logger.error('Failed to mark WalletTransaction as reversed', {
-            txId: tx.id, error: reverseUpdateErr.message,
-          });
-        }
-
-      } catch (reverseErr) {
-        // CRITICAL: Wallet was debited but transfer AND reversal failed
-        logger.error('CRITICAL: Failed to reverse wallet debit after failed withdrawal', {
-          userId,
-          amount,
-          txId: tx.id,
-          error: reverseErr.message,
-        });
-      }
-
-      // Reversed: nothing moved, so the outcome is final. Not reversed: the debit stands, and a
-      // retry with the same key completes the transfer.
-      if (reversed) throw withdrawalError('WITHDRAWAL_NOT_COMPLETED', WITHDRAWAL_NOT_COMPLETED);
-      throw new Error(`Withdrawal failed: ${stripeErr.message}`);
+      return settleFailedTransfer(tx, stripeErr, { userId, amount, idempotencyKey });
     }
   }
 
