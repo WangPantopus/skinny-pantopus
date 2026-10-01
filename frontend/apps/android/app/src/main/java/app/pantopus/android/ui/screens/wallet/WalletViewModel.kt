@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.util.UUID
 import javax.inject.Inject
 
@@ -200,7 +201,10 @@ class WalletViewModel
                     }
                     is NetworkResult.Failure -> {
                         if (!result.error.leavesWithdrawalUnsettled()) pendingWithdrawal = null
-                        _action.value = WalletAction.WithdrawFailed(result.error.message)
+                        val stillProcessing = result.error.withdrawalPendingMessage()
+                        _action.value = WalletAction.WithdrawFailed(stillProcessing ?: result.error.message)
+                        // The debit is held while the transfer settles: show it in the balance and activity.
+                        if (stillProcessing != null) loadInternal(showLoading = false)
                     }
                 }
             }
@@ -314,6 +318,7 @@ class WalletViewModel
 
 private const val HTTP_REQUEST_TIMEOUT = 408
 private const val HTTP_TOO_MANY_REQUESTS = 429
+private const val HTTP_SERVICE_UNAVAILABLE = 503
 
 /** No reply, a timeout, rate limiting or a server error: the first attempt's outcome is unknown, so a retry keeps its key. */
 private fun NetworkError.leavesWithdrawalUnsettled(): Boolean =
@@ -322,3 +327,13 @@ private fun NetworkError.leavesWithdrawalUnsettled(): Boolean =
         is NetworkError.ClientError -> code == HTTP_REQUEST_TIMEOUT || code == HTTP_TOO_MANY_REQUESTS
         else -> false
     }
+
+/**
+ * The server's sentence for a withdrawal it's still settling (503 `withdrawal_pending`): the debit is held
+ * and the next request with the same key settles it, so it isn't a failure. Null for anything else.
+ */
+private fun NetworkError.withdrawalPendingMessage(): String? {
+    val body = (this as? NetworkError.Server)?.takeIf { it.code == HTTP_SERVICE_UNAVAILABLE }?.body ?: return null
+    val json = runCatching { JSONObject(body) }.getOrNull() ?: return null
+    return json.optString("error").takeIf { json.optString("code") == "withdrawal_pending" && it.isNotBlank() }
+}

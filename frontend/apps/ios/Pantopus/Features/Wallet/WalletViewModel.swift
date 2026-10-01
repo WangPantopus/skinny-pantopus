@@ -242,10 +242,27 @@ public final class WalletViewModel {
             await fetchLive(showLoading: false)
         } catch {
             if !Self.leavesWithdrawalUnsettled(error) { pendingWithdrawal = nil }
+            let stillProcessing = Self.withdrawalPendingMessage(error)
             action = .withdrawFailed(
-                message: (error as? APIError)?.errorDescription ?? "Couldn't process the withdrawal."
+                message: stillProcessing
+                    ?? (error as? APIError)?.errorDescription
+                    ?? "Couldn't process the withdrawal."
             )
+            // The debit is held while the transfer settles: show it in the balance and activity.
+            if stillProcessing != nil { await fetchLive(showLoading: false) }
         }
+    }
+
+    /// The server's sentence for a withdrawal it's still settling (503 `withdrawal_pending`): the
+    /// debit is held and the next request with the same key settles it, so it isn't a failure.
+    static func withdrawalPendingMessage(_ error: Error) -> String? {
+        guard case let .server(status, body)? = error as? APIError, status == 503,
+              let data = body.data(using: .utf8),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              json["code"] as? String == "withdrawal_pending",
+              let message = json["error"] as? String, !message.isEmpty
+        else { return nil }
+        return message
     }
 
     /// No reply, a timeout, rate limiting or a server error: the first attempt's outcome is unknown,
