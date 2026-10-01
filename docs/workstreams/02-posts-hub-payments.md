@@ -173,9 +173,36 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T12:30:55Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T13:31:28Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T12:30:55Z):** master is `8ce4089a9` (batch 295, with the launch-cut flags #1332).
+- **Latest (2026-10-01T13:31:28Z):** master is `3dc6b089e` or later. Three PRs are in flight, waiting on my native candidates m and n in the heavy-slot queue.
+  1. **Connections general form** (`claude/stream2-posts-connections-general-form` `8ad1ea0cf`):
+     - Android before/after DONE. Before: the master draft shows an Ask form with Category chips (Handyman checked), and the row is stored general with `service_category` handyman. After: "POST", Headline, "Share with your connections…", no chips; stored with `service_category` NULL.
+     - Control: Place → Ask is unchanged (identical UI tree; 0 differing pixels below the status bar).
+     - Sealing after candidate m. Stream 1's iOS cell runs on candidate m's `.app`.
+  2. **Wallet withdraw idempotency** (`claude/stream2-money-withdraw-idempotency` `f42594a2c`, money):
+     - Reproduced on web and Android: with the reply lost after the server acted, the retry used a new key and made a second withdrawal attempt.
+     - Fix: one key per intent on every client; the server settles a repeated key (reversed → 409, paid → 200, another amount → 409, stuck → 503 with no reversal); migration `20261001132000` makes `wallet_debit` replay with `IF FOUND` (Stream 1 reserved and approved).
+     - Verified so far: the web after-run, API paths A/B/C, a rolled-back SQL proof, and the gates.
+     - The Android after-run needs candidate m. The Android wallet needs a proxy stub for the Stripe-backed account status, declared in the bundle.
+  3. **Post toggles** (`claude/stream2-posts-toggle-state` `4d576a36a`, local until the PR):
+     - Stream 1 approved; migration `20261001134000` reserved: set_post_like, set_comment_like, set_post_repost, record_post_share.
+     - Reproduced on web and Android: a lost reply plus a retry ends unliked.
+     - Verified so far: the web after-run (liked stays liked); API repeats are idempotent for like, comment like, save and repost, and an external share counts once; SQL concurrent double like gives 1 row (the old function gave a duplicate-key 500).
+     - Gates OK. Candidate n (Android + iOS) is queued, then the Android after-run and Stream 1's iOS cell.
+  - **Also this session:** posts.js:654 checked, no change (Stream 1 agreed). A3 token cells re-measured on master (seal `45923309`). mailbox-api's keyless `initiateWithdrawal` is launch cut #8: recorded, and Stream 4 told as a record.
+  - **Decisions:**
+    - Network posts stay general; the form says so.
+    - Withdraw keys last per intent, never per tap.
+    - A server retry never reverses another attempt's debit.
+    - Toggles become state sets, with the legacy toggle kept for old installs.
+    - Reposts get no unique index (production may hold duplicates).
+  - **Runtime:**
+    - Migration 20261001134000 is applied to my runtime database.
+    - Backend 18160 runs the withdraw branch.
+    - Emulator-5560 holds device slot 4.
+    - LIVE fixtures (cleaned at each bundle's end): the withdraw ledger, Alice's credit and fixture StripeAccount; toggles H1t (Dana's post, with Alice's like and Dana's comment).
+- **Earlier (2026-10-01T12:30:55Z):** master is `8ce4089a9` (batch 295, with the launch-cut flags #1332).
   - **Merged:**
     - #1324, the landing contrast (batch 291);
     - #1331, the landing on phones (batch 294). It's Stream 1-approved: `lg:` grid classes, a nowrap CTA label, a 2-line placeholder clamp, and the stacked art centered. Desktop is pixel-identical; seal `b2cd1648`.
