@@ -117,13 +117,18 @@ export default function BlockCanvas({
                       {!showPreview && (
                         <div
                           className={`absolute -top-3 right-2 z-10 flex items-center gap-1 transition-opacity ${
-                            isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                           }`}
                         >
-                          {/* Block type label */}
-                          <span className="px-1.5 py-0.5 bg-gray-800 rounded text-[9px] font-medium text-white capitalize">
+                          {/* Block type label: also the keyboard's way to open the block's settings (a click on the block does it for a mouse) */}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onSelectBlock(index); }}
+                            aria-label={`Edit ${block.block_type.replace('_', ' ')} block`}
+                            className="px-1.5 py-0.5 bg-gray-800 rounded text-[9px] font-medium text-white capitalize"
+                          >
                             {block.block_type.replace('_', ' ')}
-                          </span>
+                          </button>
 
                           {/* Move up */}
                           <button
