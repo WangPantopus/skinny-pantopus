@@ -103,7 +103,11 @@ public final class SavedPostsModel {
             if response.saved {
                 // The toggle saved it again (it had been unsaved elsewhere): re-read the list.
                 await load()
-            } else if posts.contains(where: { $0.id == postId }) {
+                return
+            }
+            // A Pulse card still showing it saved would re-save it on its next tap: lists refetch.
+            PulsePostsRefresh.notifyPostsDidChange()
+            if posts.contains(where: { $0.id == postId }) {
                 posts.removeAll { $0.id == postId }
                 // The saves after it move up one, so the next page starts one earlier or it would skip one.
                 nextOffset = nextOffset.map { max(0, $0 - 1) }

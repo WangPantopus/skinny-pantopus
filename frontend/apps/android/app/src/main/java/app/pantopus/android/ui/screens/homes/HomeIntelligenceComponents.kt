@@ -364,7 +364,14 @@ fun SeasonalChecklistCard(
                 CardNote("You don't have access to this home's checklist.")
             is HomeIntelligenceCardState.Failed ->
                 CardError(
-                    headline = "Couldn't load the seasonal checklist",
+                    // A lost reply may have committed the change, so the headline
+                    // doesn't claim it failed; the message and Retry settle it.
+                    headline =
+                        if (state.afterChange) {
+                            "Your change may not have been saved"
+                        } else {
+                            "Couldn't load the seasonal checklist"
+                        },
                     message = state.message,
                     retryTag = "homeDashboard_seasonalChecklistRetry",
                     onRetry = onRetry,
