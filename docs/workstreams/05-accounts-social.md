@@ -9,6 +9,41 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1195 #1200 #1192 #1196 #1206 #1208 #1216 #1217 merged (to batch 263, master `65de05db7`); cross-stream help: #1226 (Stream 2's post viewer) and #1228 (Stream 4's mail list Star) in CI, 2026-10-01T04:18:00Z
+
+- **User direction (2026-10-01, ~03:40Z):** keep working while there is work, and help debug and fix other workstreams. Cross-stream fixes go through Stream 1's routing, and the owning stream is told before its file is touched.
+- **Merged** (Stream 1 verified every seal):
+  - **#1195** (03:04Z): the web crew page editor; a block's settings open from the keyboard, and its toolbar shows on focus.
+  - **#1200** (03:13Z): a notification's Remove ✕ shows on keyboard focus.
+  - **#1192 + #1196** (03:24Z): a hidden block's row says "Hidden from visitors" (iOS, Android); the iOS crew Pages back and delete buttons are named. Sealed against Stream 1's device bundles.
+  - **#1206 + #1208** (03:38Z): the tab bars of the crew page, public profile and Connections say which tab is selected; profile and privacy fields are named by their labels.
+  - **#1216 + #1217** (batch 263, PR #1227, 04:03Z, master `65de05db7`):
+    - #1216: `verified_resident` means a verified, unexpired residency, not a confirmed email. Found by Stream 2. The chat Local Profile select was also repaired: it named 4 nonexistent columns, so every chat member's Local Profile and badge opt-out was ignored. Devices pass in Stream 1's `20261001-stream1-backend-1216-devices-r1`.
+    - #1217: the crew tools' form fields are named by their labels.
+- **In CI, then sealed and sent to Stream 1:**
+  - **#1226** (Stream 2's `feed/post/[id]/page.tsx`; Stream 2 acked, no edits of theirs there), bundle `20261001-stream5-post-viewer-r1`, RESULT written.
+    - **Before:** the post page's image viewer rendered inside `<main>` (z-0). The header's Profile avatar covered its Close, the sidebar's nav covered its Previous, the floating buttons painted over it, and Escape did nothing.
+    - **Fix:** portaled (the #1182 pattern); Escape closes it; `dialog` "Full size media"; the buttons are named.
+    - 0 differing pixels in the viewer's own area.
+  - **#1228** (Stream 4's `mailbox/_components/MailListItem.tsx`), bundle `20261001-stream5-mail-star-keyboard-r1`, RESULT written.
+    - **Before:** the list row's Star was opacity 0 on keyboard focus. The row's Enter/Space handler also caught keys on its inner controls, so Enter on Star opened the mail instead of starring it, and Enter on Open opened it in the pane instead of following the link.
+    - **Fix:** the row handles only its own keys, and the Star gets `focus-visible:opacity-100`.
+    - At rest, only the relative time differs.
+- **Stream 1's hover-only list, resolved:** `components/MediaGallery.tsx` and `components/home/QuickAccess.tsx` are rendered nowhere: QuickAccess is only re-exported by an unimported barrel, and nothing references MediaGallery (#1228's `builds/unused-components-grep.txt`). Not changed; dead-code candidates for their owners.
+- **Candidates recorded, not fixed:**
+  - **`find_homes_nearby`** is called by `magicTask.js:601` and `urgentFanoutService.js:50` (both launch cut #4) and by `geospatialQueries.findHomesNearby`, which nothing calls. The function doesn't exist: its SQL is only a comment in `geospatialQueries.js`, there's no migration, and the runtime DB has no such function. Out of launch scope.
+  - **Android View as** marks a hidden badge only visually: TalkBack reads "Verified neighbor", while iOS says "not shown" (Stream 1's #1216 run). Stream 5 identity; next native batch.
+  - **For Stream 4:**
+    - A starred mail's star shows only on hover in the web list (a visual call).
+    - `GET /api/mailbox/v2/p3/mailday/summary` writes a `mailday_summary_viewed` event on every mailbox load (My Mail Day is cut #8).
+    - `GET /api/mailbox/v2/item/:id` marks a mail opened, by design.
+  - Older ones stay as listed below.
+- **Decisions:**
+  - Overlays leave `<main>` by portal. Hover-only controls get `focus-visible`, and their keyboard activation is repaired in the same PR when it's broken.
+  - Dead components are not edited.
+  - Launch-cut features are noted, not fixed.
+- **Runtime:** API 18134 on `65de05db7` (receipt 04:05:34Z); web 18131 on `2279c88e3` (#1228's head). No fixtures remain: the post and the mail were deleted by exact id, and the mail tables equal their pre-fixture counts.
+
 ## LIVE — #1182 (b251) and #1190 (b253) merged; #1195 (page editor keyboard) sealed; #1200 (notification Remove focus) in CI; native #1192 + #1196 wait for Stream 1's candidate, 2026-10-01T03:04:03Z
 
 - **Merged:**
