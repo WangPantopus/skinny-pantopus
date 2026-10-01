@@ -9,6 +9,7 @@ import MapLayerToggle from '@/components/discover/MapLayerToggle';
 import MeasureFromChip from '@/components/discover/MeasureFromChip';
 import TrustLensChips from '@/components/discover/TrustLensChips';
 import { MapSkeleton } from '@/components/map/MapSkeleton';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const DiscoverMap = dynamic(() => import('@/components/discover/DiscoverMap'), {
   ssr: false,
@@ -76,8 +77,8 @@ export default function ExploreMapPage() {
         />
       </div>
 
-      {/* Category filter chips */}
-      <div className="flex items-center gap-1.5 px-4 py-2 border-b border-app-border bg-app-surface overflow-x-auto flex-shrink-0">
+      {/* Category filter chips — business filters; launch cut #6 (Business directory) hides them. */}
+      {launchFeatures.businessDirectory && <div className="flex items-center gap-1.5 px-4 py-2 border-b border-app-border bg-app-surface overflow-x-auto flex-shrink-0">
         {CATEGORY_CHIPS.map(cat => {
           const isActive = cat.key === 'all'
             ? filters.categories.length === 0
@@ -109,7 +110,7 @@ export default function ExploreMapPage() {
         {/* Trust lens */}
         <div className="w-px h-5 bg-app-border mx-1 flex-shrink-0" />
         <TrustLensChips value={sort} onChange={setSort} />
-      </div>
+      </div>}
 
       {/* Map container */}
       <div className="flex-1 relative">

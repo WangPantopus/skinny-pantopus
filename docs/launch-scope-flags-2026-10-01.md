@@ -17,7 +17,7 @@ feature on.
 | `marketplace` | 3. Marketplace | Listings (browse, detail, create, Snap & sell), offers and trades, My Listings, saved listings, Market chat filter and listing cards, Items on maps, the receipt's Marketplace stats |
 | `open_gigs` | 4. Open Gigs marketplace | Posting tasks for bids (every composer, Hire help, Post task, checklist Hire, Ask a neighbor), browse/search/map, bids, offers and counters, task Q&A, My bids, Tasks widgets, the rebook rail. **Kept:** task detail and lifecycle for tasks you are part of, My tasks, payments, tips |
 | `public_scheduling` | 5. Public scheduling | Every Scheduling entry, booking pages, event types, availability, team scheduling, My bookings, booking reminders. **Kept:** invoices, packages and payouts screens; the scheduling engine |
-| `business_directory` | 6. General business directory | Discover businesses, business search results and filters, the business map layer, the Discover hub (needs #3 and #4 too). **Kept:** business pages by link, creating and running a business |
+| `business_directory` | 6. General business directory | Discover businesses, business search results and filters, the business map layer and the map's business filters, the Discover hub (needs #3 and #4 too). **Kept:** business pages by link, creating and running a business, the Explore Map with its Posts layer |
 | `household_extras` | 7. Household extras | Home bills, packages, pets, polls and the family calendar (tiles, tabs, cards, "+" actions, reminders, Today/Hub rows, activity rows, notification toggles). **Kept:** Place bill benchmark and its opt-in, the address calendar, health score, tasks, issues, documents, emergency, access, guests, members |
 | `mail_extras` | 8. Mail extras | Writing letters (Compose / Write a letter / Send mail), ceremonial letters, certified mail and e-signing, Family Mail Party, community mail, mail event invitations, translations. **Kept:** the mailbox with postcards, welcome cards and the digest, vacation hold, Mail Day |
 
@@ -77,6 +77,10 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
    Stamps as letter-only; switching them off is a small follow-up if wanted.
 10. **Bill trends on the Home dashboard stays** (read-only, with the neighborhood benchmark and its opt-in): bills
    stay as the input to bill explanation. Adding, editing and tracking bills is hidden.
+11. **The Explore Map stays on every platform** with the layers in scope: Posts on the web (it now opens on Posts),
+   posts and homes on iOS and Android. Its business and task layers, the web map's business filters (categories, Open
+   Now, Trust lens) and a toggle with a single layer are hidden. Rejected: hiding the whole web map, which also took
+   away the in-scope Posts map that the native apps keep.
 
 ## Known limits
 
