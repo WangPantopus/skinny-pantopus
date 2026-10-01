@@ -458,7 +458,7 @@ final class MembersListViewModelTests: XCTestCase {
 
     // MARK: - Role change
 
-    func testOwnerCanAssignEveryRoleBelowAndIncludingOwner() async {
+    func testOwnerCanAssignEveryRoleBelowOwner() async {
         stubOwner()
         let vm = makeVM()
         await vm.load()
@@ -472,10 +472,10 @@ final class MembersListViewModelTests: XCTestCase {
             for: OccupantDTO(id: "occ_admin", userId: "u_admin", role: "admin", isActive: true),
             name: "Jamie Patel"
         )
-        // Every ROLE_RANK role except the one they already hold.
+        // Every ROLE_RANK role below owner except the one they already hold; the server refuses promotion to owner.
         XCTAssertEqual(
             Set(target.assignableRoles),
-            [.owner, .manager, .member, .restrictedMember, .guest]
+            [.manager, .member, .restrictedMember, .guest]
         )
         XCTAssertTrue(target.canRemove)
     }
@@ -557,10 +557,10 @@ final class MembersListViewModelTests: XCTestCase {
         } else {
             XCTFail("Expected avatarWithBadge leading, got \(row.leading)")
         }
-        if case .kebab = row.trailing {
-            // OK — an owner may re-role another owner.
+        if case .none = row.trailing {
+            // OK — another owner's row offers nothing the server allows: no role change, no removal.
         } else {
-            XCTFail("Expected kebab trailing on member row, got \(row.trailing)")
+            XCTFail("Expected no trailing actions on another owner's row, got \(row.trailing)")
         }
     }
 

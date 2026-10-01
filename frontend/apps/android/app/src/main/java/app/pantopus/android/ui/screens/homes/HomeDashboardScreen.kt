@@ -1251,7 +1251,8 @@ private fun LimitedLayout(
                 when (state.verificationKind) {
                     "residency" -> "Your residency is not yet verified. Check for updates to your request."
                     "ownership" -> "Complete your ownership verification to request access to this Home."
-                    else -> "Current access to this Home could not be confirmed. Reload to check access."
+                    // The server answered: this account has no shared access. Say so plainly (as web Place does).
+                    else -> "You don't have access to this Home."
                 },
                 style = PantopusTextStyle.small,
                 color = PantopusColors.appTextSecondary,

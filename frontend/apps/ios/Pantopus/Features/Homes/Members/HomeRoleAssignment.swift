@@ -16,7 +16,8 @@
 //        – a non-owner may not touch a target of equal or higher rank
 //    • `POST /:id/members/:userId/role` (`backend/routes/homeIam.js:212`)
 //        – requires `members.manage`
-//        – only an owner may promote to `owner`
+//        – nobody may promote to `owner` or re-role an owner here
+//          (`mutate_home_member` → OWNERSHIP_OR_SELF_ROLE_CHANGE_FORBIDDEN; ownership changes via Owners/Transfer)
 //        – an owner may not demote themselves (transfer instead)
 //        – the new role must itself pass `assertCanMutateTarget`
 //
@@ -123,12 +124,15 @@ public enum HomeRoleAssignment {
         if isSelf { return [] }
 
         guard canMutate(actorRole: effectiveActor, targetRole: targetRole) else { return [] }
+        // The server refuses any role change for an owner (OWNERSHIP_OR_SELF_ROLE_CHANGE_FORBIDDEN): ownership changes
+        // through Owners and Transfer, so Change role offers nothing for one.
+        if targetRole?.lowercased() == "owner" { return [] }
 
         let current = HomeAssignableRole.parse(targetRole)
         return HomeAssignableRole.allCases.filter { candidate in
             if candidate == current { return false }
-            // Only an owner may promote to owner.
-            if candidate == .owner { return isOwnerActor }
+            // Never offered: the server refuses promotion to owner here; ownership changes through Owners and Transfer.
+            if candidate == .owner { return false }
             if isOwnerActor { return true }
             // Non-owner: the assigned role must sit strictly below them.
             return candidate.rank < rank(of: effectiveActor)

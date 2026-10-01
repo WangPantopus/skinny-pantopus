@@ -255,7 +255,16 @@ public final class TokenAcceptViewModel {
     }
 
     private func resolve<T: Decodable>(_: T.Type, endpoint: Endpoint) async -> Resolution<T> {
-        do { return try await .success(api.request(endpoint)) } catch APIError.notFound { return .missing } catch { return .unavailable }
+        do {
+            return try await .success(api.request(endpoint))
+        } catch APIError.notFound {
+            return .missing
+        } catch APIError.clientError(400, _) {
+            // A 400 means the link's token is malformed for this kind of invitation; like a 404, retrying can't change it.
+            return .missing
+        } catch {
+            return .unavailable
+        }
     }
 
     static func humanRole(_ raw: String) -> String {

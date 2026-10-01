@@ -20,7 +20,8 @@ public struct HomeDashboardLimitedContent: Sendable {
         if verificationKind == "ownership" {
             return "Complete your ownership verification to request access to this Home."
         }
-        return "Current access to this Home could not be confirmed. Reload to check access."
+        // The server answered: this account has no shared access. Say so plainly (as web Place does).
+        return "You don't have access to this Home."
     }
 }
 
