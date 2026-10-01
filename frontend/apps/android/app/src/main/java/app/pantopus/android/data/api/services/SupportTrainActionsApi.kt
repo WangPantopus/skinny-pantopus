@@ -19,6 +19,7 @@ import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * The *write* half of the Support Trains surface: helper reservations
@@ -133,12 +134,15 @@ interface SupportTrainActionsApi {
 
     /**
      * `DELETE /:id` — **primary only**; 409s once helpers have committed
-     * or gift-fund contributions exist. Route
-     * `backend/routes/supportTrains.js:3886`.
+     * or gift-fund contributions exist. With `draft_only=true` (the Start
+     * wizard discarding its half-built draft) a train that is no longer a
+     * draft is kept: 409 `NOT_A_DRAFT`. Route
+     * `backend/routes/supportTrains.js:4249`.
      */
     @DELETE("api/activities/support-trains/{id}")
     suspend fun deleteTrain(
         @Path("id") supportTrainId: String,
+        @Query("draft_only") draftOnly: Boolean? = null,
     ): ResponseBody
 
     /**

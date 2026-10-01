@@ -75,8 +75,10 @@ export function archiveSupportTrain(id: string) {
   return post<{ id: string; status: string }>(`${BASE}/${id}/archive`);
 }
 
-export function deleteSupportTrain(id: string) {
-  return del<{ id: string; deleted: true }>(`${BASE}/${id}`);
+// draftOnly (the Start page discarding its half-built draft) keeps a train that is no longer a
+// draft: 409 NOT_A_DRAFT.
+export function deleteSupportTrain(id: string, opts: { draftOnly?: boolean } = {}) {
+  return del<{ id: string; deleted: true }>(`${BASE}/${id}${opts.draftOnly ? '?draft_only=true' : ''}`);
 }
 
 // ─── Recipient Profile ──────────────────────────────────────────────────

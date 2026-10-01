@@ -251,10 +251,16 @@ class SupportTrainsRepository
         /** `POST /:id/archive`. Route `backend/routes/supportTrains.js:1540`. */
         suspend fun archive(supportTrainId: String): NetworkResult<Unit> = safeApiCall { actionsApi.archive(supportTrainId).close() }
 
-        /** `DELETE /:id`. Route `backend/routes/supportTrains.js:3886`. */
-        suspend fun deleteTrain(supportTrainId: String): NetworkResult<Unit> =
+        /**
+         * `DELETE /:id`. Route `backend/routes/supportTrains.js:4249`. [draftOnly] keeps a
+         * train that is no longer a draft (409 `NOT_A_DRAFT`).
+         */
+        suspend fun deleteTrain(
+            supportTrainId: String,
+            draftOnly: Boolean = false,
+        ): NetworkResult<Unit> =
             safeApiCall {
-                actionsApi.deleteTrain(supportTrainId).close()
+                actionsApi.deleteTrain(supportTrainId, draftOnly.takeIf { it }).close()
             }
 
         /** `GET /:id/organizers`. Route `backend/routes/supportTrains.js:1128`. */

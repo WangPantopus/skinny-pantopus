@@ -76,6 +76,7 @@ const {
 const { RESERVED_USERNAMES, ENTITY_TYPES, getPublishRequirements } = require('../utils/businessConstants');
 const { applyEntityTypeSideEffects } = require('../services/businessEntityService');
 const stripeService = require('../stripe/stripeService');
+const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
 const { calculateAndStoreCompleteness, calculateProfileCompleteness } = require('../utils/businessCompleteness');
 const { shouldBlockCoordinateOverwrite } = require('../utils/verifiedCoordinateGuard');
 const { generateNewBusinessSignal } = require('../services/businessSignalService');
@@ -4791,10 +4792,21 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
   }
 });
 
+// A captured payment (held, then on its way to the business) is money received; anything earlier,
+// refunded or disputed is not.
+const INVOICE_PAID_PAYMENT_STATES = new Set([
+  PAYMENT_STATES.CAPTURED_HOLD,
+  PAYMENT_STATES.TRANSFER_SCHEDULED,
+  PAYMENT_STATES.TRANSFER_PENDING,
+  PAYMENT_STATES.TRANSFERRED,
+]);
+
 /**
  * POST /invoices/:invoiceId/confirm — Confirm invoice payment succeeded
  * Called by the client after Stripe PaymentIntent confirmation succeeds.
- * Marks the invoice as "paid" with a timestamp.
+ * Marks the invoice as "paid" with a timestamp, only once Stripe says the money moved: an
+ * authorized (requires_capture) payment is captured first, and anything short of a captured
+ * payment leaves the invoice as it is.
  */
 router.post('/invoices/:invoiceId/confirm', verifyToken, async (req, res) => {
   try {
@@ -4803,7 +4815,7 @@ router.post('/invoices/:invoiceId/confirm', verifyToken, async (req, res) => {
 
     const { data: invoice, error: fetchErr } = await supabaseAdmin
       .from('BusinessInvoice')
-      .select('id, status, recipient_user_id, stripe_payment_intent_id')
+      .select('id, status, recipient_user_id, stripe_payment_intent_id, payment_id')
       .eq('id', invoiceId)
       .maybeSingle();
 
@@ -4816,23 +4828,55 @@ router.post('/invoices/:invoiceId/confirm', verifyToken, async (req, res) => {
     if (invoice.status === 'paid') {
       return res.json({ invoice }); // Idempotent
     }
-    if (!invoice.stripe_payment_intent_id) {
+    if (!invoice.stripe_payment_intent_id || !invoice.payment_id) {
       return res.status(400).json({ error: 'No payment initiated for this invoice', code: 'NO_PAYMENT' });
     }
 
-    const { data: updated, error: updateErr } = await supabaseAdmin
+    // Only Stripe can say the payment went through. Before, starting /pay and calling this
+    // without paying marked the invoice paid. Read the intent through the invoice's Payment:
+    // an authorized one is captured, and the invoice is paid only once the money is captured.
+    let paymentStatus;
+    try {
+      const synced = await stripeService.syncPaymentAuthorizationStatus(invoice.payment_id);
+      if (synced?.payment_status === PAYMENT_STATES.AUTHORIZED) {
+        await stripeService.capturePayment(invoice.payment_id);
+      }
+      const { data: payment, error: paymentErr } = await supabaseAdmin
+        .from('Payment')
+        .select('payment_status')
+        .eq('id', invoice.payment_id)
+        .maybeSingle();
+      if (paymentErr) throw paymentErr;
+      paymentStatus = payment?.payment_status || null;
+    } catch (err) {
+      logger.warn('Invoice confirm: payment check failed', { invoiceId, error: err.message });
+      return res.status(503).json({
+        error: "We couldn't confirm this payment yet. Please try again in a moment.",
+        code: 'PAYMENT_CHECK_FAILED',
+      });
+    }
+    if (!INVOICE_PAID_PAYMENT_STATES.has(paymentStatus)) {
+      return res.status(409).json({ error: "This payment hasn't gone through yet.", code: 'PAYMENT_NOT_COMPLETE' });
+    }
+
+    const { data: updatedRows, error: updateErr } = await supabaseAdmin
       .from('BusinessInvoice')
       .update({
         status: 'paid',
         paid_at: new Date().toISOString(),
       })
       .eq('id', invoiceId)
-      .select()
-      .single();
+      .neq('status', 'paid')
+      .select();
 
     if (updateErr) {
       logger.error('Failed to confirm invoice payment', { invoiceId, error: updateErr.message });
       return res.status(500).json({ error: 'Failed to update invoice status' });
+    }
+    let updated = updatedRows?.[0];
+    if (!updated) {
+      // Another confirm marked it paid first.
+      ({ data: updated } = await supabaseAdmin.from('BusinessInvoice').select('*').eq('id', invoiceId).maybeSingle());
     }
 
     res.json({ invoice: updated });

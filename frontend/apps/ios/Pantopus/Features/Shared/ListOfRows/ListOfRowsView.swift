@@ -1896,7 +1896,7 @@ private struct FABButton: View {
     /// pre-T6 sky-blue render; `.home` and `.business` swap to the
     /// matching identity tokens.
     /// Fills under white glyphs and labels: the `*Solid` twins, which stay deep in dark mode
-    /// (`home` lightens to #4ade80 there, 1.9:1 under white).
+    /// (`home` lightens to a pale green there, 1.9:1 under white).
     private var tintBackground: Color {
         switch action.tint {
         case .sky: Theme.Color.primarySolid
