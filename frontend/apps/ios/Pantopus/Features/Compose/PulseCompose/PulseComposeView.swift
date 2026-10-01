@@ -195,6 +195,7 @@ public struct PulseComposeView: View {
             onSelectRecommendRating: { viewModel.recommendRating = $0 },
             onSelectDealExpires: { viewModel.dealExpiresAt = $0 },
             onUpdateField: { viewModel.update($0, to: $1) },
+            fieldValue: { viewModel.fields[$0]?.value ?? "" },
             onPickPhotos: { showsPhotosPicker = true },
             onRemovePhoto: { viewModel.remove(photo: $0) },
             onBodyEditingEnded: { Task { await viewModel.runPrecheck() } },
