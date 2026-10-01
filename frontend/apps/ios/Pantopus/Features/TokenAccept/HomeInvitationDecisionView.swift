@@ -64,11 +64,13 @@ struct HomeInvitationDecisionView: View {
         } message: { _ in
             Text("You will be signed out. Any saved invitation decision stays protected for this account.")
         }
-        .confirmationDialog(
+        // An alert, not a confirmation dialog: the dialog's popover is dismissed by a tap outside it, and a double-tapped
+        // opener's second tap landed there while it was still opening, leaving a shown dialog whose confirm did nothing.
+        // An alert ignores outside taps (Android shows this confirmation as a modal dialog too).
+        .alert(
             confirmation?.action == .accept ? "Accept this invitation?" : confirmation?
                 .action == .decline ? "Decline this invitation?" : "Cancel the original attempt?",
             isPresented: Binding(get: { confirmation != nil }, set: { if !$0 { confirmation = nil } }),
-            titleVisibility: .visible,
             presenting: confirmation
         ) { selected in
             if let action = selected.action {
@@ -80,6 +82,7 @@ struct HomeInvitationDecisionView: View {
                     Task { await model.recover(.cancel, requestId: selected.requestId, lifetime: selected.lifetime) }
                 }.accessibilityIdentifier("homeInvitationConfirmCancel")
             }
+            Button("Keep reviewing", role: .cancel) {}
         } message: { selected in
             Text(confirmationMessage(selected))
         }
@@ -135,6 +138,8 @@ struct HomeInvitationDecisionView: View {
     }
 
     private func confirm(_ action: HomeInvitationAction, _ context: HomeInvitationDecisionContext) {
+        // A double tap's second tap must not replace the confirmation it just opened: the replaced one's button does nothing.
+        guard confirmation == nil else { return }
         confirmation = Confirmation(action: action, reviewedToken: context.decisionToken, requestId: "", lifetime: model.generation)
     }
 
@@ -181,6 +186,7 @@ struct HomeInvitationDecisionView: View {
                 )
                 }
                 Button("Cancel original attempt") {
+                    guard confirmation == nil else { return }
                     confirmation = Confirmation(action: nil, reviewedToken: "", requestId: draft.requestId, lifetime: model.generation)
                 }.frame(minHeight: 44).disabled(model.isWorking).accessibilityIdentifier("homeInvitationCancel")
             }

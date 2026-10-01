@@ -172,6 +172,8 @@ public struct RootTabView: View {
                     onDeclined: { pendingInviteToken = nil }
                 )
             )
+            // A newer link while this one is open must load its own token, not keep the first link's state.
+            .id(item.id)
         }
     }
 
