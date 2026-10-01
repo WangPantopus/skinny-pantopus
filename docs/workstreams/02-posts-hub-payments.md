@@ -7,7 +7,160 @@
 > The former Stream 1's full history — evidence, decisions, batches and the pre-split acceptance accounting — stays in [`former-stream1-gigs-payments.md`](former-stream1-gigs-payments.md), frozen at the split. Its "Split reconciliation" proves that every checklist item went to exactly one of the two streams (230 = 122 + 108).
 > **Not this stream:** the *former* Stream 2 (Home and household) is now Streams 3–4 ([`03-home-access-residency.md`](03-home-access-residency.md), [`04-place-records-money-mail.md`](04-place-records-money-mail.md); its history is [`former-stream2-home-household.md`](former-stream2-home-household.md)). Stream 5 (formerly Stream 3) is also separate.
 
-## CURRENT RESUME — HANDOFF 2026-09-30T21:31Z (successor: start here)
+## CURRENT RESUME — HANDOFF 2026-10-01T18:09:59Z (successor: start here)
+
+The session "Stream 2: Posts, Hub and payments" (the 2026-09-30 evening successor) handed over at the user's request.
+
+**Nothing is in progress:**
+- all code is pushed;
+- two sealed PRs wait in Stream 1's merge queue;
+- every fixture is cleaned;
+- the emulator is stopped and device slot 4 released.
+
+The next-agent prompt is [`NEXT-STREAM2-PROMPT-2026-10-01-evening.md`](NEXT-STREAM2-PROMPT-2026-10-01-evening.md). Newest dated text wins. **Re-verify every SHA, PR, slot and process live.**
+
+### 1. Where things stand (checked at 18:00–18:10Z)
+- **Master** is `f88f74641` or later.
+- **Open PRs (both Stream 2's, sealed, in Stream 1's hub queue table, coordination `3d1b86e6d`):**
+  1. [#1412](https://github.com/WangPantopus/skinny-pantopus/pull/1412): **web dialogs are no longer covered by the app's tab bar, header or floating buttons.**
+     - Head `7b9ad6b372afae1e5f69784766692d96592675b6`. Seal `6deeee3201feeb0d21dca74cd8d61721842a3b8561047be2af319c7ec7c1b3dd` (bundle `20261001-stream2-web-overlays-under-shell-r1`).
+     - Waits for Stream 1's successor's web check of Pulse Preferences at 390 px.
+  2. [#1413](https://github.com/WangPantopus/skinny-pantopus/pull/1413): **withdraw client follow-up to #1359.** A settling withdrawal says so; the wallet re-reads; the held amount can be retried with its key, also under $1.00.
+     - Head `8a98dc8946eeffc435b73a862747b9c5ceff5b1b`. Seal `f07c5eb9d40afe71f9c942c086b8ada9746db2c8888aa9b6ec521a40cdecd903` (bundle `20261001-stream2-money-withdraw-pending-message-r1`).
+     - Waits for Stream 1's successor's Android emulator cell, plus iOS if the passcode prompt allows.
+  - **Merging:** Stream 1 is the only merger, and it asked again on 2026-10-01 that streams not merge their own PRs. Send heads and seals; don't merge.
+- **Merged on 2026-10-01 by this session's work** (batch → PR):
+  - 302: #1363 (racy task actions);
+  - 306: #1359 (withdraw idempotency), #1360 (Connections general form), #1365 (post toggles), #1377 (Feed toast);
+  - 307: #1379 (wallet_credit replay, migration `20261001135000`), #1383 (Android reply Delete dialog);
+  - 310: #1391 (web video re-send attached once);
+  - 315 (#1409, master `5051c2b79`): #1407 (iOS composer fast typing; Stream 1's iOS cell passed on candidate 31b).
+- **Checklists (section below):** U02 81 done + 2 boundary; U03 55 done + 2 not offered; U04 16 done. Nothing to do.
+- **Stream 5's idempotency audit:** every Stream 2 row is closed. #1359, #1363, #1365 and #1391 are merged. `connect/account` and `payment-sheet-add-card` are provider-bound or benign, recorded and not changed.
+- **Inventory** (living, unsealed): `…/audits/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md`, updated at this handoff.
+
+### 2. First steps
+1. **Read-only checks:**
+   - `date -u`;
+   - `git fetch`, master, `gh pr view 1412 1413`;
+   - `zsh /private/tmp/pantopus-tools/heavy-slot.sh status`;
+   - `zsh /private/tmp/pantopus-tools/device-slot.sh status` (zsh only);
+   - `ListAgents`.
+
+   Introduce yourself to Stream 1, or its successor, as "Stream 2: Posts, Hub and payments". Stream 1's handoff is `NEXT-STREAM1-PROMPT-2026-10-01-evening.md`.
+2. **If Stream 1's successor reports a problem with #1412 or #1413:** reproduce, fix on the same branch, rerun the affected evidence, then re-scan and re-seal: `python3 $R/secret-scan.py <bundle> && python3 $R/seal.py …`, always with `&&`.
+   - #1412's branch is checked out in worktree `stream2-posts-hub-payments-29bc9a`, which Next on 18169 serves.
+   - #1413's head is detached in the build worktree `stream-2-posts-hub-payments-76db95`.
+3. **Before testing wallet, chat or home code, bring the runtime DB up to master's migrations** (§4).
+4. **Then the backlog (§3), in order.** Reproduce before repairing, make the smallest repair, verify end to end in the real app, seal, and send the head and seal to Stream 1.
+
+### 3. Backlog (ordered; my recommendation)
+1. **Web task page `/app/gigs/:id` scrolls sideways at 390 px** (layout; known-crew task lifecycle).
+   - The page has `grid lg:grid-cols-3` without `grid-cols-1`, so the status timeline's min-content (422 px) widens the single column: scrollWidth 438 at a 390 px viewport.
+   - `gigs-v2/[id]` already uses `grid grid-cols-1 lg:grid-cols-3`, and `GigTimeline`'s step row is `overflow-x-auto` by design.
+   - **Repair:** add `grid-cols-1`. Show scrollWidth before/after at 390, with the timeline scrolling inside its card, and 768/1280 unchanged.
+   - **Fixtures:** `overlay-fixtures.py <bundle> create`, or one task through `new_task`. Clean by exact id, and snapshot the User counters first (§6).
+2. **Pulse Preferences "Show in Connections" toggle has no accessible name** (web feed, the political-content switch). Name it (for example `role="switch"`, `aria-checked`, and `aria-labelledby` the visible text), with an axe before/after. Don't change its look.
+3. **Unportalled overlays that only lack backdrop extent** (Withdraw, Hub Today's Change location, the started task's Cancel, the short post editor). Stream 1's rule 1 leaves them; act only if Stream 1 sets a broader policy. A shared portaling Dialog/Sheet primitive is Stream 1's long-term note, not a PR.
+4. **GigPaymentSetup on phones:** unverified (provider-bound: needs a real Stripe client secret).
+5. **Carried, act only if needed:**
+   - align the unscheduled SQL twin `auto_archive_expired_posts()` with the 32 h grace if it's ever scheduled;
+   - the radon line's EPA link needs a client field;
+   - after launch: true event and deal instants with the poster's zone.
+6. **Then keep sweeping in-scope workflows** (standing direction):
+   - a 390 px overflow scan of the Stream 2 web pages: Stream 5's scan covered 45 pages, not the task page;
+   - a re-run of the schema and route drift scanners on current master for posts, hub, wallet, payments and gigs (tools in `.pantopus-recovery/stream3-runtime-kit/tools/drift-scanners/`; treat hits as candidates).
+
+### 4. Runtime (left running for you; verify live)
+- **Stack** `pantopus-stream2-posts-20260930` (7 containers; workdir `/private/tmp/pantopus-stream2-posts-db-20260930`):
+  - API 64581, Postgres 64582, shadow 64580. Range 64580–64589 is Stream 2's.
+  - **Not** `pantopus-stream2-native-resume-r2`: that's the former Home stream's, now Streams 3 and 4. Never touch it.
+- **Migrations lag master:**
+  - The migration tool's records end at `20260930184000`.
+  - `20261001134000`'s functions (`set_post_like`, `set_comment_like`, `set_post_repost`, `record_post_share`) were applied with psql and aren't recorded.
+  - Master also has `20261001100000`, `130000`, `131000`, `132000` (`wallet_debit` replay), `135000` (`wallet_credit_before_gig_stop` IF FOUND) and `137000` (home ownership). They aren't recorded, and 132000's and 135000's fixes are not in this DB.
+  - Apply the missing ones in order (as a single transaction each, the way CI does), or rebuild the stack from master, before testing wallet, chat or home code.
+- **Private runtime** `R=/private/tmp/pantopus-stream2-runtime-20260930`. PIDs are in `PIDS.txt`; logs are in `logs/`.
+  - **Never print or copy** `.keys.env`, `.local-secrets.env`, `.fixture-password`, `.webhook-secret`, `.tokens-*` or `.webstate-*`.
+  - **Backend 18160**, pid 82064: master `38c214b50`, restarted 16:50:03Z with `zsh $R/restart-backend.sh` from worktree 29bc9a. The opt-in in-memory S3 (`S3_STUB=1 zsh $R/restart-backend.sh`) is off. Egress and Stripe guards are on.
+  - **Fault proxy 18168**, pid 21167: no rules (`fault.py clear` at 18:02:17Z).
+  - **Next dev 18169**, pid 64140: serves worktree 29bc9a, currently on `claude/stream2-web-overlays-above-shell`, with HMR.
+- **Backup kit:** `.pantopus-recovery/stream2-posts-runtime-kit/runtime/` (refreshed at this handoff; scripts only).
+  - macOS's tmp cleaner deletes `/private/tmp` files untouched for 3 days at local midnight (07:00Z). Restore missing scripts from the kit.
+  - Never copy secrets; recreate them as the runtime first made them.
+- **Fixtures:** Alice, Bob and Dana `f9300c02-0000-4000-8000-00000000000{1,2,3}`. Now: Post 3 (seed), Gig 0, Payment 0, PostComment 0, Notification 0, WalletTransaction 0, StripeAccount 0.
+  - Sign-in bookkeeping remains (AuthSession 284, AuthSecurityEvent 314, AuthDpopJti 86). Remove it at the final teardown only.
+  - **Not restorable:** aggregate counters on the synthetic users, accumulated by task-fixture runs: Bob `User.gigs_completed` 13; Alice `no_show_count` 3, `reliability_score` 55.00.
+- **Helpers new this session (runtime dir; also in the kit):**
+  - `overlay-run.py <bundle> <phase> <names> [widths]`: dialog probe at 390/768/1280.
+  - `overlay-taps.py <bundle> <names>`: coordinate taps plus Escape, backdrop, focus and scroll-lock checks.
+  - `overlay-fixtures.py <bundle> create|review|noshow-task|event-post|cleanup`: known-crew task fixtures through the API; cleanup by exact id plus a snapshot diff.
+  - `webcap.mjs` steps `tap: [x,y]` and `tapEval: "<js returning [x,y]>"` (real mouse clicks).
+  - `withdraw-fixture.py <bundle> baseline|setup|state|cleanup`, `racy-tasks.py`, `s3-stub.cjs`.
+  - `native-build-candidate-q2.sh`: an Android-only candidate template (local merge in 76db95, lint, assemble, unit tests, APK to `$R/apk/`).
+  - **Never copy** `run-node.sh`, `api.py`, `webcap.mjs`, `android-switch.py` or network logs into bundles. Redact token, password and session paths in any runner copy.
+- **Devices:**
+  - `emulator-5560` (AVD `pantopus_s2`) was stopped at 18:06:18Z, and **device slot 4 released**. The AVD and its app data are kept; Alice is signed in, and the font scale is 1.0.
+  - To use it again: `zsh /private/tmp/pantopus-tools/device-slot.sh acquire "stream2: pantopus_s2 emulator-5560 <purpose>"`, then `$R/emu-boot.sh`, or boot headless with `-port 5560 -no-window -no-snapshot -crash-report-mode disabled -no-metrics`.
+  - Never consent to crash dialogs. Check that the Password field has focus before typing a credential.
+  - Kept APK: `$R/apk/app-debug-e64ea253e.apk` (candidate q2 = master `38c214b50` + #1413's head). Build from master for new work.
+  - No iOS simulator access in this stream; Stream 1 runs Stream 2's iOS cells.
+- **Worktrees:**
+  - `stream2-posts-hub-payments-29bc9a`: the session worktree, served by Next.
+  - `stream-2-posts-hub-payments-76db95`: the build worktree, detached at `8a98dc894`.
+  - Never switch a worktree while a queued native build may compile it. Heavy slot: nothing of Stream 2's held or queued.
+- **Teardown** (only when Stream 2's runtime is ended):
+  1. Stop Next, proxy and backend by PID.
+  2. `docker stop` the 7 `*_pantopus-stream2-posts-20260930` containers, never any other.
+  3. Delete the sign-in bookkeeping rows.
+  4. The emulator is already stopped.
+
+### 5. Decisions recorded this session (per the user's standing direction)
+1. **#1363:** approve and withdraw get the same once-only treatment as reject; a same-answer re-send replies 200, not an error.
+2. **Provider-bound, not changed:** `connect/account` (orphan Stripe account race); `payment-sheet-add-card` (orphan SetupIntent, no money).
+3. **#1379:** the inner `wallet_credit_before_gig_stop` stays owner-only, with no service_role GRANT.
+4. **#1377:** the Feed toast keeps `max-w-[50vw]`, so wraps don't change, and lifts above the phone tab bar with `--fab-lift` (Stream 1 approved).
+5. **#1391:** video keys are content-addressed per owner+post (Stream 1's condition). The in-memory S3 is opt-in and local.
+6. **#1413:** a retry may send exactly the pending amount even when it exceeds what's available, or the balance is under $1.00; the server settles the same key without a new debit. A sub-$1 "withdraw all" affordance stays with Stream 1's server sweep (it would be a design change).
+7. **#1412:**
+   - per-file portals, not an AppShell change (Stream 1);
+   - portal only overlays with a covered control;
+   - z-50 → z-[60] (#1277's layer);
+   - the task dialogs now centre in the viewport (12 px higher at 844 px tall; the parent's `space-y-6` margin had pushed their backdrop down).
+
+### 6. Lessons
+- **Overlay probes:**
+  - find an overlay by its computed inset, not its box: a parent's `space-y-*` margin pushes a fixed overlay down;
+  - keep coordinate taps 8 px inside rounded controls;
+  - scope finders to the dialog: the task page has its own "Mark Complete";
+  - keep the mouse off a collapsed sidebar rail at 768: hover expands it over the page.
+- **Android capture:** `uiautomator dump` (and so `aui.py tap`) can't run while `uiautomator events` captures. Tap by coordinates during a capture.
+- **webcap** sometimes takes 50 s to exit on task pages, and once didn't exit within 240 s. Rerun the capture.
+- **Row-count snapshots miss aggregate counters** (`User.gigs_completed`, `no_show_count`, `reliability_score`). Record them before task-lifecycle runs if they must be restored.
+- **Android detekt:** CyclomaticComplexMethod fails at 18, ComplexCondition at 4, ReturnCount max 4. Extract helpers, and rebuild after every lint fix.
+- **Gradle:** a `FROM-CACHE` ktlint result is a valid pass for identical inputs.
+- **Migration proofs:** zsh `echo "\\echo"` produces ESC; that swallowed a `BEGIN` once (#1379's incident). Generate SQL from Python and run it with `--single-transaction` and a final `SELECT 1/0`.
+
+### 7. Evidence from this session
+Bundles are in `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`. The seal is the MANIFEST sha256.
+
+| Bundle | Seal | PR |
+|---|---|---|
+| `20261001-stream2-web-overlays-under-shell-r1` | `6deeee32` | #1412 (open) |
+| `20261001-stream2-money-withdraw-pending-message-r1` | `f07c5eb9` | #1413 (open) |
+| `20261001-stream2-posts-ios-compose-live-text-r1` | `d679d696` | #1407 (b315) |
+| `20261001-stream2-posts-video-upload-dedupe-r1` | `f8f8e4b4` | #1391 (b310) |
+| `20261001-stream2-posts-reply-delete-dialog-r1` | `e6e0f085` | #1383 (b307) |
+| `20261001-stream2-money-wallet-credit-replay-r1` | `065c4d46` | #1379 (b307) |
+| `20261001-stream2-web-feed-toast-centre-r1` | `c75c461c` | #1377 (b306) |
+| `20261001-stream2-posts-toggle-state-r1` | `55090346` | #1365 (b306) |
+| `20261001-stream2-posts-connections-general-form-r1` | `bd3132d0` | #1360 (b306) |
+| `20261001-stream2-money-withdraw-idempotency-r1` | `206c18bd` | #1359 (b306) |
+| `20261001-stream2-tasks-racy-actions-r1` | `a01b71f7` | #1363 (b302) |
+
+Stream 1's iOS evidence: `20261001-stream1-cand30-device-cells-r1` (`d5c78dd1`) and `20261001-stream1-cand31-device-cells-r1` (`2a8dd3c0`).
+
+## EARLIER RESUME — HANDOFF 2026-09-30T21:31Z (superseded by the handoff above)
 
 > **2026-09-30T23:13Z:** the successor session is active; #1096 merged in batch 220, so step 2 below is done. Live progress is in CURRENT STATE.
 
@@ -173,9 +326,16 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T17:32:15Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T18:09:59Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T17:32:15Z):** master is `38c214b50` or later.
+- **Latest (2026-10-01T18:09:59Z): HANDED OFF** at the user's request. See "CURRENT RESUME — HANDOFF 2026-10-01T18:09:59Z" above and [`NEXT-STREAM2-PROMPT-2026-10-01-evening.md`](NEXT-STREAM2-PROMPT-2026-10-01-evening.md).
+  - Since 17:32Z:
+    - #1407 (iOS composer) merged in batch 315;
+    - #1412 (web dialogs above the app shell; seal `6deeee32`) and #1413 (withdraw client follow-up; seal `f07c5eb9`) are open, sealed and in Stream 1's queue;
+    - the overlay and withdraw fixtures are cleaned;
+    - the emulator is stopped and slot 4 released;
+    - the runtime kit is refreshed.
+- **Earlier (2026-10-01T17:32:15Z):** master is `38c214b50` or later.
   - **Merged since the last entry:**
     - batch 306 (#1384, 16:09:31Z): [#1359](https://github.com/WangPantopus/skinny-pantopus/pull/1359) withdraw idempotency, [#1360](https://github.com/WangPantopus/skinny-pantopus/pull/1360) Connections general form, [#1365](https://github.com/WangPantopus/skinny-pantopus/pull/1365) post toggles, [#1377](https://github.com/WangPantopus/skinny-pantopus/pull/1377) Feed toast;
     - batch 307 (#1385, 16:19:05Z): [#1379](https://github.com/WangPantopus/skinny-pantopus/pull/1379) wallet_credit replay (migration `20261001135000`) and [#1383](https://github.com/WangPantopus/skinny-pantopus/pull/1383) Android reply Delete confirmation survives a theme or font change (seal `e6e0f085`);
