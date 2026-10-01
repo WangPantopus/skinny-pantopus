@@ -173,9 +173,39 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T06:36:03Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T07:32:23Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T06:36:03Z):** master is `12013a711` (batch 271).
+- **Latest (2026-10-01T07:32:23Z):** master is `dc878ddb5`.
+  - **Merged:** batch 275 (master `008613b81`): [#1267](https://github.com/WangPantopus/skinny-pantopus/pull/1267), web sidebar **"My posts"**. Stream 1 approved a footer button above Settings: desktop expanded and collapsed rail, plus the mobile drawer. Seal `d6b8d91b`; light/dark, keyboard, axe 0.
+    - Web users reach their posts and Saved list in-app again.
+  - **Queued by Stream 1:** [#1273](https://github.com/WangPantopus/skinny-pantopus/pull/1273), web My pulse → feed cache, plus the feed like reconcile. Head `6200b4b37`, seal `568930b2`. Stream 1 said no split is needed.
+    - **Reproduced on `008613b81`:** after a like or Remove in My pulse (cards or panel), the feed after Back (within 30 s) still showed the old state. W1's stale "Remove from saved" click re-saved it ("Post saved").
+    - **Second defect:** the feed's like toggle ignored the server. The card read "Unlike post 1" while the server had 0 (after My pulse, and after another device's like).
+    - **After:** the feed is truthful after Back, and each click does what its label says.
+  - **Sent, iOS cell pending:** [#1275](https://github.com/WangPantopus/skinny-pantopus/pull/1275), native Saved → Remove now sends the existing refresh signal after the server confirms. Head `bf801b5b5`, the same tree as the tested `22d669668`; seal `70792e02`.
+    - Android before (`1b4b001b8`): the Pulse card kept "Remove bookmark", and its tap re-saved the post.
+    - Android after (`22d669668`): the card reads "Save post", and its tap saves, as labelled.
+    - Build: Android ktlint, detekt, assemble and MyPostsViewModelTest pass; iOS reports TEST BUILD SUCCEEDED.
+  - **With Stream 1:** #1249 (FAB clearance) and #1259 (post-screen sync) are in its cand20, with Stream 5's #1270.
+  - **Decisions:**
+    1. The web entry is a sidebar footer button (Stream 1-approved).
+    2. My pulse patches feed caches only with server-confirmed values: no refetch, so the feed keeps its scroll.
+    3. The feed like reconcile ships in #1273.
+    4. Edit/delete staleness from My pulse is a noted follow-up: lower harm, known only from the code, not reproduced.
+    5. Native Saved Remove reuses the refresh signal, sent only after server confirmation.
+  - **Runtime:**
+    - Backend 18160 restarted on `008613b81` at 06:57:58Z. Worktree 29bc9a is on `claude/stream2-posts-web-my-pulse-feed-sync` (`6200b4b37`), and Next 18169 serves it.
+    - The emulator is stopped and the device slot released. APK `22d669668` is kept until #1275's iOS cell.
+    - No live fixtures: both bundles are cleaned, with 0 fixture posts left (`db-ORDER-NOTE.txt`).
+  - **tmp cleaner** (Stream 1/5 warning: /private/tmp files untouched for 3 days go at 07:00Z):
+    - My runtime is intact (0 files older than 2 days).
+    - Its scripts, without secrets, are copied to `.pantopus-recovery/stream2-posts-runtime-kit` (07:10Z).
+    - Touch the runtime before 2026-10-03T07:00Z if this session still runs.
+  - **Lessons:**
+    - A webcap step label must not contain an apostrophe, because the eval is single-quoted.
+    - Alice's "searched" area lapses after 24 h (resolve ignores a stale unpinned area). Web runners now give the browser coordinates; the feed's GPS fallback uses them with no server write.
+  - **Next:** the open inventory triage "visibility-only edit can't hide a Place post" (check whether any client offers it first), then a sweep of Hub/Today and money screens.
+- **Earlier (2026-10-01T06:36:03Z):** master is `12013a711` (batch 271).
   - **Building** (heavy-slot queue position 2): candidate `22d669668` = branch `claude/stream2-posts-saved-remove-sync` (head `bf801b5b5`, same tree). After a confirmed unsave in My posts → Saved, both apps send the existing refresh signal.
     - Android reproduced on master's Saved code: removing A1 in Saved left the Nearby-tab Pulse card at "Remove bookmark", and its tap re-saved A1 ("Saved to your bookmarks.").
     - The fixtures stay live for the after-run.
