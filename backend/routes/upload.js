@@ -19,6 +19,7 @@ const imageResizeService = require('../services/marketplace/imageResizeService')
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
 const { requirePersonaEnabled } = require('../utils/featureFlags');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
+const { syncLocalProfileFromAccount } = require('../utils/identityProfiles');
 
 // Rate limit: 30 uploads per 15 minutes per IP
 const uploadLimiter = rateLimit({
@@ -287,6 +288,14 @@ router.post('/profile-picture', uploadLimiter, verifyToken, upload.single('file'
     if (error) {
       // Rollback: delete uploaded file
       await s3.deleteFromS3(key);
+      return res.status(500).json({ error: 'Failed to update profile picture' });
+    }
+
+    // Posts, comments and search show the LocalProfile's copy of the photo.
+    try {
+      await syncLocalProfileFromAccount(updatedUser, ['profile_picture_url']);
+    } catch (syncErr) {
+      logger.error('Profile picture local profile sync error', { error: syncErr.message, userId });
       return res.status(500).json({ error: 'Failed to update profile picture' });
     }
 

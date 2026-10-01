@@ -216,6 +216,24 @@ async function ensureLocalProfile(userId) {
   return created;
 }
 
+// ensureLocalProfile copies the account's name, photo and bio into the LocalProfile, and no app edits them there, so
+// an account edit has to move the copies too; otherwise posts, comments, search and the privacy preview keep the old
+// ones. `changed` lists the account columns the edit wrote (name, bio, profile_picture_url); only their copies move.
+// A user without a LocalProfile is left alone: it is created from the current account when first needed.
+async function syncLocalProfileFromAccount(user, changed) {
+  const updates = {};
+  if (changed.includes('name')) updates.display_name = displayNameFromUser(user);
+  if (changed.includes('bio')) updates.bio = user.bio || null;
+  if (changed.includes('profile_picture_url')) updates.avatar_url = user.profile_picture_url || null;
+  if (Object.keys(updates).length === 0) return;
+  updates.updated_at = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from('LocalProfile')
+    .update(updates)
+    .eq('user_id', user.id);
+  if (error) throw error;
+}
+
 async function getActivePersonaForUser(userId) {
   const { data } = await supabaseAdmin
     .from('PublicPersona')
@@ -574,6 +592,7 @@ module.exports = {
   sanitizeHandle,
   displayNameFromUser,
   ensureLocalProfile,
+  syncLocalProfileFromAccount,
   getLocalProfileByUserId,
   getLocalProfileByHandle,
   getActivePersonaForUser,
