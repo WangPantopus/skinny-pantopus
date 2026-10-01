@@ -74,13 +74,13 @@ interface InviteTeammateWizardDeps {
  * Presents the Invite Teammate wizard as a full-screen Dialog. Cloned from
  * `InviteMemberWizardSheet`.
  *
- * @param onClose returns the created [BusinessSeatDto] on submit, `null`
- *   when the user dismisses without saving
+ * @param onClose returns the created [BusinessSeatDto] and its invite link on
+ *   submit, `null`s when the user dismisses without saving
  */
 @Composable
 fun InviteTeammateWizardSheet(
     businessId: String,
-    onClose: (BusinessSeatDto?) -> Unit,
+    onClose: (seat: BusinessSeatDto?, inviteLink: String?) -> Unit,
 ) {
     val context = LocalContext.current
     val repo =
@@ -101,17 +101,17 @@ fun InviteTeammateWizardSheet(
             null -> Unit
             InviteTeammateEvent.Dismiss -> {
                 viewModel.acknowledgeEvent()
-                onClose(null)
+                onClose(null, null)
             }
             is InviteTeammateEvent.Submitted -> {
                 viewModel.acknowledgeEvent()
-                onClose(event.seat)
+                onClose(event.seat, event.inviteLink)
             }
         }
     }
 
     Dialog(
-        onDismissRequest = { onClose(null) },
+        onDismissRequest = { onClose(null, null) },
         properties =
             DialogProperties(
                 usePlatformDefaultWidth = false,

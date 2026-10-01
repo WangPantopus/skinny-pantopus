@@ -28,6 +28,8 @@ public struct BusinessTeamView: View {
     @State private var overflowTarget: BusinessTeamMemberRow?
     @State private var removeTarget: BusinessTeamMemberRow?
     @State private var cancelTarget: BusinessTeamPendingRow?
+    /// A short confirmation over the list (after an invite link is copied).
+    @State private var toast: String?
 
     private let businessId: String
 
@@ -60,6 +62,19 @@ public struct BusinessTeamView: View {
         .sheet(item: $activeSheet) { sheet in
             sheetBody(sheet)
         }
+        .overlay(alignment: .bottom) {
+            if let toast {
+                ToastView(message: ToastMessage(text: toast, kind: .success))
+                    .padding(.bottom, Spacing.s16)
+                    .accessibilityIdentifier("businessTeam.toast")
+                    .transition(.opacity)
+                    .task {
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        self.toast = nil
+                    }
+            }
+        }
+        .pantopusAnimation(.componentState, value: toast)
         .confirmationDialog(
             overflowTarget?.name ?? "",
             isPresented: overflowBinding,
@@ -172,9 +187,18 @@ public struct BusinessTeamView: View {
     @ViewBuilder private func sheetBody(_ sheet: TeamSheet) -> some View {
         switch sheet {
         case .invite:
-            InviteTeammateWizardView(businessId: businessId) { seat in
+            InviteTeammateWizardView(businessId: businessId) { seat, inviteLink in
                 activeSheet = nil
-                if let seat { viewModel.handleInvited(seat) }
+                guard let seat else { return }
+                viewModel.handleInvited(seat)
+                // The invitee joins only through this link, so it goes straight to the clipboard.
+                if let inviteLink {
+                    UIPasteboard.general.string = inviteLink
+                    let name = [seat.displayName, seat.inviteEmail]
+                        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .first { !$0.isEmpty } ?? "them"
+                    toast = "Invite link copied — share it with \(name)"
+                }
             }
         case let .changeRole(row):
             ChangeRoleSheet(
