@@ -385,7 +385,7 @@ internal data class PulseComposeContentState(
     val isVisitorPost: Boolean = false,
     val announceAudience: PulseAnnounceAudience = PulseAnnounceAudience.Neighbors,
     val safetyAlertKind: PulseSafetyAlertKind = PulseSafetyAlertKind.Theft,
-    val askCategory: PulseAskCategory = PulseAskCategory.Handyman,
+    val askCategory: PulseAskCategory? = PulseAskCategory.Handyman,
     val recommendRating: Int = 5,
     val fields: Map<PulseComposeField, FormFieldState> = emptyMap(),
     val photos: List<PulseComposePhoto> = emptyList(),
@@ -873,7 +873,7 @@ private fun IntentSpecificSection(
 @Composable
 private fun AskSection(
     fields: Map<PulseComposeField, FormFieldState>,
-    category: PulseAskCategory,
+    category: PulseAskCategory?,
     onUpdateField: (PulseComposeField, String) -> Unit,
     onSelectCategory: (PulseAskCategory) -> Unit,
 ) {
@@ -888,7 +888,8 @@ private fun AskSection(
         ChipRow(
             label = "Category",
             options = PulseAskCategory.entries.map { it.key to it.label },
-            activeKey = category.key,
+            // No category: no chip is active.
+            activeKey = category?.key.orEmpty(),
             identifierPrefix = "composePulseAskCategory",
             onSelect = { key -> onSelectCategory(PulseAskCategory.entries.first { it.key == key }) },
         )

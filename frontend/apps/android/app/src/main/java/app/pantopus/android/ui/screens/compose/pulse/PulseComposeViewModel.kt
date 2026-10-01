@@ -317,8 +317,9 @@ class PulseComposeViewModel
         private val _safetyAlertKind = MutableStateFlow(PulseSafetyAlertKind.Theft)
         val safetyAlertKind: StateFlow<PulseSafetyAlertKind> = _safetyAlertKind.asStateFlow()
 
-        private val _askCategory = MutableStateFlow(PulseAskCategory.Handyman)
-        val askCategory: StateFlow<PulseAskCategory> = _askCategory.asStateFlow()
+        // New Asks start on Handyman; an edited Ask posted without a category has none selected.
+        private val _askCategory = MutableStateFlow<PulseAskCategory?>(PulseAskCategory.Handyman)
+        val askCategory: StateFlow<PulseAskCategory?> = _askCategory.asStateFlow()
 
         private val _recommendRating = MutableStateFlow(DEFAULT_RECOMMEND_RATING)
         val recommendRating: StateFlow<Int> = _recommendRating.asStateFlow()
@@ -369,7 +370,7 @@ class PulseComposeViewModel
         private var baselineLostFoundKind: PulseLostFoundKind = PulseLostFoundKind.Lost
         private var baselineLostFoundContactPref: PulseLostFoundContactPref = PulseLostFoundContactPref.Dm
         private var baselineAnnounceAudience: PulseAnnounceAudience = PulseAnnounceAudience.Neighbors
-        private var baselineAskCategory: PulseAskCategory = PulseAskCategory.Handyman
+        private var baselineAskCategory: PulseAskCategory? = PulseAskCategory.Handyman
         private var baselineRecommendRating: Int = DEFAULT_RECOMMEND_RATING
 
         private var postingTarget: PulsePostingTarget? = null
@@ -1034,9 +1035,9 @@ class PulseComposeViewModel
                 PulseComposeIntent.Ask -> {
                     seedField(PulseComposeField.Title, post.title.orEmpty())
                     seedField(PulseComposeField.Body, post.content)
-                    post.serviceCategory
-                        ?.let { raw -> PulseAskCategory.entries.firstOrNull { it.key == raw } }
-                        ?.let { _askCategory.value = it }
+                    // The post's own category, or none: an Ask posted without one doesn't show the create default.
+                    _askCategory.value =
+                        post.serviceCategory?.let { raw -> PulseAskCategory.entries.firstOrNull { it.key == raw } }
                     baselineAskCategory = _askCategory.value
                 }
                 PulseComposeIntent.Recommend -> {
@@ -1151,7 +1152,7 @@ class PulseComposeViewModel
                         content = bodyValue,
                         title = titleValue.ifEmpty { null },
                         // Only a category the author picked: a post without one isn't given the default.
-                        serviceCategory = _askCategory.value.takeIf { it != baselineAskCategory }?.key,
+                        serviceCategory = _askCategory.value?.takeIf { it != baselineAskCategory }?.key,
                     )
                 PulseComposeIntent.Recommend -> {
                     val business = trimmedValue(PulseComposeField.RecommendBusiness)
@@ -1208,7 +1209,7 @@ class PulseComposeViewModel
                             postType = postType,
                             visibility = vis,
                             postAs = postAs,
-                            serviceCategory = _askCategory.value.key,
+                            serviceCategory = _askCategory.value?.key,
                             audience = audience,
                             purpose = purposeTag,
                         )
