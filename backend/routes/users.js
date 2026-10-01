@@ -2604,11 +2604,12 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
       return res.status(500).json({ error: 'Failed to update profile' });
     }
 
-    // Posts, comments and search show the LocalProfile's copy of the name and bio.
-    const { syncLocalProfileFromAccount } = require('../utils/identityProfiles');
+    // Posts, comments and search show the LocalProfile's copy of the name and bio, and of the city and state.
+    const { syncLocalProfileFromAccount, syncLocalProfileLocality } = require('../utils/identityProfiles');
     const localProfileChanges = ['name', 'bio'].filter((column) => updates[column] !== undefined);
     try {
       await syncLocalProfileFromAccount(userData, localProfileChanges);
+      if (updates.city !== undefined || updates.state !== undefined) await syncLocalProfileLocality(userId);
     } catch (syncErr) {
       logger.error('Profile update local profile sync error', { error: syncErr.message, userId });
       return res.status(500).json({ error: 'Failed to update profile' });

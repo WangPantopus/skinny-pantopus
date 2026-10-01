@@ -132,6 +132,32 @@ async function canExposePublicLocality(userId) {
   return data?.show_neighborhood === 'public';
 }
 
+// The LocalProfile's public city and state are copies too, shown only while the Neighborhood privacy setting is
+// public (ensureLocalProfile). Re-derive them the same way when that setting or the account's city or state changes,
+// so "Only me" hides the place everywhere and a move shows the new one. Hidden also clears public_neighborhood,
+// which nothing derives (migration 20261001100000 does the same for copies already out of step).
+async function syncLocalProfileLocality(userId) {
+  const { data: user, error: userError } = await supabaseAdmin
+    .from('User')
+    .select('city, state')
+    .eq('id', userId)
+    .maybeSingle();
+  if (userError) throw userError;
+  const exposeLocality = await canExposePublicLocality(userId);
+  const updates = {
+    show_neighborhood: exposeLocality,
+    public_city: exposeLocality ? (user?.city || null) : null,
+    public_state: exposeLocality ? (user?.state || null) : null,
+    updated_at: new Date().toISOString(),
+  };
+  if (!exposeLocality) updates.public_neighborhood = null;
+  const { error } = await supabaseAdmin
+    .from('LocalProfile')
+    .update(updates)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
 async function getLocalProfileByUserId(userId) {
   const { data } = await supabaseAdmin
     .from('LocalProfile')
@@ -613,6 +639,7 @@ module.exports = {
   verifiedResidentUserIds,
   normalizeHandle,
   sanitizeHandle,
+  syncLocalProfileLocality,
   displayNameFromUser,
   ensureLocalProfile,
   syncLocalProfileFromAccount,
