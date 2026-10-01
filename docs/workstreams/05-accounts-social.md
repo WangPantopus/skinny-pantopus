@@ -3,11 +3,37 @@
 > **Renumbering (user direction, 2026-09-30):** the former Streams 1 and 2 are each being split in two (Streams 1–4), so this stream, formerly **Stream 3**, is now **Stream 5**. Its scope, accepted evidence, decisions, kit and runtime are unchanged. This file moved from `03-accounts-social.md`.
 > - Everything below dated before 2026-09-30 keeps the old name ("Stream 3", "S3"); read it as Stream 5.
 > - Paths, branches, audit bundles and UX-inventory IDs that contain `stream3` or `S3-` keep their names.
-> - Stream 5 owns this file in the coordination checkout. Its resume prompt is [NEXT-STREAM5-PROMPT-2026-10-01.md](NEXT-STREAM5-PROMPT-2026-10-01.md) (it replaces the 2026-09-30 one).
+> - Stream 5 owns this file in the coordination checkout. Its resume prompt is [NEXT-STREAM5-PROMPT-2026-10-01-evening.md](NEXT-STREAM5-PROMPT-2026-10-01-evening.md) (it replaces the 2026-10-01 morning one).
 
 # CURRENT STREAM 3 STATUS — 2026-09-25/26 peer session (supersedes the 2026-09-22 summary below)
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
+
+## LIVE — HANDOFF (the user asked this session to wrap up): #1395 merged; #1380 re-sealed at the renumbered migration 20261001138000; #1396 sealed; new #1408 (catalog/package keys); resume from NEXT-STREAM5-PROMPT-2026-10-01-evening.md, 2026-10-01T17:53:44Z
+
+- **Resume:** [NEXT-STREAM5-PROMPT-2026-10-01-evening.md](NEXT-STREAM5-PROMPT-2026-10-01-evening.md) has every open PR's head, bundle, seal state and remaining step, plus the runtime, rules and ordered backlog.
+- **Merged since the last block:** #1395 (b312: sign-up repeat; an overlapping sign-up no longer deletes the account).
+- **Sealed and with Stream 1:**
+  - **#1380:** re-sealed at `80f2d5822` (`0e248f90`). The migration was renumbered to the reserved **20261001138000** after Stream 3's 137000; same blob, same route patch-id, migration policy and DB replay green. It merges with #1381.
+  - **#1396:** crew create repeat (`28b1b171`).
+  - **#1366:** waits for #1357 (`090059b6`).
+- **Device-passed, waiting only on iOS CI before sealing:** #1338, #1356, #1357, #1367, #1381 (cand31) and #1387 (cand31).
+- **New: #1408.** A retried catalog category or item, or scheduling package, create made a second row (customer-visible).
+  - **Now:** a `client_request_id` on the server, web, iOS and Android, following the #1357 pattern.
+  - **Verified:** API, the same key twice → 1 row (master 2); 4 at once → 1 (master 4); a reused key → 409; no key → unchanged. Real web, first reply lost: 1 item and 1 package (master 2 each).
+  - CI running. A device check was requested from Stream 1.
+- **Decisions recorded:**
+  - the sign-up overlap follow-up was declined (`20261001-stream5-signup-race-addendum-r1`: GoTrue keeps the original password; "resend link" recovers);
+  - a crew create repeat is answered for the owner's own unpublished crew within 30 minutes, with the name trimmed and the email compared without case;
+  - catalog and package keys are per intended create, cleared on success.
+- **Runtime left clean:**
+  - API 18134 on master `c5ab503df`; web stopped, its tree on master. No fixtures; every scan is clean apart from sign-in events.
+  - The DB ledger ends at 20260930184000. Other streams' 131000–137000 aren't applied.
+- **Lessons:**
+  - Never run anything inside a sealed bundle; use an addendum.
+  - SwiftLint doesn't type-check, so grep `#Preview` callers too.
+  - The seal refuses a quoted "TODO".
+  - In a public repository, describe security fixes neutrally.
 
 ## LIVE — sign-up repeat #1395 sealed; crew create repeat #1396 open; #1381 iOS preview fixed; #1387 passed on Android, 2026-10-01T17:16:53Z
 
