@@ -530,6 +530,19 @@ router.get('/portfolio', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/files/portfolio/:userId answers anonymous callers, so it sends only what a visitor's portfolio grid
+// shows: never the stored or original file name (an original name often carries a person's name), the storage
+// path, the owner's other record ids or processing details.
+const PUBLIC_PORTFOLIO_COLUMNS = 'id, file_url, file_type, mime_type, metadata, display_order, created_at';
+const PUBLIC_PORTFOLIO_METADATA = ['title', 'description', 'tags', 'width', 'height', 'thumbnails'];
+
+function toPublicPortfolioFile(file) {
+  const metadata = file.metadata && typeof file.metadata === 'object'
+    ? Object.fromEntries(PUBLIC_PORTFOLIO_METADATA.filter((key) => file.metadata[key] !== undefined).map((key) => [key, file.metadata[key]]))
+    : null;
+  return { ...file, metadata };
+}
+
 /**
  * GET /api/files/portfolio/:userId
  * Get another user's public portfolio files
@@ -540,7 +553,7 @@ router.get('/portfolio/:userId', async (req, res) => {
     
     const { data: files, error } = await supabaseAdmin
       .from('File')
-      .select('*')
+      .select(PUBLIC_PORTFOLIO_COLUMNS)
       .eq('user_id', userId)
       .in('file_type', ['portfolio_image', 'portfolio_video', 'portfolio_document', 'resume', 'certification'])
       .eq('visibility', 'public')
@@ -553,7 +566,7 @@ router.get('/portfolio/:userId', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch portfolio' });
     }
     
-    res.json({ files: files || [] });
+    res.json({ files: (files || []).map(toPublicPortfolioFile) });
     
   } catch (err) {
     logger.error('Portfolio fetch error', { error: err.message });
