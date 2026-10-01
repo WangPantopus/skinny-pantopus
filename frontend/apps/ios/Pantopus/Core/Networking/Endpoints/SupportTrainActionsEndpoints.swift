@@ -158,11 +158,17 @@ public enum SupportTrainActionsEndpoints {
 
     /// Permanently delete the train (deletes the parent Activity).
     /// **Primary only**; 409s when helpers have committed or gift-fund
-    /// contributions exist.
+    /// contributions exist. With `draftOnly` (the Start wizard discarding
+    /// its half-built draft) a train that is no longer a draft is kept:
+    /// 409 `NOT_A_DRAFT`.
     ///
-    /// Route: `backend/routes/supportTrains.js:3886` — `DELETE /:id`.
-    public static func deleteTrain(supportTrainId: String) -> Endpoint {
-        Endpoint(method: .delete, path: SupportTrainsAPI.path(supportTrainId))
+    /// Route: `backend/routes/supportTrains.js:4249` — `DELETE /:id`.
+    public static func deleteTrain(supportTrainId: String, draftOnly: Bool = false) -> Endpoint {
+        Endpoint(
+            method: .delete,
+            path: SupportTrainsAPI.path(supportTrainId),
+            query: draftOnly ? ["draft_only": "true"] : [:]
+        )
     }
 
     // MARK: - Co-organizers
