@@ -310,6 +310,7 @@ public struct BusinessPageBlockEditorSheet: View {
                                 .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityAddTraits(selected == option.key ? [.isSelected] : [])
                     }
                 }
             }
@@ -500,6 +501,7 @@ public struct BusinessPageBlockEditorSheet: View {
         }
         .buttonStyle(.plain)
         .padding(.top, Spacing.s5)
+        .accessibilityLabel("Remove")
         .accessibilityIdentifier(identifier)
     }
 
