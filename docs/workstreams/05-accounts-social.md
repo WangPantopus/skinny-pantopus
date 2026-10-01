@@ -9,6 +9,43 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — #1346 (b299), #1351 and #1353 (b300) merged; #1338 passed on devices (seal waits on iOS CI); #1349 detekt fixed; new #1356 (password field stays hidden) and #1357 (crew intent keys), 2026-10-01T14:30:51Z
+
+- **Merged:**
+  - **#1346** (b299): asking twice for a reset or verification email sends one.
+  - **#1351** (b300): opening the same chat twice at once makes one room. This is migration 20261001130000, a pair advisory lock in `get_or_create_direct_chat`; master made up to 5 rooms per pair.
+  - **#1353** (b300): an invoice is marked paid only once the payment is captured. Master marked a declined payment's invoice paid. The capture path is unverified (no Stripe).
+- **#1338** (password change keeps your session): Stream 1's device check passed on iOS and Android (`20261001-stream1-1338-password-device-r1`). Stream 1 holds it until I seal, which waits on two iOS CI jobs (macOS runners).
+- **#1349** (Android DPoP proof per attempt):
+  - CI failed detekt `ReturnCount` on `remint`. Fixed in `796b63e1c`; CI is re-running.
+  - Stream 1 reproduced the sign-out on the emulator: OkHttp re-sent a refresh with the same proof, the server answered 401 `DPOP_REPLAY`, and the app signed out.
+  - The after run is in Stream 1's candidate 28.
+- **#1356 (new, iOS + Android):** Change password's New password field no longer reveals itself at 12 characters, and on iOS it no longer drops the keyboard there. Stream 1 found both in the #1338 device run.
+  - Cause: the screens passed validity as the field's default reveal. The design frames show the revealed state after a tap.
+  - Fix: the field stays masked until Show password is tapped. The revealed look is unchanged.
+  - Android's Paparazzi baseline is unchanged; the snapshot renders the tapped state.
+  - Device check requested.
+- **#1357 (new, Stream 1's money decision):** a crew invoice or package buy sent twice makes one.
+  - **Server:** an optional `client_request_id` (the comments/home-issue idiom). The same id answers with the first invoice or credit pack and notifies once. A reused id with different content gets 409. Without an id, nothing changes.
+  - **Apps:** web/iOS/Android keep one id per unchanged invoice draft and one per visit to the buy screen.
+  - **Verified on the runtime and in the real web app,** with the first reply dropped after the API answered:
+    - invoices: master 2 invoices and 2 notifications, head 1 and 1;
+    - packages: 2 packs → 1.
+  - Unverified: the priced-pack retry. Device check requested.
+- **Decisions under the standing direction:**
+  - **#1356:** a password field never reveals itself while being typed; reveal is always the person's own tap.
+  - **#1357:**
+    - an edited invoice draft is a new intent, so it gets a new id;
+    - a reused id with different content is refused, not silently answered with the old invoice;
+    - a priced pack's retry offers the same unpaid checkout.
+- **Next:** trustState.js end to end (Stream 3 OK'd), then the remaining audit items in Stream 5's scope:
+  - chat reaction toggle;
+  - catalog and business-post re-sends;
+  - chat-media orphans;
+  - the seat invite and register races;
+  - a UserReport unique index (needs a migration number).
+- **Runtime:** API 18134 and web 18131 on the #1357 head, web with paid scheduling on (launcher `S3_WEB_PAID=1`). No fixtures; every bundle's rows-since scan is empty.
+
 ## LIVE — idempotency audit delivered; fixes #1341 #1342 #1343 merged (b297), #1344 sealed, #1338 #1346 in CI; earnRiskReview recorded (cut #8), 2026-10-01T13:01:59Z
 
 - **Merged in batch 292:** #1326 (icon-only web buttons get names).
