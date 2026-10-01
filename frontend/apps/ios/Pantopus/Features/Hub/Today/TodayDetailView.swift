@@ -19,7 +19,7 @@ struct TodayDetailView: View {
     private let onBack: () -> Void
     /// Gets the text to send: today's conditions and signals (see `TodayDetailViewModel.shareText(for:)`).
     private let onShare: (String) -> Void
-    /// Nil where there's nowhere to go (the Today tab's briefing push): the control isn't shown.
+    /// Nil where there's nowhere to go (More on the Today tab's briefing push): the control isn't shown.
     private let onMore: (() -> Void)?
     private let onManage: (() -> Void)?
 

@@ -311,6 +311,7 @@ public struct TodayTabRoot: View {
     @State private var briefingDeliveryId: String?
     @State private var briefingKind: String?
     @State private var systemSheet: SystemSheetRequest?
+    @State private var showsNotificationSettings = false
 
     public init() {}
 
@@ -325,12 +326,14 @@ public struct TodayTabRoot: View {
                             briefingDeliveryId: briefingDeliveryId,
                             requestedKind: briefingKind
                         ),
-                        // Back returns to the address's day; Share sends the briefing's text.
+                        // Back returns to the address's day; Share sends the briefing's text;
+                        // Manage opens the briefing and alert settings, as on Android.
                         onBack: {
                             briefingDeliveryId = nil
                             briefingKind = nil
                         },
-                        onShare: { text in systemSheet = .share(items: [text]) }
+                        onShare: { text in systemSheet = .share(items: [text]) },
+                        onManage: { showsNotificationSettings = true }
                     )
                 } else {
                     AddressTodayTabView()
@@ -339,6 +342,10 @@ public struct TodayTabRoot: View {
             .id(generation)
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("todayTabRoot")
+            .navigationDestination(isPresented: $showsNotificationSettings) {
+                NotificationSettingsView { showsNotificationSettings = false }
+                    .toolbar(.hidden, for: .navigationBar)
+            }
         }
         .sheet(item: $systemSheet) { request in request.makeView() }
         .onChange(of: router.pending) { _, pending in
