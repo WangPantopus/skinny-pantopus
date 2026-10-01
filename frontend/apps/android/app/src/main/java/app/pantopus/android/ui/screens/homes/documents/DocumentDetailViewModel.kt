@@ -36,7 +36,7 @@ sealed interface DocumentDetailUiState {
         val content: ByteString? = null,
     ) : DocumentDetailUiState
 
-    /** [headline] names what failed: loading the document, or a delete that didn't confirm. */
+    /** [headline] names what failed: loading the document, a delete that didn't confirm, or a replacement. */
     data class Error(val message: String, val headline: String = "Couldn't load this document") : DocumentDetailUiState
 }
 
@@ -201,11 +201,11 @@ class DocumentDetailViewModel
                                 _toast.value = DocumentDetailToast("File replaced.", false)
                             }
                         } else {
-                            _state.value = DocumentDetailUiState.Error("Couldn't confirm replacement. Reload this document.")
+                            failReplace("Couldn't confirm replacement. Reload this document.")
                         }
                     }
                     is NetworkResult.Failure -> {
-                        _state.value = DocumentDetailUiState.Error(result.error.displayMessage("Couldn't replace this file."))
+                        failReplace(result.error.displayMessage("Couldn't replace this file."))
                     }
                 }
                 mutating = false
@@ -239,6 +239,13 @@ class DocumentDetailViewModel
         private fun failDelete(message: String) {
             deleteFailed = true
             _state.value = DocumentDetailUiState.Error(message, headline = "Couldn't delete this document")
+        }
+
+        // The document had loaded; only the replacement failed or went unconfirmed, and a lost
+        // reply may still have applied it. So the headline doesn't claim either way, and Try
+        // again reloads the file as it is now.
+        private fun failReplace(message: String) {
+            _state.value = DocumentDetailUiState.Error(message, headline = "Your file may not have been replaced")
         }
 
         fun acknowledgeDismiss() {

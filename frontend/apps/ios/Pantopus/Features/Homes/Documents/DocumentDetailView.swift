@@ -217,7 +217,7 @@ final class DocumentDetailViewModel {
                   response.document.fileId?.lowercased() == documentId.lowercased(),
                   response.document.fileVersion?.lowercased() == uploadId,
                   response.document.contentURL != nil else {
-                state = .error(message: "Couldn't confirm replacement. Reload this document.")
+                failReplace(message: "Couldn't confirm replacement. Reload this document.")
                 return
             }
             cancelReplacement()
@@ -228,8 +228,17 @@ final class DocumentDetailViewModel {
                 toast = ToastMessage(text: "File replaced.", kind: .success)
             }
         } catch {
-            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't replace this file. Try again.")
+            failReplace(message: (error as? APIError)?.errorDescription ?? "Couldn't replace this file. Try again.")
         }
+    }
+
+    /// The document had loaded; only the replacement failed or went
+    /// unconfirmed, and a lost reply may still have applied it. So the
+    /// headline doesn't claim either way, and Try again reloads the file as
+    /// it is now.
+    private func failReplace(message: String) {
+        errorHeadline = "Your file may not have been replaced"
+        state = .error(message: message)
     }
 
     func delete() async {
