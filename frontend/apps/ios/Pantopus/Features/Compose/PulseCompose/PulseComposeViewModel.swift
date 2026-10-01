@@ -1252,7 +1252,8 @@ public final class PulseComposeViewModel {
             return PostUpdateRequest(
                 content: bodyValue,
                 title: titleValue.isEmpty ? nil : titleValue,
-                serviceCategory: askCategory.rawValue
+                // Only a category the author picked: a post without one isn't given the default.
+                serviceCategory: askCategory == baselineAskCategory ? nil : askCategory.rawValue
             )
         case .recommend:
             let business = trimmedValue(.recommendBusiness)

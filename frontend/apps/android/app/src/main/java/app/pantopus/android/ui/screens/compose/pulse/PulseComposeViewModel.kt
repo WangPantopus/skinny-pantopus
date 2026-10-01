@@ -1150,7 +1150,8 @@ class PulseComposeViewModel
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue.ifEmpty { null },
-                        serviceCategory = _askCategory.value.key,
+                        // Only a category the author picked: a post without one isn't given the default.
+                        serviceCategory = _askCategory.value.takeIf { it != baselineAskCategory }?.key,
                     )
                 PulseComposeIntent.Recommend -> {
                     val business = trimmedValue(PulseComposeField.RecommendBusiness)
