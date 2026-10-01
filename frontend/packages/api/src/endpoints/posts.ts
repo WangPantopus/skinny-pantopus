@@ -480,6 +480,6 @@ export async function toggleSave(postId: string): Promise<{ saved: boolean; mess
 export async function getSavedPosts(params?: {
   limit?: number;
   offset?: number;
-}): Promise<{ posts: Post[] }> {
+}): Promise<{ posts: Post[]; pagination?: { limit: number; offset: number; nextOffset: number; hasMore: boolean } }> {
   return get('/api/posts/saved', params);
 }

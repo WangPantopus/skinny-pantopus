@@ -2048,11 +2048,20 @@ router.get('/saved', verifyToken, async (req, res) => {
       validSaves.map(s => ({ ...s.post, savedAt: s.created_at })),
       userId
     );
-    const serializedPosts = await serializePostsForViewer(privacySafePosts, userId);
+    // The viewer's like/save/repost state, as every feed lane returns it (the cards draw it).
+    const withStatus = await enrichWithUserStatus(privacySafePosts, userId);
+    const serializedPosts = await serializePostsForViewer(withStatus, userId);
 
+    // Offsets count saves, not the posts left after the visibility check, so a short page isn't the end.
+    const savesRead = (saves || []).length;
     res.json({
       posts: serializedPosts,
-      pagination: { limit: parseInt(limit), offset: parseInt(offset) },
+      pagination: {
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        nextOffset: parseInt(offset) + savesRead,
+        hasMore: savesRead === parseInt(limit),
+      },
     });
   } catch (err) {
     logger.error('Saved posts fetch error', { error: err.message });

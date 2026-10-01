@@ -10,12 +10,13 @@ import { EditPostDialog, PostCard, PostDetailPanel } from '@/components/feed';
 import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
 import ErrorState from '@/components/ui/ErrorState';
-import { Newspaper } from 'lucide-react';
+import { Bookmark, Newspaper } from 'lucide-react';
 import { ListArchetype } from '@/components/archetypes';
 
 const PAGE_SIZE = 50;
 
 type PageCursor = { createdAt: string; id: string };
+type Tab = 'mine' | 'saved';
 
 export default function MyPulsePage() {
   const router = useRouter();
@@ -35,6 +36,15 @@ export default function MyPulsePage() {
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const [reportPostId, setReportPostId] = useState<string | null>(null);
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
+  const [tab, setTab] = useState<Tab>('mine');
+  // Saved posts page by offset over saves; the server says where the next page starts.
+  const [saved, setSaved] = useState<Post[]>([]);
+  const [savedLoading, setSavedLoading] = useState(true);
+  const [savedLoadError, setSavedLoadError] = useState(false);
+  const [savedNextOffset, setSavedNextOffset] = useState<number | null>(null);
+  const [savedLoadingMore, setSavedLoadingMore] = useState(false);
+  const [savedLoadMoreFailed, setSavedLoadMoreFailed] = useState(false);
+  const savedGeneration = useRef(0);
 
   // ── Fetch user ───────────────────────────────────────────
   useEffect(() => {
@@ -104,6 +114,54 @@ export default function MyPulsePage() {
     }
   }, [userId, nextCursor, loadingMore]);
 
+  // ── Fetch saved posts (the Saved tab) ───────────────────
+  const loadSaved = useCallback(async () => {
+    const generation = ++savedGeneration.current;
+    setSavedLoading(true);
+    setSavedLoadError(false);
+    setSavedLoadingMore(false);
+    setSavedLoadMoreFailed(false);
+    try {
+      const result = await api.posts.getSavedPosts({ limit: PAGE_SIZE, offset: 0 });
+      if (generation !== savedGeneration.current) return;
+      setSaved(result?.posts || []);
+      setSavedNextOffset(result?.pagination?.hasMore ? result.pagination.nextOffset : null);
+    } catch (err) {
+      if (generation !== savedGeneration.current) return;
+      console.error('Failed to load saved posts:', err);
+      setSaved([]);
+      setSavedNextOffset(null);
+      setSavedLoadError(true);
+    } finally {
+      if (generation === savedGeneration.current) setSavedLoading(false);
+    }
+  }, []);
+
+  // Every visit to the tab re-reads it, so posts saved elsewhere since show up.
+  useEffect(() => { if (tab === 'saved') void loadSaved(); }, [tab, loadSaved]);
+
+  const loadMoreSaved = useCallback(async () => {
+    if (savedNextOffset == null || savedLoadingMore) return;
+    const generation = savedGeneration.current;
+    setSavedLoadingMore(true);
+    setSavedLoadMoreFailed(false);
+    try {
+      const result = await api.posts.getSavedPosts({ limit: PAGE_SIZE, offset: savedNextOffset });
+      if (generation !== savedGeneration.current) return;
+      setSaved((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        return [...prev, ...(result?.posts || []).filter((p) => !seen.has(p.id))];
+      });
+      setSavedNextOffset(result?.pagination?.hasMore ? result.pagination.nextOffset : null);
+    } catch (err) {
+      if (generation !== savedGeneration.current) return;
+      console.error('Failed to load more saved posts:', err);
+      setSavedLoadMoreFailed(true);
+    } finally {
+      if (generation === savedGeneration.current) setSavedLoadingMore(false);
+    }
+  }, [savedNextOffset, savedLoadingMore]);
+
   // ── Post actions ─────────────────────────────────────────
   const likeMutation = useMutation({
     mutationFn: (postId: string) => api.posts.toggleLike(postId),
@@ -139,6 +197,7 @@ export default function MyPulsePage() {
     try {
       await api.posts.deletePost(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
+      setSaved((prev) => prev.filter((p) => p.id !== postId));
       toast.success('Post deleted');
     } catch {
       toast.error('Failed to delete post');
@@ -153,6 +212,10 @@ export default function MyPulsePage() {
           p.id === postId ? { ...p, userHasSaved: res.saved } : p,
         ),
       );
+      // Unsaving from the Saved tab takes the post off that list.
+      setSaved((prev) => (res.saved
+        ? prev.map((p) => (p.id === postId ? { ...p, userHasSaved: true } : p))
+        : prev.filter((p) => p.id !== postId)));
     },
     onError: () => {
       toast.error('Failed to save post');
@@ -171,6 +234,17 @@ export default function MyPulsePage() {
     });
   };
 
+  const onSaved = tab === 'saved';
+  const shown = onSaved ? saved : posts;
+  const shownError = onSaved ? savedLoadError : loadError;
+  const shownMore = onSaved ? savedNextOffset != null : nextCursor != null;
+  const shownLoadingMore = onSaved ? savedLoadingMore : loadingMore;
+  const shownLoadMoreFailed = onSaved ? savedLoadMoreFailed : loadMoreFailed;
+  const loadMoreShown = () => { void (onSaved ? loadMoreSaved() : loadMore()); };
+  const countLabel = onSaved
+    ? `${shown.length}${shownMore ? '+' : ''} saved`
+    : shownMore ? `${posts.length}+ posts` : `${posts.length} post${posts.length !== 1 ? 's' : ''}`;
+
   return (
     <div className="min-h-[calc(100vh-64px)]">
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
@@ -178,15 +252,19 @@ export default function MyPulsePage() {
           title="My pulse"
           // No count when loading failed; while older posts are unloaded the
           // loaded count is a floor, not the total.
-          subtitle={loadError
-            ? undefined
-            : nextCursor ? `${posts.length}+ posts` : `${posts.length} post${posts.length !== 1 ? 's' : ''}`}
+          subtitle={shownError ? undefined : countLabel}
           primaryAction={{
             label: 'Go to Pulse',
             onClick: () => router.push('/app/feed'),
           }}
-          loading={loading}
-          rows={posts}
+          tabs={[
+            { key: 'mine', label: 'My posts' },
+            { key: 'saved', label: 'Saved' },
+          ]}
+          activeTabKey={tab}
+          onTabChange={(key) => setTab(key as Tab)}
+          loading={onSaved ? savedLoading : loading}
+          rows={shown}
           rowSpacing={4}
           keyExtractor={(post) => post.id}
           renderRow={(post) => (
@@ -204,7 +282,14 @@ export default function MyPulsePage() {
               showToast={(message) => toast.info(message)}
             />
           )}
-          emptyState={{
+          emptyState={onSaved ? {
+            icon: Bookmark,
+            headline: 'Nothing saved yet',
+            subcopy: 'Tap the bookmark on a post to keep it here.',
+            tone: 'personal',
+            ctaLabel: 'Go to Pulse',
+            onCtaClick: () => router.push('/app/feed'),
+          } : {
             icon: Newspaper,
             headline: 'No posts yet',
             subcopy: 'Share updates, questions, or recommendations with your community.',
@@ -212,38 +297,38 @@ export default function MyPulsePage() {
             ctaLabel: 'Go to Pulse',
             onCtaClick: () => router.push('/app/feed'),
           }}
-          renderEmpty={loadError ? () => (
+          renderEmpty={shownError ? () => (
             <div role="alert">
               <ErrorState
-                message="We couldn't load your posts. Please try again."
-                onRetry={() => { void loadPosts(); }}
+                message={onSaved ? "We couldn't load your saved posts. Please try again." : "We couldn't load your posts. Please try again."}
+                onRetry={() => { void (onSaved ? loadSaved() : loadPosts()); }}
               />
             </div>
           ) : undefined}
-          renderFooter={nextCursor || loadMoreFailed ? () => (
+          renderFooter={shownMore || shownLoadMoreFailed ? () => (
             <>
-              {loadMoreFailed && (
+              {shownLoadMoreFailed && (
                 <div role="alert" className="my-4 flex items-center justify-between gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text-strong">
-                  <p>Couldn&apos;t load more posts.</p>
+                  <p>Couldn&apos;t load more {onSaved ? 'saved posts' : 'posts'}.</p>
                   <button
                     type="button"
-                    disabled={loadingMore}
-                    onClick={() => { void loadMore(); }}
+                    disabled={shownLoadingMore}
+                    onClick={loadMoreShown}
                     className="font-semibold text-primary-600 hover:underline disabled:opacity-50"
                   >
                     Try again
                   </button>
                 </div>
               )}
-              {nextCursor && !loadMoreFailed && (
+              {shownMore && !shownLoadMoreFailed && (
                 <div className="text-center py-3">
                   <button
                     type="button"
-                    onClick={() => { void loadMore(); }}
-                    disabled={loadingMore}
+                    onClick={loadMoreShown}
+                    disabled={shownLoadingMore}
                     className="px-4 py-2 text-sm font-medium text-app-text-secondary hover:text-app-text hover:bg-app-hover rounded-lg transition disabled:opacity-50"
                   >
-                    {loadingMore ? 'Loading...' : 'Load more'}
+                    {shownLoadingMore ? 'Loading...' : 'Load more'}
                   </button>
                 </div>
               )}
@@ -268,11 +353,13 @@ export default function MyPulsePage() {
           onClose={() => setEditingPost(null)}
           onSaved={(postId, changes) => {
             setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, ...changes } : p)));
+            setSaved((prev) => prev.map((p) => (p.id === postId ? { ...p, ...changes } : p)));
             setEditingPost(null);
             toast.success('Post updated');
           }}
           onGone={(postId) => {
             setPosts((prev) => prev.filter((p) => p.id !== postId));
+            setSaved((prev) => prev.filter((p) => p.id !== postId));
             setEditingPost(null);
             toast.info('This post was deleted, so it can’t be edited.');
           }}
