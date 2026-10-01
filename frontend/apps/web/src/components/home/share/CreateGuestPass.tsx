@@ -55,6 +55,17 @@ const ALL_SECTIONS = [
 
 type Step = 'template' | 'configure' | 'preview' | 'result';
 
+/** A pass being set up (the configure or preview step), handed up when the panel unmounts with it open. */
+export type GuestPassDraft = {
+  step: 'configure' | 'preview';
+  kind: GuestPass['kind'];
+  customTitle: string;
+  durationHours: string;
+  passcode: string;
+  maxViews: string;
+  sections: string[];
+};
+
 export default function CreateGuestPass({
   open,
   onClose,
@@ -62,6 +73,8 @@ export default function CreateGuestPass({
   preselectedKind,
   onCreated,
   onIssued,
+  draft,
+  onDraftUnmount,
 }: {
   open: boolean;
   onClose: () => void;
@@ -69,6 +82,9 @@ export default function CreateGuestPass({
   preselectedKind?: GuestPass['kind'] | null;
   onCreated: () => void;
   onIssued?: () => void;
+  /** Reopens a pass that was being set up before the panel unmounted (the dashboard's access re-check). */
+  draft?: GuestPassDraft | null;
+  onDraftUnmount?: (draft: GuestPassDraft) => void;
 }) {
   const [step, setStep] = useState<Step>('template');
 
@@ -101,7 +117,15 @@ export default function CreateGuestPass({
     pending.current = null;
     setCreating(false);
     if (open) {
-      if (preselectedKind) {
+      if (draft) {
+        setKind(draft.kind);
+        setCustomTitle(draft.customTitle);
+        setDurationHours(draft.durationHours);
+        setPasscode(draft.passcode);
+        setMaxViews(draft.maxViews);
+        setSections([...draft.sections]);
+        setStep(draft.step);
+      } else if (preselectedKind) {
         const tpl = TEMPLATE_DEFAULTS[preselectedKind];
         setKind(preselectedKind);
         setCustomTitle('');
@@ -126,7 +150,20 @@ export default function CreateGuestPass({
       setCopied(false);
     }
     return () => { generation.current++; pending.current = null; };
-  }, [open, preselectedKind, homeId]);
+  }, [open, preselectedKind, homeId, draft]);
+
+  // A pass still being set up is handed up when the panel unmounts with it open; a created pass never is.
+  const latestDraft = useRef<GuestPassDraft | null>(null);
+  const handUp = useRef(onDraftUnmount);
+  useEffect(() => {
+    latestDraft.current = open && (step === 'configure' || step === 'preview')
+      ? { step, kind, customTitle, durationHours, passcode, maxViews, sections: [...sections] }
+      : null;
+    handUp.current = onDraftUnmount;
+  });
+  useEffect(() => () => {
+    if (latestDraft.current) handUp.current?.(latestDraft.current);
+  }, []);
 
   // Pick template
   const handlePickTemplate = (k: GuestPass['kind']) => {
