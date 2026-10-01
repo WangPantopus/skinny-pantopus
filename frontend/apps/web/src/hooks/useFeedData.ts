@@ -247,6 +247,9 @@ export function useFeedData({
     }
     return out;
   }, [feedQuery.data]);
+  // The click handlers read the current state through a ref, so they keep a stable identity for memoized cards.
+  const postsRef = useRef(posts);
+  postsRef.current = posts;
 
   const loading = feedQuery.isPending;
   const loadingMore = feedQuery.isFetchingNextPage;
@@ -425,8 +428,9 @@ export function useFeedData({
 
   // ── Like mutation (optimistic with automatic rollback) ──
   const likeMutation = useMutation({
-    mutationFn: (postId: string) => api.posts.toggleLike(postId),
-    onMutate: (postId: string) => {
+    // The state the person chose goes with the request, so a re-send can't flip it back.
+    mutationFn: ({ postId, liked }: { postId: string; liked: boolean }) => api.posts.toggleLike(postId, liked),
+    onMutate: ({ postId }: { postId: string; liked: boolean }) => {
       setLikingIds((prev) => new Set(prev).add(postId));
       const toggleLike = (p: Post): Post =>
         p.id === postId
@@ -439,15 +443,15 @@ export function useFeedData({
       updatePostsInCache(toggleLike);
       return { toggleLike };
     },
-    onSuccess: (res, postId) => {
+    onSuccess: (res, { postId }) => {
       // The server's answer wins, as for saves: a card that was stale when clicked shows what the toggle did.
       // Every cached list takes it: another filter's stale card would undo the like on its next click.
       patchPostInFeedCaches(queryClient, postId, { userHasLiked: res.liked, like_count: res.likeCount });
     },
-    onError: (_err, _postId, context) => {
+    onError: (_err, _vars, context) => {
       if (context) updatePostsInCache(context.toggleLike);
     },
-    onSettled: (_data, _err, postId) => {
+    onSettled: (_data, _err, { postId }) => {
       setLikingIds((prev) => {
         const next = new Set(prev);
         next.delete(postId);
@@ -458,22 +462,23 @@ export function useFeedData({
 
   const handleLike = useCallback((postId: string) => {
     if (likingIds.has(postId)) return;
-    likeMutation.mutate(postId);
+    likeMutation.mutate({ postId, liked: !(postsRef.current.find((p) => p.id === postId)?.userHasLiked ?? false) });
   }, [likingIds, likeMutation]);
 
   // ── Save mutation (optimistic with automatic rollback) ──
   const saveMutation = useMutation({
-    mutationFn: (postId: string) => api.posts.toggleSave(postId),
-    onMutate: (postId: string) => {
+    // The state the person chose goes with the request, so a re-send can't flip it back.
+    mutationFn: ({ postId, saved }: { postId: string; saved: boolean }) => api.posts.toggleSave(postId, saved),
+    onMutate: ({ postId, saved }: { postId: string; saved: boolean }) => {
       const previousSaved = posts.find((p) => p.id === postId)?.userHasSaved ?? false;
-      updatePostsInCache((p) => (p.id === postId ? { ...p, userHasSaved: !previousSaved } : p));
+      updatePostsInCache((p) => (p.id === postId ? { ...p, userHasSaved: saved } : p));
       return { postId, previousSaved };
     },
-    onSuccess: (res, postId) => {
+    onSuccess: (res, { postId }) => {
       patchPostInFeedCaches(queryClient, postId, { userHasSaved: res.saved });
       showToast(res.saved ? 'Post saved' : 'Removed from saved');
     },
-    onError: (_err, _postId, context) => {
+    onError: (_err, _vars, context) => {
       if (!context) return;
       updatePostsInCache((p) => (p.id === context.postId ? { ...p, userHasSaved: context.previousSaved } : p));
       showToast('Failed to update save');
@@ -485,7 +490,7 @@ export function useFeedData({
   const handleSave = useCallback((postId: string) => {
     if (savingIds.current.has(postId)) return;
     savingIds.current.add(postId);
-    saveMutation.mutate(postId, {
+    saveMutation.mutate({ postId, saved: !(postsRef.current.find((p) => p.id === postId)?.userHasSaved ?? false) }, {
       onSettled: () => {
         savingIds.current.delete(postId);
       },

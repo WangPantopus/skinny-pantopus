@@ -171,12 +171,15 @@ export default function MyPulsePage() {
   }, [tab, savedLoading, savedReadingOn, loadMoreSaved]);
 
   // ── Post actions ─────────────────────────────────────────
+  // The state the person chose goes with each request, so a re-send can't flip it back.
+  const listedPost = (postId: string) => posts.find((p) => p.id === postId) ?? saved.find((p) => p.id === postId);
+
   const likeMutation = useMutation({
-    mutationFn: (postId: string) => api.posts.toggleLike(postId),
-    onMutate: (postId) => {
+    mutationFn: ({ postId, liked }: { postId: string; liked: boolean }) => api.posts.toggleLike(postId, liked),
+    onMutate: ({ postId }) => {
       setLikingIds((prev) => new Set(prev).add(postId));
     },
-    onSuccess: (res, postId) => {
+    onSuccess: (res, { postId }) => {
       // Either tab's card can be liked, so both lists take the result.
       const liked = (p: Post) => (p.id === postId ? { ...p, userHasLiked: res.liked, like_count: res.likeCount } : p);
       setPosts((prev) => prev.map(liked));
@@ -186,7 +189,7 @@ export default function MyPulsePage() {
     onError: () => {
       toast.error('Failed to like post');
     },
-    onSettled: (_data, _err, postId) => {
+    onSettled: (_data, _err, { postId }) => {
       setLikingIds((prev) => {
         const next = new Set(prev);
         next.delete(postId);
@@ -196,7 +199,7 @@ export default function MyPulsePage() {
   });
 
   const handleLike = (postId: string) => {
-    likeMutation.mutate(postId);
+    likeMutation.mutate({ postId, liked: !(listedPost(postId)?.userHasLiked ?? false) });
   };
 
   // A listed save that goes (unsaved, or its post deleted) moves every later save up one,
@@ -220,8 +223,8 @@ export default function MyPulsePage() {
   };
 
   const saveMutation = useMutation({
-    mutationFn: (postId: string) => api.posts.toggleSave(postId),
-    onSuccess: (res, postId) => {
+    mutationFn: ({ postId, wantSaved }: { postId: string; wantSaved: boolean }) => api.posts.toggleSave(postId, wantSaved),
+    onSuccess: (res, { postId }) => {
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId ? { ...p, userHasSaved: res.saved } : p,
@@ -242,7 +245,7 @@ export default function MyPulsePage() {
   const handleSave = (postId: string) => {
     if (savingIds.current.has(postId)) return;
     savingIds.current.add(postId);
-    saveMutation.mutate(postId, {
+    saveMutation.mutate({ postId, wantSaved: !(listedPost(postId)?.userHasSaved ?? false) }, {
       onSettled: () => {
         savingIds.current.delete(postId);
       },

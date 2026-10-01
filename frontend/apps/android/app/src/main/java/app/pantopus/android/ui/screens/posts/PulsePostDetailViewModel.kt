@@ -243,7 +243,7 @@ class PulsePostDetailViewModel
             _state.value = PulsePostDetailUiState.Loaded(loaded.content.copy(reactions = optimistic))
 
             viewModelScope.launch {
-                when (val result = repo.toggleLike(postId)) {
+                when (val result = repo.toggleLike(postId, liked = !wasOn)) {
                     is NetworkResult.Success -> {
                         val reconciled =
                             optimistic.copy(
@@ -296,7 +296,7 @@ class PulsePostDetailViewModel
             applyCommentRow(index, optimisticRow)
 
             viewModelScope.launch {
-                when (val result = repo.toggleCommentLike(postId, commentId)) {
+                when (val result = repo.toggleCommentLike(postId, commentId, liked = toggled)) {
                     is NetworkResult.Success -> {
                         val current = _state.value as? PulsePostDetailUiState.Loaded ?: return@launch
                         val rIndex = current.content.comments.indexOfFirst { it.id == commentId }
@@ -358,7 +358,7 @@ class PulsePostDetailViewModel
             val before = _isSaved.value
             _isSaved.value = !before
             viewModelScope.launch {
-                when (val result = repo.toggleSave(postId)) {
+                when (val result = repo.toggleSave(postId, saved = !before)) {
                     is NetworkResult.Success -> {
                         _isSaved.value = result.data.saved
                         // A stale card's next tap would undo this save: lists showing the post refetch.
@@ -377,7 +377,7 @@ class PulsePostDetailViewModel
             val before = _isReposted.value
             _isReposted.value = !before
             viewModelScope.launch {
-                when (val result = repo.share(postId, shareType = "repost")) {
+                when (val result = repo.share(postId, shareType = "repost", reposted = !before)) {
                     is NetworkResult.Success -> {
                         _isReposted.value = result.data.reposted ?: !before
                         postsRefresh.notifyPostsDidChange()

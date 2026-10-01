@@ -15,8 +15,10 @@ import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostCreateResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.PostLikeResponse
+import app.pantopus.android.data.api.models.posts.PostLikeStateRequest
 import app.pantopus.android.data.api.models.posts.PostReportRequest
 import app.pantopus.android.data.api.models.posts.PostSaveResponse
+import app.pantopus.android.data.api.models.posts.PostSaveStateRequest
 import app.pantopus.android.data.api.models.posts.PostShareRequest
 import app.pantopus.android.data.api.models.posts.PostShareResponse
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
@@ -87,6 +89,7 @@ interface PostsApi {
     @POST("api/posts/{id}/like")
     suspend fun toggleLike(
         @Path("id") id: String,
+        @Body body: PostLikeStateRequest,
     ): PostLikeResponse
 
     /** `GET /api/posts/:id/comments` — route `backend/routes/posts.js:2520`. */
@@ -152,6 +155,7 @@ interface PostsApi {
     suspend fun toggleCommentLike(
         @Path("postId") postId: String,
         @Path("commentId") commentId: String,
+        @Body body: PostLikeStateRequest,
     ): CommentLikeResponse
 
     /**
@@ -182,6 +186,7 @@ interface PostsApi {
     @POST("api/posts/{id}/save")
     suspend fun toggleSave(
         @Path("id") id: String,
+        @Body body: PostSaveStateRequest,
     ): PostSaveResponse
 
     /**

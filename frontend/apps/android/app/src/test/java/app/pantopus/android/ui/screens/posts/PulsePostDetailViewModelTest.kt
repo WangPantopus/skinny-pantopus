@@ -164,7 +164,7 @@ class PulsePostDetailViewModelTest {
                     NetworkResult.Success(sampleResponse()),
                     NetworkResult.Success(PostDetailResponse(post = samplePost(likeCount = 4, userHasLiked = true))),
                 )
-            coEvery { repo.toggleLike("p1") } returns
+            coEvery { repo.toggleLike("p1", any()) } returns
                 NetworkResult.Success(PostLikeResponse(liked = true, likeCount = 4))
             val vm = makeVm()
             vm.load()
@@ -177,7 +177,7 @@ class PulsePostDetailViewModelTest {
     @Test fun reaction_rollback_on_failure() =
         runTest {
             coEvery { repo.detail("p1") } returns NetworkResult.Success(sampleResponse())
-            coEvery { repo.toggleLike("p1") } returns
+            coEvery { repo.toggleLike("p1", any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeVm()
             vm.load()

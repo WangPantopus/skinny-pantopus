@@ -515,7 +515,7 @@ class PulseFeedViewModel
             rebuildLoadedState()
 
             viewModelScope.launch {
-                when (val result = repo.toggleLike(postId)) {
+                when (val result = repo.toggleLike(postId, liked = toggled)) {
                     is NetworkResult.Success ->
                         putOverride(postId) {
                             it.copy(hasReacted = result.data.liked, likeCount = result.data.likeCount)
@@ -539,7 +539,7 @@ class PulseFeedViewModel
             putOverride(postId) { it.copy(isSaved = !original) }
             rebuildLoadedState()
             viewModelScope.launch {
-                when (val result = repo.toggleSave(postId)) {
+                when (val result = repo.toggleSave(postId, saved = !original)) {
                     is NetworkResult.Success -> {
                         putOverride(postId) { it.copy(isSaved = result.data.saved) }
                         _toastMessage.value =
@@ -571,7 +571,7 @@ class PulseFeedViewModel
             }
             rebuildLoadedState()
             viewModelScope.launch {
-                when (val result = repo.share(postId, shareType = "repost")) {
+                when (val result = repo.share(postId, shareType = "repost", reposted = !original)) {
                     is NetworkResult.Success -> {
                         val reposted = result.data.reposted ?: !original
                         putOverride(postId) {

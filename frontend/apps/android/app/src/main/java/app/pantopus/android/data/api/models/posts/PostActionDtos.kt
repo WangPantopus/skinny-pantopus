@@ -14,6 +14,20 @@ data class CommentLikeResponse(
 @JsonClass(generateAdapter = true)
 data class PostShareRequest(
     @Json(name = "shareType") val shareType: String,
+    /** The repost state the person chose, so a re-sent request can't flip it back; omitted for external shares. */
+    @Json(name = "reposted") val reposted: Boolean? = null,
+)
+
+/** `POST /:id/like` and the comment like body: the state the person chose (a re-send can't flip it back). */
+@JsonClass(generateAdapter = true)
+data class PostLikeStateRequest(
+    @Json(name = "liked") val liked: Boolean,
+)
+
+/** `POST /:id/save` body: the state the person chose (see [PostLikeStateRequest]). */
+@JsonClass(generateAdapter = true)
+data class PostSaveStateRequest(
+    @Json(name = "saved") val saved: Boolean,
 )
 
 /** `POST /:id/share` response — repost toggles return `reposted`. */

@@ -366,8 +366,12 @@ export async function dismissSeededFact(factId: string): Promise<{ dismissed: bo
 
 // ============ LIKES ============
 
-export async function toggleLike(postId: string): Promise<{ liked: boolean; likeCount: number }> {
-  return post(`/api/posts/${postId}/like`);
+/**
+ * Like or unlike a post. Pass `liked` (the state the person chose) so a request re-sent after
+ * its reply was lost sets the same state instead of flipping it back; without it the server toggles.
+ */
+export async function toggleLike(postId: string, liked?: boolean): Promise<{ liked: boolean; likeCount: number }> {
+  return post(`/api/posts/${postId}/like`, liked === undefined ? undefined : { liked });
 }
 
 export async function getLikes(postId: string, params?: {
@@ -409,8 +413,9 @@ export async function deleteComment(postId: string, commentId: string): Promise<
   return del(`/api/posts/${postId}/comments/${commentId}`);
 }
 
-export async function toggleCommentLike(postId: string, commentId: string): Promise<{ liked: boolean; likeCount: number }> {
-  return post(`/api/posts/${postId}/comments/${commentId}/like`);
+/** Like or unlike a comment; `liked` is the state the person chose (see toggleLike). */
+export async function toggleCommentLike(postId: string, commentId: string, liked?: boolean): Promise<{ liked: boolean; likeCount: number }> {
+  return post(`/api/posts/${postId}/comments/${commentId}/like`, liked === undefined ? undefined : { liked });
 }
 
 // ============ USER POSTS ============
@@ -433,8 +438,9 @@ export async function reportPost(postId: string, data: {
   return post(`/api/posts/${postId}/report`, data);
 }
 
-export async function repostPost(postId: string): Promise<{ reposted: boolean; shareCount: number }> {
-  return post(`/api/posts/${postId}/share`, { shareType: 'repost' });
+/** Repost or undo a repost; `reposted` is the state the person chose (see toggleLike). */
+export async function repostPost(postId: string, reposted?: boolean): Promise<{ reposted: boolean; shareCount: number }> {
+  return post(`/api/posts/${postId}/share`, reposted === undefined ? { shareType: 'repost' } : { shareType: 'repost', reposted });
 }
 
 export async function sharePost(postId: string): Promise<{ shared: boolean; shareCount: number }> {
@@ -473,8 +479,9 @@ export async function muteTopicOnSurface(data: {
 
 // ============ SAVES / BOOKMARKS ============
 
-export async function toggleSave(postId: string): Promise<{ saved: boolean; message: string }> {
-  return post(`/api/posts/${postId}/save`);
+/** Save or unsave a post; `saved` is the state the person chose (see toggleLike). */
+export async function toggleSave(postId: string, saved?: boolean): Promise<{ saved: boolean; message: string }> {
+  return post(`/api/posts/${postId}/save`, saved === undefined ? undefined : { saved });
 }
 
 export async function getSavedPosts(params?: {
