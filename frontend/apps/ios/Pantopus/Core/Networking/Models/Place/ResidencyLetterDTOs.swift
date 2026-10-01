@@ -65,9 +65,11 @@ public struct ResidencyLetter: Decodable, Sendable, Hashable, Identifiable {
 /// `POST /api/homes/:id/residency-letters` body.
 public struct IssueResidencyLetterRequest: Encodable, Sendable, Hashable {
     public let purpose: String?
+    public let clientRequestId: String?
 
-    public init(purpose: String?) {
+    public init(purpose: String?, clientRequestId: String? = nil) {
         self.purpose = purpose
+        self.clientRequestId = clientRequestId
     }
 }
 

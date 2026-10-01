@@ -51,8 +51,15 @@ export interface ResidencyLetterVerification {
 }
 
 /** POST /api/homes/:id/residency-letters — issue (verified residents only). */
-export async function issueResidencyLetter(homeId: string, purpose?: string): Promise<ResidencyLetter> {
-  const res = await post<{ letter: ResidencyLetter }>(`/api/homes/${homeId}/residency-letters`, { purpose });
+export async function issueResidencyLetter(
+  homeId: string,
+  purpose?: string,
+  clientRequestId?: string,
+): Promise<ResidencyLetter> {
+  const res = await post<{ letter: ResidencyLetter }>(`/api/homes/${homeId}/residency-letters`, {
+    purpose,
+    clientRequestId,
+  });
   return res.letter;
 }
 

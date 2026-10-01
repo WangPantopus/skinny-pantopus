@@ -269,6 +269,7 @@ function IssuedLetterCard({ letter, homeId }: { letter: ResidencyLetter; homeId:
 
 function ResidencyLetterLeaf({ facts, homeId, address, onBack }: { facts: Omit<LetterFacts, 'purpose'>; homeId: string; address: string; onBack: () => void }) {
   const [purpose, setPurpose] = useState('');
+  const pendingIssue = useRef<{ draft: string; id: string } | null>(null);
   const queryClient = useQueryClient();
   const fullFacts: LetterFacts = { ...facts, purpose };
 
@@ -278,8 +279,17 @@ function ResidencyLetterLeaf({ facts, homeId, address, onBack }: { facts: Omit<L
   });
 
   const issueMutation = useMutation({
-    mutationFn: () => api.residencyLetters.issueResidencyLetter(homeId, purpose),
+    // A retry of the same purpose reuses its request id (as claims do), so the server returns the letter it already
+    // issued instead of a second one.
+    mutationFn: () => {
+      const draft = JSON.stringify({ homeId, purpose });
+      if (pendingIssue.current?.draft !== draft) {
+        pendingIssue.current = { draft, id: crypto.randomUUID() };
+      }
+      return api.residencyLetters.issueResidencyLetter(homeId, purpose, pendingIssue.current.id);
+    },
     onSuccess: async (letter) => {
+      pendingIssue.current = null;
       queryClient.invalidateQueries({ queryKey: queryKeys.residencyLetters(homeId) });
       setPurpose('');
       toast.success(`Letter issued — verification code ${letter.letter_code}.`);

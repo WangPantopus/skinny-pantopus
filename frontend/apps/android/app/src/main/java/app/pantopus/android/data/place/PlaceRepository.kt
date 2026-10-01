@@ -182,9 +182,10 @@ class PlaceRepository
         suspend fun issueResidencyLetter(
             homeId: String,
             purpose: String?,
+            clientRequestId: String? = null,
         ): NetworkResult<ResidencyLetterResponse> =
             safeApiCall {
-                residencyLettersApi.issue(homeId, IssueResidencyLetterRequest(purpose))
+                residencyLettersApi.issue(homeId, IssueResidencyLetterRequest(purpose, clientRequestId))
             }
 
         suspend fun residencyLetters(homeId: String): NetworkResult<ResidencyLettersResponse> =
