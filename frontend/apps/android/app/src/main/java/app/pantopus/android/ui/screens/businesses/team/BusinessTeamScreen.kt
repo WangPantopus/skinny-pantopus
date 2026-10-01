@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -48,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.businesses.BusinessRolePresetDto
+import app.pantopus.android.data.api.models.businesses.BusinessSeatDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.Shimmer
@@ -95,16 +98,8 @@ fun BusinessTeamScreen(
     var sheet by remember { mutableStateOf<TeamSheet?>(null) }
     var removeTarget by remember { mutableStateOf<BusinessTeamMemberRow?>(null) }
     var cancelTarget by remember { mutableStateOf<BusinessTeamPendingRow?>(null) }
-    var toast by remember { mutableStateOf<String?>(null) }
-    var linkToShare by remember { mutableStateOf<String?>(null) }
     val clipboard = LocalClipboardManager.current
-
-    LaunchedEffect(toast) {
-        if (toast != null) {
-            delay(3_000)
-            toast = null
-        }
-    }
+    val inviteLink = remember(clipboard) { InviteLinkHandoff(clipboard) }
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -160,17 +155,10 @@ fun BusinessTeamScreen(
             )
         }
 
-        toast?.let { message ->
-            Toast(
-                message = ToastMessage(text = message, kind = ToastKind.Success),
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 96.dp)
-                        .testTag("businessTeam.toast"),
-            )
-        }
+        InviteLinkToast(
+            handoff = inviteLink,
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp),
+        )
     }
 
     // ─── Sheets ───────────────────────────────────────────────────
@@ -179,22 +167,10 @@ fun BusinessTeamScreen(
         TeamSheet.Invite ->
             InviteTeammateWizardSheet(
                 businessId = viewModel.businessId,
-                onClose = { seat, inviteLink ->
+                onClose = { seat, link ->
                     sheet = null
                     seat?.let(viewModel::handleInvited)
-                    // The invitee joins only through this link: copy it, or show it to copy by hand.
-                    if (seat != null && inviteLink != null) {
-                        val copied = runCatching { clipboard.setText(AnnotatedString(inviteLink)) }.isSuccess
-                        if (copied) {
-                            val name =
-                                listOfNotNull(seat.displayName, seat.inviteEmail)
-                                    .map { it.trim() }
-                                    .firstOrNull { it.isNotEmpty() } ?: "them"
-                            toast = "Invite link copied — share it with $name"
-                        } else {
-                            linkToShare = inviteLink
-                        }
-                    }
+                    inviteLink.handOff(seat, link)
                 },
             )
         is TeamSheet.ChangeRole ->
@@ -215,14 +191,7 @@ fun BusinessTeamScreen(
     }
 
     // ─── Confirms ─────────────────────────────────────────────────
-    linkToShare?.let { link ->
-        AlertDialog(
-            onDismissRequest = { linkToShare = null },
-            title = { Text("Share this invite link") },
-            text = { SelectionContainer { Text(link, modifier = Modifier.testTag("businessTeam.inviteLink")) } },
-            confirmButton = { TextButton(onClick = { linkToShare = null }) { Text("Done") } },
-        )
-    }
+    InviteLinkDialog(inviteLink)
 
     removeTarget?.let { row ->
         AlertDialog(
@@ -259,6 +228,55 @@ fun BusinessTeamScreen(
             dismissButton = { TextButton(onClick = { cancelTarget = null }) { Text("Keep invite") } },
         )
     }
+}
+
+/**
+ * Hands the inviter a new teammate's invite link, the only way to join: it is copied and a toast names who to share
+ * it with, or, when the copy fails, it is shown to copy by hand.
+ */
+@Stable
+private class InviteLinkHandoff(
+    private val clipboard: ClipboardManager,
+) {
+    var toast by mutableStateOf<String?>(null)
+    var linkToShare by mutableStateOf<String?>(null)
+
+    fun handOff(
+        seat: BusinessSeatDto?,
+        link: String?,
+    ) {
+        if (seat == null || link == null) return
+        if (runCatching { clipboard.setText(AnnotatedString(link)) }.isSuccess) {
+            val name = listOfNotNull(seat.displayName, seat.inviteEmail).map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: "them"
+            toast = "Invite link copied — share it with $name"
+        } else {
+            linkToShare = link
+        }
+    }
+}
+
+@Composable
+private fun InviteLinkToast(
+    handoff: InviteLinkHandoff,
+    modifier: Modifier,
+) {
+    val message = handoff.toast ?: return
+    LaunchedEffect(message) {
+        delay(3_000)
+        handoff.toast = null
+    }
+    Toast(message = ToastMessage(text = message, kind = ToastKind.Success), modifier = modifier.testTag("businessTeam.toast"))
+}
+
+@Composable
+private fun InviteLinkDialog(handoff: InviteLinkHandoff) {
+    val link = handoff.linkToShare ?: return
+    AlertDialog(
+        onDismissRequest = { handoff.linkToShare = null },
+        title = { Text("Share this invite link") },
+        text = { SelectionContainer { Text(link, modifier = Modifier.testTag("businessTeam.inviteLink")) } },
+        confirmButton = { TextButton(onClick = { handoff.linkToShare = null }) { Text("Done") } },
+    )
 }
 
 @Composable
