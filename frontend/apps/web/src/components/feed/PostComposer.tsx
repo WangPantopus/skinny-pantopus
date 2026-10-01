@@ -318,6 +318,7 @@ export default function PostComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const precheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const precheckRun = useRef(0);
   // An edit keeps the post's surface, identity and audience, so none of those pickers apply.
   const isNetworkSurface = activeSurface === 'connections' && !isEdit;
   const isGlobalComposer = activeSurface == null && !isEdit;
@@ -494,6 +495,7 @@ export default function PostComposer({
   useEffect(() => {
     if (isEdit || !f.content || f.content.length < 30 || !f.selectedIntent) return;
     if (precheckTimerRef.current) clearTimeout(precheckTimerRef.current);
+    const run = ++precheckRun.current;
     precheckTimerRef.current = setTimeout(async () => {
       try {
         const selectedIntent = f.selectedIntent;
@@ -502,10 +504,12 @@ export default function PostComposer({
           content: f.content,
           purpose: apiPurposeForPostType(selectedIntent),
           surface: activeSurface || 'place',
+          // With the post's location the server can tell a visitor that the post will carry a Visitor badge.
+          ...(f.location ? { latitude: f.location.latitude, longitude: f.location.longitude } : {}),
         });
-        if (result.suggestions?.length > 0) {
-          setField('precheckSuggestions', result.suggestions);
-        }
+        // Only the latest check speaks, and it replaces what an earlier one said (moving the
+        // location back home drops the visitor note).
+        if (run === precheckRun.current) setField('precheckSuggestions', result.suggestions ?? []);
       } catch {
         // fail open
       }
@@ -513,7 +517,7 @@ export default function PostComposer({
     return () => {
       if (precheckTimerRef.current) clearTimeout(precheckTimerRef.current);
     };
-  }, [isEdit, f.content, f.selectedIntent, activeSurface, setField]);
+  }, [isEdit, f.content, f.selectedIntent, f.location, activeSurface, setField]);
 
   useEffect(() => {
     if (!canUseGlobalAudience || activePostAs !== 'home') return;
