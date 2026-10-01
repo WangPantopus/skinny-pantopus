@@ -44,13 +44,13 @@ struct BusinessProfileNamedPageSection: View {
                             .pantopusTextStyle(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
-                    if blocks.isEmpty {
+                    if BusinessPageBlocksPreview.shown(blocks, forVisitors: true).isEmpty {
                         Text("This business page has no published content yet.")
                             .pantopusTextStyle(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .accessibilityIdentifier("businessProfile.page.empty")
                     } else {
-                        BusinessPageBlocksPreview(blocks: blocks)
+                        BusinessPageBlocksPreview(blocks: blocks, forVisitors: true)
                     }
                 }
             }
