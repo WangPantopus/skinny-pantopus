@@ -23,7 +23,7 @@ public struct PulseComposeContentState: Equatable {
     public var lostFoundContactPref: PulseLostFoundContactPref
     public var announceAudience: PulseAnnounceAudience
     public var safetyAlertKind: PulseSafetyAlertKind
-    public var askCategory: PulseAskCategory
+    public var askCategory: PulseAskCategory?
     public var recommendRating: Int
     public var dealExpiresAt: Date
     public var eligibilityWarning: String?
@@ -53,7 +53,7 @@ public struct PulseComposeContentState: Equatable {
         lostFoundContactPref: PulseLostFoundContactPref = .dm,
         announceAudience: PulseAnnounceAudience = .neighbors,
         safetyAlertKind: PulseSafetyAlertKind = .theft,
-        askCategory: PulseAskCategory = .handyman,
+        askCategory: PulseAskCategory? = .handyman,
         recommendRating: Int = 5,
         dealExpiresAt: Date = Date().addingTimeInterval(7 * 86400),
         eligibilityWarning: String? = nil,

@@ -311,8 +311,9 @@ public final class PulseComposeViewModel {
     /// Heads Up alert sub-type — required when `postType == alert`.
     public var safetyAlertKind: PulseSafetyAlertKind = .theft
 
-    /// Ask category chip selection.
-    public var askCategory: PulseAskCategory = .handyman
+    /// Ask category chip selection. New Asks start on Handyman; an edited Ask posted without a
+    /// category has none selected.
+    public var askCategory: PulseAskCategory? = .handyman
 
     /// Star rating for the Recommend intent (1-5).
     public var recommendRating: Int = 5
@@ -354,7 +355,7 @@ public final class PulseComposeViewModel {
     private var baselineLostFoundKind: PulseLostFoundKind = .lost
     private var baselineLostFoundContactPref: PulseLostFoundContactPref = .dm
     private var baselineAnnounceAudience: PulseAnnounceAudience = .neighbors
-    private var baselineAskCategory: PulseAskCategory = .handyman
+    private var baselineAskCategory: PulseAskCategory? = .handyman
     private var baselineRecommendRating: Int = 5
 
     private let createCommandId = UUID().uuidString
@@ -846,9 +847,8 @@ public final class PulseComposeViewModel {
         case .ask:
             seedField(.title, value: post.title ?? "")
             seedField(.body, value: post.content)
-            if let raw = post.serviceCategory, let mapped = PulseAskCategory(rawValue: raw) {
-                askCategory = mapped
-            }
+            // The post's own category, or none: an Ask posted without one doesn't show the create default.
+            askCategory = post.serviceCategory.flatMap(PulseAskCategory.init(rawValue:))
             baselineAskCategory = askCategory
         case .recommend:
             let (stars, body) = unwrapRecommendBody(post.content)
@@ -958,7 +958,7 @@ public final class PulseComposeViewModel {
                 postType: postType,
                 visibility: vis,
                 postAs: postAs,
-                serviceCategory: askCategory.rawValue,
+                serviceCategory: askCategory?.rawValue,
                 audience: audience,
                 purpose: purposeTag
             )
@@ -1253,7 +1253,7 @@ public final class PulseComposeViewModel {
                 content: bodyValue,
                 title: titleValue.isEmpty ? nil : titleValue,
                 // Only a category the author picked: a post without one isn't given the default.
-                serviceCategory: askCategory == baselineAskCategory ? nil : askCategory.rawValue
+                serviceCategory: askCategory == baselineAskCategory ? nil : askCategory?.rawValue
             )
         case .recommend:
             let business = trimmedValue(.recommendBusiness)
