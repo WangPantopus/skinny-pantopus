@@ -361,6 +361,19 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
 
 ## Live continuation — Stream 4 (newest first)
 
+- **2026-10-01T04:53:33Z — Finding for the user's launch-cut flags, recorded and not fixed (cut #8, household letters and My Mail Day).**
+  - **What:** `frontend/apps/web/src/app/(app)/app/mailbox/layout.tsx:87` calls `useMailDaySummary()` on every
+    `/app/mailbox` load to drive the My Mail Day banner. The route `GET /api/mailbox/v2/p3/mailday/summary` writes a
+    `mailday_summary_viewed` MailEvent each time: a GET with a write.
+    - Found by Stream 5's #1228 run, which deleted its 13 rows by id. Routed by Stream 1.
+  - **Decision (launch-scope rule):** the 2026-09-27 map puts household letters and My Mail Day triage under cut #8. Streams
+    don't fix or flag cut features; the user flags them.
+    - When #8 is flagged off, the banner and this fetch should go with it.
+    - If mail returns to scope: gate the call on the flag, and record "viewed" from the client when the summary is shown,
+      not on GET.
+  - Also noted from Stream 5: `components/home/QuickAccess.tsx` and `components/MediaGallery.tsx` are never rendered. That is
+    dead code with no user effect, so it's left alone.
+
 - **2026-10-01T04:52:27Z — [#1219](https://github.com/WangPantopus/skinny-pantopus/pull/1219), [#1220](https://github.com/WangPantopus/skinny-pantopus/pull/1220), [#1222](https://github.com/WangPantopus/skinny-pantopus/pull/1222) and [#1223](https://github.com/WangPantopus/skinny-pantopus/pull/1223) merged in batch 261 ([#1224](https://github.com/WangPantopus/skinny-pantopus/pull/1224), 03:43Z). U03 native window 04:20:50Z–04:50:46Z (slots 3/4) closed nine cells with no defect needing a repair; bundle `20261001-stream4-u03-native-r1` (`30ae9e65…`), verification only.**
   - **Fridge card:**
     - E3 on both apps: one POST, one card.
@@ -377,9 +390,8 @@ Itemized from this stream's sealed evidence (bundle names are in the audit store
   - **Noted:**
     - The emulator's snapshot boot reinstates an old APK and signs the app out, so reinstall and sign in after each boot.
     - The member's lazy `MailPreferences` row was cleaned.
-  - **Routed by Stream 1 and taken (not started):** `/app/mailbox` calls the cut My Mail Day summary GET, which writes a
-    `mailday_summary_viewed` MailEvent on every load.
-    - Plan: gate the client call on the cut flag, verify on web, and touch nothing inside the cut feature.
+  - **Routed by Stream 1, then recorded rather than fixed** (decision at the entry above): `/app/mailbox` calls the cut My Mail
+    Day summary GET, which writes a `mailday_summary_viewed` MailEvent on every load.
   - **Next:**
     - the mailbox GET-write;
     - remaining U03: iOS emergency add E4; issues E3/E6/E5 on both apps; Android maintenance E3; health/checklist
