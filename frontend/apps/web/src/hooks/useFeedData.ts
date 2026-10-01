@@ -418,7 +418,8 @@ export function useFeedData({
     },
     onSuccess: (res, postId) => {
       // The server's answer wins, as for saves: a card that was stale when clicked shows what the toggle did.
-      updatePostsInCache((p) => (p.id === postId ? { ...p, userHasLiked: res.liked, like_count: res.likeCount } : p));
+      // Every cached list takes it: another filter's stale card would undo the like on its next click.
+      patchPostInFeedCaches(queryClient, postId, { userHasLiked: res.liked, like_count: res.likeCount });
     },
     onError: (_err, _postId, context) => {
       if (context) updatePostsInCache(context.toggleLike);
@@ -446,7 +447,7 @@ export function useFeedData({
       return { postId, previousSaved };
     },
     onSuccess: (res, postId) => {
-      updatePostsInCache((p) => (p.id === postId ? { ...p, userHasSaved: res.saved } : p));
+      patchPostInFeedCaches(queryClient, postId, { userHasSaved: res.saved });
       showToast(res.saved ? 'Post saved' : 'Removed from saved');
     },
     onError: (_err, _postId, context) => {
@@ -468,14 +469,16 @@ export function useFeedData({
     });
   }, [saveMutation]);
 
+  // Confirmed changes from the post panel reach every cached list, like the feed's own toggles.
   const patchPost = useCallback((postId: string, patch: Partial<Post>) => {
-    updatePostsInCache((post) => (post.id === postId ? { ...post, ...patch } : post));
-  }, [updatePostsInCache]);
+    patchPostInFeedCaches(queryClient, postId, patch);
+  }, [queryClient]);
 
   const handleDelete = useCallback(async (postId: string) => {
     try {
       await api.posts.deletePost(postId);
-      removePostsFromCache((p) => p.id === postId);
+      // Every cached list, not just this filter's: another filter shown within 30 s would still list it.
+      removePostsFromCache((p) => p.id === postId, true);
       showToast('Post deleted');
     } catch {
       showToast('Failed to delete post');
@@ -485,7 +488,8 @@ export function useFeedData({
   const handleHide = useCallback(async (postId: string) => {
     try {
       await api.posts.hidePost(postId);
-      removePostsFromCache((p) => p.id === postId);
+      // A hide applies to every feed (the server filters it everywhere), so every cached list drops it.
+      removePostsFromCache((p) => p.id === postId, true);
       showToast('Post hidden');
     } catch {
       showToast('Failed to hide post');
@@ -547,12 +551,12 @@ export function useFeedData({
   }, [removePostsFromCache]);
 
   const handleSolved = useCallback((id: string) => {
-    updatePostsInCache((p) => (p.id === id ? { ...p, state: 'solved' as const } : p));
-  }, [updatePostsInCache]);
+    patchPostInFeedCaches(queryClient, id, { state: 'solved' });
+  }, [queryClient]);
 
   /** Drops a post that no longer exists (deleted elsewhere) from the loaded feed, without an API call. */
   const forgetPost = useCallback((id: string) => {
-    removePostsFromCache((p) => p.id === id);
+    removePostsFromCache((p) => p.id === id, true);
   }, [removePostsFromCache]);
 
   return {
