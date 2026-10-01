@@ -173,9 +173,17 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T06:24:42Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T06:36:03Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T06:24:42Z):** master is `12013a711` (batch 271).
+- **Latest (2026-10-01T06:36:03Z):** master is `12013a711` (batch 271).
+  - **Building** (heavy-slot queue position 2): candidate `22d669668` = branch `claude/stream2-posts-saved-remove-sync` (head `bf801b5b5`, same tree). After a confirmed unsave in My posts → Saved, both apps send the existing refresh signal.
+    - Android reproduced on master's Saved code: removing A1 in Saved left the Nearby-tab Pulse card at "Remove bookmark", and its tap re-saved A1 ("Saved to your bookmarks.").
+    - The fixtures stay live for the after-run.
+  - **Proposed to Stream 1, waiting on approval (IA):** a "My posts" item in the web account menu, opening `/app/my-pulse`.
+    - Since the wedge IA, nothing on web links to My pulse, so web users can't reach their Saved list (#1198) or their own posts.
+    - The web My pulse save/like should also patch the feed cache (the #1257 class); that comes after the decision.
+  - **With Stream 1:** #1259 (native post-screen sync), #1248, #1249 and #1250, all waiting on iOS cells.
+- **Earlier (2026-10-01T06:24:42Z):** master is `12013a711` (batch 271).
   - **Merged:**
     - batch 270: [#1254](https://github.com/WangPantopus/skinny-pantopus/pull/1254), the golden re-record, so master's Android unit tests are green again (Stream 1 checked the PNGs); #1237 iOS single pop; #1241 list paging; #1242 list top rows (Stream 1's My trains check passed).
     - batch 271: [#1257](https://github.com/WangPantopus/skinny-pantopus/pull/1257), a save or like on the web post page now updates the feed card. Before, after Back, a stale card's click undid the save ("Removed from saved").
