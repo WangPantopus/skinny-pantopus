@@ -58,7 +58,8 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
    for the old task's category, and posting it opens the task to every bidder; it does not book the same helper.
    The "rebooking a known crew" that replaces Open Gigs is the repeat Crew Day of the street-organizer design
    (`docs/product/street-organizer-design-2026-09-27.md`), which is not built yet. Rejected: a rail of helpers with
-   no action (dead UI under "Rebook a favorite helper").
+   no action (dead UI under "Rebook a favorite helper"). The 2026-09-27 verification map kept the rail in scope;
+   it comes back with `open_gigs`, or with a direct-rebook action once one exists.
 2. **Mail of a cut kind reads as plain mail** (certified, ceremonial, community, party invitation): it is mail the user
    received, so only the cut controls (sign, RSVP, translate, Mail Party) are hidden; iOS no longer sends a ceremonial
    letter to its hidden reader.
@@ -70,6 +71,12 @@ Tests run with every feature on (`backend/jest.config.js`, `frontend/apps/web/te
 7. **Home activity feeds** (dashboard recent activity, timeline) leave out bill, package, pet, poll and calendar
    records; the Members & Security audit log keeps every row.
 8. **Marketing and legal pages** (landing, about, terms, privacy) are unchanged.
+9. **The mailbox itself stays**, with My Mail Day, the vault and the Stamps gallery: they cover all received mail
+   (stamps are earned from any mail, packages, the vault and mail tasks), not only letters. Only their letter
+   controls go (Write a letter, the Stamps dock's "Send mail"). The 2026-09-27 verification map counted Mail Day and
+   Stamps as letter-only; switching them off is a small follow-up if wanted.
+10. **Bill trends on the Home dashboard stays** (read-only, with the neighborhood benchmark and its opt-in): bills
+   stay as the input to bill explanation. Adding, editing and tracking bills is hidden.
 
 ## Known limits
 
