@@ -238,6 +238,15 @@ public struct TasksTabRoot: View {
         ManageTrainView(
             viewModel: ManageTrainViewModel(trainId: trainId),
             onClose: { Task { @MainActor in pop() } },
+            // Someone who isn't an organizer gets the train's own page, as on the web.
+            onNotOrganizer: {
+                Task { @MainActor in
+                    pop()
+                    if path.last != .supportTrainDetail(supportTrainId: trainId) {
+                        path.append(.supportTrainDetail(supportTrainId: trainId))
+                    }
+                }
+            },
             onInviteHelpers: { _ in
                 systemSheet = .share(
                     items: ["Join my support train on Pantopus — \(InviteLinks.supportTrainURLString(trainId: trainId))"]

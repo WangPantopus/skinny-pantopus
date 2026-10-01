@@ -5727,6 +5727,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 navController.popBackStack()
                             }
                         },
+                        // Someone who isn't an organizer gets the train's own page, as on the web.
+                        onNotOrganizer = {
+                            val below = navController.previousBackStackEntry
+                            navController.popBackStack()
+                            if (below?.destination?.route != ChildRoutes.SUPPORT_TRAIN_DETAIL ||
+                                below.arguments?.getString(ChildRoutes.SUPPORT_TRAIN_DETAIL_ID_KEY) != trainId
+                            ) {
+                                navController.navigate(ChildRoutes.supportTrainDetail(trainId))
+                            }
+                        },
                         // Invite shares the train, as the detail's Share does.
                         // Analytics and Edit dates have no backend / native
                         // editor yet, so they aren't wired and their rows are

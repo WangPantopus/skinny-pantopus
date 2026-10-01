@@ -30,6 +30,10 @@ public struct ManageTrainView: View {
     /// Runs after a successful delete instead of `onClose`, so a host can
     /// leave the deleted train's own screens too.
     private let onDeleted: (@MainActor () -> Void)?
+    /// Runs when the viewer isn't one of the train's organizers (a link to
+    /// Manage they no longer have, say), so a host can show the train's own
+    /// page instead, as the web does. Nil runs `onClose`.
+    private let onNotOrganizer: (@MainActor () -> Void)?
     /// Organize rows. A nil handler hides its row: there is no analytics
     /// backend or native date editor yet, so hosts leave those nil.
     private let onOpenAnalytics: (@MainActor (String) -> Void)?
@@ -40,6 +44,7 @@ public struct ManageTrainView: View {
         viewModel: ManageTrainViewModel,
         onClose: @escaping @MainActor () -> Void,
         onDeleted: (@MainActor () -> Void)? = nil,
+        onNotOrganizer: (@MainActor () -> Void)? = nil,
         onOpenAnalytics: (@MainActor (String) -> Void)? = nil,
         onEditDates: (@MainActor (String) -> Void)? = nil,
         onInviteHelpers: (@MainActor (String) -> Void)? = nil
@@ -47,6 +52,7 @@ public struct ManageTrainView: View {
         _viewModel = State(initialValue: viewModel)
         self.onClose = onClose
         self.onDeleted = onDeleted
+        self.onNotOrganizer = onNotOrganizer
         self.onOpenAnalytics = onOpenAnalytics
         self.onEditDates = onEditDates
         self.onInviteHelpers = onInviteHelpers
@@ -179,6 +185,11 @@ public struct ManageTrainView: View {
         switch viewModel.state {
         case .loading:
             loadingBody
+        case let .loaded(content) where !content.viewerRole.isOrganizer:
+            // Only organizers manage a train, and the server refuses everyone
+            // else, so hand off rather than show controls that can only fail.
+            loadingBody
+                .task { (onNotOrganizer ?? onClose)() }
         case let .loaded(content):
             loadedBody(content)
         case let .error(message):

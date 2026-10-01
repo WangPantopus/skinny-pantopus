@@ -2738,6 +2738,15 @@ public struct HubTabRoot: View {
                         if path.last == .supportTrainDetail(supportTrainId: trainId) { pop() }
                     }
                 },
+                // Someone who isn't an organizer gets the train's own page, as on the web.
+                onNotOrganizer: {
+                    Task { @MainActor in
+                        pop()
+                        if path.last != .supportTrainDetail(supportTrainId: trainId) {
+                            push(.supportTrainDetail(supportTrainId: trainId))
+                        }
+                    }
+                },
                 // Invite shares the train, as the detail's Share does.
                 // Analytics and Edit dates have no backend / native editor
                 // yet, so they aren't wired and their rows are hidden.
