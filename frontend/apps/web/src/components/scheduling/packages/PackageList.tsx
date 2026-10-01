@@ -10,7 +10,7 @@
 // Backend note: GET /packages exposes no per-package "sold" count, so the
 // design's sold tally is omitted rather than faked.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import {
@@ -57,6 +57,8 @@ export default function PackageList({ owner }: { owner: SchedulingOwnerRef }) {
   const [payments, setPayments] = useState<PaymentsStatus | null>(null);
   const [filter, setFilter] = useState<"active" | "archived">("active");
   const [busyId, setBusyId] = useState<string | null>(null);
+  // One id per intended copy, reused when the same copy is retried, so a lost reply can't make two copies.
+  const pendingCopy = useRef<{ draft: string; id: string } | null>(null);
 
   const load = useCallback(() => {
     let alive = true;
@@ -102,7 +104,12 @@ export default function PackageList({ owner }: { owner: SchedulingOwnerRef }) {
         ...packageToForm(pkg),
         name: `${pkg.name} (copy)`,
       });
-      await api.scheduling.createPackage(input, owner);
+      const draft = JSON.stringify({ source: pkg.id, input });
+      if (pendingCopy.current?.draft !== draft) {
+        pendingCopy.current = { draft, id: crypto.randomUUID() };
+      }
+      await api.scheduling.createPackage(input, owner, pendingCopy.current.id);
+      pendingCopy.current = null;
       toast.success("Package duplicated.");
       load();
     } catch (err) {

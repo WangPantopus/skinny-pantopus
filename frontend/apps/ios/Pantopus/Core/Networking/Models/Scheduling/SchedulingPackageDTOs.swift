@@ -116,13 +116,16 @@ public struct BuyPackageRequest: Encodable, Sendable {
 }
 
 /// Body for `POST /packages`. Owner fields spliced in by the builder.
-public struct SchedulingCreatePackageRequest: Encodable, Sendable {
+public struct SchedulingCreatePackageRequest: Encodable, Sendable, Hashable {
     public let name: String
     public let sessionsCount: Int
     public var priceCents: Int?
     public var currency: String?
     public var eventTypeId: String?
     public var isActive: Bool?
+    /// The create's client key: one per intended package, reused on a retry
+    /// so a lost reply can't create it twice. Left out of the JSON when nil.
+    public var clientRequestId: String?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -131,6 +134,7 @@ public struct SchedulingCreatePackageRequest: Encodable, Sendable {
         case currency
         case eventTypeId = "event_type_id"
         case isActive = "is_active"
+        case clientRequestId = "client_request_id"
     }
 
     public init(

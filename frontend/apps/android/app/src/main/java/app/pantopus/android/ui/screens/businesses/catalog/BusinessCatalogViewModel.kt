@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.businesses.catalog
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.businesses.BusinessCatalogItemRequest
 import app.pantopus.android.data.api.models.businesses.BusinessCatalogManagedItemDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -68,6 +70,11 @@ class BusinessCatalogViewModel
 
         private val _toast = MutableStateFlow<BusinessCatalogToast?>(null)
         val toast: StateFlow<BusinessCatalogToast?> = _toast.asStateFlow()
+
+        // One client key per intended create, reused while the same item or category is retried, so a lost reply
+        // can't add it twice. Cleared once the create sticks.
+        private var pendingItemCreate: Pair<BusinessCatalogItemRequest, String>? = null
+        private var pendingCategoryCreate: Pair<String, String>? = null
 
         fun load() {
             if (_state.value is BusinessCatalogUiState.Loaded) return
@@ -131,7 +138,14 @@ class BusinessCatalogViewModel
                 onDone(false)
                 return
             }
-            mutate("Item added", onDone) { repo.createItem(businessId, draft.asRequest()) }
+            val body = draft.asRequest()
+            val pending = pendingItemCreate?.takeIf { it.first == body } ?: (body to UUID.randomUUID().toString())
+            pendingItemCreate = pending
+            val onCreated: (Boolean) -> Unit = { ok ->
+                if (ok) pendingItemCreate = null
+                onDone(ok)
+            }
+            mutate("Item added", onCreated) { repo.createItem(businessId, body.copy(clientRequestId = pending.second)) }
         }
 
         /** `PATCH …/catalog/items/:itemId`. */
@@ -192,7 +206,13 @@ class BusinessCatalogViewModel
                 onDone(false)
                 return
             }
-            mutate("Category added", onDone) { repo.createCategory(businessId, trimmed) }
+            val pending = pendingCategoryCreate?.takeIf { it.first == trimmed } ?: (trimmed to UUID.randomUUID().toString())
+            pendingCategoryCreate = pending
+            val onCreated: (Boolean) -> Unit = { ok ->
+                if (ok) pendingCategoryCreate = null
+                onDone(ok)
+            }
+            mutate("Category added", onCreated) { repo.createCategory(businessId, trimmed, pending.second) }
         }
 
         /** `PATCH …/catalog/categories/:catId`. */

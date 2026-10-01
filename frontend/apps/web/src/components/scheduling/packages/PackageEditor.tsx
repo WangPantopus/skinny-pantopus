@@ -11,7 +11,7 @@
 // and multi-event eligibility have no backing fields, so they're omitted rather
 // than faked. "Redeems against" maps to the single optional event_type_id.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { ChevronLeft, Info, Lock, Power } from "lucide-react";
@@ -72,6 +72,8 @@ export default function PackageEditor({
   const [eventTypes, setEventTypes] = useState<EventType[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  // One id per intended package, reused when the same package is retried, so a lost reply can't create it twice.
+  const pendingCreate = useRef<{ draft: string; id: string } | null>(null);
   // UI-only fields not persisted by the backend (design shows them view-only).
   const [description, setDescription] = useState("");
   const [expiry, setExpiry] = useState("1 year");
@@ -155,7 +157,12 @@ export default function PackageEditor({
     try {
       const input = formToInput(form);
       if (isNew) {
-        await api.scheduling.createPackage(input, owner);
+        const draft = JSON.stringify(input);
+        if (pendingCreate.current?.draft !== draft) {
+          pendingCreate.current = { draft, id: crypto.randomUUID() };
+        }
+        await api.scheduling.createPackage(input, owner, pendingCreate.current.id);
+        pendingCreate.current = null;
         toast.success("Package created.");
       } else {
         await api.scheduling.updatePackage(id, input, owner);

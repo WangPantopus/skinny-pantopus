@@ -40,8 +40,9 @@ open class BusinessCatalogRepository
         open suspend fun createCategory(
             businessId: String,
             name: String,
+            clientRequestId: String? = null,
         ): NetworkResult<BusinessCatalogCategoryResponse> =
-            safeApiCall { api.createCategory(businessId, BusinessCatalogCategoryRequest(name = name)) }
+            safeApiCall { api.createCategory(businessId, BusinessCatalogCategoryRequest(name = name, clientRequestId = clientRequestId)) }
 
         /** Rename a category. */
         open suspend fun renameCategory(
