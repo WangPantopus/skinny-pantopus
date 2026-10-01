@@ -256,7 +256,7 @@ async function setupNudges(userId) {
  * primitive: route the Mail + clear its `MailRoutingQueue` row so it doesn't
  * re-backfill. Best-effort; never throws.
  */
-async function resolveLinkedMail(item, action, drawer, userId) {
+async function resolveLinkedMail(item, action, drawer, userId, recipientUserId = userId) {
   if (!item.mail_id) return;
   try {
     const readable = await readableMail(item.mail_id, userId);
@@ -271,7 +271,7 @@ async function resolveLinkedMail(item, action, drawer, userId) {
         routing_confidence: 1.0,
         routing_method: 'mailday_resolved',
       };
-      if (d === 'personal') update.recipient_user_id = userId;
+      if (d === 'personal') update.recipient_user_id = recipientUserId;
       await supabaseAdmin.from('Mail').update(update).eq('id', item.mail_id);
     } else if (action === 'junked') {
       await supabaseAdmin.from('Mail').update({ lifecycle: 'shredded' }).eq('id', item.mail_id);
@@ -434,10 +434,45 @@ router.post('/items', verifyToken, validate(createItemSchema), async (req, res) 
   }
 });
 
-function buildDecision(item, action, body) {
+/**
+ * Who "Route to <name>" hands a piece's letter to. Every occupant sees the same
+ * queued household letter, so the triager is not its addressee: the letter goes
+ * to the member the router matched (an active occupant of the piece's Home), and
+ * with no such member it stays with the household (shared drawer). A piece with
+ * no letter (ingested or seeded) keeps the old behaviour.
+ */
+async function routeTarget(item, userId) {
+  if (!item.mail_id) return null;
+  const { data: queue, error } = await supabaseAdmin
+    .from('MailRoutingQueue')
+    .select('best_match_user_id')
+    .eq('mail_id', item.mail_id)
+    .limit(1);
+  if (error) throw error;
+  const match = (queue && queue[0] && queue[0].best_match_user_id) || null;
+  if (match && match === userId) return { userId, drawer: 'personal' };
+  if (match && item.home_id) {
+    const { data: occ, error: occErr } = await supabaseAdmin
+      .from('HomeOccupancy')
+      .select('id')
+      .eq('home_id', item.home_id)
+      .eq('user_id', match)
+      .eq('is_active', true)
+      .limit(1);
+    if (occErr) throw occErr;
+    if (occ && occ.length) return { userId: match, drawer: 'personal' };
+  }
+  return { userId: null, drawer: 'home' };
+}
+
+function buildDecision(item, action, body, target = null) {
   const nowIso = new Date().toISOString();
   const decision = { status: 'reviewed', action, reviewed_at: nowIso, updated_at: nowIso };
-  if (action === 'routed') {
+  if (action === 'routed' && target && target.drawer === 'home') {
+    // No member matched: the chip says where the letter went.
+    decision.routed_tint = 'household_home';
+    decision.routed_to = 'Household';
+  } else if (action === 'routed') {
     decision.routed_tint = ['person_primary', 'household_home'].includes(body.tint)
       ? body.tint
       : tintForAvatar(item.suggested_avatar);
@@ -460,7 +495,8 @@ async function applyDecision(req, res, action) {
     if (!item) return res.status(404).json({ error: 'Mail item not found' });
 
     const body = req.body || {};
-    const decision = buildDecision(item, action, body);
+    const target = action === 'routed' ? await routeTarget(item, userId) : null;
+    const decision = buildDecision(item, action, body, target);
 
     const { data: updated, error } = await supabaseAdmin
       .from('MailDayItem')
@@ -476,8 +512,9 @@ async function applyDecision(req, res, action) {
 
     const drawer = ['personal', 'home', 'business'].includes(body.drawer)
       ? body.drawer
-      : decision.routed_tint === 'household_home' ? 'home' : 'personal';
-    await resolveLinkedMail(item, action, drawer, userId);
+      : target ? target.drawer
+        : decision.routed_tint === 'household_home' ? 'home' : 'personal';
+    await resolveLinkedMail(item, action, drawer, userId, target ? target.userId : userId);
     await logMailEvent(`mailday_${action}`, item.mail_id || null, userId, { item_id: item.id });
 
     return res.json({ item: serializeReviewed(updated, true) });
