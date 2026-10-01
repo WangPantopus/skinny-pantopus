@@ -256,7 +256,8 @@ public extension PulseComposeViewModel {
             isFlowMode: isFlowMode,
             composePurpose: composePurpose,
             // Edits open on a Connections target; the header names the post's own (fixed) audience.
-            postingTargetLabel: isEditing ? visibility.label : postingTarget?.displayLabel
+            postingTargetLabel: isEditing ? visibility.label : postingTarget?.displayLabel,
+            isNetworkTarget: !isEditing && postingTarget?.isNetworkTarget == true
         )
     }
 }

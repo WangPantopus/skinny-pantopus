@@ -44,6 +44,8 @@ public struct PulseComposeContentState: Equatable {
     public var isFlowMode: Bool
     public var composePurpose: PulseComposePurpose?
     public var postingTargetLabel: String?
+    /// Composing a new post to the Connections target: the general form reads "Post" and speaks of connections.
+    public var isNetworkTarget: Bool
 
     public init(
         activeIntent: PulseComposeIntent,
@@ -66,7 +68,8 @@ public struct PulseComposeContentState: Equatable {
         isIntentLocked: Bool = false,
         isFlowMode: Bool = false,
         composePurpose: PulseComposePurpose? = nil,
-        postingTargetLabel: String? = nil
+        postingTargetLabel: String? = nil,
+        isNetworkTarget: Bool = false
     ) {
         self.activeIntent = activeIntent
         self.identity = identity
@@ -89,6 +92,7 @@ public struct PulseComposeContentState: Equatable {
         self.isFlowMode = isFlowMode
         self.composePurpose = composePurpose
         self.postingTargetLabel = postingTargetLabel
+        self.isNetworkTarget = isNetworkTarget
     }
 }
 
@@ -770,7 +774,8 @@ public struct PulseComposeContent: View {
     }
 
     private var announceSectionTitle: String {
-        switch state.composePurpose {
+        guard !state.isNetworkTarget else { return "Post" }
+        return switch state.composePurpose {
         case .localUpdate: "Local Update"
         case .neighborhoodWin: "Neighborhood Win"
         case .visitorGuide: "Visitor Guide"
@@ -779,7 +784,8 @@ public struct PulseComposeContent: View {
     }
 
     private var announceBodyPlaceholder: String {
-        state.composePurpose?.placeholder ?? "Share what your neighbors should know…"
+        if state.isNetworkTarget { return "Share with your connections…" }
+        return state.composePurpose?.placeholder ?? "Share what your neighbors should know…"
     }
 
     private var audienceChipRow: some View {
