@@ -173,9 +173,44 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T13:31:28Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
+## CURRENT STATE — 2026-10-01T15:07:03Z (Stream 2 session "Stream 2: Posts, Hub and payments", successor)
 
-- **Latest (2026-10-01T13:31:28Z):** master is `3dc6b089e` or later. Three PRs are in flight, waiting on my native candidates m and n in the heavy-slot queue.
+- **Latest (2026-10-01T15:07:03Z):** master is `7df64d627` or later. Four sealed PRs are with Stream 1; none is merged yet.
+  1. [#1359](https://github.com/WangPantopus/skinny-pantopus/pull/1359): **wallet withdraw idempotency** (money; migration `20261001132000`).
+     - Head `684a7cc28`; seal `f562aba5`.
+     - Android after: a lost reply, then the retry, gives 409 with no new ledger row and no Stripe call. The app says "The withdrawal didn't go through, and your balance wasn't charged…"; master made a second debit under a new key.
+     - Two Android build fixes landed on the way: detekt MagicNumber, then a Long-cents compile error that the m2 build caught.
+     - iOS cell: Stream 1, on candidate m's app.
+  2. [#1360](https://github.com/WangPantopus/skinny-pantopus/pull/1360): **Connections general form** (iOS and Android).
+     - Head `8ad1ea0cf`; seal `bd3132d0`.
+     - iOS cell: Stream 1, on candidate m's app.
+  3. [#1363](https://github.com/WangPantopus/skinny-pantopus/pull/1363): **racy task actions** (server only).
+     - Head `99647d423`; seal `a01b71f7`.
+     - Reschedule, remind-worker, worker-ack, change-order approve/reject/withdraw and the worker's no-show incident now settle once.
+     - API before/after, a deterministic row-lock race, and Android (a retried reschedule: Bob saw 2 identical notices on master, 1 with the fix).
+     - Two pinned tests updated.
+  4. [#1365](https://github.com/WangPantopus/skinny-pantopus/pull/1365): **post toggles** (migration `20261001134000`).
+     - Head `06e812445`; seal `55090346`.
+     - Android after: a lost like reply, then the retry, gives "helpful, 1" and 1 like (master: 0).
+     - iOS cell: Stream 1, on candidate n's app.
+  - **Decisions (recorded):**
+    - #1363 also covers approve and withdraw, the same pattern on the same rows.
+    - Re-sends with the same answer reply 200, not an error.
+    - connect/account (a Stripe orphan-account race) is not changed: it's provider-bound and can't be verified here.
+  - **Lessons:**
+    - A combined native candidate that fails at detekt never reaches the Kotlin compile. Rebuild after every lint fix before trusting the next step.
+    - Wallet toasts are FLAG_SECURE and animated: capture them with `adb shell uiautomator events` (TYPE_ANNOUNCEMENT), not uiautomator dumps.
+    - `check-migrations` on a branch behind master fails on master's newer migration. Run it on a local merge, as CI does.
+    - zsh's `$GID` is a read-only special parameter.
+    - A sealing step now runs `secret-scan.py <bundle> && seal.py …` (memory: seal only after a passing scan).
+  - **Next:** Stream 1's Feed toast item. The web toast slides in off-centre because the `slideUp` keyframes replace `transform`: split the centring wrapper from the animated toast. Then read CI on the four PRs.
+  - **Runtime:**
+    - Backend 18160 is on the toggles head.
+    - Emulator-5560 holds device slot 4.
+    - All fixtures are cleaned (withdraw, racy, H1t). Only sign-in bookkeeping rows remain, for final teardown.
+    - Migrations `20261001132000` (rolled back; the live function is unchanged) and `20261001134000` (applied) are in my runtime DB.
+
+- **Earlier (2026-10-01T13:31:28Z):** master is `3dc6b089e` or later. Three PRs are in flight, waiting on my native candidates m and n in the heavy-slot queue.
   1. **Connections general form** (`claude/stream2-posts-connections-general-form` `8ad1ea0cf`):
      - Android before/after DONE. Before: the master draft shows an Ask form with Category chips (Handyman checked), and the row is stored general with `service_category` handyman. After: "POST", Headline, "Share with your connections…", no chips; stored with `service_category` NULL.
      - Control: Place → Ask is unchanged (identical UI tree; 0 differing pixels below the status bar).
