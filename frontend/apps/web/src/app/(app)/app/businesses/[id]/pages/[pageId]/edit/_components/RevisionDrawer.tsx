@@ -13,7 +13,7 @@ export default function RevisionDrawer({ revisions, publishedRevision, onClose }
     <div className="absolute top-0 right-0 w-72 h-full bg-app-surface border-l border-app-border shadow-xl z-30 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 border-b border-app-border">
         <div className="text-sm font-semibold text-app-text">Revision History</div>
-        <button onClick={onClose} className="text-app-text-muted hover:text-app-text-secondary">
+        <button onClick={onClose} className="text-app-text-muted hover:text-app-text-secondary" aria-label="Close revision history">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>

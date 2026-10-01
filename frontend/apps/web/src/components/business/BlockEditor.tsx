@@ -33,7 +33,7 @@ export default function BlockEditor({ block, onUpdate, onDelete, onClose }: Bloc
           </div>
           <div className="text-[10px] text-app-text-muted">Edit block settings</div>
         </div>
-        <button onClick={onClose} className="text-app-text-muted hover:text-app-text-secondary p-1 rounded hover:bg-app-hover transition">
+        <button onClick={onClose} className="text-app-text-muted hover:text-app-text-secondary p-1 rounded hover:bg-app-hover transition" aria-label="Close block settings">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
