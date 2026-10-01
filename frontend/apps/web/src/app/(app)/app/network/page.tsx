@@ -5,6 +5,8 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
+import { confirmStore } from '@/components/ui/confirm-store';
+import { toast } from '@/components/ui/toast-store';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import type { UserProfile, BusinessUser, Home } from '@pantopus/types';
 
@@ -95,9 +97,14 @@ function DiscoverPageContent() {
   };
 
   const handlePersonConnect = async (personId: string) => {
+    const state = personState[personId]?.relationship || 'none';
+    // "Connected" removes the connection: ask first, with Connections' own Remove confirmation.
+    if (state === 'connected') {
+      const yes = await confirmStore.open({ title: 'Remove this connection?', description: 'You can reconnect by sending a new request.', confirmLabel: 'Remove', variant: 'destructive' });
+      if (!yes) return;
+    }
     setActionLoading((p) => ({ ...p, [`person-connect-${personId}`]: true }));
     try {
-      const state = personState[personId]?.relationship || 'none';
       if (state === 'none') {
         await api.relationships.sendRequest(personId);
         setPersonState((p) => ({ ...p, [personId]: { relationship: 'pending_sent' } }));
@@ -114,6 +121,8 @@ function DiscoverPageContent() {
           setPersonState((p) => ({ ...p, [personId]: { relationship: 'none' } }));
         }
       }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Couldn\u2019t update this connection. Try again.');
     } finally {
       setActionLoading((p) => ({ ...p, [`person-connect-${personId}`]: false }));
     }
