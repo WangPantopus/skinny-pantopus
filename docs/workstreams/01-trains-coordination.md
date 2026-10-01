@@ -9,6 +9,37 @@
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
 
+- **Update 2026-10-01T01:00Z (Stream 1).**
+  - **Merged** (each seal verified at the PR head; build-batch/verify-batch RESULT OK):
+
+    | Batch | PR | Time | Contents |
+    |---|---|---|---|
+    | 228 | #1130 | 00:21:13Z | #1126 (Stream 5 web portfolio, Services tab removed), #1127 (Stream 2 post band in dark). `ServicesTab.tsx` was deleted, so it was proved by hand (verify-batch can't reverse-apply a deletion) |
+    | 229 | #1132 | 00:23:16Z | #1131 (Stream 4 Document detail: no dead Open/Share) |
+    | 230 | #1136 | 00:28:17Z | #1134 (Stream 2 toast live regions) |
+    | 231 | #1137 | 00:34:21Z | #1116 (Stream 4 HubTabRoot trailing closure; master SwiftLint green again; compiled in candidate `68b8ac1ec`) |
+    | 232 | #1141 | 00:40:39Z | **security** #1140 (Stream 4): the public home-files listing returns an allowlist of columns, not `select('*')` |
+    | 233 | #1142 | 00:41:27Z | #1133 (Stream 5 dead block Appearance controls) |
+    | 234 | #1145 | 00:44:30Z | my #1117 (T9) + my #1144 (Start default Meal train, banner copy, iOS Home chip dark 3.06 → 8.80); bundle `20260930-stream1-trains-start-banner-chip-r1` `aba8772c` |
+    | 235 | #1146 | 00:45:44Z | **security** #1135 (Stream 5): the anonymous portfolio returns an allowlist of columns |
+    | 236 | #1147 | 00:46:21Z | #1138 (Stream 2 Visitor badge; change requested and made: trusted homes via `getAccessibleHomeIds`, not bare `is_active`) |
+    | 237 | #1151 | 00:57:06Z | #1129 (Stream 2 iOS Today Manage → Notification settings; my simulator run `20261001-stream1-ios-1129-today-manage-r1` `976a017c`; path A not reachable on my stack) |
+    | 238 | #1152 | 00:57:59Z | #1128 (Stream 5 test-only: date-proof maintenance snapshot; unblocks Android CI after midnight) |
+    | 239 | #1153 | 00:58:46Z | #1139 (seat menu by keyboard/tap), #1143 (builder preview truth) |
+    | 240 | #1154 | 00:59:57Z | #1148 (Stream 2: verified residents recognised for Place posting via the household rule) |
+
+    Master is **`2dc6b9747`**; the next batch is **241**. No migrations.
+  - **Decisions (per the user's standing instruction):**
+    - Post page band in dark: option B (type colour at 10%).
+    - Fridge "Revoke" left at 4.54:1 (passes).
+    - Hub Discover Posts → "Browse Pulse" (Stream 2), with the unfiltered backend lane removed.
+    - #1138's change request (pending claims mustn't hide the Visitor badge).
+    - Schema-drift candidates routed to their owners: mail → 4, home access → 3, businesses → 5, earn → 2.
+  - **Lessons:**
+    - verify-batch can't reverse-apply a deleted file; prove it by hand (base blob == merge-base blob, absent at the head and the tip).
+    - In zsh, `"$TIP:frontend/…"` hits the `:f` modifier, so always write `"${TIP}:…"` (a lint ran on empty files once).
+    - Run swiftlint --strict on every changed Swift file of a batch; #1103's error slipped through when only shared files were linted.
+  - **Next:** Stream 5's device run (#1119 + #1121 on the combined candidate, crew fixtures), then the Android Trains TalkBack fix PR (calendar tile states, duplicate speech, unnamed Manage field/switch, reason tiles' selected state).
 - **Update 2026-10-01T00:09Z (Stream 1).**
   - **Merged** (every seal verified at the PR head; build-batch/verify-batch RESULT OK, all files blob-equal):
 
