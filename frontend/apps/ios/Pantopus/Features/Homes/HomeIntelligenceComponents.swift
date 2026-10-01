@@ -219,6 +219,9 @@ struct SeasonalChecklistCard: View {
     let state: HomeIntelligenceCardState<SeasonalChecklistDTO>
     let pendingItemIds: Set<String>
     var canEdit = true
+    /// The failure is a change the server didn't confirm; the checklist
+    /// itself loaded.
+    var changeFailed = false
     let onComplete: (String) -> Void
     let onSkip: (String) -> Void
     let onHireHelp: (SeasonalChecklistItemDTO) -> Void
@@ -264,7 +267,9 @@ struct SeasonalChecklistCard: View {
 
     private func errorBody(message: String) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Couldn't load the seasonal checklist")
+            // A lost reply may have committed the change, so the headline
+            // doesn't claim it failed; the message and Retry settle it.
+            Text(changeFailed ? "Your change may not have been saved" : "Couldn't load the seasonal checklist")
                 .pantopusTextStyle(.small)
                 .fontWeight(.semibold)
                 .foregroundStyle(Theme.Color.appText)

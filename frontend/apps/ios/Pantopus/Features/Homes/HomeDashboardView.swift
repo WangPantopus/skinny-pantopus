@@ -356,6 +356,7 @@ struct HomeDashboardView: View {
             state: viewModel.checklist,
             pendingItemIds: viewModel.pendingChecklistItemIds,
             canEdit: viewModel.canEditChecklist,
+            changeFailed: viewModel.checklistChangeFailed,
             onComplete: { itemId in Task { await viewModel.completeChecklistItem(itemId) } },
             onSkip: { itemId in Task { await viewModel.skipChecklistItem(itemId) } },
             onHireHelp: { item in
