@@ -109,7 +109,7 @@ private const val STAT_LABEL_MAX_FONT_SCALE = 1.5f
 
 /** This style grows with the system font size up to [max] times, then holds, so a one-word label in a narrow cell stays whole. */
 @Composable
-private fun TextStyle.withMaxFontScale(max: Float): TextStyle {
+internal fun TextStyle.withMaxFontScale(max: Float): TextStyle {
     val scale = LocalDensity.current.fontScale
     if (scale <= max) return this
     val factor = max / scale
