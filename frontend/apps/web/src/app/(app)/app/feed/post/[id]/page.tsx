@@ -23,7 +23,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
 import { lostFoundContactLabel } from '@/components/feed/composer/LostFoundFields';
-import { patchPostInFeedCaches } from '@/hooks/useFeedData';
+import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
 
 // ─── Icon lookup (data from shared config, React icons stay local) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -151,6 +151,13 @@ export default function PostDetailPage() {
 
   // ─── Actions ───────────────────────────────────────────────
   const queryClient = useQueryClient();
+
+  // A comment added or deleted here shows in the feed card's count when you go back.
+  const commentCount = post?.comment_count;
+  useEffect(() => {
+    if (postId && commentCount != null) patchPostInFeedCaches(queryClient, postId, { comment_count: commentCount });
+  }, [queryClient, postId, commentCount]);
+
   const likeMutation = useMutation({
     mutationFn: (postId: string) => api.posts.toggleLike(postId),
     onMutate: () => {
@@ -297,6 +304,7 @@ export default function PostDetailPage() {
     if (!yes) return;
     try {
       await api.posts.deletePost(post.id);
+      removePostFromFeedCaches(queryClient, post.id);
       router.push('/app/feed');
     } catch {
       showToast('Failed to delete post');
@@ -941,13 +949,15 @@ export default function PostDetailPage() {
           post={post}
           user={user}
           onClose={() => setEditing(false)}
-          onSaved={(_postId, changes) => {
+          onSaved={(savedId, changes) => {
             setPost((p: Post | null) => (p ? { ...p, ...changes } : p));
+            patchPostInFeedCaches(queryClient, savedId, changes);
             setEditing(false);
             showToast('Post updated');
           }}
-          onGone={() => {
+          onGone={(goneId) => {
             // Deleted elsewhere while it was open: show the page's "Post not found" state.
+            removePostFromFeedCaches(queryClient, goneId);
             setEditing(false);
             setPost(null);
           }}
