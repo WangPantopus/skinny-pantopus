@@ -107,14 +107,17 @@ async function processUser(user, year, month) {
     // Email (check preference)
     if (user.email) {
       try {
-        const { data: prefs } = await supabaseAdmin
+        const { data: prefs, error: prefsError } = await supabaseAdmin
           .from('MailPreferences')
-          .select('email_receipts')
+          .select('email_receipts, email_notifications')
           .eq('user_id', userId)
           .maybeSingle();
+        // An opt-out we couldn't read is not a yes.
+        if (prefsError) throw prefsError;
 
-        // Default to true if no preference row or column is null
-        const emailEnabled = prefs?.email_receipts !== false;
+        // Default to true if no preference row or column is null. The account's
+        // Email Notifications switch (web Settings) turns this email off too.
+        const emailEnabled = prefs?.email_receipts !== false && prefs?.email_notifications !== false;
 
         if (emailEnabled) {
           await sendMonthlyReceipt(user.email, receipt);

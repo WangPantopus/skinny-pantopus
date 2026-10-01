@@ -446,7 +446,8 @@ async function sendMonthlyReceipt(toEmail, receipt) {
   const earningsDollars = (earnings.total_cents / 100).toFixed(2);
   const spendingDollars = (spending.total_cents / 100).toFixed(2);
   const shareUrl = `${APP_URL}/profile?tab=receipt&year=${period.year}&month=${period.month}`;
-  const unsubUrl = `${APP_URL}/settings/notifications`;
+  // Settings has the Email Notifications switch this email honors; /settings/notifications was a 404.
+  const unsubUrl = `${APP_URL}/app/profile/settings`;
 
   const subject = `Your ${period.label} Pantopus Summary`;
 

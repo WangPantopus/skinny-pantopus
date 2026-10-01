@@ -204,7 +204,7 @@ export default function SettingsPage() {
             <div className="space-y-4">
               <ToggleSetting
                 label="Email Notifications"
-                description="Receive email updates about your gigs and bids"
+                description="Receive email updates, like your monthly summary"
                 checked={emailNotifications}
                 onChange={setEmailNotifications}
               />
