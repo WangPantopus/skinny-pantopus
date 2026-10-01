@@ -109,6 +109,8 @@ router.get('/', verifyToken, async (req, res) => {
       .select(NOTIFICATION_LIST)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
+      // Notifications written together share created_at; without a tiebreak "load more" can repeat one and skip others.
+      .order('id', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (unreadOnly) {

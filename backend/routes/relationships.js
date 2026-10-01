@@ -703,6 +703,8 @@ router.get('/', verifyToken, async (req, res) => {
       // A blocked row is listed only for the person who blocked.
       .or(`status.neq.blocked,blocked_by.eq.${userId}`)
       .order('created_at', { ascending: false })
+      // Rows created together share created_at; the id makes the order total so paging can't repeat or skip one.
+      .order('id', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
     if (status) {
