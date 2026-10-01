@@ -9,6 +9,9 @@
 
 ## CURRENT RESUME — SUCCESSOR 2026-10-01T21:22:09Z
 
+- **UPDATE 2026-10-01T23:41:57Z — installed Android outcome reported by Stream 1:** candidate32 with backend companion `d12c18f0e8140e454547ae486fe369857f07f7fc` completed a fresh controlled withdrawal: pending503 → same-key200, balance1500 →50 cents, one1450-cent completed debit, and the actual success toast. The amount text remains intentionally; the pending key clears. The original fixture was already settled, so Stream1 preserved the before evidence, proved rollback/guarded cleanup, then seeded its same owned user for this after cell. Final coordinator seal and cleanup proof are pending. iOS wallet navigation currently meets the existing sensitive-screen security gate; no iOS withdrawal acceptance or OS bypass. #1413/#1428/#1431 remain open with all applicable CI green; sole-merger review/integration remains with Stream1.
+- **Operational decision:** two consecutive Stream1 turns failed with the model-capacity error. Resumed the same authorized coordinator chat on supported `gpt-6.1-sol`/high, preserving history, device ownership and sole-merger authority. The resumed turn produced the Android outcome above. No new chat, native delta, fixture mutation in Stream2, or acceptance-row change. Own backend/proxy health200/200, Next18169 listening; all application fixtures remain clean and11AuthSession/11AuthSecurityEvent retained until final teardown. Next: inspect coordinator's sealed native result and integration; keep the runtime available.
+
 - **CHECKPOINT 2026-10-01T23:31:30Z — active native/integration dependency:** all independent Stream2 repairs are clean, pushed and sealed. #1413 (`8a98dc894`), backend companion #1428 (`d12c18f0e`) and web accessibility #1431 (`242eac0ce`) remain open; #1428/#1431 all applicable CI green, no failed jobs on any of the three. #1426 is merged in batch322. Stream1 retains its candidate32 devices and isolated wallet fixture; it requested no additional native deltas while completing baseline cells and then candidate33. No Stream2 device/build use. Exact native Android retry and iOS authentication disposition still awaited; do not claim native acceptance from API/compile/CI.
 - Stream1's prior turn stopped with the system error “Selected model is at capacity. Please try a different model.” Sent an authorized continuation with its existing model/settings and preserved state; the new turn is active and coordinating again. Do not take over its protected devices or merge authority. No application change, new fixture or acceptance-row change from this operational recovery. Own runtime health200/200; backend remains loaded d12c18f0e, Next serves242eac0ce, all application fixtures cleaned,11AuthSession/11AuthSecurityEvent retained until final teardown. Both outstanding evidence manifests were rechecked byte-for-byte, unchanged.
 
@@ -361,9 +364,9 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-01T23:31:30Z (Stream 2 successor)
+## CURRENT STATE — 2026-10-01T23:41:57Z (Stream 2 successor)
 
-- **Latest:** #1414/#1412/#1418 merged in batches317–319; #1423 wraps proven clipped post/comment text and is sealed/queued; #1413 native evidence remains with Stream1. Web resting and money empty-state width sweeps complete with no further repair. See CURRENT RESUME for heads/seals, cleanup, decisions and limits.
+- **Latest:** #1414/#1412/#1418/#1423/#1426 merged; #1413/#1428 and #1431 remain in Stream1’s queue with green CI. Stream1 reports the installed Android withdrawal retry passes; final native seal/cleanup and iOS security-gate disposition remain pending. Current source, evidence, decisions and limits are in CURRENT RESUME above.
 
 - **Latest (2026-10-01T18:09:59Z): HANDED OFF** at the user's request. See "CURRENT RESUME — HANDOFF 2026-10-01T18:09:59Z" above and [`NEXT-STREAM2-PROMPT-2026-10-01-evening.md`](NEXT-STREAM2-PROMPT-2026-10-01-evening.md).
   - Since 17:32Z:
