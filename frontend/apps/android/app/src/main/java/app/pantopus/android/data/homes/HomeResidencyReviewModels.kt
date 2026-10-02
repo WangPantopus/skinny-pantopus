@@ -54,7 +54,7 @@ data class HomeResidencyCurrentReview(
 
 enum class HomeResidencyReviewFailureKind { Storage, Changed, Busy, Unknown, Unavailable, SessionChanged, Refused }
 
-class HomeResidencyReviewFailure(val kind: HomeResidencyReviewFailureKind) : IllegalStateException(
+class HomeResidencyReviewFailure(val kind: HomeResidencyReviewFailureKind, code: String? = null) : IllegalStateException(
     when (kind) {
         HomeResidencyReviewFailureKind.Storage ->
             "Your original residency decision could not be read or saved. Retry recovery before choosing another decision."
@@ -65,6 +65,10 @@ class HomeResidencyReviewFailure(val kind: HomeResidencyReviewFailureKind) : Ill
         HomeResidencyReviewFailureKind.SessionChanged ->
             "Your session changed. Reopen residency review to check access and recover the original."
         HomeResidencyReviewFailureKind.Refused ->
-            "The saved decision could not be applied to the current claim and membership limits. Review the current claim again."
+            if (code == "MEMBERSHIP_RENEWAL_REQUIRED") {
+                "This person’s household membership has ended, so this claim can’t be approved. You can reject it instead."
+            } else {
+                "The saved decision could not be applied to the current claim and membership limits. Review the current claim again."
+            }
     },
 )
