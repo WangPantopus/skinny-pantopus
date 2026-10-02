@@ -1,5 +1,25 @@
 # Pantopus project handoff
 
+## Current execution ownership — October 2, 2026
+
+The parent domains remain **Streams1–5**. New3-1/3-2 and4-1/4-2 are execution lanes within their existing parents, not a renumbering or new acceptance catalog. This current assignment supersedes older single-owner prompt and resource snapshots below. **Stream1 stays one stream** after the human-requested remaining-work assessment; no1-1/1-2 is created.
+
+| Owner | Scope and current routing |
+| --- | --- |
+| **Stream1** | [Support Trains and coordination](workstreams/01-trains-coordination.md): all existing G01–G05/O01–O06/L01–L04/TrainU02–U04, finalU05 integration, consolidated S2 follow-up and the **sole merge queue** for every parent/child contribution. [Single successor prompt](workstreams/NEXT-STREAM1-PROMPT-2026-10-02-clean-checkpoint.md). |
+| **Stream2** | Existing [Posts/Hub/payments contribution](workstreams/02-posts-hub-payments.md) is complete within recorded scope; human consolidated follow-up into S1 and retired exclusive local resources. No separate new campaign. |
+| **3-1** | [Home access/residency/ownership](workstreams/03-1-home-access-ownership.md): H01–H08/R01–R05,13 inherited rows; U01 and assigned U02–U04; sole parent03 custodian/combined Stream3 U05 contributor. [Prompt](workstreams/NEXT-STREAM3-1-PROMPT-2026-10-02.md). |
+| **3-2** | [Home security/privacy/guest access](workstreams/03-2-home-security-privacy.md): R06/D05–D08/D10/M02,7 inherited rows and assigned U02–U05; hand scoped evidence to3-1. [Prompt](workstreams/NEXT-STREAM3-2-PROMPT-2026-10-02.md). [Exhaustive S3 routing](workstreams/03-stream3-split-2026-10-02.md);13+7=20/disjoint,5+1=6 retained UX, existing parent8/20 acceptance unchanged. |
+| **4-1** | [Place/Home records/Money](workstreams/04-1-place-home-records-money.md): I01–I07/D01–D04/D09/F01–F05,17 inherited rows; sole parent04/combinedU05/split-guide/common-router custodian. [Prompt](workstreams/NEXT-STREAM4-1-PROMPT-2026-10-02.md). |
+| **4-2** | [Mailbox/MailDay/mail tasks](workstreams/04-2-mailbox-mailday.md): M01/M03/M04,3 inherited rows plus assigned Mailbox U02–U05; hand exact evidence to4-1. [Prompt](workstreams/NEXT-STREAM4-2-PROMPT-2026-10-02.md). [Exhaustive S4 routing](workstreams/04-stream4-split-2026-10-02.md);17+3=20core,6+12=18UX,16+26=42source dispositions and16+11=27draft sections, with JustMoved/mail-linked asset exceptions. Inherited cut/deferred rows stay cut/deferred. |
+| **Stream5** | Existing [Accounts/Social contribution](workstreams/05-accounts-social.md) complete within authorized local scope; no new campaign. External/held prerequisites remain. |
+
+The existing parent03/04 ledgers and accepted evidence remain authoritative. Child statuses route work and record scoped new results without duplicating denominators or erasing limits. Each child covers its journeys across iOS/Android/web/API/persistence. Shared routes/navigation/contracts/Place/GroupedList/design tokens/private operators have **one named writer for an exact patch**, with affected-owner review. Family ownership does not grant wholesale ownership of shared files or another child's private session.
+
+Independent source/evidence preparation can proceed in separate owned checkouts. Shared runtime/fixtures/native devices and heavy builds remain **exclusive**, with complete exact child-purpose holder and matching platform-slot preflight. Preserve helper-compatible `stream3-home:` and `stream4:` prefixes; a prefix match alone is not sibling ownership. Lease checks apply to shared runtime/native/control/serving-source actions, not offline source work. **Next runtime order remains fresh coordinator/owner ACK → S4-2 retained MailDay → actual clean return → later separately acknowledged S3 child windows.** Freedom is a snapshot, not a reservation; this documentation creates no chat/worktree/build/install/fixture or lease.
+
+All prior launch cuts, protected designs, provider/device/signing/hosted prerequisites and Legal/forbidden-business-read/migration-body/account-parent-deletion/money-history holds remain. D10 assignment does not authorize real Home/parent/account deletion; exact captured fixture-PK cleanup remains separate. My Mail Day and Stamps remain retained. No acceptance count or launch-readiness percentage changes from splitting.
+
 > ## 🔢 WORKSTREAM RENUMBERING — 2026-09-30 (user direction; read first)
 > - The user is splitting the former **Stream 1** (gigs and payments) and **Stream 2** (Home and household) into **two workstreams each**; those four are Streams 1–4. Their new names, files and ownership are recorded by those streams.
 > - **The former Stream 2 (Home and household) is split into Stream 3 — Home access, residency and security ([`03-home-access-residency.md`](workstreams/03-home-access-residency.md)) and Stream 4 — Place, records, money and mail ([`04-place-records-money-mail.md`](workstreams/04-place-records-money-mail.md)).**
