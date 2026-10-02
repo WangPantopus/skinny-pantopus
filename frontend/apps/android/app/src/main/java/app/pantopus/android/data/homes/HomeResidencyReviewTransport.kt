@@ -80,6 +80,7 @@ class APIHomeResidencyReviewTransport(
                 status in DENIED_STATUSES || code == "SESSION_SCOPE_CHANGED" -> HomeResidencyReviewFailureKind.Unavailable
                 else -> HomeResidencyReviewFailureKind.Unknown
             },
+            code = code,
         )
 
     private companion object {
