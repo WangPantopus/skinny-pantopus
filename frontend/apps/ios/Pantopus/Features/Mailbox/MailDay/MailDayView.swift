@@ -127,7 +127,8 @@ public struct MailDayView: View {
             leading: .back,
             rightActionLabel: isPopulated ? nil : "Settings",
             isValid: true,
-            isDirty: false,
+            // This opens settings; it is available even without an edited draft.
+            isDirty: true,
             onClose: onClose,
             onCommit: { Task { await viewModel.openSettings() } },
             content: { body() },
