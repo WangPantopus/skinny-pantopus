@@ -37,7 +37,9 @@ class InviteOwnerFormViewModelTest {
         Dispatchers.setMain(dispatcher)
         coEvery { homesRepo.inviteOwner(any(), any()) } returns
             NetworkResult.Success(InviteOwnerResponse(message = "ok", claimId = "c1"))
-        coEvery { homesRepo.detail(any()) } answers NetworkResult.Success(homeResponse(firstArg()))
+        coEvery { homesRepo.detail(any()) } answers {
+            NetworkResult.Success(homeResponse(firstArg()))
+        }
     }
 
     @After fun tearDown() {
