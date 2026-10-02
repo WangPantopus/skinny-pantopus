@@ -72,6 +72,7 @@ data class WalletTransactionDto(
     val currency: String? = null,
     /** `completed | pending | failed | reversed`. */
     val status: String,
+    @Json(name = "stripe_transfer_id") val stripeTransferId: String? = null,
     @Json(name = "counterparty_id") val counterpartyId: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
 )

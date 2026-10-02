@@ -110,7 +110,7 @@ class WalletMapperTest {
         assertEquals(2, content.activity.size)
         // Only the inbound June row counts toward "this month".
         assertEquals("\$140.00", content.monthValue)
-        assertEquals("1 task this month", content.monthMeta)
+        assertEquals("1 credit this month", content.monthMeta)
         assertFalse(content.isOnHold)
         assertEquals(ActivityCategory.Bank, content.activity[1].category)
     }

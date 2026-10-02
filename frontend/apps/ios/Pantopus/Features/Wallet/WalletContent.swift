@@ -26,9 +26,11 @@ public enum WalletActivityCategory: String, Equatable, Sendable, CaseIterable {
 public enum ActivityStatus: Equatable, Sendable {
     /// Earned and cleared — counts toward the available balance.
     case available
-    /// Earned but still in escrow. `clearsLabel` is the user-facing
-    /// "clears Dec 4" copy rendered after the counterparty line.
-    case pending(clearsLabel: String)
+    /// Unsettled escrow or withdrawal. `clearsLabel` is supplied only
+    /// when the existing escrow projection knows a clearing label.
+    case pending(clearsLabel: String?)
+    /// The original debit was reversed; it did not become a payout.
+    case reversed
     /// Already-settled outbound payout or fee.
     case complete
 }
