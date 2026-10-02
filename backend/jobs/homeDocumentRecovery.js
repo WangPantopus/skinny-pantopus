@@ -76,3 +76,34 @@ module.exports.completionFiles = async function completionFiles() {
   if (stats.selected) logger.info('Completion file recovery complete', stats);
   return stats;
 };
+
+// Reuse the existing bounded recovery schedule for explicit ordinary chat
+// tombstones. Their provenance and reference fence differ from Home/Gig RPCs.
+module.exports.chatFiles = async function chatFiles() {
+  const { S3_BUCKET, S3_STORAGE_NAMESPACE } = require('../config/aws');
+  const service = require('../services/s3Service');
+  const stats = { selected: 0, acknowledged: 0, pending: 0, skipped: 0 };
+  const candidates = await db.rpc('chat_file_cleanup_candidates', {
+    p_bucket: S3_BUCKET, p_namespace: S3_STORAGE_NAMESPACE, p_limit: 100,
+  });
+  if (candidates.error || !Array.isArray(candidates.data)) throw new Error('Chat file recovery selection unavailable');
+  stats.selected = candidates.data.length;
+  for (const id of candidates.data) {
+    const claimed = await db.rpc('claim_chat_file_cleanup', { p_file_id: id, p_bucket: S3_BUCKET, p_namespace: S3_STORAGE_NAMESPACE });
+    if (claimed.error) { stats.pending++; continue; }
+    const file = claimed.data;
+    if (!file) { stats.skipped++; continue; }
+    let absent = false;
+    try {
+      if (file.id !== id) throw new Error('Invalid chat cleanup identity');
+      absent = (await service.removeDeletedChatFile(file)).currentObjectAbsent === true;
+    } catch { /* Preserve inventory; never log provider paths or raw errors. */ }
+    const finished = await db.rpc('finish_chat_file_cleanup', {
+      p_file_id: id, p_claim: file.metadata?.storage_cleanup_claim || null, p_current_absent: absent,
+    });
+    if (absent && !finished.error && finished.data === true) stats.acknowledged++;
+    else stats.pending++;
+  }
+  if (stats.selected) logger.info('Chat file recovery complete', stats);
+  return stats;
+};

@@ -443,7 +443,7 @@ function startJobs(options = {}) {
   });
 
   scheduleCron('*/5 * * * *', wrapJob('homeDocumentRecovery', async () => {
-    const results = await Promise.allSettled([homeDocumentRecovery(), homeDocumentRecovery.completionFiles()]);
+    const results = await Promise.allSettled([homeDocumentRecovery(), homeDocumentRecovery.completionFiles(), homeDocumentRecovery.chatFiles()]);
     if (results.some(result => result.status === 'rejected')) throw new Error('Private file recovery incomplete');
   }), {
     scheduled: true,

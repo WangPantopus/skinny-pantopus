@@ -675,10 +675,13 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
         }
       }
 
-      const stableKey = id ? `chat/${roomId}/${userId}/${id}/${fingerprint}${path.extname(file.originalname).toLowerCase()}` : null;
-      const { url, key } = await (id
-        ? s3.uploadToS3(file.buffer, stableKey, file.mimetype)
-        : s3.uploadGeneral(file.buffer, file.originalname, userId, `chat/${roomId}`, file.mimetype));
+      const recordId = id || crypto.randomUUID();
+      const objectKey = id ? `chat/${roomId}/${userId}/${id}/${fingerprint}${path.extname(file.originalname).toLowerCase()}`
+        : s3.generateS3Key(`chat/${roomId}`, file.originalname, userId);
+      const sha256 = crypto.createHash('sha256').update(file.buffer).digest('hex');
+      const storageReference = s3.chatFileStorageReference(recordId, userId, roomId, objectKey, sha256);
+      const { url, key } = await s3.uploadToS3(file.buffer, objectKey, file.mimetype,
+        s3.chatFileObjectMetadata(recordId, userId, sha256));
 
       const ext = (path.extname(file.originalname || '').replace('.', '') || '').toLowerCase();
       const category = s3.categorizeFile(file.mimetype) || 'document';
@@ -688,7 +691,7 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
       // through GET /api/chat/files/:fileId which verifies room membership
       // and returns a short-lived signed S3 URL.
       const row = {
-          ...(id ? { id } : {}),
+          id: recordId,
           user_id: userId,
           filename: key.split('/').pop() || file.originalname,
           original_filename: file.originalname,
@@ -701,6 +704,7 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
           visibility: 'private',
           processing_status: 'completed',
           metadata: {
+            ...storageReference,
             room_id: roomId,
             category,
             uploaded_via: 'chat',
@@ -724,6 +728,12 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
       if (id && !inserted && conflict(saved)) {
         // Competing contents have disjoint object names. A tombstone must not
         // acquire late-arriving objects after deletion either.
+        if (saved.is_deleted && saved.file_path === key) {
+          // A delayed same-key write must invalidate a previous absence receipt
+          // before attempting best-effort deletion. Its inventory remains durable.
+          const invalidated = await supabaseAdmin.rpc('invalidate_chat_file_cleanup', { p_file_id: id, p_key: key });
+          if (invalidated.error) return res.status(503).json({ error: 'Attachment deletion could not be confirmed. Please retry.' });
+        }
         await s3.deleteFromS3(key);
         return res.status(409).json({ error: 'This upload request was already used. Send the attachment again.', code: 'CHAT_UPLOAD_REQUEST_REUSED' });
       }
