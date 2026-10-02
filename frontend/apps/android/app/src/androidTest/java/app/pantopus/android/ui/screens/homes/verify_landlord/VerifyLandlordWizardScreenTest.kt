@@ -2,6 +2,9 @@
 
 package app.pantopus.android.ui.screens.homes.verify_landlord
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -84,7 +87,7 @@ class VerifyLandlordWizardScreenTest {
         compose.onNodeWithTag(WizardShellTags.LEADING).assertContentDescriptionEquals("Close").performClick()
         compose.onNodeWithText("Discard your progress?").assertExists()
         assertFalse(dismissed)
-        coVerify(exactly = 0) { repository.requestApproval(any(), any()) }
+        coVerify(exactly = 0) { repository.requestApproval(any(), any(), any()) }
     }
 
     @Test
@@ -100,12 +103,19 @@ class VerifyLandlordWizardScreenTest {
         compose.onNodeWithTag(WizardShellTags.PRIMARY_CTA).performClick()
         compose.waitUntil { vm.state.value.errors != null }
         compose.onNodeWithTag(WizardShellTags.PRIMARY_CTA).assertIsNotEnabled()
+        compose.onNodeWithTag("verifyLandlordField_Owner or business name")
+            .assertContentDescriptionEquals("Owner or business name")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, "Required"))
         compose.runOnIdle {
             vm.setOwnerName("Fixture Owner")
             vm.setContactName("Fixture Contact")
             vm.setEmail("owner@example.invalid")
         }
         compose.onNodeWithTag(WizardShellTags.PRIMARY_CTA).assertIsEnabled()
+        compose.onNodeWithTag("verifyLandlordField_Owner or business name")
+            .assertContentDescriptionEquals("Owner or business name")
+            .assertTextEquals("Fixture Owner")
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Error))
         val lease = TenantLeaseDto("lease-1", "home-1", "pending", "tenant_request")
         coEvery { repository.homeStatus("home-1") } returns
             NetworkResult.Success(
@@ -123,6 +133,6 @@ class VerifyLandlordWizardScreenTest {
         compose.onNodeWithTag("verifyLandlordMailCodeCTA").assertExists()
         compose.onNodeWithTag(WizardShellTags.PRIMARY_CTA).performClick()
         compose.runOnIdle { assertTrue(dismissed) }
-        coVerify(exactly = 0) { repository.requestApproval(any(), any()) }
+        coVerify(exactly = 0) { repository.requestApproval(any(), any(), any()) }
     }
 }
