@@ -9,6 +9,8 @@
 
 ## CURRENT RESUME — SUCCESSOR 2026-10-01T21:22:09Z
 
+- **UPDATE 2026-10-02T02:47:31Z — withdrawal recovery merged; Android before still building.** GitHub live-read confirms #1445 exact8d9316e31 merged02:40:34Z (source merge b147f2ef7), integrated by sole-merger batch331 #1447/masterefa4cadab. Sealed35-file packet9a7a4099 remains immutable, all covering CI green, backend-before-web deployment note retained. Nine successor repairs now integrated; no whole-payment/native/provider launch closure. Own slot4/5564 booted; exact baseline assemble has passed Kotlin compilation and is in Java/packaging stages under the same02:31:31Z heavy lease. No app source edits/switches. Own18160/18168 healthy; native safe recorder captures only Wallet method/status/amount/key hashes, never auth data. Fresh synthetic wallet1500/provider-call0 confirmed; actual native affordable/cold cell follows successful build/install. Canonical gen.py check passes, counts unchanged.
+
 - **UPDATE 2026-10-02T02:38:46Z — #1445 all applicable CI green; independent owned Android before cell active.** Exact8d9316e31 remainsclean/pushed/sealed9a7a4099. Stream1 authorized currentlyfree slot4/uniqueAVD to avoid5558 overlap. Acquireddevice4 at02:31Z, labelstream2:posts/payments emulator-5564 withdrawalrecovery; bootednewpantopus_stream2_posts_payments_recovery frominstalledAPI35x86_64/no downloads/no metrics/crashconsent, bootcomplete observed. Beforeassembleexact8d/nativeWalletVMunchanged/API10.0.2.2:18168 queuedbehindStream1C34R3, acquiredheavy02:31:31Z labelstream2:moneyAndroidrecoverybefore8d9316e31; compiling now. Nosourceedit/switch whilequeued/compiling. SharedSDK/JDK usedread-only; no iOS/founder/peerdevices touched.
 - **Fresh round3 runtime:** restartedonlyour7containers,353/353pre-userfingerprints matchround2cleanedbaseline; freshAlice/Bob/1500cent ownedwallet/localpayoutfixture, explicitSDKpending,18160/18168healthy,Next18169stopped. NativeDPoPorigin configured10.0.2.2:18168; proxydeniesexternalHTTP/CONNECT, emulatorDNSblocked. No provider/capture/nativeacceptance yet. Next actual1000pending→500available→100affordableattempt→coldprocess before; onlyafterreproduction smallestexistingnativeVM/API/model repair, preservingdesign. Sign-inbookkeeping retaineduntilround3finalteardown. Priorround2cleanup/seal immutable; newfixturesdo notalteritsproof.
 
@@ -386,7 +388,7 @@ Stream 1's iOS evidence for these cells:
 
 The inventory, `…/20260930-stream2-posts-hub-payments-inventory-r1/INVENTORY.md` (living, unsealed), was updated at this handoff with every status above and the follow-ups.
 
-## CURRENT STATE — 2026-10-02T02:38:46Z (Stream 2 successor)
+## CURRENT STATE — 2026-10-02T02:47:31Z (Stream 2 successor)
 
 - **Latest:** #1445 exact8d9316e31/seal9a7a4099 in sole-merger review; full local web/API/SQL recovery packet passed and runtime/fixtures torn down. Native affordable/cold cell queued afterchat34; CI/review/integration pending. See newest CURRENT RESUME.
 
