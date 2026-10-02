@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.wallet
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.wallet.WalletWithdrawRequest
+import app.pantopus.android.data.api.models.wallet.WalletWithdrawalRecoveryDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.connect.ConnectRepository
@@ -68,7 +69,10 @@ class WalletViewModel
         val withdrawError: StateFlow<String?> = _withdrawError.asStateFlow()
 
         /** The withdrawal in progress (idempotency key, amount in cents), kept until a final outcome; see [withdraw]. */
-        private var pendingWithdrawal: Pair<String, Long>? = null
+        private var pendingWithdrawal: WalletWithdrawalRecoveryDto? = null
+        private var recoveryChecked = false
+        private var loadedWalletId: String? = null
+        private var withdrawalRecoveryCount = 0
 
         /** Drives the pull-to-refresh indicator. */
         private val _refreshing = MutableStateFlow(false)
@@ -109,9 +113,12 @@ class WalletViewModel
         }
 
         private suspend fun fetch(showLoading: Boolean) {
+            recoveryChecked = false
             if (showLoading) _state.value = WalletUiState.Loading
             when (val balance = repository.balance()) {
                 is NetworkResult.Success -> {
+                    if (loadedWalletId != null && loadedWalletId != balance.data.wallet.id) pendingWithdrawal = null
+                    loadedWalletId = balance.data.wallet.id
                     // Activity and pending-release are money figures: a failed
                     // read takes the balance's error + Try again rather than
                     // showing "$0.00 this month" or "Nothing in escrow" (iOS
@@ -125,6 +132,11 @@ class WalletViewModel
                                 return
                             }
                         }
+                    val recoveryError = readWithdrawalRecovery()
+                    if (recoveryError != null) {
+                        _state.value = WalletUiState.Error(recoveryError)
+                        return
+                    }
                     val pending =
                         when (val result = repository.pendingRelease()) {
                             is NetworkResult.Success -> result.data
@@ -139,6 +151,7 @@ class WalletViewModel
                     availableCents = balance.data.wallet.balance
                     payoutsEnabled = enabled
                     walletFrozen = balance.data.wallet.frozen
+                    recoveryChecked = true
                     _state.value =
                         WalletUiState.Populated(
                             WalletMapper.build(
@@ -147,6 +160,9 @@ class WalletViewModel
                                 pending = pending,
                                 payoutsEnabled = enabled,
                                 connectAccount = connectAccount,
+                            ).copy(
+                                withdrawalRecovery = pendingWithdrawal,
+                                withdrawalRecoveryCount = withdrawalRecoveryCount,
                             ),
                         )
                 }
@@ -155,6 +171,26 @@ class WalletViewModel
                 }
             }
         }
+
+        /** Only a successful owner read permits money; retain a request whose reply is unknown. */
+        private suspend fun readWithdrawalRecovery(): String? =
+            when (val result = repository.withdrawalRecovery()) {
+                is NetworkResult.Success -> {
+                    val recovery = result.data
+                    val count = recovery.total ?: -1
+                    val hasMatchingCount = (count > 0) == (recovery.withdrawalRecovery != null)
+                    if (
+                        count < 0 || recovery.transactions.isNotEmpty() || !hasMatchingCount
+                    ) {
+                        "Couldn't check previous withdrawals. Try again."
+                    } else {
+                        recovery.withdrawalRecovery?.let { pendingWithdrawal = it }
+                        withdrawalRecoveryCount = maxOf(count, if (pendingWithdrawal != null) 1 else 0)
+                        null
+                    }
+                }
+                is NetworkResult.Failure -> result.error.message
+            }
 
         // MARK: - Payout actions (Block 3C)
 
@@ -166,21 +202,27 @@ class WalletViewModel
          * original "whole balance" behaviour.
          */
         fun withdraw(amountText: String? = null) {
-            if (fixture != null) return
+            if (fixture != null || _action.value is WalletAction.Withdrawing) return
             _withdrawError.value = null
-            // A withdrawal in progress can be retried even when its held debit leaves less than $1.00 available.
+            // A held debit can be retried even with no available funds; never replace its intent.
             val belowMinimum = availableCents < MIN_WITHDRAW_CENTS && pendingWithdrawal == null
-            if (!payoutsEnabled || walletFrozen || belowMinimum) {
-                _action.value =
-                    WalletAction.WithdrawFailed(withdrawGateMessage(payoutsEnabled, walletFrozen))
+            val gateMessage =
+                when {
+                    !recoveryChecked -> "Couldn't check previous withdrawals. Refresh your wallet and try again."
+                    pendingWithdrawal?.canRetry == false -> WITHDRAWAL_REVIEW_MESSAGE
+                    !payoutsEnabled || walletFrozen || belowMinimum -> withdrawGateMessage(payoutsEnabled, walletFrozen)
+                    else -> null
+                }
+            if (gateMessage != null) {
+                _action.value = WalletAction.WithdrawFailed(gateMessage)
                 return
             }
             val amountCents = withdrawAmountCents(amountText) ?: return
             // One withdrawal, one idempotency key: a retry after a failed or lost reply resends the same key,
             // so the server settles on the first attempt and can't pay out twice. Replaced after a final
-            // outcome (paid out, or refused) or when the amount changes.
-            val key = pendingWithdrawal?.takeIf { it.second == amountCents }?.first ?: UUID.randomUUID().toString()
-            pendingWithdrawal = key to amountCents
+            // outcome (paid out, or refused). An unknown outcome cannot be replaced by another amount.
+            val key = pendingWithdrawal?.idempotencyKey ?: UUID.randomUUID().toString()
+            pendingWithdrawal = WalletWithdrawalRecoveryDto(amountCents, key, retryable = true)
             _action.value = WalletAction.Withdrawing
             viewModelScope.launch {
                 val request = WalletWithdrawRequest(amount = amountCents, idempotencyKey = key)
@@ -200,19 +242,19 @@ class WalletViewModel
          * after showing why the typed amount can't be sent.
          */
         private fun withdrawAmountCents(amountText: String?): Long? {
-            if (amountText == null) return availableCents
+            val held = pendingWithdrawal?.amountCents
+            if (amountText == null) return held ?: availableCents
+            if (held != null) {
+                if (parseWithdrawAmount(amountText, held) == WithdrawAmount.Valid(held)) return held
+                _withdrawError.value =
+                    "${WalletMapper.centsToCurrency(held)} has not been confirmed. Retry the same amount."
+                return null
+            }
             return when (val parsed = parseWithdrawAmount(amountText, availableCents)) {
                 is WithdrawAmount.Valid -> parsed.cents
                 is WithdrawAmount.Invalid -> {
-                    // A retry of the withdrawal in progress may exceed what's available now: its held debit
-                    // is that money, and the server settles the same key without debiting again.
-                    val held = pendingWithdrawal?.second
-                    if (held != null && parseWithdrawAmount(amountText, held) == WithdrawAmount.Valid(held)) {
-                        held
-                    } else {
-                        _withdrawError.value = parsed.message
-                        null
-                    }
+                    _withdrawError.value = parsed.message
+                    null
                 }
             }
         }
@@ -222,7 +264,7 @@ class WalletViewModel
             if (!unsettled) pendingWithdrawal = null
             _action.value = WalletAction.WithdrawFailed(error.withdrawalPendingMessage() ?: error.message)
             // The server may have acted (no reply, a timeout, a 5xx, a held debit): re-read the balance and activity.
-            if (unsettled) loadInternal(showLoading = false)
+            loadInternal(showLoading = false)
         }
 
         /** Drop the inline amount error once the user edits the field. */
@@ -284,6 +326,8 @@ class WalletViewModel
         companion object {
             /** The server's floor — `backend/services/walletService.js:92`. */
             const val MIN_WITHDRAW_CENTS = 100L
+            const val WITHDRAWAL_REVIEW_MESSAGE =
+                "This withdrawal needs support review. Do not start a new withdrawal for this money."
 
             private const val CENTS_PER_DOLLAR = 100.0
 

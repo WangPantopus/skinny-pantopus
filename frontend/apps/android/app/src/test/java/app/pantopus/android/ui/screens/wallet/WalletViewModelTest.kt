@@ -39,6 +39,7 @@ class WalletViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { repository.withdrawalRecovery() } returns NetworkResult.Success(WalletTransactionsResponse(total = 0))
         // Default: no connected account → live-load tests don't need to wire it.
         coEvery { connectRepository.accountStatus() } returns
             NetworkResult.Failure(NetworkError.Server(404, "no account"))

@@ -27,6 +27,10 @@ class WalletRepository
             offset: Int = 0,
         ): NetworkResult<WalletTransactionsResponse> = safeApiCall { api.transactions(limit, offset) }
 
+        /** Read the owner's oldest unsettled withdrawal; never initiates a transfer. */
+        suspend fun withdrawalRecovery(): NetworkResult<WalletTransactionsResponse> =
+            safeApiCall { api.transactions(limit = 1, type = "withdrawal", unsettledWithdrawal = true) }
+
         /** `GET /api/wallet/pending-release`. */
         suspend fun pendingRelease(): NetworkResult<WalletPendingReleaseResponse> = safeApiCall { api.pendingRelease() }
 

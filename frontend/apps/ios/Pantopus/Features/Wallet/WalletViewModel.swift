@@ -64,7 +64,12 @@ public final class WalletViewModel {
     /// not offer the action — RN's `canWithdraw` rule.
     private var walletFrozen: Bool = false
     /// The withdrawal in progress (idempotency key, amount), kept until a final outcome; see `withdraw`.
-    private var pendingWithdrawal: (key: String, amountCents: Int)?
+    private var pendingWithdrawal: WalletWithdrawalRecoveryDTO?
+    private var recoveryChecked = false
+    private var loadedWalletId: String?
+    private var withdrawalRecoveryCount = 0
+    static let withdrawalReviewMessage =
+        "This withdrawal needs support review. Do not start a new withdrawal for this money."
 
     /// Inline validation error for the withdraw amount field. Distinct from
     /// `action` so a bad amount keeps the sheet open (RN re-alerts and leaves
@@ -155,10 +160,25 @@ public final class WalletViewModel {
     /// refresh runs (e.g. after a withdraw) so the screen doesn't flash the
     /// loading shell.
     private func fetchLive(showLoading: Bool = true) async {
+        recoveryChecked = false
         if showLoading { state = .loading }
         do {
             let balance: WalletBalanceResponse = try await api.request(WalletEndpoints.balance())
+            if let loadedWalletId, loadedWalletId != balance.wallet.id { pendingWithdrawal = nil }
+            loadedWalletId = balance.wallet.id
             let history: WalletTransactionsResponse = try await api.request(WalletEndpoints.transactions())
+            let recovery: WalletTransactionsResponse = try await api.request(
+                WalletEndpoints.transactions(unsettledWithdrawal: true)
+            )
+            guard let count = recovery.total, count >= 0, recovery.transactions.isEmpty,
+                  (count > 0) == (recovery.withdrawalRecovery != nil)
+            else {
+                state = .error(message: "Couldn't check previous withdrawals. Try again.")
+                return
+            }
+            // Keep an unknown request whose debit may not be visible yet.
+            pendingWithdrawal = recovery.withdrawalRecovery ?? pendingWithdrawal
+            withdrawalRecoveryCount = max(count, pendingWithdrawal == nil ? 0 : 1)
             // Pending-release is a money figure like the balance: a failed read
             // takes the same error + Try again instead of "Nothing in escrow".
             let pending: WalletPendingReleaseResponse = try await api.request(
@@ -173,6 +193,7 @@ public final class WalletViewModel {
             availableCents = balance.wallet.balance
             payoutsEnabled = enabled
             walletFrozen = balance.wallet.frozen
+            recoveryChecked = true
             let content = Self.makeContent(
                 balance: balance,
                 transactions: history.transactions,
@@ -180,7 +201,9 @@ public final class WalletViewModel {
                 payoutsEnabled: enabled,
                 connectAccount: connect?.account,
                 calendar: calendar,
-                now: now()
+                now: now(),
+                withdrawalRecovery: pendingWithdrawal,
+                withdrawalRecoveryCount: withdrawalRecoveryCount
             )
             state = .populated(content)
         } catch {
@@ -199,7 +222,16 @@ public final class WalletViewModel {
     /// that have no field (and for the projection tests).
     public func withdraw(amountText: String? = nil) async {
         guard sampleContent == nil, !seeded else { return }
+        guard action != .withdrawing else { return }
         withdrawError = nil
+        guard recoveryChecked else {
+            action = .withdrawFailed(message: "Couldn't check previous withdrawals. Refresh your wallet and try again.")
+            return
+        }
+        guard pendingWithdrawal?.canRetry != false else {
+            action = .withdrawFailed(message: Self.withdrawalReviewMessage)
+            return
+        }
         // A withdrawal in progress can be retried even when its held debit leaves less than $1.00 available.
         guard payoutsEnabled, !walletFrozen, availableCents >= 100 || pendingWithdrawal != nil else {
             action = .withdrawFailed(message: Self.withdrawGateMessage(
@@ -209,35 +241,32 @@ public final class WalletViewModel {
             return
         }
         let amountCents: Int
-        if let amountText {
+        if let pending = pendingWithdrawal, let amountText {
+            guard case let .success(cents) = Self.parseWithdrawAmount(amountText, availableCents: pending.amountCents),
+                  cents == pending.amountCents
+            else {
+                withdrawError = "\(Self.centsToCurrency(pending.amountCents)) has not been confirmed. Retry the same amount."
+                return
+            }
+            amountCents = cents
+        } else if let amountText {
             switch Self.parseWithdrawAmount(amountText, availableCents: availableCents) {
             case let .success(cents):
                 amountCents = cents
             case let .failure(message):
-                // A retry of the withdrawal in progress may exceed what's available now: its held debit is that
-                // money, and the server settles the same key without debiting again.
-                guard let pending = pendingWithdrawal,
-                      case let .success(cents) = Self.parseWithdrawAmount(amountText, availableCents: pending.amountCents),
-                      cents == pending.amountCents
-                else {
-                    withdrawError = message
-                    return
-                }
-                amountCents = cents
+                withdrawError = message
+                return
             }
         } else {
-            amountCents = availableCents
+            amountCents = pendingWithdrawal?.amountCents ?? availableCents
         }
         // One withdrawal, one idempotency key: a retry after a failed or lost reply resends the same key,
         // so the server settles on the first attempt and can't pay out twice. Replaced after a final
-        // outcome (paid out, or refused) or when the amount changes.
-        let key: String
-        if let pending = pendingWithdrawal, pending.amountCents == amountCents {
-            key = pending.key
-        } else {
-            key = UUID().uuidString
-            pendingWithdrawal = (key, amountCents)
-        }
+        // outcome (paid out, or refused); an unknown outcome cannot be replaced by another amount.
+        let key = pendingWithdrawal?.idempotencyKey ?? UUID().uuidString
+        pendingWithdrawal = WalletWithdrawalRecoveryDTO(
+            amountCents: amountCents, idempotencyKey: key, createdAt: nil, retryable: true
+        )
         action = .withdrawing
         do {
             let response: WalletWithdrawResponse = try await api.request(
@@ -258,7 +287,7 @@ public final class WalletViewModel {
                     ?? "Couldn't process the withdrawal."
             )
             // The server may have acted (no reply, a timeout, a 5xx, a held debit): re-read the balance and activity.
-            if unsettled { await fetchLive(showLoading: false) }
+            await fetchLive(showLoading: false)
         }
     }
 
@@ -398,7 +427,9 @@ public final class WalletViewModel {
         payoutsEnabled: Bool = true,
         connectAccount: ConnectAccountDTO? = nil,
         calendar: Calendar = .current,
-        now: Date = Date()
+        now: Date = Date(),
+        withdrawalRecovery: WalletWithdrawalRecoveryDTO? = nil,
+        withdrawalRecoveryCount: Int = 0
     ) -> WalletContent {
         let pendingCents = pending?.totalPendingCents ?? 0
         let pendingCount = (pending?.inReviewCount ?? 0) + (pending?.releasingSoonCount ?? 0)
@@ -419,7 +450,9 @@ public final class WalletViewModel {
             lifetimeEarned: balance.wallet.lifetimeReceived.map(centsToCurrency),
             lifetimeWithdrawn: balance.wallet.lifetimeWithdrawals.map(centsToCurrency),
             frozen: balance.wallet.frozen,
-            hasBalance: balance.wallet.balance > 0
+            hasBalance: balance.wallet.balance > 0,
+            withdrawalRecovery: withdrawalRecovery,
+            withdrawalRecoveryCount: withdrawalRecoveryCount
         )
     }
 

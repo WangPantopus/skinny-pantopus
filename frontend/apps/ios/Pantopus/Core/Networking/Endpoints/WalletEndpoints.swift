@@ -22,11 +22,17 @@ public enum WalletEndpoints {
     /// `GET /api/wallet/transactions` — route `backend/routes/wallet.js:124`.
     /// Paginated history; the Wallet screen reads the first page for the
     /// Recent-activity feed.
-    public static func transactions(limit: Int = 50, offset: Int = 0) -> Endpoint {
-        Endpoint(
+    public static func transactions(limit: Int = 50, offset: Int = 0, unsettledWithdrawal: Bool = false) -> Endpoint {
+        var query = ["limit": String(limit), "offset": String(offset)]
+        if unsettledWithdrawal {
+            query["limit"] = "1"
+            query["type"] = "withdrawal"
+            query["unsettledWithdrawal"] = "true"
+        }
+        return Endpoint(
             method: .get,
             path: "/api/wallet/transactions",
-            query: ["limit": String(limit), "offset": String(offset)]
+            query: query
         )
     }
 
