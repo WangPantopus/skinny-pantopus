@@ -176,6 +176,7 @@ class MaintenanceDetailViewModelTest {
             assertNull(vm.event.value)
             assertEquals(NetworkError.Forbidden.message, vm.actionError.value)
         }
+
     @Test
     fun `notes load from server with an empty draft store`() =
         runTest {
@@ -187,5 +188,4 @@ class MaintenanceDetailViewModelTest {
             assertEquals("Saved server note", state.task.notes)
             assertNull(state.draft)
         }
-
 }
