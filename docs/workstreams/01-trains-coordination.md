@@ -88,6 +88,8 @@ This extends the existing U05 row using `screen-parity-inventory.md` and this st
 | Remind helpers and gift fund | Existing Manage nudge draft/send and gift-fund controls/API | Fund enable/disable accepted; three money contribution and three AI reminder chips stay provider-bound. No money/provider calls or canned AI substitute. |
 | Draft/lifecycle/account state and a11y | Existing list/detail/Manage/start/reserve families | Reuse U02/U04 accepted behavior and exact source/configuration bindings; no full-client/physical-device acceptance from source equality. |
 
+Stream5's existing retained account/social/chat/crew inventory contribution is independently verified at source `6714962907fb145865ba2ed483ccdd1c82f61f19` (four-file seal `25505e64275717ed33b353cc7abc77d4e1328c64933df88bc4c82309077e1bd5`, private `20261002-stream5-u05-source-contribution-r1`). It binds15 retained/mixed catalog rows and252 retained/shared source paths, plus15 available fresh evidence manifests; source presence and integrity do not establish new action acceptance. Its existing N01–N05/A01–A05 provider/physical/hosted/production-policy limits remain open. Pending iOS chat confirmation afters and unpublished File recovery are explicitly separate.
+
 Each peer contributes its existing owned screen/action inventory and evidence dispositions. Final U05/O04 assembly waits on current minimal repair integration and one exact release source/build/configuration binding. All eight launch cuts remain excluded. No new checklist chip or formal acceptance-row closure is claimed.
 
 ## CURRENT STATE — 2026-09-30T04:16Z (at the split)
