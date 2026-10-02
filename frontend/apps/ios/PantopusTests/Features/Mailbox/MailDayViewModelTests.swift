@@ -35,8 +35,8 @@ final class MailDayViewModelTests: XCTestCase {
 
     func test_settings_reopenReadsChangedDeliveryTime() async {
         SequencedURLProtocol.sequence = [
-            .status(200, body: #"{"settings":{"delivery_time":"19:45:00","enabled":true}}"#),
-            .status(200, body: #"{"settings":{"delivery_time":"09:00:00","enabled":true}}"#)
+            .status(200, body: #"{"delivery_time":"19:45:00","enabled":true}"#),
+            .status(200, body: #"{"delivery_time":"09:00:00","enabled":true}"#)
         ]
         let vm = MailDayViewModel(variant: .empty, api: makeAPI())
         await vm.openSettings()
@@ -54,7 +54,7 @@ final class MailDayViewModelTests: XCTestCase {
 
     func test_settings_failedReopenShowsErrorInsteadOfCachedTime() async {
         SequencedURLProtocol.sequence = [
-            .status(200, body: #"{"settings":{"delivery_time":"19:45:00","enabled":true}}"#),
+            .status(200, body: #"{"delivery_time":"19:45:00","enabled":true}"#),
             .status(503, body: #"{"error":"Settings unavailable"}"#)
         ]
         let vm = MailDayViewModel(variant: .empty, api: makeAPI())
