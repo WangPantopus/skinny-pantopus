@@ -63,9 +63,12 @@ data class VerifyLandlordUiState(
     val approvalResult: VerifyLandlordApprovalResult? = null,
     val isLoadingStatus: Boolean = false,
     val statusNeedsRetry: Boolean = false,
+    val submissionOutcomeUnknown: Boolean = false,
     val attachment: VerifyLandlordAttachmentState = VerifyLandlordAttachmentState(),
 ) {
     val isSubmitting: Boolean get() = isLoadingStatus || attachment.busy || submitState is VerifyLandlordSubmitState.Submitting
+
+    val submissionErrorTitle: String? get() = if (submissionOutcomeUnknown) "Couldn't confirm request" else null
 
     val isDirty: Boolean
         get() = attachment.file != null || form != VerifyLandlordForm(registeredUnit = form.registeredUnit)
@@ -133,6 +136,7 @@ open class VerifyLandlordWizardViewModel
                     errors = null,
                     approvalResult = null,
                     statusNeedsRetry = false,
+                    submissionOutcomeUnknown = false,
                 )
             }
             pendingEvent.value = VerifyLandlordOutboundEvent.Dismiss
@@ -206,6 +210,7 @@ open class VerifyLandlordWizardViewModel
                     it.copy(
                         currentStep = VerifyLandlordStep.Sent,
                         submitState = VerifyLandlordSubmitState.Submitted,
+                        submissionOutcomeUnknown = false,
                         approvalResult =
                             VerifyLandlordApprovalResult(
                                 kind =
@@ -230,6 +235,7 @@ open class VerifyLandlordWizardViewModel
                                 VerifyLandlordStep.Start
                             },
                         submitState = VerifyLandlordSubmitState.Idle,
+                        submissionOutcomeUnknown = false,
                         approvalResult = null,
                     )
                 }
@@ -431,7 +437,11 @@ open class VerifyLandlordWizardViewModel
                     startAt = form.startAtISO,
                     message = form.composedMessage,
                 )
-            val result = sendRequest(request)
+            var requestDispatched = false
+            val result = sendRequest(request) {
+                requestDispatched = true
+                _state.update { it.copy(submissionOutcomeUnknown = false) }
+            }
             currentCoroutineContext().ensureActive()
             requireCurrentSession()
             when (result) {
@@ -440,6 +450,7 @@ open class VerifyLandlordWizardViewModel
                     _state.update {
                         it.copy(
                             submitState = VerifyLandlordSubmitState.Submitted,
+                            submissionOutcomeUnknown = false,
                             currentStep = VerifyLandlordStep.Sent,
                             approvalResult =
                                 VerifyLandlordApprovalResult(
@@ -451,11 +462,22 @@ open class VerifyLandlordWizardViewModel
                         )
                     }
                 }
-                is NetworkResult.Failure -> handleApprovalFailure(result)
+                is NetworkResult.Failure -> {
+                    val error = result.error
+                    val lostOutcome = error is NetworkError.Transport || error is NetworkError.Decoding ||
+                        (error.code == HTTP_CONFLICT && error.message == STATUS_CHANGED_MESSAGE)
+                    if (requestDispatched && lostOutcome) {
+                        _state.update { it.copy(submissionOutcomeUnknown = true) }
+                    }
+                    handleApprovalFailure(result)
+                }
             }
         }
 
-        private suspend fun sendRequest(request: TenantRequestApprovalRequest): NetworkResult<TenantRequestApprovalResponse> =
+        private suspend fun sendRequest(
+            request: TenantRequestApprovalRequest,
+            beforeDispatch: () -> Unit,
+        ): NetworkResult<TenantRequestApprovalResponse> =
             if (leaseAttachment.hasDraft) {
                 try {
                     NetworkResult.Success(leaseAttachment.requestApproval(request))
@@ -469,7 +491,7 @@ open class VerifyLandlordWizardViewModel
                     NetworkResult.Failure(NetworkError.Decoding(error))
                 }
             } else {
-                tenantRepository.requestApproval(request, ::requireCurrentSession)
+                tenantRepository.requestApproval(request, ::requireCurrentSession, beforeDispatch)
             }
 
         /** Only explicit lease/no-landlord responses establish these alternate states. */
@@ -486,6 +508,7 @@ open class VerifyLandlordWizardViewModel
                     _state.update {
                         it.copy(
                             submitState = VerifyLandlordSubmitState.Submitted,
+                            submissionOutcomeUnknown = false,
                             currentStep = VerifyLandlordStep.Sent,
                             approvalResult =
                                 VerifyLandlordApprovalResult(kind = existingKind, serverMessage = message),
@@ -500,7 +523,11 @@ open class VerifyLandlordWizardViewModel
                         it.copy(
                             submitState =
                                 VerifyLandlordSubmitState.Error(
-                                    message.ifEmpty { "Couldn't send the request. Try again." },
+                                    if (it.submissionOutcomeUnknown && message != STATUS_CHANGED_MESSAGE) {
+                                        "Your request may be saved. Submit again to check its status."
+                                    } else {
+                                        message.ifEmpty { "Couldn't send the request. Try again." }
+                                    },
                                 ),
                         )
                     }
@@ -596,5 +623,7 @@ open class VerifyLandlordWizardViewModel
 
             private const val HTTP_BAD_REQUEST = 400
             private const val HTTP_CONFLICT = 409
+            private const val STATUS_CHANGED_MESSAGE =
+                "Your lease request status changed. Check its current status before submitting again."
         }
     }
