@@ -151,8 +151,8 @@ public final class InviteOwnerFormViewModel {
                     state = .error("We couldn't confirm this Home. Try again.")
                     return
                 }
-                let address = home.address?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-                let name = home.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                let address = home.address.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+                let name = home.name.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
                 homeContext = InviteOwnerHomeContext(title: address ?? name ?? "Home", subtitle: name ?? "Selected home")
             } catch {
                 state = .error("We couldn't load this Home. Try again.")
