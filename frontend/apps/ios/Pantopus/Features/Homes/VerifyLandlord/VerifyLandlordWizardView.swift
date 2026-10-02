@@ -82,7 +82,7 @@ public struct VerifyLandlordWizardView: View {
         switch viewModel.currentStep {
         case .start:
             if let message = submitErrorMessage {
-                VerifyErrorSummaryBanner(errors: .init(), serverMessage: message)
+                VerifyErrorSummaryBanner(errors: .init(), serverMessage: message, title: viewModel.submissionErrorTitle)
             }
             VerifyStartStep(content: viewModel.startContent)
         case .details:

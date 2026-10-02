@@ -3,10 +3,8 @@
 //  PantopusTests
 //
 //  Covers the verify-landlord wizard state machine: step transitions,
-//  form validation (email format · lease unit mismatch · PM-required-
-//  when-toggled-on · move-in date format), the error-summary count, and
-//  the three submit outcomes:
-//    201 -> .sent, 409 -> .sent (existing lease), 400 -> postcard fallback.
+//  form validation and error summaries.
+//  Covers submitted, existing-lease, fallback and unconfirmed outcomes.
 //
 
 import Foundation
@@ -220,6 +218,10 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
             .clientError(status: 400, message: "This is a multi-unit building. A unit number is required."),
             .clientError(status: 400, message: "End date must be after the start date and must not have expired"),
             .notFound,
+            .server(status: 503, body: "Unavailable"),
+            .transport(underlying: URLError(.networkConnectionLost)),
+            .invalidResponse,
+            .decoding(underlying: URLError(.cannotDecodeContentData)),
             .clientError(status: 409, message: "The current request needs review")
         ]
         for failure in failures {
@@ -228,7 +230,15 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
             vm.setMessageToLandlord("Keep my entered message")
             await vm.submit()
             XCTAssertEqual(vm.currentStep, .details, failure.localizedDescription)
-            XCTAssertEqual(vm.submitState, .error(message: failure.localizedDescription))
+            let unconfirmed: Bool = switch failure {
+            case .transport, .invalidResponse, .decoding: true
+            default: false
+            }
+            XCTAssertEqual(vm.submissionOutcomeUnknown, unconfirmed)
+            XCTAssertEqual(vm.submissionErrorTitle, unconfirmed ? "Couldn't confirm request" : nil)
+            XCTAssertEqual(vm.submitState, .error(message: unconfirmed
+                    ? "Your request may be saved. Submit again to check its status."
+                    : failure.localizedDescription))
             XCTAssertNil(vm.pendingEvent)
             XCTAssertNil(vm.approvalResult)
             XCTAssertEqual(vm.form.messageToLandlord, "Keep my entered message")
@@ -419,6 +429,7 @@ extension VerifyLandlordWizardViewModelTests {
         await vm.submit()
         XCTAssertEqual(vm.currentStep, .details)
         XCTAssertEqual(vm.form.messageToLandlord, "Retain this request")
+        XCTAssertFalse(vm.submissionOutcomeUnknown, "A known 503 keeps the existing server failure message")
         XCTAssertNil(vm.pendingEvent)
         await vm.submit()
         XCTAssertEqual(vm.currentStep, .sent)
@@ -478,6 +489,8 @@ extension VerifyLandlordWizardViewModelTests {
             XCTAssertEqual(vm.currentStep, .details)
             if case .error = vm.submitState {} else { XCTFail("Failed status must remain an error") }
             XCTAssertNil(vm.pendingEvent)
+            XCTAssertFalse(vm.submissionOutcomeUnknown, "Preflight failure must not imply a dispatched request")
+            XCTAssertNil(vm.submissionErrorTitle)
             XCTAssertFalse(URLProtocolStub.capturedRequests.contains { $0.url?.path == "/api/v1/tenant/request-approval" })
             await auth.awaitBackgroundWork()
             try? FileManager.default.removeItem(at: marker)
