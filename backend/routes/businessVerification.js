@@ -12,6 +12,7 @@
  */
 
 const express = require('express');
+const { createHash } = require('crypto');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
@@ -206,16 +207,37 @@ router.post('/:businessId/verify/upload-evidence', verifyToken, async (req, res)
       return res.status(400).json({ error: 'file_id must be a verification document you uploaded' });
     }
 
-    // Check for duplicate pending evidence of same type
-    const { data: pendingEvidence } = await supabaseAdmin
+    const reply = (evidence) => res.status(201).json({
+      evidence_id: evidence.id,
+      status: evidence.status,
+      message: 'Evidence submitted for review',
+    });
+    // Recover a committed registration, including one reviewed before retry.
+    // File ownership and current business access are still checked above.
+    const { data: existingEvidence, error: existingErr } = await supabaseAdmin
       .from('BusinessVerificationEvidence')
-      .select('id')
+      .select('id, status')
+      .eq('business_user_id', businessId)
+      .eq('evidence_type', evidence_type)
+      .eq('file_id', file_id)
+      .limit(1)
+      .maybeSingle();
+    if (existingErr) return res.status(500).json({ error: 'Failed to submit evidence' });
+    if (existingEvidence) return reply(existingEvidence);
+
+    // A different document must still wait for the current review.
+    const { data: pendingEvidence, error: pendingErr } = await supabaseAdmin
+      .from('BusinessVerificationEvidence')
+      .select('id, file_id, status')
       .eq('business_user_id', businessId)
       .eq('evidence_type', evidence_type)
       .eq('status', 'pending')
+      .limit(1)
       .maybeSingle();
 
+    if (pendingErr) return res.status(500).json({ error: 'Failed to submit evidence' });
     if (pendingEvidence) {
+      if (pendingEvidence.file_id?.toLowerCase() === file_id.toLowerCase()) return reply(pendingEvidence);
       return res.status(409).json({
         error: 'Evidence of this type is already pending review',
         code: 'DUPLICATE_PENDING',
@@ -223,47 +245,59 @@ router.post('/:businessId/verify/upload-evidence', verifyToken, async (req, res)
     }
 
     // Check for already-approved evidence of same type
-    const { data: approvedEvidence } = await supabaseAdmin
+    const { data: approvedEvidence, error: approvedErr } = await supabaseAdmin
       .from('BusinessVerificationEvidence')
-      .select('id')
+      .select('id, file_id, status')
       .eq('business_user_id', businessId)
       .eq('evidence_type', evidence_type)
       .eq('status', 'approved')
+      .limit(1)
       .maybeSingle();
 
+    if (approvedErr) return res.status(500).json({ error: 'Failed to submit evidence' });
     if (approvedEvidence) {
+      if (approvedEvidence.file_id?.toLowerCase() === file_id.toLowerCase()) return reply(approvedEvidence);
       return res.status(409).json({
         error: 'This evidence type has already been verified',
         code: 'ALREADY_VERIFIED',
       });
     }
 
-    // Insert evidence
+    // The existing primary key arbitrates overlapping copies of this same
+    // registration. Existing historical rows are recovered by the read above.
+    const hex = createHash('sha256').update(JSON.stringify([
+      businessId.toLowerCase(), evidence_type, file_id.toLowerCase(),
+    ])).digest('hex').slice(0, 32);
+    const evidenceId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
     const { data: evidence, error: insertErr } = await supabaseAdmin
       .from('BusinessVerificationEvidence')
-      .insert({
+      .upsert({
+        id: evidenceId,
         business_user_id: businessId,
         evidence_type,
         file_id,
         status: 'pending',
-      })
+      }, { onConflict: 'id', ignoreDuplicates: true })
       .select()
-      .single();
+      .maybeSingle();
 
     if (insertErr) {
       logger.error('Error inserting verification evidence', { error: insertErr.message, businessId });
       return res.status(500).json({ error: 'Failed to submit evidence' });
     }
 
+    if (!evidence) {
+      const { data: winner, error: winnerErr } = await supabaseAdmin
+        .from('BusinessVerificationEvidence').select('id, status').eq('id', evidenceId).single();
+      if (winnerErr || !winner) return res.status(500).json({ error: 'Failed to submit evidence' });
+      return reply(winner);
+    }
+
     await writeAuditLog(businessId, userId, 'upload_verification_evidence', 'BusinessVerificationEvidence', evidence.id, {
       evidence_type,
     });
 
-    res.status(201).json({
-      evidence_id: evidence.id,
-      status: 'pending',
-      message: 'Evidence submitted for review',
-    });
+    return reply(evidence);
   } catch (err) {
     logger.error('Upload evidence error', { error: err.message, businessId: req.params.businessId });
     res.status(500).json({ error: 'Failed to submit evidence' });

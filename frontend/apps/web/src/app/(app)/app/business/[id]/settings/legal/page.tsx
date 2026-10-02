@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
@@ -83,6 +83,8 @@ export default function BusinessSettingsLegalPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
+  const uploadInFlight = useRef(false);
+  const pendingUpload = useRef<{ draft: string; fileId: string } | null>(null);
 
   // Review state
   const [reviewingId, setReviewingId] = useState<string | null>(null);
@@ -171,20 +173,30 @@ export default function BusinessSettingsLegalPage() {
 
   // ---- Evidence upload ----
   const handleUploadEvidence = async () => {
+    if (uploadInFlight.current) return;
     setUploadError('');
     setUploadSuccess('');
     if (!evidenceFile) {
       setUploadError('Choose the document to upload.');
       return;
     }
+    uploadInFlight.current = true;
     setUploading(true);
     try {
-      // Same two hops as iOS and Android: store the file, then register it as evidence.
-      const { file } = await api.upload.uploadVerificationDocument(evidenceFile);
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await evidenceFile.arrayBuffer())))
+        .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+      const draft = JSON.stringify([businessId, evidenceForm.evidence_type, evidenceFile.name, evidenceFile.type,
+        digest, localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)]);
+      if (pendingUpload.current?.draft !== draft) pendingUpload.current = null;
+      if (!pendingUpload.current) {
+        const { file } = await api.upload.uploadVerificationDocument(evidenceFile);
+        pendingUpload.current = { draft, fileId: file.id };
+      }
       const res = await api.businesses.uploadVerificationEvidence(businessId, {
         evidence_type: evidenceForm.evidence_type,
-        file_id: file.id,
+        file_id: pendingUpload.current.fileId,
       });
+      pendingUpload.current = null;
       setUploadSuccess(res.message);
       setEvidenceFile(null);
       setFileInputKey((k) => k + 1);
@@ -192,6 +204,7 @@ export default function BusinessSettingsLegalPage() {
     } catch (e: unknown) {
       setUploadError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
+      uploadInFlight.current = false;
       setUploading(false);
     }
   };

@@ -25,6 +25,8 @@ export default function LegalTab({ businessId, businessType }: Props) {
   // Which letter the file picker is choosing for.
   const [pendingEvidenceType, setPendingEvidenceType] = useState<'ein_verification' | 'tax_exempt_letter' | null>(null);
   const evidenceInputRef = useRef<HTMLInputElement>(null);
+  const uploadInFlight = useRef(false);
+  const pendingEvidence = useRef<{ draft: string; fileId: string } | null>(null);
 
   const isNonprofit = businessType === 'nonprofit_501c3';
 
@@ -77,19 +79,30 @@ export default function LegalTab({ businessId, businessType }: Props) {
   };
 
   const handleUploadEvidence = async (evidenceType: 'ein_verification' | 'tax_exempt_letter', letter: File) => {
+    if (uploadInFlight.current) return;
+    uploadInFlight.current = true;
     setUploadingEin(true);
     try {
-      // Same two hops as iOS and Android: store the file, then register it as evidence.
-      const { file } = await api.upload.uploadVerificationDocument(letter);
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await letter.arrayBuffer())))
+        .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+      const draft = JSON.stringify([businessId, evidenceType, letter.name, letter.type,
+        digest, localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)]);
+      if (pendingEvidence.current?.draft !== draft) pendingEvidence.current = null;
+      if (!pendingEvidence.current) {
+        const { file } = await api.upload.uploadVerificationDocument(letter);
+        pendingEvidence.current = { draft, fileId: file.id };
+      }
       await api.businesses.uploadVerificationEvidence(businessId, {
         evidence_type: evidenceType,
-        file_id: file.id,
+        file_id: pendingEvidence.current.fileId,
       });
+      pendingEvidence.current = null;
       toast.success('Document submitted for admin review');
       await loadNonprofitStatus();
     } catch (e: any) {
       toast.error(e?.message || 'Failed to upload evidence');
     } finally {
+      uploadInFlight.current = false;
       setUploadingEin(false);
     }
   };
