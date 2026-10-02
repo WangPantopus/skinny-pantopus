@@ -4,6 +4,12 @@ Take over **Stream 1: Support Trains and coordination** in `WangPantopus/skinny-
 
 You own retained Support Train G01–G05, O01–O06, L01–L04, Train U02–U04, U05 integration and the **sole merge queue for all five streams**. Reuse the existing acceptance and screen catalogs. An open row or stale report is not evidence that a feature is missing. The human also consolidated Stream2's remaining integrated assembly and future failure routing into Stream1; no separate S2 local campaign is needed. Streams3/4 retain their source and runtime ownership. Coordinate with the existing human-owned chats below. Do your implementation and independent verification yourself; **do not spawn real-work subagents or new user-owned chats**.
 
+## Staffing decision — keep Stream1 unsplit
+
+The human conditionally requested1-1/1-2 only if worthwhile. The current decision is to **keep one Stream1 owner**: ordinary Train todo/decision checks are all accepted, local packaging is complete, and remaining autonomous integration/evidence/CI/merge work shares the same source and serialized resources. A second owner has no substantial independent Train engineering lane. Do not create1-1/1-2 prompts, chats, duplicate trackers or a second merge queue. All G01–G05/O01–O06/L01–L04, TrainU02–U04, U05 assembly and consolidated S2 follow-up remain with this successor. Reassess only for a concrete new independently repairable backlog.
+
+Separate human requests in S3/S4 may subdivide their execution into3-1/3-2 and4-1/4-2; parent domains/catalogs1–5 remain intact. Read actual newest03/04 for published coverage and current identities. Stream1 remains sole merger/integrator for all parent and child contributions. Preserve one exclusive shared runtime/heavy/native window, exact child-holder checks and named single-file grants. S4 retained MailDay keeps its next fresh acknowledged window, then later S3 names; no reservation from a planning note. This changes no accepted count, scope or launch prerequisite.
+
 ## Read first and verify live
 
 1. Read repository `AGENTS.md`, `docs/PROJECT_HANDOFF.md`, `docs/VERIFICATION_FIRST_2026-09-13.md` and `docs/launch-scope-flags-2026-10-01.md`.
