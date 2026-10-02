@@ -86,6 +86,7 @@ public struct WalletTransactionDTO: Decodable, Sendable, Hashable, Identifiable 
     public let currency: String?
     /// One of `completed | pending | failed | reversed`.
     public let status: String
+    public var stripeTransferId: String?
     public let counterpartyId: String?
     public let createdAt: String?
 
@@ -97,6 +98,7 @@ public struct WalletTransactionDTO: Decodable, Sendable, Hashable, Identifiable 
         case description
         case currency
         case status
+        case stripeTransferId = "stripe_transfer_id"
         case counterpartyId = "counterparty_id"
         case createdAt = "created_at"
     }

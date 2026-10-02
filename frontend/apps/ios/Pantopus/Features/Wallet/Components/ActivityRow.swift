@@ -90,7 +90,7 @@ struct WalletActivityRow: View {
     }
 
     private var subtext: String {
-        if case let .pending(clears) = item.status {
+        if case let .pending(clears) = item.status, let clears {
             return "\(item.counterparty) · \(item.dateLabel) · clears \(clears)"
         }
         return "\(item.counterparty) · \(item.dateLabel)"
@@ -110,8 +110,9 @@ struct WalletActivityRow: View {
     private var trailingLabel: String {
         if item.isFee { return "Fee" }
         switch (item.direction, item.status) {
+        case (_, .reversed): return "Reversed"
+        case (_, .pending): return "On hold"
         case (.out, _): return "Payout"
-        case (.in, .pending): return "On hold"
         case (.in, _): return "Cleared"
         }
     }

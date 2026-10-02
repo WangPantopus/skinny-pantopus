@@ -172,7 +172,7 @@ final class WalletMappingTests: XCTestCase {
         XCTAssertEqual(content.activity.count, 2)
         // Only the inbound June row counts toward "this month".
         XCTAssertEqual(content.monthValue, "$140.00")
-        XCTAssertEqual(content.monthMeta, "1 task this month")
+        XCTAssertEqual(content.monthMeta, "1 credit this month")
         XCTAssertFalse(content.isOnHold, "Live content never renders the Stripe-specific hold banner")
         XCTAssertEqual(content.activity[1].category, .bank)
     }
