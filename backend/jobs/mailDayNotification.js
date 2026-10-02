@@ -76,6 +76,32 @@ function localHour(timezone, now = new Date()) {
   return now.getUTCHours();
 }
 
+/** Local wall-clock minutes, including seconds, for a not-before threshold. */
+function localMinute(timezone, now = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone || DEFAULT_TIMEZONE,
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).formatToParts(now);
+    const value = (type) => Number(parts.find((p) => p.type === type)?.value);
+    return (value('hour') % 24) * 60 + value('minute') + value('second') / 60;
+  } catch {
+    if (timezone && timezone !== DEFAULT_TIMEZONE) return localMinute(DEFAULT_TIMEZONE, now);
+    return now.getUTCHours() * 60 + now.getUTCMinutes() + now.getUTCSeconds() / 60;
+  }
+}
+
+/** Stored HH:MM[:SS] time; malformed existing values must not send early. */
+function deliveryMinute(timeStr) {
+  const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(timeStr));
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = Number(match[3] || 0);
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  return hour * 60 + minute + second / 60;
+}
+
 /** "22:00" / "22:00:00" → 22. Null for anything unparseable. */
 function parseHour(timeStr) {
   if (!timeStr) return null;
@@ -99,9 +125,12 @@ function inQuietHours(hour, startStr, endStr) {
 }
 
 /** Whether this user may be interrupted right now. */
-function isSendableNow(prefs, now = new Date()) {
+function isSendableNow(prefs, now = new Date(), deliveryTime = '08:00') {
   const timezone = prefs?.daily_briefing_timezone || DEFAULT_TIMEZONE;
-  const hour = localHour(timezone, now);
+  const minute = localMinute(timezone, now);
+  const hour = Math.floor(minute / 60);
+  const notBefore = deliveryMinute(deliveryTime);
+  if (notBefore === null || minute < notBefore) return false;
   if (hour < SEND_AFTER_LOCAL_HOUR || hour >= SEND_BEFORE_LOCAL_HOUR) return false;
   if (inQuietHours(hour, prefs?.quiet_hours_start_local, prefs?.quiet_hours_end_local)) return false;
   return true;
@@ -174,22 +203,21 @@ async function claimMailDay(userId, today, claimedAt, existingSession) {
 }
 
 /**
- * Users among `userIds` who switched My Mail Day off in its settings
- * (MailDaySettings.enabled; a user with no settings row has it on). Read in
+ * Delivery settings for `userIds` (a user with no row defaults to on/08:00).
+ * Both enabled and not-before apply before claiming the day. Read in
  * chunks so a long candidate list stays within the request URL.
  */
-async function usersWithMailDayOff(userIds) {
-  const off = new Set();
+async function mailDaySettingsForUsers(userIds) {
+  const settings = new Map();
   for (let i = 0; i < userIds.length; i += 200) {
     const { data, error } = await supabaseAdmin
       .from('MailDaySettings')
-      .select('user_id')
-      .in('user_id', userIds.slice(i, i + 200))
-      .eq('enabled', false);
+      .select('user_id, enabled, delivery_time')
+      .in('user_id', userIds.slice(i, i + 200));
     if (error) throw new Error(error.message);
-    for (const row of data || []) off.add(row.user_id);
+    for (const row of data || []) settings.set(row.user_id, row);
   }
-  return off;
+  return settings;
 }
 
 /** Hand the day back when dispatch failed, so a later run can retry. */
@@ -247,9 +275,9 @@ async function mailDayNotification() {
   // "Mail Day enabled" off in the settings means no Mail Day push. If the
   // settings can't be read, this run sends nothing: the next run retries, and a
   // push to someone who switched it off can't be taken back.
-  let mailDayOff;
+  let deliverySettings;
   try {
-    mailDayOff = await usersWithMailDayOff([...byUser.keys()]);
+    deliverySettings = await mailDaySettingsForUsers([...byUser.keys()]);
   } catch (err) {
     logger.error('[MailDay] Failed to read Mail Day settings', { error: err.message });
     return;
@@ -261,7 +289,8 @@ async function mailDayNotification() {
 
   for (const [userId, userItems] of byUser) {
     try {
-      if (mailDayOff.has(userId)) {
+      const settings = deliverySettings.get(userId);
+      if (settings?.enabled === false) {
         skipped++;
         continue;
       }
@@ -302,7 +331,7 @@ async function mailDayNotification() {
 
       // Outside the local window — leave it for a later run today rather
       // than dropping it, so a 4pm scan still gets its push at 4pm.
-      if (!isSendableNow(prefs)) {
+      if (!isSendableNow(prefs, new Date(), settings?.delivery_time ?? '08:00')) {
         deferred++;
         continue;
       }
