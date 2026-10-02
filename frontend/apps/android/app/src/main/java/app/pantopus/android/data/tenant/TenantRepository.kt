@@ -36,6 +36,7 @@ class TenantRepository
         suspend fun requestApproval(
             body: TenantRequestApprovalRequest,
             requireCurrentSession: suspend () -> Unit = {},
+            beforeDispatch: () -> Unit = {},
         ): NetworkResult<TenantRequestApprovalResponse> =
             safeApiCall {
                 requireCurrentSession()
@@ -46,6 +47,7 @@ class TenantRepository
                 }
                 currentCoroutineContext().ensureActive()
                 requireCurrentSession()
+                beforeDispatch()
                 api.requestApproval(body.copy(requestContext = context))
             }
 

@@ -78,6 +78,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.ui.semantics.error as semanticError
 
 /** Test tag applied to the verify-landlord wizard root. */
 const val VERIFY_LANDLORD_SCREEN_TAG: String = "verifyLandlordWizard"
@@ -142,7 +143,7 @@ fun VerifyLandlordWizardScreen(
         when (state.currentStep) {
             VerifyLandlordStep.Start -> {
                 (state.submitState as? VerifyLandlordSubmitState.Error)?.let {
-                    ErrorSummaryBanner(VerifyLandlordValidationErrors(), serverMessage = it.message)
+                    ErrorSummaryBanner(VerifyLandlordValidationErrors(), serverMessage = it.message, title = state.submissionErrorTitle)
                 }
                 StartStep(content = state.startContent)
             }
@@ -482,7 +483,7 @@ internal fun DetailsStep(
         ErrorSummaryBanner(validationErrors)
     } else {
         (state.submitState as? VerifyLandlordSubmitState.Error)?.let {
-            ErrorSummaryBanner(VerifyLandlordValidationErrors(), serverMessage = it.message)
+            ErrorSummaryBanner(VerifyLandlordValidationErrors(), serverMessage = it.message, title = state.submissionErrorTitle)
         }
     }
 
@@ -1078,7 +1079,11 @@ private fun VerifyField(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .testTag("verifyLandlordField_$label"),
+                        .testTag("verifyLandlordField_$label")
+                        .semantics {
+                            contentDescription = label
+                            error?.let { semanticError(it) }
+                        },
                 decorationBox = { inner ->
                     Box(modifier = Modifier.fillMaxWidth()) {
                         if (value.isEmpty()) {
