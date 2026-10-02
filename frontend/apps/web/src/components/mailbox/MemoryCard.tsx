@@ -6,6 +6,7 @@ type MemoryCardProps = {
   memory: MailMemory;
   onView: (itemId: string) => void;
   onDismiss: () => void;
+  dismissDisabled?: boolean;
 };
 
 function memoryHeading(type: string, referenceDate: string): string {
@@ -24,7 +25,7 @@ function memoryHeading(type: string, referenceDate: string): string {
   }
 }
 
-export default function MemoryCard({ memory, onView, onDismiss }: MemoryCardProps) {
+export default function MemoryCard({ memory, onView, onDismiss, dismissDisabled = false }: MemoryCardProps) {
   const heading = memoryHeading(memory.memory_type, memory.reference_date);
 
   return (
@@ -39,6 +40,7 @@ export default function MemoryCard({ memory, onView, onDismiss }: MemoryCardProp
             month: 'long',
             day: 'numeric',
             year: 'numeric',
+            timeZone: 'UTC',
           })}
         </p>
       </div>
@@ -74,6 +76,7 @@ export default function MemoryCard({ memory, onView, onDismiss }: MemoryCardProp
           <button
             type="button"
             onClick={onDismiss}
+            disabled={dismissDisabled}
             className="px-3 py-1.5 text-xs text-app-text-secondary hover:text-app-text-strong dark:hover:text-gray-300 transition-colors"
           >
             Dismiss
