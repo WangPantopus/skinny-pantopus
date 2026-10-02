@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useId, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
+import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
 
 interface ModalShellProps {
   open: boolean;
@@ -51,19 +52,12 @@ export default function ModalShell({
   const titleId = useId();
   const subtitleId = useId();
 
-  // Close on Escape
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) onClose();
+  const closeWhenReady = useCallback(
+    () => {
+      if (!submitting) onClose();
     },
     [onClose, submitting],
   );
-
-  useEffect(() => {
-    if (!open) return;
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, handleKeyDown]);
 
   // Lock body scroll
   useEffect(() => {
@@ -80,6 +74,7 @@ export default function ModalShell({
   // them, and they stayed clickable behind the dialog.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const dialogRef = useDialogFocusTrap<HTMLDivElement>(closeWhenReady, undefined, open && mounted);
 
   if (!open || !mounted) return null;
 
@@ -95,6 +90,8 @@ export default function ModalShell({
       <div
         className={`relative w-full ${maxWidth} bg-app-surface rounded-2xl shadow-2xl border border-app-border-subtle overflow-hidden flex flex-col max-h-[90vh]`}
         role="dialog"
+        ref={dialogRef}
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={subtitle ? subtitleId : undefined}

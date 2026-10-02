@@ -11,7 +11,7 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-export function useDialogFocusTrap<T extends HTMLElement>(onClose: () => void, returnFocusTo?: HTMLElement | null) {
+export function useDialogFocusTrap<T extends HTMLElement>(onClose: () => void, returnFocusTo?: HTMLElement | null, enabled = true) {
   const containerRef = useRef<T | null>(null);
   const onCloseRef = useRef(onClose);
   const returnFocusRef = useRef<HTMLElement | null>(returnFocusTo || null);
@@ -21,13 +21,20 @@ export function useDialogFocusTrap<T extends HTMLElement>(onClose: () => void, r
   }, [onClose]);
 
   useEffect(() => {
+    if (!enabled) return;
     const previousFocus = returnFocusRef.current || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     const container = containerRef.current;
+    if (!container) return;
     const getFocusable = () => (
       Array.from(container?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) || [])
+        .filter((element) => element.getAttribute('type') !== 'hidden'
+          && !element.closest('[hidden], [inert]')
+          && getComputedStyle(element).display !== 'none'
+          && getComputedStyle(element).visibility !== 'hidden')
     );
 
-    getFocusable()[0]?.focus();
+    // Keep a caller's autofocus (e.g. the password field); otherwise enter the dialog.
+    if (!container.contains(document.activeElement)) (getFocusable()[0] || container).focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -68,9 +75,9 @@ export function useDialogFocusTrap<T extends HTMLElement>(onClose: () => void, r
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      previousFocus?.focus();
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, []);
+  }, [enabled]);
 
   return containerRef;
 }
