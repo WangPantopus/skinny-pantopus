@@ -509,7 +509,14 @@ private fun RowItem(
                             checkedTrackColor = PantopusColors.primary600,
                             checkedThumbColor = Color.White,
                         ),
-                    modifier = Modifier.testTag("groupedListToggle_${row.id}"),
+                    modifier =
+                        Modifier
+                            .testTag("groupedListToggle_${row.id}")
+                            .semantics {
+                                if (row.id == "addressPrecision") {
+                                    contentDescription = row.label
+                                }
+                            },
                 )
             is RowControl.Radio ->
                 RadioGlyph(isSelected = control.isSelected, modifier = Modifier.testTag("groupedListRadio_${row.id}"))
