@@ -22,7 +22,7 @@
 The resume prompt is [`NEXT-STREAM4-PROMPT-2026-10-01.md`](NEXT-STREAM4-PROMPT-2026-10-01.md). The 2026-09-30 resume below
 this one is kept for its still-valid recipes and lessons; its state is superseded.
 
-> **Successor update — 2026-10-02T00:31:20Z.** Session “Stream 4: Place, records, money and mail” remains active. **#1406/#1410/#1420/#1422/#1424 merged unchanged**; source-binding and fresh web seals remain below. Mailtask source `d378fee78` still awaits native afters/PR. Approved S34 joint `c96b6fc60aa1a2e77ce2d6d6bc454caaa4c5e139` has iOS test-build and Android assemble success; bounded Android checks passed (22unit/9snapshots), and S3’s existing3iOS recovery tests passed. **Maintenance is now reproduced on both real native callers:** retained next-due saves also POST hidden calendar events, and typed notes disappear after process restart (API/DB notes null). Fresh before seal `494d976e0d72fe4d0381037a24e5efb58a36b3ba60f59101df707ac26b946cee`, 45 files. Exact eight rows cleaned;353/353 public tables restored; devices shut/slots released; backend restored master `a39b5b53c16f907cc791404724310e2d9b233ba9`. S3 has taken the runtime for its bounded window. S4 pushed separate calendar-guard8dad481d4 and notes19917a5ac repairs; native afters/PRs remain pending. U05 remains partial.
+> **Successor update — 2026-10-02T00:31:20Z.** Session “Stream 4: Place, records, money and mail” remains active. **#1406/#1410/#1420/#1422/#1424 merged unchanged**; source-binding and fresh web seals remain below. Mailtask source `d378fee78` still awaits native afters/PR. Approved S34 joint `c96b6fc60aa1a2e77ce2d6d6bc454caaa4c5e139` has iOS test-build and Android assemble success; bounded Android checks passed (22unit/9snapshots), and S3’s existing3iOS recovery tests passed. **Maintenance is now reproduced on both real native callers:** retained next-due saves also POST hidden calendar events, and typed notes disappear after process restart (API/DB notes null). Fresh before seal `494d976e0d72fe4d0381037a24e5efb58a36b3ba60f59101df707ac26b946cee`, 45 files. Exact eight rows cleaned;353/353 public tables restored; devices shut/slots released; backend restored master `a39b5b53c16f907cc791404724310e2d9b233ba9`. S3 has taken the runtime for its bounded window. S4 pushed separate calendar-guard81d855b9d and notesa0b5d8cb7 repairs (application code unchanged by the final test-format commits); native afters/PRs remain pending. U05 remains partial.
 
 ### State at handoff
 
@@ -561,6 +561,14 @@ Compared current master `cb02fef0827d8a6f895eba9bbaee42cee70a6aed` with the draf
 - **Times and SHAs:** record every time from `date -u` and every SHA from `git rev-parse`. Never estimate them.
 
 ## Live continuation — Stream 4 (newest first)
+
+### 2026-10-02T01:25:44Z — Sol continuation; private Maintenance build and focused Swift gates
+
+- User requested GPT-6.1 Sol at Extra High; current session metadata confirms `gpt-6.1-sol` / `xhigh`, same task/session and checkpoint. No new task or duplicate work.
+- Latest pushed topic heads: reminder guard `81d855b9d52f814d856eee649902ac8e65161b54`; notes `a0b5d8cb7faaec71cedaa0e0097be5629618310e`. Advances from8dad/19917 affect only existing iOS regression-test formatting. All application implementations are unchanged. Focused SwiftFormat/strictSwiftLint pass on2guard and5notes files; receipts/test-only bindings prepared in unsealed `stream4-maintenance-afters-r1`. Existing backend31/31 remains source-bound.
+- Reserved heavy acquired at2026-10-02T01:11:43Z for exact approved joint `cf3d349887d23a6e35a01352df3b6cc27004c06c`, built through the kit from the clean PRIVATE `stream4-native-mailtask` checkout/default private cache. iOS test-build is in progress, then Android assemble/ktlint/detekt/Maintenance unit/snapshot checks. No build pass claimed yet. Shared native checkout/cache remainsc96 unchanged; S3 retains runtime/devices while completing its recovered Android case, then S4 has the agreed next window. S1 candidate34 follows S4 heavy release.
+- User-facing launch planning estimate: about75% ready (70–80range) for retained Stream4 scope, weighted judgment rather than formal row closure. Remaining U05 actions, native afters/PRs and named staging/provider/media boundaries remain open; no release acceptance inferred from this estimate.
+- Next: MailTask d378 actual native afters/cleanup/seal/PR using immutablec96; repaired Maintenance caller/cold/clear-note afters with zero calendar events and exact cleanup; separate topic PRs; remaining U05/settings. Prepared observers/clear-note operators are unrun.
 
 ### 2026-10-02T00:45:40Z — Joint MailTask build passed; Maintenance repair heads pushed, afters pending
 
