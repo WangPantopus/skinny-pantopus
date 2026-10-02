@@ -46,6 +46,14 @@ export interface WalletTransaction {
   created_at: string;
 }
 
+/** Owner-only recovery of the oldest unresolved withdrawal. Reading never initiates a transfer. */
+export interface WithdrawalRecovery {
+  amountCents: number;
+  idempotencyKey: string | null;
+  createdAt: string | null;
+  retryable: boolean;
+}
+
 // ============ WALLET BALANCE ============
 
 /**
@@ -79,6 +87,7 @@ export async function withdraw(amount: number, idempotencyKey?: string): Promise
  */
 export async function getTransactions(filters?: {
   type?: string;
+  unsettledWithdrawal?: boolean;
   limit?: number;
   offset?: number;
   startDate?: string;
@@ -88,12 +97,14 @@ export async function getTransactions(filters?: {
   total: number;
   limit: number;
   offset: number;
+  withdrawalRecovery?: WithdrawalRecovery | null;
 }> {
   return get<{
     transactions: WalletTransaction[];
     total: number;
     limit: number;
     offset: number;
+    withdrawalRecovery?: WithdrawalRecovery | null;
   }>('/api/wallet/transactions', filters);
 }
 

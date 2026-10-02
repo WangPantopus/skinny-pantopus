@@ -1,19 +1,43 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { wallet as walletApi } from '@pantopus/api';
+import { useState, useCallback, useId, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { wallet as walletApi, AUTH_SESSION_CHANGE_KEY, getApiBaseUrl, onTokenChange } from '@pantopus/api';
 import { getErrorMessage } from '@pantopus/utils';
 
-// One withdrawal, one idempotency key. A retry after a failed or lost reply resends the same key, so
-// the server settles on the first attempt and can't pay out twice. The key is replaced after a final
-// outcome (paid out, or refused) or when the amount changes. It outlives the modal, so reopening it to
-// retry is safe too.
-let pendingWithdrawal: { key: string; amountCents: number } | null = null;
+type PendingWithdrawal = {
+  key: string | null;
+  amountCents: number;
+  marker: string | null;
+  origin: string;
+  createdAt: number;
+};
+const PENDING_WITHDRAWAL_KEY = 'pantopus_pending_withdrawal';
+// Stripe may prune idempotency keys after 24 hours. Never turn an aged retry into a new transfer.
+const MAX_RETRY_AGE = 23 * 60 * 60 * 1000;
 
-/** No reply, a timeout, rate limiting or a server error: the first attempt's outcome is unknown. */
-function leavesWithdrawalUnsettled(err: unknown): boolean {
-  const status = (err as { statusCode?: unknown } | null)?.statusCode;
-  return typeof status !== 'number' || status >= 500 || status === 408 || status === 429;
+function clearPendingWithdrawal(key?: string): void {
+  try {
+    if (key && JSON.parse(sessionStorage.getItem(PENDING_WITHDRAWAL_KEY) || 'null')?.key !== key) return;
+    sessionStorage.removeItem(PENDING_WITHDRAWAL_KEY);
+  } catch { /* Storage failure must not change a verified financial result. */ }
+}
+
+function readPendingWithdrawal(): PendingWithdrawal | null {
+  try {
+    const pending = JSON.parse(sessionStorage.getItem(PENDING_WITHDRAWAL_KEY) || 'null') as PendingWithdrawal | null;
+    if (!pending) return null;
+    if (pending.marker !== localStorage.getItem(AUTH_SESSION_CHANGE_KEY) || pending.origin !== getApiBaseUrl()) {
+      clearPendingWithdrawal();
+      return null;
+    }
+    if (typeof pending.key !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(pending.key)
+      || !Number.isSafeInteger(pending.amountCents) || pending.amountCents < 100
+      || !Number.isFinite(pending.createdAt) || pending.createdAt <= 0 || pending.createdAt > Date.now()) {
+      throw new Error('Invalid pending withdrawal');
+    }
+    return pending;
+  } catch { throw new Error('Cannot restore this withdrawal safely in this browser. Please contact support.'); }
 }
 
 interface WithdrawModalProps {
@@ -25,14 +49,67 @@ interface WithdrawModalProps {
 }
 
 export default function WithdrawModal({ balance, onClose, onSuccess, onUnsettled }: WithdrawModalProps) {
+  const amountInputId = useId();
   const [amount, setAmount] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [pendingWithdrawal, setPendingWithdrawal] = useState<PendingWithdrawal | null>(null);
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const [needsReview, setNeedsReview] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [recoveryFailed, setRecoveryFailed] = useState(false);
+  const [readAttempt, setReadAttempt] = useState(0);
+
+  useEffect(() => {
+    let retired = false;
+    const restore = async () => {
+      let saved: PendingWithdrawal | null = null;
+      let storageError = false;
+      try { saved = readPendingWithdrawal(); } catch { storageError = true; }
+      try {
+        const result = await walletApi.getTransactions({ type: 'withdrawal', unsettledWithdrawal: true, limit: 1 });
+        if (retired) return;
+        const recovery = result.withdrawalRecovery;
+        const pending = recovery ? {
+          key: recovery.idempotencyKey, amountCents: recovery.amountCents,
+          marker: localStorage.getItem(AUTH_SESSION_CHANGE_KEY), origin: getApiBaseUrl(),
+          createdAt: recovery.createdAt ? Date.parse(recovery.createdAt) : 0,
+        } : saved;
+        if (!pending && storageError) throw new Error('Cannot restore this withdrawal safely in this browser. Please contact support.');
+        if (recovery?.retryable && pending?.key) {
+          sessionStorage.setItem(PENDING_WITHDRAWAL_KEY, JSON.stringify(pending));
+          if (readPendingWithdrawal()?.key !== pending.key) throw new Error('Pending withdrawal was not saved');
+        }
+        setPendingWithdrawal(pending);
+        setPendingCount(result.total);
+        setNeedsReview(Boolean(recovery && !recovery.retryable));
+        if (pending) setAmount((pending.amountCents / 100).toFixed(2));
+        if (recovery && !recovery.retryable) setError('This withdrawal needs support review before it can be retried. Please contact support.');
+        setRecoveryReady(true);
+      } catch {
+        if (!retired) {
+          setError('Cannot check for an existing withdrawal safely. Retry the check or contact support.');
+          setRecoveryFailed(true);
+        }
+      }
+    };
+    void restore();
+    const retire = () => { retired = true; clearPendingWithdrawal(); setPendingWithdrawal(null); setRecoveryReady(false); };
+    const changed = (event: StorageEvent) => {
+      if (event.key === AUTH_SESSION_CHANGE_KEY || event.key === null) retire();
+    };
+    const unsubscribe = onTokenChange(retire);
+    window.addEventListener('storage', changed);
+    return () => { retired = true; unsubscribe(); window.removeEventListener('storage', changed); };
+  }, [readAttempt]);
 
   const amountCents = Math.round(parseFloat(amount || '0') * 100);
   // A retry of the withdrawal in progress may exceed the refreshed balance: its held debit is that money.
-  const isValid = amountCents >= 100 && (amountCents <= balance || pendingWithdrawal?.amountCents === amountCents);
+  const isValid = amountCents >= 100 && (pendingWithdrawal ? pendingWithdrawal.amountCents === amountCents : amountCents <= balance);
+  const pendingNotice = pendingWithdrawal && pendingWithdrawal.amountCents !== amountCents
+    ? `A withdrawal of $${(pendingWithdrawal.amountCents / 100).toFixed(2)} is pending. Retry that amount before starting another withdrawal.`
+    : pendingCount > 1 ? `${pendingCount} withdrawals are pending. Resolve this oldest withdrawal before starting another.` : null;
 
   const handleWithdrawAll = () => {
     setAmount((balance / 100).toFixed(2));
@@ -40,38 +117,74 @@ export default function WithdrawModal({ balance, onClose, onSuccess, onUnsettled
   };
 
   const handleWithdraw = useCallback(async () => {
+    if (!recoveryReady) {
+      if (recoveryFailed) {
+        setRecoveryFailed(false);
+        setError(null);
+        setReadAttempt(attempt => attempt + 1);
+      }
+      return;
+    }
     if (!isValid) return;
 
     setProcessing(true);
     setError(null);
 
+    let intent: PendingWithdrawal | null = null;
     try {
-      const intent = pendingWithdrawal?.amountCents === amountCents
-        ? pendingWithdrawal
-        : { key: crypto.randomUUID(), amountCents };
-      pendingWithdrawal = intent;
+      if (needsReview) {
+        setError('This withdrawal needs support review before it can be retried. Please contact support.');
+        return;
+      }
+      const stored = readPendingWithdrawal();
+      intent = stored || pendingWithdrawal;
+      if (intent && intent.amountCents !== amountCents) {
+        setPendingWithdrawal(intent);
+        setError(`A withdrawal of $${(intent.amountCents / 100).toFixed(2)} is pending. Retry that amount before starting another withdrawal.`);
+        return;
+      }
+      if (intent && (!intent.key || Date.now() - intent.createdAt >= MAX_RETRY_AGE)) {
+        setError('This withdrawal needs support review before it can be retried. Please contact support.');
+        return;
+      }
+      try {
+        intent ??= { key: crypto.randomUUID(), amountCents, marker: localStorage.getItem(AUTH_SESSION_CHANGE_KEY), origin: getApiBaseUrl(), createdAt: Date.now() };
+        sessionStorage.setItem(PENDING_WITHDRAWAL_KEY, JSON.stringify(intent));
+        if (readPendingWithdrawal()?.key !== intent.key) throw new Error('Pending withdrawal was not saved');
+      } catch {
+        setError('Cannot save this withdrawal safely in this browser. Enable browser storage and try again.');
+        return;
+      }
+      setPendingWithdrawal(intent);
+      if (!intent.key) return;
       await walletApi.withdraw(amountCents, intent.key);
-      pendingWithdrawal = null;
+      clearPendingWithdrawal(intent.key);
+      setPendingWithdrawal(null);
       setSuccess(true);
       setTimeout(() => onSuccess(), 2000);
     } catch (err: unknown) {
-      const unsettled = leavesWithdrawalUnsettled(err);
-      if (!unsettled) pendingWithdrawal = null;
+      const code = (err as { code?: string } | null)?.code;
+      const terminal = code === 'withdrawal_not_completed' || code === 'withdrawal_key_reused';
+      if (terminal && intent?.key) { clearPendingWithdrawal(intent.key); setPendingWithdrawal(null); }
       const message = getErrorMessage(err).trim();
       setError(message || 'Withdrawal failed. Please try again.');
-      if (unsettled) onUnsettled?.();
+      if (!terminal) onUnsettled?.();
     } finally {
       setProcessing(false);
     }
-  }, [amountCents, isValid, onSuccess, onUnsettled]);
+  }, [amountCents, isValid, pendingWithdrawal, recoveryReady, recoveryFailed, needsReview, onSuccess, onUnsettled]);
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
       <div className="bg-app-surface rounded-2xl max-w-md w-full shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-app-border-subtle">
           <h2 className="text-lg font-semibold text-app-text">Withdraw Funds</h2>
           <button
+            type="button"
+            aria-label="Close withdrawal dialog"
             onClick={onClose}
             className="w-8 h-8 rounded-full hover:bg-app-hover flex items-center justify-center text-app-text-muted hover:text-app-text-secondary transition"
           >
@@ -109,15 +222,16 @@ export default function WithdrawModal({ balance, onClose, onSuccess, onUnsettled
 
               {/* Amount input */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-app-text-strong mb-2">
+                <label htmlFor={amountInputId} className="block text-sm font-medium text-app-text-strong mb-2">
                   Withdrawal amount
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-app-text-secondary font-medium">$</span>
                   <input
+                    id={amountInputId}
                     type="number"
                     min="1"
-                    max={(balance / 100).toFixed(2)}
+                    max={(Math.max(balance, pendingWithdrawal?.amountCents === amountCents ? amountCents : 0) / 100).toFixed(2)}
                     step="0.01"
                     value={amount}
                     onChange={(e) => { setAmount(e.target.value); setError(null); }}
@@ -145,15 +259,16 @@ export default function WithdrawModal({ balance, onClose, onSuccess, onUnsettled
                 </p>
               </div>
 
-              {error && (
+              {(error || pendingNotice) && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-4">
-                  {error}
+                  {error || pendingNotice}
                 </div>
               )}
 
               <button
                 onClick={handleWithdraw}
-                disabled={!isValid || processing}
+                aria-busy={(!recoveryReady && !recoveryFailed) || processing}
+                disabled={(!recoveryReady && !recoveryFailed) || (recoveryReady && !isValid) || processing}
                 className="w-full py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {processing ? (
@@ -164,7 +279,7 @@ export default function WithdrawModal({ balance, onClose, onSuccess, onUnsettled
                     </svg>
                     Processing...
                   </span>
-                ) : (
+                ) : !recoveryReady ? (recoveryFailed ? 'Retry withdrawal check' : 'Checking withdrawal…') : (
                   `Withdraw $${amountCents >= 100 ? (amountCents / 100).toFixed(2) : '0.00'}`
                 )}
               </button>
@@ -172,6 +287,7 @@ export default function WithdrawModal({ balance, onClose, onSuccess, onUnsettled
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
