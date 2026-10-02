@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.homes.owners
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.OwnerDto
 import app.pantopus.android.data.api.models.homes.OwnerUser
 import app.pantopus.android.data.api.models.homes.OwnersResponse
@@ -12,6 +13,7 @@ import app.pantopus.android.data.api.models.users.UserDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeOwnersRepository
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBackground
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBadgeSize
@@ -22,6 +24,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.theme.PantopusIcon
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -43,11 +46,19 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class OwnersListViewModelTest {
     private val repo: HomeOwnersRepository = mockk()
+    private val adminRepo: HomeAdminRepository = mockk()
     private val authRepository: AuthRepository = mockk()
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { adminRepo.myAccess("home_1") } returns
+            NetworkResult.Success(
+                HomeAccessDto(
+                    hasAccess = true,
+                    permissions = listOf("ownership.manage", "ownership.transfer"),
+                ),
+            )
         // Default: viewer is Maria — drives the "You" chip on row o1.
         every { authRepository.state } returns
             MutableStateFlow(
@@ -70,6 +81,7 @@ class OwnersListViewModelTest {
     private fun makeVm(): OwnersListViewModel =
         OwnersListViewModel(
             repo = repo,
+            adminRepo = adminRepo,
             authRepository = authRepository,
             savedStateHandle = SavedStateHandle(mapOf(OWNERS_LIST_HOME_ID_KEY to "home_1")),
         )
@@ -109,6 +121,8 @@ class OwnersListViewModelTest {
         runTest {
             coEvery { repo.list("home_1") } returns NetworkResult.Success(OwnersResponse(owners = emptyList()))
             val vm = makeVm()
+            assertNull(vm.fab)
+            assertNull(vm.access.value)
             vm.state.test {
                 assertEquals(ListOfRowsUiState.Loading, awaitItem())
                 vm.load()
@@ -151,8 +165,37 @@ class OwnersListViewModelTest {
                     "Expected user-readable error copy, got '${error.message}'",
                     error.message.contains("Something went wrong", ignoreCase = true),
                 )
+                assertNull(vm.fab)
                 cancelAndConsumeRemainingEvents()
             }
+            coEvery { repo.list("home_1") } returns NetworkResult.Failure(NetworkError.Forbidden)
+            vm.refresh()
+            assertNull(vm.fab)
+            assertNull(vm.access.value)
+            assertNotNull(vm.topBarAction)
+
+            coEvery { repo.list("home_1") } returns NetworkResult.Success(OwnersResponse(owners = threeOwners))
+            coEvery { adminRepo.myAccess("home_1") } returns NetworkResult.Failure(NetworkError.Server(503, null))
+            vm.refresh()
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            assertNull(vm.fab)
+            assertNull(vm.access.value)
+
+            coEvery { adminRepo.myAccess("home_1") } returns
+                NetworkResult.Success(HomeAccessDto(hasAccess = true, permissions = listOf("ownership.transfer")))
+            vm.refresh()
+            assertNull(vm.fab)
+            assertTrue(vm.access.value?.can("ownership.transfer") == true)
+            vm.requestInvite()
+            vm.removeOwner("o2")
+            assertNull(vm.pendingEvent.value)
+            coVerify(exactly = 0) { repo.remove(any(), any()) }
+
+            coEvery { adminRepo.myAccess("home_1") } returns
+                NetworkResult.Success(HomeAccessDto(hasAccess = true, permissions = listOf("ownership.manage")))
+            vm.refresh()
+            assertNotNull(vm.fab)
+            assertFalse(vm.access.value?.can("ownership.transfer") == true)
         }
 
     @Test
@@ -302,6 +345,7 @@ class OwnersListViewModelTest {
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             assertEquals(2, loaded.sections.first().rows.size)
             assertNull(loaded.sections.first().rows.firstOrNull { it.id == "o2" })
+            assertNull(vm.removalError.value)
         }
 
     @Test
@@ -316,6 +360,13 @@ class OwnersListViewModelTest {
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             assertEquals(3, loaded.sections.first().rows.size)
             assertNotNull(loaded.sections.first().rows.firstOrNull { it.id == "o2" })
+            assertEquals(
+                "We couldn't confirm the owner removal. " +
+                    "Refresh owners to check the current access before trying again.",
+                vm.removalError.value,
+            )
+            vm.acknowledgeRemovalError()
+            assertNull(vm.removalError.value)
         }
 
     @Test
@@ -331,14 +382,17 @@ class OwnersListViewModelTest {
     // MARK: - Chrome
 
     @Test
-    fun fab_is_home_tinted_secondary_create_with_user_plus() {
-        val vm = makeVm()
-        val fab = vm.fab
-        assertEquals(PantopusIcon.UserPlus, fab.icon)
-        assertEquals("Invite an owner", fab.contentDescription)
-        assertTrue(fab.variant is FabVariant.SecondaryCreate)
-        assertEquals(FabTint.Home, fab.tint)
-    }
+    fun fab_is_home_tinted_secondary_create_with_user_plus() =
+        runTest {
+            coEvery { repo.list("home_1") } returns NetworkResult.Success(OwnersResponse(owners = threeOwners))
+            val vm = makeVm()
+            vm.load()
+            val fab = requireNotNull(vm.fab)
+            assertEquals(PantopusIcon.UserPlus, fab.icon)
+            assertEquals("Invite an owner", fab.contentDescription)
+            assertTrue(fab.variant is FabVariant.SecondaryCreate)
+            assertEquals(FabTint.Home, fab.tint)
+        }
 
     @Test
     fun pending_event_is_open_invite_when_fab_clicks() =
@@ -346,7 +400,7 @@ class OwnersListViewModelTest {
             coEvery { repo.list("home_1") } returns NetworkResult.Success(OwnersResponse(owners = threeOwners))
             val vm = makeVm()
             vm.load()
-            vm.fab.onClick()
+            requireNotNull(vm.fab).onClick()
             assertEquals(OwnersListEvent.OpenInvite, vm.pendingEvent.value)
             vm.acknowledgeEvent()
             assertNull(vm.pendingEvent.value)

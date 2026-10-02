@@ -16,6 +16,7 @@ import app.pantopus.android.ui.screens.shared.form.email
 import app.pantopus.android.ui.screens.shared.form.emailNotMatching
 import app.pantopus.android.ui.screens.shared.form.maxLength
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -145,18 +146,45 @@ class InviteOwnerFormViewModel
         private val currentUserEmail: String =
             savedStateHandle[INVITE_OWNER_CURRENT_EMAIL_KEY] ?: ""
         private val initialDraft = InviteOwnerSampleData.draftFor(homeId)
+        private var loadJob: Job? = null
 
         private val _state = MutableStateFlow(stateFrom(initialDraft, InviteOwnerPhase.Loading))
         val state: StateFlow<InviteOwnerUiState> = _state.asStateFlow()
 
         fun load() {
-            _state.update { current ->
-                if (current.phase != InviteOwnerPhase.Loading) return@update current
-                current.copy(phase = if (current.owners.isEmpty()) InviteOwnerPhase.Empty else InviteOwnerPhase.Editing)
-            }
+            if (_state.value.phase != InviteOwnerPhase.Loading || loadJob?.isActive == true) return
+            loadJob =
+                viewModelScope.launch {
+                    when (val result = homesRepo.detail(homeId)) {
+                        is NetworkResult.Success -> {
+                            val home = result.data.home
+                            if (home.id != homeId) {
+                                _state.update { it.copy(phase = InviteOwnerPhase.Error("We couldn't confirm this Home. Try again.")) }
+                                return@launch
+                            }
+                            val address = home.address?.trim()?.takeIf { it.isNotEmpty() }
+                            val name = home.name?.trim()?.takeIf { it.isNotEmpty() }
+                            _state.update { current ->
+                                current.copy(
+                                    homeContext =
+                                        InviteOwnerHomeContext(
+                                            title = address ?: name ?: "Home",
+                                            subtitle = name ?: "Selected home",
+                                        ),
+                                    phase = if (current.owners.isEmpty()) InviteOwnerPhase.Empty else InviteOwnerPhase.Editing,
+                                )
+                            }
+                        }
+                        is NetworkResult.Failure -> {
+                            _state.update { it.copy(phase = InviteOwnerPhase.Error("We couldn't load this Home. Try again.")) }
+                        }
+                    }
+                }
         }
 
         fun refresh() {
+            loadJob?.cancel()
+            loadJob = null
             _state.value = stateFrom(initialDraft, InviteOwnerPhase.Loading)
             load()
         }
@@ -254,6 +282,7 @@ class InviteOwnerFormViewModel
         }
 
         fun submit() {
+            if (_state.value.phase != InviteOwnerPhase.Editing) return
             val invalid = validateAll()
             val current = _state.value
             if (invalid != null || current.hasShareConflict || current.grantPercent <= 0) {

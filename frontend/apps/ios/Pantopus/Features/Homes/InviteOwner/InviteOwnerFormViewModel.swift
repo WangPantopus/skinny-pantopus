@@ -6,8 +6,8 @@
 //  via `POST /api/homes/:id/owners/invite` (route
 //  `backend/routes/homeOwnership.js:1526`). The ownership-share split
 //  (grantPercent / owners) is a client-side affordance the invite route
-//  doesn't consume, so it still hydrates from deterministic sample data
-//  to keep previews, snapshots, and local UI tests stable.
+//  doesn't consume. The context strip loads the selected Home; explicit
+//  drafts keep previews, snapshots, and local UI tests deterministic.
 //
 
 import Foundation
@@ -53,6 +53,7 @@ public final class InviteOwnerFormViewModel {
     public let noteMaxLength = InviteOwnerSampleData.noteMaxLength
 
     private let initialDraft: InviteOwnerDraft
+    private let loadsHomeContext: Bool
     private let onSent: @MainActor (InviteOwnerSentInvite) -> Void
     private let api: APIClient
     private var originalGrantPercent: Int
@@ -71,6 +72,7 @@ public final class InviteOwnerFormViewModel {
         self.api = api
         let draft = initialDraft ?? InviteOwnerSampleData.initialDraft(homeId: homeId)
         self.initialDraft = draft
+        loadsHomeContext = initialDraft == nil
         homeContext = draft.homeContext
         owners = draft.owners
         grantPercent = draft.grantPercent
@@ -141,7 +143,22 @@ public final class InviteOwnerFormViewModel {
 
     public func load() async {
         guard case .loading = state else { return }
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        if loadsHomeContext {
+            do {
+                let response = try await api.request(HomesEndpoints.detail(homeId: homeId), as: HomeDetailResponse.self)
+                let home = response.home.base
+                guard home.id == homeId else {
+                    state = .error("We couldn't confirm this Home. Try again.")
+                    return
+                }
+                let address = home.address.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+                let name = home.name.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+                homeContext = InviteOwnerHomeContext(title: address ?? name ?? "Home", subtitle: name ?? "Selected home")
+            } catch {
+                state = .error("We couldn't load this Home. Try again.")
+                return
+            }
+        }
         state = owners.isEmpty ? .empty : .editing
     }
 
@@ -207,6 +224,7 @@ public final class InviteOwnerFormViewModel {
 
     @discardableResult
     public func submit() async -> Bool {
+        guard case .editing = state else { return false }
         if validateAll() != nil || hasShareConflict || grantPercent <= 0 {
             shakeTrigger &+= 1
             toast = ToastMessage(
