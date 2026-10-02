@@ -4,6 +4,12 @@ Checkpoint: 2026-10-02T12:19:24.506340+00:00. Stream 1 successor chat is `01a0fb
 
 Own Support Train G01–G05, O01–O06, L01–L04, Train U02–U04, U05/O04 assembly and the sole merge queue for all five streams. Use existing acceptance and screen catalogs; an open row, old report or new filename does not establish a missing feature.
 
+## Latest recovery checkpoint — 2026-10-02T12:42:24.380568+00:00
+
+Draft1479 now has exact `d3ed390e8d0747211bb333ec8a5d792bd65f6762`. Actual a84 installed sequence reproduced the preflight-read reset defect:201/drop correct uncertainty→three failed GETs/noextraPOST→misleading submit-failure heading→GET200/POST409 same lease. Root independently verified38 total recovery-before files/seal5e874517,19 installed/serving bindings, all3 masked PNGs and353 cleanup. Exact five-character note now has bounded retention/persistence evidence; longer input remains unverified. Followup changes only existing VM reset locations and one existing context test (same28 declarations). Fullfive guards/tree/log hashes pass. Necessary cached build exactpurpose `stream3-home: necessary iOS E2 recovery d3ed cached build r1` acquired12:35:24Z and is ongoing; build/tests/install/realafter still pending, draft not ready.
+
+Root independently verified AndroidR1 24 total files/sealb82af173,19 bindings, actual503×3→deliberate200/AXRetry→Start/zeroPOSTorlease-notification-audit/353cleanup. FLAG_SECURE/no raster or spokenTalkBack retained. Six of12 bounded landlord cases accepted (fiveiOS+oneAndroid), iOSE2open/AndroidE6active. These dated cleanups are not a current globalfixture0 claim. Runtimeorder stays12landlord+exactfullreturn→S4MailTask→S3widerU02. Root/S4 no waiter; master346 and root final345 package unchanged. Original a84/d3ed snapshots below are historical where superseded; latest01 and live ownership win.
+
 ## Read first and verify live
 
 Read repository AGENTS.md, docs/PROJECT_HANDOFF.md, docs/VERIFICATION_FIRST_2026-09-13.md, docs/launch-scope-flags-2026-10-01.md and docs/screen-parity-inventory.md. Live coordination is `/Users/yingpengwang/pantopus-coordination`, branch `codex/workstream-coordination`: read README, newest01 and current02–05, then existing checklists/data_s1.py and checklist README. Master's copies and older resource records are snapshots.
@@ -20,7 +26,7 @@ Before/closure/after seals: `7e7a67a1aa606d3afc3a05e34e74834cd9187e4266b3a073d10
 
 Source CI37003947398 completed SUCCESS at exacte6: all applicable web/Identity Firewall/schema/safeguard and CI OK pass; backend/native skips are not passes. Only batch37004863186 cancelled immediately, completed cancelled. Sole failed CI OK110831107161 fully read privately (100lines/7596bytes, SHA90fe7e379e80271a54c973b0c0681b0435c1ad9c503ee9b719fe6aec6622bb44): cancelled prerequisites, no app failure or aggregate green. Source CI untouched. Settings #1474 source36984703665 also completed SUCCESS including all three iOS targets; old queued snapshots are superseded. Preserve cancelled343/344/345 qualifications.
 
-**Draft1479 is unready and excluded from the merge queue.** Exact candidate `a84a7f2b85d3811e70d5b6dd7725a635c86307a8`, branch claude/stream3-home-landlord-outcome. Three existing iOS app files change truthful unknown-outcome wording in the existing banner; one existing unit file retains the same28 declarations. Actual E2 after, affected failed-status recovery, existing regressions and sealed cleanup are still required. Leave unrelated46/429/430/625/draft842 untouched. Fresh-check later PRs and failures; never merge an unsealed peer draft.
+**Draft1479 is unready and excluded from the merge queue.** Exact current candidate `d3ed390e8d0747211bb333ec8a5d792bd65f6762` (prior compileda84 preserved), branch claude/stream3-home-landlord-outcome. Three existing iOS app files change truthful unknown-outcome wording in the existing banner; one existing unit file retains the same28 declarations. Actual E2 after, affected failed-status recovery, existing regressions and sealed cleanup are still required. Leave unrelated46/429/430/625/draft842 untouched. Fresh-check later PRs and failures; never merge an unsealed peer draft.
 
 ## Root accepted local packaging and Train evidence
 
