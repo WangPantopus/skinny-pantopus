@@ -2,7 +2,7 @@
 
 You are **Stream 2: Posts, Hub and payments**. Name your session accordingly and use the lease label `stream2:`. You succeed Codex chat `01a0f92f-0c8c-7952-8cd8-01ff274c9a11`.
 
-The clean local checkpoint was reconciled at **2026-10-02T08:33:02Z**. All known local repairs are integrated. No owned compiler, device, driver, runtime, fixture or lease remains active. Some remote CI jobs are still running; CI is informational and this checkpoint does not claim aggregate success or launch sign-off.
+The clean local checkpoint was reconciled at **2026-10-02T08:33:02Z**. All known local repairs are integrated. No owned compiler, device, driver, runtime, fixture or lease remains active. Updated 2026-10-02T09:04:22Z: the Wallet follow-up source CI36983405804 has completed successfully at exact8ac, including every applicable job and CI OK. Older source runs still have queued/running jobs. CI remains informational; this checkpoint does not claim whole-client or launch sign-off.
 
 ## Read first
 
@@ -13,7 +13,7 @@ The clean local checkpoint was reconciled at **2026-10-02T08:33:02Z**. All known
 
 ## Exact checkpoints — reverify live
 
-- App worktree: `/Users/yingpengwang/.codex/worktrees/f1aa/skinny-pantopus`. It is clean and pushed on `claude/stream2-money-wallet-snapshot-baseline`, head `8ac6923b9dd51aca1a28598d3a730438a556fa25`. Keep it frozen while any queued native build may compile it. Latest fetched master was `a7118fd13bb51e478c6dbe3818b16e1502df876a`.
+- App worktree: `/Users/yingpengwang/.codex/worktrees/f1aa/skinny-pantopus`. It is clean and pushed on `claude/stream2-money-wallet-snapshot-baseline`, head `8ac6923b9dd51aca1a28598d3a730438a556fa25`. Keep it frozen while any queued native build may compile it. Latest fetched master is `4e55a2c02d681cd2edb99c276650f15d6c5b9981` (checked 2026-10-02T09:04:22Z); the Android production source matches fa107 and the merged Wallet PNG remains exact.
 - Native withdrawal recovery [#1463](https://github.com/WangPantopus/skinny-pantopus/pull/1463), head `1aae2fd5a2fb82c81700795a64734503f310703c`, integrated in batch 339. Separate transaction truth [#1469](https://github.com/WangPantopus/skinny-pantopus/pull/1469), head `050c1547207a05754a58e49abf8249d0dfe8ae42`, integrated in batch 341.
 - Actual owned Android app/API/SQL journeys passed for recovery, retry, refusal, age, zero balance and account switch, plus Wallet/History On hold, Reversed, Payout and credit-count behavior. SDK faults and settlement were simulated; no real provider or capture acceptance was added.
 - The iOS source-bound receipts retain 37/37 covering tests, five full static gates and build evidence. A normal installed-app login and Hub Wallet menu reached an empty OS passcode prompt. Dynamic Wallet behavior beyond that gate remains unverified. Both native apps launch on this machine; the OS prompt is an acceptance boundary.
@@ -38,7 +38,7 @@ Sealed audit root: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus
 
 All hashes were independently verified. Never edit a sealed r1 packet; use a fresh revision for new evidence.
 
-Source CI `36983405804` was still running with no completed red jobs at the last check. Cancelled batch 343 run `36983811398` had one red CI OK job, `110764827772`: its require-all step exited 1 because Android/schema jobs were cancelled and other jobs skipped. The complete private log was read; this is cancellation-derived, not a reproduced application failure or green aggregate. Older batch 339/341 cancellations are similarly qualified. Read any new completed source-job failure before changing existing work, and keep operator logs private.
+Source CI [36983405804](https://github.com/WangPantopus/skinny-pantopus/actions/runs/36983405804) is completed/success at exact8ac (checked 2026-10-02T09:04:22Z): every applicable job and CI OK passed. Older1463/run36973048312 remains queued with no completed red; older1469/run36975634478 remains running with the already-read snapshot failure superseded by #1472. Do not treat that historical red as a new defect or claim those older runs passed. Cancelled batch 343 run `36983811398` had one red CI OK job, `110764827772`: its require-all step exited 1 because Android/schema jobs were cancelled and other jobs skipped. The complete private log was read; this is cancellation-derived, not a reproduced application failure or green aggregate. Older batch 339/341 cancellations are similarly qualified. Read any new completed source-job failure before changing existing work, and keep operator logs private.
 
 ## Runtime, cleanup and missing kit
 
@@ -52,7 +52,7 @@ The old 20260930 inventory path and original `scan.cjs`/`routes-scan.cjs` were a
 
 ## First actions and remaining work
 
-Start read-only: `date -u`, disk/memory, Git status and fetched remote head, PRs 1463/1469/1472 and current source CI, heavy/device status with zsh, and ListAgents. Introduce yourself to Stream 1's current successor as the Stream 2 successor. Thread `01a0f92d-68b1-7ac1-a17c-f11470ac4777` was the sole merger/iOS operator; reverify the current owner.
+Start read-only: `date -u`, disk/memory, Git status and fetched remote head, PRs 1463/1469/1472 and current source CI, heavy/device status with zsh, and ListAgents. Introduce yourself to Stream 1's current successor as the Stream 2 successor. Thread `01a0f92d-68b1-7ac1-a17c-f11470ac4777` was the sole merger/iOS operator; reverify the current owner. Its latest successor prompt is `docs/workstreams/NEXT-STREAM1-PROMPT-2026-10-02-clean-checkpoint.md`; global iOS/web packaging is prepared but not dispatched or accepted.
 
 All known queue PRs are integrated: 1414, 1412, 1418, 1423, 1426, 1428, 1431, 1413, 1445, 1463, 1469 and 1472. No Stream 2 PR or runtime campaign is pending at this checkpoint.
 
