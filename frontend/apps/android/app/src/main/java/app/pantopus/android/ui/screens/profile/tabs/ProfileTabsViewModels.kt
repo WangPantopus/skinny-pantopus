@@ -19,10 +19,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.UUID
 import javax.inject.Inject
 import kotlin.math.floor
 
@@ -146,6 +148,7 @@ class ProfilePortfolioViewModel
         private var isOwnProfile: Boolean = false
         private var allItems: List<PortfolioItem> = emptyList()
         private var loadedOnce = false
+        private var pendingUpload: Pair<List<String>, String>? = null
 
         /** Your own portfolio unlocks the add bar and the delete affordance. */
         val canEdit: Boolean get() = isOwnProfile
@@ -242,6 +245,17 @@ class ProfilePortfolioViewModel
             }
             if (_isMutating.value) return
             _isMutating.value = true
+            val draft =
+                listOf(
+                    userId.orEmpty(),
+                    file.filename,
+                    file.mimeType,
+                    trimmedTitle,
+                    description.trim(),
+                    category.slug,
+                    MessageDigest.getInstance("SHA-256").digest(file.bytes).joinToString("") { "%02x".format(it) },
+                )
+            if (pendingUpload?.first != draft) pendingUpload = draft to UUID.randomUUID().toString()
             viewModelScope.launch {
                 val result =
                     repo.uploadPortfolioItem(
@@ -251,9 +265,11 @@ class ProfilePortfolioViewModel
                         title = trimmedTitle,
                         description = description.trim(),
                         category = category.slug,
+                        clientRequestId = pendingUpload?.second,
                     )
                 when (result) {
                     is NetworkResult.Success -> {
+                        pendingUpload = null
                         _showAddSheet.value = false
                         _toastMessage.value = "Portfolio item added"
                         _isMutating.value = false

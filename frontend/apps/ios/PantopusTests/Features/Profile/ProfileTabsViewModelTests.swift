@@ -34,6 +34,47 @@ final class ProfileTabsViewModelTests: XCTestCase {
 
     // MARK: - Portfolio
 
+    func testPortfolioUploadRetainsRequestOnFailureAndClearsAfterSuccess() async throws {
+        SequencedURLProtocol.routeResponses["/api/files/portfolio"] = [
+            .status(500, body: #"{"error":"Lost reply"}"#),
+            .status(201, body: #"{"file":{"id":"f1"}}"#),
+            .status(200, body: #"{"files":[]}"#),
+            .status(201, body: #"{"file":{"id":"f2"}}"#),
+            .status(200, body: #"{"files":[]}"#),
+            .status(500, body: #"{"error":"Lost reply"}"#),
+            .status(500, body: #"{"error":"Lost reply"}"#)
+        ]
+        let vm = ProfilePortfolioViewModel(
+            userId: "me",
+            isOwnProfile: true,
+            client: makeClient(),
+            uploader: MultipartUploader(session: SequencedURLProtocol.makeSession())
+        )
+        var ids: [String] = []
+        for content in ["same", "same", "same", "same", "changed"] {
+            await vm.upload(
+                data: Data(content.utf8),
+                filename: "project.txt",
+                mimeType: "text/plain",
+                title: "Project",
+                description: "",
+                category: .photo
+            )
+            let request = try XCTUnwrap(SequencedURLProtocol.capturedRequests.last { $0.httpMethod == "POST" })
+            let body = try XCTUnwrap(request.authTestBodyData())
+            let text = try XCTUnwrap(String(data: body, encoding: .utf8))
+            let field = try XCTUnwrap(text.components(separatedBy: "name=\"client_request_id\"\r\n\r\n").dropFirst().first)
+            let id = try XCTUnwrap(field.components(separatedBy: "\r\n").first)
+            XCTAssertNotNil(UUID(uuidString: id))
+            ids.append(id)
+        }
+        XCTAssertEqual(ids[0], ids[1])
+        XCTAssertNotEqual(ids[1], ids[2])
+        XCTAssertNotEqual(ids[2], ids[3])
+        XCTAssertNotEqual(ids[3], ids[4], "Changed bytes start a different upload intent")
+        XCTAssertFalse(vm.isMutating)
+    }
+
     func testPortfolioLoadsSomeoneElsesPublicRouteAndProjectsCards() async {
         SequencedURLProtocol.routeResponses["/api/files/portfolio/u2"] = [
             .status(200, body: """
