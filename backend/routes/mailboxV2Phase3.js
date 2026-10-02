@@ -1203,11 +1203,12 @@ router.get('/mailday/settings', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { data: settings } = await supabaseAdmin
+    const { data: settings, error } = await supabaseAdmin
       .from('MailDaySettings')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+    if (error) throw error;
 
     if (!settings) {
       // Return defaults
