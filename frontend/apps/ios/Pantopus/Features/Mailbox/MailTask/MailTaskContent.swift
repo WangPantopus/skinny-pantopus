@@ -263,6 +263,10 @@ public struct MailTaskContent: Sendable, Hashable {
     public let elfDone: MailTaskElf?
     public let completion: MailTaskCompletion?
     public let nextUp: MailTaskNextUp?
+    /// The design's unbuilt actions: the open dock's Snooze, Delegate and
+    /// Calendar chips and the header's Share and More. The task API has none
+    /// of them yet, so live tasks hide them.
+    public let hasUnbuiltActions: Bool
     public var isDone: Bool
 
     public init(
@@ -279,6 +283,7 @@ public struct MailTaskContent: Sendable, Hashable {
         elfDone: MailTaskElf? = nil,
         completion: MailTaskCompletion? = nil,
         nextUp: MailTaskNextUp? = nil,
+        hasUnbuiltActions: Bool = false,
         isDone: Bool = false
     ) {
         self.taskId = taskId
@@ -294,6 +299,7 @@ public struct MailTaskContent: Sendable, Hashable {
         self.elfDone = elfDone
         self.completion = completion
         self.nextUp = nextUp
+        self.hasUnbuiltActions = hasUnbuiltActions
         self.isDone = isDone
     }
 

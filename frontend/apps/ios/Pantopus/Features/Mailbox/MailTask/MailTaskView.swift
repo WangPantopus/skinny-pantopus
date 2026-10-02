@@ -81,9 +81,16 @@ public struct MailTaskView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Task")
             Spacer(minLength: Spacing.s0)
-            HStack(spacing: 2) {
+            // Share and More have no actions yet: live tasks keep their space,
+            // so the title stays centred, but nothing to tap or hear.
+            let headerActions = HStack(spacing: 2) {
                 navIcon(.share, label: "Share")
                 navIcon(.moreHorizontal, label: "More")
+            }
+            if showsUnbuiltActions {
+                headerActions
+            } else {
+                headerActions.hidden()
             }
         }
         .padding(.horizontal, Spacing.s2)
@@ -92,6 +99,13 @@ public struct MailTaskView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
         }
+    }
+
+    private var showsUnbuiltActions: Bool {
+        if case let .loaded(task) = viewModel.state {
+            return task.hasUnbuiltActions
+        }
+        return false
     }
 
     private func navIcon(_ icon: PantopusIcon, label: String) -> some View {
@@ -215,7 +229,7 @@ public struct MailTaskView: View {
             if task.isDone {
                 doneDock
             } else {
-                openDock
+                openDock(task)
             }
         }
         .padding(.horizontal, Spacing.s4)
@@ -227,17 +241,21 @@ public struct MailTaskView: View {
         }
     }
 
-    private var openDock: some View {
+    private func openDock(_ task: MailTaskContent) -> some View {
         VStack(spacing: Spacing.s2 + 2) {
             dockPrimary(icon: .check, title: "Mark done") { viewModel.markDone() }
                 .accessibilityIdentifier("mailTask_markDone")
-            HStack(spacing: Spacing.s2) {
-                dockChip(icon: .clock, label: "Snooze") { viewModel.snoozeFromDock() }
-                    .accessibilityIdentifier("mailTask_dock_snooze")
-                dockChip(icon: .userPlus, label: "Delegate") { viewModel.delegate() }
-                    .accessibilityIdentifier("mailTask_dock_delegate")
-                dockChip(icon: .calendarPlus, label: "Calendar") { viewModel.addToCalendar() }
-                    .accessibilityIdentifier("mailTask_dock_calendar")
+            // Design frames only: live tasks have no snooze picker, hand-off or
+            // calendar to open, so the chips stay hidden rather than fake it.
+            if task.hasUnbuiltActions {
+                HStack(spacing: Spacing.s2) {
+                    dockChip(icon: .clock, label: "Snooze") { viewModel.snoozeFromDock() }
+                        .accessibilityIdentifier("mailTask_dock_snooze")
+                    dockChip(icon: .userPlus, label: "Delegate") { viewModel.delegate() }
+                        .accessibilityIdentifier("mailTask_dock_delegate")
+                    dockChip(icon: .calendarPlus, label: "Calendar") { viewModel.addToCalendar() }
+                        .accessibilityIdentifier("mailTask_dock_calendar")
+                }
             }
         }
     }
