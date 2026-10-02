@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Calendar, List, Printer,
+  ArrowLeft, AlertTriangle, ChevronLeft, ChevronRight, Calendar, List, Printer,
   ChefHat, ShoppingCart, Truck,
 } from 'lucide-react';
 import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
@@ -31,6 +31,7 @@ export default function SupportTrainCalendarPage() {
   const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
@@ -39,15 +40,21 @@ export default function SupportTrainCalendarPage() {
 
   const fetchData = useCallback(async () => {
     if (!getAuthToken()) { router.push('/login'); return; }
+    setLoading(true);
+    setData(null);
+    setError(null);
     try {
       const result = await api.supportTrains.getSupportTrain(id);
       setData(result);
-    } catch { /* handled by empty state */ }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load schedule');
+    } finally {
+      setLoading(false);
+    }
   }, [id, router]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchData().finally(() => setLoading(false));
+    fetchData();
   }, [fetchData]);
 
   const slots: any[] = data?.slots || [];
@@ -104,6 +111,24 @@ export default function SupportTrainCalendarPage() {
     return (
       <div className="max-w-5xl mx-auto px-4 py-16 flex justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600" />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-16 text-center">
+        <button onClick={() => router.push(`/app/support-trains/${id}`)} className="text-sm text-app-text-secondary hover:text-app-text flex items-center gap-1 mb-6">
+          <ArrowLeft className="w-4 h-4" />Back
+        </button>
+        <AlertTriangle className="w-12 h-12 text-app-text-muted mx-auto mb-4" />
+        <p role="alert" className="text-app-text-secondary mb-4">{error || 'Schedule not found'}</p>
+        <button
+          onClick={fetchData}
+          className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 transition"
+        >
+          Retry
+        </button>
       </div>
     );
   }
