@@ -342,10 +342,9 @@ public struct WalletView: View {
         guard let recovery = currentRecovery else { return nil }
         guard recovery.canRetry else { return WalletViewModel.withdrawalReviewMessage }
         let amount = WalletViewModel.centsToCurrency(recovery.amountCents)
-        let count: Int
-        switch viewModel.state {
-        case let .populated(content), let .hold(content): count = content.withdrawalRecoveryCount
-        default: count = 0
+        let count: Int = switch viewModel.state {
+        case let .populated(content), let .hold(content): content.withdrawalRecoveryCount
+        default: 0
         }
         return count > 1
             ? "\(count) withdrawals need checking. Retry the oldest \(amount) amount."
@@ -365,7 +364,7 @@ public struct WalletView: View {
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Text(recoveryMessage ?? ("Funds arrive in 2–3 business days. "
-                + "Available to withdraw: $\(currentAvailable)."))
+                    + "Available to withdraw: $\(currentAvailable)."))
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
@@ -386,10 +385,10 @@ public struct WalletView: View {
                     Button("Max") {
                         withdrawAmount = currentRecovery.map { WalletViewModel.centsToPlain($0.amountCents) } ?? currentAvailable
                     }
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Theme.Color.primaryInk)
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("wallet.withdrawMaxBtn")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Theme.Color.primaryInk)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("wallet.withdrawMaxBtn")
                 }
                 .padding(.horizontal, Spacing.s3)
                 .frame(height: 48)
