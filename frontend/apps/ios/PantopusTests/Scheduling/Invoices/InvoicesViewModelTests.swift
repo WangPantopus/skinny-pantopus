@@ -120,4 +120,43 @@ final class InvoicesViewModelTests: XCTestCase {
         await model.load()
         guard case .error = model.phase else { return XCTFail("expected error phase") }
     }
+
+    func testSendRetryKeepsIntentAndSuccessAllowsAnotherSend() async throws {
+        let model = detailVM([
+            "/api/scheduling/invoices/inv1/send": [
+                .status(503, body: #"{"error":"Unavailable"}"#),
+                .status(200, body: #"{"ok":true}"#),
+                .status(200, body: #"{"ok":true}"#)
+            ]
+        ])
+        var ids: [String] = []
+        for _ in 0..<3 {
+            await model.send()
+            let request = try XCTUnwrap(SequencedURLProtocol.capturedRequests.last)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: String])
+            let id = try XCTUnwrap(body["client_request_id"])
+            XCTAssertNotNil(UUID(uuidString: id))
+            ids.append(id)
+            let query = try URLComponents(url: XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems
+            XCTAssertTrue(query?.contains(URLQueryItem(name: "owner_id", value: "biz1")) == true)
+        }
+        XCTAssertEqual(ids[0], ids[1])
+        XCTAssertNotEqual(ids[1], ids[2])
+    }
+
+    private static func bodyData(from request: URLRequest) -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return Data() }
+        var data = Data()
+        stream.open()
+        defer { stream.close() }
+        let bufferSize = 4096
+        var buffer = [UInt8](repeating: 0, count: bufferSize)
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: bufferSize)
+            if read <= 0 { break }
+            data.append(buffer, count: read)
+        }
+        return data
+    }
 }

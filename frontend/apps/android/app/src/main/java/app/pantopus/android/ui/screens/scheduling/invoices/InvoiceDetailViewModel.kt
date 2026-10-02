@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -108,6 +109,7 @@ class InvoiceDetailViewModel
         private var owner: SchedulingOwner = SchedulingOwner.Personal
         private var shareText: String = ""
         private var started = false
+        private var sendRequestId: String? = null
 
         fun start() {
             if (started) return
@@ -137,10 +139,12 @@ class InvoiceDetailViewModel
         /** Send the invoice to its recipient (in-app notification; no state mutation). */
         fun send() {
             if (_sending.value) return
+            if (sendRequestId == null) sendRequestId = UUID.randomUUID().toString()
             _sending.value = true
             viewModelScope.launch {
-                when (repo.sendInvoice(owner, invoiceId)) {
+                when (repo.sendInvoice(owner, invoiceId, sendRequestId)) {
                     is NetworkResult.Success -> {
+                        sendRequestId = null
                         _sending.value = false
                         _sentToast.value = true
                         delay(SENT_TOAST_MS)

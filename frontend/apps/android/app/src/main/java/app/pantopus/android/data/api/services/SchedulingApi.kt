@@ -564,6 +564,7 @@ interface SchedulingApi {
         @Path("id") invoiceId: String,
         @Query("owner_type") ownerType: String? = null,
         @Query("owner_id") ownerId: String? = null,
+        @Body body: Map<String, String> = emptyMap(),
     ): SchedulingOkResponse
 
     // ─── Packages ───────────────────────────────────────────────────────────

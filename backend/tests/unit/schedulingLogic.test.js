@@ -27,6 +27,64 @@ jest.mock('../../stripe/stripeService', () => ({
 
 const { resetTables, seedTable, getTable } = require('../__mocks__/supabaseAdmin');
 
+describe('invoice send retry identity', () => {
+  const express = require('express');
+  const request = require('supertest');
+  const notifications = require('../../services/notificationService');
+  const app = express();
+  app.use(express.json());
+  app.use('/api/scheduling', require('../../routes/scheduling'));
+  const owner = 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa';
+  const recipient = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const requestId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const send = (id, key = requestId, actor = owner) => request(app)
+    .post(`/api/scheduling/invoices/${id}/send`)
+    .set('x-test-user-id', actor)
+    .send({ owner_type: 'business', owner_id: owner, ...(key === undefined ? {} : { client_request_id: key }) });
+
+  beforeEach(() => {
+    resetTables();
+    notifications.createNotification.mockClear();
+    seedTable('BusinessInvoice', ['invoice-1', 'invoice-2'].map(id => ({
+      id, business_user_id: owner, recipient_user_id: recipient, total_cents: 2500, currency: 'usd', status: 'sent',
+    })));
+  });
+
+  it('keeps one notification identity through a retry, including UUID letter case', async () => {
+    expect((await send('invoice-1')).status).toBe(200);
+    expect((await send('invoice-1', requestId.toUpperCase())).status).toBe(200);
+    const calls = notifications.createNotification.mock.calls.map(([input]) => input);
+    expect(calls).toHaveLength(2);
+    expect(calls[0].idempotencyKey).toBe(calls[1].idempotencyKey);
+    expect(calls[0]).toMatchObject({ userId: recipient, type: 'invoice_sent', link: '/app/invoice/invoice-1' });
+    expect(getTable('BusinessInvoice')[0]).toMatchObject({ total_cents: 2500, status: 'sent' });
+  });
+
+  it('allows a deliberate resend and scopes a reused key to its invoice', async () => {
+    await send('invoice-1');
+    await send('invoice-1', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    await send('invoice-2');
+    expect(new Set(notifications.createNotification.mock.calls.map(([input]) => input.idempotencyKey)).size).toBe(3);
+  });
+
+  it('retains unkeyed client compatibility', async () => {
+    const response = await request(app).post('/api/scheduling/invoices/invoice-1/send')
+      .send({ owner_type: 'business', owner_id: owner });
+    expect(response.status).toBe(200);
+    expect(notifications.createNotification.mock.calls[0][0]).not.toHaveProperty('idempotencyKey');
+  });
+
+  it.each(['invalid', '', null])('rejects an invalid request identity %p before delivery', async key => {
+    expect((await send('invoice-1', key)).status).toBe(400);
+    expect(notifications.createNotification).not.toHaveBeenCalled();
+  });
+
+  it('does not let an outsider replay the owner command', async () => {
+    expect((await send('invoice-1', requestId, recipient)).status).toBe(403);
+    expect(notifications.createNotification).not.toHaveBeenCalled();
+  });
+});
+
 describe('module wiring (require without error)', () => {
   it('loads all scheduling services + routers', () => {
     expect(typeof require('../../services/scheduling/availabilityService').computeSlots).toBe('function');

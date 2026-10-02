@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.scheduling.BookingPageResponse
 import app.pantopus.android.data.api.models.scheduling.CreateEventTypeRequest
 import app.pantopus.android.data.api.models.scheduling.EventTypeDto
 import app.pantopus.android.data.api.models.scheduling.EventTypeResponse
+import app.pantopus.android.data.api.models.scheduling.SchedulingOkResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.services.SchedulingApi
@@ -27,6 +28,16 @@ class SchedulingRepositoryTest {
     private val repo = SchedulingRepository(api, publicApi)
 
     private fun pageResponse() = BookingPageResponse(BookingPageDto(id = "page-1"))
+
+    @Test
+    fun invoice_send_carries_its_intent_and_business_owner() =
+        runTest {
+            coEvery { api.sendInvoice(any(), any(), any(), any(), any()) } returns SchedulingOkResponse()
+            repo.sendInvoice(SchedulingOwner.Business("biz-1"), "invoice-1", "intent-1")
+            coVerify {
+                api.sendInvoice("scheduling", "invoice-1", "business", "biz-1", mapOf("client_request_id" to "intent-1"))
+            }
+        }
 
     @Test
     fun personal_read_sends_scheduling_base_and_no_owner_query() =
