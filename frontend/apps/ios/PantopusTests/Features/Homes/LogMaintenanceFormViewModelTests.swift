@@ -137,7 +137,8 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         // The retained next-due date must not create a hidden family-calendar event.
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 1)
         XCTAssertTrue(SequencedURLProtocol.capturedRequests[0].url?.path.hasSuffix("/maintenance") ?? false)
-        let body = try? JSONSerialization.jsonObject(with: SequencedURLProtocol.capturedRequests[0].authTestBodyData() ?? Data()) as? [String: Any]
+        let body = try? JSONSerialization
+            .jsonObject(with: SequencedURLProtocol.capturedRequests[0].authTestBodyData() ?? Data()) as? [String: Any]
         XCTAssertEqual(body?["due_date"] as? String, "2026-11-01")
     }
 
