@@ -4,6 +4,10 @@ Checkpoint: 2026-10-02T15:00:17.042320+00:00. Stream 1 successor chat is `01a0fb
 
 Own Support Train G01–G05, O01–O06, L01–L04, Train U02–U04, U05/O04 assembly and the sole merge queue for all five streams. Use existing acceptance and screen catalogs; an open row, old report or new filename does not establish a missing feature.
 
+## Active work — 2026-10-02T15:23Z
+
+Own2467 frozen348d6e58; root iOS Debug/local Release compilation actually holds exact sole-heavy acquired15:12:40Z, label `stream1: integrated-ios-d6e58e38a Debug-local Release compile d6e58e38a449912f826908caafc1d8af651bd08e`. No build/signature pass yet, root runtime/device/fixture0. S4 shared runtime/devices active after actual startup release; pure S3 Android767 compilation follows actual root release, native install/afters wait S4 full return. Draft1484 source-only scoped repair reviewed, no new test declarations; quality/build/actual after/cleanup/seal/source CI remain pending. S4 actual iOS retained MailTask shows Convert to neighbor gig with OpenGigsOFF; before/full-preimage/Android checks ongoing, no cut action invoked. Frozen348 packaging is a checkpoint with a known pending entry guard, not final launch acceptance. Fresh-check all source/resource/CI states; current01/liveowners override older checkpoint paragraphs.
+
 ## Latest merged Android recovery checkpoint — 2026-10-02T15:00:17.042320+00:00
 
 Fresh master **d6e58e38a449912f826908caafc1d8af651bd08e**, next **349**. Source #1482 exact7d is merged through #1483/batch348; fresh full tree equals reviewed bafb68bc2d4670ab1a0ef6d4a1de86bbebdac3bd. Five existing-file whole-blob union/diff/migration policy and unchanged full five iOS guards pass. Actual Android full ktlint/detekt/lintDebug,54 selected existing JVM and2 existing instrumented tests pass; installed b773 APK matches compiled product. Source CI37016550142 passed all applicable checks. Narrow existing-test-class LargeClass suppression is recorded; real earlier quality failures remain immutable.
