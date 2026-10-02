@@ -54,6 +54,7 @@ class ProfileTabsRepository
             title: String,
             description: String?,
             category: String?,
+            clientRequestId: String? = null,
         ): NetworkResult<PortfolioUploadResponse> =
             safeApiCall {
                 val filePart =
@@ -67,6 +68,7 @@ class ProfileTabsRepository
                     title = title.asFormField(),
                     description = description?.takeIf { it.isNotBlank() }?.asFormField(),
                     category = category?.takeIf { it.isNotBlank() }?.asFormField(),
+                    clientRequestId = clientRequestId?.asFormField(),
                 )
             }
 

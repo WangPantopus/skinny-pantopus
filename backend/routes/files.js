@@ -65,7 +65,8 @@ const uploadPortfolioSchema = Joi.object({
   title: Joi.string().max(255).optional(),
   description: Joi.string().max(1000).optional(),
   tags: Joi.array().items(Joi.string()).optional(),
-  displayOrder: Joi.number().integer().min(0).optional()
+  displayOrder: Joi.number().integer().min(0).optional(),
+  client_request_id: Joi.string().uuid().optional()
 });
 
 const uploadHomeFileSchema = Joi.object({
@@ -376,9 +377,40 @@ router.post('/portfolio', verifyToken, upload.single('file'), validate(uploadPor
       return res.status(400).json({ error: 'No file provided' });
     }
     
-    const { category, title, description, tags, displayOrder } = req.body;
+    const { category, title, description, tags, displayOrder, client_request_id: requestId } = req.body;
     const userId = req.user.id;
     const file = req.file;
+
+    // A retry keeps both its File identity and object names. The payload hash prevents
+    // concurrent reuse of a key for different bytes/metadata from overwriting the winner.
+    const fileId = requestId ? crypto.createHash('sha256')
+      .update(`pantopus:portfolio:v1:${userId.toLowerCase()}:${requestId.toLowerCase()}`)
+      .digest('hex').slice(0, 32) : null;
+    const fingerprint = fileId ? crypto.createHash('sha256').update(JSON.stringify({
+      sha256: crypto.createHash('sha256').update(file.buffer).digest('hex'),
+      filename: file.originalname, mimeType: file.mimetype,
+      category: category || null, title: title || null, description: description || null,
+      tags: tags || [], displayOrder: displayOrder || 0,
+    })).digest('hex') : null;
+    const readExisting = async () => {
+      const { data, error } = await supabaseAdmin.from('File').select('*').eq('id', fileId).maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const answer = (saved) => {
+      if (fileId && (saved.is_deleted || saved.metadata?.upload_fingerprint !== fingerprint)) {
+        return res.status(409).json({ error: 'This upload request was already used. Add the item again.', code: 'PORTFOLIO_REQUEST_REUSED' });
+      }
+      const { upload_fingerprint: _fingerprint, ...metadata } = saved.metadata || {};
+      return res.status(201).json({ message: 'Portfolio file uploaded successfully', file: {
+        id: saved.id, url: saved.file_url, type: saved.file_type,
+        thumbnails: metadata.thumbnails || {}, metadata,
+      } });
+    };
+    if (fileId) {
+      const existing = await readExisting();
+      if (existing) return answer(existing);
+    }
     
     const fileCategory = getFileCategory(file.mimetype);
     if (!fileCategory) {
@@ -393,6 +425,10 @@ router.post('/portfolio', verifyToken, upload.single('file'), validate(uploadPor
     await checkStorageQuota(userId, file.size);
 
     const ext = path.extname(file.originalname).toLowerCase();
+    const objectKey = (folder, extension) => fileId
+      ? `${folder}/${userId}/${fileId}/${fingerprint}${extension}`
+      : s3.generateS3Key(folder, file.originalname.replace(ext, extension), userId);
+    const uploadedKeys = [];
 
     let processedBuffer = file.buffer;
     let imageMetadata = null;
@@ -407,13 +443,16 @@ router.post('/portfolio', verifyToken, upload.single('file'), validate(uploadPor
       // Upload thumbnails to S3
       for (const [sizeName, thumbBuffer] of Object.entries(thumbnails)) {
         try {
+          const key = objectKey(`portfolio/thumbnails/${sizeName}`, '.webp');
           const thumbResult = await s3.uploadToS3(
             thumbBuffer,
-            s3.generateS3Key(`portfolio/thumbnails/${sizeName}`, file.originalname.replace(ext, '.webp'), userId),
+            key,
             'image/webp'
           );
+          uploadedKeys.push(key);
           thumbnailUrls[sizeName] = thumbResult.url;
         } catch (err) {
+          if (fileId) throw err; // retry completes the same set of objects before publishing
           logger.warn('Thumbnail upload failed', { error: err.message });
         }
       }
@@ -433,16 +472,16 @@ router.post('/portfolio', verifyToken, upload.single('file'), validate(uploadPor
     // Upload to S3
     const { url: fileUrl, key: s3Key } = await s3.uploadToS3(
       processedBuffer,
-      s3.generateS3Key('portfolio', file.originalname, userId),
+      objectKey('portfolio', ext),
       file.mimetype
     );
+    uploadedKeys.push(s3Key);
 
     const visibility = fileCategory === 'DOCUMENT' ? 'private' : 'public';
 
     // Save to database
-    const { data: savedFile, error: dbError } = await supabaseAdmin
-      .from('File')
-      .insert({
+    const row = {
+        ...(fileId ? { id: fileId } : {}),
         user_id: userId,
         filename: path.basename(s3Key),
         original_filename: file.originalname,
@@ -461,31 +500,34 @@ router.post('/portfolio', verifyToken, upload.single('file'), validate(uploadPor
           tags: tags || [],
           width: imageMetadata?.width,
           height: imageMetadata?.height,
-          thumbnails: thumbnailUrls
+          thumbnails: thumbnailUrls,
+          ...(fingerprint ? { upload_fingerprint: fingerprint } : {})
         },
         processing_status: 'completed'
-      })
+      };
+    const { data: savedFile, error: dbError } = await (fileId
+      ? supabaseAdmin.from('File').upsert(row, { onConflict: 'id', ignoreDuplicates: true })
+      : supabaseAdmin.from('File').insert(row))
       .select()
-      .single();
+      .maybeSingle();
 
     if (dbError) {
-      await s3.deleteFromS3(s3Key);
+      // A keyed concurrent request may already reference these same objects. Keep
+      // them on an uncertain database result; retry uses these exact names again.
+      if (!fileId) await s3.deleteFromS3(s3Key);
       logger.error('Database insert error', { error: dbError.message, userId });
       return res.status(500).json({ error: 'Failed to save file record' });
     }
 
-    logger.info('Portfolio file uploaded', { fileId: savedFile.id, userId, fileType });
-
-    res.status(201).json({
-      message: 'Portfolio file uploaded successfully',
-      file: {
-        id: savedFile.id,
-        url: fileUrl,
-        type: fileType,
-        thumbnails: thumbnailUrls,
-        metadata: savedFile.metadata
-      }
-    });
+    const saved = savedFile || (fileId ? await readExisting() : null);
+    if (!saved) throw new Error('Portfolio upload returned no file');
+    if (fileId && (saved.is_deleted || saved.metadata?.upload_fingerprint !== fingerprint)) {
+      // Different payloads use disjoint names; a deleted row has no live objects.
+      // A deletion winning during upload must not leave late-arriving bytes behind.
+      await Promise.all(uploadedKeys.map((key) => s3.deleteFromS3(key)));
+    }
+    logger.info('Portfolio file uploaded', { fileId: saved.id, userId, fileType });
+    return answer(saved);
     
   } catch (err) {
     logger.error('Portfolio upload error', { error: err.message });

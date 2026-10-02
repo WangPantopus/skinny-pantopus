@@ -19,6 +19,7 @@
 
 // swiftlint:disable file_length function_parameter_count
 
+import CryptoKit
 import Foundation
 import Logging
 import Observation
@@ -127,6 +128,7 @@ public final class ProfilePortfolioViewModel {
     private let isOwnProfile: Bool
     private let client: APIClient
     private let uploader: MultipartUploader
+    private var pendingUpload: (draft: [String], id: String)?
     private let logger = Logger(label: "app.pantopus.ios.ProfilePortfolio")
 
     init(
@@ -228,6 +230,7 @@ public final class ProfilePortfolioViewModel {
         description: String,
         category: PortfolioItemKind
     ) async {
+        guard !isMutating else { return }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else {
             toastMessage = "Please enter a title for your portfolio item."
@@ -236,6 +239,14 @@ public final class ProfilePortfolioViewModel {
         guard let data, !data.isEmpty else {
             toastMessage = "Couldn't read that file. Check Photos access and try again."
             return
+        }
+        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let draft = [
+            userId, filename, mimeType, trimmedTitle, trimmedDescription, category.rawValue,
+            SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        ]
+        if pendingUpload?.draft != draft {
+            pendingUpload = (draft, UUID().uuidString)
         }
         isMutating = true
         defer { isMutating = false }
@@ -248,9 +259,11 @@ public final class ProfilePortfolioViewModel {
                     data: data
                 ),
                 title: trimmedTitle,
-                description: description.trimmingCharacters(in: .whitespacesAndNewlines),
-                category: category.rawValue
+                description: trimmedDescription,
+                category: category.rawValue,
+                clientRequestId: pendingUpload?.id
             )
+            pendingUpload = nil
             showAddSheet = false
             toastMessage = "Portfolio item added"
             await fetch()
