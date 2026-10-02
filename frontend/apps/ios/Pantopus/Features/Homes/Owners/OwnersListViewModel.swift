@@ -51,13 +51,17 @@ final class OwnersListViewModel: ListOfRowsDataSource {
     var selectedTab: String = ""
 
     var fab: FABAction? {
-        FABAction(
+        guard canManageOwnership else { return nil }
+        return FABAction(
             icon: .userPlus,
             accessibilityLabel: "Invite an owner",
             variant: .secondaryCreate,
             tint: .home
         ) { @Sendable [weak self] in
-            Task { @MainActor in self?.pendingEvent = .openInvite }
+            Task { @MainActor in
+                guard self?.canManageOwnership == true else { return }
+                self?.pendingEvent = .openInvite
+            }
         }
     }
 
@@ -75,6 +79,15 @@ final class OwnersListViewModel: ListOfRowsDataSource {
     /// Cached roster — preserves backend ordering (primary first) and
     /// drives optimistic-remove rollback.
     private var owners: [OwnerDTO] = []
+    private var access: HomeAccessDTO?
+
+    var canManageOwnership: Bool {
+        access?.can("ownership.manage") == true
+    }
+
+    var canTransferOwnership: Bool {
+        access?.can("ownership.transfer") == true
+    }
 
     /// True only when the host supplied an `onOpenClaimReview` handler.
     private let showsClaimReview: Bool
@@ -134,7 +147,8 @@ final class OwnersListViewModel: ListOfRowsDataSource {
     /// alert handler. The view can reissue `refresh()` to surface the
     /// canonical state.
     func removeOwner(ownerId: String) async {
-        guard let idx = owners.firstIndex(where: { $0.id == ownerId }) else { return }
+        guard canManageOwnership,
+              let idx = owners.firstIndex(where: { $0.id == ownerId }) else { return }
         removalError = nil
         let previous = owners
         owners.remove(at: idx)
@@ -154,10 +168,12 @@ final class OwnersListViewModel: ListOfRowsDataSource {
     // MARK: - Private
 
     private func fetch() async {
+        access = nil
         do {
             let response: OwnersResponse = try await api.request(
                 HomesEndpoints.listOwners(homeId: homeId)
             )
+            access = try await api.request(HomeAdminEndpoints.myAccess(homeId: homeId), as: HomeAccessDTO.self)
             owners = response.owners
             applyState()
         } catch {
@@ -177,9 +193,12 @@ final class OwnersListViewModel: ListOfRowsDataSource {
                     subcopy:
                     "Invite a spouse, sibling, or co-investor who's on the " +
                         "deed. They'll upload proof and split the share with you.",
-                    ctaTitle: "Invite an owner"
+                    ctaTitle: canManageOwnership ? "Invite an owner" : nil
                 ) { @Sendable [weak self] in
-                    Task { @MainActor in self?.pendingEvent = .openInvite }
+                    Task { @MainActor in
+                        guard self?.canManageOwnership == true else { return }
+                        self?.pendingEvent = .openInvite
+                    }
                 }
             )
             return
@@ -249,7 +268,7 @@ final class OwnersListViewModel: ListOfRowsDataSource {
                 size: .medium,
                 verified: proof != .pending
             ),
-            trailing: .kebab,
+            trailing: canManageOwnership ? .kebab : .none,
             onTap: { @Sendable in
                 // Tapping the row itself is a no-op for now — the only
                 // interactive surface is the kebab menu. A future
@@ -257,6 +276,7 @@ final class OwnersListViewModel: ListOfRowsDataSource {
             },
             onSecondary: { @Sendable [weak self] in
                 Task { @MainActor in
+                    guard self?.canManageOwnership == true else { return }
                     self?.pendingEvent = .confirmRemove(
                         ownerId: owner.id,
                         displayName: displayName

@@ -5,10 +5,12 @@ package app.pantopus.android.ui.screens.homes.owners
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.OwnerDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeOwnersRepository
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBackground
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBadgeSize
@@ -70,6 +72,7 @@ class OwnersListViewModel
     @Inject
     constructor(
         private val repo: HomeOwnersRepository,
+        private val adminRepo: HomeAdminRepository,
         authRepository: AuthRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
@@ -88,6 +91,12 @@ class OwnersListViewModel
 
         private val _removalError = MutableStateFlow<String?>(null)
         val removalError: StateFlow<String?> = _removalError.asStateFlow()
+
+        private val _access = MutableStateFlow<HomeAccessDto?>(null)
+        val access: StateFlow<HomeAccessDto?> = _access.asStateFlow()
+
+        private val canManageOwnership: Boolean
+            get() = _access.value?.can("ownership.manage") == true
 
         /** Cached roster — preserves backend ordering and drives
          *  optimistic-remove rollback. */
@@ -112,6 +121,7 @@ class OwnersListViewModel
 
         /** Fired by the FAB / empty CTA. */
         fun requestInvite() {
+            if (!canManageOwnership) return
             _pendingEvent.value = OwnersListEvent.OpenInvite
         }
 
@@ -136,14 +146,19 @@ class OwnersListViewModel
 
         /** FAB payload — 52dp secondary-create + user-plus glyph +
          *  home-green tint to match the home-pillar identity. */
-        val fab: FabAction =
-            FabAction(
-                icon = PantopusIcon.UserPlus,
-                contentDescription = "Invite an owner",
-                variant = FabVariant.SecondaryCreate,
-                tint = FabTint.Home,
-                onClick = ::requestInvite,
-            )
+        val fab: FabAction?
+            get() =
+                if (canManageOwnership) {
+                    FabAction(
+                        icon = PantopusIcon.UserPlus,
+                        contentDescription = "Invite an owner",
+                        variant = FabVariant.SecondaryCreate,
+                        tint = FabTint.Home,
+                        onClick = ::requestInvite,
+                    )
+                } else {
+                    null
+                }
 
         /** Look up a cached owner by id. */
         fun cachedOwner(id: String): OwnerDto? = owners.firstOrNull { it.id == id }
@@ -162,6 +177,7 @@ class OwnersListViewModel
 
         /** Optimistic remove + rollback on failure. */
         fun removeOwner(ownerId: String) {
+            if (!canManageOwnership) return
             val previous = owners
             if (previous.none { it.id == ownerId }) return
             _removalError.value = null
@@ -182,12 +198,24 @@ class OwnersListViewModel
         }
 
         private fun reload() {
+            _access.value = null
             _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
                 when (val result = repo.list(homeId)) {
                     is NetworkResult.Success -> {
-                        owners = result.data.owners
-                        applyState()
+                        when (val accessResult = adminRepo.myAccess(homeId)) {
+                            is NetworkResult.Success -> {
+                                _access.value = accessResult.data
+                                owners = result.data.owners
+                                applyState()
+                            }
+                            is NetworkResult.Failure -> {
+                                _state.value =
+                                    ListOfRowsUiState.Error(
+                                        accessResult.error.displayMessage("Couldn't load owner permissions."),
+                                    )
+                            }
+                        }
                     }
                     is NetworkResult.Failure -> {
                         _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
@@ -206,8 +234,8 @@ class OwnersListViewModel
                             "Invite a spouse, sibling, or co-investor who's on " +
                                 "the deed. They'll upload proof and split the share " +
                                 "with you.",
-                        ctaTitle = "Invite an owner",
-                        onCta = ::requestInvite,
+                        ctaTitle = if (canManageOwnership) "Invite an owner" else null,
+                        onCta = if (canManageOwnership) ::requestInvite else null,
                     )
                 return
             }
@@ -286,18 +314,20 @@ class OwnersListViewModel
                         size = AvatarBadgeSize.Medium,
                         verified = proof != OwnerProof.Pending,
                     ),
-                trailing = RowTrailing.Kebab,
+                trailing = if (canManageOwnership) RowTrailing.Kebab else RowTrailing.None,
                 onTap = {
                     // No-op — the only interactive surface is the kebab
                     // menu. A future "View claim" destination would push
                     // here.
                 },
                 onSecondary = {
-                    _pendingEvent.value =
-                        OwnersListEvent.ConfirmRemove(
-                            ownerId = owner.id,
-                            displayName = displayName,
-                        )
+                    if (canManageOwnership) {
+                        _pendingEvent.value =
+                            OwnersListEvent.ConfirmRemove(
+                                ownerId = owner.id,
+                                displayName = displayName,
+                            )
+                    }
                 },
                 body = proof.bodyLabel,
                 subtitleIcon = PantopusIcon.Shield,

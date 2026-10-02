@@ -105,7 +105,7 @@ public struct OwnersListView: View {
     /// "Transfer Ownership" button under the roster.
     @ViewBuilder
     private var transferBar: some View {
-        if let onOpenTransfer {
+        if viewModel.canTransferOwnership, let onOpenTransfer {
             VStack(spacing: Spacing.s0) {
                 Button(action: onOpenTransfer) {
                     HStack(spacing: Spacing.s2) {
