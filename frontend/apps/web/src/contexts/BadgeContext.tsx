@@ -14,6 +14,7 @@ import type { Socket } from 'socket.io-client';
 import { getAuthToken } from '@pantopus/api';
 import * as api from '@pantopus/api';
 import { useSocket, useSocketConnected } from '@/contexts/SocketContext';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ── Types ────────────────────────────────────────────────────
 export interface BadgeCounts {
@@ -75,7 +76,9 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
       const [notifRes, chatRes, offersRes] = await Promise.allSettled([
         api.notifications.getUnreadCount({ suppressDevErrorOverlay: true }),
         api.chat.getChatStats({ suppressDevErrorOverlay: true }),
-        api.gigs.getReceivedOffers(undefined, { suppressDevErrorOverlay: true }),
+        launchFeatures.openGigs
+          ? api.gigs.getReceivedOffers(undefined, { suppressDevErrorOverlay: true })
+          : Promise.resolve({ offers: [] }),
       ]);
 
       const notifPayload =
