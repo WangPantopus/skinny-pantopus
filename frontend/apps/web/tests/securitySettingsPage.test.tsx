@@ -187,11 +187,23 @@ describe('Security settings page', () => {
     loadPage();
     await screen.findByRole('button', { name: 'Remove Pixel 9' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Pixel 9' }));
+    const trigger = screen.getByRole('button', { name: 'Remove Pixel 9' });
+    trigger.focus();
+    fireEvent.click(trigger);
     await screen.findByText('Remove Pixel 9?');
+    const password = screen.getByLabelText('Password');
+    await waitFor(() => expect(password).toHaveFocus());
+    const close = screen.getByRole('button', { name: 'Close' });
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(cancel).toHaveFocus();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => expect(screen.queryByText('Remove Pixel 9?')).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
     expect(apiMock.authDevices.stepUpWithPassword).not.toHaveBeenCalled();
     expect(apiMock.authDevices.revokeDevice).not.toHaveBeenCalled();
   });
@@ -311,5 +323,61 @@ describe('Security settings page', () => {
     loadPage();
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/login?redirectTo=%2Fapp%2Fsettings%2Fsecurity'));
     expect(apiMock.authDevices.getDevices).not.toHaveBeenCalled();
+  });
+});
+
+describe('shared ModalShell keyboard lifetime', () => {
+  test('an initially closed mounted shell enters, contains and restores focus on each opening', async () => {
+    const ModalShell = require('../src/components/ui/ModalShell').default;
+    function Harness() {
+      const [open, setOpen] = React.useState(false);
+      return <>
+        <button onClick={() => setOpen(true)}>Open confirmation</button>
+        <ModalShell open={open} title="Synthetic confirmation" onClose={() => setOpen(false)}
+          onCancel={() => setOpen(false)} cancelLabel="Cancel" submitLabel="Confirm" onSubmit={() => {}}>
+          <input aria-label="Synthetic detail" />
+        </ModalShell>
+      </>;
+    }
+    render(<Harness />);
+    const trigger = screen.getByRole('button', { name: 'Open confirmation' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    for (const action of ['Escape', 'Cancel', 'Close']) {
+      trigger.focus();
+      fireEvent.click(trigger);
+      const dialog = await screen.findByRole('dialog', { name: 'Synthetic confirmation' });
+      const close = within(dialog).getByRole('button', { name: 'Close' });
+      const confirm = within(dialog).getByRole('button', { name: 'Confirm' });
+      expect(close).toHaveFocus();
+      confirm.focus();
+      fireEvent.keyDown(document, { key: 'Tab' });
+      expect(close).toHaveFocus();
+      fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+      expect(confirm).toHaveFocus();
+      if (action === 'Escape') fireEvent.keyDown(document, { key: 'Escape' });
+      else fireEvent.click(within(dialog).getByRole('button', { name: action }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    }
+  });
+
+  test('a submitting shell keeps focus and refuses Escape, then uses the current close callback', async () => {
+    const ModalShell = require('../src/components/ui/ModalShell').default;
+    const originalClose = jest.fn();
+    const latestClose = jest.fn();
+    const props = { open: true, title: 'Synthetic submitting', onClose: originalClose,
+      onCancel: jest.fn(), submitLabel: 'Confirm', onSubmit: jest.fn(), submitting: true };
+    const { rerender } = render(<ModalShell {...props}><input type="hidden" /></ModalShell>);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(dialog).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(originalClose).not.toHaveBeenCalled();
+    rerender(<ModalShell {...props} submitting={false} onClose={latestClose}><input type="hidden" /></ModalShell>);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(latestClose).toHaveBeenCalledTimes(1);
+    expect(originalClose).not.toHaveBeenCalled();
   });
 });
