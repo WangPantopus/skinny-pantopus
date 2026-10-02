@@ -46,7 +46,7 @@ public struct WalletTransactionsResponse: Decodable, Sendable, Hashable {
     public let total: Int?
     public let limit: Int?
     public let offset: Int?
-    public var withdrawalRecovery: WalletWithdrawalRecoveryDTO? = nil
+    public var withdrawalRecovery: WalletWithdrawalRecoveryDTO?
 }
 
 /// Owner-only recovery projection, separate from ordinary activity history.
