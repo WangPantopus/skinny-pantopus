@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 const FOCUSABLE_SELECTOR = [
   'a[href]',
@@ -11,10 +11,10 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-export function useDialogFocusTrap<T extends HTMLElement>(onClose: () => void, returnFocusTo?: HTMLElement | null, enabled = true) {
+export function useDialogFocusTrap<T extends HTMLElement>(onClose: () => void, returnFocusTo?: HTMLElement | RefObject<HTMLElement | null> | null, enabled = true) {
   const containerRef = useRef<T | null>(null);
   const onCloseRef = useRef(onClose);
-  const returnFocusRef = useRef<HTMLElement | null>(returnFocusTo || null);
+  const returnFocusRef = useRef(returnFocusTo || null);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -22,7 +22,9 @@ export function useDialogFocusTrap<T extends HTMLElement>(onClose: () => void, r
 
   useEffect(() => {
     if (!enabled) return;
-    const previousFocus = returnFocusRef.current || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    const returnTarget = returnFocusRef.current;
+    const previousFocus = (returnTarget && 'current' in returnTarget ? returnTarget.current : returnTarget)
+      || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     const container = containerRef.current;
     if (!container) return;
     const getFocusable = () => (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useId, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
 import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
@@ -51,6 +51,12 @@ export default function ModalShell({
 }: ModalShellProps) {
   const titleId = useId();
   const subtitleId = useId();
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  // Capture the opener before a caller's deferred autofocus and the portal mount.
+  useLayoutEffect(() => {
+    if (open) returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }, [open]);
 
   const closeWhenReady = useCallback(
     () => {
@@ -74,7 +80,7 @@ export default function ModalShell({
   // them, and they stayed clickable behind the dialog.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const dialogRef = useDialogFocusTrap<HTMLDivElement>(closeWhenReady, undefined, open && mounted);
+  const dialogRef = useDialogFocusTrap<HTMLDivElement>(closeWhenReady, returnFocusRef, open && mounted);
 
   if (!open || !mounted) return null;
 
