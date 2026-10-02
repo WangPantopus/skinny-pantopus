@@ -771,6 +771,9 @@ describe('POST /api/chat/rooms/:roomId/read', () => {
 
 jest.mock('../../services/s3Service', () => ({
   uploadToS3: jest.fn(), uploadGeneral: jest.fn(), deleteFromS3: jest.fn(),
+  generateS3Key: jest.fn((folder, filename, userId) => `${folder}/${userId}/${require('crypto').randomUUID()}.txt`),
+  chatFileStorageReference: (...args) => jest.requireActual('../../services/s3Service').chatFileStorageReference(...args),
+  chatFileObjectMetadata: (...args) => jest.requireActual('../../services/s3Service').chatFileObjectMetadata(...args),
   categorizeFile: jest.fn(() => 'document'), isAllowedType: jest.fn(() => true),
   MAX_FILE_SIZES: { document: 25 * 1024 * 1024 },
 }));
@@ -841,6 +844,15 @@ describe('chat attachment retry identity', () => {
   test('invalid keys are refused and unkeyed clients retain their behavior', async () => {
     expect((await upload('invalid')).status).toBe(400);
     expect((await upload(null)).status).toBe(200); expect((await upload(null)).status).toBe(200);
-    expect(db.getTable('File')).toHaveLength(2); expect(s3.uploadGeneral).toHaveBeenCalledTimes(2);
+    expect(db.getTable('File')).toHaveLength(2); expect(s3.uploadToS3).toHaveBeenCalledTimes(2);
+  });
+  test('storage provenance is server authored and binds object metadata to the File', async () => {
+    const response = await upload(); expect(response.status).toBe(200);
+    const file = db.getTable('File')[0], [bytes, objectKey, , metadata] = s3.uploadToS3.mock.calls[0];
+    expect(file.metadata).toMatchObject({ storage_contract: 'chat_upload_s3_v1', storage_key: objectKey,
+      storage_sha256: require('crypto').createHash('sha256').update(bytes).digest('hex') });
+    expect(metadata).toEqual({ 'pantopus-file-id': file.id, 'pantopus-owner-id': user,
+      'pantopus-sha256': file.metadata.storage_sha256 });
+    expect(file.metadata.storage_bucket).toBeTruthy(); expect(file.metadata.storage_namespace).toBeTruthy();
   });
 });

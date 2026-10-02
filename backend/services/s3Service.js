@@ -6,7 +6,7 @@ const { PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectComma
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 const path = require('path');
-const { s3Client, S3_BUCKET, CLOUDFRONT_URL, S3_REGION } = require('../config/aws');
+const { s3Client, S3_BUCKET, CLOUDFRONT_URL, S3_REGION, S3_STORAGE_NAMESPACE } = require('../config/aws');
 const logger = require('../utils/logger');
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/heic', 'image/heif'];
@@ -50,13 +50,63 @@ function buildPutObjectParams(baseParams) {
   return baseParams;
 }
 
-async function uploadToS3(buffer, key, contentType) {
+async function uploadToS3(buffer, key, contentType, objectMetadata) {
   const cmd = new PutObjectCommand(
-    buildPutObjectParams({ Bucket: S3_BUCKET, Key: key, Body: buffer, ContentType: contentType })
+    buildPutObjectParams({ Bucket: S3_BUCKET, Key: key, Body: buffer, ContentType: contentType,
+      ...(objectMetadata ? { Metadata: objectMetadata } : {}) })
   );
   await s3Client.send(cmd);
   logger.info('S3 upload success', { key, size: buffer.length });
   return { key, url: getPublicUrl(key) };
+}
+
+function chatFileStorageReference(id, userId, roomId, key, sha256) {
+  if (![id, userId, roomId].every(value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
+    || !/^[0-9a-f]{64}$/.test(sha256)
+    || !key.startsWith(`chat/${roomId}/${userId}/`) || key.includes('..')) {
+    throw new Error('Invalid chat storage reference');
+  }
+  return { storage_contract: 'chat_upload_s3_v1', storage_bucket: S3_BUCKET,
+    storage_namespace: S3_STORAGE_NAMESPACE, storage_key: key, storage_sha256: sha256 };
+}
+
+function chatFileObjectMetadata(id, userId, sha256) {
+  return { 'pantopus-file-id': id, 'pantopus-owner-id': userId, 'pantopus-sha256': sha256 };
+}
+
+async function removeDeletedChatFile(file) {
+  const metadata = file?.metadata;
+  if (!file?.is_deleted || !metadata?.storage_cleanup_claim || !metadata.storage_cleanup_fenced
+    || metadata.storage_contract !== 'chat_upload_s3_v1'
+    || metadata.storage_bucket !== S3_BUCKET || metadata.storage_namespace !== S3_STORAGE_NAMESPACE
+    || metadata.storage_key !== file.file_path) throw new Error('Invalid chat cleanup reference');
+  chatFileStorageReference(file.id, file.user_id, metadata.room_id, file.file_path, metadata.storage_sha256);
+  const params = { Bucket: metadata.storage_bucket, Key: metadata.storage_key };
+  const head = async () => {
+    try { return await s3Client.send(new HeadObjectCommand(params)); }
+    catch (error) {
+      if (error.$metadata?.httpStatusCode === 404 && ['NotFound', 'NoSuchKey'].includes(error.name)) return null;
+      throw new Error('Chat storage absence could not be verified');
+    }
+  };
+  const before = await head();
+  if (before) {
+    // An exact namespace/key alone does not establish ownership of its bytes.
+    // Refuse versioned objects: deleting a current version is not a history purge.
+    if ((before.VersionId && before.VersionId !== 'null')
+      || before.Metadata?.['pantopus-file-id'] !== file.id
+      || before.Metadata?.['pantopus-owner-id'] !== file.user_id
+      || before.Metadata?.['pantopus-sha256'] !== metadata.storage_sha256) {
+      throw new Error('Chat object ownership could not be verified');
+    }
+    const deleted = await s3Client.send(new DeleteObjectCommand(params));
+    if (deleted.DeleteMarker || deleted.VersionId) throw new Error('Chat version history could not be verified');
+    if (await head()) throw new Error('Chat object is still present');
+  }
+  // This proves current-object absence only. Keep the exact inventory/key even
+  // after acknowledgement, so lost replies, late writes and provider history
+  // can be reconciled without guessing a bucket or resurrecting a send intent.
+  return { currentObjectAbsent: true, versionHistoryVerified: false };
 }
 
 async function uploadProfilePicture(buffer, originalFilename, userId, mimeType) {
@@ -349,6 +399,7 @@ function isAllowedType(mimeType) {
 module.exports = {
   categorizeFile, generateS3Key, getPublicUrl, isAllowedType,
   uploadToS3, uploadProfilePicture, uploadGigMedia,
+  chatFileStorageReference, chatFileObjectMetadata, removeDeletedChatFile,
   verifyGigCompletionFile, normalizeGigCompletionFile,
   privateGigCompletionReference, privateGigCompletionKey, preparePrivateGigCompletionFile,
   uploadPrivateGigCompletionFile, downloadPrivateGigCompletionFile, removePrivateGigCompletionFile,

@@ -39,4 +39,10 @@ const CLOUDFRONT_URL =
       : `https://${normalizedCloudfront}`
     : '';
 
-module.exports = { s3Client, S3_BUCKET, CLOUDFRONT_URL, S3_REGION };
+// Record the server's storage namespace at upload time. A later configuration
+// change must not send cleanup to another endpoint with the same bucket name.
+const S3_STORAGE_NAMESPACE = S3_ENDPOINT
+  ? new URL(S3_ENDPOINT).origin + new URL(S3_ENDPOINT).pathname.replace(/\/+$/, '')
+  : `aws:${S3_REGION}`;
+
+module.exports = { s3Client, S3_BUCKET, CLOUDFRONT_URL, S3_REGION, S3_STORAGE_NAMESPACE };
