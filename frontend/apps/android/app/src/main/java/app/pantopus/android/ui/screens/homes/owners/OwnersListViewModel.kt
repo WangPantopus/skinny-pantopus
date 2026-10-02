@@ -86,6 +86,9 @@ class OwnersListViewModel
         private val _pendingEvent = MutableStateFlow<OwnersListEvent?>(null)
         val pendingEvent: StateFlow<OwnersListEvent?> = _pendingEvent.asStateFlow()
 
+        private val _removalError = MutableStateFlow<String?>(null)
+        val removalError: StateFlow<String?> = _removalError.asStateFlow()
+
         /** Cached roster — preserves backend ordering and drives
          *  optimistic-remove rollback. */
         private var owners: List<OwnerDto> = emptyList()
@@ -145,6 +148,10 @@ class OwnersListViewModel
         /** Look up a cached owner by id. */
         fun cachedOwner(id: String): OwnerDto? = owners.firstOrNull { it.id == id }
 
+        fun acknowledgeRemovalError() {
+            _removalError.value = null
+        }
+
         /**
          * Apply the result of the Invite Owner flow — the backend returns
          * a new claim id rather than a hydrated owner row, so the
@@ -156,7 +163,8 @@ class OwnersListViewModel
         /** Optimistic remove + rollback on failure. */
         fun removeOwner(ownerId: String) {
             val previous = owners
-            val target = previous.firstOrNull { it.id == ownerId } ?: return
+            if (previous.none { it.id == ownerId }) return
+            _removalError.value = null
             owners = previous.filter { it.id != ownerId }
             applyState()
             viewModelScope.launch {
@@ -165,8 +173,9 @@ class OwnersListViewModel
                     is NetworkResult.Failure -> {
                         owners = previous
                         applyState()
-                        @Suppress("UNUSED_VARIABLE")
-                        val rollbackTarget = target
+                        _removalError.value =
+                            "We couldn't confirm the owner removal. " +
+                            "Refresh owners to check the current access before trying again."
                     }
                 }
             }

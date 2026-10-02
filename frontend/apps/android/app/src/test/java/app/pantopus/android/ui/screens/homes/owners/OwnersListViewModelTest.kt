@@ -302,6 +302,7 @@ class OwnersListViewModelTest {
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             assertEquals(2, loaded.sections.first().rows.size)
             assertNull(loaded.sections.first().rows.firstOrNull { it.id == "o2" })
+            assertNull(vm.removalError.value)
         }
 
     @Test
@@ -316,6 +317,13 @@ class OwnersListViewModelTest {
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             assertEquals(3, loaded.sections.first().rows.size)
             assertNotNull(loaded.sections.first().rows.firstOrNull { it.id == "o2" })
+            assertEquals(
+                "We couldn't confirm the owner removal. " +
+                    "Refresh owners to check the current access before trying again.",
+                vm.removalError.value,
+            )
+            vm.acknowledgeRemovalError()
+            assertNull(vm.removalError.value)
         }
 
     @Test

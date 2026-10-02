@@ -73,6 +73,7 @@ fun OwnersListScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
+    val removalError by viewModel.removalError.collectAsStateWithLifecycle()
 
     var removeTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
@@ -135,6 +136,26 @@ fun OwnersListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { removeTarget = null }) { Text("Cancel") }
+            },
+        )
+    }
+
+    removalError?.let { message ->
+        AlertDialog(
+            onDismissRequest = viewModel::acknowledgeRemovalError,
+            title = { Text("Couldn't confirm removal") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.acknowledgeRemovalError()
+                        viewModel.refresh()
+                    },
+                    modifier = Modifier.testTag("ownersList_removalRefresh"),
+                ) { Text("Refresh owners") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::acknowledgeRemovalError) { Text("OK") }
             },
         )
     }

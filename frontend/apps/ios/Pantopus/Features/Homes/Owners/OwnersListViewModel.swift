@@ -67,6 +67,8 @@ final class OwnersListViewModel: ListOfRowsDataSource {
     /// the view after dispatching.
     var pendingEvent: OwnersListEvent?
 
+    private(set) var removalError: String?
+
     let homeId: String
     private let currentUserId: String?
     private let api: APIClient
@@ -121,6 +123,10 @@ final class OwnersListViewModel: ListOfRowsDataSource {
         owners.first { $0.id == id }
     }
 
+    func acknowledgeRemovalError() {
+        removalError = nil
+    }
+
     /// Optimistic remove with rollback on failure. When the backend
     /// returns a `quorum_action_id`, the row is *not* actually removed
     /// server-side until quorum resolves — we still drop the row from
@@ -129,6 +135,7 @@ final class OwnersListViewModel: ListOfRowsDataSource {
     /// canonical state.
     func removeOwner(ownerId: String) async {
         guard let idx = owners.firstIndex(where: { $0.id == ownerId }) else { return }
+        removalError = nil
         let previous = owners
         owners.remove(at: idx)
         applyState()
@@ -139,6 +146,8 @@ final class OwnersListViewModel: ListOfRowsDataSource {
         } catch {
             owners = previous
             applyState()
+            removalError = "We couldn't confirm the owner removal. " +
+                "Refresh owners to check the current access before trying again."
         }
     }
 

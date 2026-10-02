@@ -295,6 +295,7 @@ final class OwnersListViewModelTests: XCTestCase {
         }
         XCTAssertEqual(sections.first?.rows.count, 2)
         XCTAssertNil(sections.first?.rows.first { $0.id == "o2" })
+        XCTAssertNil(vm.removalError)
     }
 
     func testRemoveFailureRollsBack() async {
@@ -311,6 +312,13 @@ final class OwnersListViewModelTests: XCTestCase {
         }
         XCTAssertEqual(sections.first?.rows.count, 3)
         XCTAssertNotNil(sections.first?.rows.first { $0.id == "o2" })
+        XCTAssertEqual(
+            vm.removalError,
+            "We couldn't confirm the owner removal. " +
+                "Refresh owners to check the current access before trying again."
+        )
+        vm.acknowledgeRemovalError()
+        XCTAssertNil(vm.removalError)
     }
 
     func testCachedOwnerLookupAfterLoad() async {
