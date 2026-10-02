@@ -118,7 +118,11 @@ const applyThemeSchema = Joi.object({
 
 // ── Memory ──
 const dismissMemorySchema = Joi.object({
-  memoryId: Joi.string().uuid().required(),
+  // The read returns otd-* card IDs; UUIDs still identify existing stored rows.
+  memoryId: Joi.alternatives().try(
+    Joi.string().uuid(),
+    Joi.string().pattern(/^otd-\d{4}-\d{1,2}-\d{1,2}$/),
+  ).required(),
 });
 
 // ── Vacation ──
@@ -1443,22 +1447,25 @@ router.get('/memory/on-this-day', verifyToken, async (req, res) => {
           headline: `${yearsBack} year${yearsBack > 1 ? 's' : ''} ago today`,
           body: `You received ${items.length} item${items.length > 1 ? 's' : ''}`,
           mail_items: items,
+          mail_ids: items.map(item => item.id),
           dismissed: false,
         });
       }
     }
 
     // Check for dismissed
-    const { data: dismissed } = await supabaseAdmin
+    const { data: dismissed, error: dismissedErr } = await supabaseAdmin
       .from('MailMemory')
-      .select('reference_id')
+      .select('reference_date')
       .eq('user_id', userId)
+      .eq('memory_type', 'on_this_day')
       .eq('dismissed', true);
+    if (dismissedErr) throw dismissedErr;
 
-    const dismissedIds = new Set((dismissed || []).map(d => d.reference_id));
+    const dismissedDates = new Set((dismissed || []).map(d => d.reference_date));
     const filtered = memories.map(m => ({
       ...m,
-      dismissed: dismissedIds.has(m.id),
+      dismissed: dismissedDates.has(m.reference_date.slice(0, 10)),
     }));
 
     res.json({ memories: filtered });
@@ -1589,14 +1596,72 @@ router.post('/memory/dismiss', verifyToken, validate(dismissMemorySchema), async
     const userId = req.user.id;
     const { memoryId } = req.body;
 
-    await supabaseAdmin
+    if (!memoryId.startsWith('otd-')) {
+      const { data, error } = await supabaseAdmin
+        .from('MailMemory')
+        .update({ dismissed: true })
+        .eq('id', memoryId)
+        .eq('user_id', userId)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return res.status(404).json({ error: 'Memory not found' });
+      return res.json({ message: 'Memory dismissed' });
+    }
+
+    const today = new Date();
+    const yearsBack = today.getFullYear() - Number(memoryId.split('-')[1]);
+    const targetDate = new Date(today.getFullYear() - yearsBack, today.getMonth(), today.getDate());
+    const expectedId = `otd-${targetDate.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+    if (yearsBack < 1 || yearsBack > 5 || memoryId !== expectedId) {
+      return res.status(404).json({ error: 'Memory not found' });
+    }
+    const nextDay = new Date(targetDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    // Match the read's exact owned, non-deleted anniversary selection.
+    const { data: items, error: itemsErr } = await supabaseAdmin
+      .from('Mail')
+      .select('id')
+      .eq('recipient_user_id', userId)
+      .is('deleted_at', null)
+      .gte('created_at', targetDate.toISOString())
+      .lt('created_at', nextDay.toISOString())
+      .in('category', ['postcard', 'package', 'personal', 'greeting', 'gift']);
+    if (itemsErr) throw itemsErr;
+    if (!items?.length) return res.status(404).json({ error: 'Memory not found' });
+
+    const referenceDate = targetDate.toISOString().slice(0, 10);
+    const { data: existing, error: existingErr } = await supabaseAdmin
+      .from('MailMemory')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('memory_type', 'on_this_day')
+      .eq('reference_date', referenceDate)
+      .order('created_at')
+      .limit(1)
+      .maybeSingle();
+    if (existingErr) throw existingErr;
+    // Reuse existing rows; concurrent/retried first dismissals share one PK.
+    // This uses the same bounded UUID-from-hash pattern as Home unit requests.
+    const bytes = crypto.createHash('sha256')
+      .update(`mail-memory:${userId}:on_this_day:${referenceDate}`).digest().subarray(0, 16);
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = bytes.toString('hex');
+    const id = existing?.id || `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    const { error } = await supabaseAdmin
       .from('MailMemory')
       .upsert({
+        id,
         user_id: userId,
-        reference_id: memoryId,
         memory_type: 'on_this_day',
+        reference_date: referenceDate,
+        headline: `${yearsBack} year${yearsBack > 1 ? 's' : ''} ago today`,
+        body: `You received ${items.length} item${items.length > 1 ? 's' : ''}`,
+        mail_item_ids: items.map(item => item.id),
         dismissed: true,
-      }, { onConflict: 'user_id,reference_id' });
+      }, { onConflict: 'id' });
+    if (error) throw error;
 
     res.json({ message: 'Memory dismissed' });
   } catch (err) {
