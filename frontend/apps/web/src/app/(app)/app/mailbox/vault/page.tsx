@@ -10,6 +10,7 @@ import {
 } from '@/lib/mailbox-queries';
 import { VaultFolderCard } from '@/components/mailbox';
 import { launchFeatures } from '@/lib/featureFlags';
+import { toast } from '@/components/ui/toast-store';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ export default function VaultPage() {
           setNewIcon('📁');
           setNewColor('#6B7280');
         },
+        onError: (err) => toast.error(err.message || "Couldn't create folder. Try again."),
       },
     );
   }, [createFolder, newLabel, newIcon, newColor, newDrawer]);
