@@ -464,8 +464,9 @@ open class VerifyLandlordWizardViewModel
                 }
                 is NetworkResult.Failure -> {
                     val error = result.error
-                    val lostOutcome = error is NetworkError.Transport || error is NetworkError.Decoding ||
-                        (error.code == HTTP_CONFLICT && error.message == STATUS_CHANGED_MESSAGE)
+                    val lostOutcome =
+                        error is NetworkError.Transport || error is NetworkError.Decoding ||
+                            (error.code == HTTP_CONFLICT && error.message == STATUS_CHANGED_MESSAGE)
                     if (requestDispatched && lostOutcome) {
                         _state.update { it.copy(submissionOutcomeUnknown = true) }
                     }

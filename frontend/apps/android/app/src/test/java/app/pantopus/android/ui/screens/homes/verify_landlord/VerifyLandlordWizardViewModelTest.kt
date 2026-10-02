@@ -23,8 +23,6 @@ import io.mockk.coVerifySequence
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
-import java.io.IOException
-import java.util.TimeZone
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -46,6 +44,8 @@ import org.junit.Before
 import org.junit.Test
 import retrofit2.HttpException
 import retrofit2.Response
+import java.io.IOException
+import java.util.TimeZone
 
 @OptIn(ExperimentalCoroutinesApi::class)
 abstract class VerifyLandlordWizardTestFixture {
@@ -322,11 +322,12 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
     @Test fun actual_repository_reads_context_before_retry_and_preserves_the_form() =
         runTest {
             val changed = "Your lease request status changed. Check its current status before submitting again."
-            val failures = listOf(
-                IOException("reply lost"),
-                com.squareup.moshi.JsonDataException("malformed reply"),
-                HttpException(Response.error<TenantRequestApprovalResponse>(409, """{"error":"$changed"}""".toResponseBody())),
-            )
+            val failures =
+                listOf(
+                    IOException("reply lost"),
+                    com.squareup.moshi.JsonDataException("malformed reply"),
+                    HttpException(Response.error<TenantRequestApprovalResponse>(409, """{"error":"$changed"}""".toResponseBody())),
+                )
             for (failure in failures) {
                 val api = mockk<TenantApi>()
                 val initial = TenantRequestContextDto("home-1", "actor-1", null, null)
