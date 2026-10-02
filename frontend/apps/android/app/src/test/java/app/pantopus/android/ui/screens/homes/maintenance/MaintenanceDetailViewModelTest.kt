@@ -176,4 +176,16 @@ class MaintenanceDetailViewModelTest {
             assertNull(vm.event.value)
             assertEquals(NetworkError.Forbidden.message, vm.actionError.value)
         }
+
+    @Test
+    fun `notes load from server with an empty draft store`() =
+        runTest {
+            coEvery { repo.getHomeMaintenance("home-1", null) } returns
+                NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task("task-1").copy(notes = "Saved server note"))))
+            val vm = makeVm()
+            vm.load()
+            val state = vm.state.value as MaintenanceDetailUiState.Loaded
+            assertEquals("Saved server note", state.task.notes)
+            assertNull(state.draft)
+        }
 }

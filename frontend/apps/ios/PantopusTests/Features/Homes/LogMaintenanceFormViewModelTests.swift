@@ -262,4 +262,65 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         XCTAssertEqual(LogMaintenanceFormViewModel.inferPerformedBy(vendor: ""), .self)
         XCTAssertEqual(LogMaintenanceFormViewModel.inferPerformedBy(vendor: "Riverside HVAC"), .contractor)
     }
+
+    func test_notes_createEncodesText() async throws {
+        SequencedURLProtocol.sequence = [
+            .status(201, body: """
+            {"task":{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Saved note"}}
+            """)
+        ]
+        let vm = makeVM()
+        vm.title = "Filter swap"
+        vm.notes = "Saved note"
+        await vm.submit()
+        let request = try XCTUnwrap(SequencedURLProtocol.capturedRequests.first)
+        let body = try XCTUnwrap(try JSONSerialization.jsonObject(with: XCTUnwrap(request.authTestBodyData())) as? [String: Any])
+        XCTAssertEqual(body["notes"] as? String, "Saved note")
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 1)
+    }
+
+    func test_notes_editUsesServerValue_andOmitsUnchangedText() async throws {
+        MaintenanceDraftStore.shared.upsert(MaintenanceDraft(notes: "Stale local note"), for: "note-task")
+        SequencedURLProtocol.sequence = [
+            .status(200, body: """
+            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Server note"}]}
+            """),
+            .status(200, body: """
+            {"task":{"id":"note-task","home_id":"home-1","task":"Updated title","notes":"Concurrent server note"}}
+            """)
+        ]
+        let vm = makeVM(mode: .edit(taskId: "note-task"))
+        await vm.loadIfNeeded()
+        XCTAssertEqual(vm.notes, "Server note")
+        vm.title = "Updated title"
+        await vm.submit()
+        let request = try XCTUnwrap(SequencedURLProtocol.capturedRequests.last)
+        let body = try XCTUnwrap(try JSONSerialization.jsonObject(with: XCTUnwrap(request.authTestBodyData())) as? [String: Any])
+        XCTAssertNil(body["notes"])
+    }
+
+    func test_notes_clearEncodesEmpty_andColdEditDoesNotRestoreDraft() async throws {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: """
+            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Server note"}]}
+            """),
+            .status(200, body: """
+            {"task":{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":null}}
+            """),
+            .status(200, body: """
+            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":null}]}
+            """)
+        ]
+        let vm = makeVM(mode: .edit(taskId: "note-task"))
+        await vm.loadIfNeeded()
+        vm.notes = ""
+        await vm.submit()
+        let request = try XCTUnwrap(SequencedURLProtocol.capturedRequests.last)
+        let body = try XCTUnwrap(try JSONSerialization.jsonObject(with: XCTUnwrap(request.authTestBodyData())) as? [String: Any])
+        XCTAssertEqual(body["notes"] as? String, "")
+        MaintenanceDraftStore.shared.upsert(MaintenanceDraft(notes: "Stale local note"), for: "note-task")
+        let reopened = makeVM(mode: .edit(taskId: "note-task"))
+        await reopened.loadIfNeeded()
+        XCTAssertEqual(reopened.notes, "")
+    }
 }

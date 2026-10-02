@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.homes.CreateMaintenanceRequest
 import app.pantopus.android.data.api.models.homes.GetHomeMaintenanceResponse
 import app.pantopus.android.data.api.models.homes.HomeMaintenanceResponse
 import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
+import app.pantopus.android.data.api.models.homes.UpdateMaintenanceRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
@@ -229,6 +230,61 @@ class LogMaintenanceFormViewModelTest {
         val day = LogMaintenanceFormViewModel.formatDay(Instant.parse("2026-11-01T08:00:00Z"))
         assertEquals("2026-11-01", day)
     }
+
+    @Test
+    fun `notes create sends text to the existing API`() =
+        runTest {
+            val captured = slot<CreateMaintenanceRequest>()
+            coEvery { repo.createHomeMaintenance("home-1", capture(captured)) } returns
+                NetworkResult.Success(HomeMaintenanceResponse(makeTask("note-task", "Filter swap").copy(notes = "Saved note")))
+            val vm = makeCreateVm()
+            vm.updateTitle("Filter swap")
+            vm.updateNotes("Saved note")
+            vm.submit()
+            assertEquals("Saved note", captured.captured.notes)
+            coVerify(exactly = 0) { repo.createHomeEvent(any(), any()) }
+        }
+
+    @Test
+    fun `notes edit uses server value and omits unchanged text`() =
+        runTest {
+            store.upsert("note-task", MaintenanceDraft(notes = "Stale local note"))
+            val task = makeTask("note-task", "Filter swap").copy(notes = "Server note")
+            coEvery { repo.getHomeMaintenance("home-1", null) } returns
+                NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task)))
+            val captured = slot<UpdateMaintenanceRequest>()
+            coEvery { repo.updateHomeMaintenance("home-1", "note-task", capture(captured)) } returns
+                NetworkResult.Success(HomeMaintenanceResponse(task.copy(notes = "Concurrent server note")))
+            val vm = makeEditVm("note-task")
+            vm.loadIfNeeded()
+            assertEquals("Server note", vm.form.value.notes)
+            vm.updateTitle("Updated title")
+            vm.submit()
+            assertNull(captured.captured.notes)
+        }
+
+    @Test
+    fun `notes clear sends empty and reopening does not restore stale draft`() =
+        runTest {
+            val task = makeTask("note-task", "Filter swap").copy(notes = "Server note")
+            coEvery { repo.getHomeMaintenance("home-1", null) } returnsMany
+                listOf(
+                    NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task))),
+                    NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task.copy(notes = null)))),
+                )
+            val captured = slot<UpdateMaintenanceRequest>()
+            coEvery { repo.updateHomeMaintenance("home-1", "note-task", capture(captured)) } returns
+                NetworkResult.Success(HomeMaintenanceResponse(task.copy(notes = null)))
+            val vm = makeEditVm("note-task")
+            vm.loadIfNeeded()
+            vm.updateNotes("")
+            vm.submit()
+            assertEquals("", captured.captured.notes)
+            store.upsert("note-task", MaintenanceDraft(notes = "Stale local note"))
+            val reopened = makeEditVm("note-task")
+            reopened.loadIfNeeded()
+            assertEquals("", reopened.form.value.notes)
+        }
 
     // MARK: - Helpers
 

@@ -246,7 +246,7 @@ private struct LoadedBody: View {
             body: {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
                     DetailGrid(task: task, draft: draft)
-                    if let notes = draft?.notes, !notes.isEmpty {
+                    if let notes = task.notes, !notes.isEmpty {
                         NotesBlock(notes: notes)
                     }
                     if let photos = draft?.photos, !photos.isEmpty {

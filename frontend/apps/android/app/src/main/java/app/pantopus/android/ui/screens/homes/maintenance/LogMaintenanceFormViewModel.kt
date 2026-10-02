@@ -108,11 +108,8 @@ sealed interface LogMaintenanceFormEvent {
  * `POST /api/homes/:id/events` so the household calendar surfaces the
  * upcoming task.
  *
- * Photos / notes / receipt / performed-by are stored client-side via
- * [MaintenanceDraftStore] because the backend's `HomeMaintenanceLog`
- * schema doesn't carry those columns today. When it does, the relevant
- * fields will move onto [MaintenanceTaskDto] and this store can be
- * dropped in one diff.
+ * Notes use the existing HomeMaintenanceLog.notes API field. Other draft
+ * extras remain local; reopening notes uses the authoritative server value.
  */
 @HiltViewModel
 class LogMaintenanceFormViewModel
@@ -212,7 +209,7 @@ class LogMaintenanceFormViewModel
                     performerName = task.vendor.orEmpty(),
                     performerContact = stored?.performerContact.orEmpty(),
                     costText = task.cost?.let { formatCost(it) }.orEmpty(),
-                    notes = stored?.notes.orEmpty(),
+                    notes = task.notes.orEmpty(),
                     photos = stored?.photos ?: emptyList(),
                     receipt = stored?.receipt,
                     nextDueEnabled = task.dueDate != null,
@@ -286,6 +283,7 @@ class LogMaintenanceFormViewModel
                 val req =
                     CreateMaintenanceRequest(
                         task = current.title.trim(),
+                        notes = current.notes,
                         vendor = encodeVendor(current),
                         cost = parseCost(current.costText),
                         recurrence = current.recurrence.raw,
@@ -305,6 +303,7 @@ class LogMaintenanceFormViewModel
                                 m.taskId,
                                 UpdateMaintenanceRequest(
                                     task = req.task.takeIf { it != initial.title.trim() },
+                                    notes = req.notes.takeIf { current.notes != initial.notes },
                                     vendor = req.vendor.takeIf { it != encodeVendor(initial) },
                                     cost = req.cost.takeIf { current.costText != initial.costText },
                                     recurrence = req.recurrence,

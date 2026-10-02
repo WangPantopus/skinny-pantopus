@@ -2979,7 +2979,7 @@ router.get('/:id/maintenance', verifyToken, async (req, res) => {
 /**
  * POST /api/homes/:id/maintenance
  *
- * Body: { task, vendor?, cost?, recurrence?, due_date?, status?, performed_at? }.
+ * Body: { task, vendor?, cost?, recurrence?, due_date?, status?, performed_at?, notes? }.
  *  - `task` is required (non-empty); everything else is optional.
  *  - `status` defaults to `scheduled`; `recurrence` defaults to `one_time`.
  */
@@ -2991,7 +2991,10 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'home.edit');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage maintenance' });
 
-    const { task, vendor, cost, recurrence, due_date, status, performed_at, clientRequestId } = req.body || {};
+    const { task, vendor, cost, recurrence, due_date, status, performed_at, notes, clientRequestId } = req.body || {};
+    if (Joi.string().max(4000).allow('', null).optional().validate(notes).error) {
+      return res.status(400).json({ error: 'Notes must be text up to 4000 characters' });
+    }
 
     if (!task || typeof task !== 'string' || !task.trim()) {
       return res.status(400).json({ error: 'task is required' });
@@ -3022,6 +3025,7 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
       recurrence: recurrence || 'one_time',
       due_date: due_date || null,
       ...(performed_at !== undefined ? { performed_at: new Date(performed_at).toISOString() } : {}),
+      notes: typeof notes === 'string' ? notes.trim() || null : null,
       status: status || 'scheduled',
       created_by: userId,
     };
@@ -3033,6 +3037,7 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
     const acknowledgeRetry = (existing) => {
       if (existing.home_id !== homeId.toLowerCase() || existing.created_by !== userId.toLowerCase() || existing.gig_id != null ||
           existing.task !== row.task || existing.vendor !== row.vendor || existing.recurrence !== row.recurrence ||
+          (notes !== undefined && (existing.notes ?? null) !== row.notes) ||
           existing.status !== row.status || (existing.cost == null ? null : Number(existing.cost)) !==
             (row.cost == null ? null : Number(row.cost)) ||
           (existing.due_date == null ? null : Date.parse(existing.due_date)) !==
@@ -3089,10 +3094,17 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
     if (readError) return res.status(503).json({ error: 'Maintenance could not be checked. Please retry.' });
     if (!current) return res.status(404).json({ error: 'Maintenance task not found' });
 
-    const allowed = ['task', 'vendor', 'cost', 'recurrence', 'due_date', 'status', 'performed_at'];
+    const allowed = ['task', 'vendor', 'cost', 'recurrence', 'due_date', 'status', 'performed_at', 'notes'];
     const updates = {};
     for (const key of allowed) {
       if (req.body && req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+
+    if (Joi.string().max(4000).allow('', null).optional().validate(updates.notes).error) {
+      return res.status(400).json({ error: 'Notes must be text up to 4000 characters' });
+    }
+    if (updates.notes !== undefined) {
+      updates.notes = typeof updates.notes === 'string' ? updates.notes.trim() || null : null;
     }
 
     if (updates.status && !MAINTENANCE_STATUS_VALUES.has(updates.status)) {

@@ -23,6 +23,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let homeId: String
     public let task: String
+    public let notes: String?
     public let vendor: String?
     public let cost: Decimal?
     public let recurrence: String
@@ -37,6 +38,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         case id
         case homeId = "home_id"
         case task
+        case notes
         case vendor
         case cost
         case recurrence
@@ -53,6 +55,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         id = try container.decode(String.self, forKey: .id)
         homeId = try container.decode(String.self, forKey: .homeId)
         task = try container.decodeIfPresent(String.self, forKey: .task) ?? ""
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
         vendor = try container.decodeIfPresent(String.self, forKey: .vendor)
         cost = try MaintenanceTaskDTO.decodeOptionalDecimal(in: container, key: .cost)
         recurrence = try container.decodeIfPresent(String.self, forKey: .recurrence) ?? "one_time"
@@ -68,6 +71,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         id: String,
         homeId: String,
         task: String,
+        notes: String? = nil,
         vendor: String? = nil,
         cost: Decimal? = nil,
         recurrence: String = "one_time",
@@ -81,6 +85,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         self.id = id
         self.homeId = homeId
         self.task = task
+        self.notes = notes
         self.vendor = vendor
         self.cost = cost
         self.recurrence = recurrence
@@ -124,6 +129,7 @@ public struct HomeMaintenanceResponse: Decodable, Sendable {
 /// `task` (non-empty string); everything else optional.
 public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
     public let task: String
+    public let notes: String?
     public let vendor: String?
     public let cost: Decimal?
     public let recurrence: String?
@@ -134,6 +140,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case task
+        case notes
         case vendor
         case cost
         case recurrence
@@ -145,6 +152,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
 
     public init(
         task: String,
+        notes: String? = nil,
         vendor: String? = nil,
         cost: Decimal? = nil,
         recurrence: String? = nil,
@@ -153,6 +161,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
         status: String? = nil
     ) {
         self.task = task
+        self.notes = notes
         self.vendor = vendor
         self.cost = cost
         self.recurrence = recurrence
@@ -165,6 +174,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(task, forKey: .task)
+        if let notes { try c.encode(notes, forKey: .notes) }
         if let vendor { try c.encode(vendor, forKey: .vendor) }
         if let cost {
             try c.encode(NSDecimalNumber(decimal: cost).doubleValue, forKey: .cost)
@@ -181,6 +191,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
 /// optional — the server picks up whichever are sent.
 public struct UpdateMaintenanceRequest: Encodable, Sendable {
     public let task: String?
+    public let notes: String?
     public let vendor: String?
     public let cost: Decimal?
     public let recurrence: String?
@@ -192,6 +203,7 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case task
+        case notes
         case vendor
         case cost
         case recurrence
@@ -202,6 +214,7 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
 
     public init(
         task: String? = nil,
+        notes: String? = nil,
         vendor: String? = nil,
         cost: Decimal? = nil,
         recurrence: String? = nil,
@@ -212,6 +225,7 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
         clearCost: Bool = false
     ) {
         self.task = task
+        self.notes = notes
         self.vendor = vendor
         self.cost = cost
         self.recurrence = recurrence
@@ -225,6 +239,7 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         if let task { try c.encode(task, forKey: .task) }
+        if let notes { try c.encode(notes, forKey: .notes) }
         if let vendor { try c.encode(vendor, forKey: .vendor) } else if clearVendor { try c.encodeNil(forKey: .vendor) }
         if let cost {
             try c.encode(NSDecimalNumber(decimal: cost).doubleValue, forKey: .cost)
