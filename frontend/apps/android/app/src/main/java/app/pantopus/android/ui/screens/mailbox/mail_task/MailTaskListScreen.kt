@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
@@ -439,7 +440,7 @@ private fun TaskCardRow(
                     color = PantopusColors.business,
                 )
             }
-        } else if (!row.isDone) {
+        } else if (LaunchFeatures.openGigs && !row.isDone) {
             Row(
                 modifier =
                     Modifier

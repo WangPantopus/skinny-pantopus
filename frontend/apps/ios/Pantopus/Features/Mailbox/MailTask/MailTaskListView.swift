@@ -266,7 +266,7 @@ public struct MailTaskListView: View {
                 .padding(.vertical, Spacing.s1)
                 .background(Theme.Color.businessBg)
                 .clipShape(Capsule())
-            } else if !row.isDone {
+            } else if LaunchFeatures.openGigs, !row.isDone {
                 Button(action: { viewModel.requestConvert(row) }, label: {
                     HStack(spacing: Spacing.s2) {
                         if viewModel.convertingTaskId == row.id {
