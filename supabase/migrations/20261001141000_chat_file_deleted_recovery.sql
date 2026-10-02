@@ -169,14 +169,15 @@ END $$;
 CREATE TRIGGER guard_chat_file_cleanup_identity BEFORE UPDATE ON public."File"
  FOR EACH ROW EXECUTE FUNCTION public.guard_chat_file_cleanup_identity();
 
-DO $$ DECLARE f record;
-BEGIN
- FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-  WHERE n.nspname='public' AND p.proname IN('chat_file_has_live_reference','chat_file_cleanup_candidates','claim_chat_file_cleanup',
-   'finish_chat_file_cleanup','invalidate_chat_file_cleanup','guard_claimed_chat_file_reference','guard_chat_attachment_binding','guard_chat_file_cleanup_identity') LOOP
-  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,anon,authenticated',f.signature);
-  EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role',f.signature);
- END LOOP;
-END $$;
+REVOKE ALL ON FUNCTION public.chat_file_has_live_reference(uuid),
+ public.chat_file_cleanup_candidates(text,text,integer),public.claim_chat_file_cleanup(uuid,text,text),
+ public.finish_chat_file_cleanup(uuid,text,boolean),public.invalidate_chat_file_cleanup(uuid,text),
+ public.guard_claimed_chat_file_reference(),public.guard_chat_attachment_binding(),public.guard_chat_file_cleanup_identity()
+ FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.chat_file_has_live_reference(uuid),
+ public.chat_file_cleanup_candidates(text,text,integer),public.claim_chat_file_cleanup(uuid,text,text),
+ public.finish_chat_file_cleanup(uuid,text,boolean),public.invalidate_chat_file_cleanup(uuid,text),
+ public.guard_claimed_chat_file_reference(),public.guard_chat_attachment_binding(),public.guard_chat_file_cleanup_identity()
+ TO service_role;
 NOTIFY pgrst,'reload schema';
 COMMIT;
