@@ -7,7 +7,7 @@
 //   - minimal (title-only)
 //   - full (every field populated)
 //   - with-photos (photo slots filled)
-//   - with-next-due (calendar reminder wiring)
+//   - with-next-due (date retained with launch extras off)
 //
 
 import XCTest
@@ -19,7 +19,7 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         super.setUp()
         SequencedURLProtocol.reset()
         MaintenanceDraftStore.shared.clear()
-        LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
+        LaunchFeatures.overrideForTesting = []
     }
 
     override func tearDown() {
@@ -83,7 +83,7 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
 
     // MARK: - Full submit (every field populated)
 
-    func test_full_submit_postsExpectedBody_andCalendarReminder() async {
+    func test_full_submit_keepsNextDue_withoutHiddenCalendarWrite() async {
         SequencedURLProtocol.sequence = [
             // Maintenance POST → returns the new task id.
             .status(201, body: """
@@ -96,16 +96,6 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
               "recurrence":"yearly",
               "due_date":"2026-11-01",
               "status":"completed"
-            }}
-            """),
-            // Calendar POST → success, body ignored by the form VM.
-            .status(201, body: """
-            {"event":{
-              "id":"ev-1",
-              "home_id":"home-1",
-              "event_type":"maintenance",
-              "title":"Fall HVAC tune-up",
-              "start_at":"2026-11-01T00:00:00Z"
             }}
             """)
         ]
@@ -144,10 +134,11 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         XCTAssertEqual(draft?.performerContact, "555-0142")
         XCTAssertEqual(draft?.notes, "Replaced filter, topped off coolant.")
 
-        // Two requests went out — maintenance + calendar.
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 2)
+        // The retained next-due date must not create a hidden family-calendar event.
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 1)
         XCTAssertTrue(SequencedURLProtocol.capturedRequests[0].url?.path.hasSuffix("/maintenance") ?? false)
-        XCTAssertTrue(SequencedURLProtocol.capturedRequests[1].url?.path.hasSuffix("/events") ?? false)
+        let body = try? JSONSerialization.jsonObject(with: SequencedURLProtocol.capturedRequests[0].authTestBodyData() ?? Data()) as? [String: Any]
+        XCTAssertEqual(body?["due_date"] as? String, "2026-11-01")
     }
 
     func test_full_submitErrorSurfacesMessage() async {

@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.maintenance
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.analytics.AnalyticsResult
@@ -320,7 +321,8 @@ class LogMaintenanceFormViewModel
                         pendingCreate = null
                         val taskId = result.data.task.id
                         persistExtras(taskId, current)
-                        if (current.nextDueEnabled) {
+                        // Keep the retained next-due date without a hidden family-calendar write.
+                        if (current.nextDueEnabled && LaunchFeatures.householdExtras) {
                             postCalendarReminder(current.title.trim(), current.nextDueDate)
                         }
                         Analytics.track(AnalyticsEvent.CtaLogMaintenanceSubmit(AnalyticsResult.SUCCESS))

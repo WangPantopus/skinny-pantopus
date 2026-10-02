@@ -3,11 +3,9 @@
 package app.pantopus.android.ui.screens.homes.maintenance
 
 import androidx.lifecycle.SavedStateHandle
-import app.pantopus.android.data.api.models.homes.CalendarEventDto
-import app.pantopus.android.data.api.models.homes.CreateHomeEventRequest
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homes.CreateMaintenanceRequest
 import app.pantopus.android.data.api.models.homes.GetHomeMaintenanceResponse
-import app.pantopus.android.data.api.models.homes.HomeEventResponse
 import app.pantopus.android.data.api.models.homes.HomeMaintenanceResponse
 import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -43,10 +41,12 @@ class LogMaintenanceFormViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         store.clear()
+        LaunchFeatures.overrideForTesting = emptySet()
     }
 
     @After
     fun tearDown() {
+        LaunchFeatures.overrideForTesting = null
         Dispatchers.resetMain()
     }
 
@@ -94,27 +94,13 @@ class LogMaintenanceFormViewModelTest {
     // MARK: - Full submit
 
     @Test
-    fun `full submit posts maintenance and calendar event then emits Created`() =
+    fun `full submit retains next due without hidden calendar write`() =
         runTest {
             val maintenanceRequest = slot<CreateMaintenanceRequest>()
-            val eventRequest = slot<CreateHomeEventRequest>()
             coEvery { repo.createHomeMaintenance("home-1", capture(maintenanceRequest)) } returns
                 NetworkResult.Success(
                     HomeMaintenanceResponse(
                         task = makeTask(id = "task-new", taskTitle = "Fall HVAC tune-up"),
-                    ),
-                )
-            coEvery { repo.createHomeEvent("home-1", capture(eventRequest)) } returns
-                NetworkResult.Success(
-                    HomeEventResponse(
-                        event =
-                            CalendarEventDto(
-                                id = "ev-1",
-                                homeId = "home-1",
-                                eventType = "maintenance",
-                                title = "Fall HVAC tune-up",
-                                startAt = "2026-11-01T00:00:00Z",
-                            ),
                     ),
                 )
             val vm = makeCreateVm()
@@ -139,7 +125,7 @@ class LogMaintenanceFormViewModelTest {
             assertEquals("yearly", maintenanceRequest.captured.recurrence)
             assertEquals("completed", maintenanceRequest.captured.status)
             assertEquals("2026-11-01", maintenanceRequest.captured.dueDate)
-            assertEquals("maintenance", eventRequest.captured.eventType)
+            coVerify(exactly = 0) { repo.createHomeEvent(any(), any()) }
             // Local draft was persisted with the extras that backend doesn't store.
             val draft = store.draft("task-new")
             assertNotNull(draft)
