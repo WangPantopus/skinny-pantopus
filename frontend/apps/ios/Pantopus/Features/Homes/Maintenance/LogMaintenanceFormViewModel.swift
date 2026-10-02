@@ -10,13 +10,9 @@
 //
 //  Field encoding notes
 //  --------------------
-//  The backend `HomeMaintenanceLog` schema today only stores: task,
-//  vendor, cost, recurrence, due_date, status. The richer form
-//  (performed-by category, notes, photos, receipt) is captured locally
-//  via `MaintenanceDraftStore` so the detail screen can render the
-//  2x2 photo grid + receipt thumbnail + notes block the design calls
-//  for. When the backend grows columns, the form view-model + store
-//  flip in one diff.
+//  Notes use the existing HomeMaintenanceLog.notes API field. Photos,
+//  receipt, category and contact remain local draft extras. The server
+//  value is authoritative when reopening detail or editing an entry.
 //
 
 // swiftlint:disable file_length
@@ -203,7 +199,7 @@ final class LogMaintenanceFormViewModel {
                 performerName: dto?.vendor ?? "",
                 performerContact: stored?.performerContact ?? "",
                 costText: Self.format(cost: dto?.cost),
-                notes: stored?.notes ?? "",
+                notes: dto?.notes ?? "",
                 photos: stored?.photos ?? [],
                 receipt: stored?.receipt,
                 nextDueEnabled: dueParsed != nil,
@@ -266,7 +262,7 @@ final class LogMaintenanceFormViewModel {
         performerName = dto.vendor ?? ""
         performerContact = stored?.performerContact ?? ""
         costText = Self.format(cost: dto.cost)
-        notes = stored?.notes ?? ""
+        notes = dto.notes ?? ""
         photos = stored?.photos ?? []
         receipt = stored?.receipt
         recurrence = MaintenanceRecurrence(raw: dto.recurrence) ?? .none
@@ -329,6 +325,7 @@ final class LogMaintenanceFormViewModel {
             case .create:
                 var req = CreateMaintenanceRequest(
                     task: trimmedTitle,
+                    notes: notes,
                     vendor: vendor,
                     cost: parsedCost,
                     recurrence: recurrence.rawValue,
@@ -344,6 +341,7 @@ final class LogMaintenanceFormViewModel {
             case let .edit(taskId):
                 let req = UpdateMaintenanceRequest(
                     task: trimmedTitle == initial.title.trimmingCharacters(in: .whitespaces) ? nil : trimmedTitle,
+                    notes: notes == initial.notes ? nil : notes,
                     vendor: vendor == vendorEncoding(initial) ? nil : vendor,
                     cost: costText == initial.costText ? nil : parsedCost,
                     recurrence: recurrence.rawValue,

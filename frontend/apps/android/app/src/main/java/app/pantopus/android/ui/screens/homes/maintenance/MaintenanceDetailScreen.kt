@@ -227,8 +227,8 @@ private fun LoadedBody(
                 verticalArrangement = Arrangement.spacedBy(Spacing.s4),
             ) {
                 DetailGrid(task = task, draft = draft)
-                if (!draft?.notes.isNullOrEmpty()) {
-                    NotesBlock(notes = draft.notes)
+                if (!task.notes.isNullOrEmpty()) {
+                    NotesBlock(notes = task.notes)
                 }
                 val photos = draft?.photos.orEmpty()
                 if (photos.isNotEmpty()) {
