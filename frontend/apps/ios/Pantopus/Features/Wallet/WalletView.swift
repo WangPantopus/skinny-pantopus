@@ -259,7 +259,7 @@ public struct WalletView: View {
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                         .accessibilityIdentifier("wallet.frozenNote")
-                } else if !content.hasBalance {
+                } else if !content.hasBalance && content.withdrawalRecovery == nil {
                     WithdrawLockedCTA(amount: content.available)
                     Text("No funds to withdraw yet.")
                         .font(.system(size: 10.5))
@@ -268,7 +268,17 @@ public struct WalletView: View {
                         .frame(maxWidth: .infinity)
                         .accessibilityIdentifier("wallet.noFundsNote")
                 } else {
-                    WithdrawCTA(amount: content.available) { showWithdrawSheet = true }
+                    WithdrawCTA(
+                        amount: content.withdrawalRecovery.map { WalletViewModel.centsToPlain($0.amountCents) } ?? content.available,
+                        label: content.withdrawalRecovery == nil ? "Withdraw"
+                            : content.withdrawalRecovery?.canRetry == true ? "Retry withdrawal" : "Review withdrawal"
+                    ) {
+                        if let recovery = content.withdrawalRecovery {
+                            withdrawAmount = WalletViewModel.centsToPlain(recovery.amountCents)
+                        }
+                        viewModel.clearWithdrawError()
+                        showWithdrawSheet = true
+                    }
                 }
             }
             .padding(.horizontal, Spacing.s4)
@@ -321,14 +331,41 @@ public struct WalletView: View {
         }
     }
 
+    private var currentRecovery: WalletWithdrawalRecoveryDTO? {
+        switch viewModel.state {
+        case let .populated(content), let .hold(content): content.withdrawalRecovery
+        default: nil
+        }
+    }
+
+    private var recoveryMessage: String? {
+        guard let recovery = currentRecovery else { return nil }
+        guard recovery.canRetry else { return WalletViewModel.withdrawalReviewMessage }
+        let amount = WalletViewModel.centsToCurrency(recovery.amountCents)
+        let count: Int
+        switch viewModel.state {
+        case let .populated(content), let .hold(content): count = content.withdrawalRecoveryCount
+        default: count = 0
+        }
+        return count > 1
+            ? "\(count) withdrawals need checking. Retry the oldest \(amount) amount."
+            : "\(amount) has not been confirmed. Retry the same amount."
+    }
+
+    private var withdrawConfirmLabel: String {
+        if viewModel.action == .withdrawing { return "Processing…" }
+        if currentRecovery?.canRetry == false { return "Needs support review" }
+        return currentRecovery == nil ? "Confirm withdrawal" : "Retry withdrawal"
+    }
+
     private var withdrawSheet: some View {
         VStack(spacing: Spacing.s4) {
             Icon(.arrowDownToLine, size: 32, color: Theme.Color.primaryInk)
             Text("Withdraw to your bank")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
-            Text("Funds arrive in 2–3 business days. "
-                + "Available to withdraw: $\(currentAvailable).")
+            Text(recoveryMessage ?? ("Funds arrive in 2–3 business days. "
+                + "Available to withdraw: $\(currentAvailable)."))
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
@@ -346,7 +383,9 @@ public struct WalletView: View {
                         .foregroundStyle(Theme.Color.appText)
                         .onChange(of: withdrawAmount) { _, _ in viewModel.clearWithdrawError() }
                         .accessibilityIdentifier("wallet.withdrawAmountField")
-                    Button("Max") { withdrawAmount = currentAvailable }
+                    Button("Max") {
+                        withdrawAmount = currentRecovery.map { WalletViewModel.centsToPlain($0.amountCents) } ?? currentAvailable
+                    }
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(Theme.Color.primaryInk)
                         .buttonStyle(.plain)
@@ -365,6 +404,7 @@ public struct WalletView: View {
                         )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                .disabled(viewModel.action == .withdrawing || currentRecovery?.canRetry == false)
                 if let error = viewModel.withdrawError {
                     Text(error)
                         .pantopusTextStyle(.caption)
@@ -375,7 +415,7 @@ public struct WalletView: View {
             Button {
                 Task { await confirmWithdraw() }
             } label: {
-                Text(viewModel.action == .withdrawing ? "Processing…" : "Confirm withdrawal")
+                Text(withdrawConfirmLabel)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity)
@@ -384,7 +424,7 @@ public struct WalletView: View {
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
             .buttonStyle(.plain)
-            .disabled(viewModel.action == .withdrawing)
+            .disabled(viewModel.action == .withdrawing || currentRecovery?.canRetry == false)
             .accessibilityIdentifier("wallet.withdrawBtn")
             Button("Cancel") { showWithdrawSheet = false }
                 .font(.system(size: 13, weight: .semibold))
@@ -566,6 +606,7 @@ private struct ActivityList: View {
 
 private struct WithdrawCTA: View {
     let amount: String
+    var label: String = "Withdraw"
     let onTap: () -> Void
 
     var body: some View {
@@ -573,7 +614,7 @@ private struct WithdrawCTA: View {
             HStack(spacing: Spacing.s0) {
                 HStack(spacing: Spacing.s2) {
                     Icon(.arrowDownToLine, size: 17, strokeWidth: 2.2, color: .white)
-                    Text("Withdraw")
+                    Text(label)
                         .font(.system(size: 15, weight: .bold))
                         .tracking(-0.15)
                         .foregroundStyle(.white)
@@ -593,7 +634,7 @@ private struct WithdrawCTA: View {
             .pantopusShadow(.primary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Withdraw $\(amount)")
+        .accessibilityLabel("\(label) $\(amount)")
         .accessibilityIdentifier("walletWithdrawButton")
     }
 }

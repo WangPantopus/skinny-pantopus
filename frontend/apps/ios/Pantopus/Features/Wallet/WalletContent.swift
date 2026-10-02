@@ -289,6 +289,8 @@ public struct WalletContent: Equatable, Sendable {
     /// `false` when the available balance is zero — RN's `balance > 0` leg of
     /// `canWithdraw`, which renders the disabled "No funds to withdraw" CTA.
     public let hasBalance: Bool
+    public let withdrawalRecovery: WalletWithdrawalRecoveryDTO?
+    public let withdrawalRecoveryCount: Int
 
     /// `true` when the server sent at least one lifetime total — drives the
     /// "Lifetime" section's visibility.
@@ -304,7 +306,7 @@ public struct WalletContent: Equatable, Sendable {
     /// native payouts-enabled gate (the server also requires a verified
     /// Connect account) and the designed hold frame.
     public var canWithdraw: Bool {
-        payoutsEnabled && !frozen && hasBalance && !isOnHold
+        payoutsEnabled && !frozen && (hasBalance || withdrawalRecovery != nil) && !isOnHold
     }
 
     public init(
@@ -323,7 +325,9 @@ public struct WalletContent: Equatable, Sendable {
         lifetimeEarned: String? = nil,
         lifetimeWithdrawn: String? = nil,
         frozen: Bool = false,
-        hasBalance: Bool = true
+        hasBalance: Bool = true,
+        withdrawalRecovery: WalletWithdrawalRecoveryDTO? = nil,
+        withdrawalRecoveryCount: Int = 0
     ) {
         self.available = available
         self.pending = pending
@@ -341,5 +345,7 @@ public struct WalletContent: Equatable, Sendable {
         self.lifetimeWithdrawn = lifetimeWithdrawn
         self.frozen = frozen
         self.hasBalance = hasBalance
+        self.withdrawalRecovery = withdrawalRecovery
+        self.withdrawalRecoveryCount = withdrawalRecoveryCount
     }
 }

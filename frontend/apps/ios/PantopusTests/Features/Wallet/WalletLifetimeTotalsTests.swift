@@ -50,6 +50,7 @@ final class WalletLifetimeTotalsTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.balanceWithLifetimeJSON),
             .status(200, body: Self.txJSON),
+            .status(200, body: Self.txJSON),
             .status(200, body: Self.pendingJSON),
             .status(404, body: "{}")
         ]
@@ -67,6 +68,7 @@ final class WalletLifetimeTotalsTests: XCTestCase {
     func testMissingLifetimeTotalsHideTheSection() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.balanceWithoutLifetimeJSON),
+            .status(200, body: Self.txJSON),
             .status(200, body: Self.txJSON),
             .status(200, body: Self.pendingJSON),
             .status(404, body: "{}")
@@ -86,6 +88,7 @@ final class WalletLifetimeTotalsTests: XCTestCase {
     func testConnectedAccountCarriesCapabilityTiles() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.balanceWithLifetimeJSON),
+            .status(200, body: Self.txJSON),
             .status(200, body: Self.txJSON),
             .status(200, body: Self.pendingJSON),
             .status(200, body: Self.connectEnabledJSON)

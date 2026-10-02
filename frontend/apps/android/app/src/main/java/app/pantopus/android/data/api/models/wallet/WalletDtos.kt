@@ -33,7 +33,24 @@ data class WalletTransactionsResponse(
     val total: Int? = null,
     val limit: Int? = null,
     val offset: Int? = null,
+    val withdrawalRecovery: WalletWithdrawalRecoveryDto? = null,
 )
+
+/** Owner-only recovery projection from the existing transaction read. */
+@JsonClass(generateAdapter = true)
+data class WalletWithdrawalRecoveryDto(
+    val amountCents: Long,
+    val idempotencyKey: String? = null,
+    val createdAt: String? = null,
+    val retryable: Boolean = false,
+) {
+    val canRetry: Boolean
+        get() =
+            retryable && amountCents >= 100L &&
+                idempotencyKey?.matches(
+                    Regex("(?i)[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"),
+                ) == true
+}
 
 @JsonClass(generateAdapter = true)
 data class WalletTransactionDto(

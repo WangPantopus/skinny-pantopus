@@ -46,6 +46,22 @@ public struct WalletTransactionsResponse: Decodable, Sendable, Hashable {
     public let total: Int?
     public let limit: Int?
     public let offset: Int?
+    public var withdrawalRecovery: WalletWithdrawalRecoveryDTO? = nil
+}
+
+/// Owner-only recovery projection, separate from ordinary activity history.
+public struct WalletWithdrawalRecoveryDTO: Decodable, Sendable, Hashable {
+    public let amountCents: Int
+    public let idempotencyKey: String?
+    public let createdAt: String?
+    public let retryable: Bool
+
+    public var canRetry: Bool {
+        retryable && amountCents >= 100 && idempotencyKey?.range(
+            of: "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
+    }
 }
 
 /// A single `WalletTransaction` row. Only the fields the Recent-activity feed

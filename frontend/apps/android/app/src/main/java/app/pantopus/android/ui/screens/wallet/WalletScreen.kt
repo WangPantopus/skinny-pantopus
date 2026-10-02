@@ -66,6 +66,7 @@ import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.core.security.SensitiveScreenGuard
 import app.pantopus.android.core.security.rememberSensitiveActionGuard
+import app.pantopus.android.data.api.models.wallet.WalletWithdrawalRecoveryDto
 import app.pantopus.android.ui.components.BalanceHero
 import app.pantopus.android.ui.components.BalanceHeroSplitCell
 import app.pantopus.android.ui.components.BalanceHeroTone
@@ -190,7 +191,11 @@ fun WalletScreen(
                     state = state,
                     onBack = onBack,
                     onOpenHistory = onOpenHistory,
-                    onWithdraw = { showWithdrawSheet = true },
+                    onWithdraw = {
+                        currentRecovery(state)?.let { withdrawAmount = WalletMapper.centsToPlain(it.amountCents) }
+                        viewModel.clearWithdrawError()
+                        showWithdrawSheet = true
+                    },
                     onSetupPayouts = { viewModel.setupPayouts() },
                     onManagePayout = { viewModel.openDashboard() },
                     onReverifyPayout = { viewModel.setupPayouts() },
@@ -211,6 +216,8 @@ fun WalletScreen(
         ) {
             WithdrawConfirmSheet(
                 amount = currentAvailable(state),
+                recovery = currentRecovery(state),
+                recoveryCount = currentRecoveryCount(state),
                 amountText = withdrawAmount,
                 amountError = withdrawError,
                 processing = action is WalletAction.Withdrawing,
@@ -218,7 +225,9 @@ fun WalletScreen(
                     withdrawAmount = it
                     viewModel.clearWithdrawError()
                 },
-                onUseMax = { withdrawAmount = currentAvailable(state) },
+                onUseMax = {
+                    withdrawAmount = currentRecovery(state)?.let { WalletMapper.centsToPlain(it.amountCents) } ?: currentAvailable(state)
+                },
                 onConfirm = {
                     scope.launch {
                         when (val outcome = verifyIdentity("Approve wallet withdrawal")) {
@@ -264,9 +273,25 @@ private fun currentAvailable(state: WalletUiState): String =
         else -> "0.00"
     }
 
+private fun currentRecovery(state: WalletUiState): WalletWithdrawalRecoveryDto? =
+    when (state) {
+        is WalletUiState.Populated -> state.content.withdrawalRecovery
+        is WalletUiState.Hold -> state.content.withdrawalRecovery
+        else -> null
+    }
+
+private fun currentRecoveryCount(state: WalletUiState): Int =
+    when (state) {
+        is WalletUiState.Populated -> state.content.withdrawalRecoveryCount
+        is WalletUiState.Hold -> state.content.withdrawalRecoveryCount
+        else -> 0
+    }
+
 @Composable
 private fun WithdrawConfirmSheet(
     amount: String,
+    recovery: WalletWithdrawalRecoveryDto?,
+    recoveryCount: Int,
     amountText: String,
     amountError: String?,
     processing: Boolean,
@@ -275,6 +300,20 @@ private fun WithdrawConfirmSheet(
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
+    val canConfirm = recovery?.canRetry != false
+    val recoveryMessage =
+        recovery?.let {
+            if (!it.canRetry) {
+                WalletViewModel.WITHDRAWAL_REVIEW_MESSAGE
+            } else {
+                val amountLabel = WalletMapper.centsToCurrency(it.amountCents)
+                if (recoveryCount > 1) {
+                    "$recoveryCount withdrawals need checking. Retry the oldest $amountLabel amount."
+                } else {
+                    "$amountLabel has not been confirmed. Retry the same amount."
+                }
+            }
+        }
     Column(
         modifier =
             Modifier
@@ -297,7 +336,7 @@ private fun WithdrawConfirmSheet(
             color = PantopusColors.appText,
         )
         Text(
-            text = "Funds arrive in 2–3 business days. Available to withdraw: \$$amount.",
+            text = recoveryMessage ?: "Funds arrive in 2–3 business days. Available to withdraw: \$$amount.",
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
@@ -308,7 +347,7 @@ private fun WithdrawConfirmSheet(
         WithdrawAmountField(
             amountText = amountText,
             amountError = amountError,
-            enabled = !processing,
+            enabled = !processing && canConfirm,
             onAmountChange = onAmountChange,
             onUseMax = onUseMax,
         )
@@ -318,13 +357,19 @@ private fun WithdrawConfirmSheet(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(Radii.lg))
                     .background(PantopusColors.primary600)
-                    .clickable(enabled = !processing, onClick = onConfirm)
+                    .clickable(enabled = !processing && canConfirm, onClick = onConfirm)
                     .heightIn(min = 48.dp)
                     .testTag("wallet.withdrawBtn"),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = if (processing) "Processing…" else "Confirm withdrawal",
+                text =
+                    when {
+                        processing -> "Processing…"
+                        !canConfirm -> "Needs support review"
+                        recovery != null -> "Retry withdrawal"
+                        else -> "Confirm withdrawal"
+                    },
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appTextInverse,
@@ -835,7 +880,7 @@ private fun WalletBottomBar(
                         .fillMaxWidth()
                         .testTag("wallet.frozenNote"),
             )
-        } else if (!content.hasBalance) {
+        } else if (!content.hasBalance && content.withdrawalRecovery == null) {
             WithdrawLockedCta(amount = content.available)
             Text(
                 text = "No funds to withdraw yet.",
@@ -848,7 +893,17 @@ private fun WalletBottomBar(
                         .testTag("wallet.noFundsNote"),
             )
         } else {
-            WithdrawCta(amount = content.available, onClick = onWithdraw)
+            val recovery = content.withdrawalRecovery
+            WithdrawCta(
+                amount = recovery?.let { WalletMapper.centsToPlain(it.amountCents) } ?: content.available,
+                label =
+                    when {
+                        recovery == null -> "Withdraw"
+                        recovery.canRetry -> "Retry withdrawal"
+                        else -> "Review withdrawal"
+                    },
+                onClick = onWithdraw,
+            )
         }
     }
 }
@@ -891,6 +946,7 @@ private fun SetupPayoutsCta(onClick: () -> Unit) {
 @Composable
 private fun WithdrawCta(
     amount: String,
+    label: String = "Withdraw",
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(14.dp)
@@ -904,7 +960,7 @@ private fun WithdrawCta(
                 .background(PantopusColors.primary600)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 18.dp)
-                .semantics { contentDescription = "Withdraw $$amount" }
+                .semantics { contentDescription = "$label $$amount" }
                 .testTag("walletWithdrawButton"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -920,7 +976,7 @@ private fun WithdrawCta(
                 tint = Color.White,
             )
             Text(
-                text = "Withdraw",
+                text = label,
                 color = Color.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,

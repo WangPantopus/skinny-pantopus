@@ -24,6 +24,8 @@ interface WalletApi {
     suspend fun transactions(
         @Query("limit") limit: Int = 50,
         @Query("offset") offset: Int = 0,
+        @Query("type") type: String? = null,
+        @Query("unsettledWithdrawal") unsettledWithdrawal: Boolean? = null,
     ): WalletTransactionsResponse
 
     /** `GET /api/wallet/pending-release` — route `backend/routes/wallet.js:160`. */

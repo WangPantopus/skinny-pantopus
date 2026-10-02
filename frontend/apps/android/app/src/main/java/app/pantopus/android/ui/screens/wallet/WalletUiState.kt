@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.wallet
 
+import app.pantopus.android.data.api.models.wallet.WalletWithdrawalRecoveryDto
+
 /**
  * A10.10 — render payloads for the Wallet screen. Pure value types so
  * the view-model can be fed deterministic stub data ([WalletSampleData])
@@ -244,6 +246,9 @@ data class WalletContent(
      * `canWithdraw`, which renders the disabled "No funds to withdraw" CTA.
      */
     val hasBalance: Boolean = true,
+    /** A held withdrawal remains recoverable even when the available balance is zero. */
+    val withdrawalRecovery: WalletWithdrawalRecoveryDto? = null,
+    val withdrawalRecoveryCount: Int = 0,
 ) {
     val isOnHold: Boolean get() = holdState != null
 
@@ -258,7 +263,7 @@ data class WalletContent(
      * native payouts-enabled gate (the server also requires a verified Connect
      * account) and the designed hold frame. Mirrors iOS `WalletContent`.
      */
-    val canWithdraw: Boolean get() = payoutsEnabled && !frozen && hasBalance && !isOnHold
+    val canWithdraw: Boolean get() = payoutsEnabled && !frozen && (hasBalance || withdrawalRecovery != null) && !isOnHold
 }
 
 /**
