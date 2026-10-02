@@ -1772,6 +1772,12 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     let supportsMetadataColumn = true;
     let { data: message, error } = await insertMessage(messageData);
 
+    // Attachment admission is rechecked while holding its File locks in the
+    // inserting transaction; a deletion can win after the earlier REST read.
+    if (error?.code === 'PT400' && String(error.message || '').trim() === 'CHAT_FILE_UNAVAILABLE') {
+      return res.status(400).json({ error: 'One or more attached files are invalid or not owned by you' });
+    }
+
     // The database re-decides direct-room admission inside the inserting
     // transaction (20260916010000_direct_message_block_admission): the isBlocked
     // pre-check above and this insert are separate PostgREST transactions, so a
