@@ -90,7 +90,10 @@ fun MailTaskScreen(
                 .testTag("mailTask"),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TopBar(onBack = { viewModel.tapBack() })
+            TopBar(
+                onBack = { viewModel.tapBack() },
+                showsUnbuiltActions = (state as? MailTaskUiState.Loaded)?.content?.hasUnbuiltActions == true,
+            )
             when (val current = state) {
                 MailTaskUiState.Loading -> MailTaskLoadingBody(modifier = Modifier.weight(1f))
                 is MailTaskUiState.Loaded -> LoadedBody(content = current.content, viewModel = viewModel, modifier = Modifier.weight(1f))
@@ -133,7 +136,10 @@ fun MailTaskScreen(
 // MARK: - Top bar
 
 @Composable
-private fun TopBar(onBack: () -> Unit) {
+private fun TopBar(
+    onBack: () -> Unit,
+    showsUnbuiltActions: Boolean,
+) {
     Box(
         modifier =
             Modifier
@@ -176,8 +182,11 @@ private fun TopBar(onBack: () -> Unit) {
                 Text(text = "Mailbox", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = PantopusColors.primary600)
             }
             Spacer(modifier = Modifier.weight(1f))
-            NavIcon(icon = PantopusIcon.Share, label = "Share")
-            NavIcon(icon = PantopusIcon.MoreHorizontal, label = "More")
+            // Share and More have no actions yet, so live tasks don't show them.
+            if (showsUnbuiltActions) {
+                NavIcon(icon = PantopusIcon.Share, label = "Share")
+                NavIcon(icon = PantopusIcon.MoreHorizontal, label = "More")
+            }
         }
         Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp).background(PantopusColors.appBorderSubtle))
     }
@@ -336,25 +345,29 @@ private fun ActionDock(
                 onClick = { viewModel.markDone() },
                 modifier = Modifier.testTag("mailTask_markDone"),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                DockChip(
-                    icon = PantopusIcon.Clock,
-                    label = "Snooze",
-                    onClick = { viewModel.snoozeFromDock() },
-                    modifier = Modifier.weight(1f).testTag("mailTask_dock_snooze"),
-                )
-                DockChip(
-                    icon = PantopusIcon.UserPlus,
-                    label = "Delegate",
-                    onClick = { viewModel.delegate() },
-                    modifier = Modifier.weight(1f).testTag("mailTask_dock_delegate"),
-                )
-                DockChip(
-                    icon = PantopusIcon.CalendarPlus,
-                    label = "Calendar",
-                    onClick = { viewModel.addToCalendar() },
-                    modifier = Modifier.weight(1f).testTag("mailTask_dock_calendar"),
-                )
+            // Design frames only: live tasks have no snooze picker, hand-off or
+            // calendar to open, so the chips stay hidden rather than fake it.
+            if (content.hasUnbuiltActions) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    DockChip(
+                        icon = PantopusIcon.Clock,
+                        label = "Snooze",
+                        onClick = { viewModel.snoozeFromDock() },
+                        modifier = Modifier.weight(1f).testTag("mailTask_dock_snooze"),
+                    )
+                    DockChip(
+                        icon = PantopusIcon.UserPlus,
+                        label = "Delegate",
+                        onClick = { viewModel.delegate() },
+                        modifier = Modifier.weight(1f).testTag("mailTask_dock_delegate"),
+                    )
+                    DockChip(
+                        icon = PantopusIcon.CalendarPlus,
+                        label = "Calendar",
+                        onClick = { viewModel.addToCalendar() },
+                        modifier = Modifier.weight(1f).testTag("mailTask_dock_calendar"),
+                    )
+                }
             }
         }
     }
