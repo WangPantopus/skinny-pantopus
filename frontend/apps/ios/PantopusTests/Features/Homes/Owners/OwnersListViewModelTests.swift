@@ -18,14 +18,9 @@ final class OwnersListViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
-    }
-
-    private func makeAPI() -> APIClient {
-        APIClient(
-            environment: .current,
-            session: SequencedURLProtocol.makeSession(),
-            retryPolicy: .none
-        )
+        SequencedURLProtocol.routeResponses["/api/homes/home_1/me"] = [
+            .status(200, body: Self.ownerAccessJSON)
+        ]
     }
 
     private func makeVM(
@@ -40,50 +35,6 @@ final class OwnersListViewModelTests: XCTestCase {
             showsClaimReview: showsClaimReview
         )
     }
-
-    /// Three-owner roster: a verified primary (legal tier), a verified
-    /// co-owner (standard tier), and a pending invitee.
-    private static let threeOwnersJSON = """
-    {"owners":[
-      {"id":"o1","subject_type":"user","subject_id":"user_1",
-       "owner_status":"verified","is_primary_owner":true,
-       "added_via":"claim","verification_tier":"legal",
-       "created_at":"2022-03-12T10:00:00Z",
-       "updated_at":"2022-03-12T10:00:00Z",
-       "user":{"id":"user_1","username":"maria","name":"Maria Kovács",
-               "profile_picture_url":null}},
-      {"id":"o2","subject_type":"user","subject_id":"user_2",
-       "owner_status":"verified","is_primary_owner":false,
-       "added_via":"invite","verification_tier":"standard",
-       "created_at":"2022-03-15T10:00:00Z",
-       "updated_at":"2022-03-15T10:00:00Z",
-       "user":{"id":"user_2","username":"jamie","name":"Jamie Patel",
-               "profile_picture_url":null}},
-      {"id":"o3","subject_type":"user","subject_id":"user_3",
-       "owner_status":"pending","is_primary_owner":false,
-       "added_via":"invite","verification_tier":"weak",
-       "created_at":"2026-10-04T10:00:00Z",
-       "updated_at":"2026-10-04T10:00:00Z",
-       "user":{"id":"user_3","username":"ana","name":"Ana Kovács",
-               "profile_picture_url":null}}
-    ]}
-    """
-
-    private static let soleOwnerJSON = """
-    {"owners":[
-      {"id":"o1","subject_type":"user","subject_id":"user_1",
-       "owner_status":"verified","is_primary_owner":true,
-       "added_via":"claim","verification_tier":"legal",
-       "created_at":"2022-03-12T10:00:00Z",
-       "updated_at":"2022-03-12T10:00:00Z",
-       "user":{"id":"user_1","username":"maria","name":"Maria Kovács",
-               "profile_picture_url":null}}
-    ]}
-    """
-
-    private static let emptyJSON = """
-    {"owners":[]}
-    """
 
     // MARK: - Lifecycle
 
@@ -117,11 +68,43 @@ final class OwnersListViewModelTests: XCTestCase {
     func testLoadFailureTransitionsToError() async {
         SequencedURLProtocol.sequence = [.status(500, body: "{}")]
         let vm = makeVM()
+        XCTAssertNil(vm.fab)
+        XCTAssertFalse(vm.canTransferOwnership)
         await vm.load()
         guard case .error = vm.state else {
             XCTFail("Expected .error, got \(vm.state)")
             return
         }
+        XCTAssertNil(vm.fab)
+        SequencedURLProtocol.sequence = [.status(403, body: "{}")]
+        await vm.refresh()
+        XCTAssertNil(vm.fab)
+        XCTAssertFalse(vm.canTransferOwnership)
+        XCTAssertNotNil(vm.topBarAction)
+
+        SequencedURLProtocol.sequence = [.status(200, body: Self.threeOwnersJSON)]
+        SequencedURLProtocol.routeResponses["/api/homes/home_1/me"] = [.status(503, body: "{}")]
+        await vm.refresh()
+        guard case .error = vm.state else { return XCTFail("Access-read failure must remain retryable") }
+        XCTAssertNil(vm.fab)
+        XCTAssertFalse(vm.canTransferOwnership)
+
+        SequencedURLProtocol.sequence = [.status(200, body: Self.threeOwnersJSON)]
+        SequencedURLProtocol.routeResponses["/api/homes/home_1/me"] = [
+            .status(200, body: "{\"hasAccess\":true,\"permissions\":[\"ownership.transfer\"]}")
+        ]
+        await vm.refresh()
+        XCTAssertNil(vm.fab)
+        XCTAssertTrue(vm.canTransferOwnership)
+        let requestCount = SequencedURLProtocol.capturedRequests.count
+        await vm.removeOwner(ownerId: "o2")
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, requestCount)
+
+        SequencedURLProtocol.sequence = [.status(200, body: Self.threeOwnersJSON)]
+        SequencedURLProtocol.routeResponses["/api/homes/home_1/me"] = [.status(200, body: Self.ownerAccessJSON)]
+        await vm.refresh()
+        XCTAssertNotNil(vm.fab)
+        XCTAssertTrue(vm.canTransferOwnership)
     }
 
     func testLoadIsIdempotentAfterLoaded() async {
@@ -295,6 +278,7 @@ final class OwnersListViewModelTests: XCTestCase {
         }
         XCTAssertEqual(sections.first?.rows.count, 2)
         XCTAssertNil(sections.first?.rows.first { $0.id == "o2" })
+        XCTAssertNil(vm.removalError)
     }
 
     func testRemoveFailureRollsBack() async {
@@ -311,6 +295,13 @@ final class OwnersListViewModelTests: XCTestCase {
         }
         XCTAssertEqual(sections.first?.rows.count, 3)
         XCTAssertNotNil(sections.first?.rows.first { $0.id == "o2" })
+        XCTAssertEqual(
+            vm.removalError,
+            "We couldn't confirm the owner removal. " +
+                "Refresh owners to check the current access before trying again."
+        )
+        vm.acknowledgeRemovalError()
+        XCTAssertNil(vm.removalError)
     }
 
     func testCachedOwnerLookupAfterLoad() async {
@@ -323,8 +314,10 @@ final class OwnersListViewModelTests: XCTestCase {
 
     // MARK: - Chrome
 
-    func testFABIsHomeTintedSecondaryCreateWithUserPlus() {
+    func testFABIsHomeTintedSecondaryCreateWithUserPlus() async {
+        SequencedURLProtocol.sequence = [.status(200, body: Self.threeOwnersJSON)]
         let vm = makeVM()
+        await vm.load()
         guard let fab = vm.fab else {
             XCTFail("Expected FAB")
             return
@@ -353,4 +346,62 @@ final class OwnersListViewModelTests: XCTestCase {
         let vm = makeVM()
         XCTAssertTrue(vm.tabs.isEmpty)
     }
+}
+
+private extension OwnersListViewModelTests {
+    private func makeAPI() -> APIClient {
+        APIClient(
+            environment: .current,
+            session: SequencedURLProtocol.makeSession(),
+            retryPolicy: .none
+        )
+    }
+
+    /// Three-owner roster: a verified primary (legal tier), a verified
+    /// co-owner (standard tier), and a pending invitee.
+    private static let threeOwnersJSON = """
+    {"owners":[
+      {"id":"o1","subject_type":"user","subject_id":"user_1",
+       "owner_status":"verified","is_primary_owner":true,
+       "added_via":"claim","verification_tier":"legal",
+       "created_at":"2022-03-12T10:00:00Z",
+       "updated_at":"2022-03-12T10:00:00Z",
+       "user":{"id":"user_1","username":"maria","name":"Maria Kovács",
+               "profile_picture_url":null}},
+      {"id":"o2","subject_type":"user","subject_id":"user_2",
+       "owner_status":"verified","is_primary_owner":false,
+       "added_via":"invite","verification_tier":"standard",
+       "created_at":"2022-03-15T10:00:00Z",
+       "updated_at":"2022-03-15T10:00:00Z",
+       "user":{"id":"user_2","username":"jamie","name":"Jamie Patel",
+               "profile_picture_url":null}},
+      {"id":"o3","subject_type":"user","subject_id":"user_3",
+       "owner_status":"pending","is_primary_owner":false,
+       "added_via":"invite","verification_tier":"weak",
+       "created_at":"2026-10-04T10:00:00Z",
+       "updated_at":"2026-10-04T10:00:00Z",
+       "user":{"id":"user_3","username":"ana","name":"Ana Kovács",
+               "profile_picture_url":null}}
+    ]}
+    """
+
+    private static let soleOwnerJSON = """
+    {"owners":[
+      {"id":"o1","subject_type":"user","subject_id":"user_1",
+       "owner_status":"verified","is_primary_owner":true,
+       "added_via":"claim","verification_tier":"legal",
+       "created_at":"2022-03-12T10:00:00Z",
+       "updated_at":"2022-03-12T10:00:00Z",
+       "user":{"id":"user_1","username":"maria","name":"Maria Kovács",
+               "profile_picture_url":null}}
+    ]}
+    """
+
+    private static let emptyJSON = """
+    {"owners":[]}
+    """
+
+    private static let ownerAccessJSON = """
+    {"hasAccess":true,"permissions":["ownership.manage","ownership.transfer"]}
+    """
 }

@@ -83,13 +83,29 @@ public struct OwnersListView: View {
                         "If other owners exist, removal may need quorum approval."
                 )
             }
+            .alert(
+                "Couldn't confirm removal",
+                isPresented: Binding(
+                    get: { viewModel.removalError != nil },
+                    set: { if !$0 { viewModel.acknowledgeRemovalError() } }
+                )
+            ) {
+                Button("Refresh owners") {
+                    viewModel.acknowledgeRemovalError()
+                    Task { await viewModel.refresh() }
+                }
+                .accessibilityIdentifier("ownersList_removalRefresh")
+                Button("OK", role: .cancel) { viewModel.acknowledgeRemovalError() }
+            } message: {
+                Text(viewModel.removalError ?? "")
+            }
     }
 
     /// Sticky bottom action bar — mirrors RN's warning-tinted
     /// "Transfer Ownership" button under the roster.
     @ViewBuilder
     private var transferBar: some View {
-        if let onOpenTransfer {
+        if viewModel.canTransferOwnership, let onOpenTransfer {
             VStack(spacing: Spacing.s0) {
                 Button(action: onOpenTransfer) {
                     HStack(spacing: Spacing.s2) {

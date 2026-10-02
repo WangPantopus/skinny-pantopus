@@ -73,6 +73,8 @@ fun OwnersListScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
+    val removalError by viewModel.removalError.collectAsStateWithLifecycle()
+    val access by viewModel.access.collectAsStateWithLifecycle()
 
     var removeTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
@@ -107,11 +109,13 @@ fun OwnersListScreen(
                 onRefresh = { viewModel.refresh() },
                 onEndReached = { viewModel.loadMoreIfNeeded() },
                 topBarAction = viewModel.topBarAction,
-                fab = viewModel.fab,
+                fab = if (access?.can("ownership.manage") == true) viewModel.fab else null,
                 onBack = onBack,
             )
         }
-        TransferOwnershipBar(onTap = { onOpenTransfer(viewModel.homeId) })
+        if (access?.can("ownership.transfer") == true) {
+            TransferOwnershipBar(onTap = { onOpenTransfer(viewModel.homeId) })
+        }
     }
 
     removeTarget?.let { (ownerId, displayName) ->
@@ -135,6 +139,26 @@ fun OwnersListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { removeTarget = null }) { Text("Cancel") }
+            },
+        )
+    }
+
+    removalError?.let { message ->
+        AlertDialog(
+            onDismissRequest = viewModel::acknowledgeRemovalError,
+            title = { Text("Couldn't confirm removal") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.acknowledgeRemovalError()
+                        viewModel.refresh()
+                    },
+                    modifier = Modifier.testTag("ownersList_removalRefresh"),
+                ) { Text("Refresh owners") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::acknowledgeRemovalError) { Text("OK") }
             },
         )
     }
