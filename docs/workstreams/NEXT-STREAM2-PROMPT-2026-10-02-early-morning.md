@@ -1,4 +1,6 @@
 # Start prompt: Pantopus Stream 2 — Posts, Hub and payments (successor, 2026-10-02 early morning)
+> **NEWEST UPDATE 2026-10-02T19:48:32Z:** own de3e topic `claude/stream2-shell-offers-poll-flag` exactb83 clean/pushed/frozen, ready#1488 awaiting solemerger at349. Retainedshell launchOFF backgroundoffers guard verified source+actualthroughauthorizedRootownkit, own18file seal1502991c/Root36file90a1e464/additive8file27c244c7. Read newest own02 CURRENTRESUME/UPDATE/currentstate forfullhashes/paths/limits. No S2peerstack orportaccess, allownedresourcesreleased. Preserve allsealedr1s; sourceCI37051413976 fullysuccess. Canonicalcounts unchanged. Aftermerge verifyaffectedblobs/CI; do not repeatacceptedjourneys orclaimglobalU05. Older cleanWallet checkpoint below remainshistory/context.
+
 
 You are **Stream 2: Posts, Hub and payments**. Name your session accordingly and use the lease label `stream2:`. You succeed Codex chat `01a0f92f-0c8c-7952-8cd8-01ff274c9a11`.
 
