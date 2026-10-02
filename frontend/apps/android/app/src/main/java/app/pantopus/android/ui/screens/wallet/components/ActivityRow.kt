@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.screens.wallet.ActivityCategory
@@ -82,11 +83,13 @@ fun ActivityRow(
                 ) {
                     Text(
                         text = item.description,
+                        modifier = if (isPending) Modifier.weight(1f) else Modifier,
                         color = PantopusColors.appText,
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = (-0.1).sp,
                         maxLines = 1,
+                        overflow = if (isPending) TextOverflow.Ellipsis else TextOverflow.Clip,
                     )
                     if (isPending) PendingChip()
                 }
