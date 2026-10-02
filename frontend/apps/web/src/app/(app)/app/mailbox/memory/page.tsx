@@ -230,10 +230,17 @@ function YearInMailCard({ year: yearNum }: { year: number }) {
 // ── Main Page ────────────────────────────────────────────────
 
 export default function MailMemoryPage() {
-  const { data: memories, isLoading: memoriesLoading } = useMailMemories();
+  const {
+    data: memories,
+    isLoading: memoriesLoading,
+    isError: memoriesError,
+    isFetching: memoriesFetching,
+    refetch: refetchMemories,
+  } = useMailMemories();
   const dismissMutation = useDismissMemory();
 
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [dismissError, setDismissError] = useState<string | null>(null);
 
   const visibleMemories = useMemo(() => {
     if (!memories) return [];
@@ -242,9 +249,11 @@ export default function MailMemoryPage() {
 
   const handleDismiss = useCallback(
     (memoryId: string) => {
-      // Per-session dismissal (not persisted beyond mutation call)
-      setDismissed((prev) => new Set(prev).add(memoryId));
-      dismissMutation.mutate(memoryId);
+      setDismissError(null);
+      dismissMutation.mutate(memoryId, {
+        onSuccess: () => setDismissed((prev) => new Set(prev).add(memoryId)),
+        onError: () => setDismissError('Could not dismiss this memory. Try again.'),
+      });
     },
     [dismissMutation],
   );
@@ -283,7 +292,27 @@ export default function MailMemoryPage() {
             </h2>
           </div>
 
-          {visibleMemories.length === 0 ? (
+          {dismissError && (
+            <p role="alert" className="text-xs text-red-600 dark:text-red-400 mb-3">
+              {dismissError}
+            </p>
+          )}
+
+          {memoriesError ? (
+            <div className="rounded-xl border border-app-border p-8 text-center">
+              <p role="alert" className="text-sm text-app-text-secondary">
+                Could not load memories.
+              </p>
+              <button
+                type="button"
+                onClick={() => void refetchMemories()}
+                disabled={memoriesFetching}
+                className="mt-3 text-sm font-semibold text-primary-600 disabled:opacity-50"
+              >
+                Retry
+              </button>
+            </div>
+          ) : visibleMemories.length === 0 ? (
             <div className="rounded-xl border border-app-border p-8 text-center">
               <div className="text-4xl mb-3">📭</div>
               <p className="text-sm text-app-text-secondary">
@@ -298,6 +327,7 @@ export default function MailMemoryPage() {
                   memory={memory}
                   onView={handleView}
                   onDismiss={() => handleDismiss(memory.id)}
+                  dismissDisabled={dismissMutation.isPending}
                 />
               ))}
             </div>
