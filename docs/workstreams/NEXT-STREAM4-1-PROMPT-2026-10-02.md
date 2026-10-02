@@ -74,6 +74,20 @@ Both children share **one** S34 runtime, device pair and host heavy queue with S
 
 Recorded order: actual S3 full return21:11:24Z → **4-2 MailDay only after fresh Root ACK and exact own leases** → later separately scheduled S3 child native naming windows.4-1 does source/archive/caller/preparation review while waiting and obtains its own later Root-scheduled window. Any order change must be explicit; no child gains a reservation from this document. One heavy build at a time; one composition build for demonstrated related fixes where appropriate. Current holders/source/products/config/CI must be checked freshly; elapsed time or peer case cleanup is not full handback. Source preparation/review can overlap; shared end-to-end evidence cannot, so no2× throughput promise.
 
+## Resource retirement — 2026-10-02T22:51:32Z
+
+**Actual permanent cleanup completed; this overrides historical checkout/cache availability below.** Removed12 ignored Android generated-output directories (`frontend/apps/android/app/build`, `frontend/apps/android/build`, project-local `.gradle`) across own a69f/864, s3-native-e5/c96, stream4-maintenance/1c4 and stream4-native-mailtask/6452. All tracked source/heads remain unchanged and clean. Retired two obsolete clean, pushed worktrees: `stream4-memory`/8e24 (exact source merged in#1467) and `stream4-records-phone`/66ae (its sole changed Tasks file byte-identical to merged#1485 and current master). Their local/remote branches and commits remain available; **neither deleted checkout is an available reuse path**. Use an appropriate current source checkout or Git by recorded SHA; do not run historical tests/installers solely because an old report names a removed path.
+
+Removed allocated file size: **7.46GiB /8,010,235,904bytes**,14 exact paths. Host free space at final observation250GiB; other streams also cleaned resources, so the host-wide difference is not all attributable to this stream. No active/queued process or open handle referenced an exact deletion path; a69f current-session root cwd was retained. Plain `git worktree remove` only, no force, source reset, branch deletion, stash, prune or gc. Dependency symlinks were unlinked with old worktrees; retained b430 targets were not removed.
+
+**Preserved for successors:** a69f frozen864 and three other local composition sources (c96/1c4/6452), b430 source/operator `node_modules`, all13 `apps-s4` product directories, exact independent copies of all four deleted-folder APKs, current864 iOS app/binaries and AndroidAPK, S3 offered7fc source/products, complete native-driver-s34-private XCTest runner, both shared kit DerivedData/SourcePackages, all shared SDK/JDK/Gradle/toolchains/dependencies, kit/tools/audits/private preparations/raw evidence, d317/runtime/DB/Docker resources and S34 device data. No native app uninstall, device reset, helper edit, fixture/API/DB/provider action or shared Docker/global-cache prune. **1,411 retained product/runner/head/seal/manifest file hashes matched before/after.**
+
+Deliverable verification: all handoff commits published on coordination;29 recent Stream4 PR records inspected, zero open Stream4 application PRs;12 named recent repair heads confirmed merged and ancestors of remote master350. Memory#1467 and Settings#1474 exact heads are remote. The old Records66ae topic has no standalone PR because its final change was delivered through#1485; its published single-file blob matches that merged topic/current master, so no duplicate PR was opened. Unrelated old drafts remain untouched.
+
+**Qualified local leftovers:** four clean build/source compositions have unpublished diagnostic history. Their accepted application changes are already in merged topics; their private history includes superseded test declarations. They were preserved, not blindly pushed, erased or presented as outstanding feature PRs. Do not claim every local diagnostic commit is on the remote. Do not publish historical new-unit declarations or use old compositions as current repair branches. These retained sources protect provenance; necessary future app changes start from fresh current source after real-caller verification.
+
+Safe private receipts: [retirement preflight](/private/tmp/pantopus-stream4-prep/stream4-resource-retirement-preflight-r1.json), [actual deletion/conservation result](/private/tmp/pantopus-stream4-prep/stream4-resource-retirement-result-r1.json), [push/PR audit](/private/tmp/pantopus-stream4-prep/stream4-push-pr-cleanup-audit-r1.json). Old raw operator/build logs are not public evidence. Source allocation/cuts/holds/accepted scopes/next tasks remain unchanged:4-1 independent preparation;4-2 MailDay only after fresh Root ACK/exact leases. Cache retirement adds no source/runtime reservation and requires no rebuild of the retained accepted products merely to begin.
+
 ## Preserved application and evidence checkpoint
 
 All predecessor app fixes are pushed/merged; latest five are#1474Settings(aedb),#1476Vault/Records(ed289),#1478Themes(e6c38),#1485Taskentry(b8df),#1486feedback(94b5). Earlier Maintenance#1448/#1449, due date#1459, Memory#1467/Year#1468 and parent accepted scopes remain. Freshly verify PR/CI state rather than assuming dated zero-open-query. Preserve unrelated drafts such as#842. Frozen864 whole Task/MailDay62files+4literal source binding equalmaster350; entire current350≠864 because7otherstream paths advanced. Source equality is not installed/config/actor acceptance.
@@ -114,7 +128,7 @@ Read current script arguments before execution. Prefer `rg --files` before path 
 
 ### Frozen code and products
 
-All seven recorded own checkouts were clean at handoff. Old builds/integrations are private diagnostics, not outstanding feature PRs; their relevant application changes are in pushed merged topics. Do not publish raw logs or historical new test declarations.
+All seven recorded own checkouts were clean at the original handoff; the Memory and Records phone checkouts were subsequently retired as recorded above. Only the five retained source checkouts still exist. Old builds/integrations are private diagnostics, not outstanding feature PRs; their relevant application changes are in pushed merged topics. Do not publish raw logs or historical new test declarations.
 
 | Checkout | Branch/head | Treatment |
 |---|---|---|
@@ -122,9 +136,9 @@ All seven recorded own checkouts were clean at handoff. Old builds/integrations 
 | `/Users/yingpengwang/.codex/worktrees/s3-native-e5/skinny-pantopus` | `claude/stream4-s34-mailtask-build`,c96 `c96b6fc60aa1a2e77ce2d6d6bc454caaa4c5e139` | Old S4 frozen build despite pathname |
 | `/Users/yingpengwang/.codex/worktrees/b430/skinny-pantopus` | Settingsaedb | Authoritative merged source; private operators import its node_modules, so check runtime holders before considering reuse |
 | `/Users/yingpengwang/.codex/worktrees/stream4-maintenance/skinny-pantopus` | `claude/stream4-runtime-settings-cache-r2`,1c4 | Historical backend/web composition |
-| `/Users/yingpengwang/.codex/worktrees/stream4-memory/skinny-pantopus` | Memory8e24 | Merged source; possible clean inactive reuse only after verifying holders |
+| `/Users/yingpengwang/.codex/worktrees/stream4-memory/skinny-pantopus` | Memory8e24 | **Retired2026-10-02:** checkout removed; published8e24 source/#1467 remains in Git. Not an available reuse path |
 | `/Users/yingpengwang/.codex/worktrees/stream4-native-mailtask/skinny-pantopus` | `claude/stream4-s34-settings-refresh`,6452 | Frozen historical Settings build |
-| `/Users/yingpengwang/.codex/worktrees/stream4-records-phone/skinny-pantopus` | Old web-only entry66ae | Historical one-line implementation, superseded by merged#1485 |
+| `/Users/yingpengwang/.codex/worktrees/stream4-records-phone/skinny-pantopus` | Old web-only entry66ae | **Retired2026-10-02:** checkout removed; published66ae source preserved, sole changed file matches merged#1485/current master |
 
 Choose fresh child-specific `claude/stream4-1-<topic>` or `claude/stream4-2-<topic>` from fresh master **after a reproduced gap**. Prefer a suitable clean inactive owned checkout; inspect `list_artifacts` before a managed new worktree. Never switch frozen/queued/sibling/runtime sources.
 
