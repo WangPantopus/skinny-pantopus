@@ -50,6 +50,8 @@ data class CreatePackageRequest(
     @Json(name = "is_active") val isActive: Boolean? = null,
     @Json(name = "owner_type") val ownerType: String? = null,
     @Json(name = "owner_id") val ownerId: String? = null,
+    /** The create's client key: one per intended package, reused on a retry so a lost reply can't create it twice. */
+    @Json(name = "client_request_id") val clientRequestId: String? = null,
 )
 
 /** Body for `PUT /packages/:id` (partial). */

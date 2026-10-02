@@ -95,6 +95,7 @@ function WalletContent() {
             setShowWithdraw(false);
             setRefreshKey((k) => k + 1);
           }}
+          onUnsettled={() => setRefreshKey((k) => k + 1)}
         />
       )}
     </div>

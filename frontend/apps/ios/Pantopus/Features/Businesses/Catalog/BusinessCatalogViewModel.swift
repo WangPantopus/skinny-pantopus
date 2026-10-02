@@ -29,6 +29,10 @@ public final class BusinessCatalogViewModel {
 
     /// Surfaced by the view as a bottom toast.
     public var toast: ToastMessage?
+    /// One client key per intended create, reused while the same item or
+    /// category is retried, so a lost reply can't add it twice.
+    private var pendingItemCreate: (body: BusinessCatalogItemRequest, id: String)?
+    private var pendingCategoryCreate: (name: String, id: String)?
 
     private let businessId: String
     private let client: APIClient
@@ -101,15 +105,20 @@ public final class BusinessCatalogViewModel {
             toast = ToastMessage(text: "Name is required", kind: .error)
             return false
         }
-        return await mutate(successText: "Item added") {
+        let body = draft.asRequest()
+        if pendingItemCreate?.body != body { pendingItemCreate = (body, UUID().uuidString) }
+        let requestId = pendingItemCreate?.id
+        let created = await mutate(successText: "Item added") {
             _ = try await self.client.request(
                 BusinessCatalogEndpoints.createItem(
                     businessId: self.businessId,
-                    body: draft.asRequest()
+                    body: body.withClientRequestId(requestId)
                 ),
                 as: BusinessCatalogItemEnvelope.self
             )
         }
+        if created { pendingItemCreate = nil }
+        return created
     }
 
     /// `PATCH …/catalog/items/:itemId`. Returns true when the edit stuck.
@@ -182,15 +191,19 @@ public final class BusinessCatalogViewModel {
             toast = ToastMessage(text: "Category name is required", kind: .error)
             return false
         }
-        return await mutate(successText: "Category added") {
+        if pendingCategoryCreate?.name != trimmed { pendingCategoryCreate = (trimmed, UUID().uuidString) }
+        let requestId = pendingCategoryCreate?.id
+        let created = await mutate(successText: "Category added") {
             _ = try await self.client.request(
                 BusinessCatalogEndpoints.createCategory(
                     businessId: self.businessId,
-                    body: BusinessCatalogCategoryRequest(name: trimmed)
+                    body: BusinessCatalogCategoryRequest(name: trimmed, clientRequestId: requestId)
                 ),
                 as: BusinessCatalogCategoryResponse.self
             )
         }
+        if created { pendingCategoryCreate = nil }
+        return created
     }
 
     /// `PATCH …/catalog/categories/:catId`.

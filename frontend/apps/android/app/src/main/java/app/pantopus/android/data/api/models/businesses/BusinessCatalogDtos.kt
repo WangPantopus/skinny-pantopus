@@ -58,6 +58,8 @@ data class BusinessCatalogCategoryRequest(
     val name: String? = null,
     val description: String? = null,
     @Json(name = "sort_order") val sortOrder: Int? = null,
+    /** A create's client key: one per intended category, reused on a retry so a lost reply can't add it twice. */
+    @Json(name = "client_request_id") val clientRequestId: String? = null,
 )
 
 /** Nested `category:category_id (id, name, slug)` join on the item list. */
@@ -123,6 +125,8 @@ data class BusinessCatalogItemRequest(
     val durationMinutes: Int?,
     val isFeatured: Boolean,
     val categoryId: String?,
+    /** A create's client key (written only when set): one per intended item, reused on a retry. Updates leave it null. */
+    val clientRequestId: String? = null,
 )
 
 /** One `{ id, sort_order }` pair in the reorder body. */

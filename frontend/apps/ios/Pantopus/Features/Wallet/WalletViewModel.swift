@@ -200,7 +200,8 @@ public final class WalletViewModel {
     public func withdraw(amountText: String? = nil) async {
         guard sampleContent == nil, !seeded else { return }
         withdrawError = nil
-        guard payoutsEnabled, !walletFrozen, availableCents >= 100 else {
+        // A withdrawal in progress can be retried even when its held debit leaves less than $1.00 available.
+        guard payoutsEnabled, !walletFrozen, availableCents >= 100 || pendingWithdrawal != nil else {
             action = .withdrawFailed(message: Self.withdrawGateMessage(
                 payoutsEnabled: payoutsEnabled,
                 frozen: walletFrozen
@@ -213,8 +214,16 @@ public final class WalletViewModel {
             case let .success(cents):
                 amountCents = cents
             case let .failure(message):
-                withdrawError = message
-                return
+                // A retry of the withdrawal in progress may exceed what's available now: its held debit is that
+                // money, and the server settles the same key without debiting again.
+                guard let pending = pendingWithdrawal,
+                      case let .success(cents) = Self.parseWithdrawAmount(amountText, availableCents: pending.amountCents),
+                      cents == pending.amountCents
+                else {
+                    withdrawError = message
+                    return
+                }
+                amountCents = cents
             }
         } else {
             amountCents = availableCents
@@ -241,11 +250,28 @@ public final class WalletViewModel {
             // Re-read balance + activity (server is the source of truth).
             await fetchLive(showLoading: false)
         } catch {
-            if !Self.leavesWithdrawalUnsettled(error) { pendingWithdrawal = nil }
+            let unsettled = Self.leavesWithdrawalUnsettled(error)
+            if !unsettled { pendingWithdrawal = nil }
             action = .withdrawFailed(
-                message: (error as? APIError)?.errorDescription ?? "Couldn't process the withdrawal."
+                message: Self.withdrawalPendingMessage(error)
+                    ?? (error as? APIError)?.errorDescription
+                    ?? "Couldn't process the withdrawal."
             )
+            // The server may have acted (no reply, a timeout, a 5xx, a held debit): re-read the balance and activity.
+            if unsettled { await fetchLive(showLoading: false) }
         }
+    }
+
+    /// The server's sentence for a withdrawal it's still settling (503 `withdrawal_pending`): the
+    /// debit is held and the next request with the same key settles it, so it isn't a failure.
+    static func withdrawalPendingMessage(_ error: Error) -> String? {
+        guard case let .server(status, body)? = error as? APIError, status == 503,
+              let data = body.data(using: .utf8),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              json["code"] as? String == "withdrawal_pending",
+              let message = json["error"] as? String, !message.isEmpty
+        else { return nil }
+        return message
     }
 
     /// No reply, a timeout, rate limiting or a server error: the first attempt's outcome is unknown,

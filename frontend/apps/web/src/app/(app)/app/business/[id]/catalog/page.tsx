@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
@@ -22,6 +22,9 @@ export default function BusinessCatalogPage() {
     price_cents: '',
     description: '',
   });
+  // One id per intended category or item, reused when the same one is retried, so a lost reply can't add it twice.
+  const pendingCategory = useRef<{ draft: string; id: string } | null>(null);
+  const pendingItem = useRef<{ draft: string; id: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,7 +51,10 @@ export default function BusinessCatalogPage() {
     if (!categoryName.trim()) return;
     setSaving(true);
     try {
-      await api.businesses.createCatalogCategory(businessId, { name: categoryName.trim() });
+      const draft = categoryName.trim();
+      if (pendingCategory.current?.draft !== draft) pendingCategory.current = { draft, id: crypto.randomUUID() };
+      await api.businesses.createCatalogCategory(businessId, { name: draft, client_request_id: pendingCategory.current.id });
+      pendingCategory.current = null;
       setCategoryName('');
       await load();
     } catch (e: unknown) {
@@ -62,12 +68,16 @@ export default function BusinessCatalogPage() {
     if (!itemForm.name.trim()) return;
     setSaving(true);
     try {
-      await api.businesses.createCatalogItem(businessId, {
+      const payload = {
         name: itemForm.name.trim(),
         kind: itemForm.kind as CatalogItem['kind'],
         price_cents: itemForm.price_cents ? Number(itemForm.price_cents) : undefined,
         description: itemForm.description.trim() || undefined,
-      });
+      };
+      const draft = JSON.stringify(payload);
+      if (pendingItem.current?.draft !== draft) pendingItem.current = { draft, id: crypto.randomUUID() };
+      await api.businesses.createCatalogItem(businessId, { ...payload, client_request_id: pendingItem.current.id });
+      pendingItem.current = null;
       setItemForm({ name: '', kind: 'service', price_cents: '', description: '' });
       await load();
     } catch (e: unknown) {

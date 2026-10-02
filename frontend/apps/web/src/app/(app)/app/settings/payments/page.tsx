@@ -225,6 +225,7 @@ function PaymentSettingsPageContent() {
                   setShowWithdraw(false);
                   setWalletKey((k) => k + 1); // refresh balance
                 }}
+                onUnsettled={() => setWalletKey((k) => k + 1)}
               />
             )}
           </div>
