@@ -10,7 +10,7 @@
 // than shown as dead buttons. Line items, totals, and timeline render from
 // real fields and degrade gracefully.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import clsx from "clsx";
@@ -72,6 +72,7 @@ export default function InvoiceDetail({
   const [phase, setPhase] = useState<"loading" | "error" | "ready">("loading");
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [sending, setSending] = useState(false);
+  const sendIntent = useRef<{ scope: string; id: string } | null>(null);
 
   const load = useCallback(() => {
     let alive = true;
@@ -94,9 +95,16 @@ export default function InvoiceDetail({
   useEffect(() => load(), [load]);
 
   const send = async () => {
+    if (sending) return;
+    const scope = `${owner.ownerType}:${owner.ownerId}:${id}`;
+    if (sendIntent.current?.scope !== scope) {
+      sendIntent.current = { scope, id: crypto.randomUUID() };
+    }
+    const intent = sendIntent.current;
     setSending(true);
     try {
-      await api.scheduling.sendInvoice(id, owner);
+      await api.scheduling.sendInvoice(id, owner, intent.id);
+      if (sendIntent.current === intent) sendIntent.current = null;
       toast.success(
         invoice
           ? `Invoice sent to ${recipientLabel(invoice)}.`

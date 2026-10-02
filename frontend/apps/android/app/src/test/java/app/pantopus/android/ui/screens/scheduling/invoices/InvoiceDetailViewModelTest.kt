@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.scheduling.InvoiceDto
 import app.pantopus.android.data.api.models.scheduling.InvoiceResponse
 import app.pantopus.android.data.api.models.scheduling.SchedulingOkResponse
 import app.pantopus.android.data.api.models.users.UserDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.scheduling.SchedulingErrorDecoder
@@ -135,12 +136,44 @@ class InvoiceDetailViewModelTest {
     fun `send posts the invoice and flashes the sent toast`() =
         runTest(dispatcher) {
             coEvery { repo.getInvoice(any(), any()) } returns NetworkResult.Success(InvoiceResponse(invoice()))
-            coEvery { repo.sendInvoice(any(), "abc123def") } returns NetworkResult.Success(SchedulingOkResponse())
+            coEvery { repo.sendInvoice(any(), "abc123def", any()) } returns NetworkResult.Success(SchedulingOkResponse())
             val model = vm()
             model.start()
             advanceUntilIdle()
             model.send()
             advanceUntilIdle()
-            coVerify { repo.sendInvoice(any(), "abc123def") }
+            coVerify { repo.sendInvoice(any(), "abc123def", any()) }
+        }
+
+    @Test
+    fun `failed send retains intent and success permits another resend`() =
+        runTest(dispatcher) {
+            val ids = mutableListOf<String?>()
+            coEvery { repo.getInvoice(any(), any()) } returns NetworkResult.Success(InvoiceResponse(invoice()))
+            coEvery { repo.sendInvoice(any(), any(), any()) } answers {
+                ids.add(thirdArg())
+                if (ids.size == 1) {
+                    NetworkResult.Failure(NetworkError.Transport(java.io.IOException("Lost response")))
+                } else {
+                    NetworkResult.Success(SchedulingOkResponse())
+                }
+            }
+            val model = vm()
+            model.start()
+            advanceUntilIdle()
+            model.send()
+            model.send()
+            advanceUntilIdle()
+            assertEquals(1, ids.size)
+            model.load()
+            advanceUntilIdle()
+            model.send()
+            advanceUntilIdle()
+            model.send()
+            advanceUntilIdle()
+            assertEquals(3, ids.size)
+            assertTrue(!ids[0].isNullOrBlank())
+            assertEquals(ids[0], ids[1])
+            assertTrue(ids[1] != ids[2])
         }
 }
