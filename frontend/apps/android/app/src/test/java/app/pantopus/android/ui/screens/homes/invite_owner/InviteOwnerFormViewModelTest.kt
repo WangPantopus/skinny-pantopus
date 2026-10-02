@@ -3,7 +3,10 @@
 package app.pantopus.android.ui.screens.homes.invite_owner
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.api.models.homes.HomeDetail
+import app.pantopus.android.data.api.models.homes.HomeDetailResponse
 import app.pantopus.android.data.api.models.homes.InviteOwnerResponse
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import io.mockk.coEvery
@@ -34,6 +37,7 @@ class InviteOwnerFormViewModelTest {
         Dispatchers.setMain(dispatcher)
         coEvery { homesRepo.inviteOwner(any(), any()) } returns
             NetworkResult.Success(InviteOwnerResponse(message = "ok", claimId = "c1"))
+        coEvery { homesRepo.detail(any()) } answers NetworkResult.Success(homeResponse(firstArg()))
     }
 
     @After fun tearDown() {
@@ -53,7 +57,33 @@ class InviteOwnerFormViewModelTest {
                     ),
                 ),
             homesRepo = homesRepo,
-        ).also { it.load() }
+        ).also {
+            it.load()
+            dispatcher.scheduler.runCurrent()
+        }
+
+    private fun homeResponse(
+        homeId: String,
+        address: String? = " 100 Synthetic Way ",
+        name: String? = " S3 W2 Home ",
+    ): HomeDetailResponse =
+        HomeDetailResponse(
+            HomeDetail(
+                id = homeId,
+                name = name,
+                address = address,
+                city = null,
+                state = null,
+                zipcode = null,
+                homeType = null,
+                visibility = null,
+                description = null,
+                createdAt = null,
+                owner = null,
+                location = null,
+                pendingClaimId = null,
+            ),
+        )
 
     @Test fun initial_state_is_clean_and_invalid_until_contact_is_entered() {
         val vm = makeVm()
@@ -62,6 +92,39 @@ class InviteOwnerFormViewModelTest {
         assertFalse(state.isValid)
         assertEquals(25, state.grantPercent)
         assertEquals(75, state.owners.first().sharePercent)
+        assertEquals(InviteOwnerHomeContext("100 Synthetic Way", "S3 W2 Home"), state.homeContext)
+
+        coEvery { homesRepo.detail("home-1") } returns NetworkResult.Failure(NetworkError.Server(503, null))
+        vm.refresh()
+        vm.update(InviteOwnerField.Email, "invitee@example.com")
+        vm.submit()
+        assertEquals(InviteOwnerPhase.Loading, vm.state.value.phase)
+        dispatcher.scheduler.runCurrent()
+        assertEquals(InviteOwnerPhase.Error("We couldn't load this Home. Try again."), vm.state.value.phase)
+        assertFalse(vm.state.value.isValid)
+        vm.submit()
+        coVerify(exactly = 0) { homesRepo.inviteOwner(any(), any()) }
+
+        coEvery { homesRepo.detail("home-1") } returns NetworkResult.Success(homeResponse("other-home"))
+        vm.refresh()
+        dispatcher.scheduler.runCurrent()
+        assertEquals(InviteOwnerPhase.Error("We couldn't confirm this Home. Try again."), vm.state.value.phase)
+        coEvery { homesRepo.detail("home-1") } returns NetworkResult.Failure(NetworkError.Forbidden)
+        vm.refresh()
+        dispatcher.scheduler.runCurrent()
+        assertEquals(InviteOwnerPhase.Error("We couldn't load this Home. Try again."), vm.state.value.phase)
+
+        coEvery { homesRepo.detail("home-1") } returns NetworkResult.Success(homeResponse("home-1"))
+        vm.refresh()
+        dispatcher.scheduler.runCurrent()
+        assertEquals(InviteOwnerPhase.Editing, vm.state.value.phase)
+        assertEquals(InviteOwnerHomeContext("100 Synthetic Way", "S3 W2 Home"), vm.state.value.homeContext)
+        vm.update(InviteOwnerField.Email, "invitee@example.com")
+        assertTrue(vm.state.value.isValid)
+        coEvery { homesRepo.detail("home-1") } returns NetworkResult.Success(homeResponse("home-1", address = " ", name = null))
+        vm.refresh()
+        dispatcher.scheduler.runCurrent()
+        assertEquals(InviteOwnerHomeContext("Home", "Selected home"), vm.state.value.homeContext)
     }
 
     @Test fun email_validation_rejects_garbage() {

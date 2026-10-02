@@ -38,12 +38,42 @@ final class InviteOwnerFormViewModelTests: XCTestCase {
 
     // MARK: - Validation
 
-    func testInitialStateIsCleanAndInvalidUntilContactIsEntered() {
+    func testInitialStateIsCleanAndInvalidUntilContactIsEntered() async {
         let vm = makeVM()
         XCTAssertFalse(vm.isDirty)
         XCTAssertFalse(vm.isValid, "Empty contact must not be submittable.")
         XCTAssertEqual(vm.grantPercent, 25)
         XCTAssertEqual(vm.owners.first?.sharePercent, 75)
+
+        let liveVM = InviteOwnerFormViewModel(homeId: "home-1", currentUserEmail: "me@example.com", api: makeAPI())
+        liveVM.update(.email, to: "invitee@example.com")
+        let loadingSubmit = await liveVM.submit()
+        XCTAssertFalse(loadingSubmit, "Loading must not submit an invite.")
+        SequencedURLProtocol.sequence = [.status(503, body: "{}")]
+        await liveVM.load()
+        XCTAssertEqual(liveVM.state, .error("We couldn't load this Home. Try again."))
+        XCTAssertFalse(liveVM.isValid)
+        let failedSubmit = await liveVM.submit()
+        XCTAssertFalse(failedSubmit, "Failed context must not submit an invite.")
+
+        SequencedURLProtocol.sequence = [.status(200, body: #"{"home":{"id":"other-home","address":"Other address"}}"#)]
+        await liveVM.refresh()
+        XCTAssertEqual(liveVM.state, .error("We couldn't confirm this Home. Try again."))
+        SequencedURLProtocol.sequence = [.status(403, body: "{}")]
+        await liveVM.refresh()
+        XCTAssertEqual(liveVM.state, .error("We couldn't load this Home. Try again."))
+
+        let selectedHomeJSON = #"{"home":{"id":"home-1","address":" 100 Synthetic Way ","name":" S3 W2 Home "}}"#
+        SequencedURLProtocol.sequence = [.status(200, body: selectedHomeJSON)]
+        await liveVM.refresh()
+        XCTAssertEqual(liveVM.state, .editing)
+        XCTAssertEqual(liveVM.homeContext, InviteOwnerHomeContext(title: "100 Synthetic Way", subtitle: "S3 W2 Home"))
+        liveVM.update(.email, to: "invitee@example.com")
+        XCTAssertTrue(liveVM.isValid)
+        SequencedURLProtocol.sequence = [.status(200, body: #"{"home":{"id":"home-1","address":" ","name":" "}}"#)]
+        await liveVM.refresh()
+        XCTAssertEqual(liveVM.homeContext, InviteOwnerHomeContext(title: "Home", subtitle: "Selected home"))
+        XCTAssertTrue(SequencedURLProtocol.capturedRequests.allSatisfy { $0.httpMethod == "GET" })
     }
 
     func testEmailValidationRejectsGarbage() {
