@@ -17,6 +17,7 @@
 //  Mirrors RN `src/components/business/tabs/LegalTab.tsx`.
 //
 
+import CryptoKit
 import Foundation
 
 /// Verification tiers the backend can report
@@ -188,6 +189,7 @@ public final class BusinessLegalViewModel {
     private let api: APIClient
     private let uploader: MultipartUploader
     private let seededContent: BusinessLegalContent?
+    private var pendingEvidence: (draft: [String], fileId: String)?
 
     /// Production initialiser — `APIClient` is module-internal.
     public convenience init(businessId: String) {
@@ -340,28 +342,38 @@ public final class BusinessLegalViewModel {
     /// Two hops: `POST /api/files/upload` for the `File` UUID, then
     /// `POST /verify/upload-evidence`.
     public func uploadEvidence(type: BusinessEvidenceType, file: PickedEvidenceFile) async {
-        guard seededContent == nil else { return }
+        guard seededContent == nil, action != .uploading else { return }
         action = .uploading
+        let draft = [
+            type.rawValue, file.filename, file.mimeType,
+            SHA256.hash(data: file.data).map { String(format: "%02x", $0) }.joined()
+        ]
+        if pendingEvidence?.draft != draft { pendingEvidence = nil }
         do {
-            let upload = try await uploader.uploadFile(
-                MultipartFile(
-                    fieldName: "file",
-                    filename: file.filename,
-                    mimeType: file.mimeType,
-                    data: file.data
-                ),
-                formFields: ["file_type": "business_verification", "visibility": "private"]
-            )
+            if pendingEvidence == nil {
+                let upload = try await uploader.uploadFile(
+                    MultipartFile(
+                        fieldName: "file",
+                        filename: file.filename,
+                        mimeType: file.mimeType,
+                        data: file.data
+                    ),
+                    formFields: ["file_type": "business_verification", "visibility": "private"]
+                )
+                pendingEvidence = (draft, upload.file.id)
+            }
+            guard let fileId = pendingEvidence?.fileId else { return }
             _ = try await api.request(
                 BusinessFinanceEndpoints.uploadVerificationEvidence(
                     businessId: businessId,
                     body: BusinessUploadEvidenceRequest(
                         evidenceType: type.rawValue,
-                        fileId: upload.file.id
+                        fileId: fileId
                     )
                 ),
                 as: BusinessUploadEvidenceResponse.self
             )
+            pendingEvidence = nil
             action = .succeeded(message: "Document submitted for review.")
             await refresh()
         } catch {
@@ -378,6 +390,7 @@ public final class BusinessLegalViewModel {
     /// Wipe the PII fields when the screen goes away so the values don't
     /// outlive the surface that needed them.
     public func clearSensitive() {
+        pendingEvidence = nil
         legalName = ""
         taxIdLast4 = ""
         supportEmail = ""

@@ -9,6 +9,10 @@
 
 const { resetTables, seedTable, getTable } = require('./__mocks__/supabaseAdmin');
 const supabaseAdmin = require('./__mocks__/supabaseAdmin');
+jest.mock('../utils/businessPermissions', () => ({
+  checkBusinessPermission: jest.fn().mockResolvedValue({ hasAccess: true }),
+  writeAuditLog: jest.fn().mockResolvedValue(undefined),
+}));
 
 beforeEach(() => resetTables());
 
@@ -330,5 +334,58 @@ describe('Verification — review', () => {
 
     expect(result.status).toBe(400);
     expect(result.error).toMatch(/already been approved/);
+  });
+});
+
+// Exercise the actual router for retry behavior; the legacy flow simulations
+// above cannot catch a regression in the registration endpoint itself.
+describe('upload-evidence router retries', () => {
+  const express = require('express');
+  const request = require('supertest');
+  const { checkBusinessPermission, writeAuditLog } = require('../utils/businessPermissions');
+  const app = express(); app.use(express.json());
+  app.use('/api/businesses', require('../routes/businessVerification'));
+  const business = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const actor = 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa';
+  const file = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const otherFile = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const submit = (id = file) => request(app).post(`/api/businesses/${business}/verify/upload-evidence`)
+    .send({ evidence_type: 'business_license', file_id: id });
+  beforeEach(() => {
+    checkBusinessPermission.mockResolvedValue({ hasAccess: true });
+    seedTable('File', [file, otherFile].map(id => ({ id, user_id: actor, file_context: 'business_verification', is_deleted: false })));
+  });
+  test('lost reply retry recovers the existing registration and audits only once', async () => {
+    const first = await submit(); const again = await submit();
+    expect(first.status).toBe(201); expect(again.body).toEqual(first.body);
+    expect(getTable('BusinessVerificationEvidence')).toHaveLength(1);
+    expect(writeAuditLog).toHaveBeenCalledTimes(1);
+  });
+  test('overlapping registration retries converge on the same existing primary key', async () => {
+    const replies = await Promise.all(Array.from({ length: 6 }, () => submit()));
+    expect(replies.map(r => r.status)).toEqual(Array(6).fill(201));
+    expect(new Set(replies.map(r => r.body.evidence_id)).size).toBe(1);
+    expect(getTable('BusinessVerificationEvidence')).toHaveLength(1);
+    expect(writeAuditLog).toHaveBeenCalledTimes(1);
+  });
+  test.each(['pending', 'approved', 'rejected'])('historical %s registration is recovered without changing review state', async status => {
+    seedTable('BusinessVerificationEvidence', [{ id: 'old-id', business_user_id: business, evidence_type: 'business_license', file_id: file, status }]);
+    const reply = await submit(); expect(reply.status).toBe(201);
+    expect(reply.body).toMatchObject({ evidence_id: 'old-id', status });
+    expect(writeAuditLog).not.toHaveBeenCalled();
+  });
+  test('a different document still cannot replace pending or approved evidence', async () => {
+    await submit(); expect((await submit(otherFile)).body.code).toBe('DUPLICATE_PENDING');
+    getTable('BusinessVerificationEvidence')[0].status = 'approved';
+    expect((await submit(otherFile)).body.code).toBe('ALREADY_VERIFIED');
+  });
+  test('retries still require current access and a live caller-owned verification file', async () => {
+    await submit(); checkBusinessPermission.mockResolvedValue({ hasAccess: false });
+    expect((await submit()).status).toBe(403);
+    checkBusinessPermission.mockResolvedValue({ hasAccess: true });
+    for (const change of [{ is_deleted: true }, { user_id: 'someone-else' }, { file_context: 'portfolio' }]) {
+      seedTable('File', [{ id: file, user_id: actor, file_context: 'business_verification', is_deleted: false, ...change }]);
+      expect((await submit()).status).toBe(400);
+    }
   });
 });

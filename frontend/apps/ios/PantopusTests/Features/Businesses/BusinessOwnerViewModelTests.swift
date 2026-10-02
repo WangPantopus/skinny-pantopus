@@ -172,4 +172,37 @@ final class BusinessOwnerViewModelTests: XCTestCase {
         // swiftlint:disable:next force_try
         try! JSONDecoder().decode(type, from: Data(json.utf8))
     }
+
+    /// Legal owner flow: keep two-hop retry coverage in the existing owner suite.
+    func testRegistrationRetryReusesUploadAndClearsOnSuccessChangeOrExit() async throws {
+        SequencedURLProtocol.reset()
+        let session = SequencedURLProtocol.makeSession()
+        let api = APIClient(environment: .current, session: session, retryPolicy: .none)
+        let uploader = MultipartUploader(environment: .current, session: session)
+        let model = BusinessLegalViewModel(businessId: "crew", api: api, uploader: uploader)
+        SequencedURLProtocol.routeResponses["/api/files/upload"] = (1...4).map { index in
+            .status(201, body: "{\"message\":\"uploaded\",\"file\":{\"id\":\"file-\(index)\",\"url\":\"https://example.com/file\"}}")
+        }
+        let success = SequencedURLProtocol.Response.status(201, body: "{\"evidence_id\":\"evidence\",\"status\":\"pending\"}")
+        let failure = SequencedURLProtocol.Response.status(500, body: "{\"error\":\"lost reply\"}")
+        SequencedURLProtocol.routeResponses["/api/businesses/crew/verify/upload-evidence"] = [
+            failure, success, failure, failure, success
+        ]
+        let first = PickedEvidenceFile(filename: "document.png", mimeType: "image/png", data: Data([1]))
+        let changed = PickedEvidenceFile(filename: "document.png", mimeType: "image/png", data: Data([2]))
+        await model.uploadEvidence(type: .businessLicense, file: first)
+        await model.uploadEvidence(type: .businessLicense, file: first)
+        await model.uploadEvidence(type: .businessLicense, file: first)
+        await model.uploadEvidence(type: .businessLicense, file: changed)
+        model.clearSensitive()
+        await model.uploadEvidence(type: .businessLicense, file: changed)
+        let requests = SequencedURLProtocol.capturedRequests
+        XCTAssertEqual(requests.filter { $0.url?.path == "/api/files/upload" }.count, 4)
+        let registrations = try requests.filter { $0.url?.path.hasSuffix("/verify/upload-evidence") == true }.map { request in
+            let body = try XCTUnwrap(request.authTestBodyData())
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+            return try XCTUnwrap(json["file_id"])
+        }
+        XCTAssertEqual(registrations, ["file-1", "file-1", "file-2", "file-3", "file-4"])
+    }
 }

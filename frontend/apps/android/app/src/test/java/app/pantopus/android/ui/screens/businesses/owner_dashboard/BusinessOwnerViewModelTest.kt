@@ -18,18 +18,29 @@ import app.pantopus.android.data.api.models.businesses.BusinessOwnerReviewDto
 import app.pantopus.android.data.api.models.businesses.BusinessOwnerReviewsResponse
 import app.pantopus.android.data.api.models.businesses.BusinessProfileDetailDto
 import app.pantopus.android.data.api.models.businesses.BusinessPublicResponse
+import app.pantopus.android.data.api.models.businesses.BusinessUploadEvidenceResponse
 import app.pantopus.android.data.api.models.businesses.BusinessUserDetailDto
+import app.pantopus.android.data.api.models.homes.FileUploadResponse
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.businesses.BusinessFinanceRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.businessfounding.BusinessFoundingRepository
+import app.pantopus.android.data.files.FilesRepository
+import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.profile.ProfileRepository
+import app.pantopus.android.ui.screens.businesses.legal.BUSINESS_LEGAL_ID_KEY
+import app.pantopus.android.ui.screens.businesses.legal.BusinessEvidenceType
+import app.pantopus.android.ui.screens.businesses.legal.BusinessLegalViewModel
+import app.pantopus.android.ui.screens.businesses.legal.PickedEvidenceFile
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -258,4 +269,42 @@ class BusinessOwnerViewModelTest {
         assertEquals("Appreciate it", updated.reviews.first { it.id == "dana" }.reply)
         assertNull(updated.reviewsToReplyLabel)
     }
+
+    @Test fun registrationRetryReusesUploadAndClearsOnSuccessChangeOrExit() =
+        runTest {
+            val repository = mockk<BusinessFinanceRepository>()
+            val files = mockk<FilesRepository>()
+            val network = mockk<NetworkMonitor>()
+            every { network.isOnline } returns MutableStateFlow(true)
+            val failure = NetworkResult.Failure(NetworkError.Transport(java.io.IOException("lost reply")))
+            coEvery { repository.verificationStatus(any()) } returns failure
+            var uploads = 0
+            coEvery { files.uploadFile(any(), any(), any(), any(), any(), any()) } coAnswers {
+                uploads++
+                NetworkResult.Success(
+                    FileUploadResponse("uploaded", FileUploadResponse.FileRef("file-$uploads", "https://example.com/file")),
+                )
+            }
+            val registrations = mutableListOf<String>()
+            coEvery { repository.uploadVerificationEvidence(any(), any(), capture(registrations)) } coAnswers {
+                if (registrations.size in listOf(2, 5)) {
+                    NetworkResult.Success(BusinessUploadEvidenceResponse("evidence", "pending"))
+                } else {
+                    failure
+                }
+            }
+            val model =
+                BusinessLegalViewModel(repository, files, network, SavedStateHandle(mapOf(BUSINESS_LEGAL_ID_KEY to "crew")))
+            val first = PickedEvidenceFile("document.png", "image/png", byteArrayOf(1))
+            val changed = first.copy(bytes = byteArrayOf(2))
+            for (file in listOf(first, first, first, changed)) {
+                model.uploadEvidence(BusinessEvidenceType.BusinessLicense, file)
+                advanceUntilIdle()
+            }
+            model.clearSensitive()
+            model.uploadEvidence(BusinessEvidenceType.BusinessLicense, changed)
+            advanceUntilIdle()
+            assertEquals(listOf("file-1", "file-1", "file-2", "file-3", "file-4"), registrations)
+            coVerify(exactly = 4) { files.uploadFile(any(), any(), any(), "business_verification", "private", null) }
+        }
 }
