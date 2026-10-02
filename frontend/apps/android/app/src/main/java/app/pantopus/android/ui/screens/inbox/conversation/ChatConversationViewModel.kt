@@ -1949,7 +1949,10 @@ class ChatConversationViewModel
             }
         }
 
-        private suspend fun uploadQueuedAttachmentsIfNeeded(roomId: String, clientId: String): List<String> {
+        private suspend fun uploadQueuedAttachmentsIfNeeded(
+            roomId: String,
+            clientId: String,
+        ): List<String> {
             val files =
                 _queuedAttachments.value.mapNotNull { attachment ->
                     val bytes = attachment.bytes ?: return@mapNotNull null
