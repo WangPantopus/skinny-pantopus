@@ -863,14 +863,17 @@ final class ChatConversationViewModelTests: XCTestCase {
         }
     }
 
-    func testQueuedAttachmentUploadsAndRendersAttachmentBubble() async {
+    func testQueuedAttachmentUploadsAndRendersAttachmentBubble() async throws {
         URLProtocolStub.stub(path: "/api/chat/conversations/u_other/messages", response: .json(Self.messagesJSON()))
         URLProtocolStub.stub(path: "/api/chat/conversations/u_other/read", response: .json("{}"))
         URLProtocolStub.stub(
             path: "/api/upload/chat-media/r1",
-            response: .json("""
-            {"message":"1 file(s) uploaded","media":[{"id":"f1","file_url":"/api/chat/files/f1","original_filename":"note.pdf","mime_type":"application/pdf","file_size":2048,"file_type":"document"}]}
-            """)
+            responses: [
+                .json("{}", status: 500),
+                .json("""
+                {"message":"1 file(s) uploaded","media":[{"id":"f1","file_url":"/api/chat/files/f1","original_filename":"note.pdf","mime_type":"application/pdf","file_size":2048,"file_type":"document"}]}
+                """)
+            ]
         )
         URLProtocolStub.stub(
             path: "/api/chat/messages",
@@ -891,6 +894,18 @@ final class ChatConversationViewModelTests: XCTestCase {
         await vm.load()
         vm.queueAttachment(kind: .document, filename: "note.pdf", mimeType: "application/pdf", data: Data("pdf".utf8))
         await vm.send()
+        guard case let .loaded(failedRows) = vm.state,
+              case let .bubble(failed)? = failedRows.last(where: {
+                  if case .bubble = $0 { true } else { false }
+              }) else { return XCTFail("Expected failed upload") }
+        XCTAssertEqual(failed.deliveryState, .failed)
+        await vm.retry(clientId: failed.id)
+        let uploads = URLProtocolStub.capturedRequests.filter { $0.url?.path == "/api/upload/chat-media/r1" }
+        XCTAssertEqual(uploads.count, 2)
+        for upload in uploads {
+            let body = try XCTUnwrap(String(bytes: XCTUnwrap(upload.httpBodyData()), encoding: .utf8))
+            XCTAssertTrue(body.contains("name=\"client_request_id\"\r\n\r\n\(failed.id)"))
+        }
         guard case let .loaded(rows) = vm.state,
               case let .bubble(content)? = rows.first(where: { $0.id == "bubble_m_file" }),
               case let .attachment(filename, sizeLabel, _, _, _) = content.body else {

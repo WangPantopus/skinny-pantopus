@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.listings.ListingMediaUploadResponse
 import app.pantopus.android.data.api.models.posts.PostMediaUploadResponse
 import app.pantopus.android.data.api.models.users.ProfilePictureUploadResponse
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
@@ -34,6 +35,7 @@ interface UploadApi {
     suspend fun uploadChatMedia(
         @Path("roomId") roomId: String,
         @Part files: @JvmSuppressWildcards List<MultipartBody.Part>,
+        @Part("client_request_id") clientRequestId: RequestBody? = null,
     ): ChatMediaUploadResponse
 
     /** Upload images for AI assistant chat. */

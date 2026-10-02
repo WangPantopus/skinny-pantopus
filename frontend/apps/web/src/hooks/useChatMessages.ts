@@ -227,6 +227,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const [loadFailure, setLoadFailure] = useState<ChatLoadFailure | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [sending, setSending] = useState(false);
+  const attachmentSendInFlight = useRef(false);
+  const pendingAttachmentSend = useRef<{ draft: string; clientMessageId: string } | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [resolvedRoomId, setResolvedRoomId] = useState<string | null>(roomId || null);
@@ -608,7 +610,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
       let uploadedFiles: Record<string, any>[] = [];
       if (hasFiles && files) {
-        const uploadRes = await ((api.upload as Record<string, any>).uploadChatMedia as (roomId: string, files: File[]) => Promise<Record<string, any>>)(targetRoomId, files);
+        const uploadRes = await api.upload.uploadChatMedia(targetRoomId, files, clientMessageId);
         uploadedFiles = (uploadRes?.media as Record<string, any>[]) || [];
       }
 
@@ -693,12 +695,30 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     // Throwing keeps the draft in the composer, which restores it with the reason.
     if (!targetRoomId) throw new Error(directChatError || "This conversation isn't ready yet. Try again in a moment.");
 
-    // Generate a client-side message ID for idempotent sends and optimistic rendering
-    const clientMessageId = crypto.randomUUID();
-
-    // mutateAsync preserves the throw-on-error contract for callers
-    await sendMessageMutation.mutateAsync({ text, files, targetRoomId, clientMessageId });
-  }, [isRoomMode, roomId, resolvedRoomId, sending, sendMessageMutation, directChatError]);
+    if (attachmentSendInFlight.current) return;
+    attachmentSendInFlight.current = true;
+    try {
+      let clientMessageId = crypto.randomUUID();
+      if (hasFiles && files) {
+        const fingerprints = await Promise.all(files.map(async (file) => [file.name, file.type,
+          Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer())))
+            .map(byte => byte.toString(16).padStart(2, '0')).join(''),
+        ]));
+        const draft = JSON.stringify([targetRoomId, currentUserId, asBusinessUserId, trimmed,
+          fingerprints, localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)]);
+        if (pendingAttachmentSend.current?.draft !== draft) {
+          pendingAttachmentSend.current = { draft, clientMessageId };
+        }
+        clientMessageId = pendingAttachmentSend.current.clientMessageId;
+      }
+      // Keep both upload and message identity across an uncertain reply. Only a
+      // completed send starts a new intent for an identical subsequent attachment.
+      await sendMessageMutation.mutateAsync({ text, files, targetRoomId, clientMessageId });
+      pendingAttachmentSend.current = null;
+    } finally {
+      attachmentSendInFlight.current = false;
+    }
+  }, [isRoomMode, roomId, resolvedRoomId, sending, sendMessageMutation, directChatError, currentUserId, asBusinessUserId]);
 
   // ── Retry failed message ────────────────────────────
 
