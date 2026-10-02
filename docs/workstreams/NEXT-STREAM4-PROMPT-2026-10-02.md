@@ -1,0 +1,187 @@
+# Stream 4 successor prompt — Place, records, money and mail
+
+Written 2026-10-02T08:47:57Z by session `01a0f930-2553-7fd3-bd0e-6dc2f1be1eff`. The user requested a clean, seamless handoff after the current verified Settings repair. This supersedes `NEXT-STREAM4-PROMPT-2026-10-01.md`; retain that file as history. Do not restart accepted journeys or recreate merged implementations.
+
+## Identity, authority and first actions
+
+You are **Stream 4** of the five Pantopus workstreams. Name this session exactly **“Stream 4: Place, records, money and mail”**. User preference: **GPT-6.1 Sol, Extra High effort**. Do all real verification, fixes and review responses yourself. Do not spawn implementation agents. Keep working autonomously until all feasible retained work is finished; make routine UX/security/retention decisions and record them. Ask only for a real missing prerequisite, and keep doing independent work meanwhile.
+
+The coordination checkout is `/Users/yingpengwang/pantopus-coordination`, branch `codex/workstream-coordination`. First inspect its status, fetch and fast-forward. Never stash, reset, clean or commit unrelated files. A preserved untracked `.stream2-current-commit-date` is another stream's file. Read, in order:
+
+1. This entire prompt and the newest CURRENT RESUME/live entries in `docs/workstreams/04-place-records-money-mail.md`.
+2. The older resume blocks/runtime lessons there. Their device/worktree paths are historical unless reconfirmed below.
+3. `docs/workstreams/stream4-u05-inventory-draft-2026-10-01.md` — source leads, **UNVERIFIED**, not missing-feature proof. The 04 file records42 source dispositions; several real repairs are now merged, remaining cases are below.
+4. Live `docs/workstreams/README.md`, `AGENTS.md`, `docs/PROJECT_HANDOFF.md` and applicable launch scope/checklists. Stream1 owns hub/handoff edits; send it your milestone, do not edit those shared files yourself.
+5. Current kit `README-successor-20261001.md` and this kit's `NEXT-STREAM4-PROMPT-2026-10-02.md`. Original kit `README.md` and many older scripts are absent on this reconstructed host; do not blindly run the October1 recipes. Never print env/private account/config files.
+6. Relevant audit READMEs/MANIFESTs listed below, especially final Settings source binding and clean handback. Evidence integrity is not new product acceptance.
+
+Contact Stream 1 and Stream 3 before taking shared resources. The user explicitly authorizes these coordination messages. Discover current successor titles/IDs with the app's `list_threads` (or ListAgents if available); inspect recent state and use `send_message_to_thread`. Previous addresses, which may now be wrapped:
+
+| Stream | Previous Codex thread |
+|---|---|
+| Stream1 — merge queue | `01a0f92d-68b1-7ac1-a17c-f11470ac4777` |
+| Stream3 — shared Home runtime/S34 | `01a0f92f-5a0b-7482-8ce6-355ff6ee835e` |
+| Stream2 — Posts/Hub/payments | `01a0f92f-0c8c-7952-8cd8-01ff274c9a11` |
+| Stream5 — Accounts/Social | `01a0f930-7953-7c52-ad47-1b0d2640cf1c` |
+
+Stream1 reviews/integrates/merges; **do not merge independently**. It last used batch343 for #1472 and proposed344 for Settings. Refresh state rather than inventing the next batch. Stream3 wrapped after ownership/invitation acceptance; landlord12 are prepared but unexecuted. Its successor prompt is in live03 and kit. No S3 runtime acquisition was made after S4's final handback in the previous session; confirm current successor ownership again.
+
+## Current concrete state
+
+**Final merge addendum — 2026-10-02T09:04:23Z:** Settings#1474 is **MERGED**, unchanged head `aedb424b4ce08a8162052685126ff229fbdd8fcc`, GitHub mergedAt **2026-10-02T08:43:19Z**, merge `b99e22a17c49702572b7ccae01120e74785740a2`. Batch344/#1475 master is freshly fetched `4e55a2c02d681cd2edb99c276650f15d6c5b9981`; Stream1 independently verified all three seals, four whole blobs/two literal Settings sections, five-file integration and migration guards. There are no open Stream4 application PRs at this checkpoint. Source CI36984703665 completed applicable backend/web/schema/safeguard jobs successfully; iOS lint/build remained queued. Batch36985518026 was cancelled and its failure was read by Stream1; cancellation is not an aggregate pass. No new runtime window was opened after the08:27:43 clean return: shared serving source remains the then-current mastera7118. On the next window recheck/fetch current master; do not change d317 outside the lease merely to advance that snapshot. Next queue batch345, subject to coordinator refresh.
+
+- Latest fetched master at actual runtime return: `a7118fd13bb51e478c6dbe3818b16e1502df876a` (batch343). Fetch for newer before relying on it.
+- **Settings PR [#1474](https://github.com/WangPantopus/skinny-pantopus/pull/1474)** submitted/attached, exact pushed origin head `aedb424b4ce08a8162052685126ff229fbdd8fcc`, branch `claude/stream4-mailday-settings-time`. Real acceptance is complete and merged as recorded above; all83 evidence files sealed/copy-rehashed/read-only. Confirm the final source state with Stream1 and answer any later review issue; do not rerun unchanged real journeys simply because the old report says “pending”. A final merge addendum, if present, supersedes this submission snapshot.
+- All application changes are committed/pushed; all five owned checkouts below were clean. Private operator scripts/logs and frozen build/test diagnostics stay local; do not publish the raw kit or diagnostic-only integration branches as feature PRs.
+- **No S4 runtime/device/heavy owner, waiter or fixture remains.** Actual runtime release **2026-10-02T08:27:43Z**; label `stream4: final settings cache acceptance`.
+- Backend shared `d317`, clean mastera7118, PID70332 healthy/database connected. Startup original bytes restored SHA `c2f92f96d4410e08ea3d90d28c23a8937f6649e0a26cb508c1c0e21cd8e11276`; process has no temporary Settings DB fault preload. Exact own private fault control removed. Proxy63587 rules0 at handback, current source SHA `906384ba58d275988e8c05075a8d9a23ce6bdd52d9b64bec7c9582dc424eb4d9`.
+- Native iOS S34 shut down, installed frozen6452, owner signed in. Own driver64698 stopped after identity check;22093 absent;slot1 released after shutdown. Android5562 was untouched, remains S3d6c product and stopped. Check its actual installed APK hash after every boot.
+- Exact final cleanup Settings1+MailEvent13 (14 total), dry-run/locked PK/full-row preimages/global counts verified. **349 of353 public-table fingerprints unchanged; only four Auth tables changed and are deliberately preserved:** AuthDevice2→2 changed fingerprint, AuthDpopJti17→18, AuthSession21→27 and AuthSecurityEvent21→27. These are real sign-ins/native cold bookkeeping. **Do not claim351/353 equality for this window.** Both earlier Memory and Year have their own distinct qualified cleanup receipts.
+
+### Owned code and frozen build locations
+
+| Checkout | Branch/head | Use |
+|---|---|---|
+| `/Users/yingpengwang/.codex/worktrees/b430/skinny-pantopus` | `claude/stream4-mailday-settings-time`, `aedb424b4ce08a8162052685126ff229fbdd8fcc` | Settings authoritative pushed PR |
+| `/Users/yingpengwang/.codex/worktrees/stream4-memory/skinny-pantopus` | `claude/stream4-memory-contract`, `8e24f70b49595a54c1a58b88f50aaac2d4de30d8` | Already merged Memory |
+| `/Users/yingpengwang/.codex/worktrees/stream4-records-phone/skinny-pantopus` | `claude/stream4-mail-task-gig-entry`, `66ae082450b64b2152204b1c074b0d3109e97878` | Pushed web entry guard only; NO PR, native/real after pending |
+| `/Users/yingpengwang/.codex/worktrees/stream4-maintenance/skinny-pantopus` | `claude/stream4-runtime-settings-cache-r2`, `1c4ed01084fc3577c53a69d7532915a32c60d439` | Private actual backend/web integration, not serving now |
+| `/Users/yingpengwang/.codex/worktrees/stream4-native-mailtask/skinny-pantopus` | `claude/stream4-s34-settings-refresh`, `6452b03ced6ff60cb29560ad459acaa557227975` | Frozen native build evidence; do not turn historical diagnostic tests into outgoing new tests |
+
+Current Settings native product: `<kit>/apps-s4/settings-refresh-empty-r3/Pantopus.app`, with `HEAD`. It was built-for-testing at6452 and installed under heavy07:52:07–07:52:57Z. Executable/product hashes verified equal:
+
+| Product | SHA256 |
+|---|---|
+| Pantopus | `d892066ab58620e423a452272ae910ff85228c1925dd4b6ff80edac83370e8b0` |
+| Pantopus.debug.dylib | `75c9a9dd2222d1d535447c02a5c1346467275bd8c9f47e61178f1d2038251380` |
+| __preview.dylib | `eab385bd8792156c7942dd9472f9ee8fc83bccef4f225987a74cde9fab30d010` |
+| Info.plist | `6fb0eca00d37a2cf99b4a82301aef33e964314a8d3077f2204477e398f6e35c9` |
+
+**Bind each relevant screen to current source before reusing a product.** S3 proved19 landlord files equal d6c↔6452, so landlord reuse is possible.6452 predates d6c ownership repairs: no whole-app/ownership-U02 equality. Same caution applies to remaining Stream4 screens and any integrated release product. Keep queued/frozen sources unchanged.
+
+## Completed repairs to preserve
+
+User specifically asked about these branches: source stripe#1451 and Maintenance notes#1449/reminder guard#1448 are merged; Settings now has#1474. Correct spellings are `claude/stream4-maintenance-notes` and `claude/stream4-maintenance-reminder-flag`; don't recreate misspelled branches or duplicate PRs.
+
+| PR/topic | Exact pushed head | Acceptance |
+|---|---|---|
+| #1444 MailTask dead controls | `d378fee78fba2ddb9f969e0dc41d5f5d2074cb74` | Both native/cold: five unfinished actions hidden; Markdone/source retained. Markdone activation NOT covered by that packet |
+| #1448 reminder launch guard | `81d855b9d52f814d856eee649902ac8e65161b54` | Both actual Maintenance callers save/cold; no cut family-calendar POST/row |
+| #1449 Maintenance notes | `03b73830de9c5b3eddf29fdf758679a9784feae5` | Real create/edit/cold/explicit clear/API/DB on both native |
+| #1451 Android source-mail stripe | `5106f39e498519a29c4e78f1c5355461c8999aa3` | Actual white card/narrow orange stripe; source API/DB/backlink, three existing goldens |
+| #1459 Maintenance due date | `8fd192e8d35089c534c45902b6c3fd8d81b68ba3` | Actual iOSNov1 vs EditOct31 fixed with existing UTC picker convention; Nov2 save/cold/API/DB/calendar0 |
+| #1467 Memory contract | `8e24f70b49595a54c1a58b88f50aaac2d4de30d8` | Real web caller GET503/Retry; failed dismiss keeps card/DB0; success/cold/singlePK/member404/stale404/concurrent retry; date corrected |
+| #1468 Year-in-Mail actions | `faa98d2811c7783b4a9348c78b48a6a0a049c1b3` | Real browser outcomes distinguish failed/cancelled/shared-handler/copied; unsupported aggregate Vault action hidden |
+
+#1467/#1468 merged batch342/#1471 at07:12:29Z. Earlier #1406/#1410 merged batch323; their reconstructed-host historical audits are missing and expressly qualified, not fabricated. #1420 Records phone form, #1422 web MailDay dismissal and #1424 New-from-mail are merged/source-bound in live04. All earlier retained accepted evidence remains authoritative when source/configuration/behavior is unchanged.
+
+### Settings final scope and evidence
+
+Five existing application files only: backend notification job + P3 Settings reader/schema, existing iOS View/VM, existing web Settings page. No new screen, table, migration, store/service or outgoing unit declaration.
+
+The job honors savedHHmmss as **not-before in effective push timezone**, keeping9–20 daytime/quiet hours/cooldown/atomic claim. New changed times cap19:45; enabled-only updates on legacy saved values survive. Only honored settings exposed. iOS time is read-only and directs edits to web, enabled remains native; Android has no Settings UI/caller, so no new UI was created. Empty native Settings is available, each entry rereads.
+
+Original real local job disabled/future/eligible/duplicate and desktop/phone save/hiding acceptance remains in53-file packet. Its stale native after was a reproduced failure, now closed by real final packet: actual empty MyMailDay→Settings09, same VM Back→actualweb19→Settings19:45:00, Back→actualweb09→Settings09. Exact underlying owned local PostgREST403 before yielded API200/default08 and native08 despiteDB09; `maybeSingle`+error check now yields realAPI500/existing native error/no time, actual **Try again→09**, cold launchPID68098 via **Hub Mail pillar→My mail day→Settings→09**. A genuinely absent row after cleanup returns200/default08/DB0.
+
+Transient503 was retried successfully to09, so strict helper refusals are **not product defects**. Underlying403 is local denial simulation, not a production outage. The additive API-before503 proxy capability is **UNRUN**. Phone Settings panel crop overlaps bottomnav but real scroll-to-Save/click succeeded; no redesign/phone overlap defect claimed. All16 final PNGs viewed, no sign-in raster.
+
+Final26 existing notification tests, current whole-web typecheck/changed-page lint, Node syntax and diff checks passed. Native6452 build/product/installed hashes bound to final topic View/VM; backend/web1c4 binds whole four files and exact Settings schema/GET+PATCH sections with explicit start-inclusive/end-exclusive marker extraction. Whole route differs because actualruntime includes merged Memory; don't claim whole route equality. Original31 backend/2 VM added diagnostics are historical only: new test file/methods/cases removed per standing no-new-unit-tests direction.
+
+All audits below are `<kit>/../audits/<name>`. Every SHA is seal **and** MANIFEST SHA256; never modify sealed bytes. Runtime stages are also read-only mirrors.
+
+| Bundle | Files | Seal/MANIFEST |
+|---|---:|---|
+| `20261002-stream4-mailday-settings-before-r2` |29|`6e4e2bd53c8d3992847587796036c770a4b65c3bd7187602dfedefeb715f4b1f`|
+| `20261002-stream4-mailday-settings-afters-r1` |53|`9c9317b4d54c1c007f74b65099342d8288f1b926f09b2194335015937918dc45`|
+| `20261002-stream4-mailday-settings-cache-afters-r2` |83|`afe71a3dd77620edc8cdb92299997721df5312fb1437ac2d42f4e3fffd2a55c2`|
+| `20261002-stream4-maintenance-before-r1` |45|`494d976e0d72fe4d0381037a24e5efb58a36b3ba60f59101df707ac26b946cee`|
+| `20261002-stream4-maintenance-afters-r1` |82|`330da745bcdacbcfe472d81c875da68f962de86c77c9ac8f35a1120505f5bd83`|
+| `20261002-stream4-source-card-afters-r1` |21|`f158985e8daa29a0a71aa0a3af7d1d79b7cf2a7892e3c12cab06be948cdd5843`|
+| `20261002-stream4-maintenance-due-date-afters-r1` |41|`1ab0e6eeb87371dc11e87f5f891436fe23a32409150ea2aac8a33fdfcf51a7a6`|
+| `20261002-stream4-memory-contract-afters-r1` |39|`00531576971d0db2733d5ab160ac0f51dbe082ac602948dde9acee2c85917c9e`|
+| `20261002-stream4-memory-review-source-r2` |5|`09489e2b5469e8a918f13d1e84868a853e6cff2aff113a8158e9c37e75c8b379`|
+| `20261002-stream4-memory-year-afters-r1` |23|`0b874e11bac4b364202c55e80433fb76ac1cf471c666253ba514c421c033a354`|
+
+Verify bundle names from disk if a history spelling differs. Memory source qualification: original MainPage subsection digestf2a87… does not reproduce with literal marker-inclusive extraction; treat it as unverified. S1 independently established whole actual98dd Page/API DTO/MemoryCard identity and exact Memory route/union hunks. Do not edit its immutable packet. Memory cleanup of33 rows restores351 other tables, AuthSession/SecurityEvent17→19 preserved; Year30events restores353. They do not change the final Settings349-of353 qualification.
+
+## Next work, in order — source leads are not yet real acceptance
+
+1. **Confirm the final Settings merge/source state first**, reuse the merge addendum above and record any newer applicable CI status. Required CI is off/informational, but read every failed job; don't call queued/cancelled runs passes. Stream1 merges reviewed real-app evidence. Settings is complete within its recorded local scope; no active fixture to recover.
+2. **MailTask Convert launch entry.** Existing pushed web-only guard66ae at stream4-records-phone, noPR/realafter. Native list controls still need first real current-master before. iOS `MailTaskListView.swift` roughly263 `else if !row.isDone`; Android `MailTaskListScreen.kt` roughly440. Reuse existing OpenGigs launch flag to hide the entry. Verify only retained entry visibility with flags off; **never enter/test/fix cut Gigs interiors**. Build/sourcebind/native+web after, cleanup, seal, focusedPR.
+3. **Native Markdone/Reopen premature success.** Existing iOS MailTaskViewModel roughly110/119 and Android roughly151/160 toast before `persistStatus`. Actual successful move was observed historically, but fault/success/cold statusjourney not accepted. Reproduce exact owned PATCH failure with screenshot burst/API/DB, keep state honest and only show success after confirmed persistence. Preserve sample preview's intentional immediate behavior. Check races/busy only if reproduced; don't invent them. Use existing fixture/observer below. Cleanup must account for exact newly created status-update audit IDs, not broad deletes.
+4. **MailDay Accept/Finish failure feedback.** Source: iOS Accept catch rolls back silently; Finish catch silent. Existing `settingsToast` overlay already supports Other/Undo; reuse it if real failure reproduces. Android existing `_actionError` can surface failures; handlers currently discard errors. Verify actual caller/action/error/retained state/API/DB, preserve accepted Undo/Other. No new notification/error framework.
+5. **Reviewed iOS Undo accessibility.** Combined VoiceOver row label omits Undo though trailing control exists. First actual fixture/AX, then minimum named action/hint and focus proof. An AX tree is not spoken VoiceOver acceptance; name that limit, or run permitted real speech. Don't claim TalkBack from an off service.
+6. **Received generic mail honesty.** Suspected fabricated TLDR when summary absent and “Tap to undo” acknowledgment that acknowledges again. Trace real notice/source/API/DB and confirm before fixing copy/state; don't invent an Undo endpoint or fabricate a summary.
+7. **Protected attachments.** Name-only chips need actual protected-content contract/caller verification. Reuse existing authorized content route and document links; no new public file URL or parallel store. Native booklet/coupon/records variants may be unreachable with actual MailObject metadata; establish reachability first.
+8. **Maintenance media/category/contact cold loss.** Notes/date already repaired. Existing local draft preserves client fields not necessarily server persistence; photos/receipt/category/contact need actualsave/cold/API/DB reproduction and existing `HomeDocument`/`document_id` contract comparison. PHPicker can use local fixtures without full photo-library permission; not automatically blocked on physical hardware. Minimum existing repair or honest available fields; no new attachment architecture or design rewrite.
+9. **Web mutation error feedback:** Themes Apply (`settings/themes/page.tsx` handleSwitchTheme), Vault Create (`vault/page.tsx` handleCreate), Records AddAsset (`records/page.tsx` AddAssetPanel). Existing handlers have onSuccess but no onError; first actualfailedrequest/draft/retry/DB, then reuse existing alert/error treatment. Search exact paths with `rg --files`; no copied replacement pages/new unit declarations.
+10. **Android rate-watch delete** currently ignores DELETE result; prove realfailure and persist/cold behavior before repair.
+11. **Civic provider failure vs “No upcoming election”** on retained three-app detail. Already merged empty-state election-date/no-ballot promises stay; verify failedread distinction locally without claiming live regionalprovider coverage.
+12. **iOS document picker/recent activity cut targets.** Check retained entry leakage only; guard cut bills/pets requests and cut destination rows using existing flags. Never open their interiors.
+13. **Equity unused rate input** may promise calculation it doesn't influence. Actual field/caller/API arithmetic first; minimum honesty, no new financial formula/advice.
+14. **JustMoved mail-step promise** says return previous resident mail but goes to nativeMailDay/webSettings. Confirm actualnavigation and make copy match the retained destination; don't build mail-return system.
+15. **Mailbox Map representation:** real HomeMapPin lat/lng API exists, native uses FNV spread, pin.body as address and isOpen=true. Existing source explicitly calls map stylized; don't claim geographic or opening-hours accuracy. Fixture/API/DB/caller first, then reuse geometry/metadata or minimal truthful representation within existing design.
+16. **Web Bundle File-all and Booklet Download** appear no-op. Establish real retained payload reachability before wiring existing Vault/download or hiding a dead control. MailObject GET metadata is a storage row; payload is separate. Sample interiors/unreachable native variants do not justify replacement decoders/new screens.
+17. **Empty Emergency Share** enabled no-op: actualempty/API caller before existing disable/hide. Never dial a number or send externally.
+18. **Web Maintenance Suggested/static checklist and LogMaintenance→Issue**: distinguish useful static recommendation from fake state; preserve honest local behavior, confirm wording/destination before any change.
+19. **U02 remaining native font/dark/focus/VO/TalkBack** cells of this stream's existing checklist. Preserve default designs; prior accepted sweeps/brand decisions stay. U03/U04 tables already account for bounded accepted cells/named limits; new U05 defects are their own narrow repairs, not permission to repeat everything.
+20. **Complete every U05 disposition and the release manifest row**, comparing the unverified draft to fresh master/accepted evidence. Distinguish fixed, hidden, honest placeholder, sample-only, unreachable, cut and genuine external boundary. Current42 source dispositions are not42 real journeys or final U05 acceptance. Preserve earlier false-positive findings: IssueRow footer, disabled property correction, unavailable Recent permits, confirmed pickup response, unreachable Records AI, accepted benchmarks. After own feasible backlog, help other streams through Stream1.
+
+New topics branch `claude/stream4-<topic>` from fresh master; existing user-requested prefix takes precedence over generic codex branch defaults. Reuse a suitable clean owned worktree. Do not overwrite queued builds or sibling work. No destructive git cleanup/removal/prune.
+
+## Runtime, devices and current operators
+
+Kit: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/stream2-runtime-kit`.
+Private preparation: `/private/tmp/pantopus-stream4-prep`. Preserve it locally; do not publish logs, cookies or credentials. Bundled Node is `/Users/yingpengwang/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node`; PIL Python is the sibling `dependencies/python/bin/python3`; gh is `/Users/yingpengwang/.local/bin/gh`.
+
+Shared source is `/Users/yingpengwang/.codex/worktrees/d317/skinny-pantopus`. Ports: backend18143, proxy18142, web18144, Supabase64553, DB64554, mailpit64558. The DB has353 public tables. Launch flags are off; cron, push and external egress are disabled. Use only the existing synthetic owner/member. Dev Next redirects can change host to localhost and reach sign-in: record redirects without following them. Opening Earn creates a Wallet row; avoid cut interiors and guard shell GETwallet if it has an unrelated side effect.
+
+1. Confirm actual availability with the Stream3 successor. Use `zsh tools/runtime-lease.sh status`, then `acquire "stream4: <purpose>"`. Release requires the **exact full label** in this reconstructed kit, not the old prefix recipe. Save the actual acquisition/release JSON and message Stream3/Stream1. A held or initializing lock cannot be stolen. Any fixture, fault, restart, shared-source change, baseline or device run requires the lease.
+2. Check `zsh /private/tmp/pantopus-tools/heavy-slot.sh status` and coordinate the current peer queue. Historical FIFO instructions are superseded. Native build, install and driver startup require the heavy slot and at least10GiB free. Use `zsh tools/build-s4-native.sh ROOT BRANCH UNIQUE-LABEL ios|android|both [existing focused Gradle checks]`. For iOS test bundles, set `S4_IOS_BUILD_ACTION=build-for-testing`. The wrapper binds clean source HEAD before/after and releases its own reservation. Never switch/edit a queued source or release a peer's heavy lock.
+3. Device slots: `zsh /private/tmp/pantopus-tools/device-slot.sh acquire "stream4: iOS <UDID> <purpose>"` or a label containing Android5562. Current iOS S34 is **696C4693-BD96-4E96-8E59-D0591C981F2B**, bundle `app.pantopus.ios`; historical DA8 is not current. Android is `pantopus_s34`, emulator5562, package `app.pantopus.android.debug`. Stop only your identified runner, shut down the device, verify22093 absent, then release slots with prefix `stream4`. Root's B237/5558 devices also belong to another stream; do not touch them.
+4. Switch the backend only with `zsh tools/s4-backend-switch.sh COMMIT "source" "reason"`. It requires clean d317, verifies the recorded PID/cwd/egress guard before SIGTERM, and does not fetch for you. Original startup bytes are restored; do not reinstall the temporary Settings denial preload. After every restart, run the actual browser sign-in helper for owner/member before a fresh baseline: the dev CSRF secret rotates. Stale CSRF is an operator issue, not a product failure or reason to bypass auth.
+5. Create a new unsealed stage and DECISION. Dates come from `date -u`; capture baseline with `python3 tools/fp.py snap runtime/STAGE baseline-public-fingerprints`. A baseline belongs to that lease only. Read existing fixture/operator arguments and ownership guards first; do not use another stage's baseline or historical user IDs.
+6. iOS current driver is `tools/s34-ios-driver.py`: `describe`, `tap-id`, `tap-label`, `capture`, with lease/slot/runner/app-focus guards. Capture needs PIL Python. Cold legacy TabBar has no `tab.mail` and two Mail labels: use observed **hub.pillar.mail**, then the leaf **My mail day**, then Settings. Before any raster inspect AX for sign-in fields and refuse capture. Native credentials go only through kit secret operations after a focus check; decline OS prompts, never grant OS permissions. Select observed child switches, not ambiguous parent labels.
+7. Android uses current S34 helpers including `tools/android-s3-step.py` with bounds from observed XML. Verify installed APK SHA after every boot; snapshots can restore older products. Toast evidence needs a short screenshot burst plus actual tap because the driver often returns after the toast disappears. Use the corresponding xcrun burst on iOS. TalkBack probes must refuse while it is off. Missed feedback, driver errors or XCTest overlapping-gesture refusal are observation limits, not accepted product results.
+8. Current proxy retains Stream3 Home/tenant ownership guards. The exact S4 GET `/api/mailbox/v2/p3/mailday/settings` before503 mode,1–3 turns, is available but **unrun**. Controls/status require the runtime lease; a423 outside the lease is not proof of zero rules. A future task PATCH fault must bind the exact owned UUID and request-time lease. **Do not install the old private `fault-proxy-retained-tasks.cjs` wholesale**: it predates Stream3 guards. Add only the needed bounded rule to the then-current proxy under your lease and record its source hash.
+9. Task operators in private prep: `native-mail-task-setup.cjs` creates owned Home/occupancy/Mail plus a real fromMail POST and task/backlink; `native-mailtask-observe.cjs STAGE PHASE` reads API/DB/audits. Read their guards first. Existing `--native-mail-task` cleanup only accounts for the creation audit; status cases need exact observed update-audit IDs and preimage guards. Current cleanup SHA is `2fbfe81c2984eece6d8824f3e075520ab1b6d15feb5c7b9b9956438d394cc34e`; preserve all original scope/lock/count checks. Settings denial helpers remain private preparation only; their startup/control were already removed from the shared runtime.
+
+## Exact closeout protocol per topic
+
+Reproduce the existing real caller/API/persistence first. Record the failure or concrete unmet requirement and why the existing implementation should be extended before changing it. Compare archived/open branches before adding files or migrations. Preserve existing designs; no speculative refactor or parallel store.
+
+**No new unit tests**, including new cases/methods. Direct human attachment `/Users/yingpengwang/.codex/attachments/c63d7eaf-4bc2-48a7-8ceb-3bfd3d0c5a86/Pasted text.txt`, line59: “No new unit tests (updating existing ones is fine). E2E in the real apps is the bar.” Required CI is off/informational under the user's September27 decision. Read every failed job before batching. Run relevant existing regressions; do not run cut interiors/tests just because an old helper asks for a broad suite.
+
+Cleanup uses the reconstructed narrow modes:
+`python3 tools/s4-cleanup-home.py STAGE '{"TABLE":COUNT,...}' MODE`.
+Dry-run first, then the identical command with `--apply`. Current arguments are not the old extra-scope JSON recipe. Assert exact ownership, PK/full-row preimage/global counts; capture fresh post-cleanup fingerprints and qualify auth history. Preserve applied migrations and peer data. Clear owned faults, restore freshly fetched master, stop your driver, shut down devices, release slots and the exact runtime label, and send actual handback receipts to Stream3/Stream1.
+
+Seal with the current tool:
+`python3 tools/s4-secret-scan.py runtime/STAGE && python3 tools/seal-bundle.py runtime/STAGE BRANCH COMMIT "scope and limits"`.
+Always use `&&`. The sealer does not copy or chmod. Copy to unique `../audits/YYYYMMDD-stream4-TOPIC-rN`, verify the MANIFEST/each listed file/seal, make files0444/directories0555 in both copies. Never modify a sealed bundle; corrections need a qualified successor packet.
+
+Open one focused PR with problem, repair, real evidence, seal/MANIFEST, checks and limits. Use a body file for literal newlines. End with **🤖 Generated with [Claude Code](https://claude.com/claude-code)**. Attach the PR in the app. Send Stream1 the exact pushed head from `git rev-parse origin/BRANCH` and seals. Builds/green CI alone do not establish acceptance.
+
+Add a live entry at the top of 04 and update its current checkpoint/U05 cell when applicable. Commit only your owned files with `git commit --only -- docs/workstreams/04-place-records-money-mail.md`, then push. If rejected, fetch/rebase your own commit/push; never stash others' work. Stream1 owns README/PROJECT_HANDOFF. This owned successor prompt can be committed with04. Every timestamp comes from `date -u`, every SHA from `git rev-parse`.
+
+## Remaining external/deferred boundaries and completion estimate
+
+Rough weighted retained-workstream readiness remains **75–80%**, with20–25% remaining: approximately15–20 focused local topic/check groups plus external boundaries. This is a planning estimate, **not launch certification**. The20 core inventory rows still label4 closed/others partial, including cut/deferred/provider rows. Neither PR count nor4/20 measures feature completion. U05 and integrated release acceptance remain open; this handoff does not claim all autonomous work is exhausted.
+
+| Boundary | What is needed |
+|---|---|
+| I04 address calendar | Real holiday-provider coverage/address breadth; reuse accepted local DST/recurrence/pickup |
+| I05 property | Authorized ATTOM provider/test data and stale/wrong-parcel acceptance; existing `ATTOM_API_KEY` contract, no new property system |
+| I06 regional information | Real weather/air/alerts/civic coverage and provider access; existing AirNow/Civic keys and WeatherKit Apple team/key/service/private-key configuration. Cached stand-ins are not provider acceptance |
+| F04/F05 deployment | Hosted scale and eligibility/retention policy; authorized staging/deploy/DB schedule inventory, migration-before-reader proof, deployed old-worker retirement and released client/API bindings |
+| M01 printed cards/digest | Design-stage requirements deferred after launch. Product/delivery requirements must precede implementation; this is not just a missing API key |
+| D02 issue media | Design-stage requirement deferred after launch. Approved private upload/access/EXIF/type/scan/delete contract is needed before attachment work; granting AWS alone does not finish it |
+| Native release boundaries | Physical iOS/Android release candidates, real OS share/push/provider receipts/token rotation, and spoken VoiceOver/TalkBack where explicitly named |
+
+Stream1 inspected repository/four release-environment secrets as empty and staging/production deploy switches as false. Attribute its bounded report; do not claim a whole cloud-account audit. This stream did not inspect or authorize live ATTOM, AirNow, Civic, Apple or AWS accounts. Protected media elsewhere uses S3 bucket/region configuration, but no new storage architecture is justified. Some accessibility and local-media verification is feasible on simulators/emulators; investigate before declaring a physical-device/access block.
+
+Safety: no production providers, real user/payment data, credentials/tokens/private browser state/raw logs/DB archives in Git/chat/evidence. Never touch founder Docker64521/64522, backend8000, simulatorEB5AD759 or the physical iPhone. Use the shared local64553/64554 environment only. No git reset/stash/clean/gc/worktree removal/prune/force push. Do not send external messages or emails without direct authorization.
+
+Launch cuts: bills/packages/tracking/unboxing/pets/polls/family calendar; letters/compose/ceremonial/certified/e-signing/community/party/invitations/translations/Earn/postage wallet; OpenGigs and other cut areas. Never verify/test/fix their interiors. Retained-entry visibility guards are allowed. My Mail Day, received mail, vault, Stamps gallery/themes, tasks, vacation hold and Place stay in scope. Preserve honest coming-soon/sample/unreachable paths.
+
+After confirming Settings merged/source state, the first substantive next step is MailTask Convert-entry and Markdone fault acceptance in a fresh Stream3-coordinated runtime window. Finish remaining feasible cases before reporting complete. If a later handoff is needed, stop at a clean verified boundary with exact resources, evidence and remaining prerequisites, as this user requested.
