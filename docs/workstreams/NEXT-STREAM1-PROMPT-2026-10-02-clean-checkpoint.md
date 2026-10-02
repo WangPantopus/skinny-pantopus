@@ -4,6 +4,12 @@ Checkpoint: 2026-10-02T15:00:17.042320+00:00. Stream 1 successor chat is `01a0fb
 
 Own Support Train G01–G05, O01–O06, L01–L04, Train U02–U04, U05/O04 assembly and the sole merge queue for all five streams. Use existing acceptance and screen catalogs; an open row, old report or new filename does not establish a missing feature.
 
+## Current follow-up checkpoint — 2026-10-02T16:18:54.782006+00:00
+
+Master348d6e58/next349 unchanged. D27 pureAndroid build independently verified fullquality/54existingJVM/Debug+testAPK/localconfig/product hashes; heavy15:51:58–16:03:50 released. Draft1484 stillunready/currentCI37027349183pending; no d27instrumentation/install/nativeafter. Old767 actualqualityfailure and cancelled-instrumentation aggregate separatelyfullyread, notpurecancellation/green. S4 beforeentry34total/32listed f7ed +status98total/96listed cc1 independentlyverified30whole+4literal bindings each/everyhash/actualeightPATCH/fullnineTaskMailAuditfailure-coldpairs/353cleanup; seven representative safePNGs rootviewed, ownerreviews/hashes remainingnine, before-only.
+
+S4 frozenlocal864preview source-reviewPASS/fivewhole topicblobs, localonly/noPR/afterclaim. It now owns actualheavy16:09:55Z/full5pinnedIOSguards+Androidgates/build4existing previewmethods; continuousruntime transition16:06:37→38, retainedtwo slots/devices/driver—notfullreturn. Rootresources0/no waiter; S3nativeinstall/after/widerU02 waits actualS4return. Root27-file current348 IOSpackage boundedPASS below; final Android/web/laterchangednative packages and all external/held limits remain. Freshcheckliveowner/source/resources/CI, no unsealed draft merge.
+
 ## Latest iOS packaging checkpoint — 2026-10-02T15:49:47.870968+00:00
 
 Own2467 frozen348d6e58; full generic x86_64 Debug/local optimized Release BUILD_SUCCEEDED/strict ad-hoc/keychain-host/config checks pass. Independent649Debug/326Release inventories all match; Debug319cached auxiliary test files are not current test execution, Release hasnone. New immutable27total/25listed iOS packet `R/audits/20261002-stream1-final348-ios-package-addendum-r1/README.md`, seal76792e520b76a8944d510b1b6a1d32459533a33fbe8fb313777ffbc28f06da3a, newscan/everyhashPASS. Prior77/16/Android37 unchanged,12 Traincontracts unchanged; no new journey/runtime/device/fixture/source/test campaign. Heavy15:12:40→runnerend15:43:28 thenrelease/freshfree; exactrelease secondnotseparatelyrecorded. Rootresources0; S3 pure d27 Androidcompile next, then necessary S4 combinedrepairbuild; S3nativeinstall/afters wait S4fullreturn.
