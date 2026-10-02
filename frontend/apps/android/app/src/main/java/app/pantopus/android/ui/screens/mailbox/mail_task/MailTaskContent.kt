@@ -131,6 +131,10 @@ data class MailTaskContent(
     val elfDone: MailTaskElf? = null,
     val completion: MailTaskCompletion? = null,
     val nextUp: MailTaskNextUp? = null,
+    // The design's unbuilt actions: the open dock's Snooze, Delegate and Calendar
+    // chips and the header's Share and More. The task API has none of them yet,
+    // so live tasks hide them.
+    val hasUnbuiltActions: Boolean = false,
     val isDone: Boolean = false,
 ) {
     /** Total subtasks. */
