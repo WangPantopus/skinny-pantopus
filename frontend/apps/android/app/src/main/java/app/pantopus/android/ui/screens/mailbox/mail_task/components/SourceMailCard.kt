@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -66,7 +67,15 @@ fun SourceMailCard(
                     .clickable { onOpen() }
                     .testTag("mailTask_sourceMail"),
         ) {
-            Box(modifier = Modifier.width(4.dp).matchParentSize().background(PantopusColors.handyman))
+            // Match the card height while painting only the existing 4dp accent.
+            Box(
+                modifier =
+                    Modifier
+                        .matchParentSize()
+                        .wrapContentWidth(Alignment.Start)
+                        .width(4.dp)
+                        .background(PantopusColors.handyman),
+            )
             Column(modifier = Modifier.padding(start = 18.dp, top = Spacing.s3, end = 14.dp, bottom = Spacing.s3)) {
                 ChipRow(source = source)
                 Spacer(modifier = Modifier.height(7.dp))
