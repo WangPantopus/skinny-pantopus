@@ -153,28 +153,29 @@ class InviteOwnerFormViewModel
 
         fun load() {
             if (_state.value.phase != InviteOwnerPhase.Loading || loadJob?.isActive == true) return
-            loadJob = viewModelScope.launch {
-                when (val result = homesRepo.detail(homeId)) {
-                    is NetworkResult.Success -> {
-                        val home = result.data.home
-                        if (home.id != homeId) {
-                            _state.update { it.copy(phase = InviteOwnerPhase.Error("We couldn't confirm this Home. Try again.")) }
-                            return@launch
+            loadJob =
+                viewModelScope.launch {
+                    when (val result = homesRepo.detail(homeId)) {
+                        is NetworkResult.Success -> {
+                            val home = result.data.home
+                            if (home.id != homeId) {
+                                _state.update { it.copy(phase = InviteOwnerPhase.Error("We couldn't confirm this Home. Try again.")) }
+                                return@launch
+                            }
+                            val address = home.address?.trim()?.takeIf { it.isNotEmpty() }
+                            val name = home.name?.trim()?.takeIf { it.isNotEmpty() }
+                            _state.update { current ->
+                                current.copy(
+                                    homeContext = InviteOwnerHomeContext(title = address ?: name ?: "Home", subtitle = name ?: "Selected home"),
+                                    phase = if (current.owners.isEmpty()) InviteOwnerPhase.Empty else InviteOwnerPhase.Editing,
+                                )
+                            }
                         }
-                        val address = home.address?.trim()?.takeIf { it.isNotEmpty() }
-                        val name = home.name?.trim()?.takeIf { it.isNotEmpty() }
-                        _state.update { current ->
-                            current.copy(
-                                homeContext = InviteOwnerHomeContext(title = address ?: name ?: "Home", subtitle = name ?: "Selected home"),
-                                phase = if (current.owners.isEmpty()) InviteOwnerPhase.Empty else InviteOwnerPhase.Editing,
-                            )
+                        is NetworkResult.Failure -> {
+                            _state.update { it.copy(phase = InviteOwnerPhase.Error("We couldn't load this Home. Try again.")) }
                         }
-                    }
-                    is NetworkResult.Failure -> {
-                        _state.update { it.copy(phase = InviteOwnerPhase.Error("We couldn't load this Home. Try again.")) }
                     }
                 }
-            }
         }
 
         fun refresh() {
