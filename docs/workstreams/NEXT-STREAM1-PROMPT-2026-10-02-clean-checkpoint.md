@@ -2,6 +2,14 @@
 
 Stream1 successor chat `01a0fbe4-e9a4-7310-8e1e-f4692f1e3590` is active and sole merge owner. User preference: GPT-6.1 Sol, Extra High effort. Continue independently feasible retained work to completion, using existing owning peer chats; do all implementation/verification yourself, no real-work subagents or new user-owned chats. A clean root checkpoint is not launch verification completion. Own G01–G05/O01–O06/L01–L04, Train U02–U04, U05/O04 assembly and merge queue for all five streams. Preserve existing catalogs; open/stale rows are not proof of missing implementation.
 
+## Current coordination checkpoint — 2026-10-02T11:46:34.745312+00:00
+
+S3 now has five bounded iOS landlord cases accepted from six exercised; E2 still requires truthful unknown-outcome feedback, and six Android cases are unstarted. Root independently verified E3's29-filef578f00c and E5's26-file09b79d91 seals,19 unchanged landlord contracts,353 cleanup and three images. E3 proves a held-response guard at559.282ms sequential dispatch, not exact350ms/device timing. E5 is a real same-tenant API competitor, not another-device UI. Optional note remains unverified.
+
+Actual S3 full clean return was11:43:06Z, followed by S4's exact browser-only Themes lease11:43:47Z. All device slots/heavy were free and22093 absent at root's fresh handback observation. Current S4 fixtures may be active. Do not infer current global cleanup from dated S3 receipts. S4's window uses no heavy/device/native driver.
+
+S3 prepares the authorized focused E2 message repair plus a combined current-source S34 U02 build. No build dispatched yet: exact source/config/runner/purpose and coordinator heavy order required first. No shared switch/install until S4 actual cleanup/source restoration/full return and fresh S3 lease. Replace the later duplicate U02 compile only if this combined build proves exact coverage. Android six and real E2 after remain, then S4 native MailTask at actual landlord acceptance return. Root resources/waiter zero; next queue346 and both immutable release packets unchanged.
+
 ## Latest continuation update — 2026-10-02T11:40:16.675252+00:00
 
 Settings source CI36984703665 completed successfully at exact aedb424b4ce08a8162052685126ff229fbdd8fcc, including all three iOS tests and CI OK. Android/Seeder were path-skipped. Earlier queued snapshots are superseded; cancelled batch344 remains qualified.
