@@ -129,10 +129,9 @@ public final class MailDayViewModel {
     /// Transient banner shown when a PATCH fails.
     public var settingsToast: String?
 
-    /// Open the settings frame and fetch the row on first entry.
+    /// Reread on entry so a delivery-time change on web is visible here.
     public func openSettings() async {
         isShowingSettings = true
-        if case .loaded = settings { return }
         await loadSettings()
     }
 
