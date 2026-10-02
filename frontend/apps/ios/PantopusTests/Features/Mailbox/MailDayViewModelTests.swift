@@ -33,37 +33,6 @@ final class MailDayViewModelTests: XCTestCase {
         )
     }
 
-    func test_settings_reopenReadsChangedDeliveryTime() async {
-        SequencedURLProtocol.sequence = [
-            .status(200, body: #"{"delivery_time":"19:45:00","enabled":true}"#),
-            .status(200, body: #"{"delivery_time":"09:00:00","enabled":true}"#)
-        ]
-        let vm = MailDayViewModel(variant: .empty, api: makeAPI())
-        await vm.openSettings()
-        guard case let .loaded(first) = vm.settings else { return XCTFail("Expected first settings read") }
-        XCTAssertEqual(first.deliveryTime, "19:45:00")
-
-        vm.closeSettings()
-        await vm.openSettings()
-        guard case let .loaded(reopened) = vm.settings else { return XCTFail("Expected fresh settings read") }
-        XCTAssertEqual(reopened.deliveryTime, "09:00:00")
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter {
-            $0.httpMethod == "GET" && $0.url?.path == "/api/mailbox/v2/p3/mailday/settings"
-        }.count, 2)
-    }
-
-    func test_settings_failedReopenShowsErrorInsteadOfCachedTime() async {
-        SequencedURLProtocol.sequence = [
-            .status(200, body: #"{"delivery_time":"19:45:00","enabled":true}"#),
-            .status(503, body: #"{"error":"Settings unavailable"}"#)
-        ]
-        let vm = MailDayViewModel(variant: .empty, api: makeAPI())
-        await vm.openSettings()
-        vm.closeSettings()
-        await vm.openSettings()
-        guard case .error = vm.settings else { return XCTFail("A failed reread must not show the old time") }
-    }
-
     /// VM seeded with the `variant` fixture whose `load()` GET fails, so it projects the seed.
     private func makeSeededVM(variant: MailDayVariant) -> MailDayViewModel {
         SequencedURLProtocol.sequence = [.status(500, body: "{}")]

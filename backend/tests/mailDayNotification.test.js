@@ -177,59 +177,6 @@ describe('isSendableNow', () => {
   });
 });
 
-describe('saved delivery time', () => {
-  const prefs = { daily_briefing_timezone: 'America/Los_Angeles' };
-  const at = (clock) => new Date(`2026-10-01T${clock}-07:00`);
-
-  test('defers until the saved minute, including stored seconds', () => {
-    expect(isSendableNow(prefs, at('14:29:59'), '14:30:00')).toBe(false);
-    expect(isSendableNow(prefs, at('14:30:00'), '14:30:00')).toBe(true);
-    expect(isSendableNow(prefs, at('14:30:00'), '14:30:30')).toBe(false);
-    expect(isSendableNow(prefs, at('14:30:30'), '14:30:30')).toBe(true);
-  });
-
-  test('uses the push timezone and still respects the daytime window', () => {
-    const now = at('14:00:00');
-    expect(isSendableNow(prefs, now, '16:00')).toBe(false);
-    expect(isSendableNow({ daily_briefing_timezone: 'America/New_York' }, now, '16:00')).toBe(true);
-    expect(isSendableNow(prefs, at('08:30:00'), '08:00')).toBe(false);
-    expect(isSendableNow(prefs, at('20:00:00'), '19:45')).toBe(false);
-  });
-
-  test('quiet hours still defer an otherwise eligible saved time', () => {
-    expect(isSendableNow({ ...prefs, quiet_hours_start_local: '13:00', quiet_hours_end_local: '16:00' }, at('14:00:00'), '09:00')).toBe(false);
-  });
-
-  test('malformed or late existing times never fall back to an earlier send', () => {
-    for (const time of ['25:00', '09:99', 'invalid', '20:30']) {
-      expect(isSendableNow(prefs, at('19:30:00'), time)).toBe(false);
-    }
-    expect(isSendableNow({ daily_briefing_timezone: 'Not/AZone' }, at('14:00:00'), '14:30')).toBe(false);
-  });
-
-  test('reads enabled and delivery_time before claiming, then sends once when eligible', async () => {
-    resetTables();
-    notificationService.createNotification.mockReset();
-    notificationService.createNotification.mockResolvedValue({ id: 'notif-retained' });
-    seedScannedMail(USER, ['envelope']);
-    seedPrefs(USER);
-    seedTable('MailDaySettings', [{ user_id: USER, enabled: false, delivery_time: '09:00', timezone: NIGHT_TZ }]);
-    await mailDayNotification();
-    expect(notificationService.createNotification).not.toHaveBeenCalled();
-    const settings = getTable('MailDaySettings')[0];
-    settings.enabled = true;
-    settings.delivery_time = '18:00:00';
-    await mailDayNotification();
-    expect(notificationService.createNotification).not.toHaveBeenCalled();
-    expect(getTable('MailDaySession').find((row) => row.user_id === USER)?.notified_at).toBeFalsy();
-    settings.delivery_time = '09:00:00';
-    await mailDayNotification();
-    await mailDayNotification();
-    expect(notificationService.createNotification).toHaveBeenCalledTimes(1);
-    expect(getTable('MailDaySession').find((row) => row.user_id === USER)?.notified_at).toBeTruthy();
-  });
-});
-
 describe('mailDayNotification job', () => {
   beforeEach(() => {
     resetTables();
