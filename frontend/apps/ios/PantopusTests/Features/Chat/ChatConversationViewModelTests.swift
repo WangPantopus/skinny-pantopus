@@ -473,8 +473,11 @@ final class ChatConversationViewModelTests: XCTestCase {
         XCTAssertEqual(failedBubble.deliveryState, .failed)
 
         vm.composerText = "draft in progress"
+        vm.queueAttachment(kind: .document, filename: "next.pdf", mimeType: "application/pdf", data: Data("next".utf8))
+        let newerAttachmentIds = vm.queuedAttachments.map(\.id)
         await vm.retry(clientId: failedBubble.id)
         XCTAssertEqual(vm.composerText, "draft in progress", "retry must not clobber the composer")
+        XCTAssertEqual(vm.queuedAttachments.map(\.id), newerAttachmentIds, "text retry must preserve newer attachments")
 
         let sendBodies = try URLProtocolStub.capturedRequests
             .filter { $0.url?.path == "/api/chat/messages" && $0.httpMethod == "POST" }
@@ -536,15 +539,27 @@ final class ChatConversationViewModelTests: XCTestCase {
         URLProtocolStub.stub(path: "/api/chat/conversations/u_other/read", response: .json("{}"))
         URLProtocolStub.stub(path: "/api/chat/direct", response: .json("{\"roomId\":\"r1\"}"))
         URLProtocolStub.stub(path: "/api/chat/messages", response: .json("{}", status: 500))
+        URLProtocolStub.stub(
+            path: "/api/upload/chat-media/r1",
+            response: .json("""
+            {"media":[{"id":"f1","file_url":"/api/chat/files/f1","original_filename":"note.pdf",
+            "mime_type":"application/pdf","file_size":2048,"file_type":"document"}]}
+            """)
+        )
         let vm = ChatConversationViewModel(
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            uploader: MultipartUploader(session: TestSession.make())
         )
         await vm.load()
-        vm.composerText = "Hello"
+        vm.queueAttachment(kind: .document, filename: "note.pdf", mimeType: "application/pdf", data: Data("pdf".utf8))
         await vm.send()
+        XCTAssertEqual(vm.queuedAttachments.count, 1, "unconfirmed attachment must stay queued")
+        vm.composerText = "newer draft"
+        vm.queueAttachment(kind: .document, filename: "next.pdf", mimeType: "application/pdf", data: Data("next".utf8))
+        let newerAttachmentId = try XCTUnwrap(vm.queuedAttachments.last?.id)
 
         // The "failed" send actually landed: the next fetch returns it
         // under the same client_message_id.
@@ -562,13 +577,12 @@ final class ChatConversationViewModelTests: XCTestCase {
             path: "/api/chat/conversations/u_other/messages",
             response: .json(Self.messagesJSON(
                 Self.messageJSON(id: "m1", userId: "u_other", text: "hi"),
-                Self.messageJSON(
-                    id: "m_landed",
-                    userId: "u_me",
-                    text: "Hello",
-                    createdAt: "2026-04-20T10:01:00.000Z",
-                    clientMessageId: clientMessageId
-                )
+                """
+                {"id":"m_landed","room_id":"r1","user_id":"u_me","message_type":"file",
+                "client_message_id":"\(clientMessageId)","created_at":"2026-04-20T10:01:00.000Z",
+                "attachments":[{"id":"f1","file_url":"/api/chat/files/f1","original_filename":"note.pdf",
+                "mime_type":"application/pdf","file_size":2048,"file_type":"document"}]}
+                """
             ))
         )
         URLProtocolStub.stub(path: "/api/chat/conversations/u_other/read", response: .json("{}"))
@@ -584,6 +598,11 @@ final class ChatConversationViewModelTests: XCTestCase {
         XCTAssertEqual(bubbles.count, 2, "confirmed pending row must not duplicate")
         XCTAssertTrue(bubbles.contains { $0.id == "m_landed" })
         XCTAssertFalse(bubbles.contains { $0.deliveryState == .failed }, "failed mark must clear once confirmed")
+        XCTAssertEqual(vm.composerText, "newer draft")
+        XCTAssertEqual(vm.queuedAttachments.map(\.id), [newerAttachmentId], "confirmation must consume only original attachments")
+        vm.composerText = ""
+        vm.removeQueuedAttachment(id: newerAttachmentId)
+        XCTAssertFalse(vm.canSend, "confirmed attachment must not enable another send")
     }
 
     /// Person threads aggregate messages from every shared room (direct
@@ -899,7 +918,12 @@ final class ChatConversationViewModelTests: XCTestCase {
                   if case .bubble = $0 { true } else { false }
               }) else { return XCTFail("Expected failed upload") }
         XCTAssertEqual(failed.deliveryState, .failed)
+        vm.composerText = "newer draft"
+        vm.queueAttachment(kind: .document, filename: "next.pdf", mimeType: "application/pdf", data: Data("next".utf8))
+        let newerAttachmentId = try XCTUnwrap(vm.queuedAttachments.last?.id)
         await vm.retry(clientId: failed.id)
+        XCTAssertEqual(vm.composerText, "newer draft")
+        XCTAssertEqual(vm.queuedAttachments.map(\.id), [newerAttachmentId], "successful retry must consume only original attachments")
         let uploads = URLProtocolStub.capturedRequests.filter { $0.url?.path == "/api/upload/chat-media/r1" }
         XCTAssertEqual(uploads.count, 2)
         let clientRequestId = failed.id.hasPrefix("client_") ? String(failed.id.dropFirst("client_".count)) : failed.id
@@ -907,6 +931,9 @@ final class ChatConversationViewModelTests: XCTestCase {
         for upload in uploads {
             let body = try XCTUnwrap(String(bytes: XCTUnwrap(upload.httpBodyData()), encoding: .utf8))
             XCTAssertTrue(body.contains("name=\"client_request_id\"\r\n\r\n\(clientRequestId)"))
+            XCTAssertTrue(body.contains("filename=\"note.pdf\""))
+            XCTAssertTrue(body.contains("\r\n\r\npdf\r\n"))
+            XCTAssertFalse(body.contains("filename=\"next.pdf\""), "retry must upload the original snapshot")
         }
         let send = try XCTUnwrap(URLProtocolStub.capturedRequests.first { $0.url?.path == "/api/chat/messages" })
         let sendBody = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(send.httpBodyData())) as? [String: Any])
