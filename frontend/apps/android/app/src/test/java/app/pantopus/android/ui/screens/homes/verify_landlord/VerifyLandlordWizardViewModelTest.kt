@@ -132,6 +132,8 @@ abstract class VerifyLandlordWizardTestFixture {
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
+// Keep the existing context, retry and step-machine regressions together; no new test file or declarations.
+@Suppress("LargeClass")
 class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
     @Test fun discarding_held_status_does_not_submit_after_departure() =
         runTest {
