@@ -33,11 +33,11 @@ final class WalletPayoutTests: XCTestCase {
         #"{"success":true,"message":"$847.50 withdrawal initiated.","#
             + #""transaction":{"id":"wtx1","type":"withdrawal","amount":84750,"status":"completed"}}"#
 
-    /// Live-fetch reads 4 endpoints in order: balance, transactions,
-    /// pending-release, connect/account.
+    /// Live-fetch reads balance, history, owner recovery, pending-release, then Connect.
     private static func liveLoad(payoutsEnabled: Bool) -> [SequencedURLProtocol.Response] {
         [
             .status(200, body: balanceJSON),
+            .status(200, body: txJSON),
             .status(200, body: txJSON),
             .status(200, body: pendingJSON),
             payoutsEnabled ? .status(200, body: connectEnabledJSON) : .status(404, body: "{}")
@@ -105,6 +105,7 @@ final class WalletPayoutTests: XCTestCase {
         SequencedURLProtocol.sequence =
             Self.liveLoad(payoutsEnabled: true)
                 + [.status(400, body: #"{"error":"Insufficient balance"}"#)]
+                + Self.liveLoad(payoutsEnabled: true) // re-read after a terminal refusal
         let vm = makeVM()
         await vm.load()
         await vm.withdraw()
@@ -150,6 +151,7 @@ final class WalletPayoutTests: XCTestCase {
     func testPendingAccountSurfacesContinueSetup() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.balanceJSON),
+            .status(200, body: Self.txJSON),
             .status(200, body: Self.txJSON),
             .status(200, body: Self.pendingJSON),
             .status(200, body: Self.connectPendingJSON)

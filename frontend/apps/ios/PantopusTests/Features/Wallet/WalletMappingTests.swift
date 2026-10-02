@@ -208,7 +208,8 @@ final class WalletMappingTests: XCTestCase {
                 {"transactions":[{"id":"tx-1","type":"gig_income","amount":14000,\
                 "description":"Patio cleanup","currency":"usd","status":"completed",\
                 "created_at":"2026-06-03T14:14:00.000Z"}],"total":1,"limit":50,"offset":0}
-                """)
+                """),
+                .status(200, body: #"{"transactions":[],"total":0,"withdrawalRecovery":null}"#)
             ],
             "/api/wallet/pending-release": [
                 .status(200, body: """

@@ -13,9 +13,21 @@ import XCTest
 
 @MainActor
 final class WalletLifetimeTotalsTests: XCTestCase {
+    private var isolatedAuth: AuthManager?
+    private var markerDirectory: URL!
+
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        markerDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("wallet-lifetime-tests-\(UUID().uuidString)", isDirectory: true)
+    }
+
+    override func tearDown() {
+        isolatedAuth = nil
+        SequencedURLProtocol.reset()
+        try? FileManager.default.removeItem(at: markerDirectory)
+        super.tearDown()
     }
 
     private static let balanceWithLifetimeJSON =
@@ -33,14 +45,20 @@ final class WalletLifetimeTotalsTests: XCTestCase {
             + #""created_at":"2024-03-12T10:00:00.000Z"}}"#
 
     private func makeVM() -> WalletViewModel {
-        WalletViewModel(
-            api: APIClient(
-                environment: .current,
-                session: SequencedURLProtocol.makeSession(),
-                retryPolicy: .none
-            ),
-            connectPresenter: NoopConnectPresenter()
+        let client = APIClient(
+            environment: .current,
+            session: SequencedURLProtocol.makeSession(),
+            retryPolicy: .none
         )
+        // APIClient holds auth weakly; retain this isolated pair for the whole test.
+        isolatedAuth = AuthManager(
+            store: InMemorySecureStore(),
+            apiClient: client,
+            installMarker: InstallMarker(directory: markerDirectory),
+            presenceGate: FakePresenceGate(.verified),
+            allowSecureEnclave: false
+        )
+        return WalletViewModel(api: client, connectPresenter: NoopConnectPresenter())
     }
 
     /// RN renders `lifetime_received` as "Total Earned" and
@@ -49,6 +67,7 @@ final class WalletLifetimeTotalsTests: XCTestCase {
     func testLifetimeTotalsAreProjectedFromTheBalancePayload() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.balanceWithLifetimeJSON),
+            .status(200, body: Self.txJSON),
             .status(200, body: Self.txJSON),
             .status(200, body: Self.pendingJSON),
             .status(404, body: "{}")
@@ -68,6 +87,7 @@ final class WalletLifetimeTotalsTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.balanceWithoutLifetimeJSON),
             .status(200, body: Self.txJSON),
+            .status(200, body: Self.txJSON),
             .status(200, body: Self.pendingJSON),
             .status(404, body: "{}")
         ]
@@ -86,6 +106,7 @@ final class WalletLifetimeTotalsTests: XCTestCase {
     func testConnectedAccountCarriesCapabilityTiles() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.balanceWithLifetimeJSON),
+            .status(200, body: Self.txJSON),
             .status(200, body: Self.txJSON),
             .status(200, body: Self.pendingJSON),
             .status(200, body: Self.connectEnabledJSON)

@@ -47,6 +47,7 @@ class WalletPayoutViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { repository.withdrawalRecovery() } returns NetworkResult.Success(WalletTransactionsResponse(total = 0))
         coEvery { repository.balance() } returns
             NetworkResult.Success(WalletBalanceResponse(WalletDto(id = "w1", balance = 84_750L)))
         coEvery { repository.transactions() } returns NetworkResult.Success(WalletTransactionsResponse(emptyList()))
