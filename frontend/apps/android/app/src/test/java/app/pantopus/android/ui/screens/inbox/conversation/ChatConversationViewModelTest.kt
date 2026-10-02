@@ -927,8 +927,10 @@ class ChatConversationViewModelTest {
                 (vm.state.value as ChatConversationUiState.Loaded).rows
                     .filterIsInstance<ChatTimelineRow.Bubble>().first { it.content.deliveryState == ChatDeliveryState.Failed }
             vm.retry(failed.content.id)
-            assertEquals(listOf(failed.content.id, failed.content.id), uploadKeys)
-            assertEquals(failed.content.id, bodySlot.captured.clientMessageId)
+            val clientMessageId = failed.content.id.removePrefix("client_")
+            assertEquals(clientMessageId, UUID.fromString(clientMessageId).toString())
+            assertEquals(listOf(clientMessageId, clientMessageId), uploadKeys)
+            assertEquals(clientMessageId, bodySlot.captured.clientMessageId)
             assertEquals(listOf("f1"), bodySlot.captured.fileIds)
             val loaded = vm.state.value as ChatConversationUiState.Loaded
             val bubble = loaded.rows.filterIsInstance<ChatTimelineRow.Bubble>().first { it.content.id == "m_file" }

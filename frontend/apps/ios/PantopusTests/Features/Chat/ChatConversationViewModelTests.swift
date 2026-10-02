@@ -902,10 +902,15 @@ final class ChatConversationViewModelTests: XCTestCase {
         await vm.retry(clientId: failed.id)
         let uploads = URLProtocolStub.capturedRequests.filter { $0.url?.path == "/api/upload/chat-media/r1" }
         XCTAssertEqual(uploads.count, 2)
+        let clientRequestId = failed.id.hasPrefix("client_") ? String(failed.id.dropFirst("client_".count)) : failed.id
+        XCTAssertNotNil(UUID(uuidString: clientRequestId))
         for upload in uploads {
             let body = try XCTUnwrap(String(bytes: XCTUnwrap(upload.httpBodyData()), encoding: .utf8))
-            XCTAssertTrue(body.contains("name=\"client_request_id\"\r\n\r\n\(failed.id)"))
+            XCTAssertTrue(body.contains("name=\"client_request_id\"\r\n\r\n\(clientRequestId)"))
         }
+        let send = try XCTUnwrap(URLProtocolStub.capturedRequests.first { $0.url?.path == "/api/chat/messages" })
+        let sendBody = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(send.httpBodyData())) as? [String: Any])
+        XCTAssertEqual(sendBody["clientMessageId"] as? String, clientRequestId)
         guard case let .loaded(rows) = vm.state,
               case let .bubble(content)? = rows.first(where: { $0.id == "bubble_m_file" }),
               case let .attachment(filename, sizeLabel, _, _, _) = content.body else {
