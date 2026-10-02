@@ -359,6 +359,7 @@ private struct CostAndNextDueGroup: View {
                     )
                     .labelsHidden()
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .environment(\.timeZone, TimeZone(secondsFromGMT: 0) ?? .current)
                     .accessibilityIdentifier("logMaintenance_nextDueDate")
 
                     Picker(
