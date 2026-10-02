@@ -166,6 +166,8 @@ export default function ChatRoomView({
           ? PRE_BID_LIMIT_MESSAGE
           : (err?.message || 'Failed to send');
         chat.setError(errMsg);
+        // Let the existing composer restore the text and attachments for retry.
+        throw e;
       }
     },
     [chat, preBidStatus, loadPreBidStatus],

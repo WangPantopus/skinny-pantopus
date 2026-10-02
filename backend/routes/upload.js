@@ -622,6 +622,11 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
     const userId = req.user.id;
     const { roomId } = req.params;
     const files = req.files || [];
+    const requestId = req.body.client_request_id;
+
+    if (requestId !== undefined && require('joi').string().uuid().validate(requestId).error) {
+      return res.status(400).json({ error: 'Invalid upload request ID' });
+    }
 
     if (files.length === 0) {
       return res.status(400).json({ error: 'No files provided' });
@@ -639,15 +644,41 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
       return res.status(403).json({ error: 'Not authorized to upload files to this room' });
     }
 
+    // Bind every part to the same send intent. Include the ordered batch in the
+    // fingerprint so a changed retry cannot combine attachments from two drafts.
+    const fingerprint = requestId ? crypto.createHash('sha256').update(JSON.stringify(files.map(file => [
+      file.originalname, file.mimetype, crypto.createHash('sha256').update(file.buffer).digest('hex'),
+    ]))).digest('hex') : null;
     const uploaded = [];
-    for (const file of files) {
-      const { url, key } = await s3.uploadGeneral(
-        file.buffer,
-        file.originalname,
-        userId,
-        `chat/${roomId}`,
-        file.mimetype
-      );
+    for (const [index, file] of files.entries()) {
+      const hex = requestId ? crypto.createHash('sha256')
+        .update(`pantopus:chat-upload:v1:${userId.toLowerCase()}:${roomId.toLowerCase()}:${requestId.toLowerCase()}:${index}`)
+        .digest('hex').slice(0, 32) : null;
+      const id = hex ? `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}` : null;
+      const readExisting = async () => {
+        const { data, error } = await supabaseAdmin.from('File').select('*').eq('id', id).maybeSingle();
+        if (error) throw error;
+        return data;
+      };
+      const conflict = saved => saved.is_deleted || saved.metadata?.upload_fingerprint !== fingerprint;
+      const responseFile = saved => ({
+        id: saved.id, file_url: `/api/chat/files/${saved.id}`,
+        original_filename: saved.original_filename, mime_type: saved.mime_type,
+        file_size: saved.file_size, file_type: saved.file_type,
+      });
+      if (id) {
+        const existing = await readExisting();
+        if (existing) {
+          if (conflict(existing)) return res.status(409).json({ error: 'This upload request was already used. Send the attachment again.', code: 'CHAT_UPLOAD_REQUEST_REUSED' });
+          uploaded.push(responseFile(existing));
+          continue;
+        }
+      }
+
+      const stableKey = id ? `chat/${roomId}/${userId}/${id}/${fingerprint}${path.extname(file.originalname).toLowerCase()}` : null;
+      const { url, key } = await (id
+        ? s3.uploadToS3(file.buffer, stableKey, file.mimetype)
+        : s3.uploadGeneral(file.buffer, file.originalname, userId, `chat/${roomId}`, file.mimetype));
 
       const ext = (path.extname(file.originalname || '').replace('.', '') || '').toLowerCase();
       const category = s3.categorizeFile(file.mimetype) || 'document';
@@ -656,14 +687,13 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
       // proxy path once we have the generated id. Clients will fetch files
       // through GET /api/chat/files/:fileId which verifies room membership
       // and returns a short-lived signed S3 URL.
-      const { data: saved, error: saveErr } = await supabaseAdmin
-        .from('File')
-        .insert({
+      const row = {
+          ...(id ? { id } : {}),
           user_id: userId,
           filename: key.split('/').pop() || file.originalname,
           original_filename: file.originalname,
           file_path: key,
-          file_url: url,
+          file_url: id ? `/api/chat/files/${id}` : url,
           file_size: file.size,
           mime_type: file.mimetype,
           file_extension: ext,
@@ -674,12 +704,31 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
             room_id: roomId,
             category,
             uploaded_via: 'chat',
+            ...(fingerprint ? { upload_fingerprint: fingerprint } : {}),
           }
-        })
+        };
+      const { data: inserted, error: saveErr } = await (id
+        ? supabaseAdmin.from('File').upsert(row, { onConflict: 'id', ignoreDuplicates: true })
+        : supabaseAdmin.from('File').insert(row))
         .select('id, file_url, original_filename, mime_type, file_size, file_type')
-        .single();
+        .maybeSingle();
 
-      if (saved && !saveErr) {
+      if (saveErr) {
+        // An uncertain keyed commit may already own this object. Retry uses
+        // exactly the same name; deleting it could break a successful upload.
+        if (!id) await s3.deleteFromS3(key);
+        return res.status(500).json({ error: 'Failed to save uploaded file metadata' });
+      }
+      const saved = inserted || (id ? await readExisting() : null);
+      if (!saved) throw new Error('Upload returned no file');
+      if (id && !inserted && conflict(saved)) {
+        // Competing contents have disjoint object names. A tombstone must not
+        // acquire late-arriving objects after deletion either.
+        await s3.deleteFromS3(key);
+        return res.status(409).json({ error: 'This upload request was already used. Send the attachment again.', code: 'CHAT_UPLOAD_REQUEST_REUSED' });
+      }
+
+      if (!id) {
         // Replace the public URL with the authenticated proxy path
         const proxyUrl = `/api/chat/files/${saved.id}`;
         await supabaseAdmin
@@ -689,12 +738,7 @@ router.post('/chat-media/:roomId', uploadLimiter, verifyToken, upload.array('fil
         saved.file_url = proxyUrl;
       }
 
-      if (saveErr) {
-        await s3.deleteFromS3(key);
-        return res.status(500).json({ error: 'Failed to save uploaded file metadata' });
-      }
-
-      uploaded.push(saved);
+      uploaded.push(responseFile(saved));
     }
 
     res.json({

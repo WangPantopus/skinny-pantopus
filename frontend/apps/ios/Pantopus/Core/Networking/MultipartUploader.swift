@@ -397,14 +397,19 @@ public final class MultipartUploader: @unchecked Sendable {
     /// Each part uses the field name `files`, matching the backend multer route.
     public func uploadChatMedia(
         roomId: String,
-        files: [MultipartFile]
+        files: [MultipartFile],
+        clientRequestId: String? = nil
     ) async throws -> ChatMediaUploadResponse {
         guard !files.isEmpty else {
             throw APIError.clientError(status: 400, message: "No files provided")
         }
         let boundary = "PantopusBoundary-\(UUID().uuidString)"
         let url = environment.apiBaseURL.appendingPathComponent("/api/upload/chat-media/\(roomId)")
-        let body = Self.buildBody(boundary: boundary, files: files)
+        let body = Self.buildBody(
+            boundary: boundary,
+            files: files,
+            fields: clientRequestId.map { ["client_request_id": $0] } ?? [:]
+        )
         let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
         switch http.statusCode {
         case 200..<300:
