@@ -246,7 +246,6 @@ final class VerifyLandlordWizardViewModel: WizardModel {
             return
         }
         let generation = requestGeneration
-        submissionOutcomeUnknown = false
         let live = form.validate()
         errors = live
         if !live.isEmpty {
@@ -269,6 +268,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         guard requestGeneration == generation, !Task.isCancelled else { return }
         switch result {
         case let .success(lease):
+            submissionOutcomeUnknown = false
             approvalResult = VerifyLandlordApprovalResult(
                 kind: .submitted,
                 submittedAt: lease.createdAt,
@@ -346,6 +346,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
                 try await Task.sleep(nanoseconds: submitDelayNanos)
                 try Task.checkCancellation()
                 guard requestGeneration == generation, isCurrentSession else { throw CancellationError() }
+                submissionOutcomeUnknown = false
                 requestDispatched = true
                 let result = await approvalRequester(request)
                 if case let .failure(error) = result {
@@ -367,6 +368,8 @@ final class VerifyLandlordWizardViewModel: WizardModel {
                 message: request.message,
                 requestContext: context
             )
+            // A failed status read cannot resolve an earlier unconfirmed request.
+            submissionOutcomeUnknown = false
             requestDispatched = true
             let response: TenantRequestApprovalResponse = try await api.request(
                 TenantEndpoints.requestApproval(observedRequest)

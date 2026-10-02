@@ -11,6 +11,9 @@ import Foundation
 import XCTest
 @testable import Pantopus
 
+// Extend the existing network-context regression without a duplicate test file.
+// swiftlint:disable file_length
+
 @MainActor
 final class VerifyLandlordWizardViewModelTests: XCTestCase {
     // MARK: - Helpers
@@ -405,6 +408,7 @@ extension VerifyLandlordWizardViewModelTests {
         )
         URLProtocolStub.stub(path: "/api/v1/tenant/home/home-1/status", responses: [
             .json(#"{"home_id":"home-1","request_context":{"home_id":"home-1","actor_id":"actor-1","lease_id":null,"lease_state":null}}"#),
+            .json(#"{"error":"Status unavailable"}"#, status: 503),
             .json(
                 #"""
                 {"home_id":"home-1","request_context":{
@@ -413,7 +417,7 @@ extension VerifyLandlordWizardViewModelTests {
             )
         ])
         URLProtocolStub.stub(path: "/api/v1/tenant/request-approval", responses: [
-            .json(#"{"error":"Reply unavailable"}"#, status: 503),
+            .json(#"{"unconfirmed":"Reply unavailable"}"#, status: 201),
             .json(#"{"lease":{"id":"new-lease","home_id":"home-1","state":"pending"}}"#, status: 201)
         ])
         var form = VerifyLandlordSampleData.populatedForm
@@ -429,12 +433,20 @@ extension VerifyLandlordWizardViewModelTests {
         await vm.submit()
         XCTAssertEqual(vm.currentStep, .details)
         XCTAssertEqual(vm.form.messageToLandlord, "Retain this request")
-        XCTAssertFalse(vm.submissionOutcomeUnknown, "A known 503 keeps the existing server failure message")
+        XCTAssertTrue(vm.submissionOutcomeUnknown, "An unreadable POST reply may hide a saved request")
         XCTAssertNil(vm.pendingEvent)
         await vm.submit()
+        XCTAssertEqual(vm.currentStep, .details)
+        XCTAssertTrue(vm.submissionOutcomeUnknown, "A failed recheck cannot resolve the previous POST")
+        XCTAssertEqual(vm.submissionErrorTitle, "Couldn't confirm request")
+        XCTAssertEqual(vm.submitState, .error(message: "Your request may be saved. Submit again to check its status."))
+        XCTAssertEqual(vm.form.messageToLandlord, "Retain this request")
+        XCTAssertEqual(URLProtocolStub.capturedRequests.filter { $0.httpMethod == "POST" }.count, 1)
+        await vm.submit()
         XCTAssertEqual(vm.currentStep, .sent)
+        XCTAssertFalse(vm.submissionOutcomeUnknown, "A trustworthy result resolves the unconfirmed request")
         let requests = URLProtocolStub.capturedRequests.filter { $0.url?.path.hasPrefix("/api/v1/tenant/") == true }
-        XCTAssertEqual(requests.map(\.httpMethod), ["GET", "POST", "GET", "POST"])
+        XCTAssertEqual(requests.map(\.httpMethod), ["GET", "POST", "GET", "GET", "POST"])
         XCTAssertEqual(requests.first?.cachePolicy, .reloadIgnoringLocalAndRemoteCacheData)
         let posts = requests.filter { $0.httpMethod == "POST" }
         XCTAssertEqual(posts.count, 2)
