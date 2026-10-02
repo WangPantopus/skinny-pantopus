@@ -81,7 +81,47 @@ describe('NotificationBell — split by firewall mode (P2.3)', () => {
     return renderWithClient(<NotificationBell mode={mode} />);
   }
 
-  test('mode=personal renders the bell icon and the personal+platform count', () => {
+  test('mode=personal renders the bell icon and the personal+platform count', async () => {
+    const flags = require('../src/lib/featureFlags').launchFeatures;
+    const previousOpenGigs = flags.openGigs;
+    const previousAuth = apiMock.getAuthToken.getMockImplementation();
+    const previousChatStats = apiMock.chat.getChatStats;
+    const previousGigs = apiMock.gigs;
+    apiMock.getAuthToken.mockReturnValue('__session__');
+    apiMock.chat.getChatStats = jest.fn().mockResolvedValue({
+      stats: { total_unread: 7, total_messages: 11 },
+    });
+    apiMock.gigs = { ...previousGigs, getReceivedOffers: jest.fn() };
+    apiMock.notifications.getUnreadCount.mockResolvedValue({
+      total: 12, byContext: { personal: 9, audience: 3, platform: 0 },
+    });
+    flags.openGigs = false;
+    jest.useFakeTimers();
+    try {
+      const actualBadges = jest.requireActual('../src/contexts/BadgeContext');
+      function BadgeProbe() {
+        const counts = actualBadges.useBadges();
+        return <span data-testid="retained-shell-counts">{
+          `${counts.unreadMessages}/${counts.totalMessages}/${counts.notifications}/${counts.pendingOffers}`
+        }</span>;
+      }
+      render(<actualBadges.BadgeProvider><BadgeProbe /></actualBadges.BadgeProvider>);
+      await act(async () => { await Promise.resolve(); });
+      expect(screen.getByTestId('retained-shell-counts')).toHaveTextContent('7/11/12/0');
+      const initialPolls = apiMock.chat.getChatStats.mock.calls.length;
+      expect(initialPolls).toBeGreaterThan(0);
+      await act(async () => { jest.advanceTimersByTime(5_000); });
+      expect(apiMock.chat.getChatStats).toHaveBeenCalledTimes(initialPolls + 1);
+      expect(apiMock.notifications.getUnreadCount).toHaveBeenCalledTimes(initialPolls + 1);
+      expect(apiMock.gigs.getReceivedOffers).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+      jest.useRealTimers();
+      flags.openGigs = previousOpenGigs;
+      apiMock.getAuthToken.mockImplementation(previousAuth);
+      apiMock.chat.getChatStats = previousChatStats;
+      apiMock.gigs = previousGigs;
+    }
     loadBell('personal');
     const button = screen.getByTestId('notification-bell-personal');
     expect(button).toBeInTheDocument();

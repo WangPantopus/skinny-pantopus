@@ -696,7 +696,8 @@ private fun MessageField(
                         color = if (isFocused) PantopusColors.primary600 else PantopusColors.appBorder,
                         shape = RoundedCornerShape(Radii.md),
                     ).padding(Spacing.s2)
-                    .testTag("verifyLandlordMessageField"),
+                    .testTag("verifyLandlordMessageField")
+                    .semantics { contentDescription = "Message to landlord" },
             decorationBox = { inner ->
                 Box(modifier = Modifier.fillMaxWidth()) {
                     if (value.isEmpty()) {

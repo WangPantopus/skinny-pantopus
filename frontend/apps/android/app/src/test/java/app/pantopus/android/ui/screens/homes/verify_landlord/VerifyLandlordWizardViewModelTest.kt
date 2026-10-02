@@ -353,6 +353,16 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
                 assertTrue(vm.state.value.submissionOutcomeUnknown)
                 assertEquals("Couldn't confirm request", vm.state.value.submissionErrorTitle)
                 assertNull(vm.pendingEvent.value)
+                val retainedError = vm.state.value.submitState
+                val ownerName = vm.state.value.form.ownerName
+                vm.setOwnerName("")
+                vm.onPrimary()
+                assertEquals("Required", vm.state.value.errors?.ownerName)
+                assertEquals(retainedError, vm.state.value.submitState)
+                assertTrue(vm.state.value.submissionOutcomeUnknown)
+                coVerify(exactly = 1) { api.requestApproval(any()) }
+                vm.setOwnerName(ownerName)
+                assertEquals(retainedError, vm.state.value.submitState)
                 vm.onPrimary()
                 assertTrue(vm.state.value.submissionOutcomeUnknown)
                 assertEquals("Couldn't confirm request", vm.state.value.submissionErrorTitle)
@@ -641,6 +651,15 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
                 assertNull(vm.pendingEvent.value)
                 assertNull(vm.state.value.approvalResult)
                 assertEquals("Keep my entered message", vm.state.value.form.messageToLandlord)
+                val retainedError = vm.state.value.submitState
+                val ownerName = vm.state.value.form.ownerName
+                vm.setOwnerName("")
+                vm.onPrimary()
+                assertEquals("Required", vm.state.value.errors?.ownerName)
+                assertEquals(retainedError, vm.state.value.submitState)
+                vm.setOwnerName(ownerName)
+                assertTrue(vm.state.value.errors?.isEmpty == true)
+                assertEquals(retainedError, vm.state.value.submitState)
             }
         }
 
@@ -764,8 +783,21 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
             vm.setLease(VerifyLandlordSampleData.errorForm.lease)
             vm.onPrimary() // submit with errors
             assertEquals(2, vm.state.value.errors?.count)
+            assertEquals(
+                VerifyLandlordSubmitState.Error("Fix 2 things to submit", validationError = true),
+                vm.state.value.submitState,
+            )
             vm.setEmail("mira@elmstholdings.com")
             assertEquals(1, vm.state.value.errors?.count)
+            assertEquals(
+                VerifyLandlordSubmitState.Error("Fix 1 thing to submit", validationError = true),
+                vm.state.value.submitState,
+            )
+            vm.setLease(null)
+            assertEquals(0, vm.state.value.errors?.count)
+            assertEquals(VerifyLandlordSubmitState.Idle, vm.state.value.submitState)
+            assertTrue(vm.chrome.primaryCtaEnabled)
+            coVerify(exactly = 0) { tenantRepository.requestApproval(any(), any(), any()) }
         }
 
     @Test fun field_updates_do_not_show_errors_until_submit_attempt() {
