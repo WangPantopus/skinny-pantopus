@@ -4,6 +4,8 @@ You are **Stream 2: Posts, Hub and payments**. Name your session accordingly and
 
 The clean local checkpoint was reconciled at **2026-10-02T08:33:02Z**. All known local repairs are integrated. No owned compiler, device, driver, runtime, fixture or lease remains active. Updated 2026-10-02T09:04:22Z: the Wallet follow-up source CI36983405804 has completed successfully at exact8ac, including every applicable job and CI OK. Older source runs still have queued/running jobs. CI remains informational; this checkpoint does not claim whole-client or launch sign-off.
 
+**Successor supplement 2026-10-02T09:22:26Z:** current Stream2 owner is `01a0fbe5-715d-78f2-94a8-3ffce4bdc24c`; current Stream1 sole merger/iOS operator is `01a0fbe4-e9a4-7310-8e1e-f4692f1e3590`. Both older1463/1469 source runs now show queued iOS tests; only known1469 snapshotred remains, repaired by1472. Source/master/PNG and all174 files in the90/66/18 immutable packets were independently reverified. Own containers/listeners/devices/leases remain off; no new campaign or acceptance. Only the two named memory files are present in the specified restored memory directory; supplemental historical files remain unavailable. Newest status/U05 supplement wins over prior state below.
+
 ## Read first
 
 1. `/Users/yingpengwang/pantopus-coordination/AGENTS.md`, `docs/PROJECT_HANDOFF.md`, and the newest updates and launch-scope cuts in `docs/workstreams/README.md`. Newest dated text wins.
