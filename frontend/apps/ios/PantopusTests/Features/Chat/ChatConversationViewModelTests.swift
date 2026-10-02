@@ -542,7 +542,7 @@ final class ChatConversationViewModelTests: XCTestCase {
         URLProtocolStub.stub(
             path: "/api/upload/chat-media/r1",
             response: .json("""
-            {"media":[{"id":"f1","file_url":"/api/chat/files/f1","original_filename":"note.pdf",
+            {"message":"1 file(s) uploaded","media":[{"id":"f1","file_url":"/api/chat/files/f1","original_filename":"note.pdf",
             "mime_type":"application/pdf","file_size":2048,"file_type":"document"}]}
             """)
         )
