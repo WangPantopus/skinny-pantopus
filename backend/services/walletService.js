@@ -43,6 +43,8 @@ function withdrawalError(code, message) {
 }
 
 const WITHDRAWAL_PENDING = 'This withdrawal is still being processed. Check your wallet in a moment.';
+// Stripe may prune idempotency keys after 24 hours. Keep unresolved older attempts for review.
+const MAX_WITHDRAWAL_RETRY_AGE_MS = 23 * 60 * 60 * 1000;
 
 // Stripe refused the transfer request itself, so the same key and parameters get the same refusal:
 // no transfer exists, and none can be made with this key. Any other error (no reply, a timeout, a
@@ -125,6 +127,12 @@ async function settleRepeatedWithdrawal(tx, { userId, amount, stripe, stripeAcco
   }
   if (tx.status === 'reversed') throw withdrawalError('WITHDRAWAL_NOT_COMPLETED', WITHDRAWAL_NOT_COMPLETED);
   if (tx.stripe_transfer_id) return tx;
+
+  const createdAt = typeof tx.created_at === 'string' ? Date.parse(tx.created_at) : NaN;
+  const age = Date.now() - createdAt;
+  if (!Number.isFinite(age) || age < 0 || age >= MAX_WITHDRAWAL_RETRY_AGE_MS) {
+    throw withdrawalError('WITHDRAWAL_PENDING', 'This withdrawal needs support review before it can be retried. Please contact support.');
+  }
 
   // The earlier attempt debited the wallet but hasn't recorded its transfer: it is still running,
   // or it stopped between the two steps. The same transfer call with the same key returns that
@@ -429,13 +437,19 @@ class WalletService {
   /**
    * Get paginated transaction history for a user.
    */
-  async getTransactions(userId, { type, limit = 50, offset = 0, startDate, endDate } = {}) {
+  async getTransactions(userId, { type, unsettledWithdrawal = false, limit = 50, offset = 0, startDate, endDate } = {}) {
     let query = supabaseAdmin
       .from('WalletTransaction')
-      .select('*', { count: 'exact' })
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+      .select(unsettledWithdrawal ? 'amount,idempotency_key,created_at' : '*', { count: 'exact' })
+      .eq('user_id', userId);
+
+    if (unsettledWithdrawal) {
+      query = query.eq('type', 'withdrawal').is('stripe_transfer_id', null).neq('status', 'reversed')
+        .order('created_at', { ascending: true, nullsFirst: true });
+    } else {
+      query = query.order('created_at', { ascending: false });
+    }
+    query = query.range(offset, offset + limit - 1);
 
     if (type) query = query.eq('type', type);
     if (startDate) query = query.gte('created_at', startDate);
@@ -448,7 +462,26 @@ class WalletService {
       throw new Error('Failed to fetch transactions');
     }
 
-    return { transactions: data || [], total: count || 0 };
+    const result = { transactions: unsettledWithdrawal ? [] : data || [], total: count || 0 };
+    if (unsettledWithdrawal) {
+      const pending = data?.[0];
+      result.withdrawalRecovery = null;
+      if (pending) {
+        const prefix = `withdraw:${userId}:`;
+        const key = typeof pending.idempotency_key === 'string' && pending.idempotency_key.startsWith(prefix)
+          ? pending.idempotency_key.slice(prefix.length) : null;
+        const validKey = key && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key);
+        const age = Date.now() - (typeof pending.created_at === 'string' ? Date.parse(pending.created_at) : NaN);
+        result.withdrawalRecovery = {
+          amountCents: Number(pending.amount),
+          idempotencyKey: validKey ? key : null,
+          createdAt: pending.created_at || null,
+          retryable: Boolean(validKey && Number.isSafeInteger(Number(pending.amount)) && Number(pending.amount) >= 100
+            && Number.isFinite(age) && age >= 0 && age < MAX_WITHDRAWAL_RETRY_AGE_MS),
+        };
+      }
+    }
+    return result;
   }
 
   // ============ ADMIN OPERATIONS ============
