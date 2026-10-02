@@ -106,16 +106,24 @@ class VerifyLandlordWizardScreenTest {
         compose.onNodeWithTag("verifyLandlordField_Owner or business name")
             .assertContentDescriptionEquals("Owner or business name")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, "Required"))
-        compose.runOnIdle {
-            vm.setOwnerName("Fixture Owner")
-            vm.setContactName("Fixture Contact")
-            vm.setEmail("owner@example.invalid")
-        }
+        compose.onNodeWithText("Fix 3 things to submit").assertExists()
+        compose.runOnIdle { vm.setOwnerName("Fixture Owner") }
+        compose.onNodeWithText("Fix 2 things to submit").assertExists()
+        compose.runOnIdle { vm.setContactName("Fixture Contact") }
+        compose.onNodeWithText("Fix 1 thing to submit").assertExists()
+        compose.runOnIdle { vm.setEmail("owner@example.invalid") }
+        compose.onNodeWithText("Fix 1 thing to submit").assertDoesNotExist()
         compose.onNodeWithTag(WizardShellTags.PRIMARY_CTA).assertIsEnabled()
         compose.onNodeWithTag("verifyLandlordField_Owner or business name")
             .assertContentDescriptionEquals("Owner or business name")
             .assertTextEquals("Fixture Owner")
             .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Error))
+        compose.onNodeWithTag("verifyLandlordMessageField")
+            .assertContentDescriptionEquals("Message to landlord")
+        compose.runOnIdle { vm.setMessageToLandlord("Retain this note") }
+        compose.onNodeWithTag("verifyLandlordMessageField")
+            .assertContentDescriptionEquals("Message to landlord")
+            .assertTextEquals("Retain this note")
         val lease = TenantLeaseDto("lease-1", "home-1", "pending", "tenant_request")
         coEvery { repository.homeStatus("home-1") } returns
             NetworkResult.Success(

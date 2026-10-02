@@ -405,10 +405,10 @@ open class VerifyLandlordWizardViewModel
             val live = snapshot.form.validate()
             _state.update { it.copy(errors = live) }
             if (!live.isEmpty) {
-                val noun = if (live.count == 1) "thing" else "things"
                 _state.update {
+                    val existingError = it.submitState as? VerifyLandlordSubmitState.Error
                     it.copy(
-                        submitState = VerifyLandlordSubmitState.Error("Fix ${live.count} $noun to submit"),
+                        submitState = existingError?.takeUnless { error -> error.validationError } ?: validationFeedback(live),
                     )
                 }
                 return
@@ -600,6 +600,12 @@ open class VerifyLandlordWizardViewModel
 
         // MARK: - Helpers
 
+        private fun validationFeedback(errors: VerifyLandlordValidationErrors): VerifyLandlordSubmitState {
+            if (errors.isEmpty) return VerifyLandlordSubmitState.Idle
+            val noun = if (errors.count == 1) "thing" else "things"
+            return VerifyLandlordSubmitState.Error("Fix ${errors.count} $noun to submit", validationError = true)
+        }
+
         private inline fun updateForm(
             revalidate: Boolean = true,
             crossinline transform: (VerifyLandlordForm) -> VerifyLandlordForm,
@@ -613,7 +619,13 @@ open class VerifyLandlordWizardViewModel
                     } else {
                         current.errors
                     }
-                current.copy(form = nextForm, errors = nextErrors)
+                val nextSubmitState =
+                    if ((current.submitState as? VerifyLandlordSubmitState.Error)?.validationError == true && nextErrors != null) {
+                        validationFeedback(nextErrors)
+                    } else {
+                        current.submitState
+                    }
+                current.copy(form = nextForm, errors = nextErrors, submitState = nextSubmitState)
             }
         }
 
