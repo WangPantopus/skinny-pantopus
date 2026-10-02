@@ -33,6 +33,7 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const retire = () => {
+      try { window.sessionStorage.removeItem('pantopus_pending_withdrawal'); } catch {}
       // Retire both cached queries and component-local state belonging to the
       // previous account. A fresh client cannot accept an old pending result.
       queryClient.clear();

@@ -40,7 +40,8 @@ const transactionFilterSchema = Joi.object({
   type: Joi.string().valid(
     'withdrawal', 'gig_income', 'tip_income',
     'refund', 'adjustment', 'cancellation_fee'
-  ).optional(),
+  ).when('unsettledWithdrawal', { is: true, then: Joi.valid(Joi.override, 'withdrawal').required() }).optional(),
+  unsettledWithdrawal: Joi.boolean().default(false),
   limit: Joi.number().integer().min(1).max(100).default(50),
   offset: Joi.number().integer().min(0).max(5000).default(0),
   startDate: Joi.string().isoDate().optional(),
@@ -146,6 +147,7 @@ router.get('/transactions', verifyToken, walletReadLimiter, async (req, res) => 
     res.json({
       transactions: result.transactions,
       total: result.total,
+      withdrawalRecovery: result.withdrawalRecovery,
       limit: filters.limit,
       offset: filters.offset,
     });
