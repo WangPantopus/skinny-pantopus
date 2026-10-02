@@ -35,6 +35,10 @@ Complete handoff: [NEXT-STREAM4-1-PROMPT-2026-10-02.md](NEXT-STREAM4-1-PROMPT-20
 | F04/F05 | Hosted scale/eligibility/retention, deploy/DB schedules/migration-before-reader/old-worker retirement/released clients |
 | D02 deferred | Issue media after launch, approved private access/EXIF/type/scan/delete contract first; text launch stays |
 
+## Execution and review are separate
+
+4-1 is the sole execution lead for its assigned cases. Record the existing row/feature, concrete boundary and affected clients in this current-status next action. Another child's contract/evidence review is not a second implementation or runtime sweep. Reuse accepted evidence and one shared packet for a crossing journey; Root must explicitly transfer ownership before another child executes the same case. The prepared groups above are a shortlist, not a limit on the exact allocation or original core remaining-boundary columns. See the split guide's explicit execution/reviewer table and20 inherited U02–U04 group mappings. Row35 is split by actual Place/Home vs mail sublead; JustMoved mail and mail-linked Records have4-2 lead, with4-1 contract/host review. Other-stream draft mentions and inherited guest-pass/access references do not transferS3/Root ownership.
+
 ## Writer and review limits
 
 4-1 is the sole parent04/combinedU05/splitguide/common-router custodian, incorporates exact4-2 outcome/evidence/head contributions sequentially, and never revises immutable evidence. Root solewrites shared hub/handoff and merges. Single-writer exact-file grants apply to whole shared files; JustMoved, HomeAsset/HomeDocument/mailRecords, S3 document/deletion and platform exceptions are explicit in the split guide. Separate inactive source checkout; frozen a69f/shared d317 are not two-worker edit roots. Branch `claude/stream4-1-<topic>`; helper leases still `stream4:` and actual full exact label release.
@@ -46,3 +50,5 @@ No new acceptance from organization. Source leads≠failures; mocks/CI≠real ca
 ## Milestones
 
 - 2026-10-02T22:00:10Z: user-directed child allocation recorded; no application or acceptance state changed. Coverage proof and all inherited decision routing in [04-stream4-split-2026-10-02.md](04-stream4-split-2026-10-02.md); shared publication coordinated with Root.
+
+- 2026-10-02T22:24:00Z: second coverage audit tightened execution-versus-review and aggregate-row exceptions; all original allocations/acceptance unchanged. Exact core/UX/source/draft, residual boundaries and20 inherited exit groups compared against parent sources.
