@@ -111,7 +111,6 @@ public final class MailTaskViewModel {
         guard case var .loaded(content) = state, !content.isDone else { return }
         content.isDone = true
         state = .loaded(content)
-        toast = "Marked done"
         persistStatus("completed", rollbackDoneTo: false)
     }
 
@@ -120,21 +119,27 @@ public final class MailTaskViewModel {
         guard case var .loaded(content) = state, content.isDone else { return }
         content.isDone = false
         state = .loaded(content)
-        toast = "Task reopened"
         persistStatus("pending", rollbackDoneTo: true)
     }
 
     /// Persist the done/open flip. No-op in the seeded preview/test path;
     /// rolls the optimistic flip back on failure.
     private func persistStatus(_ status: String, rollbackDoneTo previous: Bool) {
-        guard seed == nil else { return }
+        let successMessage = status == "completed" ? "Marked done" : "Task reopened"
+        guard seed == nil else {
+            toast = successMessage
+            return
+        }
+        toast = nil
         let id = taskId
         Task {
             let result = await client.perform(
                 MailboxV2Endpoints.updateP3Task(taskId: id, request: P3TaskUpdateRequest(status: status)),
                 as: P3TaskResponse.self
             )
-            if case .failure = result, case var .loaded(content) = state {
+            if case .success = result {
+                toast = successMessage
+            } else if case .failure = result, case var .loaded(content) = state {
                 content.isDone = previous
                 state = .loaded(content)
                 toast = "Couldn't save — try again"

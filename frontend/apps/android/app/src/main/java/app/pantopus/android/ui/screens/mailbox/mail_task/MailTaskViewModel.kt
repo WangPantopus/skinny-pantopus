@@ -152,7 +152,6 @@ class MailTaskViewModel
             val current = _state.value as? MailTaskUiState.Loaded ?: return
             if (current.content.isDone) return
             _state.value = MailTaskUiState.Loaded(current.content.copy(isDone = true))
-            _toast.value = "Marked done"
             persistStatus("completed", rollbackDoneTo = false)
         }
 
@@ -161,7 +160,6 @@ class MailTaskViewModel
             val current = _state.value as? MailTaskUiState.Loaded ?: return
             if (!current.content.isDone) return
             _state.value = MailTaskUiState.Loaded(current.content.copy(isDone = false))
-            _toast.value = "Task reopened"
             persistStatus("pending", rollbackDoneTo = true)
         }
 
@@ -170,10 +168,17 @@ class MailTaskViewModel
             status: String,
             rollbackDoneTo: Boolean,
         ) {
-            if (seed != null) return
+            val successMessage = if (status == "completed") "Marked done" else "Task reopened"
+            if (seed != null) {
+                _toast.value = successMessage
+                return
+            }
+            _toast.value = null
             viewModelScope.launch {
                 val result = repository.updateP3Task(taskId, P3TaskUpdateRequest(status = status))
-                if (result is NetworkResult.Failure) {
+                if (result is NetworkResult.Success) {
+                    _toast.value = successMessage
+                } else if (result is NetworkResult.Failure) {
                     val current = _state.value as? MailTaskUiState.Loaded ?: return@launch
                     _state.value = MailTaskUiState.Loaded(current.content.copy(isDone = rollbackDoneTo))
                     _toast.value = "Couldn't save — try again"
