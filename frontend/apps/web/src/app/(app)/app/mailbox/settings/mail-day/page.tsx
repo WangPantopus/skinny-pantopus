@@ -12,24 +12,6 @@ import { toast } from '@/components/ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
 import { useMailboxContext } from '@/contexts/MailboxContext';
 
-// ── Timezone list (common US + intl) ─────────────────────────
-
-const TIMEZONES = [
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Anchorage',
-  'Pacific/Honolulu',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Asia/Tokyo',
-  'Asia/Shanghai',
-  'Australia/Sydney',
-  'Pacific/Auckland',
-];
-
 // ── Season helper ────────────────────────────────────────────
 
 function getSeasonEmoji(): string {
@@ -134,15 +116,6 @@ export default function MailDayPage() {
       setDraft({
         enabled: settings.enabled,
         delivery_time: settings.delivery_time,
-        timezone: settings.timezone,
-        include_personal: settings.include_personal,
-        include_home: settings.include_home,
-        include_business: settings.include_business,
-        include_earn_count: settings.include_earn_count,
-        include_community: settings.include_community,
-        interrupt_time_sensitive: settings.interrupt_time_sensitive,
-        interrupt_packages_otd: settings.interrupt_packages_otd,
-        interrupt_certified: settings.interrupt_certified,
       });
     }
   }, [settings]);
@@ -155,7 +128,17 @@ export default function MailDayPage() {
   );
 
   const handleSave = useCallback(() => {
-    updateSettings.mutate(draft, {
+    const patch: Partial<MailDaySettings> = { enabled: draft.enabled ?? settings?.enabled ?? true };
+    const time = (draft.delivery_time || '08:00').slice(0, 5);
+    if (time !== (settings?.delivery_time || '08:00').slice(0, 5)) {
+      const [hour, minute] = time.split(':').map(Number);
+      if (!/^\d{2}:\d{2}$/.test(time) || hour * 60 + minute > 19 * 60 + 45) {
+        toast.error('Choose a delivery time of 7:45 PM or earlier.');
+        return;
+      }
+      patch.delivery_time = time;
+    }
+    updateSettings.mutate(patch, {
       onSuccess: () => {
         setSaveToast(true);
         setTimeout(() => setSaveToast(false), 3000);
@@ -163,7 +146,7 @@ export default function MailDayPage() {
       // A failed save must not look like nothing happened.
       onError: (err) => toast.error(err.message || "Couldn't save your Mail Day settings."),
     });
-  }, [draft, updateSettings]);
+  }, [draft, settings, updateSettings]);
 
   if (summaryLoading || settingsLoading) {
     return (
@@ -334,7 +317,7 @@ export default function MailDayPage() {
             </p>
 
             <div className="space-y-6">
-              {/* Mail Day enabled + delivery time + timezone */}
+              {/* Mail Day enabled + honored not-before time */}
               <div className="space-y-3">
                 <div className="border border-app-border rounded-lg px-3 py-2.5">
                   <ToggleRow
@@ -346,90 +329,21 @@ export default function MailDayPage() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-app-text-secondary mb-1 block">Delivery Time</label>
+                  <label className="text-xs text-app-text-secondary mb-1 block">Notify no earlier than</label>
                   <input
                     type="time"
-                    value={draft.delivery_time || '08:00'}
+                    aria-label="Notify no earlier than"
+                    max="19:45"
+                    value={(draft.delivery_time || '08:00').slice(0, 5)}
                     onChange={(e) => updateDraft('delivery_time', e.target.value)}
                     className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
 
-                <div>
-                  <label className="text-xs text-app-text-secondary mb-1 block">Timezone</label>
-                  <select
-                    value={draft.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone}
-                    onChange={(e) => updateDraft('timezone', e.target.value)}
-                    className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  >
-                    {TIMEZONES.map((tz) => (
-                      <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Include in Mail Day */}
-              <div>
-                <p className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider mb-1">
-                  Include in Mail Day
+                <p className="text-xs text-app-text-secondary">
+                  Uses your push notification timezone. Mail Day notifications arrive when mail is
+                  ready, between 9 AM and 8 PM, and respect your quiet hours.
                 </p>
-                <div className="divide-y divide-app-border-subtle">
-                  <ToggleRow
-                    label="Personal"
-                    checked={draft.include_personal ?? true}
-                    onChange={(v) => updateDraft('include_personal', v)}
-                  />
-                  <ToggleRow
-                    label="Home"
-                    checked={draft.include_home ?? true}
-                    onChange={(v) => updateDraft('include_home', v)}
-                  />
-                  <ToggleRow
-                    label="Business"
-                    checked={draft.include_business ?? true}
-                    onChange={(v) => updateDraft('include_business', v)}
-                  />
-                  <ToggleRow
-                    label="Earn count"
-                    checked={draft.include_earn_count ?? true}
-                    onChange={(v) => updateDraft('include_earn_count', v)}
-                  />
-                  {/* Launch cut #8 (Mail extras): the community mail stream is hidden. */}
-                  {launchFeatures.mailExtras && <ToggleRow
-                    label="Neighborhood notices"
-                    checked={draft.include_community ?? true}
-                    onChange={(v) => updateDraft('include_community', v)}
-                  />}
-                </div>
-              </div>
-
-              {/* Always interrupt */}
-              <div>
-                <p className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider mb-1">
-                  Always Interrupt (Instant)
-                </p>
-                <div className="divide-y divide-app-border-subtle">
-                  <ToggleRow
-                    label="Time-sensitive"
-                    description="Bills due soon, deadlines"
-                    checked={draft.interrupt_time_sensitive ?? true}
-                    onChange={(v) => updateDraft('interrupt_time_sensitive', v)}
-                  />
-                  {/* Launch cuts #7 (package tracking) and #8 (certified mail) are hidden. */}
-                  {launchFeatures.householdExtras && <ToggleRow
-                    label="Packages out for delivery"
-                    description="Real-time delivery alerts"
-                    checked={draft.interrupt_packages_otd ?? true}
-                    onChange={(v) => updateDraft('interrupt_packages_otd', v)}
-                  />}
-                  {launchFeatures.mailExtras && <ToggleRow
-                    label="Certified mail"
-                    description="Requires acknowledgment"
-                    checked={draft.interrupt_certified ?? true}
-                    onChange={(v) => updateDraft('interrupt_certified', v)}
-                  />}
-                </div>
               </div>
 
               {/* Browser notifications */}
