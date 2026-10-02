@@ -1,5 +1,11 @@
 # Stream 4 — Place, home records, money and mail (split from the former Stream 2 on 2026-09-30)
 
+## STREAM 4 CHILD EXECUTION ROUTING — 2026-10-02T22:00:10Z
+
+**Current organization:** Stream4 now executes as **4-1 Place, Home records and Money** and **4-2 Mailbox, MailDay and mail tasks**, under unchanged parent domain4. Read [04-stream4-split-2026-10-02.md](04-stream4-split-2026-10-02.md) for exhaustive coverage, single-writer exceptions and runtime queue; use [NEXT-STREAM4-1-PROMPT-2026-10-02.md](NEXT-STREAM4-1-PROMPT-2026-10-02.md) or [NEXT-STREAM4-2-PROMPT-2026-10-02.md](NEXT-STREAM4-2-PROMPT-2026-10-02.md) for the child successor. Child statuses [04-1-place-home-records-money.md](04-1-place-home-records-money.md)/[04-2-mailbox-mailday.md](04-2-mailbox-mailday.md) own current milestones/next actions.4-1 is sole parent04/combinedU05/splitguide/common-router custodian;4-2 contributes exact accepted row evidence/head sequentially. Root is sole shared hub/handoff writer and merge/runtime coordinator.
+
+All tables/evidence/history below remain authoritative within their recorded scope; their older one-worker instructions and dated runtime/queue snapshots are superseded by this routing and fresh coordination. IDs/cuts/designs/accepted evidence/40+24parent split proof are preserved.4-2 MailDay remains next only after fresh Root ACK/exact leases;4-1 independently prepares its own retained work and a later scheduled window. Helper leases remain`stream4:`; no parallel shared runtime/devices/DB/fixtures/faults/builds. No app/acceptance changed for organization.
+
 > **Split (user direction, 2026-09-30).** The former **Stream 2** (Home and household) is split into **Stream 3 — Home access, residency and security** ([`03-home-access-residency.md`](03-home-access-residency.md)) and **Stream 4 — Place, records, money and mail** ([`04-place-records-money-mail.md`](04-place-records-money-mail.md)).
 > - Together their checklists are exactly the former Stream 2's, and nothing is shared or dropped:
 >   - the 40-row inventory, 20 rows each;

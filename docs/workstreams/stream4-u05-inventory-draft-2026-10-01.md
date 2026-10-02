@@ -1,5 +1,7 @@
 # Stream 4 U05 inventory — DRAFT, agent-gathered, NOT yet verified (2026-10-01)
 
+> **Child routing 2026-10-02T22:00:10Z:** this historical inventory stays DRAFT/UNVERIFIED. [04-stream4-split-2026-10-02.md](04-stream4-split-2026-10-02.md) assigns sections1.x/2.x to4-1 and3.x to4-2, with JustMoved mail-step and mail-linked asset exceptions.4-1 is the sole combined-draft custodian, taking exact4-2 contributions sequentially; use current parent dispositions rather than treating historical leads as missing features. No accepted scope/old draft payload changed.
+
 **Status:** gathered by a read-only research agent on 2026-10-01 (prompt: the kit's
 `runtime/stream4-u05-inventory-agent-prompt.md`). It read worktree c3e7 at `dd0602d5c`, which is master `7b41c8b04` plus one
 backend commit. **Nothing here is verified.** The next Stream 4 session must check each NOOP, SAMPLE, premature-success and

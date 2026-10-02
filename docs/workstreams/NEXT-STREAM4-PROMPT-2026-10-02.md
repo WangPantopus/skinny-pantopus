@@ -1,5 +1,13 @@
 # Stream 4 successor prompt — Place, records, money and mail
 
+## STREAM 4 CHILD EXECUTION ROUTING — 2026-10-02T22:00:10Z
+
+**Current organization:** Stream4 now executes as **4-1 Place, Home records and Money** and **4-2 Mailbox, MailDay and mail tasks**, under unchanged parent domain4. Read [04-stream4-split-2026-10-02.md](04-stream4-split-2026-10-02.md) for exhaustive coverage, single-writer exceptions and runtime queue; use [NEXT-STREAM4-1-PROMPT-2026-10-02.md](NEXT-STREAM4-1-PROMPT-2026-10-02.md) or [NEXT-STREAM4-2-PROMPT-2026-10-02.md](NEXT-STREAM4-2-PROMPT-2026-10-02.md) for the child successor. Child statuses [04-1-place-home-records-money.md](04-1-place-home-records-money.md)/[04-2-mailbox-mailday.md](04-2-mailbox-mailday.md) own current milestones/next actions.4-1 is sole parent04/combinedU05/splitguide/common-router custodian;4-2 contributes exact accepted row evidence/head sequentially. Root is sole shared hub/handoff writer and merge/runtime coordinator.
+
+All tables/evidence/history below remain authoritative within their recorded scope; their older one-worker instructions and dated runtime/queue snapshots are superseded by this routing and fresh coordination. IDs/cuts/designs/accepted evidence/40+24parent split proof are preserved.4-2 MailDay remains next only after fresh Root ACK/exact leases;4-1 independently prepares its own retained work and a later scheduled window. Helper leases remain`stream4:`; no parallel shared runtime/devices/DB/fixtures/faults/builds. No app/acceptance changed for organization.
+
+**This former single-worker prompt is retained common evidence/operator context, not the prompt for starting one all-Stream4 worker. Use the two child entry points above; child scope/ownership overrides historical instructions below.**
+
 Written 2026-10-02T20:29:44Z by Stream 4 chat `01a0fbe6-c508-7ff3-88ad-16cf0165b451` at the user's requested clean handoff boundary. This replaces the mixed historical continuation prompt in this same file. Earlier checkpoints remain in the Git history, the live04 detailed record and the original attachment. The workstream is not complete. Continue feasible retained work from the next unexecuted case; preserve accepted implementations and evidence.
 
 ## RESOURCE RETURN ADDENDUM — 2026-10-02T21:14:32Z
