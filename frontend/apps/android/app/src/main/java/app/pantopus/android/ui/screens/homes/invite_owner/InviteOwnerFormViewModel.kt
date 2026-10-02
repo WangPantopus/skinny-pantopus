@@ -166,7 +166,11 @@ class InviteOwnerFormViewModel
                             val name = home.name?.trim()?.takeIf { it.isNotEmpty() }
                             _state.update { current ->
                                 current.copy(
-                                    homeContext = InviteOwnerHomeContext(title = address ?: name ?: "Home", subtitle = name ?: "Selected home"),
+                                    homeContext =
+                                        InviteOwnerHomeContext(
+                                            title = address ?: name ?: "Home",
+                                            subtitle = name ?: "Selected home",
+                                        ),
                                     phase = if (current.owners.isEmpty()) InviteOwnerPhase.Empty else InviteOwnerPhase.Editing,
                                 )
                             }
