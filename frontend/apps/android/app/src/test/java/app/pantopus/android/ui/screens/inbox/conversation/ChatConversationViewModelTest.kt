@@ -124,7 +124,7 @@ class ChatConversationViewModelTest {
         every { socket.connectionState } returns MutableStateFlow(SocketManager.ConnectionState.Disconnected)
         every { socket.eventsOf(any()) } returns emptyFlow()
         coEvery { socket.emitWithAck(any(), any(), any()) } returns null
-        coEvery { uploadRepo.uploadChatMedia(any(), any()) } returns
+        coEvery { uploadRepo.uploadChatMedia(any(), any(), any()) } returns
             NetworkResult.Success(ChatMediaUploadResponse(message = "ok", media = emptyList()))
         coEvery { uploadRepo.uploadAIMedia(any()) } returns
             NetworkResult.Success(
@@ -868,21 +868,25 @@ class ChatConversationViewModelTest {
         runTest {
             coEvery { repo.roomMessages(any(), any(), any(), any()) } returns
                 NetworkResult.Success(ChatMessagesResponse(messages = emptyList(), hasMore = false))
-            coEvery { uploadRepo.uploadChatMedia(eq("r1"), any()) } returns
-                NetworkResult.Success(
-                    ChatMediaUploadResponse(
-                        message = "ok",
-                        media =
-                            listOf(
-                                ChatAttachmentDto(
-                                    id = "f1",
-                                    fileUrl = "/api/chat/files/f1",
-                                    originalFilename = "note.pdf",
-                                    mimeType = "application/pdf",
-                                    fileSize = 2048,
-                                    fileType = "document",
+            val uploadKeys = mutableListOf<String>()
+            coEvery { uploadRepo.uploadChatMedia(eq("r1"), any(), capture(uploadKeys)) } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(500, null)),
+                    NetworkResult.Success(
+                        ChatMediaUploadResponse(
+                            message = "ok",
+                            media =
+                                listOf(
+                                    ChatAttachmentDto(
+                                        id = "f1",
+                                        fileUrl = "/api/chat/files/f1",
+                                        originalFilename = "note.pdf",
+                                        mimeType = "application/pdf",
+                                        fileSize = 2048,
+                                        fileType = "document",
+                                    ),
                                 ),
-                            ),
+                        ),
                     ),
                 )
             val bodySlot = slot<SendChatMessageBody>()
@@ -919,6 +923,14 @@ class ChatConversationViewModelTest {
             vm.load()
             vm.queueAttachment(ChatQueuedAttachmentKind.Document, "note.pdf", "application/pdf", "pdf".toByteArray())
             vm.send()
+            val failed =
+                (vm.state.value as ChatConversationUiState.Loaded).rows
+                    .filterIsInstance<ChatTimelineRow.Bubble>().first { it.content.deliveryState == ChatDeliveryState.Failed }
+            vm.retry(failed.content.id)
+            val clientMessageId = failed.content.id.removePrefix("client_")
+            assertEquals(clientMessageId, UUID.fromString(clientMessageId).toString())
+            assertEquals(listOf(clientMessageId, clientMessageId), uploadKeys)
+            assertEquals(clientMessageId, bodySlot.captured.clientMessageId)
             assertEquals(listOf("f1"), bodySlot.captured.fileIds)
             val loaded = vm.state.value as ChatConversationUiState.Loaded
             val bubble = loaded.rows.filterIsInstance<ChatTimelineRow.Bubble>().first { it.content.id == "m_file" }

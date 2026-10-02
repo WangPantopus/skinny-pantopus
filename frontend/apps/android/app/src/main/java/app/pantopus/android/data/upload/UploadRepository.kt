@@ -43,6 +43,7 @@ class UploadRepository
         suspend fun uploadChatMedia(
             roomId: String,
             files: List<UploadFile>,
+            clientRequestId: String? = null,
         ): NetworkResult<ChatMediaUploadResponse> =
             safeApiCall {
                 val parts =
@@ -53,7 +54,7 @@ class UploadRepository
                             body = file.bytes.toRequestBody(file.mimeType.toMediaTypeOrNull()),
                         )
                     }
-                uploadApi.uploadChatMedia(roomId, parts)
+                uploadApi.uploadChatMedia(roomId, parts, clientRequestId?.toRequestBody("text/plain".toMediaTypeOrNull()))
             }
 
         suspend fun uploadAIMedia(files: List<UploadFile>): NetworkResult<AIMediaUploadResponse> =

@@ -442,6 +442,9 @@ public final class ChatConversationViewModel {
     /// send time so retry doesn't re-read mutated composer state.
     private struct PendingSendContext {
         let text: String
+        /// Original bytes and queue identities belong to this send,
+        /// even when a newer draft changes the composer before retry.
+        let attachments: [ChatQueuedAttachment]
         /// Uploaded attachment ids — set after the first successful
         /// upload so a retry after a failed POST doesn't re-upload.
         var fileIds: [String]?
@@ -694,6 +697,7 @@ public final class ChatConversationViewModel {
         pendingByClientId[clientId] = pending
         sendContextsByClientId[clientId] = PendingSendContext(
             text: trimmed,
+            attachments: queuedAttachments,
             fileIds: nil,
             replyToId: replyingTo?.messageId,
             topicId: selectedTopicId,
@@ -730,7 +734,11 @@ public final class ChatConversationViewModel {
         do {
             let roomId = try await ensureRoomId()
             if context.messageType == nil, context.fileIds == nil {
-                context.fileIds = try await uploadQueuedAttachmentsIfNeeded(roomId: roomId)
+                context.fileIds = try await uploadQueuedAttachmentsIfNeeded(
+                    context.attachments,
+                    roomId: roomId,
+                    clientId: clientId
+                )
                 sendContextsByClientId[clientId] = context
             }
             let fileIds = context.fileIds ?? []
@@ -750,15 +758,10 @@ public final class ChatConversationViewModel {
             )
             // Swap optimistic → server message. The socket echo may have
             // landed it via a refetch already, so replace-by-id.
-            pendingByClientId[clientId] = nil
-            sendContextsByClientId[clientId] = nil
-            failedClientIds.remove(clientId)
+            retireConfirmedSend(clientId: clientId)
             upsert(response.message)
             replyingTo = nil
             sendLimitNotice = nil
-            if context.messageType == nil {
-                queuedAttachments = []
-            }
             rebuild()
             scheduleMarkRead(for: roomId)
             return true
@@ -1332,6 +1335,7 @@ public final class ChatConversationViewModel {
         pendingByClientId[clientId] = pending
         sendContextsByClientId[clientId] = PendingSendContext(
             text: messageText,
+            attachments: [],
             fileIds: nil,
             replyToId: replyingTo?.messageId,
             topicId: topicId,
@@ -1400,8 +1404,12 @@ public final class ChatConversationViewModel {
         queuedAttachments = Array((queuedAttachments + [attachment]).prefix(5))
     }
 
-    private func uploadQueuedAttachmentsIfNeeded(roomId: String) async throws -> [String] {
-        let files = queuedAttachments.compactMap { attachment -> MultipartFile? in
+    private func uploadQueuedAttachmentsIfNeeded(
+        _ attachments: [ChatQueuedAttachment],
+        roomId: String,
+        clientId: String
+    ) async throws -> [String] {
+        let files = attachments.compactMap { attachment -> MultipartFile? in
             guard let data = attachment.data else { return nil }
             return MultipartFile(
                 fieldName: "files",
@@ -1411,7 +1419,7 @@ public final class ChatConversationViewModel {
             )
         }
         guard !files.isEmpty else { return [] }
-        let response = try await uploader.uploadChatMedia(roomId: roomId, files: files)
+        let response = try await uploader.uploadChatMedia(roomId: roomId, files: files, clientRequestId: clientId)
         return response.media.map(\.id)
     }
 
@@ -1591,10 +1599,19 @@ public final class ChatConversationViewModel {
             where pendingByClientId[clientId] != nil
             || sendContextsByClientId[clientId] != nil
             || failedClientIds.contains(clientId) {
-            pendingByClientId[clientId] = nil
-            sendContextsByClientId[clientId] = nil
-            failedClientIds.remove(clientId)
+            retireConfirmedSend(clientId: clientId)
         }
+    }
+
+    /// Every confirmation path consumes only the original send's
+    /// attachments. A newer composer draft keeps its text and files.
+    private func retireConfirmedSend(clientId: String) {
+        if let context = sendContextsByClientId.removeValue(forKey: clientId) {
+            let attachmentIds = Set(context.attachments.map(\.id))
+            queuedAttachments.removeAll { attachmentIds.contains($0.id) }
+        }
+        pendingByClientId[clientId] = nil
+        failedClientIds.remove(clientId)
     }
 
     /// Stable `(created_at|id)` cursor for keyset pagination. Avoids raw
@@ -1840,9 +1857,7 @@ public final class ChatConversationViewModel {
             where pendingByClientId[clientId] != nil
             || sendContextsByClientId[clientId] != nil
             || failedClientIds.contains(clientId) {
-            pendingByClientId[clientId] = nil
-            sendContextsByClientId[clientId] = nil
-            failedClientIds.remove(clientId)
+            retireConfirmedSend(clientId: clientId)
             retiredPending = true
         }
         let existingIds = Set(messages.map(\.id))
@@ -1877,9 +1892,7 @@ public final class ChatConversationViewModel {
         // too, so a lost POST response resolving moments later can't
         // re-flag the now-confirmed message as failed.
         if let clientId = event.clientMessageId, pendingByClientId[clientId] != nil {
-            pendingByClientId[clientId] = nil
-            sendContextsByClientId[clientId] = nil
-            failedClientIds.remove(clientId)
+            retireConfirmedSend(clientId: clientId)
             Task { await self.refresh() }
             return
         }
