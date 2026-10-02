@@ -1,37 +1,77 @@
 # Start prompt: Pantopus Stream 2 — Posts, Hub and payments (successor, 2026-10-02 early morning)
 
-You are **Stream 2: Posts, Hub and payments**, lease label `stream2:`. This is the successor of Codex chat01a0f92f-0c8c-7952-8cd8-01ff274c9a11. The localcheckpoint was reconciled 2026-10-02T08:33:02Z fromliveGit/PR/lease/process evidence. All known localrepair work isintegrated. No owned native compiler, device/driver, runtime, fixture or lease remains active. RemoteCI isinformational andsomejobsremainrunning, not greenaggregate acceptance.
+You are **Stream 2: Posts, Hub and payments**. Name your session accordingly and use the lease label `stream2:`. You succeed Codex chat `01a0f92f-0c8c-7952-8cd8-01ff274c9a11`.
+
+The clean local checkpoint was reconciled at **2026-10-02T08:33:02Z**. All known local repairs are integrated. No owned compiler, device, driver, runtime, fixture or lease remains active. Some remote CI jobs are still running; CI is informational and this checkpoint does not claim aggregate success or launch sign-off.
 
 ## Read first
 
-1. `/Users/yingpengwang/pantopus-coordination/AGENTS.md`, `docs/PROJECT_HANDOFF.md`, newest `docs/workstreams/README.md` updates and launchcuts. Newestdatedtext wins.
-2. `/Users/yingpengwang/pantopus-coordination/docs/workstreams/02-posts-hub-payments.md`: CURRENTRESUME/HANDOFF, newestUPDATE, CURRENTSTATE, U05ownercontribution table, existingcanonicalU02–U04. Read linked reports rather than recreatinginventories or acceptedjourneys.
-3. ExistingchecklistsREADME: editonly `data_s2.py`, run `gen.py check` and re-render section. Counts U02 81done/2boundaries, U03 55done/2notoffered, U04 16done; these152completeditems are not a wholelaunch denominator. Approximately80–85% launchsignoff/15–20%left is planningjudgmentonly.
-4. Existingmemory `/Users/yingpengwang/.claude/projects/-Users-yingpengwang-skinny-pantopus/memory/stream2-posts-hub-payments-successor-2026-09-30.md` and `user-decisions-stream2-2026-09-30.md`, plus standingdirection/CI/cuts/timestamps/credentialfocus/migration/sealing/tmpcleaner files named in thepriorprompt.
+1. `/Users/yingpengwang/pantopus-coordination/AGENTS.md`, `docs/PROJECT_HANDOFF.md`, and the newest updates and launch-scope cuts in `docs/workstreams/README.md`. Newest dated text wins.
+2. `/Users/yingpengwang/pantopus-coordination/docs/workstreams/02-posts-hub-payments.md`: CURRENT RESUME/HANDOFF, newest UPDATE, CURRENT STATE, the U05 owner-contribution table, and the canonical U02–U04 checklists. Read the linked reports instead of recreating inventories or accepted journeys.
+3. `docs/workstreams/checklists/README.md`. Edit only `data_s2.py`, run `gen.py check`, and re-render your section. Counts remain U02 81 done/2 boundaries, U03 55 done/2 not offered, U04 16 done. The 152 completed items are not a whole-launch denominator. The estimate of 80–85% toward launch sign-off and 15–20% left is planning judgment only.
+4. Memory under `/Users/yingpengwang/.claude/projects/-Users-yingpengwang-skinny-pantopus/memory/`: the latest entries in `stream2-posts-hub-payments-successor-2026-09-30.md` and `user-decisions-stream2-2026-09-30.md`, followed by the standing-direction, CI, launch-cuts, timestamps, credential-focus, migration, sealing and tmp-cleaner files named in the prior prompt.
 
-## Exact latest checkpoints (reverify live)
+## Exact checkpoints — reverify live
 
-- Appworktree `/Users/yingpengwang/.codex/worktrees/f1aa/skinny-pantopus`, clean/pushedbranch `claude/stream2-money-wallet-snapshot-baseline`, head `8ac6923b9dd51aca1a28598d3a730438a556fa25`. It remains frozen; don'tswitch/edit while anyqueuednativebuild maycompile it. Latestfetchedmaster `a7118fd13bb51e478c6dbe3818b16e1502df876a`.
-- Primarynativewithdrawalrecovery #1463/head1aae2fd5a2fb82c81700795a64734503f310703c integrated339; separatetransactiontruth #1469/head050c1547207a05754a58e49abf8249d0dfe8ae42 integrated341. ActualownedAndroidapp/API/SQL recovery/retry/refusal/age/zero/accountswitch and Wallet/HistoryOnhold/Reversed/Payout/creditcount cells passed; SDK faults/settlement simulated, no realprovider/capture. SourceboundiOS37/37/full5static/build receipts retained; actualnormalHubWalletmenu reachesemptyOSpasscode, dynamicWallet beyondgateUNVERIFIED. Bothnativeappslaunchhere; OSgate is an acceptanceboundary.
-- Late050c sourceCI36975634478/Android110740139541 exposed existingwallet_populated golden0.238972% mismatch on3attempts. Priorordinary28tests didnotenablegoldencomparison; do not repeatthatclaim. #1472/head8ac mergedunchangedbatch343/#1473: batchmastermerged08:24:39Z, sourcePRmerged08:24:41Z/tip617584573683ac381387d4407fbccdc3eb42d845. OnlyexistingpopulatedPNG changes, wholeGitblob460b44cfe366b9f8de0079b22db889decd38421b/SHA256a87a0c6d2f735c8249515291825e7b00ddd2a784da16f4618f62d9fc859f066c; production/cases/fixture/threshold/holdgoldenunchanged. Localbeforepopulated0.238945%3fail/holdPASS; record1PASS; existing2explicitaftercomparisons2/2PASS08:11:48Z. Majorold/newdeltas confinedto2Pendingbadgepositions, smallrenderer/onepixel/privateXMLguard/owninitiallockcleanup qualifications retained. No newtests/application redesign or livefixtures.
-- Sealedimmutableauditroot `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`: `20261002-stream2-money-native-withdraw-recovery-r1`90files/sealff8a0f52f0f83ac71613a0b33fc43a6d1df1a89ae8540f4928d25c6ae23bfa21; `20261002-stream2-money-wallet-truth-r1`66files/sealf3f243dffa6966c02e26c15f3b0a3c51f21f0683250de7a60ba945ecf0879e96; `20261002-stream2-money-wallet-snapshot-baseline-r1`18files/seal32132a79c579d13f017227f8c041202fb0f545ec6e8ebf344ac885283c1f34c7. ManifestSHAequalsseal; allhashes were independentlyverified. Nevereditsealedr1packets; freshrevision fornew evidence.
-- Current1472sourceCI36983405804 stillrunning/no completedredatlatestcheck. Canceledbatch343/run36983811398 solefailedCI OK110764827772 readfullyprivately: failedrequire-all step/exit1 dueAndroid/schema cancellations, othersskipped; cancellation-derived, no appfailure/greenaggregate inferred. Old339/341cancelledaggregates similarlyqualified. Re-read anynewcompletedred sourcejob before newwork; keepoperatorlogsprivate.
+- App worktree: `/Users/yingpengwang/.codex/worktrees/f1aa/skinny-pantopus`. It is clean and pushed on `claude/stream2-money-wallet-snapshot-baseline`, head `8ac6923b9dd51aca1a28598d3a730438a556fa25`. Keep it frozen while any queued native build may compile it. Latest fetched master was `a7118fd13bb51e478c6dbe3818b16e1502df876a`.
+- Native withdrawal recovery [#1463](https://github.com/WangPantopus/skinny-pantopus/pull/1463), head `1aae2fd5a2fb82c81700795a64734503f310703c`, integrated in batch 339. Separate transaction truth [#1469](https://github.com/WangPantopus/skinny-pantopus/pull/1469), head `050c1547207a05754a58e49abf8249d0dfe8ae42`, integrated in batch 341.
+- Actual owned Android app/API/SQL journeys passed for recovery, retry, refusal, age, zero balance and account switch, plus Wallet/History On hold, Reversed, Payout and credit-count behavior. SDK faults and settlement were simulated; no real provider or capture acceptance was added.
+- The iOS source-bound receipts retain 37/37 covering tests, five full static gates and build evidence. A normal installed-app login and Hub Wallet menu reached an empty OS passcode prompt. Dynamic Wallet behavior beyond that gate remains unverified. Both native apps launch on this machine; the OS prompt is an acceptance boundary.
+
+A late source-CI result exposed a stale `wallet_populated` golden: run `36975634478`, Android job `110740139541`, three failed attempts at 0.238972% image difference. Earlier ordinary 28-test Wallet runs did not enable explicit golden comparison; do not treat them as a passing image comparison.
+
+[#1472](https://github.com/WangPantopus/skinny-pantopus/pull/1472), exact head `8ac6923b9dd51aca1a28598d3a730438a556fa25`, fixed only the existing populated PNG. It merged unchanged through batch 343/[#1473](https://github.com/WangPantopus/skinny-pantopus/pull/1473): batch master merged at 08:24:39Z, source PR at 08:24:41Z, tip `617584573683ac381387d4407fbccdc3eb42d845`.
+
+- PNG Git blob: `460b44cfe366b9f8de0079b22db889decd38421b`.
+- PNG SHA256: `a87a0c6d2f735c8249515291825e7b00ddd2a784da16f4618f62d9fc859f066c`.
+- Local before: populated failed three attempts at 0.238945%; hold passed.
+- Record: only the existing populated case passed. Explicit after: both existing Wallet comparisons passed, 2/2, at 08:11:48Z.
+- Production code, test cases, fixture, threshold and hold golden were unchanged. Meaningful pixel differences were confined to two Pending badges. Renderer noise, one pixel-count difference, the private XML-prefix guard and initial own-lock cleanup are qualified in the report. No new tests, redesign or live fixtures were introduced.
+
+Sealed audit root: `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`.
+
+| Packet | Files | Seal = MANIFEST SHA256 |
+|---|---:|---|
+| `20261002-stream2-money-native-withdraw-recovery-r1` | 90 | `ff8a0f52f0f83ac71613a0b33fc43a6d1df1a89ae8540f4928d25c6ae23bfa21` |
+| `20261002-stream2-money-wallet-truth-r1` | 66 | `f3f243dffa6966c02e26c15f3b0a3c51f21f0683250de7a60ba945ecf0879e96` |
+| `20261002-stream2-money-wallet-snapshot-baseline-r1` | 18 | `32132a79c579d13f017227f8c041202fb0f545ec6e8ebf344ac885283c1f34c7` |
+
+All hashes were independently verified. Never edit a sealed r1 packet; use a fresh revision for new evidence.
+
+Source CI `36983405804` was still running with no completed red jobs at the last check. Cancelled batch 343 run `36983811398` had one red CI OK job, `110764827772`: its require-all step exited 1 because Android/schema jobs were cancelled and other jobs skipped. The complete private log was read; this is cancellation-derived, not a reproduced application failure or green aggregate. Older batch 339/341 cancellations are similarly qualified. Read any new completed source-job failure before changing existing work, and keep operator logs private.
 
 ## Runtime, cleanup and missing kit
 
-Private operatorroot `/Users/yingpengwang/.config/pantopus/stream2-posts-runtime-20261001` exists; neverdump dotfiles/credentials/rawtokens orcopyrunners/operatorlogs/archives/APKs toGit/chat/bundles. All7 `*_pantopus-stream2-posts-20261001`containersSTOPPED; own18160/18168/18169listenersCLOSED, ownAVD/emulator5564absent/reverse18168removed. Ownheavy/deviceleasesreleased (latestnative08:11:48Z); globalpeerleases/devices maystillbeactive. Round2/3/4 completecleanup restores353public/23authfullfingerprints andownedAuthbookkeeping/JTI. Oldprivatecredentials referdeletedactors, mustnotreuse. Futureauthorizedlocalcell needsfresh ownedactors, migration/source/config recheck, exactleases and cleanupbaseline. Do not auto-startoldruntime or investigatepeers/founderports.
+Private operator root: `/Users/yingpengwang/.config/pantopus/stream2-posts-runtime-20261001`. Never dump dot-files, credentials or raw tokens, or copy runners, operator logs, archives or APKs into Git, chat or evidence packets.
 
-Old20260930inventorypath and originalscan.cjs/routes-scan.cjs wereabsentonrestoredhost. Stream1confirmedno copy; do notinventduplicateinventory/scanner. Bounded12RPC/manualroute/sourceinspectionpassed, fullautomateddriftsweepUNVERIFIED. Runtimewas reconstructed-v1; secretsneverstoredin recoverykit. Missingoldartifacts remainhistorical, notbyte-for-byte reconstruction.
+All seven `*_pantopus-stream2-posts-20261001` containers are stopped. Own listeners 18160/18168/18169 are closed. Own emulator 5564 is absent and reverse 18168 removed. Own heavy/device leases are released; the latest native window ended at 08:11:48Z. Peer leases or devices may still be active.
+
+Round 2/3/4 cleanup restored 353 public and 23 auth table fingerprints and removed owned sign-in bookkeeping/JTI rows. Old private credentials refer to deleted actors and must not be reused. A future authorized local cell needs fresh owned actors, source/migration/config checks, exact leases and a cleanup baseline. Do not automatically start the old runtime or investigate peer/founder ports.
+
+The old 20260930 inventory path and original `scan.cjs`/`routes-scan.cjs` were absent on this restored host. Stream 1 confirmed no available copy. Do not invent a duplicate inventory or scanner. The bounded manual inspection of 12 RPCs/routes passed; a full automated drift sweep remains unverified. The reconstructed runtime/evidence format is `reconstructed-v1`; missing historical artifacts were not recovered byte for byte, and secrets are never in the recovery kit.
 
 ## First actions and remaining work
 
-Read-only: `date -u`, disk/memory, cleanGit/status/remotehead and PR1463/1469/1472 pluscurrentsourceCI; heavy-slot/device-slotstatuswithzsh; ListAgents. Introduce yourself to Stream1'scurrent successor as Stream2successor. Stream1thread01a0f92d-68b1-7ac1-a17c-f11470ac4777 was solemerger/iOSoperator; reverifycurrentthread/owner. AllknownlocalqueuePRs1414/1412/1418/1423/1426/1428/1431/1413/1445/1463/1469/1472 areintegrated. No pendingStream2PR or newruntimecampaign isrequested atthischeckpoint.
+Start read-only: `date -u`, disk/memory, Git status and fetched remote head, PRs 1463/1469/1472 and current source CI, heavy/device status with zsh, and ListAgents. Introduce yourself to Stream 1's current successor as the Stream 2 successor. Thread `01a0f92d-68b1-7ac1-a17c-f11470ac4777` was the sole merger/iOS operator; reverify the current owner.
 
-Continue a newreproducedin-scopefailure/newavailableauthorizedboundary reportedbyStream1, not staleopenrows or speculativeredesigns. LateCI sourcefailure is actionable evenafterearlierlocalcompletion; classify/read beforechangingexistingimplementation. Preserveworkingdesigns andsourceboundrealapp evidence; smallestrepair, affectedrealjourney/regressions, cleanup, passing scan&&seal, PR/attach, exacthead/seal/MANIFEST/decision tosolemerger.
+All known queue PRs are integrated: 1414, 1412, 1418, 1423, 1426, 1428, 1431, 1413, 1445, 1463, 1469 and 1472. No Stream 2 PR or runtime campaign is pending at this checkpoint.
 
-Remaininglaunchacceptance is explicit inexistingU05table: normaliOSpasscode/biometricWalletscenarios throughStream1; secureAndroidmanualvisual/contrastreference-device review; approvedStripeTEST/Connect/providercapabilities/webhook/clientsecret scenarios; scopedhostedAWS EC2/SSH/S3/CDN andSupabaseAuth/Storage/schema/worker/backup access andreviewedrollout/rollback; consentingphysicaliPhone/Android/signing/APNs/FCM/permissions/location/colddeeplinkdelivery; approvedShare/maps/address/AIproviderenitlements/destinations; originalautomatedscanner restoration; Stream1'sfinalintegratedsignedRelease/configuration/source/provider/deviceassembly. No provider/hosted/physical/moneycapture work isauthorized bythishandoff. Deploybackend1445before dependentrecoveryclients. No blanketwholePosts/payments/client/launch-ready claim.
+Continue when a new reproduced in-scope failure or an available authorized boundary is reported through Stream 1. Stale open rows are not missing features. A late completed source-CI failure is actionable after an earlier local checkpoint: read and classify it first. Preserve designs and relevant accepted real-app evidence; make the smallest repair, verify the affected journey/regressions, clean fixtures, scan && seal, publish/attach the PR, and send exact head, seal, MANIFEST and decision to the sole merger.
 
-Scope remains Posts/Pulse, Start/Placepreview, Hub/Today, P01–P10tips/payments/Wallet, known-crewassignedtasklifecycle, web logged-outlanding. Launchcuts/entrypoints remainexcluded. FormerStream2Home/household belongsStreams3–4; do not use their `stream2`branches/stacks. Conditionalnotesstayconditional: backdrop-onlyoverlaysStream1rule1, unscheduledarchiveSQL onlyifscheduled, optionalEPAclientfield, afterlaunchactualevent/dealinstants.
+Remaining launch acceptance is recorded in the existing U05 table:
+
+- Normal iOS passcode/biometric Wallet scenarios through Stream 1.
+- Secure Android visual/contrast review on an approved reference device.
+- Approved Stripe TEST/Connect scenarios and provider capabilities/webhooks/client secret.
+- Scoped AWS EC2/SSH/S3/CDN and Supabase Auth/Storage/schema/worker/backup access, with reviewed rollout/rollback authorization.
+- Consenting physical iPhone/Android devices, signing/APNs/FCM, permissions/location and cold deep-link delivery.
+- Approved Share/maps/address/AI provider entitlements and destinations.
+- Restoration of the original automated scanner.
+- Stream 1's final integrated signed Release/configuration/source/provider/device assembly.
+
+This handoff grants no provider, hosted, physical-device or money-capture authorization. Deploy backend #1445 before dependent recovery clients. Do not claim whole Posts, payments, client or launch-ready acceptance.
+
+Scope remains Posts/Pulse, Start/Place preview, Hub/Today, P01–P10 tips/payments/Wallet, the known-crew assigned-task lifecycle, and web logged-out landing. Launch cuts and their entry points stay excluded. Former Stream 2 Home/household belongs to Streams 3–4; do not use their branches or stacks. Conditional notes stay conditional: backdrop-only overlays under Stream 1 rule 1, unscheduled archive SQL only if scheduled, optional EPA client field, and after-launch event/deal instants.
 
 ## The user's standing direction (verbatim where quoted)
 
