@@ -433,6 +433,7 @@ private fun FastTrackToggleRow(
         Switch(
             checked = isOn,
             onCheckedChange = onCheckedChange,
+            modifier = Modifier.semantics { contentDescription = "Fast track (vouch)" },
             colors =
                 SwitchDefaults.colors(
                     checkedThumbColor = PantopusColors.appSurface,

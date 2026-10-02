@@ -235,6 +235,7 @@ private struct VerifyLandlordMessageField: View {
                         lineWidth: isFocused ? 1.5 : 1
                     )
             }
+            .accessibilityLabel("Message to landlord, optional")
             .accessibilityIdentifier("verifyLandlordMessageField")
             Text("\(value.count)/\(VerifyLandlordForm.messageMaxLength)")
                 .pantopusTextStyle(.caption)
@@ -364,6 +365,7 @@ private struct VerifyLandlordField: View {
                 .font(Theme.Font.body)
                 .foregroundStyle(Theme.Color.appText)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(optional ? "\(label), optional" : label)
                 .accessibilityIdentifier("verifyLandlordField_\(label)")
             }
             .frame(height: 44)
@@ -423,6 +425,7 @@ private struct PMToggleRow: View {
             Toggle("", isOn: $isOn)
                 .labelsHidden()
                 .tint(Theme.Color.primary600)
+                .accessibilityLabel("Property manager handles this rental")
                 .accessibilityIdentifier("verifyLandlordPMToggle")
         }
     }
