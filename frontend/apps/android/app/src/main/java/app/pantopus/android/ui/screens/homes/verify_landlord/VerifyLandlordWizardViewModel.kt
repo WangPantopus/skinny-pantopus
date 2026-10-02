@@ -408,12 +408,7 @@ open class VerifyLandlordWizardViewModel
                 _state.update {
                     val existingError = it.submitState as? VerifyLandlordSubmitState.Error
                     it.copy(
-                        submitState =
-                            if (existingError != null && !existingError.validationError) {
-                                existingError
-                            } else {
-                                validationFeedback(live)
-                            },
+                        submitState = existingError?.takeUnless { error -> error.validationError } ?: validationFeedback(live),
                     )
                 }
                 return
