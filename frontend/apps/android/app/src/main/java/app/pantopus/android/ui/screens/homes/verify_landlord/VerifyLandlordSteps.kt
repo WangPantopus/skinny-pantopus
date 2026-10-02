@@ -96,7 +96,10 @@ sealed interface VerifyLandlordSubmitState {
 
     data object Submitted : VerifyLandlordSubmitState
 
-    data class Error(val message: String) : VerifyLandlordSubmitState
+    data class Error(
+        val message: String,
+        val validationError: Boolean = false,
+    ) : VerifyLandlordSubmitState
 }
 
 /** Detected attributes from a lease upload — drives the done / warn
