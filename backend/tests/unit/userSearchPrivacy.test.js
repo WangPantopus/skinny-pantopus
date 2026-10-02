@@ -29,6 +29,10 @@ jest.mock('../../config/auth', () => ({
   signIn: jest.fn(),
 }));
 
+jest.mock('../../services/adminAlerts', () => ({
+  notifyReportToReview: jest.fn().mockResolvedValue(false),
+}));
+
 jest.mock('../../services/gig/affinityService', () => ({
   recordInteraction: jest.fn().mockResolvedValue(undefined),
   getUserAffinities: jest.fn().mockResolvedValue([]),
@@ -43,6 +47,73 @@ function createApp() {
   app.use('/api/users', require('../../routes/users'));
   return app;
 }
+
+describe('personal user report retries', () => {
+  const reporter = '11111111-1111-4111-8111-111111111111';
+  const target = '22222222-2222-4222-8222-222222222222';
+  const other = '33333333-3333-4333-8333-333333333333';
+  const alert = () => require('../../services/adminAlerts').notifyReportToReview;
+  const submit = (app, actor = reporter, body = { reason: 'spam', details: 'Original details' }, user = target) =>
+    request(app).post(`/api/users/${user}/report`).set('x-test-user-id', actor).send(body);
+
+  beforeEach(() => {
+    resetTables();
+    jest.clearAllMocks();
+    seedTable('User', [{ id: reporter }, { id: target }, { id: other }]);
+    seedTable('UserReport', []);
+  });
+
+  test('concurrent submissions write and alert once, and a later reason cannot overwrite the winner', async () => {
+    const app = createApp();
+    const responses = await Promise.all(Array.from({ length: 6 }, () => submit(app)));
+    expect(responses.map((res) => res.status)).toEqual(Array(6).fill(200));
+    expect(responses.filter((res) => !res.body.already_reported)).toHaveLength(1);
+    const original = { ...getTable('UserReport')[0] };
+    expect(getTable('UserReport')).toHaveLength(1);
+    expect(original).toMatchObject({ reported_by: reporter, reported_user_id: target, reason: 'spam', details: 'Original details' });
+    expect(alert()).toHaveBeenCalledTimes(1);
+    expect(alert()).toHaveBeenCalledWith({ kind: 'user', reason: 'spam', reportId: original.id });
+    const retry = await submit(app, reporter, { reason: 'harassment', details: 'Later details' });
+    expect(retry.status).toBe(200);
+    expect(retry.body.already_reported).toBe(true);
+    expect(getTable('UserReport')).toEqual([original]);
+    expect(alert()).toHaveBeenCalledTimes(1);
+  });
+
+  test('legacy duplicate reports retain their original content and completed review state', async () => {
+    const legacy = ['reviewed', 'dismissed'].map((status, index) => ({
+      id: `44444444-4444-4444-8444-44444444444${index}`,
+      reported_by: reporter, reported_user_id: target, reason: 'safety',
+      details: `Original legacy ${index}`, status, resolved_at: '2026-09-01T00:00:00Z',
+    }));
+    seedTable('UserReport', legacy);
+    const res = await submit(createApp());
+    expect(res.status).toBe(200);
+    expect(res.body.already_reported).toBe(true);
+    expect(getTable('UserReport')).toEqual(legacy);
+    expect(alert()).not.toHaveBeenCalled();
+  });
+
+  test('a different reporter retains an independent report and alert', async () => {
+    const app = createApp();
+    await submit(app);
+    const res = await submit(app, other);
+    expect(res.status).toBe(200);
+    expect(res.body.already_reported).toBe(false);
+    expect(getTable('UserReport')).toHaveLength(2);
+    expect(new Set(getTable('UserReport').map((row) => row.id)).size).toBe(2);
+    expect(alert()).toHaveBeenCalledTimes(2);
+  });
+
+  test('self, invalid-reason and missing-target submissions write no report or alert', async () => {
+    const app = createApp();
+    expect((await submit(app, reporter, { reason: 'spam' }, reporter)).status).toBe(400);
+    expect((await submit(app, reporter, { reason: 'invalid' })).status).toBe(400);
+    expect((await submit(app, reporter, { reason: 'spam' }, '55555555-5555-4555-8555-555555555555')).status).toBe(404);
+    expect(getTable('UserReport')).toEqual([]);
+    expect(alert()).not.toHaveBeenCalled();
+  });
+});
 
 describe('user search privacy', () => {
   beforeEach(() => {
