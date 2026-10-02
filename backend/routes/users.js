@@ -5297,12 +5297,16 @@ router.post('/:userId/report', verifyToken, validate(reportUserSchema), async (r
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Check for existing report. limit(1), not maybeSingle(): two reports sent at once can both
-    // be stored, and maybeSingle() then fails every later report from this person.
+    // PostgreSQL accepts UUID aliases such as uppercase or unhyphenated input.
+    if (targetUser.id === reporterId) {
+      return res.status(400).json({ error: 'You cannot report yourself' });
+    }
+
+    // Preserve legacy random-ID reports, including duplicate rows and their review state.
     const { data: existingReports, error: existingErr } = await supabaseAdmin
       .from('UserReport')
       .select('id')
-      .eq('reported_user_id', userId)
+      .eq('reported_user_id', targetUser.id)
       .eq('reported_by', reporterId)
       .limit(1);
     const existingReport = existingReports?.[0] || null;
@@ -5318,13 +5322,20 @@ router.post('/:userId/report', verifyToken, validate(reportUserSchema), async (r
       return res.status(500).json({ error: 'Failed to report user' });
     }
 
+    let alreadyReported = Boolean(existingReport);
     if (!existingReport) {
-      const { data: inserted, error: insertErr } = await supabaseAdmin.from('UserReport').insert({
-        reported_user_id: userId,
+      // Reuse the existing UUID primary key to serialize simultaneous retries without
+      // changing old reports or overwriting the first reason, details or review state.
+      const reportId = crypto.createHash('sha256')
+        .update(`pantopus:user-report:v1:${targetUser.id.toLowerCase()}:${reporterId.toLowerCase()}`)
+        .digest('hex').slice(0, 32);
+      const { data: inserted, error: insertErr } = await supabaseAdmin.from('UserReport').upsert({
+        id: reportId,
+        reported_user_id: targetUser.id,
         reported_by: reporterId,
         reason,
         details: details || null,
-      }).select('id').maybeSingle();
+      }, { onConflict: 'id', ignoreDuplicates: true }).select('id');
 
       if (insertErr) {
         if (isUserReportTableMissing(insertErr)) {
@@ -5336,14 +5347,17 @@ router.post('/:userId/report', verifyToken, validate(reportUserSchema), async (r
         logger.error('User report insert error', { userId, reporterId, error: insertErr.message });
         return res.status(500).json({ error: 'Failed to report user' });
       }
-      require('../services/adminAlerts').notifyReportToReview({ kind: 'user', reason, reportId: inserted?.id }).catch(() => {});
+      alreadyReported = !inserted?.length;
+      if (inserted?.length) {
+        require('../services/adminAlerts').notifyReportToReview({ kind: 'user', reason, reportId: inserted[0].id }).catch(() => {});
+      }
     }
 
     res.json({
-      message: existingReport
+      message: alreadyReported
         ? 'User already reported. We will review it shortly.'
         : 'User reported successfully. We will review it shortly.',
-      already_reported: Boolean(existingReport),
+      already_reported: alreadyReported,
     });
   } catch (err) {
     logger.error('User report error', { error: err.message, userId: req.params.userId });
