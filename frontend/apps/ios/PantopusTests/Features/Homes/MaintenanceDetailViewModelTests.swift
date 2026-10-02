@@ -178,10 +178,13 @@ final class MaintenanceDetailViewModelTests: XCTestCase {
         await vm.delete()
         XCTAssertNotNil(vm.actionError)
     }
+
     func test_notes_loadsServerTextWithAnEmptyDraftStore() async {
-        SequencedURLProtocol.sequence = [.status(200, body: """
-        {"tasks":[{"id":"task-1","home_id":"home-1","task":"Filter swap","notes":"Saved server note"}]}
-        """)]
+        SequencedURLProtocol.sequence = [
+            .status(200, body: """
+            {"tasks":[{"id":"task-1","home_id":"home-1","task":"Filter swap","notes":"Saved server note"}]}
+            """)
+        ]
         let vm = makeVM()
         await vm.load()
         guard case let .loaded(task) = vm.state else {
@@ -191,5 +194,4 @@ final class MaintenanceDetailViewModelTests: XCTestCase {
         XCTAssertEqual(task.notes, "Saved server note")
         XCTAssertNil(vm.draft)
     }
-
 }
