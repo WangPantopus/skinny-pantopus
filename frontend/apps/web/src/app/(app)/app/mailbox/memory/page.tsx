@@ -5,7 +5,6 @@ import {
   useMailMemories,
   useDismissMemory,
   useYearInMail,
-  useFileItemToVault,
 } from '@/lib/mailbox-queries';
 import { MemoryCard } from '@/components/mailbox';
 
@@ -31,7 +30,9 @@ function StatPill({ value, label }: { value: string; label: string }) {
 
 // ── Share card capture ───────────────────────────────────────
 
-async function captureAndShare(_element: HTMLElement, year: number) {
+type ShareResult = 'shared' | 'copied' | 'cancelled' | 'failed';
+
+async function captureAndShare(_element: HTMLElement, year: number): Promise<ShareResult> {
   // Use native share API with text — html2canvas would require an extra dependency
   if (navigator.share) {
     try {
@@ -39,9 +40,12 @@ async function captureAndShare(_element: HTMLElement, year: number) {
         title: `My ${year} Year in Mail`,
         text: `Check out my ${year} Year in Mail on Pantopus!`,
       });
-      return;
-    } catch {
-      // User cancelled or share failed — fall through
+      return 'shared';
+    } catch (error) {
+      // Respect cancellation; do not copy after the user dismisses sharing.
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
+        return 'cancelled';
+      }
     }
   }
 
@@ -50,8 +54,9 @@ async function captureAndShare(_element: HTMLElement, year: number) {
     await navigator.clipboard.writeText(
       `My ${year} Year in Mail — powered by Pantopus`,
     );
+    return 'copied';
   } catch {
-    // Clipboard also unavailable — no-op
+    return 'failed';
   }
 }
 
@@ -59,33 +64,18 @@ async function captureAndShare(_element: HTMLElement, year: number) {
 
 function YearInMailCard({ year: yearNum }: { year: number }) {
   const { data: yearData, isLoading } = useYearInMail(yearNum);
-  const fileToVault = useFileItemToVault();
   const cardRef = useRef<HTMLDivElement>(null);
-  const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'done'>('idle');
-  const [vaultStatus, setVaultStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'shared' | 'copied' | 'failed'>('idle');
 
   const handleShare = useCallback(async () => {
     if (!cardRef.current || !yearData) return;
     setShareStatus('sharing');
-    await captureAndShare(cardRef.current, yearNum);
-    setShareStatus('done');
-    setTimeout(() => setShareStatus('idle'), 3000);
+    const result = await captureAndShare(cardRef.current, yearNum);
+    setShareStatus(result === 'cancelled' ? 'idle' : result);
+    if (result === 'shared' || result === 'copied') {
+      setTimeout(() => setShareStatus('idle'), 3000);
+    }
   }, [yearData, yearNum]);
-
-  const handleSaveToVault = useCallback(() => {
-    // Save using a synthetic item ID based on year
-    setVaultStatus('saving');
-    fileToVault.mutate(
-      { itemId: `year-in-mail-${yearNum}`, folderId: 'mail-history' },
-      {
-        onSuccess: () => {
-          setVaultStatus('saved');
-          setTimeout(() => setVaultStatus('idle'), 3000);
-        },
-        onError: () => setVaultStatus('idle'),
-      },
-    );
-  }, [yearNum, fileToVault]);
 
   if (isLoading) {
     return (
@@ -191,7 +181,7 @@ function YearInMailCard({ year: yearNum }: { year: number }) {
           onClick={handleShare}
           disabled={shareStatus === 'sharing'}
           className={`flex-1 py-2 text-center text-sm font-medium rounded-lg transition-colors ${
-            shareStatus === 'done'
+            shareStatus === 'shared' || shareStatus === 'copied'
               ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
               : shareStatus === 'sharing'
                 ? 'bg-app-surface-sunken text-app-text-muted cursor-not-allowed'
@@ -200,29 +190,18 @@ function YearInMailCard({ year: yearNum }: { year: number }) {
         >
           {shareStatus === 'sharing'
             ? 'Preparing...'
-            : shareStatus === 'done'
+            : shareStatus === 'shared'
               ? 'Shared!'
-              : 'Share card'}
-        </button>
-        <button
-          type="button"
-          onClick={handleSaveToVault}
-          disabled={vaultStatus !== 'idle'}
-          className={`flex-1 py-2 text-center text-sm font-medium rounded-lg transition-colors ${
-            vaultStatus === 'saved'
-              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-              : vaultStatus === 'saving'
-                ? 'bg-app-surface-sunken text-app-text-muted cursor-not-allowed'
-                : 'text-primary-600 border border-primary-200 dark:border-primary-800 hover:bg-primary-50 dark:hover:bg-primary-900/20'
-          }`}
-        >
-          {vaultStatus === 'saving'
-            ? 'Saving...'
-            : vaultStatus === 'saved'
-              ? 'Saved to Vault'
-              : 'Save to Vault'}
+              : shareStatus === 'copied'
+                ? 'Copied!'
+                : 'Share card'}
         </button>
       </div>
+      {shareStatus === 'failed' && (
+        <p role="alert" className="px-5 pb-3 text-sm text-red-600 dark:text-red-400">
+          Could not share or copy this card. Try again.
+        </p>
+      )}
     </div>
   );
 }
