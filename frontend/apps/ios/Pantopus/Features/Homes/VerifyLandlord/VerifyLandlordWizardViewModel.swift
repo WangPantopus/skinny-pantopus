@@ -16,11 +16,15 @@
 import Foundation
 import Observation
 
+// Keep request dispatch and departure/session guards in the existing wizard.
+// swiftlint:disable file_length
+
 /// View model backing `VerifyLandlordWizardView`. Holds the per-field
 /// form state, the current step, and the submit state machine
 /// (`.idle → .submitting → .submitted / .error(_)`).
 @Observable
 @MainActor
+// swiftlint:disable:next type_body_length
 final class VerifyLandlordWizardViewModel: WizardModel {
     // MARK: - Published state
 
@@ -32,6 +36,13 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     /// `.empty` or populated after the first submit attempt.
     private(set) var errors: VerifyLandlordValidationErrors?
     private(set) var submitState: VerifyLandlordSubmitState = .idle
+    /// A dispatched request without a trustworthy reply may already be saved.
+    private(set) var submissionOutcomeUnknown = false
+
+    var submissionErrorTitle: String? {
+        submissionOutcomeUnknown ? "Couldn't confirm request" : nil
+    }
+
     /// Populated once the tenant approval request resolved. Drives the
     /// `.sent` step's content — every field comes off the wire.
     private(set) var approvalResult: VerifyLandlordApprovalResult?
@@ -257,6 +268,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         guard requestGeneration == generation, !Task.isCancelled else { return }
         switch result {
         case let .success(lease):
+            submissionOutcomeUnknown = false
             approvalResult = VerifyLandlordApprovalResult(
                 kind: .submitted,
                 submittedAt: lease.createdAt,
@@ -272,6 +284,10 @@ final class VerifyLandlordWizardViewModel: WizardModel {
 
     /// Only explicit lease/no-landlord responses establish these alternate states.
     private func handleApprovalFailure(_ error: any Error) async {
+        if submissionOutcomeUnknown {
+            submitState = .error(message: "Your request may be saved. Submit again to check its status.")
+            return
+        }
         guard let apiError = error as? APIError else {
             submitState = .error(message: "Couldn't send the request. Try again.")
             return
@@ -320,6 +336,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
             startAt: form.startAtISO,
             message: form.composedMessage
         )
+        var requestDispatched = false
         do {
             if attachment.hasDraft {
                 let lease = try await attachment.requestApproval(request)
@@ -329,7 +346,13 @@ final class VerifyLandlordWizardViewModel: WizardModel {
                 try await Task.sleep(nanoseconds: submitDelayNanos)
                 try Task.checkCancellation()
                 guard requestGeneration == generation, isCurrentSession else { throw CancellationError() }
-                return await approvalRequester(request)
+                submissionOutcomeUnknown = false
+                requestDispatched = true
+                let result = await approvalRequester(request)
+                if case let .failure(error) = result {
+                    recordUnconfirmedSubmission(error, dispatched: requestDispatched, generation: generation)
+                }
+                return result
             }
             let status: TenantHomeStatusResponse = try await api.request(TenantEndpoints.homeStatus(homeId: homeId))
             let context = status.requestContext
@@ -345,12 +368,25 @@ final class VerifyLandlordWizardViewModel: WizardModel {
                 message: request.message,
                 requestContext: context
             )
+            // A failed status read cannot resolve an earlier unconfirmed request.
+            submissionOutcomeUnknown = false
+            requestDispatched = true
             let response: TenantRequestApprovalResponse = try await api.request(
                 TenantEndpoints.requestApproval(observedRequest)
             )
             return .success(response.lease)
         } catch {
+            recordUnconfirmedSubmission(error, dispatched: requestDispatched, generation: generation)
             return .failure(error)
+        }
+    }
+
+    private func recordUnconfirmedSubmission(_ error: any Error, dispatched: Bool, generation: Int) {
+        guard dispatched, requestGeneration == generation, isCurrentSession, !Task.isCancelled,
+              let apiError = error as? APIError else { return }
+        switch apiError {
+        case .transport, .invalidResponse, .decoding: submissionOutcomeUnknown = true
+        default: break
         }
     }
 
@@ -433,6 +469,7 @@ extension VerifyLandlordWizardViewModel {
         attachment.clear()
         approvalResult = nil
         errors = nil
+        submissionOutcomeUnknown = false
         submitState = .idle
         currentStep = .start
         pendingEvent = .dismiss
@@ -485,6 +522,7 @@ extension VerifyLandlordWizardViewModel {
                 if currentStep != .details { currentStep = .start }
                 submitState = .idle
             }
+            submissionOutcomeUnknown = false
             statusNeedsRetry = false
         } catch {
             guard isCurrentSession else { sessionChanged()
