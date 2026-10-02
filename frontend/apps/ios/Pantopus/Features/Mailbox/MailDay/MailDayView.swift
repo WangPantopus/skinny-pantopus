@@ -305,17 +305,6 @@ public struct MailDayView: View {
         case let .loaded(form):
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 deliveryTimeCard(form)
-                switchCard(
-                    title: "Include in Mail Day",
-                    keys: MailDaySettingKey.includeGroup,
-                    form: form
-                )
-                switchCard(
-                    title: "Always interrupt (instant)",
-                    keys: MailDaySettingKey.interruptGroup,
-                    form: form
-                )
-                soundCard(form)
             }
             .padding(.horizontal, Spacing.s4)
             .padding(.top, Spacing.s3)
@@ -331,7 +320,7 @@ public struct MailDayView: View {
     }
 
     private func deliveryTimeCard(_ form: MailDaySettingsForm) -> some View {
-        MailDaySettingsCard(title: "Delivery time") {
+        MailDaySettingsCard(title: "Notify no earlier than") {
             HStack(spacing: Spacing.s2) {
                 HStack(spacing: Spacing.s2) {
                     Icon(.clock, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
@@ -348,11 +337,12 @@ public struct MailDayView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 Spacer(minLength: Spacing.s0)
-                Text(form.timezone)
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
             }
             .padding(.bottom, Spacing.s2)
+            Text("Saved time; change it in web Mail Day settings. Uses your push notification timezone and quiet hours.")
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .padding(.bottom, Spacing.s2)
             settingsSwitchRow(.enabled, form: form, showsDivider: false)
         }
     }

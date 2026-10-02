@@ -93,7 +93,17 @@ const taskToGigSchema = Joi.object({
 // ── MailDay ──
 const updateMailDaySchema = Joi.object({
   // The GET returns the stored time column as HH:MM:SS; accept it back.
-  delivery_time: Joi.string().pattern(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
+  delivery_time: Joi.string()
+    .pattern(/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/)
+    .custom((value, helpers) => {
+      const [hour, minute, second = 0] = value.split(':').map(Number);
+      // The last quarter-hour job inside the existing daytime window is 19:45.
+      if (hour * 60 + minute + second / 60 > 19 * 60 + 45) {
+        return helpers.message({ custom: 'Delivery time must be 19:45 or earlier.' });
+      }
+      return value;
+    })
+    .optional(),
   timezone: Joi.string().max(50).optional(),
   enabled: Joi.boolean().optional(),
   sound_enabled: Joi.boolean().optional(),
