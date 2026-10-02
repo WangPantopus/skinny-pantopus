@@ -192,6 +192,7 @@ export interface MailMemoryItem {
   headline: string;
   body?: string;
   mail_items: MailItemV2[];
+  mail_ids: string[];
   dismissed: boolean;
 }
 
