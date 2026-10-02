@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.maintenance
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.analytics.AnalyticsResult
@@ -107,11 +108,8 @@ sealed interface LogMaintenanceFormEvent {
  * `POST /api/homes/:id/events` so the household calendar surfaces the
  * upcoming task.
  *
- * Photos / notes / receipt / performed-by are stored client-side via
- * [MaintenanceDraftStore] because the backend's `HomeMaintenanceLog`
- * schema doesn't carry those columns today. When it does, the relevant
- * fields will move onto [MaintenanceTaskDto] and this store can be
- * dropped in one diff.
+ * Notes use the existing HomeMaintenanceLog.notes API field. Other draft
+ * extras remain local; reopening notes uses the authoritative server value.
  */
 @HiltViewModel
 class LogMaintenanceFormViewModel
@@ -211,7 +209,7 @@ class LogMaintenanceFormViewModel
                     performerName = task.vendor.orEmpty(),
                     performerContact = stored?.performerContact.orEmpty(),
                     costText = task.cost?.let { formatCost(it) }.orEmpty(),
-                    notes = stored?.notes.orEmpty(),
+                    notes = task.notes.orEmpty(),
                     photos = stored?.photos ?: emptyList(),
                     receipt = stored?.receipt,
                     nextDueEnabled = task.dueDate != null,
@@ -285,6 +283,7 @@ class LogMaintenanceFormViewModel
                 val req =
                     CreateMaintenanceRequest(
                         task = current.title.trim(),
+                        notes = current.notes,
                         vendor = encodeVendor(current),
                         cost = parseCost(current.costText),
                         recurrence = current.recurrence.raw,
@@ -304,6 +303,7 @@ class LogMaintenanceFormViewModel
                                 m.taskId,
                                 UpdateMaintenanceRequest(
                                     task = req.task.takeIf { it != initial.title.trim() },
+                                    notes = req.notes.takeIf { current.notes != initial.notes },
                                     vendor = req.vendor.takeIf { it != encodeVendor(initial) },
                                     cost = req.cost.takeIf { current.costText != initial.costText },
                                     recurrence = req.recurrence,
@@ -320,7 +320,8 @@ class LogMaintenanceFormViewModel
                         pendingCreate = null
                         val taskId = result.data.task.id
                         persistExtras(taskId, current)
-                        if (current.nextDueEnabled) {
+                        // Keep the retained next-due date without a hidden family-calendar write.
+                        if (current.nextDueEnabled && LaunchFeatures.householdExtras) {
                             postCalendarReminder(current.title.trim(), current.nextDueDate)
                         }
                         Analytics.track(AnalyticsEvent.CtaLogMaintenanceSubmit(AnalyticsResult.SUCCESS))

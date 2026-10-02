@@ -24,6 +24,7 @@ data class MaintenanceTaskDto(
     val id: String,
     @Json(name = "home_id") val homeId: String,
     val task: String = "",
+    val notes: String? = null,
     val vendor: String? = null,
     @MaintenanceCost val cost: BigDecimal? = null,
     val recurrence: String = "one_time",
@@ -72,6 +73,7 @@ data class HomeMaintenanceResponse(
 @JsonClass(generateAdapter = true)
 data class CreateMaintenanceRequest(
     val task: String,
+    val notes: String? = null,
     val vendor: String? = null,
     val cost: BigDecimal? = null,
     val recurrence: String? = null,
@@ -84,6 +86,7 @@ data class CreateMaintenanceRequest(
 /** Body for `PUT /api/homes/:id/maintenance/:taskId`. All fields optional. */
 data class UpdateMaintenanceRequest(
     val task: String? = null,
+    val notes: String? = null,
     val vendor: String? = null,
     val cost: BigDecimal? = null,
     val recurrence: String? = null,
@@ -106,6 +109,7 @@ class UpdateMaintenanceRequestJsonAdapter {
         try {
             writer.beginObject()
             value.task?.let { writer.name("task").value(it) }
+            value.notes?.let { writer.name("notes").value(it) }
             if (value.vendor != null || value.clearVendor) writer.name("vendor").value(value.vendor)
             if (value.cost != null || value.clearCost) writer.name("cost").value(value.cost)
             value.recurrence?.let { writer.name("recurrence").value(it) }

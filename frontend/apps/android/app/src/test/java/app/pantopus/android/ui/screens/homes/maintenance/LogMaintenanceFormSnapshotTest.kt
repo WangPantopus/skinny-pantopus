@@ -246,6 +246,7 @@ class LogMaintenanceFormSnapshotTest {
             id = "task-2",
             homeId = "home-1",
             task = "Fall HVAC tune-up",
+            notes = "Replaced filter, topped off coolant. Next visit booked.",
             vendor = "Riverside HVAC",
             cost = BigDecimal("185"),
             recurrence = "yearly",
