@@ -438,10 +438,11 @@ open class VerifyLandlordWizardViewModel
                     message = form.composedMessage,
                 )
             var requestDispatched = false
-            val result = sendRequest(request) {
-                requestDispatched = true
-                _state.update { it.copy(submissionOutcomeUnknown = false) }
-            }
+            val result =
+                sendRequest(request) {
+                    requestDispatched = true
+                    _state.update { it.copy(submissionOutcomeUnknown = false) }
+                }
             currentCoroutineContext().ensureActive()
             requireCurrentSession()
             when (result) {
