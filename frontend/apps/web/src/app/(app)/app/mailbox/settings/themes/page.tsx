@@ -5,6 +5,7 @@ import { useState, useCallback, useMemo } from 'react';
 import type { Stamp, SeasonalTheme } from '@/types/mailbox';
 import { useStamps, useThemes, useSetActiveTheme } from '@/lib/mailbox-queries';
 import { StampCard } from '@/components/mailbox';
+import { toast } from '@/components/ui/toast-store';
 
 // ── Stamp category filter ────────────────────────────────────
 
@@ -264,6 +265,9 @@ export default function StampsThemesPage() {
             document.documentElement.style.setProperty('--theme-accent', theme.accent_color);
             document.documentElement.setAttribute('data-theme', theme.id);
           }
+        },
+        onError: (err) => {
+          toast.error(err.message || 'Could not switch theme. Please try again.');
         },
       });
     },
