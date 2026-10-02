@@ -9,6 +9,7 @@ import {
   useLinkMailToAsset,
 } from '@/lib/mailbox-queries';
 import { AssetCard } from '@/components/mailbox';
+import { toast } from '@/components/ui/toast-store';
 // The user's Home; each page used a hard-coded 'home_1' stub.
 import useHomeProfile from '../_components/useMailboxHome';
 
@@ -195,7 +196,10 @@ function AddAssetPanel({
         manufacturer: manufacturer.trim() || undefined,
         model_number: modelNumber.trim() || undefined,
       },
-      { onSuccess: (asset) => onCreated(asset.id) },
+      {
+        onSuccess: (asset) => onCreated(asset.id),
+        onError: (err) => toast.error(err.message || "Couldn't create asset. Try again."),
+      },
     );
   }, [name, category, room, manufacturer, modelNumber, homeId, createAsset, onCreated]);
 
