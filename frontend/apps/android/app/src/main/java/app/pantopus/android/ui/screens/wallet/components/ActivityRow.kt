@@ -174,7 +174,7 @@ private fun PendingChip() {
 private fun subtextFor(item: WalletActivityItem): String {
     val base = "${item.counterparty} · ${item.dateLabel}"
     return when (val status = item.status) {
-        is ActivityStatus.Pending -> "$base · clears ${status.clearsLabel}"
+        is ActivityStatus.Pending -> status.clearsLabel?.let { "$base · clears $it" } ?: base
         else -> base
     }
 }
@@ -191,9 +191,10 @@ private fun amountColorFor(
 
 private fun trailingLabelFor(item: WalletActivityItem): String =
     when {
+        item.status is ActivityStatus.Reversed -> "Reversed"
+        item.status is ActivityStatus.Pending -> "On hold"
         item.isFee -> "Fee"
         item.direction == ActivityDirection.Out -> "Payout"
-        item.status is ActivityStatus.Pending -> "On hold"
         else -> "Cleared"
     }
 

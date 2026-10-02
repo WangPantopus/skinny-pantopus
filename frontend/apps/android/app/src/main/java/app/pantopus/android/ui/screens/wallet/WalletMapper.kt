@@ -111,7 +111,7 @@ object WalletMapper {
             counterparty = counterpartyLabel(tx.type),
             category = category(tx.type),
             direction = direction,
-            status = status(tx.status, direction),
+            status = transactionStatus(tx, direction),
             amount = centsToPlain(tx.amount),
             isFee = tx.type == "cancellation_fee",
         )
@@ -143,6 +143,18 @@ object WalletMapper {
             "cancellation_fee", "refund", "adjustment" -> ActivityCategory.Fee
             else -> ActivityCategory.Handyman
         }
+
+    private fun transactionStatus(
+        tx: WalletTransactionDto,
+        direction: ActivityDirection,
+    ): ActivityStatus {
+        if (tx.type == "withdrawal") {
+            if (tx.status == "reversed") return ActivityStatus.Reversed
+            val unsettledStatus = tx.status == "completed" || tx.status == "pending"
+            if (unsettledStatus && tx.stripeTransferId.isNullOrEmpty()) return ActivityStatus.Pending()
+        }
+        return status(tx.status, direction)
+    }
 
     fun status(
         status: String,
@@ -222,7 +234,7 @@ object WalletMapper {
             "$count ${if (count == 1) "payment" else "payments"} · releases after review"
         }
 
-    private fun monthMeta(count: Int): String = "$count ${if (count == 1) "task" else "tasks"} this month"
+    private fun monthMeta(count: Int): String = "$count ${if (count == 1) "credit" else "credits"} this month"
 
     // Integer cents → grouped 2-dp string with no symbol, e.g. "1,284.50".
     fun centsToPlain(cents: Long): String {

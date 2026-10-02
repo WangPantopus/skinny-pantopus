@@ -37,10 +37,13 @@ sealed interface ActivityStatus {
     data object Available : ActivityStatus
 
     /**
-     * Earned but still in escrow. [clearsLabel] is the user-facing
-     * "clears Dec 4" sub-line copy.
+     * Unsettled escrow or withdrawal. [clearsLabel] is supplied only
+     * when the existing escrow projection knows a clearing label.
      */
-    data class Pending(val clearsLabel: String) : ActivityStatus
+    data class Pending(val clearsLabel: String? = null) : ActivityStatus
+
+    /** The original debit was reversed; it did not become a payout. */
+    data object Reversed : ActivityStatus
 
     /** Already-settled outbound payout or fee. */
     data object Complete : ActivityStatus

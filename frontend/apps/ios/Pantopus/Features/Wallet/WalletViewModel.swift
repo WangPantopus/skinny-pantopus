@@ -558,7 +558,12 @@ public final class WalletViewModel {
     }
 
     static func status(for tx: WalletTransactionDTO, direction: ActivityDirection) -> ActivityStatus {
-        switch tx.status {
+        if tx.type == "withdrawal" {
+            if tx.status == "reversed" { return .reversed }
+            let unsettledStatus = tx.status == "completed" || tx.status == "pending"
+            if unsettledStatus, tx.stripeTransferId?.isEmpty != false { return .pending(clearsLabel: nil) }
+        }
+        return switch tx.status {
         case "pending":
             .pending(clearsLabel: "soon")
         default:
@@ -643,7 +648,7 @@ public final class WalletViewModel {
     }
 
     private static func monthMeta(count: Int) -> String {
-        let noun = count == 1 ? "task" : "tasks"
+        let noun = count == 1 ? "credit" : "credits"
         return "\(count) \(noun) this month"
     }
 
