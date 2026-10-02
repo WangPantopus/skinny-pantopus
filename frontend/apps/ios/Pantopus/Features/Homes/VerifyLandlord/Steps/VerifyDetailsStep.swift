@@ -31,7 +31,7 @@ struct VerifyDetailsStep: View {
         } else if let message = viewModel.attachment.errorMessage {
             VerifyErrorSummaryBanner(errors: .init(), serverMessage: message, title: "Couldn't confirm attachment")
         } else if case let .error(message) = viewModel.submitState {
-            VerifyErrorSummaryBanner(errors: .init(), serverMessage: message)
+            VerifyErrorSummaryBanner(errors: .init(), serverMessage: message, title: viewModel.submissionErrorTitle)
         }
 
         BusinessInfoCard(viewModel: viewModel)
