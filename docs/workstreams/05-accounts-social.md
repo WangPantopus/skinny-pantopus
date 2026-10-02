@@ -9,6 +9,12 @@
 
 Stream 3 is an independent peer. It reports to the user; Stream 1 runs the serial merge queue. This is the live Stream 3 status location; the detailed history below stays as it was.
 
+## LIVE — invoice retry merged; portfolio1435 awaiting final native receipt, 2026-10-02T00:32:34Z
+
+- **1416 merged:** independently verified batch325 PR1434 at2026-10-02T00:14:33Z, master `a39b5b53c16f907cc791404724310e2d9b233ba9`. Exact34e23a6ff and seal163db597 remain the bounded API/web send plus native-compile basis; native send caller unavailable, no new permission/navigation change.
+- **Next ordered PR1435:** exact portfolio `3c7c7cb120b8eddbc3b82d048ceaa221e8dee26c`; body updated and attached. Existing API/browser evidence, test-placement and format addenda are assembled; final acceptance seal awaits Stream1's source-specific native receipt and cleanup. Stream1 reports actual Android lost201→retained draft→explicitAdd201, same File and exactly4 objects, one visible item. This is reported partial progress, not the final sealed all-cell result. Combined31 existing portfolio/verification backend checks pass.
+- **Remaining native:** Android verification automatic transport retry reached one pending document; a separate visible user Retry check and iOS remain in progress. Own API18134/web18131 stay stopped and zero fixtures. S1 owns devices/runtime/S3 bucket. Verification593269008, chat5d48f41ff and schema140000 remain separate/unpublished; no extra delta to frozen33. Production UserReport duplicate aggregates still required before139000. Lower orphan cleanup is source/design-only. No whole acceptance row closes; backend deployment should promptly include merged1382.
+
 ## LIVE — fresh1408 native catalog seal; formatting and route boundaries reconciled, 2026-10-02T00:02:14Z
 
 - **Follow-up 2026-10-02T00:09:29Z:**1416 exact34e23a6ff16527f535eb423d45c4dc7c74c7dd6f is now sealed for Stream1 review, `20261001-stream5-invoice-send-r1`, seal163db5979f96172f102625e167236a90f4668a46c1d1aae405e1186672000ebd.28 files independently verify. API/web Send and explicit Resend pass; candidate33 compilation passes; no retained native Send caller, so no native journey claim. PR body matches; pending CI remains informational with no failed jobs. Chat's deferred final source is5d48f41ffb9f021cc8b0d7655639126e054d7ab1 after one formatting-only existing Android function change; all4 changed Kotlin files pass. Addendum `20261002-stream5-chat-format-addendum-r1`, sealb0f7b62f5b36fa0ccc36ff0326a46f1513159d32616964b35416a3fb4c6b0922. No new input requested for frozen33.
