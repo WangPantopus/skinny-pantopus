@@ -33,6 +33,10 @@ Core: I01, I02, I03, I04, I05, I06, I07, D01, D02, D03, D04, D09, F01, F02, F03,
 | F04/F05 | Hosted scale/eligibility/retention, deploy/DB schedules/migration-before-reader/old-worker retirement/released clients |
 | D02 deferred | Issue media after launch, approved private access/EXIF/type/scan/delete contract first; text launch stays |
 
+## Preserved holds and operator boundaries
+
+The organizational split does not lift current human/coordinator holds: no `/api/b/:username` reads or Legal caller bypass; migration `20260926100000` is **metadata-only** (never read its BODY, apply/unapply or rewrite it). General account/parent deletion and money-history extension remain held; narrow captured-fixture-PK cleanup within the acknowledged case remains allowed. Stripe TEST does not authorize capture/transfer/payout/refund/gift money. No OS-permission, passcode/presence or secure-pixel bypass. Continue independent permitted source preparation without treating these holds as new approval requests. If a future case depends on a held action, report that exact dependency to Root and preserve the hold.
+
 ## Boundaries and single writers
 
 - **JustMoved:** 4-2 owns the mail-step outcome; 4-1 owns the containing Place feature. The exact existing files are `frontend/apps/ios/Pantopus/Features/Place/Components/JustMovedCard.swift`, `frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/place/components/JustMovedCard.kt`, and `frontend/apps/web/src/components/place/JustMovedCard.tsx`. Obtain a Root exact-file grant and4-1 review for a demonstrated mail-step repair. One writer for the whole file; preserve other steps/navigation/design.
@@ -126,7 +130,7 @@ Preserve existing iOS/Android/web layouts, style and navigation. Before app chan
 
 Cleanup uses the current narrow helper arguments, not old extra-scope JSON:
 `python3 tools/s4-cleanup-home.py STAGE '{"TABLE":COUNT,...}' MODE`.
-For MailDay use the unique reviewed derivative and `--mailday-feedback`, actual observed counts. Dry-run then **identical** `--apply`, guarded ownership/PK/full-row preimages/global counts/locks; preserve peer data and Auth bookkeeping. Restore freshly acknowledged source and current helper bytes, clear only owned faults and prove original guarded health/rules0. Stop only your identified runner/process group, verify22093 absent, shut down selected devices, release exact slots/full runtime label and own heavy/waiter. Save actual receipts and send S1/S3 full return; case cleanup alone is not handback.
+The MailDay-specific derivative/`--mailday-feedback` recipe belongs4-2 only and assigns no MailDay case to4-1. For4-1 use its current reviewed case-specific cleanup with exact actual captured PKs/counts, never the MailDay derivative merely because it is inherited in common context. Dry-run then **identical** `--apply`, guarded ownership/PK/full-row preimages/global counts/locks; preserve peer data and Auth bookkeeping. Restore freshly acknowledged source and current helper bytes, clear only owned faults and prove original guarded health/rules0. Stop only your identified runner/process group, verify22093 absent, shut down selected devices, release exact slots/full runtime label and own heavy/waiter. Save actual receipts and send S1/S3 full return; case cleanup alone is not handback.
 
 **Personally view every PNG before sealing.** Sanitize at capture, no auth/Profile raster/private account text/token/env/raw logs/database archives. Android secure/unknown meansAX-only/0PNG. Require privacy scan **&&** seal:
 `python3 tools/s4-secret-scan.py runtime/STAGE && python3 tools/seal-bundle.py runtime/STAGE BRANCH COMMIT "scope and limits"`.
