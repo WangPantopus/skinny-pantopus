@@ -10,6 +10,8 @@ The clean local checkpoint was reconciled at **2026-10-02T08:33:02Z**. All known
 
 **Complete web supplement 2026-10-02T17:16:18Z:** frozen348 web assembly now complete: packet f5eefddb (17 total/15 listed), all4014 standalone files/140055621 bytes and seven manifests independently rehashed. It supersedes producer-only web status above. Existing raw3468 +519 static +27 public assembly and own reader filename qualification retained. This is local packaging only; Android Debug/local Release and final integrated assembly continue through Stream1. No new Stream2 defect or application campaign.
 
+**Android failure supplement 2026-10-02T17:41:02Z:** original master348 Release R8 failed with Java heap space at6144MiB. Full private138-line/5989-byte log SHA ba66021ec1747609ebd56b85fd11c02f92199c33121ed97dfee76d93c1f1f0f7 independently verified; no Debug/Release pair receipt/pass. Stream1 private8192MiB heap/unique-r2 retry preparation hashes checked; no app/minification/signing/flag/test change, not dispatched. Follow coordinator accepted-source/resource order, preserve failed bytes and accepted iOS/web evidence. No new Stream2 behavior defect or duplicate campaign. This supersedes earlier running-status paragraphs.
+
 ## Read first
 
 1. `/Users/yingpengwang/pantopus-coordination/AGENTS.md`, `docs/PROJECT_HANDOFF.md`, and the newest updates and launch-scope cuts in `docs/workstreams/README.md`. Newest dated text wins.
