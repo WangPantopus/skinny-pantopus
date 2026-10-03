@@ -195,7 +195,6 @@ class MaintenanceListViewModelTest {
         assertEquals(MaintenanceCategory.Hvac, MaintenanceListViewModel.project(explicit, fixedNow).category)
         val generic = makeTask(task = "Fall HVAC tune-up").copy(category = "generic")
         assertEquals(MaintenanceCategory.Generic, MaintenanceListViewModel.project(generic, fixedNow).category)
-
     }
 
     @Test fun projection_diy_zero_cost_renders_as_DIY() {

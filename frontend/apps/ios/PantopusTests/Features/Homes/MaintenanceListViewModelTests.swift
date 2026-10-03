@@ -198,7 +198,6 @@ final class MaintenanceListViewModelTests: XCTestCase {
         XCTAssertEqual(MaintenanceListViewModel.project(task: explicit, now: Self.fixedNow).category, .hvac)
         let generic = MaintenanceTaskDTO(id: "generic", homeId: "home-1", task: "Fall HVAC tune-up", category: "generic")
         XCTAssertEqual(MaintenanceListViewModel.project(task: generic, now: Self.fixedNow).category, .generic)
-
     }
 
     func testProjectionDIYRendersZeroCostAsDIY() {

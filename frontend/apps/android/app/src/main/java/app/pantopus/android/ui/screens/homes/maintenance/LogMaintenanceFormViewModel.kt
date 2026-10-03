@@ -135,6 +135,7 @@ class LogMaintenanceFormViewModel
         private val _event = MutableStateFlow<LogMaintenanceFormEvent?>(null)
         val event: StateFlow<LogMaintenanceFormEvent?> = _event.asStateFlow()
 
+        private var hasPersistedCategory = false
         private var initial: LogMaintenanceFormState = _form.value
         private var pendingCreate: Pair<CreateMaintenanceRequest, String>? = null
 
@@ -187,6 +188,7 @@ class LogMaintenanceFormViewModel
             task: MaintenanceTaskDto,
             taskId: String,
         ) {
+            hasPersistedCategory = MaintenanceCategory.entries.any { it.rawValue == task.category }
             val stored = draftStore.draft(taskId)
             val inferredCategory = MaintenanceCategory.from(task.task)
             val storedVendor =
@@ -308,10 +310,12 @@ class LogMaintenanceFormViewModel
                                 UpdateMaintenanceRequest(
                                     task = req.task.takeIf { it != initial.title.trim() },
                                     notes = req.notes.takeIf { current.notes != initial.notes },
-                                    category = req.category.takeIf { current.category != initial.category },
-                                    performerContact = req.performerContact.takeIf {
-                                        current.performerContact != initial.performerContact || current.performedBy != initial.performedBy
-                                    },
+                                    category = req.category.takeIf { current.category != initial.category || !hasPersistedCategory },
+                                    performerContact =
+                                        req.performerContact.takeIf {
+                                            current.performerContact != initial.performerContact ||
+                                                current.performedBy != initial.performedBy
+                                        },
                                     vendor = req.vendor.takeIf { it != encodeVendor(initial) },
                                     cost = req.cost.takeIf { current.costText != initial.costText },
                                     recurrence = req.recurrence,

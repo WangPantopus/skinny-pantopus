@@ -182,7 +182,18 @@ final class MaintenanceDetailViewModelTests: XCTestCase {
     func test_notes_loadsServerTextWithAnEmptyDraftStore() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
-            {"tasks":[{"id":"task-1","home_id":"home-1","task":"Filter swap","notes":"Saved server note","category":"hvac","performer_contact":"555-0142"}]}
+            {
+              "tasks": [
+                {
+                  "id": "task-1",
+                  "home_id": "home-1",
+                  "task": "Filter swap",
+                  "notes": "Saved server note",
+                  "category": "hvac",
+                  "performer_contact": "555-0142"
+                }
+              ]
+            }
             """)
         ]
         let vm = makeVM()

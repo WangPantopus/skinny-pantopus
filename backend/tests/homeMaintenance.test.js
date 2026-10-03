@@ -393,6 +393,12 @@ describe('existing maintenance completion edits over HTTP', () => {
       .set('x-test-user-id', ownerId).send({ category: 'plumbing', performer_contact: '  New contact  ' });
     expect(changed.status).toBe(200);
     expect(changed.body.task).toMatchObject({ category: 'plumbing', performer_contact: 'New contact' });
+    seedTable('HomeMaintenanceLog', [{ ...original, task: 'HVAC service', category: null }]);
+    const legacy = await request(app).put(`/api/homes/${homeId}/maintenance/${original.id}`)
+      .set('x-test-user-id', ownerId).send({ task: 'Filter replacement', category: 'hvac' });
+    expect(legacy.status).toBe(200);
+    expect(legacy.body.task).toMatchObject({ task: 'Filter replacement', category: 'hvac',
+      performed_at: original.performed_at, performed_by: original.performed_by });
   });
 
   test.each(['', '   ', null])('explicit note clear %j persists without changing completion history', async notes => {

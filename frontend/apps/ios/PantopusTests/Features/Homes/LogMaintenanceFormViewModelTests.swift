@@ -231,6 +231,9 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
                 "status":"scheduled"
               }
             ]}
+            """),
+            .status(200, body: """
+            {"task":{"id":"task-edit","home_id":"home-1","task":"Filter replacement","category":"pest"}}
             """)
         ]
         let vm = makeVM(mode: .edit(taskId: "task-edit"), api: makeAPI())
@@ -245,6 +248,11 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         XCTAssertTrue(vm.nextDueEnabled)
         // Loading an existing task is not a dirty edit.
         XCTAssertFalse(vm.isDirty)
+        vm.title = "Filter replacement"
+        await vm.submit()
+        let body = try? JSONSerialization
+            .jsonObject(with: SequencedURLProtocol.capturedRequests.last?.authTestBodyData() ?? Data()) as? [String: Any]
+        XCTAssertEqual(body?["category"] as? String, "pest")
     }
 
     // MARK: - Cost parsing helpers
@@ -282,10 +290,14 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
     }
 
     func test_notes_editUsesServerValue_andOmitsUnchangedText() async throws {
-        MaintenanceDraftStore.shared.upsert(MaintenanceDraft(category: .roof, performerContact: "Stale contact", notes: "Stale local note"), for: "note-task")
+        MaintenanceDraftStore.shared.upsert(
+            MaintenanceDraft(category: .roof, performerContact: "Stale contact", notes: "Stale local note"),
+            for: "note-task"
+        )
         SequencedURLProtocol.sequence = [
             .status(200, body: """
-            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Server note","vendor":"Contractor","category":"hvac","performer_contact":"555-0142"}]}
+            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Server note","vendor":"Contractor","category":
+            "hvac","performer_contact":"555-0142"}]}
             """),
             .status(200, body: """
             {"task":{"id":"note-task","home_id":"home-1","task":"Updated title","notes":"Concurrent server note"}}
@@ -308,13 +320,15 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
     func test_notes_clearEncodesEmpty_andColdEditDoesNotRestoreDraft() async throws {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
-            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Server note","vendor":"Contractor","category":"hvac","performer_contact":"555-0142"}]}
+            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Server note","vendor":"Contractor","category":
+            "hvac","performer_contact":"555-0142"}]}
             """),
             .status(200, body: """
             {"task":{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":null,"category":"plumbing","performer_contact":null}}
             """),
             .status(200, body: """
-            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":null,"category":"plumbing","performer_contact":null}]}
+            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":null,"category":"plumbing","performer_contact":null}
+            ]}
             """)
         ]
         let vm = makeVM(mode: .edit(taskId: "note-task"))
@@ -328,7 +342,10 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         XCTAssertEqual(body["notes"] as? String, "")
         XCTAssertEqual(body["category"] as? String, "plumbing")
         XCTAssertEqual(body["performer_contact"] as? String, "")
-        MaintenanceDraftStore.shared.upsert(MaintenanceDraft(category: .roof, performerContact: "Stale contact", notes: "Stale local note"), for: "note-task")
+        MaintenanceDraftStore.shared.upsert(
+            MaintenanceDraft(category: .roof, performerContact: "Stale contact", notes: "Stale local note"),
+            for: "note-task"
+        )
         let reopened = makeVM(mode: .edit(taskId: "note-task"))
         await reopened.loadIfNeeded()
         XCTAssertEqual(reopened.notes, "")

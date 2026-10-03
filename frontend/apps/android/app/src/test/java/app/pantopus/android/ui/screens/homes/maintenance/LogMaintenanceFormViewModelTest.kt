@@ -214,6 +214,12 @@ class LogMaintenanceFormViewModelTest {
             assertTrue(vm.form.value.nextDueEnabled)
             // Loading an existing task isn't a dirty edit.
             assertFalse(vm.isDirty.value)
+            val captured = slot<UpdateMaintenanceRequest>()
+            coEvery { repo.updateHomeMaintenance("home-1", "task-edit", capture(captured)) } returns
+                NetworkResult.Success(HomeMaintenanceResponse(makeTask("task-edit", "Filter replacement").copy(category = "pest")))
+            vm.updateTitle("Filter replacement")
+            vm.submit()
+            assertEquals("pest", captured.captured.category)
         }
 
     // MARK: - Cost parsing helpers
@@ -250,8 +256,15 @@ class LogMaintenanceFormViewModelTest {
     @Test
     fun `notes edit uses server value and omits unchanged text`() =
         runTest {
-            store.upsert("note-task", MaintenanceDraft(category = MaintenanceCategory.Roof, performerContact = "Stale contact", notes = "Stale local note"))
-            val task = makeTask("note-task", "Filter swap").copy(notes = "Server note", vendor = "Contractor", category = "hvac", performerContact = "555-0142")
+            store.upsert(
+                "note-task",
+                MaintenanceDraft(category = MaintenanceCategory.Roof, performerContact = "Stale contact", notes = "Stale local note"),
+            )
+            val task =
+                makeTask(
+                    "note-task",
+                    "Filter swap",
+                ).copy(notes = "Server note", vendor = "Contractor", category = "hvac", performerContact = "555-0142")
             coEvery { repo.getHomeMaintenance("home-1", null) } returns
                 NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task)))
             val captured = slot<UpdateMaintenanceRequest>()
@@ -272,15 +285,20 @@ class LogMaintenanceFormViewModelTest {
     @Test
     fun `notes clear sends empty and reopening does not restore stale draft`() =
         runTest {
-            val task = makeTask("note-task", "Filter swap").copy(notes = "Server note", vendor = "Contractor", category = "hvac", performerContact = "555-0142")
+            val task =
+                makeTask(
+                    "note-task",
+                    "Filter swap",
+                ).copy(notes = "Server note", vendor = "Contractor", category = "hvac", performerContact = "555-0142")
+            val cleared = task.copy(notes = null, category = "plumbing", performerContact = null)
             coEvery { repo.getHomeMaintenance("home-1", null) } returnsMany
                 listOf(
                     NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task))),
-                    NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task.copy(notes = null, category = "plumbing", performerContact = null)))),
+                    NetworkResult.Success(GetHomeMaintenanceResponse(listOf(cleared))),
                 )
             val captured = slot<UpdateMaintenanceRequest>()
             coEvery { repo.updateHomeMaintenance("home-1", "note-task", capture(captured)) } returns
-                NetworkResult.Success(HomeMaintenanceResponse(task.copy(notes = null, category = "plumbing", performerContact = null)))
+                NetworkResult.Success(HomeMaintenanceResponse(cleared))
             val vm = makeEditVm("note-task")
             vm.loadIfNeeded()
             vm.updateNotes("")
@@ -290,7 +308,10 @@ class LogMaintenanceFormViewModelTest {
             assertEquals("", captured.captured.notes)
             assertEquals("plumbing", captured.captured.category)
             assertEquals("", captured.captured.performerContact)
-            store.upsert("note-task", MaintenanceDraft(category = MaintenanceCategory.Roof, performerContact = "Stale contact", notes = "Stale local note"))
+            store.upsert(
+                "note-task",
+                MaintenanceDraft(category = MaintenanceCategory.Roof, performerContact = "Stale contact", notes = "Stale local note"),
+            )
             val reopened = makeEditVm("note-task")
             reopened.loadIfNeeded()
             assertEquals("", reopened.form.value.notes)
