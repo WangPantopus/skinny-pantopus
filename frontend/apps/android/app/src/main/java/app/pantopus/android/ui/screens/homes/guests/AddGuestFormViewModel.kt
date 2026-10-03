@@ -77,13 +77,22 @@ data class AddGuestUiState(
     val firstName: String?
         get() = nameField.value.trim().split(" ").firstOrNull()?.takeIf { it.isNotEmpty() }
 
-    /** Required: name non-empty, contact valid (email OR phone), duration chosen, at least one section. */
+    /** Required: name, valid contact, duration (committed ordered days for Custom), and a section. */
     val isValid: Boolean
         get() =
             nameField.value.trim().isNotEmpty() &&
                 isGuestContactValid(contactField.value) &&
-                duration != null &&
+                hasValidDuration &&
                 selectedSections.isNotEmpty()
+
+    private val hasValidDuration: Boolean
+        get() {
+            if (duration == null) return false
+            if (duration != AddGuestSampleData.DURATION_CUSTOM_ID) return true
+            val start = customStartEpochDay ?: return false
+            val end = customEndEpochDay ?: return false
+            return end >= start
+        }
 
     /** Create is offered until this form's pass exists. */
     val canSubmit: Boolean get() = isValid && !didCreate
