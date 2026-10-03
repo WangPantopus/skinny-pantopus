@@ -111,6 +111,7 @@ struct PlacePrivacyMirrorView: View {
                     .frame(width: 34, height: 34).background(Theme.Color.appSurface).clipShape(Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Back")
             Text("Your Place")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.Color.appTextSecondary)

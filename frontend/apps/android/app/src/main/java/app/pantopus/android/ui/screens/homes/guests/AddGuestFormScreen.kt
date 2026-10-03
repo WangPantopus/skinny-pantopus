@@ -437,6 +437,7 @@ private fun WelcomeMessageEditor(
                     Modifier
                         .fillMaxWidth()
                         .heightIn(min = 68.dp)
+                        .semantics { contentDescription = "Welcome message (optional)" }
                         .testTag("field_welcome"),
             )
         }
