@@ -9,6 +9,21 @@
 
 **September 26 product research — Porchlight (documentation only):** the founder asked for product vision, not implementation. [The Porchlight product design](product/porchlight-product-design-2026-09-26.md) proposes watching over the homes of people you love with daily check-ins, address alerts and verified neighbors who knock, built on existing verified homes, gigs, mailbox, chat and civic data. Revised the same day after an outside review (direct competitors Snug, Iamfine and Life360; corrected status and scam-check overclaims; first version cut to 7 features; trial-then-paid pricing). Next: founder decisions (doc "Open decisions"), then a small hand-run pilot with families' existing trusted contacts and announced drills before any build. Limits: no codebase audit, no application change, no acceptance count change.
 
+**October 3 preserved local documents:** the user requested a PR for the five
+uncommitted documents saved during owner-checkout recovery. The
+[September 26 launch-planning drafts](launch-boundary-2026-09-26/README.md) and
+[October 1 marketing draft](marketing/launch-assets-2026-10-01.md) are restored
+byte-for-byte on `codex/preserved-local-docs-20261003`, based on freshly fetched
+master `2f7bea45f`. SHA-256 checks match all five private backup records, and every
+relative document link resolves. Their dated facts, proposed tiers and scope are
+historical drafts; the current live coordination guide still governs work. Next:
+review the drafts and reconcile approved direction with the existing authoritative
+plans. No application verification, acceptance-row change or implementation is
+claimed. The owner checkout returns to clean master after PR creation; the private
+backup remains retained. The separate Git-isolation repair is
+[PR1498](https://github.com/WangPantopus/skinny-pantopus/pull/1498), whose required
+CI now passes; coordinator integration remains pending.
+
 **September 24 local Git recovery:** preserved the original `new designs` commit `34e3a1860` on `codex/backup-designs-before-sync-20260924` and merged remote master `fd48ccfd2` into the owner checkout. Both handoff contributions are retained. Verification: original design-file Git blobs remain unchanged; remote changes are incorporated; no application acceptance rerun. Remote CI [35968123763](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35968123763) passed on the fetched remote head, not this local merge. Next: before publishing, remove the accidentally committed Chrome profile from outgoing history while retaining its local files and private recovery copy. Nothing was pushed during recovery.
 
 **September 23 research supplement — Ballot (separate from stream integration):** the founder requested product critique and research, not implementation. The [Ballot review](ballot-product-review-2026-09-23.md) and [build-guide Appendix D](ballot-build-guide-2026-09-23.md#appendix-d-research-review-and-proposed-amendments--september-23) record the proposed bounded official-information pilot, concrete contract corrections and acquisition/retention experiment. Next: founder scope decision, then source coverage and existing save-place/Today verification if authorized. Limits: HTML template content read but visual rendering blocked; no live provider coverage, user research, device delivery or application acceptance established. The report records the independently checked Git/remote CI snapshot. No stream ownership, acceptance count, runtime, application code or merge state is changed by this documentation milestone; the coordinator's live status remains authoritative.
