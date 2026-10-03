@@ -1135,7 +1135,10 @@ private fun PMToggleRow(
         Switch(
             checked = isOn,
             onCheckedChange = onToggle,
-            modifier = Modifier.testTag("verifyLandlordPMToggle"),
+            modifier =
+                Modifier
+                    .testTag("verifyLandlordPMToggle")
+                    .semantics { contentDescription = "Property manager handles this rental" },
             colors =
                 SwitchDefaults.colors(
                     checkedThumbColor = PantopusColors.appSurface,
