@@ -1,5 +1,7 @@
 # Successor prompt — Stream 3-1: Home access, residency and ownership
 
+**Latest exact-source CI read, 2026-10-03T00:02Z (October2,5:02p.m. PDT):** PR1490bebaf51 Android lint/test/assemble and instrumentation now both PASS, schema/safeguards/detection PASS; iOS lint/bundle remain queued. This supersedes the earlier Android-running snapshot, not aggregategreen or actualnativeafter acceptance. Source/head/draft/holds unchanged.
+
 ## Offline preparation checkpoint — 2026-10-02T23:59:18.926028+00:00
 
 Source1490bebaf51 remains clean/pushed, current origin/master3503de; latest CI37078414363 has Androidinstrumentation/schema/detection/safeguards PASS, Androidlint/test/assemblerunning, iOSlint/bundlequeued, pathskips retained. No aggregategreen/nativeafter/release claim. Own source13total/11listed3436a58e and siblingsource12total/10listed568d59 remain immutable/source-only. Integratedf41 remains localunbuilt/unpushed; refresh all candidateheads before the one later compilation. Rootcurrent01a0fef2,3-2current01a0fef3-cbdc,4-1current01a0fef5-a011,4-2current01a0fef6-b953; exact fullIDs in childmilestone/routing, not inferred from predecessors.
