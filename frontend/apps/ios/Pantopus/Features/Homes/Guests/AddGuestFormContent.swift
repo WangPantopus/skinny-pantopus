@@ -201,6 +201,7 @@ private struct WelcomeMessageEditor: View {
                         RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                             .stroke(Theme.Color.appBorder, lineWidth: 1)
                     )
+                    .accessibilityLabel("Welcome message (optional)")
                     .accessibilityIdentifier("field_welcome")
             }
             Text("\(text.count) / \(maxLength)")
