@@ -161,8 +161,10 @@ final class MailDayViewModelTests: XCTestCase {
     }
 
     func test_acceptSuggestion_rollsBackOnFailure() async {
-        // GET fails → the injected populated fixture; route POST fails → revert.
-        SequencedURLProtocol.sequence = [.status(500, body: "{}"), .status(500, body: "{}")]
+        // GET uses the seed; failed route rolls back, then a manual retry succeeds.
+        SequencedURLProtocol.sequence = [
+            .status(500, body: "{}"), .status(503, body: "{}"), .status(200, body: "{}")
+        ]
         let vm = MailDayViewModel(variant: .populated, api: makeAPI(), content: MailDaySampleData.populated)
         await vm.load()
 
@@ -177,6 +179,22 @@ final class MailDayViewModelTests: XCTestCase {
         }
         XCTAssertEqual(updated.unreviewed.count, 2, "A failed route must restore the piece")
         XCTAssertEqual(updated.reviewed.count, 6)
+        XCTAssertEqual(updated.unreviewed.map(\.id), initial.unreviewed.map(\.id))
+        XCTAssertEqual(updated.reviewed.map(\.id), initial.reviewed.map(\.id))
+        XCTAssertEqual(vm.settingsToast, "Couldn't route that piece. Try again.")
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "POST" }.count, 1)
+
+        vm.consumeSettingsToast()
+        XCTAssertNil(vm.settingsToast)
+        await vm.acceptSuggestion(for: target.id)
+        guard case let .populated(retried) = vm.state else {
+            return XCTFail("Expected .populated after manual retry")
+        }
+        XCTAssertEqual(retried.unreviewed.count, 1)
+        XCTAssertEqual(retried.reviewed.count, 7)
+        XCTAssertEqual(retried.reviewed.first?.id, target.id)
+        XCTAssertNil(vm.settingsToast)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "POST" }.count, 2)
     }
 
     // MARK: - Empty frame (fixture fallback)
@@ -251,15 +269,32 @@ final class MailDayViewModelTests: XCTestCase {
         let finish = """
         {"streak_days":13,"pieces":1,"routed_count":1,"junked_count":0,"returned_count":0}
         """
-        SequencedURLProtocol.sequence = [.status(200, body: today), .status(200, body: finish)]
+        SequencedURLProtocol.sequence = [
+            .status(200, body: today), .status(503, body: "{}"), .status(200, body: finish)
+        ]
         let vm = MailDayViewModel(variant: .empty, api: makeAPI())
         await vm.load()
         XCTAssertTrue(vm.canFinishDay)
+
+        await vm.finishDay()
+        guard case let .populated(failed) = vm.state else {
+            return XCTFail("Expected the populated day to remain open after failure")
+        }
+        XCTAssertEqual(failed.streakDays, 12)
+        XCTAssertEqual(failed.reviewed.map(\.id), ["r1"])
+        XCTAssertTrue(vm.canFinishDay)
+        XCTAssertEqual(vm.settingsToast, "Couldn't finish Mail Day. Try again.")
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "POST" }.count, 1)
+        vm.consumeSettingsToast()
+        XCTAssertNil(vm.settingsToast)
 
         await vm.finishDay()
         guard case let .populated(content) = vm.state else {
             return XCTFail("Expected .populated after finish")
         }
         XCTAssertEqual(content.streakDays, 13, "Finish bumps the streak server-side")
+        XCTAssertEqual(content.reviewed.map(\.id), ["r1"])
+        XCTAssertNil(vm.settingsToast)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "POST" }.count, 2)
     }
 }

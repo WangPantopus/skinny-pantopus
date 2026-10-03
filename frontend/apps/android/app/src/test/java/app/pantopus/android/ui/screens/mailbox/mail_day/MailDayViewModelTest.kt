@@ -167,13 +167,27 @@ class MailDayViewModelTest {
     fun acceptSuggestionRollsBackOnFailure() =
         runTest {
             val vm = vmWith(today(unreviewed = listOf(unreviewed("m1"), unreviewed("m2"))))
-            coEvery { repository.route(any()) } returns NetworkResult.Failure(NetworkError.Server(500, null))
+            coEvery { repository.route(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
             vm.load()
             val target = (vm.state.value as MailDayUiState.Populated).content.unreviewed[0]
             vm.acceptSuggestion(target.id)
             val rolledBack = (vm.state.value as MailDayUiState.Populated).content
             assertEquals(2, rolledBack.unreviewed.size)
             assertEquals(0, rolledBack.reviewed.size)
+            assertEquals(target.id, rolledBack.unreviewed.first().id)
+            assertEquals("Couldn't route that piece. Try again.", vm.actionError.value)
+            coVerify(exactly = 1) { repository.route(target.id) }
+
+            vm.consumeActionError()
+            assertNull(vm.actionError.value)
+            coEvery { repository.route(any()) } returns NetworkResult.Success(MailDayActionResponse(reviewed(target.id)))
+            vm.acceptSuggestion(target.id)
+            val retried = (vm.state.value as MailDayUiState.Populated).content
+            assertEquals(1, retried.unreviewed.size)
+            assertEquals(1, retried.reviewed.size)
+            assertEquals(target.id, retried.reviewed.first().id)
+            assertNull(vm.actionError.value)
+            coVerify(exactly = 2) { repository.route(target.id) }
         }
 
     @Test
@@ -215,9 +229,23 @@ class MailDayViewModelTest {
             val vm = vmWith(today(reviewed = listOf(reviewed("r1"))))
             vm.load()
             assertTrue(vm.canFinishDay)
+            coEvery { repository.finish() } returns NetworkResult.Failure(NetworkError.Server(503, null))
             vm.finishDay()
-            coVerify { repository.finish() }
+            val failed = (vm.state.value as MailDayUiState.Populated).content
+            assertEquals(12, failed.streakDays)
+            assertEquals(listOf("r1"), failed.reviewed.map { it.id })
+            assertTrue(vm.canFinishDay)
+            assertEquals("Couldn't finish Mail Day. Try again.", vm.actionError.value)
+            coVerify(exactly = 1) { repository.finish() }
+            vm.consumeActionError()
+            assertNull(vm.actionError.value)
+
+            coEvery { repository.finish() } returns NetworkResult.Success(MailDayFinishResponse(streakDays = 13))
+            vm.finishDay()
+            coVerify(exactly = 2) { repository.finish() }
             assertEquals(13, (vm.state.value as MailDayUiState.Populated).content.streakDays)
+            assertEquals(listOf("r1"), (vm.state.value as MailDayUiState.Populated).content.reviewed.map { it.id })
+            assertNull(vm.actionError.value)
         }
 
     @Test
