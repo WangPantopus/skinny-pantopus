@@ -326,6 +326,7 @@ public final class MailDayViewModel {
             _ = try await api.request(MailDayEndpoints.route(itemId: itemId))
         } catch {
             state = .populated(previous)
+            settingsToast = "Couldn't route that piece. Try again."
         }
     }
 
@@ -386,7 +387,7 @@ public final class MailDayViewModel {
                 )
             )
         } catch {
-            // Leave the day open on failure.
+            settingsToast = "Couldn't finish Mail Day. Try again."
         }
     }
 

@@ -133,6 +133,7 @@ class MailDayViewModel
             viewModelScope.launch {
                 if (repository.route(id) is NetworkResult.Failure) {
                     _state.value = MailDayUiState.Populated(previous)
+                    _actionError.value = "Couldn't route that piece. Try again."
                 }
             }
         }
@@ -193,7 +194,7 @@ class MailDayViewModel
                     is NetworkResult.Success ->
                         _state.value =
                             MailDayUiState.Populated(current.content.copy(streakDays = result.data.streakDays))
-                    is NetworkResult.Failure -> Unit
+                    is NetworkResult.Failure -> _actionError.value = "Couldn't finish Mail Day. Try again."
                 }
             }
         }
