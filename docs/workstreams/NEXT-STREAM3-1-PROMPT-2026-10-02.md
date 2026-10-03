@@ -1,5 +1,10 @@
 # Successor prompt — Stream 3-1: Home access, residency and ownership
 
+## Current handoff clarification — 2026-10-03T07:10Z
+
+Joint TWO-case command binding81a513 passes custodian23deb source/AST review; the one active-stage sealing-order issue is resolved by separately dated qualificationc26592, original14pins/source/core/input/cases preserved. Root must bind **both81a513+c26592** in a future mainACK: active stage unsealed throughcleanup/final353/guardedstop/absence→successfulactualslot/runtimefullreturn+independentreview→finalscan/separateseal/newimmutableaudit. No latersealed/released-stage native/API/SQL/control action. See current child/parent links for exact source-only receipts; no import/runtime grant/acceptance increase. Generic custodianreview complete, own1490ready/threeiOSCIqueued, parent8/20 unchanged.
+
+
 ## Current continuation — actual names window finished, 2026-10-03T06:30Z
 
 Read [current child state](03-1-home-access-ownership.md) and [authoritative parent ledger](03-home-access-residency.md) first. PR1490 exactbeb contains the three minimal nonvisual repairs; FOUR actual b903 native afters are independently baselined, exactly cleaned, personally inspected, scanned/separately sealed/new immutable audits fully hash/byte/set/mode verified. [Publication proof](/Users/yingpengwang/.config/pantopus/stream3-1-resume-20261002/names-fixture-operator-proposal-r7/private-runtime/names-window-r2/four-case-immutable-audits.json) gives all paths/manifests/counts. iOS Message expected39 vs actual54 remains qualified, no application defect/typing correction inferred; Android secure AX is not pixels/speech. Parent8/20 unchanged.
