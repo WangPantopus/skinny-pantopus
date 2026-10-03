@@ -3,9 +3,9 @@
 //  Pantopus
 //
 //  P2.9 — Session-scoped store for the maintenance form's *extras* that
-//  the current backend schema (`HomeMaintenanceLog`) doesn't yet
-//  persist: photos, receipt, notes, performed-by category, and the
-//  category enum the user picked in the form.
+//  the backend does not yet persist: photos, receipt and performed-by
+//  kind. Saved notes, category and contact come from HomeMaintenanceLog;
+//  the retained draft copies do not override those canonical fields.
 //
 //  The list / detail screens read the matching draft (keyed by the
 //  server-returned task id) so a freshly-logged maintenance entry shows

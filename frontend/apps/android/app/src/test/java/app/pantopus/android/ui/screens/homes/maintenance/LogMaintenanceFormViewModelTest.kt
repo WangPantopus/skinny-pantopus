@@ -126,8 +126,10 @@ class LogMaintenanceFormViewModelTest {
             assertEquals("yearly", maintenanceRequest.captured.recurrence)
             assertEquals("completed", maintenanceRequest.captured.status)
             assertEquals("2026-11-01", maintenanceRequest.captured.dueDate)
+            assertEquals("hvac", maintenanceRequest.captured.category)
+            assertEquals("555-0142", maintenanceRequest.captured.performerContact)
             coVerify(exactly = 0) { repo.createHomeEvent(any(), any()) }
-            // Local draft was persisted with the extras that backend doesn't store.
+            // Media/performer draft behavior is retained alongside canonical scalars.
             val draft = store.draft("task-new")
             assertNotNull(draft)
             assertEquals(MaintenanceCategory.Hvac, draft!!.category)
@@ -212,6 +214,12 @@ class LogMaintenanceFormViewModelTest {
             assertTrue(vm.form.value.nextDueEnabled)
             // Loading an existing task isn't a dirty edit.
             assertFalse(vm.isDirty.value)
+            val captured = slot<UpdateMaintenanceRequest>()
+            coEvery { repo.updateHomeMaintenance("home-1", "task-edit", capture(captured)) } returns
+                NetworkResult.Success(HomeMaintenanceResponse(makeTask("task-edit", "Filter replacement").copy(category = "pest")))
+            vm.updateTitle("Filter replacement")
+            vm.submit()
+            assertEquals("pest", captured.captured.category)
         }
 
     // MARK: - Cost parsing helpers
@@ -248,8 +256,15 @@ class LogMaintenanceFormViewModelTest {
     @Test
     fun `notes edit uses server value and omits unchanged text`() =
         runTest {
-            store.upsert("note-task", MaintenanceDraft(notes = "Stale local note"))
-            val task = makeTask("note-task", "Filter swap").copy(notes = "Server note")
+            store.upsert(
+                "note-task",
+                MaintenanceDraft(category = MaintenanceCategory.Roof, performerContact = "Stale contact", notes = "Stale local note"),
+            )
+            val task =
+                makeTask(
+                    "note-task",
+                    "Filter swap",
+                ).copy(notes = "Server note", vendor = "Contractor", category = "hvac", performerContact = "555-0142")
             coEvery { repo.getHomeMaintenance("home-1", null) } returns
                 NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task)))
             val captured = slot<UpdateMaintenanceRequest>()
@@ -258,32 +273,50 @@ class LogMaintenanceFormViewModelTest {
             val vm = makeEditVm("note-task")
             vm.loadIfNeeded()
             assertEquals("Server note", vm.form.value.notes)
+            assertEquals(MaintenanceCategory.Hvac, vm.form.value.category)
+            assertEquals("555-0142", vm.form.value.performerContact)
             vm.updateTitle("Updated title")
             vm.submit()
             assertNull(captured.captured.notes)
+            assertNull(captured.captured.category)
+            assertNull(captured.captured.performerContact)
         }
 
     @Test
     fun `notes clear sends empty and reopening does not restore stale draft`() =
         runTest {
-            val task = makeTask("note-task", "Filter swap").copy(notes = "Server note")
+            val task =
+                makeTask(
+                    "note-task",
+                    "Filter swap",
+                ).copy(notes = "Server note", vendor = "Contractor", category = "hvac", performerContact = "555-0142")
+            val cleared = task.copy(notes = null, category = "plumbing", performerContact = null)
             coEvery { repo.getHomeMaintenance("home-1", null) } returnsMany
                 listOf(
                     NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task))),
-                    NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task.copy(notes = null)))),
+                    NetworkResult.Success(GetHomeMaintenanceResponse(listOf(cleared))),
                 )
             val captured = slot<UpdateMaintenanceRequest>()
             coEvery { repo.updateHomeMaintenance("home-1", "note-task", capture(captured)) } returns
-                NetworkResult.Success(HomeMaintenanceResponse(task.copy(notes = null)))
+                NetworkResult.Success(HomeMaintenanceResponse(cleared))
             val vm = makeEditVm("note-task")
             vm.loadIfNeeded()
             vm.updateNotes("")
+            vm.updateCategory(MaintenanceCategory.Plumbing)
+            vm.updatePerformerContact("")
             vm.submit()
             assertEquals("", captured.captured.notes)
-            store.upsert("note-task", MaintenanceDraft(notes = "Stale local note"))
+            assertEquals("plumbing", captured.captured.category)
+            assertEquals("", captured.captured.performerContact)
+            store.upsert(
+                "note-task",
+                MaintenanceDraft(category = MaintenanceCategory.Roof, performerContact = "Stale contact", notes = "Stale local note"),
+            )
             val reopened = makeEditVm("note-task")
             reopened.loadIfNeeded()
             assertEquals("", reopened.form.value.notes)
+            assertEquals(MaintenanceCategory.Plumbing, reopened.form.value.category)
+            assertEquals("", reopened.form.value.performerContact)
         }
 
     // MARK: - Helpers

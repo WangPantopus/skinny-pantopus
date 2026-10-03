@@ -24,6 +24,8 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
     public let homeId: String
     public let task: String
     public let notes: String?
+    public let category: String?
+    public let performerContact: String?
     public let vendor: String?
     public let cost: Decimal?
     public let recurrence: String
@@ -39,6 +41,8 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         case homeId = "home_id"
         case task
         case notes
+        case category
+        case performerContact = "performer_contact"
         case vendor
         case cost
         case recurrence
@@ -56,6 +60,8 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         homeId = try container.decode(String.self, forKey: .homeId)
         task = try container.decodeIfPresent(String.self, forKey: .task) ?? ""
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
+        performerContact = try container.decodeIfPresent(String.self, forKey: .performerContact)
         vendor = try container.decodeIfPresent(String.self, forKey: .vendor)
         cost = try MaintenanceTaskDTO.decodeOptionalDecimal(in: container, key: .cost)
         recurrence = try container.decodeIfPresent(String.self, forKey: .recurrence) ?? "one_time"
@@ -72,6 +78,8 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         homeId: String,
         task: String,
         notes: String? = nil,
+        category: String? = nil,
+        performerContact: String? = nil,
         vendor: String? = nil,
         cost: Decimal? = nil,
         recurrence: String = "one_time",
@@ -86,6 +94,8 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         self.homeId = homeId
         self.task = task
         self.notes = notes
+        self.category = category
+        self.performerContact = performerContact
         self.vendor = vendor
         self.cost = cost
         self.recurrence = recurrence
@@ -130,6 +140,8 @@ public struct HomeMaintenanceResponse: Decodable, Sendable {
 public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
     public let task: String
     public let notes: String?
+    public let category: String?
+    public let performerContact: String?
     public let vendor: String?
     public let cost: Decimal?
     public let recurrence: String?
@@ -141,6 +153,8 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case task
         case notes
+        case category
+        case performerContact = "performer_contact"
         case vendor
         case cost
         case recurrence
@@ -153,6 +167,8 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
     public init(
         task: String,
         notes: String? = nil,
+        category: String? = nil,
+        performerContact: String? = nil,
         vendor: String? = nil,
         cost: Decimal? = nil,
         recurrence: String? = nil,
@@ -162,6 +178,8 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
     ) {
         self.task = task
         self.notes = notes
+        self.category = category
+        self.performerContact = performerContact
         self.vendor = vendor
         self.cost = cost
         self.recurrence = recurrence
@@ -175,6 +193,8 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(task, forKey: .task)
         if let notes { try c.encode(notes, forKey: .notes) }
+        if let category { try c.encode(category, forKey: .category) }
+        if let performerContact { try c.encode(performerContact, forKey: .performerContact) }
         if let vendor { try c.encode(vendor, forKey: .vendor) }
         if let cost {
             try c.encode(NSDecimalNumber(decimal: cost).doubleValue, forKey: .cost)
@@ -192,6 +212,8 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
 public struct UpdateMaintenanceRequest: Encodable, Sendable {
     public let task: String?
     public let notes: String?
+    public let category: String?
+    public let performerContact: String?
     public let vendor: String?
     public let cost: Decimal?
     public let recurrence: String?
@@ -204,6 +226,8 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case task
         case notes
+        case category
+        case performerContact = "performer_contact"
         case vendor
         case cost
         case recurrence
@@ -215,6 +239,8 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
     public init(
         task: String? = nil,
         notes: String? = nil,
+        category: String? = nil,
+        performerContact: String? = nil,
         vendor: String? = nil,
         cost: Decimal? = nil,
         recurrence: String? = nil,
@@ -226,6 +252,8 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
     ) {
         self.task = task
         self.notes = notes
+        self.category = category
+        self.performerContact = performerContact
         self.vendor = vendor
         self.cost = cost
         self.recurrence = recurrence
@@ -240,6 +268,8 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         if let task { try c.encode(task, forKey: .task) }
         if let notes { try c.encode(notes, forKey: .notes) }
+        if let category { try c.encode(category, forKey: .category) }
+        if let performerContact { try c.encode(performerContact, forKey: .performerContact) }
         if let vendor { try c.encode(vendor, forKey: .vendor) } else if clearVendor { try c.encodeNil(forKey: .vendor) }
         if let cost {
             try c.encode(NSDecimalNumber(decimal: cost).doubleValue, forKey: .cost)

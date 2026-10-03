@@ -125,7 +125,7 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         XCTAssertEqual(taskId, "task-new")
         XCTAssertNil(vm.submitError)
 
-        // Local draft was persisted with the extras backend doesn't store.
+        // Media/performer draft behavior is retained alongside canonical scalars.
         let draft = MaintenanceDraftStore.shared.draft(for: taskId)
         XCTAssertNotNil(draft)
         XCTAssertEqual(draft?.category, .hvac)
@@ -140,6 +140,8 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         let body = try? JSONSerialization
             .jsonObject(with: SequencedURLProtocol.capturedRequests[0].authTestBodyData() ?? Data()) as? [String: Any]
         XCTAssertEqual(body?["due_date"] as? String, "2026-11-01")
+        XCTAssertEqual(body?["category"] as? String, "hvac")
+        XCTAssertEqual(body?["performer_contact"] as? String, "555-0142")
     }
 
     func test_full_submitErrorSurfacesMessage() async {
@@ -229,6 +231,9 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
                 "status":"scheduled"
               }
             ]}
+            """),
+            .status(200, body: """
+            {"task":{"id":"task-edit","home_id":"home-1","task":"Filter replacement","category":"pest"}}
             """)
         ]
         let vm = makeVM(mode: .edit(taskId: "task-edit"), api: makeAPI())
@@ -243,6 +248,11 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         XCTAssertTrue(vm.nextDueEnabled)
         // Loading an existing task is not a dirty edit.
         XCTAssertFalse(vm.isDirty)
+        vm.title = "Filter replacement"
+        await vm.submit()
+        let body = try? JSONSerialization
+            .jsonObject(with: SequencedURLProtocol.capturedRequests.last?.authTestBodyData() ?? Data()) as? [String: Any]
+        XCTAssertEqual(body?["category"] as? String, "pest")
     }
 
     // MARK: - Cost parsing helpers
@@ -280,10 +290,14 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
     }
 
     func test_notes_editUsesServerValue_andOmitsUnchangedText() async throws {
-        MaintenanceDraftStore.shared.upsert(MaintenanceDraft(notes: "Stale local note"), for: "note-task")
+        MaintenanceDraftStore.shared.upsert(
+            MaintenanceDraft(category: .roof, performerContact: "Stale contact", notes: "Stale local note"),
+            for: "note-task"
+        )
         SequencedURLProtocol.sequence = [
             .status(200, body: """
-            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Server note"}]}
+            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Server note","vendor":"Contractor","category":
+            "hvac","performer_contact":"555-0142"}]}
             """),
             .status(200, body: """
             {"task":{"id":"note-task","home_id":"home-1","task":"Updated title","notes":"Concurrent server note"}}
@@ -292,35 +306,50 @@ final class LogMaintenanceFormViewModelTests: XCTestCase {
         let vm = makeVM(mode: .edit(taskId: "note-task"))
         await vm.loadIfNeeded()
         XCTAssertEqual(vm.notes, "Server note")
+        XCTAssertEqual(vm.category, .hvac)
+        XCTAssertEqual(vm.performerContact, "555-0142")
         vm.title = "Updated title"
         await vm.submit()
         let request = try XCTUnwrap(SequencedURLProtocol.capturedRequests.last)
         let body = try XCTUnwrap(try JSONSerialization.jsonObject(with: XCTUnwrap(request.authTestBodyData())) as? [String: Any])
         XCTAssertNil(body["notes"])
+        XCTAssertNil(body["category"])
+        XCTAssertNil(body["performer_contact"])
     }
 
     func test_notes_clearEncodesEmpty_andColdEditDoesNotRestoreDraft() async throws {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
-            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Server note"}]}
+            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":"Server note","vendor":"Contractor","category":
+            "hvac","performer_contact":"555-0142"}]}
             """),
             .status(200, body: """
-            {"task":{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":null}}
+            {"task":{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":null,"category":"plumbing","performer_contact":null}}
             """),
             .status(200, body: """
-            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":null}]}
+            {"tasks":[{"id":"note-task","home_id":"home-1","task":"Filter swap","notes":null,"category":"plumbing","performer_contact":null}
+            ]}
             """)
         ]
         let vm = makeVM(mode: .edit(taskId: "note-task"))
         await vm.loadIfNeeded()
         vm.notes = ""
+        vm.category = .plumbing
+        vm.performerContact = ""
         await vm.submit()
         let request = try XCTUnwrap(SequencedURLProtocol.capturedRequests.last)
         let body = try XCTUnwrap(try JSONSerialization.jsonObject(with: XCTUnwrap(request.authTestBodyData())) as? [String: Any])
         XCTAssertEqual(body["notes"] as? String, "")
-        MaintenanceDraftStore.shared.upsert(MaintenanceDraft(notes: "Stale local note"), for: "note-task")
+        XCTAssertEqual(body["category"] as? String, "plumbing")
+        XCTAssertEqual(body["performer_contact"] as? String, "")
+        MaintenanceDraftStore.shared.upsert(
+            MaintenanceDraft(category: .roof, performerContact: "Stale contact", notes: "Stale local note"),
+            for: "note-task"
+        )
         let reopened = makeVM(mode: .edit(taskId: "note-task"))
         await reopened.loadIfNeeded()
         XCTAssertEqual(reopened.notes, "")
+        XCTAssertEqual(reopened.category, .plumbing)
+        XCTAssertEqual(reopened.performerContact, "")
     }
 }
