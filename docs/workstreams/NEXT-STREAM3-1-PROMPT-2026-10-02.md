@@ -8,6 +8,8 @@ Own full runtime/device/process/heavy/fixture return is actual `3f96567a`; exact
 
 Next: Root final-audit/merge review and queued iOS CI; offline minimal **separate Q3 exact TWO Guest-dependent recovery successor outsideK**, preserving frozen Q3/original five-table cleanup/inputR4/qualifiedR2 declarations, with future separate READ capture and dry-run-bound DELETE ACKs. Then queued GenericR3 source-only custodian review (no K placement/resource read/operator execution). Revised runtime order **4-1 scalar Maintenance → 3-2 TWO → 4-2 Generic**, each fresh exact Root ACK/acquisition. Continue remaining own reproduce-first leads/accepted-source reuse independently; native AddHome selected-state repair requires an actual reproduced failure. No peer functional execution, provider/address bypass, speculative change or new acceptance.
 
+Offline follow-through is now complete for the queued proposals: exactTWO supplement source d52550a2/plan dd81e299 has Root independent source PASS3360d7e7; use the existing TWO outer full-admission try/finally wrapper and future separate per-case READ/dry/DELETE grants. Generic R3 custodian PASSd0be2c24 is source-only/noKplacement/action, with qualified post-cleanup349 rather than atomic whole347 conservation. AddHome seven-file source reconciliation d5a13937 retains an unreproduced selected-state lead behind actual address validation; no repair/state/provider bypass. Read linked current child state for exact receipts.
+
 The dated blocks below preserve provenance and former states. Their cleanup-held/source-only/no-after/pending-MaillDay statements are superseded by this current continuation; retain their original evidence bytes.
 
 
