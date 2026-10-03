@@ -191,6 +191,11 @@ class MaintenanceListViewModelTest {
         assertEquals("Riverside HVAC · Yearly", projection.subtitle)
         assertEquals("$185", projection.amount)
         assertEquals(MaintenanceCategory.Hvac, projection.category)
+        val explicit = makeTask(task = "Unclassified work").copy(category = "hvac")
+        assertEquals(MaintenanceCategory.Hvac, MaintenanceListViewModel.project(explicit, fixedNow).category)
+        val generic = makeTask(task = "Fall HVAC tune-up").copy(category = "generic")
+        assertEquals(MaintenanceCategory.Generic, MaintenanceListViewModel.project(generic, fixedNow).category)
+
     }
 
     @Test fun projection_diy_zero_cost_renders_as_DIY() {

@@ -2932,6 +2932,10 @@ const MAINTENANCE_STATUS_VALUES = new Set([
 const MAINTENANCE_RECURRENCE_VALUES = new Set([
   'one_time', 'weekly', 'monthly', 'quarterly', 'yearly'
 ]);
+const MAINTENANCE_CATEGORY_VALUES = new Set([
+  'hvac', 'plumbing', 'electrical', 'roof', 'gutter', 'appliance', 'pest',
+  'landscape', 'cleaning', 'painting', 'safety', 'chimney', 'generic'
+]);
 
 /**
  * GET /api/homes/:id/maintenance
@@ -2991,9 +2995,15 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'home.edit');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage maintenance' });
 
-    const { task, vendor, cost, recurrence, due_date, status, performed_at, notes, clientRequestId } = req.body || {};
+    const { task, vendor, cost, recurrence, due_date, status, performed_at, notes, category, performer_contact, clientRequestId } = req.body || {};
     if (Joi.string().max(4000).allow('', null).optional().validate(notes).error) {
       return res.status(400).json({ error: 'Notes must be text up to 4000 characters' });
+    }
+    if (category !== undefined && category !== null && !MAINTENANCE_CATEGORY_VALUES.has(category)) {
+      return res.status(400).json({ error: 'Invalid maintenance category' });
+    }
+    if (Joi.string().max(4000).allow('', null).optional().validate(performer_contact).error) {
+      return res.status(400).json({ error: 'Contact must be text up to 4000 characters' });
     }
 
     if (!task || typeof task !== 'string' || !task.trim()) {
@@ -3026,6 +3036,8 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
       due_date: due_date || null,
       ...(performed_at !== undefined ? { performed_at: new Date(performed_at).toISOString() } : {}),
       notes: typeof notes === 'string' ? notes.trim() || null : null,
+      category: category ?? null,
+      performer_contact: typeof performer_contact === 'string' ? performer_contact.trim() || null : null,
       status: status || 'scheduled',
       created_by: userId,
     };
@@ -3038,6 +3050,8 @@ router.post('/:id/maintenance', verifyToken, async (req, res) => {
       if (existing.home_id !== homeId.toLowerCase() || existing.created_by !== userId.toLowerCase() || existing.gig_id != null ||
           existing.task !== row.task || existing.vendor !== row.vendor || existing.recurrence !== row.recurrence ||
           (notes !== undefined && (existing.notes ?? null) !== row.notes) ||
+          (category !== undefined && (existing.category ?? null) !== row.category) ||
+          (performer_contact !== undefined && (existing.performer_contact ?? null) !== row.performer_contact) ||
           existing.status !== row.status || (existing.cost == null ? null : Number(existing.cost)) !==
             (row.cost == null ? null : Number(row.cost)) ||
           (existing.due_date == null ? null : Date.parse(existing.due_date)) !==
@@ -3094,7 +3108,7 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
     if (readError) return res.status(503).json({ error: 'Maintenance could not be checked. Please retry.' });
     if (!current) return res.status(404).json({ error: 'Maintenance task not found' });
 
-    const allowed = ['task', 'vendor', 'cost', 'recurrence', 'due_date', 'status', 'performed_at', 'notes'];
+    const allowed = ['task', 'vendor', 'cost', 'recurrence', 'due_date', 'status', 'performed_at', 'notes', 'category', 'performer_contact'];
     const updates = {};
     for (const key of allowed) {
       if (req.body && req.body[key] !== undefined) updates[key] = req.body[key];
@@ -3105,6 +3119,15 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
     }
     if (updates.notes !== undefined) {
       updates.notes = typeof updates.notes === 'string' ? updates.notes.trim() || null : null;
+    }
+    if (updates.category !== undefined && updates.category !== null && !MAINTENANCE_CATEGORY_VALUES.has(updates.category)) {
+      return res.status(400).json({ error: 'Invalid maintenance category' });
+    }
+    if (Joi.string().max(4000).allow('', null).optional().validate(updates.performer_contact).error) {
+      return res.status(400).json({ error: 'Contact must be text up to 4000 characters' });
+    }
+    if (updates.performer_contact !== undefined) {
+      updates.performer_contact = typeof updates.performer_contact === 'string' ? updates.performer_contact.trim() || null : null;
     }
 
     if (updates.status && !MAINTENANCE_STATUS_VALUES.has(updates.status)) {

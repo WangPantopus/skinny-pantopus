@@ -11,7 +11,7 @@
 //  Field encoding notes
 //  --------------------
 //  Notes use the existing HomeMaintenanceLog.notes API field. Photos,
-//  receipt, category and contact remain local draft extras. The server
+//  receipt remain local draft extras. Category/contact use the log API. The server
 //  value is authoritative when reopening detail or editing an entry.
 //
 
@@ -192,12 +192,12 @@ final class LogMaintenanceFormViewModel {
                 return MaintenanceListViewModel.parseDate(dueIso)
             }()
             return Snapshot(
-                category: stored?.category ?? inferredCategory,
+                category: dto?.category.flatMap(MaintenanceCategory.init(rawValue:)) ?? inferredCategory,
                 title: dto?.task ?? "",
                 dateCompleted: Self.parsePerformedDate(dto: dto) ?? baseNow,
                 performedBy: Self.inferPerformedBy(vendor: dto?.vendor, stored: stored),
                 performerName: dto?.vendor ?? "",
-                performerContact: stored?.performerContact ?? "",
+                performerContact: dto?.performerContact ?? "",
                 costText: Self.format(cost: dto?.cost),
                 notes: dto?.notes ?? "",
                 photos: stored?.photos ?? [],
@@ -253,14 +253,14 @@ final class LogMaintenanceFormViewModel {
     private func apply(existing dto: MaintenanceTaskDTO, taskId: String) {
         let stored = draftStore.draft(for: taskId)
         let inferredCategory = MaintenanceCategory.from(task: dto.task)
-        category = stored?.category ?? inferredCategory
+        category = dto.category.flatMap(MaintenanceCategory.init(rawValue:)) ?? inferredCategory
         title = dto.task
         if let parsed = Self.parsePerformedDate(dto: dto) {
             dateCompleted = parsed
         }
         performedBy = Self.inferPerformedBy(vendor: dto.vendor, stored: stored)
         performerName = dto.vendor ?? ""
-        performerContact = stored?.performerContact ?? ""
+        performerContact = dto.performerContact ?? ""
         costText = Self.format(cost: dto.cost)
         notes = dto.notes ?? ""
         photos = stored?.photos ?? []
@@ -316,6 +316,8 @@ final class LogMaintenanceFormViewModel {
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
         let vendor = vendorEncoding(currentSnapshot())
+        let contact = performedBy == .contractor
+            ? performerContact.trimmingCharacters(in: .whitespaces) : ""
         let parsedCost = Self.parseCost(costText)
         let dueIso = nextDueEnabled ? Self.isoDayString(from: nextDueDate) : nil
 
@@ -326,6 +328,8 @@ final class LogMaintenanceFormViewModel {
                 var req = CreateMaintenanceRequest(
                     task: trimmedTitle,
                     notes: notes,
+                    category: category.rawValue,
+                    performerContact: contact,
                     vendor: vendor,
                     cost: parsedCost,
                     recurrence: recurrence.rawValue,
@@ -342,6 +346,9 @@ final class LogMaintenanceFormViewModel {
                 let req = UpdateMaintenanceRequest(
                     task: trimmedTitle == initial.title.trimmingCharacters(in: .whitespaces) ? nil : trimmedTitle,
                     notes: notes == initial.notes ? nil : notes,
+                    category: category == initial.category ? nil : category.rawValue,
+                    performerContact: performerContact == initial.performerContact && performedBy == initial.performedBy ? nil
+                        : contact,
                     vendor: vendor == vendorEncoding(initial) ? nil : vendor,
                     cost: costText == initial.costText ? nil : parsedCost,
                     recurrence: recurrence.rawValue,

@@ -182,7 +182,7 @@ final class MaintenanceDetailViewModelTests: XCTestCase {
     func test_notes_loadsServerTextWithAnEmptyDraftStore() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
-            {"tasks":[{"id":"task-1","home_id":"home-1","task":"Filter swap","notes":"Saved server note"}]}
+            {"tasks":[{"id":"task-1","home_id":"home-1","task":"Filter swap","notes":"Saved server note","category":"hvac","performer_contact":"555-0142"}]}
             """)
         ]
         let vm = makeVM()
@@ -192,6 +192,8 @@ final class MaintenanceDetailViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(task.notes, "Saved server note")
+        XCTAssertEqual(task.category, "hvac")
+        XCTAssertEqual(task.performerContact, "555-0142")
         XCTAssertNil(vm.draft)
     }
 }

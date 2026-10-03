@@ -202,12 +202,12 @@ class LogMaintenanceFormViewModel
                 task.dueDate?.let { parseDate(it) } ?: _form.value.nextDueDate
             val merged =
                 LogMaintenanceFormState(
-                    category = stored?.category ?: inferredCategory,
+                    category = MaintenanceCategory.entries.firstOrNull { it.rawValue == task.category } ?: inferredCategory,
                     title = task.task,
                     dateCompleted = parseInstant(task.performedAt ?: task.updatedAt ?: task.createdAt) ?: Instant.now(),
                     performedBy = performedBy,
                     performerName = task.vendor.orEmpty(),
-                    performerContact = stored?.performerContact.orEmpty(),
+                    performerContact = task.performerContact.orEmpty(),
                     costText = task.cost?.let { formatCost(it) }.orEmpty(),
                     notes = task.notes.orEmpty(),
                     photos = stored?.photos ?: emptyList(),
@@ -280,10 +280,14 @@ class LogMaintenanceFormViewModel
             if (!current.canSubmit) return
             _form.value = current.copy(isSubmitting = true, submitError = null)
             viewModelScope.launch {
+                val contact =
+                    if (current.performedBy == MaintenancePerformedBy.Contractor) current.performerContact.trim() else ""
                 val req =
                     CreateMaintenanceRequest(
                         task = current.title.trim(),
                         notes = current.notes,
+                        category = current.category.rawValue,
+                        performerContact = contact,
                         vendor = encodeVendor(current),
                         cost = parseCost(current.costText),
                         recurrence = current.recurrence.raw,
@@ -304,6 +308,10 @@ class LogMaintenanceFormViewModel
                                 UpdateMaintenanceRequest(
                                     task = req.task.takeIf { it != initial.title.trim() },
                                     notes = req.notes.takeIf { current.notes != initial.notes },
+                                    category = req.category.takeIf { current.category != initial.category },
+                                    performerContact = req.performerContact.takeIf {
+                                        current.performerContact != initial.performerContact || current.performedBy != initial.performedBy
+                                    },
                                     vendor = req.vendor.takeIf { it != encodeVendor(initial) },
                                     cost = req.cost.takeIf { current.costText != initial.costText },
                                     recurrence = req.recurrence,
