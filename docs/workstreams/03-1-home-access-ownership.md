@@ -1,6 +1,6 @@
 # Stream 3-1 — Home access, residency and ownership
 
-**Latest exact-source CI read, 2026-10-03T00:02Z (October2,5:02p.m. PDT):** PR1490bebaf51 Android lint/test/assemble and instrumentation now both PASS, schema/safeguards/detection PASS; iOS lint/bundle remain queued. This supersedes the earlier Android-running snapshot, not aggregategreen or actualnativeafter acceptance. Source/head/draft/holds unchanged.
+**Latest exact-source CI read, 2026-10-03T00:01:28.751110+00:00 (October 2, 5:01:28 PM PDT):** PR1490bebaf51 Android lint/test/assemble and instrumentation both PASS, schema/safeguards/detection PASS; iOS lint queued, bundle queued. Earlier Android-running snapshot superseded; no aggregategreen or actualnativeafter acceptance. Timestamp is from this actual read; the previous minute-only timestamp was replaced. Source/head/draft/holds unchanged.
 
 ## Offline preparation checkpoint — 2026-10-02T23:59:18.926028+00:00
 
