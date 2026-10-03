@@ -1,5 +1,18 @@
 # Pantopus project handoff
 
+**October 3 owner-checkout recovery:** local `master` contained nine migration-test
+fixture commits and tracked only four files. The disk matched the last real
+checkout `ed5ea9ec5`, apart from five local documents. The original head is retained
+on `codex/backup-master-before-recovery-20261003`; those documents and recovery
+metadata are preserved privately. Owner `master` was restored and fast-forwarded
+to `2f7bea45f`; 33 absent-worktree registrations were archived/pruned, with all 19
+present worktrees retained. The inherited Git-environment defect is reproduced
+and repaired on a separate branch. All 75 safeguard tests and the migration policy
+check pass locally. Next: coordinator review/integration after required CI; then
+refresh owner `master`. Latest master CI still awaited iOS jobs at inspection.
+See [the recovery report](local-git-recovery-2026-10-03.md) for source, preservation,
+evidence and verification limits. Existing application acceptance is unchanged.
+
 > **2026-09-30 — this copy is an older snapshot; workstreams renumbered.** The live hub and the live handoff are `docs/workstreams/README.md` and `docs/PROJECT_HANDOFF.md` on the `codex/workstream-coordination` branch. The user renumbered the workstreams that day: the former Streams 1 and 2 are each being split in two (Streams 1–4), and the former **Stream 3 (Accounts and Social) is now Stream 5**, with its status in `docs/workstreams/05-accounts-social.md`. Below, "Stream 3" means today's Stream 5.
 
 > **2026-09-30 — the former Stream 1 (gigs, payments and coordination) is split into Streams 1 and 2.** Stream 1 — Support Trains and coordination ([`01-trains-coordination.md`](workstreams/01-trains-coordination.md)) owns Support Trains, the merge queue and hub status for all streams, rows G01–G05, O01–O06, L01–L04 and the U05 assembly. Stream 2 — Posts, Hub and payments ([`02-posts-hub-payments.md`](workstreams/02-posts-hub-payments.md)) owns Posts and Pulse, Start and Place preview, the Hub cards, money screens, rows P01–P10 and the launch-cut areas #3, #4 and #6. The U02–U04 checklists split 230 = 122 + 108 ([`checklists/`](workstreams/checklists/README.md)); the former file is [`former-stream1-gigs-payments.md`](workstreams/former-stream1-gigs-payments.md). The live copies are on `codex/workstream-coordination`.
