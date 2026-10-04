@@ -280,6 +280,7 @@ function generateAddressCalendarSignals(addressCalendar) {
   const seen = new Set();
   for (const e of upcoming) {
     if (!e || typeof e.days_until !== 'number') continue;
+    if (e.kind === 'pickup_holiday' || (PICKUP_KINDS.has(e.kind) && e.kind !== 'street_sweeping' && e.scope !== 'home')) continue;
     const lead = Number.isFinite(e.lead_days) ? e.lead_days : 1;
     if (e.days_until > lead) continue;
     if (seen.has(e.kind)) continue; // one line per kind per briefing

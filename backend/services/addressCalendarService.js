@@ -18,13 +18,14 @@
 // ============================================================
 
 const crypto = require('crypto');
-const { RRule } = require('rrule');
+const { RRule, RRuleSet } = require('rrule');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 
 const WINDOW_DAYS = 14;
 const SCOPE_RANK = { home: 0, city: 1, county: 2, state: 3 };
 const PICKUP_KINDS = new Set(['garbage', 'recycling', 'yard_waste']);
+const HOLIDAY_PICKUP_KINDS = new Set([...PICKUP_KINDS, 'bulk_pickup']);
 const WEEKDAYS = { MO: RRule.MO, TU: RRule.TU, WE: RRule.WE, TH: RRule.TH, FR: RRule.FR, SA: RRule.SA, SU: RRule.SU };
 
 function isoDate(d) {
@@ -63,7 +64,7 @@ async function loadRules(home) {
   if (!scopes.length) return [];
   const { data, error } = await supabaseAdmin
     .from('AddressCalendarRule')
-    .select('id, scope_type, scope_key, kind, title, detail, rrule, dtstart, until, all_day, lead_days, source, source_url, confidence')
+    .select('id, scope_type, scope_key, kind, title, detail, rrule, dtstart, until, all_day, lead_days, source, source_url, confidence, params')
     .in('scope_key', scopes.map((s) => s.scope_key));
   if (error) throw new Error(error.message);
   const wanted = new Set(scopes.map((s) => `${s.scope_type}|${s.scope_key}`));
@@ -83,7 +84,7 @@ function applyPrecedence(rules) {
   return rules.filter((r) => SCOPE_RANK[r.scope_type] === bestRank.get(r.kind));
 }
 
-function expandRule(rule, fromDay, toDay) {
+function expandRule(rule, fromDay, toDay, { holidays = [], moved = new Map() } = {}) {
   let options;
   try {
     options = RRule.parseString(rule.rrule);
@@ -93,10 +94,44 @@ function expandRule(rule, fromDay, toDay) {
   }
   const dtstart = noonUtc(String(rule.dtstart).slice(0, 10));
   const rr = new RRule({ ...options, dtstart, until: rule.until ? noonUtc(String(rule.until).slice(0, 10)) : options.until });
+  const dates = new RRuleSet();
+  dates.rrule(rr);
+  const removed = new Map();
+  const shiftedDays = new Set();
+  if (HOLIDAY_PICKUP_KINDS.has(rule.kind)) {
+    for (const holiday of holidays) {
+      const params = holiday.params;
+      // An unconfirmed holiday is information, never authority to move the
+      // household's confirmed day. Data rows require manual provider review.
+      if (holiday.scope_type !== 'city' || holiday.confidence !== 'official'
+        || !params || !Array.isArray(params.kinds) || !params.kinds.includes(rule.kind)
+        || typeof params.holiday !== 'string' || !params.holiday.trim()
+        || !Number.isSafeInteger(params.shift_days) || params.shift_days <= 0) continue;
+      const lookback = new Date(noonUtc(fromDay).getTime() - (params.shift_days + 6) * 86400000);
+      if (!Number.isFinite(lookback.getTime())) continue;
+      for (const holidayDay of expandRule(holiday, isoDate(lookback), toDay)) {
+        const start = noonUtc(holidayDay);
+        const saturday = new Date(start.getTime() + (6 - start.getUTCDay()) * 86400000);
+        for (const original of rr.between(start, saturday, true)) {
+          const shifted = new Date(original.getTime() + params.shift_days * 86400000);
+          if (!Number.isFinite(shifted.getTime())) continue;
+          removed.set(isoDate(original), original);
+          dates.rdate(shifted);
+          shiftedDays.add(isoDate(shifted));
+          moved.set(isoDate(shifted), { moved_from: isoDate(original), holiday: params.holiday, shift_days: params.shift_days });
+        }
+      }
+    }
+  }
+  // RRuleSet exclusions also exclude rdates. A moved Thursday may land on a
+  // Saturday that itself moves: retain the incoming Thursday on that date.
+  for (const [day, original] of removed) {
+    if (!shiftedDays.has(day)) dates.exdate(original);
+  }
   // Occurrences from the window start (inclusive) to its end (inclusive).
   const from = noonUtc(fromDay);
   const to = noonUtc(toDay);
-  return rr.between(from, to, true).map(isoDate);
+  return dates.between(from, to, true).map(isoDate);
 }
 
 function daysBetween(fromDay, toDay) {
@@ -128,10 +163,12 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
   // silently fall back to a guessed city week (including briefing signals).
   const rules = applyPrecedence(loaded.filter((r) =>
     !hasHouseholdPickup || !PICKUP_KINDS.has(r.kind) || r.scope_type === 'home'));
+  const holidays = rules.filter((r) => r.kind === 'pickup_holiday');
 
   const upcoming = [];
   for (const rule of rules) {
-    for (const day of expandRule(rule, today, end)) {
+    const moved = new Map();
+    for (const day of expandRule(rule, today, end, { holidays, moved })) {
       upcoming.push({
         rule_id: rule.id,
         kind: rule.kind,
@@ -145,6 +182,7 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
         source: rule.source || null,
         source_url: rule.source_url || null,
         confidence: rule.confidence === 'official' ? 'official' : 'unverified',
+        ...moved.get(day),
       });
     }
   }
@@ -166,10 +204,11 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
   const pickupSchedule = garbage ? {
     weekday: /BYDAY=([A-Z]{2})/.exec(garbage.rrule)?.[1] || null,
     recycling_frequency: recycling ? (/INTERVAL=2(?:;|$)/.test(recycling.rrule) ? 'biweekly' : 'weekly') : 'not_set',
-    recycling_next_date: recycling ? expandRule(recycling, today, end)[0] || null : null,
+    recycling_next_date: recycling ? expandRule(recycling, today, end, { holidays })[0] || null : null,
   } : null;
 
   return {
+    homeId: home.id || null,
     upcoming,
     next: upcoming[0] || null,
     needs_pickup_day: !garbage,

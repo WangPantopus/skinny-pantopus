@@ -13,6 +13,8 @@ jest.mock('../../services/context/providerOrchestrator', () => ({
   composeScheduledBriefing: jest.fn(),
 }));
 jest.mock('../../services/context/internalContextCollector', () => ({ collectInternalContext: jest.fn() }));
+jest.mock('../../services/context/locationResolver', () => ({ resolveLocation: jest.fn() }));
+jest.mock('../../services/addressCalendarService', () => ({ composeForHomeId: jest.fn() }));
 
 const { composeScheduledBriefing } = require('../../services/context/providerOrchestrator');
 // jest.config maps `../services/pushService` (the route's specifier) to this
@@ -253,6 +255,82 @@ describe('POST /api/internal/briefing/send', () => {
       .send({ userId: USER_ID, briefingKind: 'morning' });
     expect(duplicate.body).toEqual({ status: 'skipped', skip_reason: 'already_processed' });
     expect(pushService.sendToUserWithReceipt).toHaveBeenCalledTimes(acceptedCalls);
+    const { buildTomorrowPickupSignal, tomorrowDateKey } = require('../../services/context/eveningBriefingService');
+    const { resolveLocation } = require('../../services/context/locationResolver');
+    const { composeForHomeId } = require('../../services/addressCalendarService');
+    const timezone = 'America/Los_Angeles';
+    const date = tomorrowDateKey(timezone);
+    const location = { homeId: 'home-abc', timezone };
+    const pickupCalendar = { homeId: 'home-abc', upcoming: ['garbage', 'recycling'].map(kind => ({ kind, days_until: 1, date, scope: 'home' })) };
+    for (const moved of [null, { holiday: 'Thanksgiving', shift_days: 1 }, { holiday: 'Holiday', shift_days: 2 }]) {
+      const calendar = { ...pickupCalendar, upcoming: pickupCalendar.upcoming.map(event => ({ ...event,
+        ...(moved ? { ...moved, moved_from: new Date(Date.parse(`${date}T12:00:00Z`) - moved.shift_days * 86400000).toISOString().slice(0, 10) } : {}) })) };
+      const signal = buildTomorrowPickupSignal(calendar, timezone);
+      composeScheduledBriefing.mockResolvedValue({ should_send: true, text: 'Weather intro and pickup.', mode: 'template', tokens_used: 0,
+        signals_snapshot: [signal], home_id: 'home-abc', location_geohash: 'c20g8' });
+      resolveLocation.mockResolvedValue(location);
+      composeForHomeId.mockResolvedValue(calendar);
+      seedTable('DailyBriefingDelivery', []);
+      seedTable('FunnelEvent', []);
+      const pickup = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+        .send({ userId: USER_ID, briefingKind: 'evening' });
+      expect(pickup.body.status).toBe('sent');
+      const payload = pushService.sendToUserWithReceipt.mock.calls.at(-1)[1];
+      expect(payload.title).toBe('Garbage and recycling tomorrow');
+      expect(payload.body).toBe(moved ? `Bins out tonight.${moved.shift_days === 1 ? ' Moved a day for' : ' Moved for'} ${moved.holiday}.` : 'Bins out tonight.');
+      expect(payload.data).toMatchObject({ category: 'PICKUP_REMINDER', pickupDate: date, homeId: 'home-abc', link: '/app/today', route: '/app/today', recipient_user_id: USER_ID });
+      expect(getTable('FunnelEvent')).toEqual([expect.objectContaining({ event_type: 'reminder_sent', user_id: USER_ID, meta: { kind: 'pickup' } })]);
+    }
+    const signal = buildTomorrowPickupSignal(pickupCalendar, timezone);
+    composeScheduledBriefing.mockResolvedValue({ should_send: true, text: 'Pickup.', mode: 'template', tokens_used: 0,
+      signals_snapshot: [signal], home_id: 'home-abc', location_geohash: 'c20g8' });
+    for (const changed of ['home', 'withdrawn', 'schedule', 'unreadable']) {
+      seedTable('DailyBriefingDelivery', []);
+      seedTable('FunnelEvent', []);
+      pushService.sendToUserWithReceipt.mockClear();
+      resolveLocation.mockResolvedValue(location);
+      composeForHomeId.mockResolvedValue(pickupCalendar);
+      if (changed === 'home') resolveLocation.mockResolvedValueOnce({ ...location, homeId: 'other-home' });
+      if (changed === 'withdrawn') composeForHomeId.mockResolvedValueOnce({ ...pickupCalendar, upcoming: [] });
+      if (changed === 'schedule') composeForHomeId.mockResolvedValueOnce({ ...pickupCalendar, upcoming: pickupCalendar.upcoming.slice(0, 1) });
+      if (changed === 'unreadable') composeForHomeId.mockRejectedValueOnce(new Error('Calendar authority unavailable'));
+      const refused = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+        .send({ userId: USER_ID, briefingKind: 'evening' });
+      expect(refused.status).toBe(500);
+      expect(pushService.sendToUserWithReceipt).not.toHaveBeenCalled();
+      expect(getTable('DailyBriefingDelivery')[0].status).toBe('failed');
+      expect(getTable('DailyBriefingDelivery')[0].summary_text).toBeUndefined();
+      expect(getTable('FunnelEvent')).toHaveLength(0);
+    }
+    resolveLocation.mockResolvedValue(location);
+    composeForHomeId.mockResolvedValue(pickupCalendar);
+    for (const receipt of [undefined, { acceptedCount: 0, unresolvedCount: 1 }]) {
+      seedTable('DailyBriefingDelivery', []);
+      pushService.sendToUserWithReceipt.mockResolvedValueOnce(receipt);
+      const refused = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+        .send({ userId: USER_ID, briefingKind: 'evening' });
+      expect(refused.status).toBe(503);
+      expect(getTable('DailyBriefingDelivery')[0].status).toBe('failed');
+      expect(getTable('FunnelEvent')).toHaveLength(0);
+    }
+    pushService.sendToUserWithReceipt.mockRejectedValueOnce(new Error('Provider unavailable'));
+    const failedPickup = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+      .send({ userId: USER_ID, briefingKind: 'evening' });
+    expect(failedPickup.status).toBe(500);
+    expect(getTable('FunnelEvent')).toHaveLength(0);
+    pushService.sendToUserWithReceipt.mockResolvedValueOnce({ acceptedCount: 1, unresolvedCount: 1 });
+    const retriedPickup = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+      .send({ userId: USER_ID, briefingKind: 'evening' });
+    expect(retriedPickup.body.status).toBe('sent');
+    expect(getTable('DailyBriefingDelivery')).toHaveLength(1);
+    expect(getTable('DailyBriefingDelivery')[0].summary_text).toBe('Bins out tonight.');
+    expect(getTable('FunnelEvent')).toHaveLength(1);
+    const pickupCalls = pushService.sendToUserWithReceipt.mock.calls.length;
+    const repeatedPickup = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+      .send({ userId: USER_ID, briefingKind: 'evening' });
+    expect(repeatedPickup.body.skip_reason).toBe('already_processed');
+    expect(pushService.sendToUserWithReceipt).toHaveBeenCalledTimes(pickupCalls);
+    expect(getTable('FunnelEvent')).toHaveLength(1);
   });
 });
 

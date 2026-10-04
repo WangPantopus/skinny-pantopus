@@ -128,10 +128,10 @@ function createSignal(kind, score, detail, data = {}, label = kind, urgency = 'l
   };
 }
 
-function buildAlertSignal(alerts, recentBriefings = []) {
-  const alert = (alerts?.alerts || []).find((item) =>
-    ['extreme', 'severe', 'moderate'].includes(String(item.severity || '').toLowerCase())
-  );
+function buildAlertSignal(alerts, recentBriefings = [], preferSevere = false) {
+  const active = (alerts?.alerts || []).filter((item) =>
+    ['extreme', 'severe', 'moderate'].includes(String(item.severity || '').toLowerCase()));
+  const alert = (preferSevere && active.find(item => String(item.severity).toLowerCase() !== 'moderate')) || active[0];
   if (!alert) return null;
   const identity = `alert:${alert.id || alert.event || alert.headline}`;
   const overnight = /overnight|tonight|tomorrow/i.test(`${alert.headline || ''} ${alert.description || ''}`);
@@ -148,6 +148,30 @@ function buildAlertSignal(alerts, recentBriefings = []) {
     score >= 0.85 ? 'critical' : 'high',
     null
   );
+}
+
+const PICKUP_LABELS = { garbage: 'garbage', recycling: 'recycling', yard_waste: 'yard waste', bulk_pickup: 'bulk pickup' };
+
+function buildTomorrowPickupSignal(addressCalendar, timeZone, recentBriefings = [], now = new Date()) {
+  if (!addressCalendar?.homeId) return null;
+  const tomorrow = tomorrowDateKey(timeZone, now);
+  const events = (Array.isArray(addressCalendar.upcoming) ? addressCalendar.upcoming : []).filter(event =>
+    event?.days_until === 1 && event.date === tomorrow && event.scope === 'home'
+    && Object.hasOwn(PICKUP_LABELS, event.kind));
+  if (!events.length) return null;
+  const date = events[0].date;
+  const identity = `pickup:${date}`;
+  if (hasRecentSignalIdentity(recentBriefings, 'address_calendar', identity)) return null;
+  const kinds = Object.keys(PICKUP_LABELS).filter(kind => events.some(event => event.kind === kind));
+  const names = kinds.map(kind => PICKUP_LABELS[kind]);
+  const joined = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  const label = `${joined[0].toUpperCase()}${joined.slice(1)} tomorrow`;
+  const movedEvent = events.find(event => event.moved_from && event.holiday && Number.isSafeInteger(event.shift_days));
+  const moved = movedEvent ? { holiday: movedEvent.holiday, shift_days: movedEvent.shift_days } : null;
+  const holidaySentence = moved ? (moved.shift_days === 1 ? ` Moved a day for ${moved.holiday}.` : ` Moved for ${moved.holiday}.`) : '';
+  return createSignal('address_calendar', 0.66, `Bins out tonight.${holidaySentence}`,
+    { identity, kinds, date, homeId: addressCalendar.homeId, moved }, label, 'medium',
+    { label: 'See your calendar', route: '/app/today' });
 }
 
 function buildTomorrowEventSignal(internal, timeZone, recentBriefings = [], now = new Date()) {
@@ -304,14 +328,18 @@ function buildEveningTipSignal(recentBriefings = [], now = new Date()) {
 function selectEveningSignal({
   alerts,
   internal,
+  addressCalendar = null,
   timeZone,
   recentBriefings = [],
   localUpdates = null,
   includeEveningTip = true,
   now = new Date(),
 }) {
+  const pickup = buildTomorrowPickupSignal(addressCalendar, timeZone, recentBriefings, now);
+  const alert = buildAlertSignal(alerts, recentBriefings, Boolean(pickup));
+  if (pickup) return alert?.score === 0.90 ? alert : pickup;
   const candidates = [
-    buildAlertSignal(alerts, recentBriefings),
+    alert,
     buildTomorrowEventSignal(internal, timeZone, recentBriefings, now),
     buildTomorrowBillSignal(internal, timeZone, recentBriefings, now),
     buildTomorrowTaskSignal(internal, timeZone, recentBriefings, now),
@@ -326,6 +354,7 @@ function selectEveningSignal({
 }
 
 module.exports = {
+  buildTomorrowPickupSignal,
   buildTomorrowWeatherIntro,
   selectEveningSignal,
   getLocalDateKey,
