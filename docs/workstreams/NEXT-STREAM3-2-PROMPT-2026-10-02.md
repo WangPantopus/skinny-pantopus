@@ -16,6 +16,18 @@ Package estimates, migration reservations and shared-file writers are authoritat
 
 Take over this existing workstream and continue its authorized verification and focused repairs. The workstream is incomplete. The human authorized a successor handoff at a sound boundary; this replaces the earlier instruction not to hand off. Do not restart the campaign or treat preparation, passing builds or partial rows as end-to-end acceptance.
 
+## Latest source checkpoint and bounded next actions — October 4, 2026
+
+Own clean/pushed1518 is e7befe109bd82eac91deb9d7c15c375f8ce9b876. Root's exact test-only authorization was completed: both asynchronous skew cases freeze Date.now and restore it in finally; all38 existing auth tests pass, auth code/300-second policy unchanged. Required CI now6SUCCESS/5pathSKIP. Reuse prior70 affected source checks and application bytes. [Latest status](03-2-home-security-privacy.md#latest-source-reviews-applied-state-distinction-and-remaining-defects--october-4-2026) links preserved r1 and new r2 evidence.
+
+Root's delivered read-only metadata receipt passed independent receipt review/full-return11:42:09Z. Historical applied destination353tables/106versions lacks current default-deny182000 and pilot101000–104000; old anon/authenticated Emergency privileges are still present. Source ACL protection is not applied destination readiness. Reuse existing permitted source only after separate schema admission;110000 stays UNUSED, no new migration or held-body read.
+
+Before proposing an Emergency fence, the actual existing handler/IAM source was checked against founder1513's sensitivity scope and the accepted current Home reader contract. Temporary frozen/frozen-silent owner cases reproduce200 instead of403, then were restored. No shared home.js edit: await Root's exact single-writer disposition. Reuse existing homeDashboardService.withCurrentAccess if admitted; no replacement service/SQL/design is justified.
+
+WP6@7fd2e5b4 bounded corrections source PASS:15 targeted Mail/tier cases,68 wrappers/five syntax/diff; prior11-function/34-case review preserved and104000743a82 remains unchanged. Historical untouched invitation ordering resolves the earlier no-op timestamp hypothesis. Current native CI was pending; no SQL/native/J3 closure.3-1 remains sole writer/parent03/operator custodian.1517@601 fixes the bill slow-provider wait, but a task-only deferred-provider case fails and was sent to sole4-1 writer; review its newly frozen task/calendar response repair before claiming readiness.1515 current3d844fa4 is attached for bounded action/credential/source review;4-2 alone owns native/transport guards and its separately assigned Android401 tag-replay repair.
+
+Continue Emergency disposition and exact owner source reviews personally, preserve accepted tests rather than repeat large suites, and verify actual Sol/xhigh metadata on each new working turn. Root remains sole merge/shared-handoff/bootstrap owner. The two Custom1496 journeys are still draft/idle-only, conditional on the recorded Studio setup and fresh exact runtime/device/fixture grants. No source/CI result changes acceptance counts or supplies those grants.
+
 ## Latest exact review and CI checkpoint — October 4, 2026
 
 1518/f548 schema/SQL-contract CI passes; aggregate37198423071 fails only the unchanged asynchronous future-iat `authDpop` case. Two skew cases pass locally onf548,70 affected checks remain green; Root owns deterministic test-only disposition/CI control. No auth app patch or new CI run is authorized by this record.1514@37d receipt/event delta has bounded source pass and exactCI7SUCCESS/4SKIP; provider/device/real-local-date and ledger concurrency/lost-reply limits persist.
