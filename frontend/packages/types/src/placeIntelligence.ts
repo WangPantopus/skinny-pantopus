@@ -822,6 +822,8 @@ export type PlaceBallotElectionData = PlaceCivicElectionData & BallotSummaryFiel
 /** The anonymous /start teaser (`ballot_teaser` on the public preview). */
 export interface BallotTeaser {
   coverage: BallotCoverage;
+  /** Successful live boundary lookup time; absent on older or links-only previews. */
+  looked_up_at?: string | null;
   state: string;
   election: { id: string; name: string; date: string; days_until: number };
   headline: string;

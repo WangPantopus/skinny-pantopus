@@ -101,6 +101,7 @@ export function ballotTeaserData(v: unknown): BallotTeaser | null {
   const days = next && num(next.days_left);
   return {
     ...(o as unknown as BallotTeaser),
+    looked_up_at: text(o.looked_up_at),
     note: text(o.note),
     next_deadline: next && text(next.lead) && days !== null
       ? { key: text(next.key) ?? '', lead: next.lead as string, days_left: days, detail: text(next.detail) }

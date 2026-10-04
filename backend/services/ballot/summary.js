@@ -340,6 +340,9 @@ async function teaserForPoint({ lat, lng, state }, { now = new Date() } = {}) {
   }
 
   const govResult = await governments.governmentsForPoint(lat, lng);
+  // A successful live boundary lookup owns its timestamp. Client rerenders
+  // and restored previews must not make the same answer appear refreshed.
+  const lookedUpAt = govResult ? new Date().toISOString() : null;
   const summary = composeSummary({
     stateValue: state,
     countyGeoid: govResult ? govResult.county_geoid : null,
@@ -350,6 +353,7 @@ async function teaserForPoint({ lat, lng, state }, { now = new Date() } = {}) {
   const next = summary.deadlines.find((d) => d.needs_action && d.teaser_lead) || null;
   return {
     coverage: 'supported',
+    looked_up_at: lookedUpAt,
     state: summary.state,
     election: { id: summary.election_id, name: summary.name, date: summary.date, days_until: summary.days_until },
     headline: summary.governments
