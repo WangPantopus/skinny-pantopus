@@ -61,6 +61,106 @@ beforeEach(() => {
   grantManageTo(OWNER);
 });
 
+describe('GET /api/homes/:id/emergencies uses the effective sensitivity permission', () => {
+  const MEMBER = OUTSIDER;
+  beforeEach(() => {
+    checkHomePermission.mockImplementation(jest.requireActual('../utils/homePermissions').checkHomePermission);
+    seedTable('Home', [{ id: HOME_ID, owner_id: OWNER }]);
+    seedTable('HomeOccupancy', [
+      { home_id: HOME_ID, user_id: OWNER, role_base: 'owner', is_active: true, verification_status: 'verified', age_band: 'adult' },
+      { home_id: HOME_ID, user_id: MEMBER, role_base: 'member', is_active: true, verification_status: 'verified', age_band: 'adult' },
+    ]);
+    seedTable('HomeRolePermission', [{ role_base: 'member', permission: 'home.view', allowed: true },
+      { role_base: 'member', permission: 'home.edit', allowed: true }]);
+    seedTable('HomeEmergency', [{ id: ROW_ID, home_id: HOME_ID, type: 'medication', label: 'Private fixture medication',
+      location: 'Cabinet', details: { notes: 'Private fixture instructions' }, created_by: OWNER }]);
+  });
+
+  async function get(actor) {
+    return request(makeApp()).get(`/api/homes/${HOME_ID}/emergencies`).set('x-test-user-id', actor);
+  }
+  function denied(res) {
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "You don't have permission to view this home's emergency info." });
+    expect(JSON.stringify(res.body)).not.toContain('Private fixture');
+  }
+
+  test('owner and explicitly granted member use the existing response and aliases', async () => {
+    expect((await get(OWNER)).body.emergencies[0]).toMatchObject({ info_type: 'medication', location_in_home: 'Cabinet' });
+    seedTable('HomePermissionOverride', [{ home_id: HOME_ID, user_id: MEMBER, permission: 'sensitive.view', allowed: true }]);
+    const res = await get(MEMBER);
+    expect(res.status).toBe(200);
+    expect(res.body.emergencies[0].details.notes).toBe('Private fixture instructions');
+    expect(checkHomePermission).toHaveBeenCalledWith(HOME_ID, MEMBER, 'sensitive.view');
+  });
+
+  test.each(['member', 'admin', 'manager', 'lease_resident', 'restricted_member', 'guest', 'service_provider'])(
+    'membership/home.edit alone does not let a %s read Emergency info', async role => {
+      getTable('HomeOccupancy')[1].role_base = role;
+      seedTable('HomeRolePermission', [{ role_base: role, permission: 'home.view', allowed: true },
+        { role_base: role, permission: 'home.edit', allowed: true }]);
+      const from = jest.spyOn(supabaseAdmin, 'from');
+      denied(await get(MEMBER));
+      expect(from).not.toHaveBeenCalledWith('HomeEmergency');
+      from.mockRestore();
+    });
+
+  test('explicit deny fences the owner and a withdrawn grant retires the next read', async () => {
+    seedTable('HomePermissionOverride', [{ home_id: HOME_ID, user_id: OWNER, permission: 'sensitive.view', allowed: false },
+      { home_id: HOME_ID, user_id: MEMBER, permission: 'sensitive.view', allowed: true }]);
+    denied(await get(OWNER));
+    expect((await get(MEMBER)).status).toBe(200);
+    getTable('HomePermissionOverride')[1].allowed = false;
+    denied(await get(MEMBER));
+  });
+
+  test.each(['child', 'teen'])('%s sensitivity remains denied even for an owner with an explicit grant', async age => {
+    getTable('HomeOccupancy')[0].age_band = age;
+    seedTable('HomePermissionOverride', [{ home_id: HOME_ID, user_id: OWNER, permission: 'sensitive.view', allowed: true }]);
+    denied(await get(OWNER));
+  });
+
+  test.each(['suspended', 'revoked', 'pending_doc'])('%s membership cannot use a retained sensitivity grant', async status => {
+    seedTable('HomePermissionOverride', [{ home_id: HOME_ID, user_id: MEMBER, permission: 'sensitive.view', allowed: true }]);
+    getTable('HomeOccupancy')[1].verification_status = status;
+    denied(await get(MEMBER));
+  });
+
+  test('home.edit PUT replaces submitted fields and cannot echo the previous private details', async () => {
+    denied(await get(MEMBER));
+    const res = await request(makeApp()).put(`/api/homes/${HOME_ID}/emergencies/${ROW_ID}`)
+      .set('x-test-user-id', MEMBER).send({ type: 'contact', label: 'Caller supplied contact' });
+    expect(res.status).toBe(200);
+    expect(res.body.emergency).toMatchObject({ type: 'contact', label: 'Caller supplied contact', details: {} });
+    expect(JSON.stringify(res.body)).not.toContain('Private fixture');
+    expect(getTable('HomeEmergency')[0].details).toEqual({});
+  });
+
+  test('home.edit POST retry returns only the same actor payload and refuses later changed private details', async () => {
+    const payload = { type: 'contact', label: 'Caller supplied contact', details: { notes: 'Caller supplied note' }, clientRequestId: ROW_ID };
+    const post = () => request(makeApp()).post(`/api/homes/${HOME_ID}/emergencies`)
+      .set('x-test-user-id', MEMBER).send(payload);
+    expect((await post()).status).toBe(201);
+    const first = getTable('HomeEmergency').find(row => row.created_by === MEMBER);
+    expect((await post()).body.emergency.id).toBe(first.id);
+    expect(getTable('HomeEmergency')).toHaveLength(2);
+    first.details = { notes: 'Private fixture changed after creation' };
+    const res = await post();
+    expect(res.status).toBe(409);
+    expect(res.body.emergency).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain('Private fixture');
+    expect(getTable('HomeEmergency')).toHaveLength(2);
+  });
+
+  test('home.edit DELETE returns an acknowledgement without Emergency fields', async () => {
+    const res = await request(makeApp()).delete(`/api/homes/${HOME_ID}/emergencies/${ROW_ID}`)
+      .set('x-test-user-id', MEMBER);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ message: 'Emergency info deleted' });
+    expect(JSON.stringify(res.body)).not.toContain('Private fixture');
+  });
+});
+
 // A chain whose execution reports the database's check-constraint refusal the
 // way PostgREST surfaces it (SQLSTATE 23514 in error.code).
 function refusingChain() {
