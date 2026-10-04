@@ -358,4 +358,4 @@ function locationFromCoordinates({ latitude, longitude, label, homeId } = {}) {
   return makeResult(lat, lng, label || 'Home', 'home', homeId || null);
 }
 
-module.exports = { resolveLocation, locationFromCoordinates };
+module.exports = { resolveLocation, locationFromCoordinates, inferTimezone };
