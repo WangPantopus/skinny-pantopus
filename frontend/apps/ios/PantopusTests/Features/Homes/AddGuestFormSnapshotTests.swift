@@ -18,6 +18,7 @@
 //
 
 import XCTest
+@testable import Pantopus
 
 final class AddGuestFormSnapshotTests: XCTestCase {
     private var baselineURL: URL {
@@ -30,11 +31,51 @@ final class AddGuestFormSnapshotTests: XCTestCase {
             .appendingPathComponent("a13-add-guest")
     }
 
+    @MainActor
     func test_add_guest_filled_ios_baseline_is_present() throws {
+        let viewModel = AddGuestFormViewModel(homeId: "validation-only")
+        viewModel.updateName("Guest")
+        viewModel.updateContact("guest@example.com")
+        let calendar = Calendar.current
+        let start = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 3, hour: 12)))
+        let nextDay = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: start))
+        viewModel.setCustomRange(start, nextDay)
+
+        XCTAssertTrue(viewModel.canSubmit)
+        let window = viewModel.guestPassWindow()
+        XCTAssertNotNil(window.startAt)
+        XCTAssertNotNil(window.endAt)
+        XCTAssertNil(window.durationHours)
+
+        // Custom uses inclusive calendar days, so an earlier time on the same day is valid.
+        let earlierToday = try XCTUnwrap(calendar.date(byAdding: .hour, value: -1, to: start))
+        viewModel.setCustomRange(start, earlierToday)
+        XCTAssertTrue(viewModel.canSubmit)
+        let previousDay = try XCTUnwrap(calendar.date(byAdding: .day, value: -1, to: start))
+        viewModel.setCustomRange(start, previousDay)
+        XCTAssertFalse(viewModel.canSubmit)
         try assertBaselineOrSkip("filled")
     }
 
+    @MainActor
     func test_add_guest_initial_ios_baseline_is_present() throws {
+        let viewModel = AddGuestFormViewModel(homeId: "validation-only")
+        viewModel.updateName("Guest")
+        viewModel.updateContact("guest@example.com")
+        viewModel.duration = AddGuestSampleData.durationCustomId
+
+        XCTAssertEqual(viewModel.durationHint, "Pick a custom date range")
+        XCTAssertFalse(viewModel.canSubmit, "Dismissing Custom without committing dates must keep Send pass disabled")
+
+        let start = Date(timeIntervalSince1970: 2_000_000_000)
+        viewModel.setCustomRange(start, start.addingTimeInterval(86400))
+        viewModel.clearCustomRange()
+        viewModel.duration = AddGuestSampleData.durationCustomId
+        XCTAssertFalse(viewModel.canSubmit, "Cleared dates must not make a reselected Custom pass valid")
+
+        viewModel.duration = "2h"
+        XCTAssertTrue(viewModel.canSubmit)
+        XCTAssertEqual(viewModel.guestPassWindow().durationHours, 2)
         try assertBaselineOrSkip("initial")
     }
 

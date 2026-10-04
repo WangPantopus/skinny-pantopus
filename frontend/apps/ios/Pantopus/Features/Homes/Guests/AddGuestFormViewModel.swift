@@ -91,12 +91,21 @@ public final class AddGuestFormViewModel {
     // MARK: - Aggregate
 
     /// Required: name non-empty, contact valid (email OR phone), duration
-    /// chosen, at least one section. The welcome note is optional.
+    /// chosen with committed, ordered days for Custom, at least one section.
+    /// The welcome note is optional.
     public var isValid: Bool {
         !trimmedName.isEmpty
             && Self.isContactValid(contactField.value)
-            && duration != nil
+            && hasValidDuration
             && !selectedSections.isEmpty
+    }
+
+    private var hasValidDuration: Bool {
+        guard let duration else { return false }
+        guard duration == AddGuestSampleData.durationCustomId else { return true }
+        guard let start = customStart, let end = customEnd else { return false }
+        let calendar = Calendar.current
+        return calendar.startOfDay(for: end) >= calendar.startOfDay(for: start)
     }
 
     /// Create is offered until this form's pass exists.
