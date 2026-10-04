@@ -49,50 +49,11 @@ struct PlaceTodayDetailContent: View {
     var body: some View {
         ScrollViewReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
-                if showHomeRadon, let state = radonState, state.homeId == vm.calendarHomeId {
-                    HomeFirstUseCard(
-                        state: state,
-                        needsPickup: needsPickup,
-                        radonAvailable: radonAvailable,
-                        onPickup: {
-                            guard (try? state.context.requireCurrent()) != nil else { return }
-                            pickupOpenTrigger += 1
-                            proxy.scrollTo("todayAddressCalendar", anchor: .top)
-                        },
-                        onRadon: {
-                            guard (try? state.context.requireCurrent()) != nil else { return }
-                            state.dismissedUntil = nil
-                            UserDefaults.standard.removeObject(forKey: "radonCard.dismissedUntil.\(state.homeId)")
-                            radonFocus += 1
-                        }
-                    )
-                }
+                firstUseCard(proxy: proxy)
                 weatherAndGoodDay
 
-                // The address calendar (Wedge Phase 2, D6): what recurs at THIS address.
-                if let calendar = vm.section(.addressCalendar, in: intel) {
-                    PlaceDetailSectionLabel(text: "At this address")
-                    if let data = calendar.addressCalendar,
-                       calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
-                        AddressCalendarCard(homeId: vm.calendarHomeId, data: data, openTrigger: pickupOpenTrigger) { await vm.refresh() }
-                            .id("todayAddressCalendar")
-                        PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
-                    } else if calendar.status == .unavailable, let data = vm.fallbackCalendar {
-                        AddressCalendarCard(homeId: vm.calendarHomeId, data: data, openTrigger: pickupOpenTrigger) { await vm.refresh() }
-                            .id("todayAddressCalendar")
-                        PlaceSourceNote(name: "Pantopus registry", asOf: "next two weeks")
-                    } else {
-                        vm.fallbackCard(calendar)
-                            .task(id: calendar.status) {
-                                if calendar.status == .unavailable { await vm.loadFallbackCalendar() }
-                            }
-                    }
-                }
-
-                if showHomeRadon, let homeId = vm.calendarHomeId, let state = radonState, state.homeId == homeId,
-                   let data = vm.section(.leadRadon, in: intel)?.leadRadon, let zone = data.radonZone, (1...3).contains(zone) {
-                    RadonTodayCard(state: state, data: data).id("todayRadonCard")
-                }
+                addressCalendar
+                homeRadon
 
                 airAlertsSun
             }
@@ -108,6 +69,59 @@ struct PlaceTodayDetailContent: View {
             .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
             .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
             .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
+        }
+    }
+
+    @ViewBuilder
+    private func firstUseCard(proxy: ScrollViewProxy) -> some View {
+        if showHomeRadon, let state = radonState, state.homeId == vm.calendarHomeId {
+            HomeFirstUseCard(
+                state: state,
+                needsPickup: needsPickup,
+                radonAvailable: radonAvailable,
+                onPickup: {
+                    guard (try? state.context.requireCurrent()) != nil else { return }
+                    pickupOpenTrigger += 1
+                    proxy.scrollTo("todayAddressCalendar", anchor: .top)
+                },
+                onRadon: {
+                    guard (try? state.context.requireCurrent()) != nil else { return }
+                    state.dismissedUntil = nil
+                    UserDefaults.standard.removeObject(forKey: "radonCard.dismissedUntil.\(state.homeId)")
+                    radonFocus += 1
+                }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var addressCalendar: some View {
+        // The address calendar (Wedge Phase 2, D6): what recurs at THIS address.
+        if let calendar = vm.section(.addressCalendar, in: intel) {
+            PlaceDetailSectionLabel(text: "At this address")
+            if let data = calendar.addressCalendar,
+               calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
+                AddressCalendarCard(homeId: vm.calendarHomeId, data: data, openTrigger: pickupOpenTrigger) { await vm.refresh() }
+                    .id("todayAddressCalendar")
+                PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
+            } else if calendar.status == .unavailable, let data = vm.fallbackCalendar {
+                AddressCalendarCard(homeId: vm.calendarHomeId, data: data, openTrigger: pickupOpenTrigger) { await vm.refresh() }
+                    .id("todayAddressCalendar")
+                PlaceSourceNote(name: "Pantopus registry", asOf: "next two weeks")
+            } else {
+                vm.fallbackCard(calendar)
+                    .task(id: calendar.status) {
+                        if calendar.status == .unavailable { await vm.loadFallbackCalendar() }
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var homeRadon: some View {
+        if showHomeRadon, let homeId = vm.calendarHomeId, let state = radonState, state.homeId == homeId,
+           let data = vm.section(.leadRadon, in: intel)?.leadRadon, let zone = data.radonZone, (1...3).contains(zone) {
+            RadonTodayCard(state: state, data: data).id("todayRadonCard")
         }
     }
 
