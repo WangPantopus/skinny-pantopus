@@ -199,6 +199,52 @@ describe('both mail entry points require address trust', () => {
     if (!qualifies) expect(send.body.code).toBe('HOME_ADDRESS_VERIFICATION_REQUIRED');
     expect(db.getTable('Mail')).toHaveLength(0);
   });
+  test.each([
+    ['truncated household', resident('household'), null, false],
+    ['truncated inactive household', { ...resident('household'), is_active: false }, null, false],
+    ['truncated legacy owner', null, null, true],
+    ['truncated address owner', resident('address'), null, true],
+    ['failed exact owner lookup', null, { code: 'unavailable' }, false],
+    ['malformed exact owner lookup', {}, null, false],
+    ['wrong Home exact owner lookup', { home_id: homeB, verification_source: 'legacy' }, null, false],
+    ['rejected exact owner lookup', null, new Error('unavailable'), false],
+    ['truncated household and independent legacy owner', homeId => homeId === homeA ? resident('household') : null, null, true, [owner(homeA), owner(homeB)]],
+  ])('%s requires an exact owner-Home occupancy read after a truncated list', async (_label, exact, error, qualifies, owners = [owner(homeA)]) => {
+    db.seedTable('HomeOwner', owners);
+    db.seedTable('Home', [{ id: target, owner_id: 'other' }]);
+    const original = db.from;
+    const filters = [];
+    const from = jest.spyOn(db, 'from').mockImplementation(table => {
+      if (table !== 'HomeOccupancy') return original(table);
+      const query = original(table);
+      const select = query.select;
+      query.select = (fields, options) => {
+        if (!['home_id,is_active,verification_status,verification_source', 'home_id,verification_source'].includes(fields)) {
+          return select.call(query, fields, options);
+        }
+        let selectedHome;
+        const scoped = { eq: (key, value) => { filters.push([key, value]); if (key === 'home_id') selectedHome = value; return scoped; },
+          then: (resolve, reject) => Promise.resolve({ data: [], error: null }).then(resolve, reject),
+          maybeSingle: () => error instanceof Error ? Promise.reject(error)
+            : Promise.resolve({ data: typeof exact === 'function' ? exact(selectedHome) : exact, error }) };
+        return scoped;
+      };
+      return query;
+    });
+    try {
+      const context = response();
+      await handler(compose, 'get', '/home-context/:homeId')({ ...request, params: { homeId: target } }, context);
+      expect(context.statusCode).toBe(403);
+      expect(context.body.code).toBe(qualifies ? 'MAILBOX_HOME_CONTEXT_FORBIDDEN' : 'HOME_ADDRESS_VERIFICATION_REQUIRED');
+      const send = response();
+      await handler(mailbox, 'post', '/send')({ ...request, body: { recipientUserId: target, content: 'Synthetic mail' } }, send);
+      expect(send.statusCode).toBe(qualifies ? 404 : 403);
+      if (!qualifies) expect(send.body.code).toBe('HOME_ADDRESS_VERIFICATION_REQUIRED');
+      expect(db.getTable('Mail')).toHaveLength(0);
+      expect(filters).toContainEqual(['home_id', homeA]);
+      expect(filters.filter(([key]) => key === 'user_id')).toEqual(expect.arrayContaining([['user_id', 'actor']]));
+    } finally { from.mockRestore(); }
+  });
   test.each([new Error('unavailable'), { data: null, error: { code: 'unavailable' } }, { data: [{}], error: null }])(
     'unknown occupancy provenance cannot use an owner fallback (%s)', async failure => {
       db.seedTable('HomeOwner', [owner(homeA)]);

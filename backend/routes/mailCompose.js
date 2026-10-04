@@ -49,9 +49,21 @@ async function hasVerifiedSenderHome(userId) {
     .filter(row => row.verification_source === 'household').map(row => row.home_id));
   const verifiedOwnerRows = ownerRes.status === 'fulfilled' && !ownerRes.value?.error
     && Array.isArray(ownerRes.value?.data) ? ownerRes.value.data : [];
-  return occupancies.some(row => row.is_active === true && row.verification_status === 'verified'
-    && row.verification_source !== 'household')
-    || verifiedOwnerRows.some(row => row && typeof row.home_id === 'string' && !householdHomes.has(row.home_id));
+  if (occupancies.some(row => row.is_active === true && row.verification_status === 'verified'
+    && row.verification_source !== 'household')) return true;
+  for (const row of verifiedOwnerRows) {
+    if (!row || typeof row.home_id !== 'string' || householdHomes.has(row.home_id)) continue;
+    // The collection can be truncated by PostgREST's max_rows. Only an exact
+    // Home/user lookup can distinguish no occupancy from an omitted row.
+    try {
+      const result = await supabaseAdmin.from('HomeOccupancy').select('home_id,verification_source')
+        .eq('user_id', userId).eq('home_id', row.home_id).maybeSingle();
+      if (!result || result.error || (result.data !== null
+        && (!result.data || Array.isArray(result.data) || result.data.home_id !== row.home_id))) return false;
+      if (result.data === null || result.data.verification_source !== 'household') return true;
+    } catch (_) { return false; }
+  }
+  return false;
 }
 
 /**
