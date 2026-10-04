@@ -559,6 +559,32 @@ describe('GET /api/homes/:id/intelligence', () => {
     expect(res.body.tier).toBe('T4');
   });
 
+  test.each([
+    ['household', false, 'T3'], ['household', true, 'T3'],
+    ['address', false, 'T4'], ['legacy', false, 'T4'], [undefined, false, 'T4'],
+  ])('address provenance %s co-owner=%s resolves %s through the existing endpoint', async (verification_source, coOwner, tier) => {
+    seedHome({ owner_id: coOwner ? USER : 'someone-else' });
+    seedTable('HomeOccupancy', [{ id: 'occ-provenance', home_id: HOME_ID, user_id: USER,
+      is_active: true, start_at: null, end_at: null, verification_status: 'verified',
+      verification_source, role_base: 'member' }]);
+    const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence?sections=weather,real_rent`).set('x-test-user-id', USER);
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe(tier);
+    const sections = sectionsById(res.body);
+    expect(sections.weather.status).toBe('ready');
+    expect(sections.real_rent.access).toBe(tier === 'T4' ? 'available' : 'locked');
+    if (tier === 'T3') {
+      expect(sections.real_rent.data).toBeNull();
+      expect(JSON.stringify(sections.real_rent)).not.toContain('reports');
+    }
+  });
+  test('address provenance cannot lift a denied private-setup general-access object', () => {
+    const { resolveTier } = require('../services/placeIntelligenceService');
+    expect(resolveTier({ hasAccess: false, occupancy: { verification_status: 'verified', verification_source: 'address' } })).toBe('T1');
+    expect(resolveTier({ hasAccess: false, occupancy: { verification_status: 'verified', verification_source: 'household' } })).toBe('T1');
+    expect(resolveTier({ hasAccess: true, occupancy: { verification_status: 'pending', verification_source: 'address' } })).toBe('T3');
+  });
+
   test('denies a viewer with no access', async () => {
     seedHome();
     const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', OTHER);
