@@ -99,25 +99,25 @@ class HomeTaskAccessTest {
             }
             access = HomeTaskAccessFactory(repository, claimScopeFactory(identity)).create("home", scope) { check(unlocked) }
             coEvery { repository.getHomeTasks(any(), any(), any()) } coAnswers {
-                verify("list", lastArg())
+                verify("list", arg<AuthenticatedDispatchGuard?>(2))
                 NetworkResult.Success(GetHomeTasksResponse(listOf(currentTask), HomeTaskCollectionCapabilitiesDto(true), server))
             }
             coEvery { repository.getHomeTask(any(), any(), any(), any()) } coAnswers {
-                verify("read", lastArg())
+                verify("read", arg<AuthenticatedDispatchGuard?>(3))
                 NetworkResult.Success(HomeTaskResponse(currentTask, server))
             }
             val receipt = HomeTaskCreationReceiptDto("home", "user-1", "request", "task", "b".repeat(64), "2026-10-04T00:00:00Z")
             coEvery { repository.createHomeTaskWithReceipt(any(), any(), any(), any()) } coAnswers {
-                verify("create", lastArg())
+                verify("create", arg<AuthenticatedDispatchGuard?>(3))
                 NetworkResult.Success(HomeTaskCreationResponse(currentTask, receipt, server, true))
             }
             coEvery { repository.patchHomeTask(any(), any(), any(), any(), any()) } coAnswers {
-                verify("edit", lastArg())
+                verify("edit", arg<AuthenticatedDispatchGuard?>(4))
                 currentTask = currentTask.copy(description = null)
                 NetworkResult.Success(HomeTaskResponse(currentTask))
             }
             coEvery { repository.deleteHomeTask(any(), any(), any(), any()) } coAnswers {
-                verify("delete", lastArg())
+                verify("delete", arg<AuthenticatedDispatchGuard?>(3))
                 NetworkResult.Success(Unit)
             }
             access.list()
