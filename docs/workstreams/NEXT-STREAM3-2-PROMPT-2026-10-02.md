@@ -2,6 +2,10 @@
 
 Take over this existing workstream and continue its authorized verification and focused repairs. The workstream is incomplete. The human authorized a successor handoff at a sound boundary; this replaces the earlier instruction not to hand off. Do not restart the campaign or treat preparation, passing builds or partial rows as end-to-end acceptance.
 
+## Founder priority update — October 4, 2026
+
+Current Root received a new founder direction: pilot-path defects and security/privacy/money defects first, then WP1–WP8; pause other verification/evidence bookkeeping. Existing1496 Custom AFTERs stay drafts with accepted evidence and run only if a device would otherwise be idle, after reviewed target setup/fresh exact grants. The earlier Guest-first schedule is superseded. Root stopped before pilot assignment/d17 build; await its current3-2 assignment, exact shared-file/migration custody and execution grants. Use only the mobile-pilot brief section12's seven design exports and section15's pilot-row IDs. The separately owned Emergency Info privacy fix awaits an exact PR/head for3-2 review; baseline caller/permission/test sources were read only, with no new fix or runtime acceptance. No destination resources are held; existing evidence, designs and hard holds remain valid.
+
 ## Active Mac Studio successor — October 4, 2026
 
 Current3-2 chat is `01a10646-2ba4-7992-99a8-3a4cc81d7aee` (**Resume Stream 3-2 verification**), source `/Users/yingpengwang/.codex/worktrees/9431/skinny-pantopus` clean/detached at fetched master `906b89f5a687066058230c0b3f622b58454f0fbb`. The single live coordination location remains `/Users/yingpengwang/pantopus-coordination`; its fetched pickup was896feba20. Private receiving package stays `/Users/yingpengwang/pantopus-handoff/stream3-2-20261004-r1`; the successor independently passes archive/package303/304/payload296/two accepted audits. Preserve immutable historical files and other target checkouts.
