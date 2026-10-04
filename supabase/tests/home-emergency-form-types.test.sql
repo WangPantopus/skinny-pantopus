@@ -50,6 +50,25 @@ BEGIN
    RAISE EXCEPTION 'A refused value left a HomeEmergency row behind'; END IF;
 END $types$;
 
+-- Current clients use the sensitivity-gated API. Broader historical RLS
+-- policies alone are not a current direct-reader bypass: 20260930181000 and
+-- 20260930182000 remove client table privileges. Check the actual ACL contract,
+-- including column grants, without changing roles/policies or provoking the
+-- known arm64 insufficient_privilege execution boundary.
+DO $acl$
+DECLARE v_role text;
+BEGIN
+  FOREACH v_role IN ARRAY ARRAY['anon','authenticated'] LOOP
+    IF has_table_privilege(v_role, 'public."HomeEmergency"', 'SELECT')
+      OR has_any_column_privilege(v_role, 'public."HomeEmergency"', 'SELECT') THEN
+      RAISE EXCEPTION 'Client % can bypass the Emergency API read permission', v_role;
+    END IF;
+  END LOOP;
+  IF NOT has_table_privilege('service_role', 'public."HomeEmergency"', 'SELECT') THEN
+    RAISE EXCEPTION 'Existing service-role Emergency reader lost its privilege';
+  END IF;
+END $acl$;
+
 $contract$, 'home-emergency-form-types.sql');
 SELECT * FROM finish();
 ROLLBACK;
