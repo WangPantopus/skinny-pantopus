@@ -152,7 +152,10 @@ class WaitingRoomContentTest {
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun withLoadedClaim(createdAt: String, assertion: (WaitingRoomViewModel) -> Unit) =
+    private fun withLoadedClaim(
+        createdAt: String,
+        assertion: (WaitingRoomViewModel) -> Unit,
+    ) =
         runTest {
             Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
             try {
