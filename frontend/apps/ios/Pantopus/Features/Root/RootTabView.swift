@@ -105,6 +105,7 @@ public struct RootTabView: View {
     /// A notification link to a screen inside the profile cover (persona
     /// inboxes, "Your audience") opens the cover on that screen.
     @State private var profileInitialRoute: YouRoute?
+    @State private var addHomeRequest: UUID?
 
     public init() {}
 
@@ -112,14 +113,18 @@ public struct RootTabView: View {
         TabView(selection: tabBinding) {
             HubTabRoot(
                 onOpenProfile: { showProfile = true },
-                onOpenProfileScreen: { route in presentProfile(at: route) }
+                onOpenProfileScreen: { route in presentProfile(at: route) },
+                addHomeRequest: $addHomeRequest
             )
             .tabItem { tabLabel(.place) }
             .tag(RootTab.place)
 
-            TodayTabRoot()
-                .tabItem { tabLabel(.today) }
-                .tag(RootTab.today)
+            TodayTabRoot {
+                model.selected = .place
+                addHomeRequest = UUID()
+            }
+            .tabItem { tabLabel(.today) }
+            .tag(RootTab.today)
 
             NeighborhoodTabRoot()
                 .tabItem { tabLabel(.nearby) }
@@ -327,8 +332,11 @@ public struct TodayTabRoot: View {
     @State private var briefingKind: String?
     @State private var systemSheet: SystemSheetRequest?
     @State private var showsNotificationSettings = false
+    private let onAddHome: () -> Void
 
-    public init() {}
+    public init(onAddHome: @escaping () -> Void = {}) {
+        self.onAddHome = onAddHome
+    }
 
     public var body: some View {
         NavigationStack {
@@ -352,7 +360,7 @@ public struct TodayTabRoot: View {
                         onManage: { showsNotificationSettings = true }
                     )
                 } else {
-                    AddressTodayTabView()
+                    AddressTodayTabView(onAddHome: onAddHome)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)

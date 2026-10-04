@@ -506,6 +506,7 @@ public struct HubTabRoot: View {
     @Environment(RootTabModel.self) private var rootTabs
     @State private var path = RouteStack<HubRoute>()
     @State private var navigationReady = false
+    @Binding private var addHomeRequest: UUID?
     @State private var router = DeepLinkRouter.shared
     /// W3 — guards the one-shot Place auto-land so it fires at most once.
     @State private var didAutoLandPlace = false
@@ -544,11 +545,13 @@ public struct HubTabRoot: View {
     public init(
         mode: HubStackMode = .hub,
         onOpenProfile: @escaping @MainActor () -> Void = {},
-        onOpenProfileScreen: @escaping @MainActor (YouRoute) -> Void = { _ in }
+        onOpenProfileScreen: @escaping @MainActor (YouRoute) -> Void = { _ in },
+        addHomeRequest: Binding<UUID?> = .constant(nil)
     ) {
         self.mode = mode
         self.onOpenProfile = onOpenProfile
         self.onOpenProfileScreen = onOpenProfileScreen
+        _addHomeRequest = addHomeRequest
     }
 
     /// The root tab this instance serves — deep links are consumed only
@@ -678,6 +681,9 @@ public struct HubTabRoot: View {
         .onChange(of: router.pending) { _, pending in
             consumeDeepLinkIfNeeded(pending: pending)
         }
+        .onChange(of: addHomeRequest) { _, _ in
+            consumeAddHomeRequestIfNeeded()
+        }
         // In the Mail tab, the Mailbox/Messages switch hides below the root.
         .onChange(of: path.isEmpty, initial: true) { _, atRoot in
             if mode == .mailbox { MailTabStore.shared.mailboxAtRoot = atRoot }
@@ -694,6 +700,7 @@ public struct HubTabRoot: View {
             await Task.yield()
             guard !Task.isCancelled else { return }
             navigationReady = true
+            consumeAddHomeRequestIfNeeded()
             consumeDeepLinkIfNeeded(pending: router.pending)
             // W3 — land the Place tab on the Place dashboard when the user
             // has a primary home. One-shot at an empty stack so we never
@@ -979,6 +986,13 @@ public struct HubTabRoot: View {
             get: { path.navigationPath },
             set: { path.replaceNavigationPath($0) }
         )
+    }
+
+    private func consumeAddHomeRequestIfNeeded() {
+        guard mode == .hub, navigationReady, rootTabs.selected == .place, addHomeRequest != nil else { return }
+        addHomeRequest = nil
+        didAutoLandPlace = true
+        path.append(.addHome)
     }
 
     /// Consume the subset of deep-link destinations that map onto a
