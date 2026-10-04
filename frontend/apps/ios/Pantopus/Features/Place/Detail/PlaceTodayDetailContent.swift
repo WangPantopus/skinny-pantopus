@@ -28,7 +28,7 @@ struct PlaceTodayDetailContent: View {
                 PlaceDetailSectionLabel(text: "Weather")
                 if let data = weather.weather, weather.status == .ready || weather.status == .stale {
                     NowCard(data: data)
-                    PlaceSourceNote(name: "National Weather Service", asOf: PlacePresentation.fmtTime(weather.asOf))
+                    PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
                 } else {
                     vm.fallbackCard(weather)
                 }
@@ -75,7 +75,7 @@ struct PlaceTodayDetailContent: View {
                 // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
                 if let data = alerts.alerts, alerts.status == .ready || alerts.status == .stale {
                     AlertsCard(active: data.active)
-                    PlaceSourceNote(name: "National Weather Service", asOf: "live")
+                    PlaceSourceNote(name: alerts.source ?? "Source unavailable", asOf: "live")
                 } else {
                     vm.fallbackCard(alerts)
                 }
