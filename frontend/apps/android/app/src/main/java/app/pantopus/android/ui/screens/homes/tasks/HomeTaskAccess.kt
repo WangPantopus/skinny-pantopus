@@ -61,7 +61,7 @@ class HomeTaskAccess(
 
     suspend fun list(): GetHomeTasksResponse {
         requireCurrent()
-        val response = repository.getHomeTasks(homeId, serverSession?.sessionScope).taskValue()
+        val response = repository.getHomeTasks(homeId, serverSession?.sessionScope, dispatchGuard).taskValue()
         requireCurrent()
         bind(response.taskSession)
         response.tasks.forEach { exact(it, it.id) }
@@ -103,7 +103,7 @@ class HomeTaskAccess(
     suspend fun delete(taskId: String) {
         check(read(taskId).capabilities?.canDelete == true) { TASK_ACCESS_CHANGED }
         requireCurrent()
-        repository.deleteHomeTask(homeId, taskId, checkNotNull(serverSession).sessionScope).taskValue()
+        repository.deleteHomeTask(homeId, taskId, checkNotNull(serverSession).sessionScope, dispatchGuard).taskValue()
         requireCurrent()
     }
 
@@ -116,7 +116,7 @@ class HomeTaskAccess(
         requireCurrent()
         val response =
             try {
-                repository.createHomeTaskWithReceipt(homeId, request, checkNotNull(serverSession).sessionScope).taskValue()
+                repository.createHomeTaskWithReceipt(homeId, request, checkNotNull(serverSession).sessionScope, dispatchGuard).taskValue()
             } catch (error: NetworkError) {
                 throw HomeTaskCreationFailure(error)
             }
@@ -133,7 +133,7 @@ class HomeTaskAccess(
         check(read(taskId).capabilities?.canEdit == true) { TASK_ACCESS_CHANGED }
         requireCurrent()
         if (patch.fields.isEmpty()) return read(taskId)
-        val response = repository.patchHomeTask(homeId, taskId, patch, checkNotNull(serverSession).sessionScope).taskValue()
+        val response = repository.patchHomeTask(homeId, taskId, patch, checkNotNull(serverSession).sessionScope, dispatchGuard).taskValue()
         requireCurrent()
         exact(response.task, taskId)
         check(patch.matches(response.task)) { "The task update was not confirmed. Reload before continuing." }
