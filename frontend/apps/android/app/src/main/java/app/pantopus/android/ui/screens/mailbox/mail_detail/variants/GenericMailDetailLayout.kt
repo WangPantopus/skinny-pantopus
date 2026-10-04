@@ -186,7 +186,7 @@ fun GenericMailDetailLayout(
 }
 
 private fun ackTimelineEvents(content: MailDetailContent): List<ChainOfCustodyEvent> =
-    listOf(
+    listOfNotNull(
         ChainOfCustodyEvent(
             id = "ack",
             icon = PantopusIcon.BadgeCheck,
@@ -199,13 +199,15 @@ private fun ackTimelineEvents(content: MailDetailContent): List<ChainOfCustodyEv
             label = "Delivered to your Mailbox",
             timestamp = content.createdAtLabel,
         ),
-        ChainOfCustodyEvent(
-            id = "tldr",
-            icon = PantopusIcon.Sparkles,
-            label = "Pantopus drafted plain-language TL;DR",
-            timestamp = content.createdAtLabel,
-            isPantopusEvent = true,
-        ),
+        content.aiSummary?.takeIf { it.isNotEmpty() }?.let {
+            ChainOfCustodyEvent(
+                id = "tldr",
+                icon = PantopusIcon.Sparkles,
+                label = "Pantopus drafted plain-language TL;DR",
+                timestamp = content.createdAtLabel,
+                isPantopusEvent = true,
+            )
+        },
     )
 
 private fun buildGenericAttachments(names: List<String>): AttachmentsRowContent? {
@@ -758,10 +760,12 @@ private fun AcknowledgeButton(
                         Modifier
                     },
                 )
-                .clickable(enabled = !ackInFlight, onClick = onAck)
+                .clickable(enabled = !ackInFlight && !content.isAcknowledged, onClick = onAck)
                 .padding(vertical = 14.dp)
                 .alpha(if (ackInFlight) 0.6f else 1f)
-                .semantics { contentDescription = "Acknowledge receipt" }
+                .semantics {
+                    contentDescription = if (content.isAcknowledged) "Acknowledged" else "Acknowledge receipt"
+                }
                 .testTag("mailDetail_acknowledge"),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -781,7 +785,7 @@ private fun AcknowledgeButton(
         Text(
             text =
                 if (content.isAcknowledged) {
-                    "Acknowledged · Tap to undo"
+                    "Acknowledged"
                 } else {
                     "Acknowledge receipt"
                 },
