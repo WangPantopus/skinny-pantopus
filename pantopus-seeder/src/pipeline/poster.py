@@ -27,8 +27,8 @@ def authenticate_curator(supabase_client, email: str, password: str) -> str | No
         token = result.session.access_token
         log.info("Curator authenticated successfully")
         return token
-    except Exception:
-        log.error("Failed to authenticate curator", exc_info=True)
+    except Exception as exc:
+        log.error("Failed to authenticate curator (error_type=%s)", type(exc).__name__)
         return None
 
 
@@ -106,14 +106,13 @@ def post_to_pantopus(
         "Content-Type": "application/json",
     }
 
-    log.info("Posting to %s with token prefix %s...", url, access_token[:20])
-    log.info("Request body: %s", {k: v for k, v in body.items() if k != "content"})
+    log.info("Posting curator content to Pantopus")
 
     try:
         response = httpx.post(url, json=body, headers=headers, timeout=_REQUEST_TIMEOUT)
     except Exception as exc:
-        log.warning("Network error posting to Pantopus: %s", exc)
-        return None, f"network_error:{exc}"
+        log.warning("Network error posting to Pantopus (error_type=%s)", type(exc).__name__)
+        return None, f"network_error:{type(exc).__name__}"
 
     if 200 <= response.status_code < 300:
         try:
@@ -121,22 +120,24 @@ def post_to_pantopus(
             # Handle both {id: ...} and {post: {id: ...}} patterns
             post_id = data.get("id") or data.get("post", {}).get("id")
             if post_id:
-                log.info("Posted successfully: post_id=%s", post_id)
+                log.info("Post created successfully (status=%d)", response.status_code)
                 return str(post_id), None
-            log.warning("Post created but no ID in response: %s", data)
+            log.warning("Post created but no ID in response (status=%d)", response.status_code)
             return None, "no_post_id_in_response"
-        except Exception:
-            log.warning("Post created but failed to parse response")
+        except Exception as exc:
+            log.warning(
+                "Post created but failed to parse response (status=%d, error_type=%s)",
+                response.status_code, type(exc).__name__,
+            )
             return None, "invalid_response_json"
 
     if 400 <= response.status_code < 500:
-        log.warning(
-            "API rejected post (%d): %s", response.status_code, response.text[:200]
-        )
-        return None, f"api_rejected:{response.status_code}:{response.text[:200]}"
+        log.warning("API rejected post (status=%d)", response.status_code)
+        return None, f"api_rejected:{response.status_code}"
 
     if response.status_code >= 500:
-        log.error("API server error (%d)", response.status_code)
+        log.error("API server error (status=%d)", response.status_code)
         return None, f"api_server_error:{response.status_code}"
 
+    log.warning("Unexpected API response (status=%d)", response.status_code)
     return None, f"unexpected_status:{response.status_code}"
