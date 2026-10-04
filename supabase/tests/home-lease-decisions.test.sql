@@ -175,8 +175,9 @@ BEGIN
  VALUES(h,t,true,'admin','admin','verified',now()-interval '1 day',true) RETURNING to_jsonb("HomeOccupancy".*) INTO before_occ;
  l:=pg_temp.pending_lease();
  r:=public.decide_home_lease('approve',a,l,au,p_dates:=jsonb_build_object('start_at',now()+interval '7 days'));
- PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'occupancy'=before_occ
-   AND public.home_effective_access(h,t)->>'has_access'='true','Preserve independent current role, flags and access window');
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'occupancy'->>'verification_source'='address'
+   AND (r->'occupancy')-'verification_source'=before_occ-'verification_source'
+   AND public.home_effective_access(h,t)->>'has_access'='true','Preserve independent current role, flags and access window while adding address proof');
  DELETE FROM public."HomeOccupancy" WHERE home_id=h AND user_id=t;
 
  -- Both pre-existing business authority paths remain valid; inactive proofs fail.

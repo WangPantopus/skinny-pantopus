@@ -97,7 +97,7 @@ DO $$ DECLARE h uuid:=pg_temp.cr_id(100); actor uuid:=pg_temp.cr_id(1); admin_id
  -- Test-only precolumn receipt shape on this newly created synthetic fixture;
  -- the application migration never edits a persisted receipt.
  UPDATE public."HomeClaimReviewReceipt" SET occupancy_snapshot=occupancy_snapshot-'verification_source',
-   result=jsonb_set(result,'{occupancy}',result->'occupancy'-'verification_source')
+   result=jsonb_set(result,'{occupancy}',(result->'occupancy')-'verification_source')
    WHERE home_id=h AND claim_id=pg_temp.cr_id(203) AND actor_user_id=actor AND action='approve';
  r:=public.mutate_home_claim_review(h,pg_temp.cr_id(203),actor,'approve',tok);PERFORM pg_temp.cr_expect(r);
  IF r->>'replayed'<>'true' OR r->'occupancy' ? 'verification_source'

@@ -270,23 +270,38 @@ INSERT INTO public."Home"(id,owner_id,address,city,state,zipcode) VALUES
  (pg_temp.invitation_user(101),pg_temp.invitation_user(1),'101 Source Street','Test','WA','98607');
 INSERT INTO public."HomeOwner"(home_id,subject_id,owner_status,is_primary_owner)
  VALUES(pg_temp.invitation_user(101),pg_temp.invitation_user(1),'verified',true);
+-- Issue while no membership exists; independent proof can arrive before the
+-- recipient accepts. Existing-member creation must retain its409 boundary.
+SET LOCAL ROLE service_role;
+DO $$ DECLARE r jsonb; n integer; BEGIN
+ FOR n IN 18..20 LOOP
+  r:=public.write_home_invitation(pg_temp.invitation_user(101),pg_temp.invitation_user(1),'create',
+    jsonb_build_object('user_id',pg_temp.invitation_user(n),'relationship','member'),encode(gen_random_bytes(32),'hex'));
+  PERFORM pg_temp.expect_invite(r);
+ END LOOP;
+END $$;
+RESET ROLE;
 INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,is_active,verification_status,verification_source,updated_at)
  SELECT pg_temp.invitation_user(101),pg_temp.invitation_user(n),'member','member',true,status,source,'2026-01-01T00:00:00Z'::timestamptz
  FROM (VALUES(18,'verified','address'),(19,'verified','legacy'),(20,'pending_approval','legacy'))f(n,status,source);
 SET LOCAL ROLE service_role;
-DO $$ DECLARE h uuid:=pg_temp.invitation_user(101); r jsonb; i uuid; n integer; want text; before_row jsonb; BEGIN
+DO $$ DECLARE h uuid:=pg_temp.invitation_user(101); r jsonb; i uuid; n integer; want text; before_row jsonb; admitted_row jsonb; BEGIN
  SELECT to_jsonb(o) INTO before_row FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pg_temp.invitation_user(18);
  UPDATE public."HomeOccupancy" SET verification_source='legacy' WHERE home_id=h AND user_id=pg_temp.invitation_user(18);
  UPDATE public."HomeOccupancy" SET verification_source='address' WHERE home_id=h AND user_id=pg_temp.invitation_user(18);
  IF before_row IS DISTINCT FROM (SELECT to_jsonb(o) FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pg_temp.invitation_user(18)) THEN
   RAISE EXCEPTION 'Source-only classification changed a historical timestamp, generation or another field'; END IF;
  FOR n,want IN SELECT * FROM (VALUES(18,'address'),(19,'legacy'),(20,'household'))f(n,source) LOOP
-  r:=public.write_home_invitation(h,pg_temp.invitation_user(1),'create',
-    jsonb_build_object('user_id',pg_temp.invitation_user(n),'relationship','member'),encode(gen_random_bytes(32),'hex'));
-  PERFORM pg_temp.expect_invite(r); i:=(r->'invitation'->>'id')::uuid;
+  SELECT id INTO i FROM public."HomeInvite" WHERE home_id=h AND invitee_user_id=pg_temp.invitation_user(n) AND status='pending';
+  SELECT to_jsonb(o) INTO admitted_row FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pg_temp.invitation_user(n);
+  IF n IN (18,19) THEN
+   PERFORM pg_temp.expect_invite(public.write_home_invitation(h,pg_temp.invitation_user(1),'create',
+    jsonb_build_object('user_id',pg_temp.invitation_user(n),'relationship','member'),encode(gen_random_bytes(32),'hex')),'MEMBER_ALREADY_EXISTS');
+  END IF;
   r:=public.act_on_home_invitation(i,NULL,pg_temp.invitation_user(n),'accept');
   PERFORM pg_temp.expect_invite(r);
   IF r->'occupancy'->>'verification_source' IS DISTINCT FROM want THEN RAISE EXCEPTION 'Expected source %, got %',want,r; END IF;
+  IF n IN (18,19) AND r->'occupancy' IS DISTINCT FROM admitted_row THEN RAISE EXCEPTION 'Pending invitation reset independent verified membership'; END IF;
  END LOOP;
  -- Other semantic edits still rotate the generation and touch the timestamp.
  UPDATE public."HomeOccupancy" SET role='guest',role_base='guest' WHERE home_id=h AND user_id=pg_temp.invitation_user(18);
