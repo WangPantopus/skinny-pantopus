@@ -253,6 +253,27 @@ describe('GET /api/homes/:id/intelligence', () => {
         { date: '2026-06-07', condition_code: 'clear', high_f: 68, low_f: 49, precip_chance: 10 },
         { date: '2026-06-08', condition_code: 'partly_cloudy', high_f: 71, low_f: 52, precip_chance: 20 },
       ]);
+      expect(w.source).toBe('Source unavailable');
+      for (const [weatherProvider, alertsProvider, weatherLabel, alertsLabel] of [
+        ['WEATHERKIT', 'NOAA', 'Apple WeatherKit', 'National Weather Service'],
+        ['OPEN_METEO', 'WEATHERKIT', 'Open-Meteo', 'Apple WeatherKit'],
+        ['future_provider', null, 'Source unavailable', 'Source unavailable'],
+      ]) {
+        providerOrchestrator.getHubToday.mockResolvedValue({
+          ...detailedHubToday(),
+          meta: { section_providers: { weather: weatherProvider, alerts: alertsProvider } },
+        });
+        const labeled = await request(app).get(`/api/homes/${HOME_ID}/intelligence?sections=weather,alerts`).set('x-test-user-id', USER);
+        expect(labeled.status).toBe(200);
+        expect(sectionsById(labeled.body).weather.source).toBe(weatherLabel);
+        expect(sectionsById(labeled.body).alerts.source).toBe(alertsLabel);
+      }
+      providerOrchestrator.getHubToday.mockResolvedValue({
+        ...defaultHubToday(),
+        meta: { section_providers: { weather: 'OPEN_METEO', alerts: 'NOAA' }, partial_failures: ['alerts'] },
+      });
+      const unchecked = await request(app).get(`/api/homes/${HOME_ID}/intelligence?sections=alerts`).set('x-test-user-id', USER);
+      expect(sectionsById(unchecked.body).alerts).toMatchObject({ status: 'unavailable', source: 'Source unavailable', data: null });
     });
 
     test('air quality names the dominant pollutant as a machine token', async () => {
