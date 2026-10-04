@@ -1,3 +1,11 @@
+## CURRENT — founder pilot assignments — 2026-10-04T10:11:26Z
+
+Effective October 4, 2026 at 3:11 AM PDT. This founder-authorized assignment supersedes the historical Guest/Timeline/Maintenance-first order and handoff-only objective. Priority: pilot-path defects and security/privacy/money defects anywhere; then WP1–WP8; other retained work only when a device slot would otherwise be idle. All five current sessions' latest recorded turns are **GPT-6.1 Sol / Extra High**; Root's actual model changed on the new turn at10:01:41.871Z. Work personally in those existing sessions. No new chats, subagents or automation. The founder will start/message the lanes; publishing an assignment does not claim they have started.
+
+The founder made the mobile pilot the active priority and authorized package routing; finishing only a handoff is no longer the objective. See the [single live coordinator record](workstreams/01-trains-coordination.md) for all owners, starts, estimates, migration reservations and shared-file patch writers, and each lane's existing status/prompt for dispatch. Current master2632ae929dab901cedf84acea4d9b7bd95122120 conserves906 application source. Stream1 WP1/WP7/WP8;4-1 WP2–WP5/provider labels;3-1 WP6/WP4 review;3-2 EmergencyInfo/privacy/security review;4-2 sole actions/routing/WP7-native writer; Stream5 retired. Pickup evidence is sealed and resources returned; no destination build/runtime/fixture grant is inferred.
+
+Verification is only the pilot-path rows in build-brief section15, with that proposal's IDs. Other verification/evidence bookkeeping is paused;1495/1496/1500 remain draft/idle-slot-only,1502 is the active WP2 starting point, merged1501's guest/accepted-delivery/retry evidence is reused for WP8. Only section12's seven exports apply. Agent implementation remains deferred until the pilot's first read. All hard holds, immutable accepted history, protected primary and sole merge ownership persist. Historical blocks below remain provenance and yield to this current direction.
+
 # Pantopus project handoff
 
 ## Current execution ownership — October 2, 2026
