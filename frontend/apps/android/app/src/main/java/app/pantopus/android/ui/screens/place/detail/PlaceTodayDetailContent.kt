@@ -434,6 +434,7 @@ private fun AddressCalendarCard(
     viewModel: AddressCalendarActions?,
 ) {
     var picking by rememberSaveable { mutableStateOf(data.needsPickupDay) }
+    LaunchedEffect(data.pickupVersion, data.needsPickupDay) { picking = data.needsPickupDay }
     val busy = viewModel?.calendarBusy?.collectAsStateWithLifecycle()?.value ?: false
     val errorText = viewModel?.calendarError?.collectAsStateWithLifecycle()?.value
     Column(
@@ -448,6 +449,7 @@ private fun AddressCalendarCard(
         errorText?.let { Text(it, fontSize = 12.5.sp, color = PantopusColors.error) }
         UpcomingEvents(data, canSetPickupDay = viewModel != null)
     }
+    if (viewModel != null) PickupReminderPrimer(viewModel)
 }
 
 @Composable

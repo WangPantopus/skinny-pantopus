@@ -72,6 +72,7 @@ class PlaceRealRentContributionTest {
             repo = repo,
             adminRepo = mockk<HomeAdminRepository>(relaxed = true),
             sessionScopes = mockk(relaxed = true),
+            preferencesRepository = mockk(relaxed = true),
             savedStateHandle =
                 SavedStateHandle(
                     mapOf(

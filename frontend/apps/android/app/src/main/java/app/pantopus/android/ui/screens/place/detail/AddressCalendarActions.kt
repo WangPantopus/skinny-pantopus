@@ -18,7 +18,20 @@ interface AddressCalendarActions {
     val calendarBusy: StateFlow<Boolean>
     val calendarError: StateFlow<String?>
 
-    fun setPickupDay(request: SetPickupDayRequest)
+    val pickupPrimerHomeId: StateFlow<String?>? get() = null
+
+    fun dismissPickupPrimer() = Unit
+
+    /** Null means an acknowledged opt-in; other values are safe user-facing failures. */
+    suspend fun enablePickupReminders(
+        homeId: String,
+        timezone: String,
+    ): String? = "Couldn't enable pickup reminders. Try again."
+
+    fun setPickupDay(
+        request: SetPickupDayRequest,
+        offerPrimer: Boolean = false,
+    )
 
     /** [expectedVersion] is the calendar's `pickupVersion` when the editor opened. */
     fun clearPickupDay(expectedVersion: String?)

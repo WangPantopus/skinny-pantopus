@@ -64,6 +64,31 @@ class TodayTabViewModel
         private val _preferenceError = MutableStateFlow<String?>(null)
         val preferenceError = _preferenceError.asStateFlow()
 
+        private val _pickupPrimerHomeId = MutableStateFlow<String?>(null)
+        override val pickupPrimerHomeId = _pickupPrimerHomeId.asStateFlow()
+
+        override fun dismissPickupPrimer() {
+            _pickupPrimerHomeId.value = null
+        }
+
+        override suspend fun enablePickupReminders(
+            homeId: String,
+            timezone: String,
+        ): String? {
+            if (!sessionScope.confirmCurrent() || calendarHomeId != homeId) return "Your session changed. Reopen Today to continue."
+            val calendar = loadAddressCalendar()
+            if (calendar == null || calendar.needsPickupDay) return "Confirm your pickup schedule before turning on reminders."
+            val result =
+                preferencesRepository.updatePreferences(
+                    NotificationPreferencesPatch(eveningBriefingEnabled = true, dailyBriefingTimezone = timezone),
+                )
+            if (!sessionScope.confirmCurrent() || calendarHomeId != homeId) return "Your session changed. Reopen Today to continue."
+            return when (result) {
+                is NetworkResult.Success -> if (result.data.eveningBriefingEnabled) null else "Couldn't enable pickup reminders. Try again."
+                is NetworkResult.Failure -> result.error.displayMessage("Couldn't enable pickup reminders.")
+            }
+        }
+
         private val _calendarBusy = MutableStateFlow(false)
         override val calendarBusy: StateFlow<Boolean> = _calendarBusy.asStateFlow()
         private val _calendarError = MutableStateFlow<String?>(null)
@@ -262,18 +287,37 @@ class TodayTabViewModel
                 is NetworkResult.Failure -> result
             }
 
-        override fun setPickupDay(request: app.pantopus.android.data.api.models.place.SetPickupDayRequest) {
+        override fun setPickupDay(
+            request: app.pantopus.android.data.api.models.place.SetPickupDayRequest,
+            offerPrimer: Boolean,
+        ) {
             val id = homeId ?: return
             if (_calendarBusy.value) return
+            val version = loadVersion
             _calendarBusy.value = true
             viewModelScope.launch {
+                if (!current(version)) {
+                    _calendarBusy.value = false
+                    return@launch
+                }
                 _calendarError.value = null
                 when (val r = repo.setPickupDay(id, request)) {
-                    is NetworkResult.Success -> refresh()
+                    is NetworkResult.Success -> pickupSaved(r.data.calendar, id, version, offerPrimer)
                     is NetworkResult.Failure -> pickupFailed(r.error, "Couldn't save your pickup day.")
                 }
                 _calendarBusy.value = false
             }
+        }
+
+        private suspend fun pickupSaved(
+            calendar: app.pantopus.android.data.api.models.place.PlaceAddressCalendarData,
+            id: String,
+            version: Long,
+            offerPrimer: Boolean,
+        ) {
+            if (!current(version) || homeId != id) return
+            if (offerPrimer && !calendar.needsPickupDay) _pickupPrimerHomeId.value = id
+            refresh()
         }
 
         override fun clearPickupDay(expectedVersion: String?) {
