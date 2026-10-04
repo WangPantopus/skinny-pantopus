@@ -273,7 +273,7 @@ async function getHubToday(userId, options = {}) {
     try {
       const currentLocation = await resolveLocation(userId);
       addressCalendar = currentLocation.homeId === location.homeId
-        ? await fetchAddressCalendar(currentLocation.homeId, userId) : null;
+        ? await fetchAddressCalendar(currentLocation, userId) : null;
     } catch (_) { addressCalendar = null; }
   }
 
@@ -655,7 +655,7 @@ async function composeEveningBriefing(userId, location) {
 
   // A confirmed pickup can change while public providers are pending too.
   if (buildTomorrowPickupSignal(addressCalendar, location.timezone, briefingHistory)) {
-    addressCalendar = await fetchAddressCalendar(location.homeId, userId);
+    addressCalendar = await fetchAddressCalendar(location, userId);
   }
 
   const selectedSignal = selectEveningSignal({
@@ -692,7 +692,7 @@ async function composeEveningBriefing(userId, location) {
   });
 
   if (selectedSignal.kind === 'address_calendar') {
-    const current = buildTomorrowPickupSignal(await fetchAddressCalendar(location.homeId, userId), location.timezone, briefingHistory);
+    const current = buildTomorrowPickupSignal(await fetchAddressCalendar(location, userId), location.timezone, briefingHistory);
     if (!current || JSON.stringify(current.data) !== JSON.stringify(selectedSignal.data)) {
       throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
     }
