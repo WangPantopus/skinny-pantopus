@@ -887,7 +887,7 @@ private fun RadonCardContent(
         Text(
             "EPA radon zones",
             fontSize = 12.sp,
-            color = PantopusColors.primaryInk,
+            color = PantopusColors.primary600,
             modifier = Modifier.clickable { uri.openUri("https://www.epa.gov/radon/epa-map-radon-zones-0") },
         )
     }
