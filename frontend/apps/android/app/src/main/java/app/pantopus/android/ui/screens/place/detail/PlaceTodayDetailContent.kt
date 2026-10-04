@@ -664,7 +664,12 @@ private class RadonTodayState(
 ) {
     val lifetime = CoroutineScope(parent.coroutineContext + Job(parent.coroutineContext[Job]))
     private var active = true
-    private var coordinator = factory.create(homeId, lifetime, contextGuard)
+    private val dispatchContext: suspend () -> Unit = {
+        lifetime.coroutineContext.ensureActive()
+        check(active)
+        contextGuard()
+    }
+    private var coordinator = factory.create(homeId, lifetime, dispatchContext)
     var task by mutableStateOf<HomeTaskDto?>(null)
     var loaded by mutableStateOf(false)
     var canCreate by mutableStateOf(false)
@@ -717,7 +722,7 @@ private class RadonTodayState(
             requireCurrent()
             check(loaded && if (kind == "change") task?.capabilities?.canEdit == true else canCreate)
             if (kind != "change") {
-                coordinator = factory.create(homeId, lifetime, contextGuard)
+                coordinator = factory.create(homeId, lifetime, dispatchContext)
                 val pending = coordinator.load()?.request
                 requireCurrent()
                 check(pending == null || (pending.details?.get("suggestion") == "radon_test" && pending.visibility == "members")) {
