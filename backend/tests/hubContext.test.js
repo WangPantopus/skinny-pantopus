@@ -887,6 +887,38 @@ describe('Evening Briefing Service', () => {
       tomorrowDateKey('America/Los_Angeles', new Date('2026-03-08T07:30:00Z'))
     ).toBe('2026-03-08');
   });
+
+  test('confirmed tomorrow pickups combine in copy order and lead over bills, tasks, events and moderate alerts', () => {
+    const now = new Date('2026-11-27T02:00:00Z');
+    const calendar = { homeId: 'h1', upcoming: ['bulk_pickup', 'recycling', 'garbage', 'yard_waste', 'garbage'].map(kind => ({ kind, days_until: 1, date: '2026-11-27', scope: 'home', moved_from: '2026-11-26', holiday: 'Thanksgiving', shift_days: 1 })) };
+    const inputs = { addressCalendar: calendar, timeZone: 'America/Los_Angeles', now, includeEveningTip: false, internal: {
+      ...MOCK_INTERNAL_EMPTY,
+      bills_due: [{ id: 'bill', due_date: '2026-11-27T17:00:00Z' }],
+      tasks_due: [{ id: 'task', title: 'Urgent task', priority: 'urgent', due_at: '2026-11-27T17:00:00Z' }],
+      calendar_events: [{ id: 'event', title: 'Appointment', start_at: '2026-11-27T17:00:00Z' }],
+    }, alerts: { alerts: [{ id: 'moderate', severity: 'moderate', event: 'Advisory' }] } };
+    const pickup = selectEveningSignal(inputs);
+    expect(pickup).toMatchObject({ kind: 'address_calendar', score: 0.66, label: 'Garbage, recycling, yard waste and bulk pickup tomorrow', data: { identity: 'pickup:2026-11-27', kinds: ['garbage', 'recycling', 'yard_waste', 'bulk_pickup'], date: '2026-11-27', homeId: 'h1', moved: { holiday: 'Thanksgiving', shift_days: 1 } } });
+    const two = selectEveningSignal({ ...inputs, addressCalendar: { ...calendar, upcoming: calendar.upcoming.filter(e => ['garbage', 'recycling'].includes(e.kind)) } });
+    expect(two.label).toBe('Garbage and recycling tomorrow');
+    const alerts = { alerts: [{ id: 'moderate', severity: 'moderate', event: 'Advisory' }, { id: 'severe', severity: 'severe', event: 'Warning' }] };
+    expect(selectEveningSignal({ ...inputs, alerts }).data.id).toBe('severe');
+    const recentBriefings = [{ signals_snapshot: [pickup] }];
+    expect(selectEveningSignal({ ...inputs, recentBriefings }).kind).toBe('calendar');
+  });
+
+  test('pickup selection rejects city, holiday, wrong-date, missing-home and already sent signals across local DST dates', () => {
+    const inputs = { internal: MOCK_INTERNAL_EMPTY, alerts: null, timeZone: 'America/Los_Angeles', includeEveningTip: false, now: new Date('2026-11-01T01:00:00Z') };
+    const pickup = { kind: 'garbage', days_until: 1, date: '2026-11-01', scope: 'home' };
+    for (const event of [{ ...pickup, scope: 'city' }, { ...pickup, kind: 'pickup_holiday' }, { ...pickup, days_until: 0 }, { ...pickup, date: '2026-11-02' }]) {
+      expect(selectEveningSignal({ ...inputs, addressCalendar: { homeId: 'h1', upcoming: [event] } })).toBeNull();
+    }
+    expect(selectEveningSignal({ ...inputs, addressCalendar: { upcoming: [pickup] } })).toBeNull();
+    const signal = selectEveningSignal({ ...inputs, addressCalendar: { homeId: 'h1', upcoming: [pickup] } });
+    expect(signal.label).toBe('Garbage tomorrow');
+    expect(signal.data).toMatchObject({ identity: 'pickup:2026-11-01', date: '2026-11-01', homeId: 'h1', moved: null });
+    expect(selectEveningSignal({ ...inputs, addressCalendar: { homeId: 'h1', upcoming: [pickup] }, recentBriefings: [{ signals_snapshot: [signal] }] })).toBeNull();
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════
@@ -1143,6 +1175,51 @@ describe('Provider Orchestrator', () => {
     expect(result.skip_reason).toBe('no_location');
   });
 
+  test('evening pickup composition uses the current authorized schedule after providers and refuses changes during composition', async () => {
+    const calendar = { homeId: 'h1', upcoming: [{ kind: 'garbage', title: 'Garbage day', date: '2026-11-27', days_until: 1, scope: 'home', confidence: 'official' }] };
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-11-27T02:00:00Z'));
+    try {
+      const calendarService = require('../services/addressCalendarService').composeForHomeId;
+      const weather = require('../services/context/weatherProvider').fetchWeather;
+      let release;
+      weather.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+      calendarService.mockResolvedValueOnce(calendar).mockResolvedValue(null);
+      const pending = composeScheduledBriefing(MOCK_USER_ID, { kind: 'evening' });
+      await Promise.resolve();
+      release(MOCK_WEATHER);
+      expect((await pending).should_send).toBe(false);
+
+      const compose = jest.fn();
+      jest.doMock('../services/context/briefingComposer', () => ({
+        composeTemplate: jest.requireActual('../services/context/briefingComposer').composeTemplate,
+        composeBriefing: compose,
+      }));
+      jest.resetModules();
+      const current = require('../services/context/providerOrchestrator');
+      const currentCalendar = require('../services/addressCalendarService').composeForHomeId;
+      for (const replacement of [null, { ...calendar, upcoming: [{ ...calendar.upcoming[0], holiday: 'New holiday', moved_from: '2026-11-26', shift_days: 1 }] }, { ...calendar, homeId: 'other-home' }]) {
+        currentCalendar.mockResolvedValue(calendar);
+        let entered;
+        const started = new Promise(resolve => { entered = resolve; });
+        compose.mockImplementationOnce(() => { entered(); return new Promise(resolve => { release = resolve; }); });
+        const composing = current.composeScheduledBriefing(MOCK_USER_ID, { kind: 'evening' });
+        await started;
+        currentCalendar.mockResolvedValue(replacement);
+        release({ text: 'Bins out tonight.', mode: 'template', tokens_used: 0 });
+        await expect(composing).rejects.toMatchObject({ code: 'HOME_LIST_ACCESS_CHANGED' });
+      }
+      currentCalendar.mockResolvedValue(calendar);
+      compose.mockResolvedValue({ text: 'Bins out tonight.', mode: 'template', tokens_used: 0 });
+      const accepted = await current.composeScheduledBriefing(MOCK_USER_ID, { kind: 'evening' });
+      expect(accepted.should_send).toBe(true);
+      expect(accepted.signals_snapshot[0].data).toMatchObject({ homeId: 'h1', date: '2026-11-27', identity: 'pickup:2026-11-27', kinds: ['garbage'] });
+    } finally {
+      jest.dontMock('../services/context/briefingComposer');
+      jest.useRealTimers();
+    }
+  });
+
   test('composeDailyBriefing uses local-update fallback when no higher-priority signal exists', async () => {
     const { getLocalUpdateContext } = require('../services/context/localUpdateProvider');
     const { fetchWeather } = require('../services/context/weatherProvider');
@@ -1210,6 +1287,29 @@ describe('Provider Orchestrator', () => {
       const result = await composeDailyBriefing(MOCK_USER_ID);
       expect(result.should_send).toBe(false);
       expect(result.skip_reason).toBe('low_signal_day');
+      const { getLocalUpdateContext } = require('../services/context/localUpdateProvider');
+      getLocalUpdateContext.mockResolvedValue({ summary: 'Nearby update', post_ids: ['post'], titles: ['Update'] });
+      const evening = await composeScheduledBriefing(MOCK_USER_ID, { kind: 'evening' });
+      expect(evening.should_send).toBe(false);
+      expect(evening.skip_reason).toBe('low_signal_day');
+    });
+
+    test('morning omits pickup leads on both lead and pickup days while Hub keeps confirmed pickup rows', async () => {
+      quietDay();
+      const { composeForHomeId } = require('../services/addressCalendarService');
+      for (const days_until of [1, 0]) {
+        composeForHomeId.mockResolvedValue({ homeId: 'h1', upcoming: [{ kind: 'garbage', title: 'Garbage day', date: '2026-11-03', scope: 'home', confidence: 'official', days_until }] });
+        const morning = await composeDailyBriefing(MOCK_USER_ID);
+        expect(morning.should_send).toBe(false);
+        expect(morning.skip_reason).toBe('low_signal_day');
+        const hub = await getHubToday(MOCK_USER_ID);
+        expect(hub.signals.some(s => s.kind === 'address_calendar' && s.data.kind === 'garbage')).toBe(true);
+        require('../services/context/providerOrchestrator').clearHubTodayCache();
+      }
+      composeForHomeId.mockResolvedValue({ homeId: 'h1', upcoming: [{ kind: 'garbage', title: 'Garbage day', date: '2026-11-03', scope: 'home', confidence: 'official', days_until: 1 }, { kind: 'street_sweeping', title: 'Street sweeping', date: '2026-11-03', scope: 'city', confidence: 'official', days_until: 1 }] });
+      const morning = await composeDailyBriefing(MOCK_USER_ID);
+      expect(morning.should_send).toBe(true);
+      expect(morning.signals_snapshot[0].data.kind).toBe('street_sweeping');
     });
 
     test('still pushes when something genuinely costly is happening', async () => {
