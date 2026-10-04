@@ -61,9 +61,10 @@ final class PilotEvents {
     }
 
     func enterBackground(now: TimeInterval = ProcessInfo.processInfo.systemUptime) {
-        window.enterBackground(now: now)
         flush?.cancel()
         flush = nil
+        if let meta = consumeOpen() { record(.sessionOpen, meta: meta) }
+        window.enterBackground(now: now)
         pendingOpen = false
         pendingActor = nil
         pushType = nil
@@ -160,14 +161,23 @@ final class PilotEvents {
         // transition before classifying it. Consuming the window precedes dispatch.
         flush = Task { @MainActor in
             do { try await Task.sleep(for: .seconds(1)) } catch { return }
-            guard pendingOpen, window.foreground, let actor,
-                  pendingActor == nil || pendingActor == actor else { return }
-            pendingOpen = false
-            pendingActor = nil
-            var meta = ["trigger": pushType == nil ? "organic" : "push"]
-            if let pushType { meta["push_type"] = pushType }
-            pushType = nil
+            guard window.foreground, let meta = consumeOpen() else { return }
             await send(.sessionOpen, meta: meta)
         }
+    }
+
+    private func consumeOpen() -> [String: String]? {
+        guard pendingOpen, let meta = Self.openMeta(pendingActor: pendingActor, currentActor: actor, pushType: pushType) else { return nil }
+        pendingOpen = false
+        pendingActor = nil
+        pushType = nil
+        return meta
+    }
+
+    static func openMeta(pendingActor: String?, currentActor: String?, pushType: String?) -> [String: String]? {
+        guard let currentActor, pendingActor == nil || pendingActor == currentActor else { return nil }
+        var meta = ["trigger": pushType == nil ? "organic" : "push"]
+        if let pushType { meta["push_type"] = pushType }
+        return meta
     }
 }

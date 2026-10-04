@@ -128,7 +128,7 @@ class AuthInterceptorsTest {
                         if (mode == "rotated_actor") {
                             TokenStorage.SessionCredentials("actor-b", "session-b", "new-at")
                         } else {
-                            credentials.copy(accessToken = "new-at")
+                            TokenStorage.SessionCredentials(credentials.userId, credentials.sessionId, "new-at")
                         }
                 }
                 credentials.accessToken
@@ -138,7 +138,7 @@ class AuthInterceptorsTest {
                     if (mode == "refresh_actor") {
                         TokenStorage.SessionCredentials("actor-b", "session-b", "new-at")
                     } else {
-                        credentials.copy(accessToken = "new-at")
+                        TokenStorage.SessionCredentials(credentials.userId, credentials.sessionId, "new-at")
                     }
                 osUnlocked = mode != "refresh_os"
                 appUnlocked = mode != "refresh_app"
@@ -272,8 +272,8 @@ class AuthInterceptorsTest {
             registry.delegate =
                 StepUpTokenProvider { _, _ ->
                     when (mode) {
-                        "actor" -> selected = selected.copy(userId = "actor-b")
-                        "session" -> selected = selected.copy(sessionId = "session-b")
+                        "actor" -> selected = TokenStorage.SessionCredentials("actor-b", selected.sessionId, selected.accessToken)
+                        "session" -> selected = TokenStorage.SessionCredentials(selected.userId, "session-b", selected.accessToken)
                         "os" -> osUnlocked = false
                         "app" -> appUnlocked = false
                     }

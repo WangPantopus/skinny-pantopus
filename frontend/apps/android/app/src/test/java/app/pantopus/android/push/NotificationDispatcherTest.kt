@@ -5,8 +5,26 @@ package app.pantopus.android.push
 import android.content.Context
 import app.pantopus.android.data.analytics.PilotEvents
 import app.pantopus.android.data.analytics.PilotSessionWindow
+import app.pantopus.android.data.api.models.users.UserDto
+import app.pantopus.android.data.api.services.HubApi
+import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
+import com.squareup.moshi.Moshi
+import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import okhttp3.RequestBody
+import okio.Buffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -22,6 +40,7 @@ import org.junit.Test
  * The system-side `dispatch(...)` path is exercised by the instrumented
  * permission test — that runs against a real Notification manager.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class NotificationDispatcherTest {
     private val dispatcher =
         NotificationDispatcher(
@@ -186,14 +205,56 @@ class NotificationDispatcherTest {
     }
 
     @Test
-    fun route_returns_null_deep_link_when_payload_omits_it() {
-        val routing =
-            dispatcher.route(
-                data = mapOf("type" to "announcement", "title" to "Welcome", "body" to "Hi"),
-            )
-        assertNull(routing.deepLink)
-        assertEquals(NotificationDispatcher.Channel.SYSTEM, routing.channel)
-    }
+    fun route_returns_null_deep_link_when_payload_omits_it() =
+        runTest {
+            val routing =
+                dispatcher.route(
+                    data = mapOf("type" to "announcement", "title" to "Welcome", "body" to "Hi"),
+                )
+            assertNull(routing.deepLink)
+            assertEquals(NotificationDispatcher.Channel.SYSTEM, routing.channel)
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            try {
+                val user = mockk<UserDto>().also { every { it.id } returns "actor-a" }
+                val other = mockk<UserDto>().also { every { it.id } returns "actor-b" }
+                val state = MutableStateFlow<AuthRepository.State>(AuthRepository.State.SignedIn(user))
+                val auth = mockk<AuthRepository>().also { every { it.state } returns state }
+                val tokens = mockk<TokenStorage>()
+                val credentials = TokenStorage.SessionCredentials("actor-a", "session-a", "at")
+                coEvery { tokens.sessionCredentials() } returns credentials
+                val api = mockk<HubApi>()
+                val sent = mutableListOf<String>()
+                coEvery { api.funnelEvent(any(), any()) } coAnswers {
+                    secondArg<AuthenticatedDispatchGuard?>()?.verify(credentials)
+                    val body = firstArg<RequestBody>()
+                    assertTrue(body.isOneShot())
+                    sent += Buffer().also { body.writeTo(it) }.readUtf8()
+                }
+                val events = PilotEvents(api, auth, tokens, Moshi.Builder().build())
+                events.notificationOpened("task_due")
+                events.enterForeground(0)
+                events.enterBackground(100)
+                events.enterBackground(101)
+                events.enterForeground(102)
+                events.enterBackground(103)
+                state.value = AuthRepository.State.Unknown
+                events.authChanged()
+                events.enterForeground(1_800_103)
+                events.enterBackground(1_800_104)
+                state.value = AuthRepository.State.SignedIn(user)
+                events.enterForeground(3_600_104)
+                state.value = AuthRepository.State.SignedIn(other)
+                events.authChanged()
+                events.enterBackground(3_600_105)
+                advanceUntilIdle()
+                assertEquals(1, sent.size)
+                assertTrue(sent.single().contains("\"trigger\":\"push\""))
+                assertTrue(sent.single().contains("\"push_type\":\"task_due\""))
+                assertFalse(sent.single().contains("actor-"))
+            } finally {
+                Dispatchers.resetMain()
+            }
+        }
 
     @Test
     fun route_treats_missing_type_as_system() {

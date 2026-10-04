@@ -89,9 +89,11 @@ class PilotEvents
         }
 
         fun enterBackground(now: Long = SystemClock.elapsedRealtime()) {
-            window.enterBackground(now)
             flush?.cancel()
             flush = null
+            val openingActor = actor
+            consumeOpen(openingActor)?.let { meta -> scope.launch { send(Event.SessionOpen, meta, openingActor) } }
+            window.enterBackground(now)
             pendingOpen = false
             pendingActor = null
             pushType = null
@@ -162,18 +164,34 @@ class PilotEvents
                 scope.launch {
                     delay(1_000)
                     val openingActor = actor ?: return@launch
-                    if (!pendingOpen || !window.foreground) return@launch
-                    if (pendingActor != null && pendingActor != openingActor) return@launch
-                    pendingOpen = false
-                    pendingActor = null
-                    val meta = mutableMapOf("trigger" to if (pushType == null) "organic" else "push")
-                    pushType?.let { meta["push_type"] = it }
-                    pushType = null
+                    if (!window.foreground) return@launch
+                    val meta = consumeOpen(openingActor) ?: return@launch
                     send(Event.SessionOpen, meta, openingActor)
                 }
         }
 
+        private fun consumeOpen(currentActor: String?): Map<String, String>? {
+            if (!pendingOpen) return null
+            val meta = openMeta(pendingActor, currentActor, pushType) ?: return null
+            pendingOpen = false
+            pendingActor = null
+            pushType = null
+            return meta
+        }
+
         companion object {
+            internal fun openMeta(
+                pendingActor: String?,
+                currentActor: String?,
+                pushType: String?,
+            ): Map<String, String>? {
+                if (currentActor == null || (pendingActor != null && pendingActor != currentActor)) return null
+                return buildMap {
+                    put("trigger", if (pushType == null) "organic" else "push")
+                    pushType?.let { put("push_type", it) }
+                }
+            }
+
             internal fun payload(
                 event: Event,
                 meta: Map<String, String>,

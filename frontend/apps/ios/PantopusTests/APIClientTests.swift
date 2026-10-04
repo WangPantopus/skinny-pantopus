@@ -49,6 +49,33 @@ final class APIClientTests: XCTestCase {
         )
         XCTAssertEqual(user.id, "u_123")
         XCTAssertEqual(user.displayName, "Alice")
+        URLProtocolStub.stub(path: "/api/users/login", response: .json(Fixtures.loginJSON(sessionId: "pilot-session")))
+        URLProtocolStub.stub(
+            path: "/api/auth/devices/register",
+            response: .json("{\"device\":{\"id\":\"row\",\"deviceId\":\"x\",\"trustLevel\":\"trusted\"}}")
+        )
+        URLProtocolStub.stub(path: "/api/hub/funnel-events", response: .empty)
+        try await auth.signIn(email: "pilot@example.com", password: "test-only")
+        await auth.awaitBackgroundWork()
+        let pilot = PilotEvents(api: client)
+        pilot.notificationOpened(type: "task_due")
+        pilot.enterForeground(now: 0)
+        pilot.enterBackground(now: 0.1)
+        pilot.enterBackground(now: 0.2)
+        pilot.enterForeground(now: 0.3)
+        pilot.enterBackground(now: 0.4)
+        for _ in 0..<100 {
+            if URLProtocolStub.capturedRequests.contains(where: { $0.url?.path == "/api/hub/funnel-events" }) { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(URLProtocolStub.capturedRequests.filter { $0.url?.path == "/api/hub/funnel-events" }.count, 1)
+        XCTAssertNil(PilotEvents.openMeta(pendingActor: "actor-a", currentActor: "actor-b", pushType: nil))
+        XCTAssertNil(PilotEvents.openMeta(pendingActor: "actor-a", currentActor: nil, pushType: nil))
+        XCTAssertNil(PilotEvents.openMeta(pendingActor: nil, currentActor: nil, pushType: nil))
+        XCTAssertEqual(
+            PilotEvents.openMeta(pendingActor: "actor-a", currentActor: "actor-a", pushType: "task_due"),
+            ["trigger": "push", "push_type": "task_due"]
+        )
     }
 
     func testDoesNotAttachAuthHeaderWhenUnauthenticated() async throws {
