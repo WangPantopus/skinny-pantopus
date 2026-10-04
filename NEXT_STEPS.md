@@ -12,7 +12,7 @@ Sources, in order of authority for this work:
 4. Claude Design exports in `docs/design/exports/`, checked in `docs/design/exports/VERIFICATION.md`: the look of the screens that have one.
 5. Background: the [design docs review](https://claude.ai/code/artifact/09276a14-1587-41be-86ef-54e95505d2d8), the [idea ledger](https://claude.ai/code/artifact/51f601e7-1e56-416e-b549-fbd036e421ba) and the [Wedge v2 strategy](https://claude.ai/artifact/GLUkeCRhnFZnsj7tRr1L4D).
 
-**Designed, outside the mobile build.** The [Street Organizer](docs/product/street-organizer-design-2026-09-27.md) (Crew Day first), [Pulse](https://github.com/WangPantopus/skinny-pantopus/pull/625) (local conversation; see its [review comment](https://github.com/WangPantopus/skinny-pantopus/pull/625#issuecomment-5974324844)) and [Porchlight](docs/product/porchlight-product-design-2026-09-26.md) (check-ins for someone living alone). Crew Day's first two phases run by hand beside the pilot (section 4A). The rest waits for evidence (sections 5 and 7).
+**Designed, outside the mobile build.** The [Street Organizer](docs/product/street-organizer-design-2026-09-27.md) (Crew Day first), [Pulse](https://github.com/WangPantopus/skinny-pantopus/pull/625) (local conversation; see its [review comment](https://github.com/WangPantopus/skinny-pantopus/pull/625#issuecomment-5974324844)) and [Porchlight](docs/product/porchlight-product-design-2026-09-26.md) (check-ins for someone living alone). The [Pantopus Agent](docs/product/pantopus-agent-product-design-2026-10-04.md) ([system design](docs/product/pantopus-agent-system-design-2026-10-04.md)) is the one box that ties them together. Crew Day's first two phases run by hand beside the pilot (section 4A). The rest waits for evidence (sections 5 and 7).
 
 Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`docs/workstreams/README.md` on the `codex/workstream-coordination` branch). Stream 1 runs the merge queue and assigns work.
 
@@ -63,6 +63,7 @@ Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`
 - [ ] Crew Day by hand this fall, beside the pilot (section 4A). Default: talk to the crews now; choose the first streets only if the crews pass Gate 1.
 - [ ] The by-hand Crew Day's tools. Default: a form, texts, email, and payment through the crew or a payment link, with no Pantopus web build, so the mobile-only rule holds. The Street Organizer's Phase 1 assumes a browser booking page.
 - [ ] Pulse's six approvals in [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625): navigation, place pages, labels and permissions, adult-only posting, paid moderation, and following the Crew Day launch. Default: decide when Pulse is scheduled; the review comment recommends an answer for each.
+- [ ] The Pantopus Agent's open decisions: working name, Stage 1 entry point and languages, autonomy defaults and memory retention ([product design](docs/product/pantopus-agent-product-design-2026-10-04.md#open-decisions)). Default: its recommendations; nothing is built before the pilot's first read.
 - [ ] Record these decisions in `docs/pantopus-product-design-index-2026-09-09.md`, `docs/PROJECT_HANDOFF.md` and section 13 of the Wedge v2 page.
 
 ## 1. Done since September 16 (checked on master October 3)
@@ -74,13 +75,14 @@ Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`
 - [x] The eight first-launch cuts sit behind launch flags (`docs/launch-scope-flags-2026-10-01.md`).
 - [x] The loop design and this checklist were written and committed.
 - [x] The Porchlight, Street Organizer and Pulse designs were written on September 26 and 27, and Pulse was reviewed on PR 625 on October 3.
+- [x] The Pantopus Agent product and system designs were written on October 4.
 
 ## 2. Before the pilot (founder-owned; agents can prepare but never hold credentials)
 
 - [ ] Turn the hosted backend on. One scheduled reminder reaches a physical iPhone and a physical Android phone.
 - [ ] Production keys the backend reads; the database baseline adopted in production; TestFlight; a Play internal testing track.
 - [ ] Confirm the Camas, Vancouver and Washougal pickup schedules and their holiday rules by hand for Thanksgiving (November 26), Christmas (December 25) and New Year's Day (January 1). Mark each official or unconfirmed. Today only Camas has rows, and all are unconfirmed.
-- [ ] Talk to ten first-time homeowners and ten meal-train organizers before and during the build. Ask the homeowners whether they would add their home to a Crew Day on their street.
+- [ ] Talk to ten first-time homeowners and ten meal-train organizers before and during the build. Ask the homeowners whether they would add their home to a Crew Day on their street, and what they would type into a box that answers questions about their home. Their questions become the agent's first test set.
 - [ ] Five strangers, ten seconds on the app's first screen: "What does this do, and why would you type your address?"
 - [ ] Review and merge PR 1499 (the September 26 drafts and the marketing draft), then reconcile it with this file.
 - [ ] Verify Lob and USPS Every Door Direct Mail rate cards before budgeting any mail drop.
@@ -131,7 +133,11 @@ Phases 0 and 1 of the [Street Organizer launch plan](docs/product/street-organiz
 - [ ] Street Organizer Phase 2 software, only after Gate 2: plans, My plans, Nearby and Household inside existing surfaces, crew route tools, postcards with codes and the weekly digest. Its invitation pages are web, so it reopens the mobile-only decision.
 - [ ] Pulse, after Crew Day launches, per [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625) and its review: one town-wide space first, with street areas opening on Crew Day streets. Aim for the place people ask their town, alongside the Facebook groups they already use, not a replacement for them.
 - [ ] Porchlight stays an option: at most a by-hand trial with five families after the pilot.
-- [ ] The paid household assistant ("take this off my plate"), routing jobs to proven crews and helpers, per the Street Organizer design.
+- [ ] The Pantopus Agent, in four stages, each only after the one before passes its gate ([product design](docs/product/pantopus-agent-product-design-2026-10-04.md), [system design](docs/product/pantopus-agent-system-design-2026-10-04.md)):
+  - [ ] Stage 1, Know: one box on the Today tab answering from what Pantopus already knows, with sources, and tasks and reminders after one tap. In the pilot area first.
+  - [ ] Stage 2, Ask people: questions routed to people who opted in to help, built once together with the Street Organizer's small asks.
+  - [ ] Stage 3, Act for you: quotes, bookings and selling with approval, once marketplace and open gigs return. This is also the paid household assistant ("take this off my plate").
+  - [ ] Stage 4, Anywhere: groups and topics with "Catch me up", visiting mode, translation, then other countries.
 
 ## 6. Dropped, parked or shelved
 
@@ -149,6 +155,7 @@ Phases 0 and 1 of the [Street Organizer launch plan](docs/product/street-organiz
 - [ ] Add Places and Creator sections to the idea ledger.
 - [ ] Claude Design pack: stop drawing and fixing cut features; finish fix passes only for the pilot screens listed in section 12 of the brief.
 - [ ] Decide whether strategy documents belong on a public repository.
+- [ ] Founder review of the Pantopus Agent designs; record each answer in the product design's Open decisions table.
 - [ ] PR 625 (Pulse): revise per the [review comment](https://github.com/WangPantopus/skinny-pantopus/pull/625#issuecomment-5974324844) before merging it as a proposal. First its eight fixes: where the Street Organizer's Nearby goes and which screen opens first; the Street Organizer's "no feed, no public comments" rule; one ask-and-offer model for the street; a text channel; street areas opening on Crew Day streets; offers not first-come by default; unanswered asks counted apart from answered ones; signed private notes. Then its fourteen smaller items.
 - [ ] Street Organizer design: when Pulse is adopted, amend its non-goals, "What we never build" and moderation sections, and record the by-hand Phase 1 tools.
 
