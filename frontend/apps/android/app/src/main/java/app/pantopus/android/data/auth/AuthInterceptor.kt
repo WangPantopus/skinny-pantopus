@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.auth
 
+import app.pantopus.android.data.api.net.NonRetriableIOException
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -11,7 +12,30 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** In-memory request tag only; never serialized or included in headers/logs. */
-class AuthenticatedDispatchGuard(val verify: suspend (TokenStorage.SessionCredentials?) -> Unit)
+class AuthenticatedDispatchGuard(val verify: suspend (TokenStorage.SessionCredentials?) -> Unit) {
+    suspend fun requireCredentials(tokens: TokenStorage): TokenStorage.SessionCredentials {
+        val selected = tokens.sessionCredentials()
+        verify(selected)
+        return checkNotNull(selected)
+    }
+}
+
+/** The same tagged guard runs for each OkHttp network attempt, including follow-ups. */
+class AuthenticatedDispatchGuardInterceptor(private val tokens: TokenStorage) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val guard = request.tag(AuthenticatedDispatchGuard::class.java) ?: return chain.proceed(request)
+        try {
+            runBlocking {
+                val selected = guard.requireCredentials(tokens)
+                check(request.header("Authorization") == "Bearer ${selected.accessToken}")
+            }
+        } catch (_: Exception) {
+            throw NonRetriableIOException("Session changed before dispatch")
+        }
+        return chain.proceed(request)
+    }
+}
 
 /**
  * OkHttp interceptor that attaches `Authorization: Bearer <token>` on every
@@ -44,6 +68,8 @@ class AuthInterceptor
         private val tokenStorage: TokenStorage,
         private val authRepositoryProvider: dagger.Lazy<AuthRepository>,
     ) : Interceptor {
+        fun dispatchGuardInterceptor(): Interceptor = AuthenticatedDispatchGuardInterceptor(tokenStorage)
+
         override fun intercept(chain: Interceptor.Chain): Response {
             val original = chain.request()
             val token =
@@ -51,14 +77,11 @@ class AuthInterceptor
                     val guard = original.tag(AuthenticatedDispatchGuard::class.java)
                     if (guard != null) {
                         try {
-                            val before = tokenStorage.sessionCredentials()
-                            guard.verify(before)
-                            if (before != null && !original.url.encodedPath.endsWith(REFRESH_PATH_SUFFIX)) {
+                            val before = guard.requireCredentials(tokenStorage)
+                            if (!original.url.encodedPath.endsWith(REFRESH_PATH_SUFFIX)) {
                                 preflightRefresh(before.accessToken)
                             }
-                            val after = tokenStorage.sessionCredentials()
-                            guard.verify(after)
-                            return@runBlocking after?.accessToken ?: throw IOException("Session unavailable before dispatch")
+                            return@runBlocking guard.requireCredentials(tokenStorage).accessToken
                         } catch (_: Exception) {
                             throw IOException("Session changed before dispatch")
                         }

@@ -15,6 +15,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
@@ -52,6 +53,7 @@ class AuthInterceptorsTest {
             .Builder()
             .addInterceptor(DeviceIdentityInterceptor(identity))
             .addInterceptor(AuthInterceptor(storage, lazyRepo))
+            .addNetworkInterceptor(AuthenticatedDispatchGuardInterceptor(storage))
             .addInterceptor(StepUpInterceptor(registry))
             .build()
 
@@ -111,6 +113,54 @@ class AuthInterceptorsTest {
         client().newCall(get("/api/hub")).execute().close()
         assertEquals("Bearer at", server.takeRequest().getHeader("Authorization"))
         coVerify(exactly = 0) { repo.signOut(any()) }
+        val replayClient = client().newBuilder().authenticator(TokenAuthenticator(storage, lazyRepo)).build()
+        for (mode in listOf("refresh_same", "refresh_actor", "refresh_os", "refresh_app", "rotated_same", "rotated_actor")) {
+            var credentials = TokenStorage.SessionCredentials("actor-a", "session-a", "old-at")
+            var osUnlocked = true
+            var appUnlocked = true
+            var tokenReads = 0
+            coEvery { repo.refreshIfExpiringSoon(any()) } returns null
+            coEvery { storage.sessionCredentials() } answers { credentials }
+            coEvery { storage.accessToken() } answers {
+                tokenReads += 1
+                if (mode.startsWith("rotated") && tokenReads > 1) {
+                    credentials =
+                        if (mode == "rotated_actor") {
+                            TokenStorage.SessionCredentials("actor-b", "session-b", "new-at")
+                        } else {
+                            credentials.copy(accessToken = "new-at")
+                        }
+                }
+                credentials.accessToken
+            }
+            coEvery { repo.refreshTokens() } answers {
+                credentials =
+                    if (mode == "refresh_actor") {
+                        TokenStorage.SessionCredentials("actor-b", "session-b", "new-at")
+                    } else {
+                        credentials.copy(accessToken = "new-at")
+                    }
+                osUnlocked = mode != "refresh_os"
+                appUnlocked = mode != "refresh_app"
+                AuthRepository.RefreshOutcome.Rotated(credentials.accessToken)
+            }
+            val guarded =
+                get("/api/homes/home/tasks/task").newBuilder().put("{}".toRequestBody()).tag(
+                    AuthenticatedDispatchGuard::class.java,
+                    AuthenticatedDispatchGuard { selected ->
+                        check(selected != null && selected.userId == "actor-a" && selected.sessionId == "session-a")
+                        check(osUnlocked && appUnlocked)
+                    },
+                ).build()
+            val before = server.requestCount
+            val allowed = mode.endsWith("same")
+            server.enqueue(MockResponse().setResponseCode(401))
+            if (allowed) server.enqueue(MockResponse().setResponseCode(200))
+            replayClient.newCall(guarded).execute().use { assertEquals(if (allowed) 200 else 401, it.code) }
+            assertEquals(before + if (allowed) 2 else 1, server.requestCount)
+            assertEquals("Bearer old-at", server.takeRequest().getHeader("Authorization"))
+            if (allowed) assertEquals("Bearer new-at", server.takeRequest().getHeader("Authorization"))
+        }
     }
 
     @Test
@@ -122,6 +172,31 @@ class AuthInterceptorsTest {
 
         server.takeRequest()
         coVerify(exactly = 0) { repo.refreshIfExpiringSoon(any()) }
+        val credentials = TokenStorage.SessionCredentials("actor-a", "session-a", "at")
+        var unlocked = true
+        coEvery { storage.sessionCredentials() } returns credentials
+        coEvery { repo.refreshIfExpiringSoon(any()) } returns null
+        val retryClient =
+            client().newBuilder().addInterceptor(
+                app.pantopus.android.data.api.net.RetryInterceptor(maxRetries = 1, sleep = { unlocked = false }),
+            ).build()
+        val guarded =
+            get("/api/homes/home/tasks/task").newBuilder().tag(
+                AuthenticatedDispatchGuard::class.java,
+                AuthenticatedDispatchGuard { selected ->
+                    check(selected == credentials)
+                    check(unlocked)
+                },
+            ).build()
+        val before = server.requestCount
+        server.enqueue(MockResponse().setResponseCode(503))
+        server.enqueue(MockResponse().setResponseCode(200))
+        try {
+            retryClient.newCall(guarded).execute().close()
+            org.junit.Assert.fail("Locked transport retry was dispatched")
+        } catch (_: java.io.IOException) {
+            assertEquals(before + 1, server.requestCount)
+        }
     }
 
     @Test
@@ -188,6 +263,44 @@ class AuthInterceptorsTest {
         assertEquals(403, client().newCall(get("/api/y")).execute().also { it.close() }.code)
         assertEquals(1, calls)
         assertEquals(3, server.requestCount)
+        for (mode in listOf("actor", "session", "os", "app", "same")) {
+            var selected = TokenStorage.SessionCredentials("actor-a", "session-a", "at")
+            var osUnlocked = true
+            var appUnlocked = true
+            coEvery { storage.sessionCredentials() } answers { selected }
+            coEvery { repo.refreshIfExpiringSoon(any()) } returns null
+            registry.delegate =
+                StepUpTokenProvider { _, _ ->
+                    when (mode) {
+                        "actor" -> selected = selected.copy(userId = "actor-b")
+                        "session" -> selected = selected.copy(sessionId = "session-b")
+                        "os" -> osUnlocked = false
+                        "app" -> appUnlocked = false
+                    }
+                    "step-token"
+                }
+            val guarded =
+                get("/api/homes/home/tasks/task").newBuilder().tag(
+                    AuthenticatedDispatchGuard::class.java,
+                    AuthenticatedDispatchGuard { credentials ->
+                        check(credentials != null && credentials.userId == "actor-a" && credentials.sessionId == "session-a")
+                        check(osUnlocked && appUnlocked)
+                    },
+                ).build()
+            val before = server.requestCount
+            val allowed = mode == "same"
+            server.enqueue(MockResponse().setResponseCode(403).setBody(stepUp))
+            if (allowed) server.enqueue(MockResponse().setResponseCode(200))
+            try {
+                client().newCall(guarded).execute().use { assertEquals(200, it.code) }
+                org.junit.Assert.assertTrue(allowed)
+            } catch (_: java.io.IOException) {
+                assertFalse(allowed)
+            }
+            assertEquals(before + if (allowed) 2 else 1, server.requestCount)
+            server.takeRequest()
+            if (allowed) assertEquals("step-token", server.takeRequest().getHeader("X-Step-Up"))
+        }
     }
 
     private val claimsAdapter =

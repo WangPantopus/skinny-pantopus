@@ -224,6 +224,7 @@ object NetworkModule {
             .cache(cache)
             // X-Client-Platform + X-Device-Id on every request (both clients).
             .addInterceptor(deviceIdentityInterceptor)
+            .addNetworkInterceptor(authInterceptor.dispatchGuardInterceptor())
             // Per network attempt: OkHttp's own re-send of a DPoP call gets a fresh proof.
             .addNetworkInterceptor(dpopReplayGuard)
             // Bearer + pre-flight refresh when the access token is about to expire.
