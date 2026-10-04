@@ -13,6 +13,7 @@ import SwiftUI
 
 struct AddressTodayTabView: View {
     let onAddHome: () -> Void
+    @Environment(AuthManager.self) private var auth
     @Environment(RootTabModel.self) private var rootTabs
     @State private var resolved = false
     @State private var loadFailed = false
@@ -30,10 +31,15 @@ struct AddressTodayTabView: View {
             content
         }
         .background(Theme.Color.appBg)
-        .task(id: rootTabs.selected) {
+        .task(id: resolveKey) {
             if rootTabs.selected == .today { await resolveHome() }
         }
         .accessibilityIdentifier("addressTodayTab")
+    }
+
+    private var resolveKey: String {
+        let userID: String? = if case let .signedIn(user) = auth.state { user.id } else { nil }
+        return "\(rootTabs.selected)|\(userID ?? "")"
     }
 
     private var header: some View {
@@ -319,6 +325,7 @@ private struct AddressTodayLoaded: View {
         } catch {
             savedAnchorMatches = false
             showMorningCard = false
+            if !scope.isCurrent { sessionChanged = true }
         }
     }
 
@@ -339,6 +346,7 @@ private struct AddressTodayLoaded: View {
             } else {
                 showMorningCard = false
                 savedAnchorMatches = false
+                sessionChanged = true
             }
         }
     }
@@ -377,6 +385,7 @@ private struct AddressTodayLoaded: View {
             } else {
                 showMorningCard = false
                 savedAnchorMatches = false
+                sessionChanged = true
             }
         }
     }
