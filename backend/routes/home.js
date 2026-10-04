@@ -3834,6 +3834,8 @@ router.get('/:id/businesses/search', verifyToken, async (req, res) => {
  * GET /api/homes/:id/emergencies
  */
 router.get('/:id/emergencies', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const denied = () => res.status(403).json({ error: 'You don\'t have permission to view this home\'s emergency info.' });
   try {
     const { id: homeId } = req.params;
     const userId = req.user.id;
@@ -3842,9 +3844,13 @@ router.get('/:id/emergencies', verifyToken, async (req, res) => {
     // client shows it only with sensitive.view (owners, and people an owner
     // granted it), so membership alone must not return it.
     const access = await checkHomePermission(homeId, userId, 'sensitive.view');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You don\'t have permission to view this home\'s emergency info.' });
-    }
+    if (!access.hasAccess) return denied();
+
+    // Reuse the shared Home reader's current IAM, SQL context and Home/owner
+    // state fence. A sensitivity grant does not reopen a frozen household.
+    const opening = await homeListService.readAccessState(homeId, userId);
+    if (opening.mode !== 'shared' || !opening.access.permissions.includes('sensitive.view')) return denied();
+    const openingKey = JSON.stringify(opening);
 
     const { data, error } = await supabaseAdmin
       .from('HomeEmergency')
@@ -3857,6 +3863,12 @@ router.get('/:id/emergencies', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch emergency info' });
     }
 
+    const current = await homeListService.readAccessState(homeId, userId);
+    if (current.mode !== 'shared' || !current.access.permissions.includes('sensitive.view')) return denied();
+    if (JSON.stringify(current) !== openingKey) {
+      return res.status(503).json({ error: 'Home access changed while loading. Please retry.', code: 'HOME_LIST_ACCESS_CHANGED' });
+    }
+
     // Map to frontend-friendly field names
     const emergencies = (data || []).map(e => ({
       ...e,
@@ -3866,6 +3878,7 @@ router.get('/:id/emergencies', verifyToken, async (req, res) => {
 
     res.json({ emergencies });
   } catch (err) {
+    if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Emergencies fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch emergency info' });
   }
