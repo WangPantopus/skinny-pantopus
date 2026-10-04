@@ -116,11 +116,10 @@ struct PlaceTodayDetailContent: View {
         }
         .task(id: vm.calendarHomeId) {
             guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
-            if radonState?.homeId != homeId { radonState?.suspend()
-                radonState = RadonTodayState(homeId: homeId)
-            }
-            radonState?.context.active = true
-            await radonState?.load()
+            radonState?.suspend()
+            let current = RadonTodayState(homeId: homeId)
+            radonState = current
+            await current.load()
         }
         .onDisappear { radonState?.suspend() }
         .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
@@ -130,9 +129,10 @@ struct PlaceTodayDetailContent: View {
 
     private func resumeRadon(_ active: Bool) {
         radonState?.suspend()
-        guard active else { return }
-        radonState?.context.active = true
-        Task { await radonState?.load() }
+        guard active, showHomeRadon, let homeId = vm.calendarHomeId else { return }
+        let current = RadonTodayState(homeId: homeId)
+        radonState = current
+        Task { await current.load() }
     }
 }
 
