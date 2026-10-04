@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,6 +16,36 @@ from src.pipeline.poster import authenticate_curator, post_to_pantopus
 # ---------------------------------------------------------------------------
 
 class TestAuthenticateCurator:
+    @pytest.mark.parametrize("fails", [False, True], ids=["success", "failure"])
+    def test_authentication_does_not_disclose_private_values(self, caplog, fails):
+        sb = MagicMock()
+        email = "synthetic-private-email@example.invalid"
+        password = "synthetic-private-password"
+        access_token = "synthetic-private-access-token"
+        if fails:
+            sb.auth.sign_in_with_password.side_effect = RuntimeError(
+                f"{email} {password} {access_token}"
+            )
+        else:
+            sb.auth.sign_in_with_password.return_value = MagicMock(
+                session=MagicMock(access_token=access_token)
+            )
+
+        with caplog.at_level(logging.INFO, logger="seeder.pipeline.poster"):
+            result = authenticate_curator(sb, email, password)
+
+        assert result == (None if fails else access_token)
+        sb.auth.sign_in_with_password.assert_called_once_with({
+            "email": email, "password": password,
+        })
+        for private in (email, password, access_token):
+            assert private not in caplog.text
+        assert all(record.exc_info is None for record in caplog.records)
+        if fails:
+            assert "error_type=RuntimeError" in caplog.text
+        else:
+            assert "Curator authenticated successfully" in caplog.text
+
     def test_successful_sign_in(self):
         sb = MagicMock()
         session = MagicMock()
@@ -64,6 +95,81 @@ def _mock_response(status_code=201, json_data=None, text=""):
 
 
 class TestPostToPantopus:
+    @pytest.mark.parametrize("outcome,status,expected", [
+        ("created", 201, ("synthetic-response-id", None)),
+        ("missing_id", 201, (None, "no_post_id_in_response")),
+        ("invalid_json", 201, (None, "invalid_response_json")),
+        ("rejected", 400, (None, "api_rejected:400")),
+        ("server_error", 503, (None, "api_server_error:503")),
+        ("unexpected_status", 302, (None, "unexpected_status:302")),
+        ("network_error", None, (None, "network_error:RuntimeError")),
+    ])
+    @patch("src.pipeline.poster.httpx.post")
+    def test_post_does_not_disclose_request_response_or_exception_values(
+        self, mock_post, caplog, outcome, status, expected,
+    ):
+        access_token = "synthetic-private-token-header-and-payload"
+        api_base = "https://synthetic-private-host.invalid"
+        private_payload = "synthetic-private-response-and-exception"
+        media_url = "https://example.invalid/synthetic-private-media"
+        metadata = {"event_key": "synthetic-private-event-key"}
+        if outcome == "network_error":
+            mock_post.side_effect = RuntimeError(private_payload)
+        else:
+            data = {"post": {"id": "synthetic-response-id"}}
+            if outcome == "missing_id":
+                data = {"diagnostic": private_payload}
+            response = _mock_response(status, data, text=private_payload)
+            if outcome == "invalid_json":
+                response.json.side_effect = ValueError(private_payload)
+            mock_post.return_value = response
+
+        with caplog.at_level(logging.INFO, logger="seeder.pipeline.poster"):
+            result = post_to_pantopus(
+                api_base_url=api_base,
+                access_token=access_token,
+                content="Synthetic local fixture. Source: synthetic attribution",
+                category="local_news",
+                region_lat=12.34567,
+                region_lng=-98.76543,
+                media_urls=[media_url],
+                post_metadata=metadata,
+            )
+
+        # Returned failure reasons are logged/stored by both poster callers.
+        assert result == expected
+        for private in (
+            access_token, access_token[:20], api_base, private_payload,
+            media_url, metadata["event_key"], "12.34567", "-98.76543",
+            "synthetic-response-id", "Synthetic local fixture",
+        ):
+            assert private not in caplog.text
+        assert all(record.exc_info is None for record in caplog.records)
+        if outcome == "network_error":
+            assert "error_type=RuntimeError" in caplog.text
+        else:
+            assert f"status={status}" in caplog.text
+        mock_post.assert_called_once_with(
+            api_base + "/api/posts",
+            json={
+                "content": "Synthetic local fixture. Source: synthetic attribution",
+                "postType": "local_update",
+                "purpose": "local_update",
+                "visibility": "public",
+                "audience": "nearby",
+                "latitude": 12.34567,
+                "longitude": -98.76543,
+                "postMetadata": metadata,
+                "mediaUrls": [media_url],
+                "mediaTypes": ["image"],
+            },
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+
     @patch("src.pipeline.poster.httpx.post")
     def test_successful_post(self, mock_post):
         mock_post.return_value = _mock_response(201, {"post": {"id": "uuid-123"}})
@@ -108,7 +214,7 @@ class TestPostToPantopus:
             region_lng=-122.0,
         )
         assert post_id is None
-        assert error.startswith("api_rejected:400:")
+        assert error == "api_rejected:400"
 
     @patch("src.pipeline.poster.httpx.post")
     def test_500_returns_server_error(self, mock_post):
