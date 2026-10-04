@@ -62,7 +62,7 @@ const DENSITY_LABELS = {
 function resolveTier(access) {
   if (!access || !access.hasAccess) return 'T1';
   const vs = access.occupancy && access.occupancy.verification_status;
-  if (vs === 'verified') return 'T4';
+  if (vs === 'verified' && access.occupancy.verification_source !== 'household') return 'T4';
   return 'T3';
 }
 

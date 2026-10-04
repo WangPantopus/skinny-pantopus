@@ -99,11 +99,18 @@ BEGIN
  r:=public.decide_home_lease('approve',a,l,au);
  PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'lease'->>'state'='active'
    AND r->'occupancy'->>'role_base'='lease_resident' AND r->'occupancy'->>'verification_status'='verified'
+   AND r->'occupancy'->>'verification_source'='address'
    AND (r->'lease'->>'start_at')::timestamptz=saved_start
    AND r->'lease'->'metadata'->>'preserved'='yes','Approval must commit lease and verified occupancy without a claim');
  PERFORM pg_temp.check_lease(EXISTS(SELECT FROM public."HomeLeaseResident" WHERE lease_id=l AND user_id=t)
    AND public.home_effective_access(h,t)->>'has_access'='true','Approval must persist resident and usable access');
- before_occ:=r->'occupancy';
+  before_occ:=r->'occupancy';
+  -- Source classification changes neither membership generation nor the lease
+  -- receipt. Other semantic membership edits still retire it below.
+  UPDATE public."HomeOccupancy" SET verification_source='legacy' WHERE home_id=h AND user_id=t;
+  UPDATE public."HomeOccupancy" SET verification_source='address' WHERE home_id=h AND user_id=t;
+  PERFORM pg_temp.check_lease((SELECT to_jsonb(o)=before_occ FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=t),
+    'Provenance-only reclassification rotated membership or changed another field');
  replay:=public.decide_home_lease('approve',a,l,au);
  PERFORM pg_temp.check_lease(replay->>'replayed'='true' AND replay->'occupancy'=before_occ
    AND (SELECT count(*)=1 FROM public."HomeAuditLog" WHERE target_id=l AND action='LEASE_APPROVED'),
@@ -162,8 +169,9 @@ BEGIN
  VALUES(h,t,true,'admin','admin','verified',now()-interval '1 day',true) RETURNING to_jsonb("HomeOccupancy".*) INTO before_occ;
  l:=pg_temp.pending_lease();
  r:=public.decide_home_lease('approve',a,l,au,p_dates:=jsonb_build_object('start_at',now()+interval '7 days'));
- PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'occupancy'=before_occ
-   AND public.home_effective_access(h,t)->>'has_access'='true','Preserve independent current role, flags and access window');
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'occupancy'->>'verification_source'='address'
+   AND (r->'occupancy')-'verification_source'=before_occ-'verification_source'
+   AND public.home_effective_access(h,t)->>'has_access'='true','Preserve independent current role, flags and access window while adding address proof');
  DELETE FROM public."HomeOccupancy" WHERE home_id=h AND user_id=t;
 
  -- Both pre-existing business authority paths remain valid; inactive proofs fail.

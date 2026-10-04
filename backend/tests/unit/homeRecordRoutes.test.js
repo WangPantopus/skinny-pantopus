@@ -1,8 +1,11 @@
 const db = require('../__mocks__/supabaseAdmin');
-jest.mock('../../services/notificationService', () => ({ notifyTaskAssigned: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/notificationService', () => ({ notifyTaskAssigned: jest.fn().mockResolvedValue(undefined),
+  notifyTaskCompleted: jest.fn().mockResolvedValue(null) }));
 const notifications = require('../../services/notificationService');
 const home = require('../../routes/home');
 const mail = require('../../routes/mailboxV2Phase3');
+const compose = require('../../routes/mailCompose');
+const mailbox = require('../../routes/mailbox');
 function handler(router, method, path) {
   return router.stack.find(l => l.route?.path === path && l.route.methods[method]).route.stack.at(-1).handle;
 }
@@ -47,6 +50,66 @@ test('mail status/due updates use canonical values and do not permit a raw ID-on
   const res=response();await handler(mail,'patch','/tasks/:id')({...request,params:{id:'record'},body:{status:'completed',dueAt:null}},res);
   expect(rpc).toHaveBeenCalledWith('mutate_home_task_by_id',{p_actor_id:'actor',p_task_id:'record',p_action:'update',p_payload:{status:'done',due_at:null}});
   expect(res.body.task.status).toBe('completed');
+});
+test.each([
+  [true, 'creator', true], [false, 'creator', false], [undefined, 'creator', false],
+  [true, 'actor', false], [true, null, false],
+])('mail completion transition=%s creator=%s notifies=%s through the exact persisted task', async (task_completed, created_by, shouldNotify) => {
+  const completed_at = '2026-10-04T09:00:00+00:00';
+  db.setRpcMock(async () => ({ data: { ok: true, task_completed,
+    record: { ...record, status: 'done', created_by, completed_at } } }));
+  const res = response();
+  await handler(mail, 'patch', '/tasks/:id')({ ...request, params: { id: 'record' }, body: { status: 'completed' } }, res);
+  expect(res.statusCode).toBe(200);
+  if (shouldNotify) expect(notifications.notifyTaskCompleted).toHaveBeenCalledWith({ creatorUserId: 'creator',
+    homeId: 'home', taskId: 'record', completedAt: completed_at });
+  else expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
+});
+test('a denied mail completion cannot notify the creator', async () => {
+  db.setRpcMock(async () => ({ data: { ok: false, code: 'HOME_RECORD_WRITE_DENIED', status: 403 } }));
+  const res = response();
+  await handler(mail, 'patch', '/tasks/:id')({ ...request, params: { id: 'record' }, body: { status: 'completed' } }, res);
+  expect(res.statusCode).toBe(403);
+  expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
+});
+test.each([
+  [true, 'creator', true], [false, 'creator', false], [undefined, 'creator', false],
+  [true, 'actor', false], [true, null, false],
+])('home completion transition=%s creator=%s notifies=%s through the exact persisted task', async (task_completed, created_by, shouldNotify) => {
+  const completed_at = '2026-10-04T09:00:00+00:00';
+  db.setRpcMock(async () => ({ data: { ok: true, task_completed,
+    record: { ...record, status: 'done', created_by, completed_at } } }));
+  const res = response();
+  await handler(home, 'put', '/:id/tasks/:recordId')({ ...request, body: { status: 'done' } }, res);
+  expect(res.statusCode).toBe(200);
+  expect(res.body.task).toMatchObject({ id: 'record', home_id: 'home', status: 'done' });
+  if (shouldNotify) expect(notifications.notifyTaskCompleted).toHaveBeenCalledWith({ creatorUserId: 'creator',
+    homeId: 'home', taskId: 'record', completedAt: completed_at });
+  else expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
+});
+test('a denied home completion cannot notify the creator', async () => {
+  db.setRpcMock(async () => ({ data: { ok: false, code: 'HOME_RECORD_WRITE_DENIED', status: 403 } }));
+  const res = response();
+  await handler(home, 'put', '/:id/tasks/:recordId')({ ...request, body: { status: 'done' } }, res);
+  expect(res.statusCode).toBe(403);
+  expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
+});
+test('a stale home task session cannot mutate or notify', async () => {
+  const rpc = jest.fn(); db.setRpcMock(rpc);
+  const res = response();
+  await handler(home, 'put', '/:id/tasks/:recordId')({ ...request, body: { status: 'done' },
+    headers: { ...request.headers, 'x-pantopus-session-scope': 'a'.repeat(64) } }, res);
+  expect(res.statusCode).toBe(409);
+  expect(rpc).not.toHaveBeenCalled();
+  expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
+});
+test('an event update cannot consume a task completion marker', async () => {
+  db.setRpcMock(async () => ({ data: { ok: true, task_completed: true,
+    record: { ...record, created_by: 'creator', completed_at: '2026-10-04T09:00:00+00:00' } } }));
+  const res = response();
+  await handler(home, 'put', '/:id/events/:recordId')(request, res);
+  expect(res.statusCode).toBe(200);
+  expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
 });
 test('mail conversion binds immutable source and selected Home atomically',async()=>{
   const rpc=jest.fn(async()=>({data:{ok:true,record}}));db.setRpcMock(rpc);const res=response();
@@ -105,4 +168,100 @@ test('missing task collection creation capability is a retryable contract failur
   db.setRpcMock(async()=>({data:{ok:true,records:[],attendees:[]}}));const res=response();
   await handler(home,'get','/:id/tasks')(request,res);
   expect(res.statusCode).toBe(503);expect(res.body.code).toBe('HOME_RECORD_UNAVAILABLE');
+});
+
+describe('both mail entry points require address trust', () => {
+  const homeA = 'ddf31000-0000-4000-8000-000000000100';
+  const homeB = 'ddf31000-0000-4000-8000-000000000200';
+  const target = 'ddf31000-0000-4000-8000-000000000300';
+  const resident = source => ({ home_id: homeA, user_id: 'actor', is_active: true,
+    verification_status: 'verified', verification_source: source });
+  const owner = home_id => ({ home_id, subject_id: 'actor', owner_status: 'verified' });
+  test.each([
+    ['household', [resident('household')], [], false],
+    ['household co-owner', [resident('household')], [owner(homeA)], false],
+    ['inactive household co-owner', [{ ...resident('household'), is_active: false }], [owner(homeA)], false],
+    ['address', [resident('address')], [], true],
+    ['legacy', [resident('legacy')], [], true],
+    ['legacy owner without occupancy', [], [owner(homeA)], true],
+    ['household A and legacy owner B', [resident('household')], [owner(homeA), owner(homeB)], true],
+    ['household A and address B', [resident('household'), { ...resident('address'), home_id: homeB }], [], true],
+  ])('%s preserves recipient denial after its sender gate (%s, %s)', async (_label, occupancies, owners, qualifies) => {
+    db.seedTable('HomeOccupancy', occupancies); db.seedTable('HomeOwner', owners);
+    db.seedTable('Home', [{ id: target, owner_id: 'other', city: 'Test', state: 'WA' }]);
+    const context = response();
+    await handler(compose, 'get', '/home-context/:homeId')({ ...request, params: { homeId: target } }, context);
+    expect(context.statusCode).toBe(403);
+    expect(context.body.code).toBe(qualifies ? 'MAILBOX_HOME_CONTEXT_FORBIDDEN' : 'HOME_ADDRESS_VERIFICATION_REQUIRED');
+    const send = response();
+    await handler(mailbox, 'post', '/send')({ ...request, body: { recipientUserId: target, content: 'Synthetic mail' } }, send);
+    expect(send.statusCode).toBe(qualifies ? 404 : 403);
+    if (!qualifies) expect(send.body.code).toBe('HOME_ADDRESS_VERIFICATION_REQUIRED');
+    expect(db.getTable('Mail')).toHaveLength(0);
+  });
+  test.each([
+    ['truncated household', resident('household'), null, false],
+    ['truncated inactive household', { ...resident('household'), is_active: false }, null, false],
+    ['truncated legacy owner', null, null, true],
+    ['truncated address owner', resident('address'), null, true],
+    ['failed exact owner lookup', null, { code: 'unavailable' }, false],
+    ['malformed exact owner lookup', {}, null, false],
+    ['wrong Home exact owner lookup', { home_id: homeB, verification_source: 'legacy' }, null, false],
+    ['rejected exact owner lookup', null, new Error('unavailable'), false],
+    ['truncated household and independent legacy owner', homeId => homeId === homeA ? resident('household') : null, null, true, [owner(homeA), owner(homeB)]],
+  ])('%s requires an exact owner-Home occupancy read after a truncated list', async (_label, exact, error, qualifies, owners = [owner(homeA)]) => {
+    db.seedTable('HomeOwner', owners);
+    db.seedTable('Home', [{ id: target, owner_id: 'other' }]);
+    const original = db.from;
+    const filters = [];
+    const from = jest.spyOn(db, 'from').mockImplementation(table => {
+      if (table !== 'HomeOccupancy') return original(table);
+      const query = original(table);
+      const select = query.select;
+      query.select = (fields, options) => {
+        if (!['home_id,is_active,verification_status,verification_source', 'home_id,verification_source'].includes(fields)) {
+          return select.call(query, fields, options);
+        }
+        let selectedHome;
+        const scoped = { eq: (key, value) => { filters.push([key, value]); if (key === 'home_id') selectedHome = value; return scoped; },
+          then: (resolve, reject) => Promise.resolve({ data: [], error: null }).then(resolve, reject),
+          maybeSingle: () => error instanceof Error ? Promise.reject(error)
+            : Promise.resolve({ data: typeof exact === 'function' ? exact(selectedHome) : exact, error }) };
+        return scoped;
+      };
+      return query;
+    });
+    try {
+      const context = response();
+      await handler(compose, 'get', '/home-context/:homeId')({ ...request, params: { homeId: target } }, context);
+      expect(context.statusCode).toBe(403);
+      expect(context.body.code).toBe(qualifies ? 'MAILBOX_HOME_CONTEXT_FORBIDDEN' : 'HOME_ADDRESS_VERIFICATION_REQUIRED');
+      const send = response();
+      await handler(mailbox, 'post', '/send')({ ...request, body: { recipientUserId: target, content: 'Synthetic mail' } }, send);
+      expect(send.statusCode).toBe(qualifies ? 404 : 403);
+      if (!qualifies) expect(send.body.code).toBe('HOME_ADDRESS_VERIFICATION_REQUIRED');
+      expect(db.getTable('Mail')).toHaveLength(0);
+      expect(filters).toContainEqual(['home_id', homeA]);
+      expect(filters.filter(([key]) => key === 'user_id')).toEqual(expect.arrayContaining([['user_id', 'actor']]));
+    } finally { from.mockRestore(); }
+  });
+  test.each([new Error('unavailable'), { data: null, error: { code: 'unavailable' } }, { data: [{}], error: null }])(
+    'unknown occupancy provenance cannot use an owner fallback (%s)', async failure => {
+      db.seedTable('HomeOwner', [owner(homeA)]);
+      db.seedTable('Home', [{ id: target, owner_id: 'other' }]);
+      const original = db.from;
+      const from = jest.spyOn(db, 'from').mockImplementation(table => table === 'HomeOccupancy'
+        ? { select: () => ({ eq: () => failure instanceof Error ? Promise.reject(failure) : Promise.resolve(failure) }) }
+        : original(table));
+      try {
+        for (const [router, method, path, req] of [
+          [compose, 'get', '/home-context/:homeId', { ...request, params: { homeId: target } }],
+          [mailbox, 'post', '/send', { ...request, body: { recipientUserId: target, content: 'Synthetic mail' } }],
+        ]) {
+          const res = response(); await handler(router, method, path)(req, res);
+          expect(res.statusCode).toBe(403); expect(res.body.code).toBe('HOME_ADDRESS_VERIFICATION_REQUIRED');
+        }
+        expect(db.getTable('Mail')).toHaveLength(0);
+      } finally { from.mockRestore(); }
+    });
 });

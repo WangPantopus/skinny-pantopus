@@ -12,6 +12,7 @@ const multer = require('multer');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
+const notificationService = require('../services/notificationService');
 const taskMediaStorage = require('../services/homeTaskMediaStorage');
 const { checkHomePermission } = require('../utils/homePermissions');
 const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter } = require('../utils/homeMailAccess');
@@ -1087,6 +1088,10 @@ router.patch('/tasks/:id', verifyToken, validate(updateTaskSchema), async (req, 
     if (req.body.status !== undefined) payload.status = ({ pending: 'open', completed: 'done' })[req.body.status] || req.body.status;
     if (req.body.dueAt !== undefined) payload.due_at = req.body.dueAt;
     const result = await homeRecordService.mutateTaskById({ actorId: req.user.id, taskId: req.params.id, action: 'update', payload });
+    if (result.task_completed === true && result.record.created_by && result.record.created_by !== req.user.id) {
+      await notificationService.notifyTaskCompleted({ creatorUserId: result.record.created_by,
+        homeId: result.record.home_id, taskId: result.record.id, completedAt: result.record.completed_at });
+    }
     res.json({ task: mailTaskDto(result.record) });
   } catch (error) { homeRecordService.sendError(res, error); }
 });
