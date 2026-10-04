@@ -195,6 +195,7 @@ private struct AddressTodayLoaded: View {
     @State private var scrollFrame = CGRect.zero
     @State private var cardFrame = CGRect.zero
     @State private var sessionChanged = false
+    @State private var lifecycleVersion = 0
 
     var body: some View {
         Group {
@@ -256,6 +257,8 @@ private struct AddressTodayLoaded: View {
             }
             await loadSavedPrompt()
         }
+        .onAppear { lifecycleVersion += 1 }
+        .onDisappear { lifecycleVersion += 1 }
     }
 
     private var morningVisible: Bool {
@@ -331,15 +334,18 @@ private struct AddressTodayLoaded: View {
 
     private func markPromptDisplayed() async {
         guard showMorningCard, savedAnchorMatches, !promptAttempted else { return }
+        let version = lifecycleVersion
         promptAttempted = true
         preferenceBusy = true
         defer { preferenceBusy = false }
         do {
-            try scope.requireCurrent()
+            try requirePreferenceCurrent(version)
             let _: NotificationPreferencesResponseDTO = try await APIClient.shared.request(
-                NotificationPreferencesEndpoints.update(["daily_briefing_prompted": .bool(true)])
+                NotificationPreferencesEndpoints.update(
+                    ["daily_briefing_prompted": .bool(true)]
+                ) { try requirePreferenceCurrent(version) }
             )
-            try scope.requireCurrent()
+            try requirePreferenceCurrent(version)
         } catch {
             if scope.isCurrent {
                 preferenceError = "Couldn't save your choice. Try again."
@@ -353,6 +359,7 @@ private struct AddressTodayLoaded: View {
 
     private func turnOnMorning() async {
         guard !preferenceBusy else { return }
+        let version = lifecycleVersion
         preferenceBusy = true
         preferenceError = nil
         defer { preferenceBusy = false }
@@ -366,14 +373,14 @@ private struct AddressTodayLoaded: View {
                 preferenceError = "Couldn't read your time zone. Try again."
                 return
             }
-            try scope.requireCurrent()
+            try requirePreferenceCurrent(version)
             let response: NotificationPreferencesResponseDTO = try await APIClient.shared.request(
                 NotificationPreferencesEndpoints.update([
                     "daily_briefing_enabled": .bool(true), "daily_briefing_timezone": .string(timezone),
                     "daily_briefing_prompted": .bool(true)
-                ])
+                ]) { try requirePreferenceCurrent(version) }
             )
-            try scope.requireCurrent()
+            try requirePreferenceCurrent(version)
             if response.preferences.dailyBriefingEnabled {
                 showMorningCard = false
             } else {
@@ -388,5 +395,12 @@ private struct AddressTodayLoaded: View {
                 sessionChanged = true
             }
         }
+    }
+
+    private func requirePreferenceCurrent(_ version: Int) throws {
+        try scope.requireCurrent()
+        try Task.checkCancellation()
+        guard lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
+              !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
     }
 }

@@ -1,13 +1,17 @@
 package app.pantopus.android.ui.screens.place.today
 
+import android.app.KeyguardManager
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.hub.HubRepository
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
@@ -16,6 +20,7 @@ import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.place.detail.AddressCalendarActions
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -47,6 +52,8 @@ class TodayTabViewModel
         private val hubRepository: HubRepository,
         private val preferencesRepository: NotificationPreferencesRepository,
         sessionScopes: HomeClaimSessionScopeFactory,
+        private val appLock: AppLockManager,
+        @ApplicationContext context: Context,
     ) : ViewModel(),
         AddressCalendarActions {
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
@@ -56,6 +63,7 @@ class TodayTabViewModel
         private var loadJob: Job? = null
         private var loadVersion = 0L
         private val sessionScope = sessionScopes.create(viewModelScope)
+        private val keyguard = context.getSystemService(KeyguardManager::class.java)
         private var promptAttempted = false
         private val _showMorningCard = MutableStateFlow(false)
         val showMorningCard = _showMorningCard.asStateFlow()
@@ -75,19 +83,39 @@ class TodayTabViewModel
             homeId: String,
             timezone: String,
         ): String? {
-            if (!sessionScope.confirmCurrent() || calendarHomeId != homeId) return "Your session changed. Reopen Today to continue."
+            val version = loadVersion
+            if (!pickupCurrent(homeId, version)) return "Your session changed. Reopen Today to continue."
             val calendar = loadAddressCalendar()
             if (calendar == null || calendar.needsPickupDay) return "Confirm your pickup schedule before turning on reminders."
             val result =
                 preferencesRepository.updatePreferences(
                     NotificationPreferencesPatch(eveningBriefingEnabled = true, dailyBriefingTimezone = timezone),
+                    dispatchGuard = todayDispatchGuard(homeId, version),
                 )
-            if (!sessionScope.confirmCurrent() || calendarHomeId != homeId) return "Your session changed. Reopen Today to continue."
+            if (!pickupCurrent(homeId, version)) return "Your session changed. Reopen Today to continue."
             return when (result) {
                 is NetworkResult.Success -> if (result.data.eveningBriefingEnabled) null else "Couldn't enable pickup reminders. Try again."
                 is NetworkResult.Failure -> result.error.displayMessage("Couldn't enable pickup reminders.")
             }
         }
+
+        private suspend fun pickupCurrent(
+            id: String,
+            version: Long,
+        ): Boolean = current(version) && homeId == id && !appLock.isLocked.value && keyguard?.isDeviceLocked == false
+
+        private fun todayDispatchGuard(
+            id: String?,
+            version: Long,
+        ): AuthenticatedDispatchGuard =
+            AuthenticatedDispatchGuard { credentials ->
+                viewModelScope.coroutineContext.ensureActive()
+                sessionScope.requireCurrent()
+                sessionScope.requireDispatchCredentials(credentials)
+                viewModelScope.coroutineContext.ensureActive()
+                check(loadVersion == version && homeId == id)
+                check(!appLock.isLocked.value && keyguard?.isDeviceLocked == false)
+            }
 
         private val _calendarBusy = MutableStateFlow(false)
         override val calendarBusy: StateFlow<Boolean> = _calendarBusy.asStateFlow()
@@ -216,7 +244,11 @@ class TodayTabViewModel
             _preferenceBusy.value = true
             viewModelScope.launch {
                 if (!current(version)) return@launch
-                val result = preferencesRepository.updatePreferences(NotificationPreferencesPatch(dailyBriefingPrompted = true))
+                val result =
+                    preferencesRepository.updatePreferences(
+                        NotificationPreferencesPatch(dailyBriefingPrompted = true),
+                        dispatchGuard = todayDispatchGuard(null, version),
+                    )
                 if (!current(version)) return@launch
                 if (result is NetworkResult.Failure) _preferenceError.value = "Couldn't save your choice. Try again."
                 _preferenceBusy.value = false
@@ -257,6 +289,7 @@ class TodayTabViewModel
                             dailyBriefingTimezone = timezone,
                             dailyBriefingPrompted = true,
                         ),
+                        dispatchGuard = todayDispatchGuard(null, version),
                     )
                 if (!current(version)) return@launch
                 when (result) {
@@ -296,12 +329,17 @@ class TodayTabViewModel
             val version = loadVersion
             _calendarBusy.value = true
             viewModelScope.launch {
-                if (!current(version)) {
+                if (!pickupCurrent(id, version)) {
                     _calendarBusy.value = false
                     return@launch
                 }
                 _calendarError.value = null
-                when (val r = repo.setPickupDay(id, request)) {
+                val r = repo.setPickupDay(id, request, dispatchGuard = todayDispatchGuard(id, version))
+                if (!pickupCurrent(id, version)) {
+                    _calendarBusy.value = false
+                    return@launch
+                }
+                when (r) {
                     is NetworkResult.Success -> pickupSaved(r.data.calendar, id, version, offerPrimer)
                     is NetworkResult.Failure -> pickupFailed(r.error, "Couldn't save your pickup day.")
                 }
@@ -315,7 +353,7 @@ class TodayTabViewModel
             version: Long,
             offerPrimer: Boolean,
         ) {
-            if (!current(version) || homeId != id) return
+            if (!pickupCurrent(id, version)) return
             if (offerPrimer && !calendar.needsPickupDay) _pickupPrimerHomeId.value = id
             refresh()
         }
@@ -323,10 +361,20 @@ class TodayTabViewModel
         override fun clearPickupDay(expectedVersion: String?) {
             val id = homeId ?: return
             if (_calendarBusy.value) return
+            val version = loadVersion
             _calendarBusy.value = true
             viewModelScope.launch {
+                if (!pickupCurrent(id, version)) {
+                    _calendarBusy.value = false
+                    return@launch
+                }
                 _calendarError.value = null
-                when (val r = repo.clearPickupDay(id, expectedVersion)) {
+                val r = repo.clearPickupDay(id, expectedVersion, dispatchGuard = todayDispatchGuard(id, version))
+                if (!pickupCurrent(id, version)) {
+                    _calendarBusy.value = false
+                    return@launch
+                }
+                when (r) {
                     is NetworkResult.Success -> refresh()
                     is NetworkResult.Failure -> pickupFailed(r.error, "Couldn't reset your pickup day.")
                 }

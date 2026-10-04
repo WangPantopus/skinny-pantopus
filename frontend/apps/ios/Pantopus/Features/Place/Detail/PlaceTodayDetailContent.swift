@@ -441,6 +441,7 @@ struct AddressCalendarCard: View {
     @State private var confirmed: PlaceAddressCalendarData?
     @State private var showPickupPrimer = false
     @State private var sessionScope = HomeClaimSessionScope(api: .shared)
+    @State private var lifecycleVersion = 0
     /// The schedule this editor started from. A save sends it back, so a
     /// change saved meanwhile on another device is not silently undone.
     @State private var openedVersion: String?
@@ -550,6 +551,8 @@ struct AddressCalendarCard: View {
                 )
             }
         }
+        .onAppear { lifecycleVersion += 1 }
+        .onDisappear { lifecycleVersion += 1 }
     }
 
     private var picker: some View {
@@ -687,20 +690,24 @@ struct AddressCalendarCard: View {
     @MainActor
     private func choose(reset: Bool = false) async {
         guard let homeId, saving == nil else { return }
+        let version = lifecycleVersion
         saving = "saving"
         defer { saving = nil }
         errorText = nil
         let offerPrimer = !reset && (calendar.needsPickupDay || calendar.pickupSchedule == nil)
         do {
-            try sessionScope.requireCurrent()
-            let endpoint = reset ? AddressCalendarEndpoints.clearPickupDay(homeId: homeId, expectedVersion: openedVersion)
+            try requirePickupCurrent(version)
+            let guardCurrent: @MainActor @Sendable () throws -> Void = { try requirePickupCurrent(version) }
+            let endpoint = reset ? AddressCalendarEndpoints.clearPickupDay(
+                homeId: homeId, expectedVersion: openedVersion, dispatchGuard: guardCurrent
+            )
                 : AddressCalendarEndpoints.setPickupDay(homeId: homeId, request: SetPickupDayRequest(
                     weekday: weekday, recyclingFrequency: frequency,
                     recyclingNextDate: frequency == "not_set" ? nil : nextDate,
                     expectedVersion: openedVersion
-                ))
+                ), dispatchGuard: guardCurrent)
             let response: AddressCalendarResponse = try await api.request(endpoint)
-            try sessionScope.requireCurrent()
+            try requirePickupCurrent(version)
             confirmed = response.calendar
             openedVersion = response.calendar.pickupVersion
             picking = false
@@ -711,10 +718,7 @@ struct AddressCalendarCard: View {
             }
             await onChanged()
         } catch let APIError.clientError(status: 409, message: body) {
-            guard sessionScope.isCurrent else {
-                errorText = "Your session changed. Reopen Today to continue."
-                return
-            }
+            guard (try? requirePickupCurrent(version)) != nil else { return }
             // Changed meanwhile: nothing was saved. Show the current schedule
             // in the editor so the person can review it and try again.
             if let current = Self.currentCalendar(inConflict: body) {
@@ -726,12 +730,24 @@ struct AddressCalendarCard: View {
             }
             errorText = "The pickup schedule changed since you opened it. Review the current schedule and try again."
         } catch let APIError.forbidden(message) {
+            guard (try? requirePickupCurrent(version)) != nil else { return }
             errorText = message ?? "You don't have permission to change this household's pickup schedule."
         } catch {
+            guard (try? requirePickupCurrent(version)) != nil else { return }
             errorText = "Could not save your pickup schedule. Check the next collection date and try again."
         }
     }
 
+    @MainActor
+    private func requirePickupCurrent(_ version: Int) throws {
+        try sessionScope.requireCurrent()
+        try Task.checkCancellation()
+        guard lifecycleVersion == version, !AppLockManager.shared.isLocked,
+              UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
+    }
+}
+
+extension AddressCalendarCard {
     /// The current calendar a 409 PICKUP_SCHEDULE_CHANGED reply carries
     /// (`clientError`'s message is the raw body); nil if it has none.
     private static func currentCalendar(inConflict body: String?) -> PlaceAddressCalendarData? {
@@ -752,6 +768,7 @@ private struct PickupReminderPrimer: View {
     @State private var primerError: String?
     @State private var notificationsOff = false
     @State private var primerHeight: CGFloat = 280
+    @State private var lifecycleVersion = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -790,18 +807,21 @@ private struct PickupReminderPrimer: View {
         .presentationDetents([.height(primerHeight)])
         .presentationDragIndicator(.hidden)
         .interactiveDismissDisabled(primerBusy)
+        .onAppear { lifecycleVersion += 1 }
+        .onDisappear { lifecycleVersion += 1 }
     }
 
     @MainActor
     private func enablePickupReminders() async {
         guard !primerBusy else { return }
+        let version = lifecycleVersion
         primerBusy = true
         primerError = nil
         defer { primerBusy = false }
         do {
-            try sessionScope.requireCurrent()
+            try requirePrimerCurrent(version)
             let calendarResponse: AddressCalendarResponse = try await api.request(AddressCalendarEndpoints.calendar(homeId: homeId))
-            try sessionScope.requireCurrent()
+            try requirePrimerCurrent(version)
             guard !calendarResponse.calendar.needsPickupDay else {
                 primerError = "Confirm your pickup schedule before turning on reminders."
                 return
@@ -811,23 +831,25 @@ private struct PickupReminderPrimer: View {
                 primerError = "Couldn't read your time zone. Try again."
                 return
             }
-            let response: NotificationPreferencesResponseDTO = try await api.request(NotificationPreferencesEndpoints.update([
-                "evening_briefing_enabled": .bool(true), "daily_briefing_timezone": .string(timezone)
-            ]))
-            try sessionScope.requireCurrent()
+            let response: NotificationPreferencesResponseDTO = try await api.request(
+                NotificationPreferencesEndpoints.update([
+                    "evening_briefing_enabled": .bool(true), "daily_briefing_timezone": .string(timezone)
+                ]) { try requirePrimerCurrent(version) }
+            )
+            try requirePrimerCurrent(version)
             guard response.preferences.eveningBriefingEnabled else {
                 primerError = "Couldn't enable pickup reminders. Try again."
                 return
             }
             let center = UNUserNotificationCenter.current()
             let settings = await center.notificationSettings()
-            try sessionScope.requireCurrent()
+            try requirePrimerCurrent(version)
             let granted: Bool = if settings.authorizationStatus == .notDetermined {
                 try await center.requestAuthorization(options: [.alert, .badge, .sound])
             } else {
                 [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
             }
-            try sessionScope.requireCurrent()
+            try requirePrimerCurrent(version)
             if granted {
                 UIApplication.shared.registerForRemoteNotifications()
                 onClose()
@@ -835,11 +857,20 @@ private struct PickupReminderPrimer: View {
                 notificationsOff = true
             }
         } catch {
+            guard lifecycleVersion == version else { return }
             if sessionScope.isCurrent {
                 primerError = "Couldn't enable pickup reminders. Try again."
             } else {
                 onSessionChanged()
             }
         }
+    }
+
+    @MainActor
+    private func requirePrimerCurrent(_ version: Int) throws {
+        try sessionScope.requireCurrent()
+        try Task.checkCancellation()
+        guard lifecycleVersion == version, !AppLockManager.shared.isLocked,
+              UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
     }
 }

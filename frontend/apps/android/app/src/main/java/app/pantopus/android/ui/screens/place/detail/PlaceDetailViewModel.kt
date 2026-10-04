@@ -1,8 +1,11 @@
 package app.pantopus.android.ui.screens.place.detail
 
+import android.app.KeyguardManager
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.BlockInviteRecipient
 import app.pantopus.android.data.api.models.place.FridgeCardItem
@@ -15,13 +18,16 @@ import app.pantopus.android.data.api.models.place.UnlistedRemovalStatus
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,6 +70,8 @@ class PlaceDetailViewModel
         savedStateHandle: SavedStateHandle,
         sessionScopes: HomeClaimSessionScopeFactory,
         private val preferencesRepository: NotificationPreferencesRepository,
+        private val appLock: AppLockManager,
+        @ApplicationContext context: Context,
     ) : ViewModel(),
         AddressCalendarActions {
         private val homeId: String =
@@ -71,6 +79,7 @@ class PlaceDetailViewModel
                 "PlaceDetailViewModel requires a '$PLACE_DETAIL_HOME_ID_KEY' nav arg."
             }
         private val calendarSession = sessionScopes.create(viewModelScope)
+        private val keyguard = context.getSystemService(KeyguardManager::class.java)
         override val calendarHomeId: String get() = homeId
 
         val group: PlaceDetailGroup =
@@ -91,19 +100,32 @@ class PlaceDetailViewModel
             homeId: String,
             timezone: String,
         ): String? {
-            if (!calendarSession.confirmCurrent() || calendarHomeId != homeId) return "Your session changed. Reopen Today to continue."
+            if (!pickupCurrent() || calendarHomeId != homeId) return "Your session changed. Reopen Today to continue."
             val calendar = loadAddressCalendar()
             if (calendar == null || calendar.needsPickupDay) return "Confirm your pickup schedule before turning on reminders."
             val result =
                 preferencesRepository.updatePreferences(
                     NotificationPreferencesPatch(eveningBriefingEnabled = true, dailyBriefingTimezone = timezone),
+                    dispatchGuard = pickupDispatchGuard(),
                 )
-            if (!calendarSession.confirmCurrent() || calendarHomeId != homeId) return "Your session changed. Reopen Today to continue."
+            if (!pickupCurrent() || calendarHomeId != homeId) return "Your session changed. Reopen Today to continue."
             return when (result) {
                 is NetworkResult.Success -> if (result.data.eveningBriefingEnabled) null else "Couldn't enable pickup reminders. Try again."
                 is NetworkResult.Failure -> result.error.displayMessage("Couldn't enable pickup reminders.")
             }
         }
+
+        private suspend fun pickupCurrent(): Boolean =
+            calendarSession.confirmCurrent() && !appLock.isLocked.value && keyguard?.isDeviceLocked == false
+
+        private fun pickupDispatchGuard(): AuthenticatedDispatchGuard =
+            AuthenticatedDispatchGuard { credentials ->
+                viewModelScope.coroutineContext.ensureActive()
+                calendarSession.requireCurrent()
+                calendarSession.requireDispatchCredentials(credentials)
+                viewModelScope.coroutineContext.ensureActive()
+                check(!appLock.isLocked.value && keyguard?.isDeviceLocked == false)
+            }
 
         // ─── Address calendar (Wedge v2 D6) ────────────────────
         private val _calendarBusy = MutableStateFlow(false)
@@ -126,12 +148,17 @@ class PlaceDetailViewModel
             if (_calendarBusy.value) return
             _calendarBusy.value = true
             viewModelScope.launch {
-                if (!calendarSession.confirmCurrent()) {
+                if (!pickupCurrent()) {
                     _calendarBusy.value = false
                     return@launch
                 }
                 _calendarError.value = null
-                when (val r = repo.setPickupDay(homeId, request)) {
+                val r = repo.setPickupDay(homeId, request, dispatchGuard = pickupDispatchGuard())
+                if (!pickupCurrent()) {
+                    _calendarBusy.value = false
+                    return@launch
+                }
+                when (r) {
                     is NetworkResult.Success -> pickupSaved(r.data.calendar, offerPrimer)
                     is NetworkResult.Failure -> pickupFailed(r.error, "Couldn't save your pickup day.")
                 }
@@ -143,7 +170,7 @@ class PlaceDetailViewModel
             calendar: app.pantopus.android.data.api.models.place.PlaceAddressCalendarData,
             offerPrimer: Boolean,
         ) {
-            if (!calendarSession.confirmCurrent()) return
+            if (!pickupCurrent()) return
             if (offerPrimer && !calendar.needsPickupDay) _pickupPrimerHomeId.value = homeId
             refresh()
         }
@@ -152,8 +179,17 @@ class PlaceDetailViewModel
             if (_calendarBusy.value) return
             _calendarBusy.value = true
             viewModelScope.launch {
+                if (!pickupCurrent()) {
+                    _calendarBusy.value = false
+                    return@launch
+                }
                 _calendarError.value = null
-                when (val r = repo.clearPickupDay(homeId, expectedVersion)) {
+                val r = repo.clearPickupDay(homeId, expectedVersion, dispatchGuard = pickupDispatchGuard())
+                if (!pickupCurrent()) {
+                    _calendarBusy.value = false
+                    return@launch
+                }
+                when (r) {
                     is NetworkResult.Success -> refresh()
                     is NetworkResult.Failure -> pickupFailed(r.error, "Couldn't reset your pickup day.")
                 }
