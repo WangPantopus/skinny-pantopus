@@ -465,6 +465,13 @@ class TestEndToEnd:
             send.reset_mock(); record.reset_mock(); send.return_value = "skipped"
             home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
             record.assert_not_called()
+            send.reset_mock(); send.return_value = "failed"
+            home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
+            record.assert_not_called()
+            send.reset_mock(); send.return_value = "sent"
+            home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
+            assert record.call_args_list == [call(reminder_db, "task_task-1_member_2026-04-07", 1)]
+            record.reset_mock()
             send.reset_mock(); send.return_value = "sent"
             history_query.execute.side_effect = RuntimeError("history unavailable")
             home_reminders._process_tasks_due(reminder_db, secrets, task_stats)

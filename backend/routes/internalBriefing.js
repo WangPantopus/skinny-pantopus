@@ -18,6 +18,7 @@ const { composeScheduledBriefing } = require('../services/context/providerOrches
 const pushService = require('../services/pushService');
 const { createNotification, isPushEnabled } = require('../services/notificationService');
 const { skipForLaunchCut } = require('../utils/featureFlags');
+const { recordFunnelEvent } = require('../services/funnelEvents');
 
 // ── Internal API key auth ───────────────────────────────────────────
 
@@ -525,7 +526,7 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
       return res.json({ status: 'skipped', reason: 'no_push_token' });
     }
 
-    await pushService.sendToUser(userId, {
+    const receipt = await pushService.sendToUserWithReceipt(userId, {
       title,
       body,
       data: {
@@ -539,6 +540,15 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
       },
     });
 
+    // At least one provider must accept the notification before the
+    // scheduler records its user/day dedup. Zero acceptance stays retryable;
+    // partial acceptance settles it without repeating an accepted device.
+    if (!Number.isInteger(receipt?.acceptedCount) || receipt.acceptedCount < 1) {
+      return res.status(503).json({ status: 'failed', reason: 'push_not_accepted' });
+    }
+    if (reminderType === 'task_due') {
+      await recordFunnelEvent('reminder_sent', { userId, meta: { kind: 'task' } });
+    }
     return res.json({ status: 'sent' });
   } catch (err) {
     logger.error('Reminder push failed', { userId, reminderType, error: err.message });
