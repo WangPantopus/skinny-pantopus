@@ -43,7 +43,8 @@ open class HomeTasksRepository
         open suspend fun getHomeTasks(
             homeId: String,
             expectedSession: String? = null,
-        ): NetworkResult<GetHomeTasksResponse> = safeApiCall { api.getHomeTasks(homeId, expectedSession) }
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<GetHomeTasksResponse> = safeApiCall { api.getHomeTasks(homeId, expectedSession, dispatchGuard) }
 
         open suspend fun getHomeTask(
             homeId: String,
@@ -62,14 +63,24 @@ open class HomeTasksRepository
             homeId: String,
             request: CreateHomeTaskRequest,
             expectedSession: String,
-        ): NetworkResult<HomeTaskCreationResponse> = safeApiCall { api.createHomeTaskWithReceipt(homeId, request, expectedSession) }
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<HomeTaskCreationResponse> =
+            safeApiCall {
+                api.createHomeTaskWithReceipt(
+                    homeId,
+                    request,
+                    expectedSession,
+                    dispatchGuard,
+                )
+            }
 
         open suspend fun patchHomeTask(
             homeId: String,
             taskId: String,
             patch: HomeTaskEditPatch,
             expectedSession: String,
-        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.patchHomeTask(homeId, taskId, patch.body(), expectedSession) }
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.patchHomeTask(homeId, taskId, patch.body(), expectedSession, dispatchGuard) }
 
         /** `PUT /api/homes/:id/tasks/:taskId`. */
         open suspend fun updateHomeTask(
@@ -85,9 +96,10 @@ open class HomeTasksRepository
             homeId: String,
             taskId: String,
             expectedSession: String? = null,
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
         ): NetworkResult<Unit> =
             safeApiCall {
-                val response = api.deleteHomeTask(homeId, taskId, expectedSession)
+                val response = api.deleteHomeTask(homeId, taskId, expectedSession, dispatchGuard)
                 if (response.message != "Task deleted") throw JsonDataException("The task deletion was not confirmed.")
             }
     }
