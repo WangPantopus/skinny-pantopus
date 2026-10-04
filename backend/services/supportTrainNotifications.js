@@ -13,6 +13,7 @@
  */
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { createNotification, createBulkNotifications } = require('./notificationService');
+const { sendGuestReservationConfirmationEmail } = require('./emailService');
 const logger = require('../utils/logger');
 
 const DEEP_LINK_PREFIX = '/app/support-trains';
@@ -66,7 +67,7 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
     // Load Support Train + Activity for context
     const { data: st } = await supabaseAdmin
       .from('SupportTrain')
-      .select('id, organizer_user_id, recipient_user_id, story, Activity!inner ( title )')
+      .select('id, organizer_user_id, recipient_user_id, status, story, Activity!inner ( title )')
       .eq('id', supportTrainId)
       .single();
 
@@ -246,10 +247,11 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
 
       case 'support_train.reservation_reminder_24h':
       case 'support_train.reservation_reminder_dayof': {
+        if (!['published', 'active'].includes(st.status)) return { delivered: false };
         // Notify the helper with full context
         if (payload.helper_user_id) {
           const timeLabel = event.includes('24h') ? 'tomorrow' : 'today';
-          await createNotification({
+          const notification = await createNotification({
             userId: payload.helper_user_id,
             type: 'support_train_reminders',
             title: buildReminderTitle(title, timeLabel),
@@ -258,8 +260,24 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
             link,
             metadata: { support_train_id: supportTrainId, slot_id: payload.slot_id },
           });
+          return { delivered: Boolean(notification) };
         }
-        break;
+        if (payload.helper_guest_email) {
+          const result = await sendGuestReservationConfirmationEmail({
+            toEmail: payload.helper_guest_email,
+            guestName: payload.helper_guest_name || 'helper',
+            trainTitle: title,
+            slotLabel: payload.slot_label || 'your contribution',
+            slotDate: formatSlotDate(payload.slot_date),
+            slotTime: payload.start_time || null,
+            contributionMode: payload.contribution_mode,
+            supportTrainId,
+            isReminder: true,
+          });
+          // A local log preview is not delivery and must not retire the retry.
+          return { delivered: result?.success === true && result.preview !== true };
+        }
+        return { delivered: false };
       }
 
       case 'support_train.update_posted': {

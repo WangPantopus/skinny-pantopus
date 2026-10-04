@@ -32,14 +32,13 @@ async function _send24hReminders() {
     const { data: reservations, error } = await supabaseAdmin
       .from('SupportTrainReservation')
       .select(`
-        id, user_id, support_train_id, contribution_mode, last_reminder_sent,
+        id, user_id, guest_name, guest_email, support_train_id, contribution_mode, last_reminder_sent,
         SupportTrainSlot:slot_id (
-          id, slot_date, slot_label, support_mode, start_time, end_time
+          id, slot_date, slot_label, support_mode, start_time, end_time, status
         )
       `)
       .eq('status', 'reserved')
-      .is('last_reminder_sent', null)
-      .not('user_id', 'is', null);
+      .is('last_reminder_sent', null);
 
     if (error) {
       logger.error('[supportTrainReminders] 24h query failed', { error: error.message });
@@ -48,19 +47,23 @@ async function _send24hReminders() {
 
     // Filter for tomorrow's slots (slot_date comparison)
     const tomorrowReservations = (reservations || []).filter(r =>
-      r.SupportTrainSlot?.slot_date === tomorrowDate
+      r.SupportTrainSlot?.slot_date === tomorrowDate &&
+      ['open', 'full'].includes(r.SupportTrainSlot.status)
     );
 
     const now = new Date().toISOString();
     let sent = 0;
     for (const res of tomorrowReservations) {
       const slot = res.SupportTrainSlot;
-      await emitSupportTrainEvent({
+      const delivery = await emitSupportTrainEvent({
         event: 'support_train.reservation_reminder_24h',
         supportTrainId: res.support_train_id,
         actorUserId: res.user_id,
         payload: {
           helper_user_id: res.user_id,
+          helper_guest_email: res.guest_email,
+          helper_guest_name: res.guest_name,
+          contribution_mode: res.contribution_mode,
           slot_id: slot.id,
           slot_label: slot.slot_label,
           slot_date: slot.slot_date,
@@ -68,11 +71,20 @@ async function _send24hReminders() {
         },
       });
 
+      if (delivery?.delivered !== true) continue;
+
       // Mark as reminded so we don't re-send
-      await supabaseAdmin
+      const { error: markError } = await supabaseAdmin
         .from('SupportTrainReservation')
         .update({ last_reminder_sent: now })
-        .eq('id', res.id);
+        .eq('id', res.id)
+        .eq('status', 'reserved')
+        .is('last_reminder_sent', null);
+
+      if (markError) {
+        logger.error('[supportTrainReminders] reminder marker failed', { error: markError.message });
+        continue;
+      }
 
       sent++;
     }
@@ -98,14 +110,13 @@ async function _sendDayOfReminders() {
     const { data: reservations, error } = await supabaseAdmin
       .from('SupportTrainReservation')
       .select(`
-        id, user_id, support_train_id, contribution_mode, last_reminder_sent,
+        id, user_id, guest_name, guest_email, support_train_id, contribution_mode, last_reminder_sent,
         SupportTrainSlot:slot_id (
-          id, slot_date, slot_label, support_mode, start_time, end_time
+          id, slot_date, slot_label, support_mode, start_time, end_time, status
         )
       `)
       .eq('status', 'reserved')
-      .is('last_reminder_sent', null)
-      .not('user_id', 'is', null);
+      .is('last_reminder_sent', null);
 
     if (error) {
       logger.error('[supportTrainReminders] day-of query failed', { error: error.message });
@@ -116,18 +127,22 @@ async function _sendDayOfReminders() {
     const eligible = (reservations || []).filter(r => {
       const slot = r.SupportTrainSlot;
       if (!slot || slot.slot_date !== todayDate || !slot.start_time) return false;
+      if (!['open', 'full'].includes(slot.status)) return false;
       return slot.start_time >= nowTimeStr && slot.start_time <= laterTimeStr;
     });
 
     let sent = 0;
     for (const res of eligible) {
       const slot = res.SupportTrainSlot;
-      await emitSupportTrainEvent({
+      const delivery = await emitSupportTrainEvent({
         event: 'support_train.reservation_reminder_dayof',
         supportTrainId: res.support_train_id,
         actorUserId: res.user_id,
         payload: {
           helper_user_id: res.user_id,
+          helper_guest_email: res.guest_email,
+          helper_guest_name: res.guest_name,
+          contribution_mode: res.contribution_mode,
           slot_id: slot.id,
           slot_label: slot.slot_label,
           slot_date: slot.slot_date,
@@ -135,11 +150,20 @@ async function _sendDayOfReminders() {
         },
       });
 
+      if (delivery?.delivered !== true) continue;
+
       // Mark as reminded
-      await supabaseAdmin
+      const { error: markError } = await supabaseAdmin
         .from('SupportTrainReservation')
         .update({ last_reminder_sent: now.toISOString() })
-        .eq('id', res.id);
+        .eq('id', res.id)
+        .eq('status', 'reserved')
+        .is('last_reminder_sent', null);
+
+      if (markError) {
+        logger.error('[supportTrainReminders] reminder marker failed', { error: markError.message });
+        continue;
+      }
 
       sent++;
     }
