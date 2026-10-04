@@ -147,9 +147,18 @@ class WaitingRoomViewModel
             val address = resolvedAddress()
             _content.value =
                 if (seedState == WaitingRoomState.MoreInfoRequested) {
-                    WaitingRoomContent.moreInfoRequested(address = address, claimRef = ref)
+                    WaitingRoomContent.moreInfoRequested(
+                        address = address,
+                        claimRef = ref,
+                        submittedOn = dayCaption(claim.createdAt),
+                    )
                 } else {
-                    WaitingRoomContent.active(address = address, claimRef = ref)
+                    WaitingRoomContent.active(
+                        address = address,
+                        claimRef = ref,
+                        submittedOn = dayCaption(claim.createdAt),
+                        reviewCaption = null,
+                    )
                 }
             _phase.value = WaitingRoomPhase.Loaded
         }

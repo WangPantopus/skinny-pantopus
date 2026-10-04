@@ -165,6 +165,8 @@ data class WaitingRoomContent(
         fun active(
             address: String = SAMPLE_ADDRESS,
             claimRef: String = SAMPLE_CLAIM_REF,
+            submittedOn: String? = "Oct 24",
+            reviewCaption: String? = "Started 9h ago",
         ): WaitingRoomContent =
             WaitingRoomContent(
                 title = ROOM_TITLE,
@@ -178,8 +180,8 @@ data class WaitingRoomContent(
                 reviewerNote = null,
                 timeline =
                     listOf(
-                        StatusTimelineStage("submitted", "Submitted", "Oct 24", StatusStepState.Done),
-                        StatusTimelineStage("review", "Under review", "Started 9h ago", StatusStepState.Current),
+                        StatusTimelineStage("submitted", "Submitted", submittedOn, StatusStepState.Done),
+                        StatusTimelineStage("review", "Under review", reviewCaption, StatusStepState.Current),
                         StatusTimelineStage("approved", "Approved", state = StatusStepState.Pending),
                     ),
                 timelinePaused = false,
@@ -215,6 +217,7 @@ data class WaitingRoomContent(
         fun moreInfoRequested(
             address: String = SAMPLE_ADDRESS,
             claimRef: String = SAMPLE_CLAIM_REF,
+            submittedOn: String? = "Oct 24",
         ): WaitingRoomContent =
             WaitingRoomContent(
                 title = ROOM_TITLE,
@@ -234,7 +237,7 @@ data class WaitingRoomContent(
                     ),
                 timeline =
                     listOf(
-                        StatusTimelineStage("submitted", "Submitted", "Oct 24", StatusStepState.Done),
+                        StatusTimelineStage("submitted", "Submitted", submittedOn, StatusStepState.Done),
                         StatusTimelineStage("review", "Under review", "Action needed", StatusStepState.Current),
                         StatusTimelineStage("approved", "Approved", state = StatusStepState.Pending),
                     ),

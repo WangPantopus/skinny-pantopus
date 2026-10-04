@@ -125,8 +125,17 @@ public final class WaitingRoomViewModel {
 
             content =
                 seedState == .moreInfoRequested
-                    ? .moreInfoRequested(address: address, claimRef: ref)
-                    : .active(address: address, claimRef: ref)
+                    ? .moreInfoRequested(
+                        address: address,
+                        claimRef: ref,
+                        submittedOn: Self.dayCaption(claim.createdAt)
+                    )
+                    : .active(
+                        address: address,
+                        claimRef: ref,
+                        submittedOn: Self.dayCaption(claim.createdAt),
+                        reviewCaption: nil
+                    )
             phase = .loaded
         } catch {
             logger.warning("waitingRoom.load failed: \(error.localizedDescription)")
