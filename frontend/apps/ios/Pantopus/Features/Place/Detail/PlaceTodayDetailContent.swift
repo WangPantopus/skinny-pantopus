@@ -53,6 +53,20 @@ struct PlaceTodayDetailContent: View {
     }
 
     private func todayContent(proxy: ScrollViewProxy) -> some View {
+        loadedContent(proxy: proxy)
+            .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
+            .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
+            .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
+    }
+
+    private func loadedContent(proxy: ScrollViewProxy) -> some View {
+        todaySections(proxy: proxy)
+            .onChange(of: radonFocus) { _, _ in proxy.scrollTo("todayRadonCard", anchor: .top) }
+            .task(id: vm.calendarHomeId) { await loadRadonState() }
+            .onDisappear { radonState?.suspend() }
+    }
+
+    private func todaySections(proxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             firstUseCard(proxy: proxy)
             weatherAndGoodDay
@@ -62,12 +76,6 @@ struct PlaceTodayDetailContent: View {
 
             airAlertsSun
         }
-        .onChange(of: radonFocus) { _, _ in proxy.scrollTo("todayRadonCard", anchor: .top) }
-        .task(id: vm.calendarHomeId) { await loadRadonState() }
-        .onDisappear { radonState?.suspend() }
-        .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
-        .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
-        .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
     }
 
     @ViewBuilder
