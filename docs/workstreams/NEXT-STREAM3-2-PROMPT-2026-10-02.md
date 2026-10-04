@@ -26,6 +26,8 @@ Then independently review4-1's exact WP4 recipient/status/local-day patch and3-1
 
 Root subsequently published draft1509@c0637b2160ee0fd97da95fbc9aa1d726c9cde244, making12 open PRs. Its exact four-path WP7 contract source/tests were read; authenticated actor/allowlist/2048-character meta boundary matches the brief, CI6SUCCESS/5 pathSKIP. Reuse this shared contract; no EmergencyInfo/recipient/F3b implementation or full WP7 acceptance follows.
 
+Root additionally requested an owner/member/time-fence review of upcoming WP7 activation source. Preparation began10:35Z on a new actual Sol/xhigh turn. Baseline feedback is recorded in the existing status and sent to Root: current occupancy/record/private-creator rules, task visibility and same-home association; earlier household resources available on a first-week join; later verified admission despite earlier occupancy creation; exact household garbage provenance; aggregate-only and explicit current-history/query-failure/truncation limits.1509 was still c063, so this is preparation, not review acceptance of an activation patch. Review its exact committed head/tests when supplied without displacing EmergencyInfo-first priority.
+
 No app/migration edit, tests, build/runtime/schema/API/SQL/device/fixture action or resource was taken by this source baseline. Owner commits are the next review dependency, not new runtime authorization. The two1496 Custom AFTERs remain draft/idle-only after recorded Studio setup and fresh exact grants. Preserve accepted naming/qualified CI evidence, source custody/designs/all holds and counts; unrelated verification/bookkeeping is paused.
 
 ## Founder priority update — October 4, 2026
