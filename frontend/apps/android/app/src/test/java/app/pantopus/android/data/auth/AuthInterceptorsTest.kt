@@ -1,5 +1,10 @@
 package app.pantopus.android.data.auth
 
+import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
+import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatchJsonAdapter
+import app.pantopus.android.data.api.models.place.SetPickupDayRequest
+import app.pantopus.android.data.api.services.NotificationPreferencesApi
+import app.pantopus.android.data.api.services.PlaceApi
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import dagger.Lazy
@@ -7,6 +12,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -20,6 +26,8 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
+import retrofit2.Retrofit
+import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.Base64
 
 /**
@@ -97,6 +105,61 @@ class AuthInterceptorsTest {
             org.junit.Assert.fail("Replacement actor was dispatched")
         } catch (_: java.io.IOException) {
             assertEquals(1, server.requestCount)
+        }
+        val retrofit =
+            Retrofit.Builder().baseUrl(server.url("/"))
+                .client(client())
+                .addConverterFactory(MoshiConverterFactory.create(Moshi.Builder().add(NotificationPreferencesPatchJsonAdapter()).build()))
+                .build()
+        val preferences = retrofit.create(NotificationPreferencesApi::class.java)
+        val places = retrofit.create(PlaceApi::class.java)
+        for (operation in listOf("preferences", "set_pickup", "clear_pickup")) {
+            var credentials = starting
+            coEvery { storage.sessionCredentials() } answers { credentials }
+            coEvery { storage.accessToken() } answers { credentials.accessToken }
+            coEvery { repo.refreshIfExpiringSoon(any()) } answers {
+                credentials = replacement
+                AuthRepository.RefreshOutcome.Rotated(replacement.accessToken)
+            }
+            val guard =
+                AuthenticatedDispatchGuard { selected ->
+                    check(selected != null && selected.userId == starting.userId && selected.sessionId == starting.sessionId)
+                }
+            val before = server.requestCount
+            try {
+                runBlocking {
+                    when (operation) {
+                        "preferences" -> preferences.updatePreferences(NotificationPreferencesPatch(eveningBriefingEnabled = true), guard)
+                        "set_pickup" -> places.setPickupDay("home", SetPickupDayRequest("TH"), guard)
+                        else -> places.clearPickupDay("home", "version", guard)
+                    }
+                }
+                org.junit.Assert.fail("Replacement actor dispatched $operation")
+            } catch (_: java.io.IOException) {
+                assertEquals(before, server.requestCount)
+            }
+            // Existing unscoped callers retain their normal current-token behavior.
+            coEvery { repo.refreshIfExpiringSoon(any()) } returns null
+            server.enqueue(MockResponse().setResponseCode(200).setBody("""{"preferences":{},"calendar":{}}"""))
+            runBlocking {
+                when (operation) {
+                    "preferences" -> preferences.updatePreferences(NotificationPreferencesPatch(eveningBriefingEnabled = true))
+                    "set_pickup" -> places.setPickupDay("home", SetPickupDayRequest("TH"))
+                    else -> places.clearPickupDay("home", "version")
+                }
+            }
+            val recorded = server.takeRequest()
+            assertEquals("Bearer replacement-at", recorded.getHeader("Authorization"))
+            assertEquals(if (operation == "clear_pickup") "DELETE" else "PUT", recorded.method)
+            assertEquals(
+                if (operation == "preferences") {
+                    "/api/hub/preferences"
+                } else {
+                    "/api/homes/home/calendar/pickup-day" + if (operation == "clear_pickup") "?expected_version=version" else ""
+                },
+                recorded.path,
+            )
+            assertEquals(before + 1, server.requestCount)
         }
     }
 

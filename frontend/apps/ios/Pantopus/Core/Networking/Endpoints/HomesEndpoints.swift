@@ -723,16 +723,25 @@ public enum AddressCalendarEndpoints {
     }
 
     /// `PUT /api/homes/:id/calendar/pickup-day`
-    public static func setPickupDay(homeId: String, request: SetPickupDayRequest) -> Endpoint {
-        Endpoint(method: .put, path: "/api/homes/\(homeId)/calendar/pickup-day", body: request)
+    public static func setPickupDay(
+        homeId: String,
+        request: SetPickupDayRequest,
+        dispatchGuard: (@MainActor @Sendable () throws -> Void)? = nil
+    ) -> Endpoint {
+        Endpoint(method: .put, path: "/api/homes/\(homeId)/calendar/pickup-day", body: request, dispatchGuard: dispatchGuard)
     }
 
     /// `DELETE /api/homes/:id/calendar/pickup-day[?expected_version=]`
-    public static func clearPickupDay(homeId: String, expectedVersion: String? = nil) -> Endpoint {
+    public static func clearPickupDay(
+        homeId: String,
+        expectedVersion: String? = nil,
+        dispatchGuard: (@MainActor @Sendable () throws -> Void)? = nil
+    ) -> Endpoint {
         Endpoint(
             method: .delete,
             path: "/api/homes/\(homeId)/calendar/pickup-day",
-            query: expectedVersion.map { ["expected_version": $0] } ?? [:]
+            query: expectedVersion.map { ["expected_version": $0] } ?? [:],
+            dispatchGuard: dispatchGuard
         )
     }
 }

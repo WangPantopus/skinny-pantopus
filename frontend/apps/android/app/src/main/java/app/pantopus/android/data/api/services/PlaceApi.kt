@@ -4,12 +4,14 @@ import app.pantopus.android.data.api.models.place.AddressCalendarResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Tag
 
 /**
  * Place Intelligence endpoints — the living dashboard
@@ -55,6 +57,7 @@ interface PlaceApi {
     suspend fun setPickupDay(
         @Path("id") homeId: String,
         @Body body: SetPickupDayRequest,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): AddressCalendarResponse
 
     /** `DELETE /api/homes/:id/calendar/pickup-day[?expected_version=]` — route `backend/routes/addressCalendar.js`. */
@@ -62,5 +65,6 @@ interface PlaceApi {
     suspend fun clearPickupDay(
         @Path("id") homeId: String,
         @Query("expected_version") expectedVersion: String? = null,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): AddressCalendarResponse
 }

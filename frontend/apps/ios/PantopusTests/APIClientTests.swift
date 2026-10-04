@@ -106,14 +106,28 @@ final class APIClientTests: XCTestCase {
         window.enterBackground(now: 1811)
         XCTAssertTrue(window.enterForeground(now: 3610))
         XCTAssertFalse(window.enterForeground(now: 3611))
+        let patch: [String: JSONValue] = ["evening_briefing_enabled": .bool(true)]
+        let pickup = SetPickupDayRequest(weekday: "TH")
+        XCTAssertNil(NotificationPreferencesEndpoints.update(patch).dispatchGuard)
+        XCTAssertNil(AddressCalendarEndpoints.setPickupDay(homeId: "home", request: pickup).dispatchGuard)
+        XCTAssertNil(AddressCalendarEndpoints.clearPickupDay(homeId: "home").dispatchGuard)
+        let refuseDispatch: @MainActor @Sendable () throws -> Void = { throw CancellationError() }
+        let endpoints = [
+            Endpoint(method: .post, path: "/api/hub/funnel-events", dispatchGuard: refuseDispatch),
+            NotificationPreferencesEndpoints.update(patch, dispatchGuard: refuseDispatch),
+            AddressCalendarEndpoints.setPickupDay(homeId: "home", request: pickup, dispatchGuard: refuseDispatch),
+            AddressCalendarEndpoints.clearPickupDay(homeId: "home", expectedVersion: "version", dispatchGuard: refuseDispatch)
+        ]
         let previousRequests = URLProtocolStub.capturedRequests.count
-        do {
-            _ = try await client.request(Endpoint(method: .post, path: "/api/hub/funnel-events") {
-                throw CancellationError()
-            })
-            XCTFail("Obsolete scope dispatched")
-        } catch {}
-        XCTAssertEqual(URLProtocolStub.capturedRequests.count, previousRequests)
+        for endpoint in endpoints {
+            do {
+                _ = try await client.request(endpoint)
+                XCTFail("Obsolete scope dispatched \(endpoint.path)")
+            } catch is CancellationError {} catch {
+                XCTFail("Expected scoped dispatch refusal: \(error)")
+            }
+            XCTAssertEqual(URLProtocolStub.capturedRequests.count, previousRequests)
+        }
     }
 
     func testNotFoundReceiptRequiresExplicitOptIn() async throws {

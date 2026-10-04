@@ -59,6 +59,7 @@ import app.pantopus.android.data.api.services.RecordWatchApi
 import app.pantopus.android.data.api.services.ResidencyClaimsApi
 import app.pantopus.android.data.api.services.ResidencyLettersApi
 import app.pantopus.android.data.api.services.UnlistedApi
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import okhttp3.ResponseBody
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -135,12 +136,14 @@ class PlaceRepository
         suspend fun setPickupDay(
             homeId: String,
             request: SetPickupDayRequest,
-        ): NetworkResult<AddressCalendarResponse> = safeApiCall { placeApi.setPickupDay(homeId, request) }
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<AddressCalendarResponse> = safeApiCall { placeApi.setPickupDay(homeId, request, dispatchGuard) }
 
         suspend fun clearPickupDay(
             homeId: String,
             expectedVersion: String? = null,
-        ): NetworkResult<AddressCalendarResponse> = safeApiCall { placeApi.clearPickupDay(homeId, expectedVersion) }
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<AddressCalendarResponse> = safeApiCall { placeApi.clearPickupDay(homeId, expectedVersion, dispatchGuard) }
 
         /** The Neighborhood Pulse signal stream for a home. */
         suspend fun pulse(homeId: String): NetworkResult<NeighborhoodPulse> = safeApiCall { aiApi.pulse(homeId) }
