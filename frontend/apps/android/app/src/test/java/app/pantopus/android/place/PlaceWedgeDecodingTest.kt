@@ -67,6 +67,7 @@ class PlaceWedgeDecodingTest {
         val radon =
             """
             {"id":"lead_radon","group":"risk_readiness","band":"A","access":"available","status":"ready",
+             "as_of":null,"source":"EPA radon zones","coverage":"full","unavailable_reason":null,
              "data":{"year_built":1979,"lead_paint_risk":"moderate","radon_zone":2,"county_name":"Clark County",
                      "summary":"Screening only","disclaimer":"Test this home."}}
             """.trimIndent()
