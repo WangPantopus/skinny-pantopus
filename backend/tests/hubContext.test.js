@@ -952,6 +952,32 @@ describe('Provider Orchestrator', () => {
     expect(result.expires_at).toBeTruthy();
     expect(result.meta.providers_used.length).toBeGreaterThan(0);
     expect(typeof result.meta.total_latency_ms).toBe('number');
+    expect(result.meta.section_providers).toEqual({ weather: 'OPEN_METEO', alerts: 'NOAA' });
+
+    const { fetchWeather } = require('../services/context/weatherProvider');
+    const { fetchAlerts } = require('../services/context/alertsProvider');
+    const { clearHubTodayCache } = require('../services/context/providerOrchestrator');
+    for (const source of ['live', 'cache', 'cache_stale']) {
+      clearHubTodayCache(MOCK_USER_ID);
+      fetchWeather.mockResolvedValue({ ...MOCK_WEATHER, provider: 'WEATHERKIT', source });
+      fetchAlerts.mockResolvedValue({ alerts: [], provider: 'WEATHERKIT', source });
+      const fromWeatherKit = await getHubToday(MOCK_USER_ID);
+      expect(fromWeatherKit.meta.section_providers).toEqual({ weather: 'WEATHERKIT', alerts: 'WEATHERKIT' });
+      expect(fromWeatherKit.alerts).toEqual([]);
+      // The Hub memo must preserve the role identities with the payload.
+      expect((await getHubToday(MOCK_USER_ID)).meta.section_providers).toEqual(fromWeatherKit.meta.section_providers);
+    }
+    clearHubTodayCache(MOCK_USER_ID);
+    fetchWeather.mockResolvedValue({ ...MOCK_WEATHER, provider: undefined });
+    fetchAlerts.mockResolvedValue({ alerts: [], source: 'cache' });
+    expect((await getHubToday(MOCK_USER_ID)).meta.section_providers).toEqual({ weather: null, alerts: null });
+
+    clearHubTodayCache(MOCK_USER_ID);
+    fetchWeather.mockResolvedValue({ current: null, provider: 'WEATHERKIT', source: 'error' });
+    fetchAlerts.mockResolvedValue({ alerts: [], provider: 'NOAA', source: 'error' });
+    const failed = await getHubToday(MOCK_USER_ID);
+    expect(failed.meta.section_providers).toEqual({ weather: null, alerts: null });
+    expect(failed.meta.partial_failures).toEqual(expect.arrayContaining(['weather', 'alerts']));
   });
 
   test('getHubToday returns hidden when no location', async () => {
@@ -1095,4 +1121,3 @@ describe('Provider Orchestrator', () => {
     expect(getLocalUpdateContext).not.toHaveBeenCalled();
   });
 });
-
