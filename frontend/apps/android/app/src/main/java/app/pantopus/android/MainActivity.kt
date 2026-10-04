@@ -155,7 +155,7 @@ class MainActivity : FragmentActivity() {
         val recipient = intent.getStringExtra(ReminderActionReceiver.RECIPIENT)
         val session = intent.getStringExtra(ReminderActionReceiver.SESSION)
         val destination = DeepLinkRouter.resolve(uri) as? DeepLinkRouter.Destination.HomeTask
-        if (recipient == null || session == null) return true
+        if (recipient == null || session == null || intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return true
         if (destination == null || !destination.openDueDateEdit) return true
         // Existing encrypted pending-route storage binds the cold login replay.
         DeepLinkRouter.handle(uri.toString(), expectedUserId = recipient)
@@ -171,7 +171,14 @@ class MainActivity : FragmentActivity() {
 
     private fun forwardDeepLink(intent: Intent?) {
         if (intent?.getBooleanExtra(ReminderActionReceiver.PUSH_OPEN, false) == true) {
-            pilotEvents.notificationOpened(intent.getStringExtra(ReminderActionReceiver.PUSH_TYPE))
+            val pushType = intent.getStringExtra(ReminderActionReceiver.PUSH_TYPE)
+            intent.removeExtra(ReminderActionReceiver.PUSH_OPEN)
+            intent.removeExtra(ReminderActionReceiver.PUSH_TYPE)
+            // Task-history restoration can retain the original notification intent.
+            // It is an organic return, not another response to that notification.
+            if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) {
+                pilotEvents.notificationOpened(pushType)
+            }
         }
         val uri = intent?.data ?: return
         if (intent.action != Intent.ACTION_VIEW) return

@@ -263,6 +263,9 @@ class AuthInterceptorsTest {
         assertEquals(403, client().newCall(get("/api/y")).execute().also { it.close() }.code)
         assertEquals(1, calls)
         assertEquals(3, server.requestCount)
+        assertNull(server.takeRequest().getHeader("X-Step-Up"))
+        assertEquals("t", server.takeRequest().getHeader("X-Step-Up"))
+        assertNull(server.takeRequest().getHeader("X-Step-Up"))
         for (mode in listOf("actor", "session", "os", "app", "same")) {
             var selected = TokenStorage.SessionCredentials("actor-a", "session-a", "at")
             var osUnlocked = true
