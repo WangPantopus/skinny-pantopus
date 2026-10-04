@@ -75,7 +75,8 @@ DO $$ DECLARE h uuid:=pg_temp.invitation_user(100); owner_id uuid:=pg_temp.invit
  PERFORM pg_temp.expect_invite(public.list_home_invitations(pg_temp.invitation_user(3),h),'MEMBERS_MANAGE_REQUIRED');
  SELECT to_jsonb(o) INTO original FROM public."HomeOccupancy"o WHERE home_id=h AND user_id=pg_temp.invitation_user(3);
  r:=public.act_on_home_invitation(i,NULL,pg_temp.invitation_user(3),'accept'); PERFORM pg_temp.expect_invite(r);
- IF r->'occupancy'->>'verification_status'<>'verified' OR r->'occupancy'->>'age_band' IS NOT NULL
+ IF r->'occupancy'->>'verification_status'<>'verified' OR r->'occupancy'->>'verification_source'<>'household'
+  OR r->'occupancy'->>'age_band' IS NOT NULL
   OR (r->'occupancy'->>'start_at')::timestamptz<>(original->>'start_at')::timestamptz
   OR (r->'occupancy'->>'end_at')::timestamptz<>(original->>'end_at')::timestamptz
   OR public.home_has_permission(h,'finance.manage',pg_temp.invitation_user(3))
@@ -255,6 +256,42 @@ DO $$ DECLARE r jsonb; i uuid; BEGIN
  IF EXISTS(SELECT FROM public."HomeOccupancy" WHERE home_id=pg_temp.invitation_user(100) AND user_id=pg_temp.invitation_user(17))
   OR NOT EXISTS(SELECT FROM public."HomeInvite" WHERE id=i AND status='pending' AND accepted_by_user_id IS NULL) THEN
   RAISE EXCEPTION 'Invitation audit failure left partial admission'; END IF;
+END $$;
+RESET ROLE;
+-- WP6: new consent is household-only; a prior address proof or verified legacy
+-- membership keeps its trust and permissions through another invitation.
+INSERT INTO public."Home"(id,owner_id,address,city,state,zipcode) VALUES
+ (pg_temp.invitation_user(101),pg_temp.invitation_user(1),'101 Source Street','Test','WA','98607');
+INSERT INTO public."HomeOwner"(home_id,subject_id,owner_status,is_primary_owner)
+ VALUES(pg_temp.invitation_user(101),pg_temp.invitation_user(1),'verified',true);
+INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,is_active,verification_status,verification_source,updated_at)
+ SELECT pg_temp.invitation_user(101),pg_temp.invitation_user(n),'member','member',true,status,source,'2026-01-01T00:00:00Z'::timestamptz
+ FROM (VALUES(18,'verified','address'),(19,'verified','legacy'),(20,'pending_approval','legacy'))f(n,status,source);
+SET LOCAL ROLE service_role;
+DO $$ DECLARE h uuid:=pg_temp.invitation_user(101); r jsonb; i uuid; n integer; want text; before_row jsonb; BEGIN
+ SELECT to_jsonb(o) INTO before_row FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pg_temp.invitation_user(18);
+ UPDATE public."HomeOccupancy" SET verification_source='legacy' WHERE home_id=h AND user_id=pg_temp.invitation_user(18);
+ UPDATE public."HomeOccupancy" SET verification_source='address' WHERE home_id=h AND user_id=pg_temp.invitation_user(18);
+ IF before_row IS DISTINCT FROM (SELECT to_jsonb(o) FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pg_temp.invitation_user(18)) THEN
+  RAISE EXCEPTION 'Source-only classification changed a historical timestamp, generation or another field'; END IF;
+ FOR n,want IN SELECT * FROM (VALUES(18,'address'),(19,'legacy'),(20,'household'))f(n,source) LOOP
+  r:=public.write_home_invitation(h,pg_temp.invitation_user(1),'create',
+    jsonb_build_object('user_id',pg_temp.invitation_user(n),'relationship','member'),encode(gen_random_bytes(32),'hex'));
+  PERFORM pg_temp.expect_invite(r); i:=(r->'invitation'->>'id')::uuid;
+  r:=public.act_on_home_invitation(i,NULL,pg_temp.invitation_user(n),'accept');
+  PERFORM pg_temp.expect_invite(r);
+  IF r->'occupancy'->>'verification_source' IS DISTINCT FROM want THEN RAISE EXCEPTION 'Expected source %, got %',want,r; END IF;
+ END LOOP;
+ -- Other semantic edits still rotate the generation and touch the timestamp.
+ UPDATE public."HomeOccupancy" SET role='guest',role_base='guest' WHERE home_id=h AND user_id=pg_temp.invitation_user(18);
+ IF EXISTS(SELECT FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pg_temp.invitation_user(18)
+   AND (o.updated_at=(before_row->>'updated_at')::timestamptz OR o.membership_version::text=before_row->>'membership_version')) THEN
+  RAISE EXCEPTION 'Provenance exception suppressed an unrelated membership edit'; END IF;
+ SELECT to_jsonb(o) INTO before_row FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pg_temp.invitation_user(19);
+ UPDATE public."HomeOccupancy" SET verification_source='legacy' WHERE home_id=h AND user_id=pg_temp.invitation_user(19);
+ IF EXISTS(SELECT FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=pg_temp.invitation_user(19)
+   AND (o.updated_at=(before_row->>'updated_at')::timestamptz OR o.membership_version::text IS DISTINCT FROM before_row->>'membership_version')) THEN
+  RAISE EXCEPTION 'Unchanged-source update lost original touch or changed membership'; END IF;
 END $$;
 RESET ROLE;
 DO $$ BEGIN

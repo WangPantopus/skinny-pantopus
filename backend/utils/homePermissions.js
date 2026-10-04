@@ -430,7 +430,8 @@ async function applyOccupancyTemplate(homeId, userId, roleBase, verificationStat
  * @returns {boolean}
  */
 function isVerifiedResident(access) {
-  if (!access || !access.occupancy || access.occupancy.verification_status !== 'verified') {
+  if (!access || !access.occupancy || access.occupancy.verification_status !== 'verified'
+    || access.occupancy.verification_source === 'household') {
     return false;
   }
   // Attestations (residency letters, live residency claims, fridge cards)

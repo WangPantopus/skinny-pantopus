@@ -75,7 +75,7 @@ DO $$ DECLARE h uuid:=pg_temp.cr_id(100); actor uuid:=pg_temp.cr_id(1); admin_id
  r:=public.get_home_claim_review(h,pg_temp.cr_id(203),actor);tok:=r->'claim'->>'review_token';
  PERFORM pg_temp.cr_expect(public.mutate_home_claim_review(h,pg_temp.cr_id(203),actor,'approve',NULL),'CLAIM_REVIEW_CHANGED');
  r:=public.mutate_home_claim_review(h,pg_temp.cr_id(203),actor,'approve',tok);PERFORM pg_temp.cr_expect(r);
- IF r->'occupancy'->>'role_base'<>'owner' OR r->'occupancy'->>'age_band' IS NOT NULL
+ IF r->'occupancy'->>'role_base'<>'owner' OR r->'occupancy'->>'verification_source'<>'address' OR r->'occupancy'->>'age_band' IS NOT NULL
   OR (r->'occupancy'->>'start_at')::timestamptz<>(before_occ->>'start_at')::timestamptz
   OR (r->'occupancy'->>'end_at')::timestamptz<>(before_occ->>'end_at')::timestamptz
   OR (r->'occupancy'->>'access_start_at')::timestamptz<>(before_occ->>'access_start_at')::timestamptz
@@ -89,6 +89,19 @@ DO $$ DECLARE h uuid:=pg_temp.cr_id(100); actor uuid:=pg_temp.cr_id(1); admin_id
  r:=public.mutate_home_claim_review(h,pg_temp.cr_id(203),actor,'approve',tok);PERFORM pg_temp.cr_expect(r);
  IF r->>'replayed'<>'true' OR r-'replayed' IS DISTINCT FROM before_occ-'replayed'
   OR (SELECT count(*) FROM public."HomeAuditLog" WHERE home_id=h)<>n THEN RAISE EXCEPTION 'Approval retry duplicated or changed result'; END IF;
+ -- A new receipt retains exact provenance comparison. Classification alone
+ -- leaves the membership generation unchanged, but cannot weaken this guard.
+ UPDATE public."HomeOccupancy" SET verification_source='household' WHERE home_id=h AND user_id=pg_temp.cr_id(3);
+ PERFORM pg_temp.cr_expect(public.mutate_home_claim_review(h,pg_temp.cr_id(203),actor,'approve',tok),'CLAIM_REVIEW_CHANGED');
+ UPDATE public."HomeOccupancy" SET verification_source='address' WHERE home_id=h AND user_id=pg_temp.cr_id(3);
+ -- Test-only precolumn receipt shape on this newly created synthetic fixture;
+ -- the application migration never edits a persisted receipt.
+ UPDATE public."HomeClaimReviewReceipt" SET occupancy_snapshot=occupancy_snapshot-'verification_source',
+   result=jsonb_set(result,'{occupancy}',result->'occupancy'-'verification_source')
+   WHERE home_id=h AND claim_id=pg_temp.cr_id(203) AND actor_user_id=actor AND action='approve';
+ r:=public.mutate_home_claim_review(h,pg_temp.cr_id(203),actor,'approve',tok);PERFORM pg_temp.cr_expect(r);
+ IF r->>'replayed'<>'true' OR r->'occupancy' ? 'verification_source'
+   OR (SELECT count(*) FROM public."HomeAuditLog" WHERE home_id=h)<>n THEN RAISE EXCEPTION 'Precolumn receipt was rewritten or replay failed'; END IF;
  PERFORM pg_temp.cr_expect(public.mutate_home_claim_review(h,pg_temp.cr_id(203),actor,'approve',tok,'Different note'),'CLAIM_REVIEW_CHANGED');
  INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,pg_temp.cr_id(3),'access.manage',false);
  PERFORM pg_temp.cr_expect(public.mutate_home_claim_review(h,pg_temp.cr_id(203),actor,'approve',tok),'CLAIM_REVIEW_CHANGED');

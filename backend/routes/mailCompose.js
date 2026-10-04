@@ -29,25 +29,29 @@ async function hasVerifiedSenderHome(userId) {
   const [occupancyRes, ownerRes] = await Promise.allSettled([
     supabaseAdmin
       .from('HomeOccupancy')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .eq('verification_status', 'verified')
-      .limit(1),
+      .select('home_id,is_active,verification_status,verification_source')
+      .eq('user_id', userId),
     supabaseAdmin
       .from('HomeOwner')
       .select('home_id')
       .eq('subject_id', userId)
-      .eq('owner_status', 'verified')
-      .limit(1),
+      .eq('owner_status', 'verified'),
   ]);
 
-  const verifiedOccupancies =
-    occupancyRes.status === 'fulfilled' ? occupancyRes.value?.data || [] : [];
-  const verifiedOwnerRows =
-    ownerRes.status === 'fulfilled' ? ownerRes.value?.data || [] : [];
-
-  return verifiedOccupancies.length > 0 || verifiedOwnerRows.length > 0;
+  // A consented co-owner can have household-only provenance too. Check that
+  // same Home before using the legacy owner fallback; another address-proven
+  // Home still qualifies. Failed provenance reads must not become "no row".
+  if (occupancyRes.status !== 'fulfilled' || occupancyRes.value?.error
+    || !Array.isArray(occupancyRes.value?.data)
+    || occupancyRes.value.data.some(row => !row || typeof row.home_id !== 'string')) return false;
+  const occupancies = occupancyRes.value.data;
+  const householdHomes = new Set(occupancies
+    .filter(row => row.verification_source === 'household').map(row => row.home_id));
+  const verifiedOwnerRows = ownerRes.status === 'fulfilled' && !ownerRes.value?.error
+    && Array.isArray(ownerRes.value?.data) ? ownerRes.value.data : [];
+  return occupancies.some(row => row.is_active === true && row.verification_status === 'verified'
+    && row.verification_source !== 'household')
+    || verifiedOwnerRows.some(row => row && typeof row.home_id === 'string' && !householdHomes.has(row.home_id));
 }
 
 /**

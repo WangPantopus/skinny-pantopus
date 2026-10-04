@@ -1,8 +1,11 @@
 const db = require('../__mocks__/supabaseAdmin');
-jest.mock('../../services/notificationService', () => ({ notifyTaskAssigned: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/notificationService', () => ({ notifyTaskAssigned: jest.fn().mockResolvedValue(undefined),
+  notifyTaskCompleted: jest.fn().mockResolvedValue(null) }));
 const notifications = require('../../services/notificationService');
 const home = require('../../routes/home');
 const mail = require('../../routes/mailboxV2Phase3');
+const compose = require('../../routes/mailCompose');
+const mailbox = require('../../routes/mailbox');
 function handler(router, method, path) {
   return router.stack.find(l => l.route?.path === path && l.route.methods[method]).route.stack.at(-1).handle;
 }
@@ -47,6 +50,27 @@ test('mail status/due updates use canonical values and do not permit a raw ID-on
   const res=response();await handler(mail,'patch','/tasks/:id')({...request,params:{id:'record'},body:{status:'completed',dueAt:null}},res);
   expect(rpc).toHaveBeenCalledWith('mutate_home_task_by_id',{p_actor_id:'actor',p_task_id:'record',p_action:'update',p_payload:{status:'done',due_at:null}});
   expect(res.body.task.status).toBe('completed');
+});
+test.each([
+  [true, 'creator', true], [false, 'creator', false], [undefined, 'creator', false],
+  [true, 'actor', false], [true, null, false],
+])('mail completion transition=%s creator=%s notifies=%s through the exact persisted task', async (task_completed, created_by, shouldNotify) => {
+  const completed_at = '2026-10-04T09:00:00+00:00';
+  db.setRpcMock(async () => ({ data: { ok: true, task_completed,
+    record: { ...record, status: 'done', created_by, completed_at } } }));
+  const res = response();
+  await handler(mail, 'patch', '/tasks/:id')({ ...request, params: { id: 'record' }, body: { status: 'completed' } }, res);
+  expect(res.statusCode).toBe(200);
+  if (shouldNotify) expect(notifications.notifyTaskCompleted).toHaveBeenCalledWith({ creatorUserId: 'creator',
+    homeId: 'home', taskId: 'record', completedAt: completed_at });
+  else expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
+});
+test('a denied mail completion cannot notify the creator', async () => {
+  db.setRpcMock(async () => ({ data: { ok: false, code: 'HOME_RECORD_WRITE_DENIED', status: 403 } }));
+  const res = response();
+  await handler(mail, 'patch', '/tasks/:id')({ ...request, params: { id: 'record' }, body: { status: 'completed' } }, res);
+  expect(res.statusCode).toBe(403);
+  expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
 });
 test('mail conversion binds immutable source and selected Home atomically',async()=>{
   const rpc=jest.fn(async()=>({data:{ok:true,record}}));db.setRpcMock(rpc);const res=response();
@@ -105,4 +129,54 @@ test('missing task collection creation capability is a retryable contract failur
   db.setRpcMock(async()=>({data:{ok:true,records:[],attendees:[]}}));const res=response();
   await handler(home,'get','/:id/tasks')(request,res);
   expect(res.statusCode).toBe(503);expect(res.body.code).toBe('HOME_RECORD_UNAVAILABLE');
+});
+
+describe('both mail entry points require address trust', () => {
+  const homeA = 'ddf31000-0000-4000-8000-000000000100';
+  const homeB = 'ddf31000-0000-4000-8000-000000000200';
+  const target = 'ddf31000-0000-4000-8000-000000000300';
+  const resident = source => ({ home_id: homeA, user_id: 'actor', is_active: true,
+    verification_status: 'verified', verification_source: source });
+  const owner = home_id => ({ home_id, subject_id: 'actor', owner_status: 'verified' });
+  test.each([
+    ['household', [resident('household')], [], false],
+    ['household co-owner', [resident('household')], [owner(homeA)], false],
+    ['inactive household co-owner', [{ ...resident('household'), is_active: false }], [owner(homeA)], false],
+    ['address', [resident('address')], [], true],
+    ['legacy', [resident('legacy')], [], true],
+    ['legacy owner without occupancy', [], [owner(homeA)], true],
+    ['household A and legacy owner B', [resident('household')], [owner(homeA), owner(homeB)], true],
+    ['household A and address B', [resident('household'), { ...resident('address'), home_id: homeB }], [], true],
+  ])('%s preserves recipient denial after its sender gate (%s, %s)', async (_label, occupancies, owners, qualifies) => {
+    db.seedTable('HomeOccupancy', occupancies); db.seedTable('HomeOwner', owners);
+    db.seedTable('Home', [{ id: target, owner_id: 'other', city: 'Test', state: 'WA' }]);
+    const context = response();
+    await handler(compose, 'get', '/home-context/:homeId')({ ...request, params: { homeId: target } }, context);
+    expect(context.statusCode).toBe(403);
+    expect(context.body.code).toBe(qualifies ? 'MAILBOX_HOME_CONTEXT_FORBIDDEN' : 'HOME_ADDRESS_VERIFICATION_REQUIRED');
+    const send = response();
+    await handler(mailbox, 'post', '/send')({ ...request, body: { recipientUserId: target, content: 'Synthetic mail' } }, send);
+    expect(send.statusCode).toBe(qualifies ? 404 : 403);
+    if (!qualifies) expect(send.body.code).toBe('HOME_ADDRESS_VERIFICATION_REQUIRED');
+    expect(db.getTable('Mail')).toHaveLength(0);
+  });
+  test.each([new Error('unavailable'), { data: null, error: { code: 'unavailable' } }, { data: [{}], error: null }])(
+    'unknown occupancy provenance cannot use an owner fallback (%s)', async failure => {
+      db.seedTable('HomeOwner', [owner(homeA)]);
+      db.seedTable('Home', [{ id: target, owner_id: 'other' }]);
+      const original = db.from;
+      const from = jest.spyOn(db, 'from').mockImplementation(table => table === 'HomeOccupancy'
+        ? { select: () => ({ eq: () => failure instanceof Error ? Promise.reject(failure) : Promise.resolve(failure) }) }
+        : original(table));
+      try {
+        for (const [router, method, path, req] of [
+          [compose, 'get', '/home-context/:homeId', { ...request, params: { homeId: target } }],
+          [mailbox, 'post', '/send', { ...request, body: { recipientUserId: target, content: 'Synthetic mail' } }],
+        ]) {
+          const res = response(); await handler(router, method, path)(req, res);
+          expect(res.statusCode).toBe(403); expect(res.body.code).toBe('HOME_ADDRESS_VERIFICATION_REQUIRED');
+        }
+        expect(db.getTable('Mail')).toHaveLength(0);
+      } finally { from.mockRestore(); }
+    });
 });

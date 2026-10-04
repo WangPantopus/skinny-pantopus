@@ -200,4 +200,14 @@ describe('a stale verification cannot mint a fresh letter (flag-gated)', () => {
 
     expect(res.status).not.toBe(403);
   });
+
+  test.each([false, true])('household access cannot issue a residency letter with expiry enforcement %s', async enforceVerificationExpiry => {
+    flags.__setOverrides({ enforceVerificationExpiry });
+    checkHomePermission.mockResolvedValue({ hasAccess: true, isOwner: false,
+      occupancy: { verification_status: 'verified', verification_source: 'household', verified_at: daysAgo(1) } });
+    const res = await request(appWithRoutes()).post('/api/homes/home-lttr-1/residency-letters').send({ purpose: 'lease' });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('VERIFICATION_REQUIRED');
+    expect(getTable('ResidencyLetter')).toHaveLength(0);
+  });
 });

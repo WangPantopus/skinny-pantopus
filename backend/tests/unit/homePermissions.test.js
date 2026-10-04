@@ -20,6 +20,7 @@ const {
   assertCanGrantPermission,
   VERIFIED_TEMPLATES,
   ALL_FALSE_TEMPLATE,
+  isVerifiedResident,
   ROLE_RANK,
 } = require('../../utils/homePermissions');
 
@@ -27,6 +28,19 @@ const { seedTable, resetTables } = require('../__mocks__/supabaseAdmin');
 
 const FAKE_HOME = 'home-test-000';
 const FAKE_USER = 'user-test-000';
+
+describe('address trust is separate from household access', () => {
+  test.each(['address', 'legacy', undefined])('%s retains existing verified residency', verification_source => {
+    expect(isVerifiedResident({ occupancy: { verification_status: 'verified', verification_source } })).toBe(true);
+  });
+  test('household verification cannot mint an address attestation', () => {
+    expect(isVerifiedResident({ hasAccess: true, isOwner: true,
+      occupancy: { verification_status: 'verified', verification_source: 'household', verified_at: new Date().toISOString() } })).toBe(false);
+  });
+  test.each(['pending_approval', 'provisional', 'inactive'])('address provenance alone does not verify %s', verification_status => {
+    expect(isVerifiedResident({ occupancy: { verification_status, verification_source: 'address' } })).toBe(false);
+  });
+});
 
 // Helper: extract the 5 booleans from a template result
 function bools(template) {
