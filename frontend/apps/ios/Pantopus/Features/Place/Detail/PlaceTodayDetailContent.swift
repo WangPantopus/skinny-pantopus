@@ -1084,7 +1084,7 @@ private final class RadonTodayState {
             guard (try? context.requireCurrent()) != nil, access.lifecycleRevision == revision, access.isCurrent else { return }
             loaded = false
             canCreate = false
-            error = "Couldn't check your home's radon tasks. Try again."
+            self.error = "Couldn't check your home's radon tasks. Try again."
         }
     }
 
@@ -1159,7 +1159,7 @@ private final class RadonTodayState {
         } catch {
             guard (try? context.requireCurrent()) != nil, access.isCurrent, access.lifecycleRevision == revision else { return }
             retained = coordinator?.pending?.payload
-            error = retained == nil ? "Couldn't save this task. Check the date and result, then try again."
+            self.error = retained == nil ? "Couldn't save this task. Check the date and result, then try again."
                 : "Couldn't confirm your task. Your saved request is retained; try again."
         }
     }
