@@ -2,10 +2,26 @@
 
 package app.pantopus.android.ui.screens.status.waiting_room
 
+import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.api.models.homes.MyOwnershipClaimsResponse
+import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
+import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.components.HaloCircleTone
+import app.pantopus.android.ui.screens.homes.HomeDashboardAccessFactory
 import app.pantopus.android.ui.screens.status.StatusPillTone
 import app.pantopus.android.ui.screens.status.StatusStepState
 import app.pantopus.android.ui.theme.PantopusIcon
+import io.mockk.coEvery
+import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -124,5 +140,53 @@ class WaitingRoomContentTest {
     fun state_seeds_the_matching_frame() {
         assertEquals("Under review", WaitingRoomState.Active.content().headline)
         assertEquals("We need one more thing", WaitingRoomState.MoreInfoRequested.content().headline)
+        withLoadedClaim("2026-06-12T12:00:00Z") { model ->
+            assertEquals(WaitingRoomViewModel.dayCaption("2026-06-12T12:00:00Z"), model.content.value.timeline[0].sub)
+            assertNotNull(model.content.value.timeline[0].sub)
+            assertNull(model.content.value.timeline[1].sub)
+        }
+        withLoadedClaim("invalid-date") { model ->
+            assertNull(model.content.value.timeline[0].sub)
+            assertNull(model.content.value.timeline[1].sub)
+        }
     }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun withLoadedClaim(createdAt: String, assertion: (WaitingRoomViewModel) -> Unit) =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            try {
+                val repository = mockk<HomesRepository>()
+                coEvery { repository.myOwnershipClaims() } returns
+                    NetworkResult.Success(
+                        MyOwnershipClaimsResponse(
+                            listOf(
+                                OwnershipClaimDto(
+                                    id = "claim-1",
+                                    homeId = "home-1",
+                                    claimType = "owner",
+                                    method = "invite",
+                                    status = "under_review",
+                                    createdAt = createdAt,
+                                    updatedAt = "2026-07-18T12:00:00Z",
+                                ),
+                            ),
+                        ),
+                    )
+                coEvery { repository.detail("home-1") } returns NetworkResult.Failure(NetworkError.Forbidden)
+                val model =
+                    WaitingRoomViewModel(
+                        repository,
+                        mockk<HomeDashboardAccessFactory>(relaxed = true),
+                        SavedStateHandle(mapOf(WAITING_ROOM_HOME_ID_KEY to "home-1")),
+                    )
+                model.refresh()
+                advanceUntilIdle()
+                assertEquals(WaitingRoomPhase.Loaded, model.phase.value)
+                assertEquals("CLAIM-1", model.content.value.claimRef)
+                assertion(model)
+            } finally {
+                Dispatchers.resetMain()
+            }
+        }
 }

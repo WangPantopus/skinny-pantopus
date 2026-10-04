@@ -221,7 +221,9 @@ public extension WaitingRoomContent {
     /// "within 24–48 hours" ETA pill.
     static func active(
         address: String = sampleAddress,
-        claimRef: String = sampleClaimRef
+        claimRef: String = sampleClaimRef,
+        submittedOn: String? = "Oct 24",
+        reviewCaption: String? = "Started 9h ago"
     ) -> WaitingRoomContent {
         WaitingRoomContent(
             title: roomTitle,
@@ -233,8 +235,8 @@ public extension WaitingRoomContent {
             claimRef: claimRef,
             reviewerNote: nil,
             timeline: [
-                StatusTimelineStage(id: "submitted", label: "Submitted", sub: "Oct 24", state: .done),
-                StatusTimelineStage(id: "review", label: "Under review", sub: "Started 9h ago", state: .current),
+                StatusTimelineStage(id: "submitted", label: "Submitted", sub: submittedOn, state: .done),
+                StatusTimelineStage(id: "review", label: "Under review", sub: reviewCaption, state: .current),
                 StatusTimelineStage(id: "approved", label: "Approved", state: .pending)
             ],
             timelinePaused: false,
@@ -265,7 +267,8 @@ public extension WaitingRoomContent {
     /// within 7 days" ETA pill, and "Update evidence" promoted to primary.
     static func moreInfoRequested(
         address: String = sampleAddress,
-        claimRef: String = sampleClaimRef
+        claimRef: String = sampleClaimRef,
+        submittedOn: String? = "Oct 24"
     ) -> WaitingRoomContent {
         WaitingRoomContent(
             title: roomTitle,
@@ -281,7 +284,7 @@ public extension WaitingRoomContent {
                     "August or later — anything within the last 60 days works.\u{201D}"
             ),
             timeline: [
-                StatusTimelineStage(id: "submitted", label: "Submitted", sub: "Oct 24", state: .done),
+                StatusTimelineStage(id: "submitted", label: "Submitted", sub: submittedOn, state: .done),
                 StatusTimelineStage(id: "review", label: "Under review", sub: "Action needed", state: .current),
                 StatusTimelineStage(id: "approved", label: "Approved", state: .pending)
             ],
