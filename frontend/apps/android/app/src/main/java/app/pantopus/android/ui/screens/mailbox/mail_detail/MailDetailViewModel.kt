@@ -349,7 +349,7 @@ class MailDetailViewModel
          */
         fun acknowledge() {
             val current = _state.value as? MailDetailUiState.Loaded ?: return
-            if (_ackInFlight.value) return
+            if (_ackInFlight.value || current.content.isAcknowledged) return
             _ackInFlight.value = true
             val signed = current.content.certifiedDetail?.completing("acknowledged", Instant.now().toString())
             val optimistic = current.content.copy(isAcknowledged = true, certifiedDetail = signed)
