@@ -267,10 +267,30 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
           // receipt, using the same Home/custom-address priority as address sharing.
           let addressLabel = null;
           if (payload.guest_address_shared_at) {
+            if (!payload.reservation_id || !payload.slot_id) return { delivered: false };
+            // The job's snapshot can precede a cancellation or a re-share. Bind
+            // the current guest receipt before repeating private address data.
+            const { data: reservation, error: reservationError } = await supabaseAdmin
+              .from('SupportTrainReservation')
+              .select('id, SupportTrainSlot:slot_id ( id, status )')
+              .eq('id', payload.reservation_id)
+              .eq('support_train_id', supportTrainId)
+              .eq('slot_id', payload.slot_id)
+              .eq('status', 'reserved')
+              .is('user_id', null)
+              .eq('guest_email', payload.helper_guest_email)
+              .eq('guest_address_shared_at', payload.guest_address_shared_at)
+              .maybeSingle();
+            if (reservationError || !reservation ||
+                reservation.SupportTrainSlot?.id !== payload.slot_id ||
+                !['open', 'full'].includes(reservation.SupportTrainSlot?.status)) {
+              return { delivered: false };
+            }
             const { data: delivery, error } = await supabaseAdmin
               .from('SupportTrain')
               .select('recipient_home_id, delivery_address, delivery_city, delivery_state, delivery_zip, Activity!inner ( home_id )')
               .eq('id', supportTrainId)
+              .in('status', ['published', 'active'])
               .single();
             if (error || !delivery) return { delivered: false };
             const homeId = delivery.recipient_home_id || delivery.Activity?.home_id;

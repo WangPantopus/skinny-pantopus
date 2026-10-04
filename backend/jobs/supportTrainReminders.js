@@ -68,6 +68,7 @@ async function _send24hReminders() {
         supportTrainId: res.support_train_id,
         actorUserId: res.user_id,
         payload: {
+          reservation_id: res.id,
           helper_user_id: res.user_id,
           helper_guest_email: res.guest_email,
           helper_guest_name: res.guest_name,
@@ -157,6 +158,7 @@ async function _sendDayOfReminders() {
         supportTrainId: res.support_train_id,
         actorUserId: res.user_id,
         payload: {
+          reservation_id: res.id,
           helper_user_id: res.user_id,
           helper_guest_email: res.guest_email,
           helper_guest_name: res.guest_name,

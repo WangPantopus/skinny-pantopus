@@ -186,6 +186,48 @@ describe('supportTrainSlotAvailability', () => {
       expect(sendGuestReservationReminderEmail).not.toHaveBeenCalled();
       expect(supabase.getTable('SupportTrainReservation')[0].day_of_reminder_sent_at).toBeNull();
     });
+
+    it.each([
+      ['cancellation', { status: 'canceled' }],
+      ['helper email change', { guest_email: 'changed@example.com' }],
+      ['share receipt removal', { guest_address_shared_at: null }],
+      ['share receipt change', { guest_address_shared_at: '2026-10-04T13:00:00Z' }],
+      ['account helper', { user_id: 'account-helper' }],
+      ['train mismatch', { support_train_id: 'other-train' }],
+      ['slot mismatch', { slot_id: 'other-slot' }],
+      ['slot cancellation', { SupportTrainSlot: { id: 'slot', status: 'canceled' } }],
+      ['reservation missing', null],
+      ['train paused during address lookup', { pauseTrain: true }],
+    ])('refuses stale shared address after %s following the job query', async (_name, mutation) => {
+      const original = seed({ shared: '2026-10-03T20:00:00Z' });
+      const from = supabase.from;
+      let trainReads = 0;
+      const spy = jest.spyOn(supabase, 'from').mockImplementation(table => {
+        if (table === 'SupportTrain') {
+          trainReads++;
+          if (trainReads === 1 && !mutation?.pauseTrain) {
+            // Replacement leaves the scheduler's original snapshot untouched.
+            supabase.seedTable('SupportTrainReservation', mutation ? [{ ...original, ...mutation }] : []);
+          }
+          if (trainReads === 2 && mutation?.pauseTrain) {
+            const train = supabase.getTable('SupportTrain')[0];
+            supabase.seedTable('SupportTrain', [{ ...train, status: 'paused' }]);
+          }
+        }
+        return from(table);
+      });
+      try {
+        await runSupportTrainReminders();
+        expect(sendGuestReservationReminderEmail).not.toHaveBeenCalled();
+        expect(createNotification).not.toHaveBeenCalled();
+        expect(spy.mock.calls.some(([table]) => table === 'Home')).toBe(false);
+        expect(trainReads).toBe(mutation?.pauseTrain ? 2 : 1);
+        const stored = supabase.getTable('SupportTrainReservation')[0];
+        if (stored) expect(stored.day_of_reminder_sent_at).toBeNull();
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   it('counts stale full slots as available when active reservations are below capacity', () => {
