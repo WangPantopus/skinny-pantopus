@@ -269,19 +269,30 @@ function engineHours(hourly) {
   return out;
 }
 
+// Provider identity is independent of the live/cache transport marker.
+function todayProviderLabel(provider) {
+  switch (provider) {
+    case 'WEATHERKIT': return 'Apple WeatherKit';
+    case 'OPEN_METEO': return 'Open-Meteo';
+    case 'NOAA': return 'National Weather Service';
+    default: return 'Source unavailable';
+  }
+}
+
 // Shared Today envelope builder. `weather` / `aqi` are the Hub-shaped
 // blocks (or null → unavailable); `alerts` is an array (or null →
 // unavailable; an EMPTY array is still "ready": "No active alerts").
 // `hub` / `home` feed the good-day verdicts and are absent for the
 // anonymous point snapshot (that section then reads unavailable and the
 // preview simply does not list it).
-function buildTodayEnvelopes({ weather, aqi, alerts, asOf = null, hub = null, home = null }) {
+function buildTodayEnvelopes({ weather, aqi, alerts, weatherProvider, alertsProvider, asOf = null, hub = null, home = null }) {
   const out = [];
 
   if (weather) {
     out.push(serializePlaceSection('weather', {
       access: 'available',
       asOf,
+      source: todayProviderLabel(weatherProvider),
       data: {
         current_temp_f: weather.current_temp_f,
         condition_code: mapConditionCode(weather.condition_code),
@@ -324,7 +335,9 @@ function buildTodayEnvelopes({ weather, aqi, alerts, asOf = null, hub = null, ho
       onset: a.starts_at || null,
       ends: a.ends_at || null,
     }));
-    out.push(serializePlaceSection('alerts', { access: 'available', asOf, status: 'ready', data: { active } }));
+    out.push(serializePlaceSection('alerts', {
+      access: 'available', asOf, source: todayProviderLabel(alertsProvider), status: 'ready', data: { active },
+    }));
   } else {
     out.push(serializePlaceSection('alerts', { access: 'available', status: 'unavailable' }));
   }
@@ -374,6 +387,8 @@ async function composeToday(userId, home, hub) {
     weather: hub && hub.weather ? hub.weather : null,
     aqi: hub && hub.aqi ? hub.aqi : null,
     alerts: alertsChecked ? (hub.alerts || []) : null,
+    weatherProvider: hub?.meta?.section_providers?.weather,
+    alertsProvider: hub?.meta?.section_providers?.alerts,
     asOf: (hub && hub.fetched_at) || null,
     hub,
     home,
@@ -428,6 +443,8 @@ async function composeTodayForPoint(lat, lng) {
     weather,
     aqi,
     alerts,
+    weatherProvider: w?.provider,
+    alertsProvider: al?.provider,
     asOf: (w && w.fetchedAt) || (a && a.fetchedAt) || new Date().toISOString(),
   });
 

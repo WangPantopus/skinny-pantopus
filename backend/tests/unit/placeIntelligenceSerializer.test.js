@@ -70,6 +70,11 @@ describe('placeIntelligenceSerializer — section envelope', () => {
     const withoutData = serializePlaceSection('weather');
     expect(withoutData.status).toBe('unavailable');
     expect(withoutData.data).toBeNull();
+    // Weather and alerts have multiple providers; an absent identity must
+    // never fall back to a claim that NWS supplied this section.
+    expect(withData.source).toBe('Source unavailable');
+    expect(withoutData.source).toBe('Source unavailable');
+    expect(serializePlaceSection('alerts', { data: { active: [] } }).source).toBe('Source unavailable');
   });
 
   test('a coverage gap renders unavailable with a reason and no data', () => {

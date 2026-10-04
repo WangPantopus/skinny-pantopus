@@ -37,6 +37,9 @@ INSERT INTO public."HomeAccessSecret"(id,home_id,created_by,access_type,label,se
  FROM (VALUES(401,'Shared network','members'),(402,'Sensitive network','sensitive'),(403,'Manager network','managers')) f(n,label,visibility);
 INSERT INTO public."HomeAccessSecretValue"(access_secret_id,secret_value)
  SELECT id,'fixture-wifi-'||label FROM public."HomeAccessSecret" WHERE home_id='ddf00000-0000-4000-8000-000000000100';
+INSERT INTO public."HomeEmergency"(id,home_id,created_by,type,label) VALUES
+ ('ddf00000-0000-4000-8000-000000000701','ddf00000-0000-4000-8000-000000000100',
+  'ddf00000-0000-4000-8000-000000000001','medication','Private medication fixture');
 INSERT INTO public."HomeTask"(id,home_id,created_by,title,task_type,visibility,details)
  SELECT ('ddf00000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
   ('ddf00000-0000-4000-8000-'||lpad(h::text,12,'0'))::uuid,'ddf00000-0000-4000-8000-000000000001',
@@ -118,6 +121,11 @@ DO $$ DECLARE h uuid:='ddf00000-0000-4000-8000-000000000100'; o uuid:='ddf00000-
  recipient uuid:='ddf00000-0000-4000-8000-000000000003'; member_id uuid:='ddf00000-0000-4000-8000-000000000004';
  p jsonb; r jsonb; sid uuid; doc uuid:='ddf00000-0000-4000-8000-000000000601';
 BEGIN
+ -- HomeEmergency is not an issuable scoped resource. A malformed response
+ -- fixture in the API suite is not proof of a reachable persisted share.
+ PERFORM pg_temp.expect_share(public.mutate_home_external_share(h,o,'scoped','create',NULL,
+  jsonb_build_object('resource_type','HomeEmergency','resource_id','ddf00000-0000-4000-8000-000000000701',
+    'token_hash',repeat('e',64))),'SHARE_RESOURCE_DENIED');
  p:=jsonb_build_object('resource_type','HomeTask','resource_id','ddf00000-0000-4000-8000-000000000501',
   'grantee_user_id',recipient,'token_hash',repeat('3',64));
  PERFORM pg_temp.expect_share(public.mutate_home_external_share(h,o,'scoped','create',NULL,
@@ -264,7 +272,11 @@ DO $$ BEGIN
  END;
 END $$;
 RESET ROLE;
-DO $$ DECLARE t text; op text; BEGIN
+DO $$ DECLARE t text; op text; v_scope text; BEGIN
+ SELECT pg_get_constraintdef(oid) INTO v_scope FROM pg_constraint
+  WHERE conrelid='public."HomeScopedGrant"'::regclass AND conname='homescopedgrant_resource_type_chk' AND contype='c';
+ IF v_scope IS NULL OR v_scope LIKE '%HomeEmergency%' OR v_scope LIKE '%HomeAccessSecret%' THEN
+  RAISE EXCEPTION 'Scoped resource constraint admits Emergency or access-secret rows'; END IF;
  FOREACH t IN ARRAY ARRAY['HomeGuestPass','HomeGuestPassView','HomeScopedGrant','HomeShareReadReceipt'] LOOP
   FOREACH op IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'] LOOP
    IF has_table_privilege('authenticated',format('public.%I',t),op) OR has_table_privilege('anon',format('public.%I',t),op) THEN

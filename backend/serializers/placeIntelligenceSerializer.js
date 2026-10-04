@@ -43,9 +43,11 @@ const PLACE_GROUP_LABELS = {
 // ─── Launch-set section metadata (Band A, §8.3) ──────────────
 // group · band · default provider label · launch-set layer number.
 const PLACE_SECTION_META = {
-  weather: { group: 'today', band: 'A', source: 'National Weather Service', layer: 1 },
+  // These adapters can fall back between providers. The composers supply
+  // the answering provider; absent provenance must not imply NWS.
+  weather: { group: 'today', band: 'A', source: 'Source unavailable', layer: 1 },
   air_quality: { group: 'today', band: 'A', source: 'AirNow · EPA', layer: 2 },
-  alerts: { group: 'today', band: 'A', source: 'National Weather Service', layer: null },
+  alerts: { group: 'today', band: 'A', source: 'Source unavailable', layer: null },
   sunrise_sunset: { group: 'today', band: 'A', source: 'Open-Meteo', layer: null },
   // Verdicts, not readings — derived from the weather/AQI payload already
   // fetched for the two layers above, crossed with the home's own facts.

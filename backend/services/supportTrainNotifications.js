@@ -13,7 +13,7 @@
  */
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { createNotification, createBulkNotifications } = require('./notificationService');
-const { sendGuestReservationConfirmationEmail } = require('./emailService');
+const { sendGuestReservationReminderEmail } = require('./emailService');
 const logger = require('../utils/logger');
 
 const DEEP_LINK_PREFIX = '/app/support-trains';
@@ -263,16 +263,66 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
           return { delivered: Boolean(notification) };
         }
         if (payload.helper_guest_email) {
-          const result = await sendGuestReservationConfirmationEmail({
+          // Resolve exact address data only for a guest with an existing share
+          // receipt, using the same Home/custom-address priority as address sharing.
+          let addressLabel = null;
+          if (payload.guest_address_shared_at) {
+            if (!payload.reservation_id || !payload.slot_id) return { delivered: false };
+            // The job's snapshot can precede a cancellation or a re-share. Bind
+            // the current guest receipt before repeating private address data.
+            const { data: reservation, error: reservationError } = await supabaseAdmin
+              .from('SupportTrainReservation')
+              .select('id, SupportTrainSlot:slot_id ( id, status )')
+              .eq('id', payload.reservation_id)
+              .eq('support_train_id', supportTrainId)
+              .eq('slot_id', payload.slot_id)
+              .eq('status', 'reserved')
+              .is('user_id', null)
+              .eq('guest_email', payload.helper_guest_email)
+              .eq('guest_address_shared_at', payload.guest_address_shared_at)
+              .maybeSingle();
+            if (reservationError || !reservation ||
+                reservation.SupportTrainSlot?.id !== payload.slot_id ||
+                !['open', 'full'].includes(reservation.SupportTrainSlot?.status)) {
+              return { delivered: false };
+            }
+            const { data: delivery, error } = await supabaseAdmin
+              .from('SupportTrain')
+              .select('recipient_home_id, delivery_address, delivery_city, delivery_state, delivery_zip, Activity!inner ( home_id )')
+              .eq('id', supportTrainId)
+              .in('status', ['published', 'active'])
+              .single();
+            if (error || !delivery) return { delivered: false };
+            const homeId = delivery.recipient_home_id || delivery.Activity?.home_id;
+            let home = null;
+            if (homeId) {
+              const result = await supabaseAdmin.from('Home')
+                .select('address, address2, city, state, zipcode').eq('id', homeId).single();
+              if (result.error) return { delivered: false };
+              home = result.data;
+            }
+            const firstLine = home ? [home.address, home.address2].filter(Boolean).join(' ') : delivery.delivery_address;
+            const secondLine = home ? [home.city, home.state, home.zipcode] : [delivery.delivery_city, delivery.delivery_state, delivery.delivery_zip];
+            if (firstLine) addressLabel = [firstLine, secondLine.filter(Boolean).join(', ')].filter(Boolean).join('\n');
+          }
+          const slotTime = payload.start_time && payload.end_time
+            ? `${payload.start_time} - ${payload.end_time}`
+            : payload.start_time ? `${payload.start_time}+`
+              : payload.end_time ? `Until ${payload.end_time}` : null;
+          const result = await sendGuestReservationReminderEmail({
             toEmail: payload.helper_guest_email,
             guestName: payload.helper_guest_name || 'helper',
             trainTitle: title,
             slotLabel: payload.slot_label || 'your contribution',
             slotDate: formatSlotDate(payload.slot_date),
-            slotTime: payload.start_time || null,
+            slotTime,
             contributionMode: payload.contribution_mode,
+            dishTitle: payload.dish_title,
+            restaurantName: payload.restaurant_name,
+            reminderDay: event.includes('24h') ? 'tomorrow' : 'today',
+            guestAddressSharedAt: payload.guest_address_shared_at,
+            ...(addressLabel ? { addressLabel } : {}),
             supportTrainId,
-            isReminder: true,
           });
           // A local log preview is not delivery and must not retire the retry.
           return { delivered: result?.success === true && result.preview !== true };
@@ -342,7 +392,7 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
         logger.warn('emitSupportTrainEvent: unknown event', { event, supportTrainId });
     }
   } catch (err) {
-    logger.error('emitSupportTrainEvent failed', { event, supportTrainId, error: err.message });
+    logger.error('emitSupportTrainEvent failed', { event, supportTrainId, errorCode: err.code });
   }
 }
 

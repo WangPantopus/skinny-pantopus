@@ -4,8 +4,8 @@
 // organizers about unfilled slots. Runs every 30 minutes.
 //
 // Three tasks:
-//   1. 24h reminders for tomorrow's reservations
-//   2. Day-of reminders for slots starting within 4 hours
+//   1. Reminders after 17:00 train-local time the evening before
+//   2. Day-of reminders at 07:00 local or 4h before an earlier start
 //   3. Open-slots nudges for organizers (max once per 48h)
 // ============================================================
 
@@ -13,6 +13,15 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { emitSupportTrainEvent } = require('../services/supportTrainNotifications');
 const { listEffectivelyOpenSlots } = require('../services/supportTrainSlotAvailability');
+const { inferTimezone } = require('../services/context/locationResolver');
+const { DateTime } = require('luxon');
+
+function localReminderTime(reservation, now) {
+  const train = reservation.SupportTrain;
+  return DateTime.fromJSDate(now, {
+    zone: inferTimezone(train?.delivery_lat, train?.delivery_lng),
+  });
+}
 
 async function runSupportTrainReminders() {
   await _send24hReminders();
@@ -24,15 +33,14 @@ async function runSupportTrainReminders() {
 
 async function _send24hReminders() {
   try {
-    // Find reservations for tomorrow's slots
-    const tomorrow = new Date();
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    const tomorrowDate = tomorrow.toISOString().split('T')[0];
+    const now = new Date();
 
     const { data: reservations, error } = await supabaseAdmin
       .from('SupportTrainReservation')
       .select(`
-        id, user_id, guest_name, guest_email, support_train_id, contribution_mode, last_reminder_sent,
+        id, user_id, guest_name, guest_email, support_train_id, contribution_mode,
+        dish_title, restaurant_name, guest_address_shared_at, last_reminder_sent,
+        SupportTrain:support_train_id ( delivery_lat, delivery_lng ),
         SupportTrainSlot:slot_id (
           id, slot_date, slot_label, support_mode, start_time, end_time, status
         )
@@ -41,17 +49,17 @@ async function _send24hReminders() {
       .is('last_reminder_sent', null);
 
     if (error) {
-      logger.error('[supportTrainReminders] 24h query failed', { error: error.message });
+      logger.error('[supportTrainReminders] 24h query failed', { errorCode: error.code });
       return;
     }
 
-    // Filter for tomorrow's slots (slot_date comparison)
-    const tomorrowReservations = (reservations || []).filter(r =>
-      r.SupportTrainSlot?.slot_date === tomorrowDate &&
-      ['open', 'full'].includes(r.SupportTrainSlot.status)
-    );
+    const tomorrowReservations = (reservations || []).filter(r => {
+      const localNow = localReminderTime(r, now);
+      return localNow.hour >= 17 &&
+        r.SupportTrainSlot?.slot_date === localNow.plus({ days: 1 }).toISODate() &&
+        ['open', 'full'].includes(r.SupportTrainSlot.status);
+    });
 
-    const now = new Date().toISOString();
     let sent = 0;
     for (const res of tomorrowReservations) {
       const slot = res.SupportTrainSlot;
@@ -60,14 +68,19 @@ async function _send24hReminders() {
         supportTrainId: res.support_train_id,
         actorUserId: res.user_id,
         payload: {
+          reservation_id: res.id,
           helper_user_id: res.user_id,
           helper_guest_email: res.guest_email,
           helper_guest_name: res.guest_name,
           contribution_mode: res.contribution_mode,
+          dish_title: res.dish_title,
+          restaurant_name: res.restaurant_name,
+          guest_address_shared_at: res.guest_address_shared_at,
           slot_id: slot.id,
           slot_label: slot.slot_label,
           slot_date: slot.slot_date,
           start_time: slot.start_time,
+          end_time: slot.end_time,
         },
       });
 
@@ -76,13 +89,13 @@ async function _send24hReminders() {
       // Mark as reminded so we don't re-send
       const { error: markError } = await supabaseAdmin
         .from('SupportTrainReservation')
-        .update({ last_reminder_sent: now })
+        .update({ last_reminder_sent: now.toISOString() })
         .eq('id', res.id)
         .eq('status', 'reserved')
         .is('last_reminder_sent', null);
 
       if (markError) {
-        logger.error('[supportTrainReminders] reminder marker failed', { error: markError.message });
+        logger.error('[supportTrainReminders] reminder marker failed', { errorCode: markError.code });
         continue;
       }
 
@@ -93,7 +106,7 @@ async function _send24hReminders() {
       logger.info('[supportTrainReminders] 24h reminders sent', { count: sent });
     }
   } catch (err) {
-    logger.error('[supportTrainReminders] 24h reminders failed', { error: err.message });
+    logger.error('[supportTrainReminders] 24h reminders failed', { errorCode: err.code });
   }
 }
 
@@ -102,34 +115,39 @@ async function _send24hReminders() {
 async function _sendDayOfReminders() {
   try {
     const now = new Date();
-    const todayDate = now.toISOString().split('T')[0];
-    const fourHoursLater = new Date(now.getTime() + 4 * 60 * 60 * 1000);
-    const nowTimeStr = now.toISOString().split('T')[1].slice(0, 5);       // HH:mm
-    const laterTimeStr = fourHoursLater.toISOString().split('T')[1].slice(0, 5);
-    const crossesMidnight = fourHoursLater.toISOString().split('T')[0] !== todayDate;
 
     const { data: reservations, error } = await supabaseAdmin
       .from('SupportTrainReservation')
       .select(`
-        id, user_id, guest_name, guest_email, support_train_id, contribution_mode, last_reminder_sent,
+        id, user_id, guest_name, guest_email, support_train_id, contribution_mode,
+        dish_title, restaurant_name, guest_address_shared_at, day_of_reminder_sent_at,
+        SupportTrain:support_train_id ( delivery_lat, delivery_lng ),
         SupportTrainSlot:slot_id (
           id, slot_date, slot_label, support_mode, start_time, end_time, status
         )
       `)
       .eq('status', 'reserved')
-      .is('last_reminder_sent', null);
+      .is('day_of_reminder_sent_at', null);
 
     if (error) {
-      logger.error('[supportTrainReminders] day-of query failed', { error: error.message });
+      logger.error('[supportTrainReminders] day-of query failed', { errorCode: error.code });
       return;
     }
 
-    // Filter: today's slots with start_time within the next 4 hours
     const eligible = (reservations || []).filter(r => {
       const slot = r.SupportTrainSlot;
-      if (!slot || slot.slot_date !== todayDate || !slot.start_time) return false;
+      const localNow = localReminderTime(r, now);
+      if (!slot || slot.slot_date !== localNow.toISODate()) return false;
       if (!['open', 'full'].includes(slot.status)) return false;
-      return slot.start_time >= nowTimeStr && (crossesMidnight || slot.start_time <= laterTimeStr);
+      const morning = localNow.startOf('day').set({ hour: 7 });
+      if (!slot.start_time) return localNow >= morning;
+      const start = DateTime.fromISO(`${slot.slot_date}T${slot.start_time}`, { zone: localNow.zoneName });
+      if (!start.isValid || start < localNow) return false;
+      const fourHoursBefore = start.minus({ hours: 4 });
+      const due = fourHoursBefore < morning ? fourHoursBefore : morning;
+      // A start before 04:00 is eligible from midnight on the slot's day;
+      // the day-of email must not say "today" on the preceding evening.
+      return localNow >= due;
     });
 
     let sent = 0;
@@ -140,14 +158,19 @@ async function _sendDayOfReminders() {
         supportTrainId: res.support_train_id,
         actorUserId: res.user_id,
         payload: {
+          reservation_id: res.id,
           helper_user_id: res.user_id,
           helper_guest_email: res.guest_email,
           helper_guest_name: res.guest_name,
           contribution_mode: res.contribution_mode,
+          dish_title: res.dish_title,
+          restaurant_name: res.restaurant_name,
+          guest_address_shared_at: res.guest_address_shared_at,
           slot_id: slot.id,
           slot_label: slot.slot_label,
           slot_date: slot.slot_date,
           start_time: slot.start_time,
+          end_time: slot.end_time,
         },
       });
 
@@ -156,13 +179,13 @@ async function _sendDayOfReminders() {
       // Mark as reminded
       const { error: markError } = await supabaseAdmin
         .from('SupportTrainReservation')
-        .update({ last_reminder_sent: now.toISOString() })
+        .update({ day_of_reminder_sent_at: now.toISOString() })
         .eq('id', res.id)
         .eq('status', 'reserved')
-        .is('last_reminder_sent', null);
+        .is('day_of_reminder_sent_at', null);
 
       if (markError) {
-        logger.error('[supportTrainReminders] reminder marker failed', { error: markError.message });
+        logger.error('[supportTrainReminders] reminder marker failed', { errorCode: markError.code });
         continue;
       }
 
@@ -173,7 +196,7 @@ async function _sendDayOfReminders() {
       logger.info('[supportTrainReminders] day-of reminders sent', { count: sent });
     }
   } catch (err) {
-    logger.error('[supportTrainReminders] day-of reminders failed', { error: err.message });
+    logger.error('[supportTrainReminders] day-of reminders failed', { errorCode: err.code });
   }
 }
 
@@ -198,7 +221,7 @@ async function _sendOpenSlotNudges() {
         columns: 'id, support_train_id, slot_date, status, capacity, filled_count',
       });
     } catch (error) {
-      logger.error('[supportTrainReminders] open slots query failed', { error: error.message });
+      logger.error('[supportTrainReminders] open slots query failed', { errorCode: error.code });
       return;
     }
 
@@ -248,7 +271,7 @@ async function _sendOpenSlotNudges() {
       logger.info('[supportTrainReminders] open slot nudges sent', { count: sent });
     }
   } catch (err) {
-    logger.error('[supportTrainReminders] open slot nudges failed', { error: err.message });
+    logger.error('[supportTrainReminders] open slot nudges failed', { errorCode: err.code });
   }
 }
 

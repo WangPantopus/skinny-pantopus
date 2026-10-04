@@ -22,6 +22,25 @@ const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const { getHubToday, clearHubTodayCache } = require('../services/context/providerOrchestrator');
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
+const { recordFunnelEvent, APP_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
+
+// Authenticated pilot beacons: account identity comes only from verifyToken.
+// The app-wide JSON parser runs first, so enforce the small body here.
+const PILOT_EVENT_META_KEYS = ['platform', 'trigger', 'push_type', 'kind', 'action', 'date', 'suggestion', 'decision'];
+router.post('/funnel-events', verifyToken, async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)
+    || JSON.stringify(body).length > 2048
+    || !APP_POSTABLE_EVENT_TYPES.includes(body.event_type)) {
+    return res.status(204).end();
+  }
+  const input = body.meta && typeof body.meta === 'object' && !Array.isArray(body.meta) ? body.meta : {};
+  const meta = Object.fromEntries(PILOT_EVENT_META_KEYS
+    .filter(key => typeof input[key] === 'string' && input[key].length <= 40)
+    .map(key => [key, input[key]]));
+  await recordFunnelEvent(body.event_type, { userId: req.user.id, meta });
+  return res.status(204).end();
+});
 
 /**
  * GET /api/hub
@@ -448,7 +467,7 @@ router.get('/', verifyToken, async (req, res) => {
         severity: 'info', count: unreadPersonal, route: '/app/mailbox',
       });
     }
-    if (offerItems.length > 0) {
+    if (offerItems.length > 0 && isLaunchFeatureEnabled('mail_extras')) {
       statusItems.push({
         id: 'inbox_offers', type: 'system_alert', pillar: 'personal',
         title: `${offerItems.length} offer${offerItems.length > 1 ? 's' : ''} available`,
