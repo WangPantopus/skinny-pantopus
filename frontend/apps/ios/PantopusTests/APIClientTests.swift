@@ -81,9 +81,9 @@ final class APIClientTests: XCTestCase {
         XCTAssertFalse(window.enterForeground(now: 3611))
         let previousRequests = URLProtocolStub.capturedRequests.count
         do {
-            _ = try await client.request(Endpoint(method: .post, path: "/api/hub/funnel-events", dispatchGuard: {
+            _ = try await client.request(Endpoint(method: .post, path: "/api/hub/funnel-events") {
                 throw CancellationError()
-            }))
+            })
             XCTFail("Obsolete scope dispatched")
         } catch {}
         XCTAssertEqual(URLProtocolStub.capturedRequests.count, previousRequests)

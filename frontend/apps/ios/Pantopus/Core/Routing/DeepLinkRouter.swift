@@ -759,7 +759,8 @@ final class DeepLinkRouter {
             guard trailing.count == 2, UUID(uuidString: id) != nil,
                   let taskId = trailing.last, UUID(uuidString: taskId) != nil else { return .unknown(url) }
             return .homeTask(
-                homeId: id.lowercased(), taskId: taskId.lowercased(),
+                homeId: id.lowercased(),
+                taskId: taskId.lowercased(),
                 openDueDateEdit: URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
                     .contains { $0.name == "edit" && $0.value == "due_date" } == true
             )

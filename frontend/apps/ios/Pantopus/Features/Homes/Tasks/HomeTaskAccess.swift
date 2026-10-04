@@ -293,13 +293,12 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
             path: "/api/homes/\(homeId)/tasks" + (taskId.map { "/\($0)" } ?? ""),
             body: body,
             headers: currentHeaders,
-            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
-            dispatchGuard: { [weak self] in
-                guard let self else { throw CancellationError() }
-                try requireCurrent()
-                try dispatchGuard()
-                try beforeDispatch?()
-            }
-        )
+            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
+        ) { [weak self] in
+            guard let self else { throw CancellationError() }
+            try requireCurrent()
+            try dispatchGuard()
+            try beforeDispatch?()
+        }
     }
 }

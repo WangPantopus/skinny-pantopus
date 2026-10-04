@@ -58,7 +58,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         let pickup = UNNotificationCategory(
             identifier: "PICKUP_REMINDER",
             actions: [UNNotificationAction(identifier: "BINS_OUT", title: "Bins out", options: [])],
-            intentIdentifiers: [], options: []
+            intentIdentifiers: [],
+            options: []
         )
         let task = UNNotificationCategory(
             identifier: "TASK_REMINDER",
@@ -66,7 +67,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
                 UNNotificationAction(identifier: "TASK_DONE", title: "Done", options: [.authenticationRequired]),
                 UNNotificationAction(identifier: "TASK_NOT_NOW", title: "Not now", options: [.foreground])
             ],
-            intentIdentifiers: [], options: []
+            intentIdentifiers: [],
+            options: []
         )
         UNUserNotificationCenter.current().setNotificationCategories([pickup, task])
     }
@@ -157,6 +159,52 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         return [.banner, .list, .sound, .badge]
     }
 
+    private struct ReminderPayload {
+        let category: String
+        let recipient: String?
+        let date: String?
+        let homeId: String?
+        let taskId: String?
+        let taskPath: String?
+    }
+
+    @MainActor
+    private func handleBackgroundReminder(_ action: String, payload: ReminderPayload) async {
+        let auth = AuthManager.shared
+        if auth.state == .unknown { await auth.restoreSession() }
+        guard let recipient = payload.recipient, case let .signedIn(user) = auth.state, user.id == recipient else { return }
+        AppLockManager.shared.configure(userID: user.id)
+        guard !AppLockManager.shared.isLocked else { return }
+        let scope = HomeClaimSessionScope(api: .shared)
+        guard scope.isCurrent else { return }
+        if action == "BINS_OUT" {
+            guard payload.category == "PICKUP_REMINDER", let date = payload.date,
+                  date.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil else { return }
+            await PilotEvents.shared.send(
+                .reminderAction,
+                meta: ["kind": "pickup", "action": "bins_out", "date": date],
+                scope: scope
+            )
+        } else {
+            guard payload.category == "TASK_REMINDER", let homeId = payload.homeId, let taskId = payload.taskId,
+                  payload.taskPath != nil else { return }
+            do {
+                _ = try await HomeTaskAccess(homeId: homeId) {
+                    try scope.requireCurrent()
+                    guard !AppLockManager.shared.isLocked else { throw CancellationError() }
+                }.complete(taskId: taskId, status: "done") {
+                    try scope.requireCurrent()
+                    guard !AppLockManager.shared.isLocked else { throw CancellationError() }
+                }
+                guard scope.isCurrent else { return }
+                await PilotEvents.shared.send(.reminderAction, meta: ["kind": "task", "action": "done"], scope: scope)
+            } catch {
+                // Keep the original task and notification usable after denial
+                // or an uncertain response; never claim a local completion.
+            }
+        }
+    }
+
     /// Handle taps on notifications — route to the relevant deep link.
     nonisolated func userNotificationCenter(
         _: UNUserNotificationCenter,
@@ -184,6 +232,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             // Briefing / monthly-receipt pushes carry no `link` — compose one
             // from `type` + `briefingKind` + `briefingDeliveryId`.
             ?? DeepLinkRouter.pushFallbackPath(userInfo: userInfo)
+        let reminder = ReminderPayload(
+            category: category,
+            recipient: recipient,
+            date: date,
+            homeId: homeId,
+            taskId: taskId,
+            taskPath: taskPath
+        )
         logger.info("Notification tapped")
         // Route and complete on the main actor. The async delegate variant
         // completed on a background executor, and UIKit's state-restoration
@@ -201,38 +257,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
                 return
             }
             if action == "BINS_OUT" || action == "TASK_DONE" {
-                let auth = AuthManager.shared
-                if auth.state == .unknown { await auth.restoreSession() }
-                guard let recipient, case let .signedIn(user) = auth.state, user.id == recipient else { return }
-                AppLockManager.shared.configure(userID: user.id)
-                guard !AppLockManager.shared.isLocked else { return }
-                let scope = HomeClaimSessionScope(api: .shared)
-                guard scope.isCurrent else { return }
-                if action == "BINS_OUT" {
-                    guard category == "PICKUP_REMINDER", let date,
-                          date.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil else { return }
-                    await PilotEvents.shared.send(
-                        .reminderAction,
-                        meta: ["kind": "pickup", "action": "bins_out", "date": date],
-                        scope: scope
-                    )
-                } else {
-                    guard category == "TASK_REMINDER", let homeId, let taskId, taskPath != nil else { return }
-                    do {
-                        _ = try await HomeTaskAccess(homeId: homeId, dispatchGuard: {
-                            try scope.requireCurrent()
-                            guard !AppLockManager.shared.isLocked else { throw CancellationError() }
-                        }).complete(taskId: taskId, status: "done") {
-                            try scope.requireCurrent()
-                            guard !AppLockManager.shared.isLocked else { throw CancellationError() }
-                        }
-                        guard scope.isCurrent else { return }
-                        await PilotEvents.shared.send(.reminderAction, meta: ["kind": "task", "action": "done"], scope: scope)
-                    } catch {
-                        // Keep the original task and notification usable after denial
-                        // or an uncertain response; never claim a local completion.
-                    }
-                }
+                await handleBackgroundReminder(action, payload: reminder)
                 return
             }
             guard action == UNNotificationDefaultActionIdentifier else { return }

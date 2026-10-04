@@ -114,10 +114,12 @@ final class PilotEvents {
         let body = Self.payload(event, meta: meta)
         // POSTs are not transport-retried by APIClient. Normal auth refresh remains.
         _ = try? await api.request(Endpoint(
-            method: .post, path: "/api/hub/funnel-events", body: body,
-            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeout: 5,
-            dispatchGuard: { try scope.requireCurrent() }
-        ))
+            method: .post,
+            path: "/api/hub/funnel-events",
+            body: body,
+            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
+            timeout: 5
+        ) { try scope.requireCurrent() })
     }
 
     static func payload(_ event: Event, meta: [String: String]) -> PilotEventBody {
