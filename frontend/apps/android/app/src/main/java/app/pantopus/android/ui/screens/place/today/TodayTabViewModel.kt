@@ -2,22 +2,33 @@ package app.pantopus.android.ui.screens.place.today
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.hub.HubRepository
+import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.place.detail.AddressCalendarActions
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection.HTTP_CONFLICT
+import java.time.ZoneId
 import javax.inject.Inject
+import kotlin.math.abs
+
+private const val SAVED_ANCHOR_TOLERANCE = 0.000001
 
 /**
  * The Today tab (Wedge v2 D2): the primary home's Today group — weather,
@@ -33,12 +44,24 @@ class TodayTabViewModel
         private val homesRepository: HomesRepository,
         private val repo: PlaceRepository,
         private val savedPlacesRepository: SavedPlacesRepository,
+        private val hubRepository: HubRepository,
+        private val preferencesRepository: NotificationPreferencesRepository,
+        sessionScopes: HomeClaimSessionScopeFactory,
     ) : ViewModel(),
         AddressCalendarActions {
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
         val state: StateFlow<TodayTabUiState> = _state.asStateFlow()
         private var homeId: String? = null
         private var loadJob: Job? = null
+        private var loadVersion = 0L
+        private val sessionScope = sessionScopes.create(viewModelScope)
+        private var promptAttempted = false
+        private val _showMorningCard = MutableStateFlow(false)
+        val showMorningCard = _showMorningCard.asStateFlow()
+        private val _preferenceBusy = MutableStateFlow(false)
+        val preferenceBusy = _preferenceBusy.asStateFlow()
+        private val _preferenceError = MutableStateFlow<String?>(null)
+        val preferenceError = _preferenceError.asStateFlow()
 
         private val _calendarBusy = MutableStateFlow(false)
         override val calendarBusy: StateFlow<Boolean> = _calendarBusy.asStateFlow()
@@ -52,10 +75,16 @@ class TodayTabViewModel
 
         fun refresh() {
             loadJob?.cancel()
+            val version = ++loadVersion
+            promptAttempted = false
+            _showMorningCard.value = false
+            _preferenceBusy.value = false
+            _preferenceError.value = null
             homeId = null
             _state.value = TodayTabUiState.Loading
             loadJob =
                 viewModelScope.launch {
+                    if (!current(version)) return@launch
                     val id =
                         when (val homes = resolvePrimaryHome()) {
                             is NetworkResult.Success -> homes.data
@@ -71,26 +100,138 @@ class TodayTabViewModel
                             homeId = id
                             repo.intelligence(id)
                         } else {
-                            val savedId =
-                                when (val saved = savedPlacesRepository.list()) {
-                                    is NetworkResult.Success -> saved.data.savedPlaces.firstOrNull()?.id
-                                    is NetworkResult.Failure -> {
-                                        _state.value = TodayTabUiState.Error(saved.error.displayMessage("Couldn't load your place."))
-                                        return@launch
-                                    }
-                                }
-                            if (savedId == null) {
-                                _state.value = TodayTabUiState.NoPlace
-                                return@launch
-                            }
-                            savedPlacesRepository.today(savedId)
+                            loadSavedPlace(version)
+                            return@launch
                         }
+                    if (!current(version)) return@launch
                     _state.value =
                         when (result) {
                             is NetworkResult.Success -> TodayTabUiState.Loaded(result.data, calendarHomeId = id)
                             is NetworkResult.Failure -> TodayTabUiState.Error(result.error.displayMessage("Couldn't load today."))
                         }
                 }
+        }
+
+        private suspend fun current(version: Long): Boolean {
+            currentCoroutineContext().ensureActive()
+            val allowed = sessionScope.confirmCurrent()
+            if (!allowed && version == loadVersion) {
+                _state.value = TodayTabUiState.Error("Your session changed. Reopen Today to continue.")
+                _showMorningCard.value = false
+                _preferenceBusy.value = false
+            }
+            return allowed && version == loadVersion
+        }
+
+        private suspend fun loadSavedPlace(version: Long) {
+            val saved = savedPlacesRepository.list()
+            if (!current(version)) return
+            val place =
+                when (saved) {
+                    is NetworkResult.Success -> saved.data.savedPlaces.firstOrNull()
+                    is NetworkResult.Failure -> {
+                        _state.value = TodayTabUiState.Error(saved.error.displayMessage("Couldn't load your place."))
+                        return
+                    }
+                }
+            if (place == null) {
+                _state.value = TodayTabUiState.NoPlace
+                return
+            }
+            val result = savedPlacesRepository.today(place.id)
+            if (!current(version)) return
+            when (result) {
+                is NetworkResult.Failure -> _state.value = TodayTabUiState.Error(result.error.displayMessage("Couldn't load today."))
+                is NetworkResult.Success -> {
+                    val matches = checkSavedAnchor(place)
+                    if (current(version)) {
+                        _state.value = TodayTabUiState.Loaded(result.data, savedPlace = place, savedAnchorMatches = matches)
+                        if (matches) {
+                            val preferences = preferencesRepository.preferences()
+                            if (current(version) && preferences is NetworkResult.Success) {
+                                _showMorningCard.value = preferences.data.dailyBriefingPromptedAt == null
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private suspend fun checkSavedAnchor(place: SavedPlaceDto): Boolean {
+            if (!sessionScope.confirmCurrent()) return false
+            val today = hubRepository.todayDetail()
+            if (!sessionScope.confirmCurrent()) return false
+            val payload = (today as? NetworkResult.Success)?.data ?: return false
+            val location = payload.location
+            val latitude = location?.latitude
+            val longitude = location?.longitude
+            return payload.isRenderable && location?.source == "saved_place" && latitude != null && longitude != null &&
+                abs(latitude - place.latitude) < SAVED_ANCHOR_TOLERANCE && abs(longitude - place.longitude) < SAVED_ANCHOR_TOLERANCE
+        }
+
+        fun markPromptDisplayed() {
+            if (!_showMorningCard.value || promptAttempted) return
+            promptAttempted = true
+            val version = loadVersion
+            _preferenceBusy.value = true
+            viewModelScope.launch {
+                if (!current(version)) return@launch
+                val result = preferencesRepository.updatePreferences(NotificationPreferencesPatch(dailyBriefingPrompted = true))
+                if (!current(version)) return@launch
+                if (result is NetworkResult.Failure) _preferenceError.value = "Couldn't save your choice. Try again."
+                _preferenceBusy.value = false
+            }
+        }
+
+        fun hideMorningCard() {
+            if (!_preferenceBusy.value) _showMorningCard.value = false
+        }
+
+        fun turnOnMorning() {
+            if (_preferenceBusy.value) return
+            val loaded = _state.value as? TodayTabUiState.Loaded ?: return
+            val place = loaded.savedPlace ?: return
+            val version = loadVersion
+            _preferenceBusy.value = true
+            _preferenceError.value = null
+            viewModelScope.launch {
+                if (!current(version)) return@launch
+                val matches = checkSavedAnchor(place)
+                if (!current(version)) return@launch
+                if (!matches) {
+                    _state.value = loaded.copy(savedAnchorMatches = false)
+                    _showMorningCard.value = false
+                    _preferenceBusy.value = false
+                    return@launch
+                }
+                val timezone = ZoneId.systemDefault().id
+                if (timezone !in ZoneId.getAvailableZoneIds()) {
+                    _preferenceError.value = "Couldn't read your time zone. Try again."
+                    _preferenceBusy.value = false
+                    return@launch
+                }
+                val result =
+                    preferencesRepository.updatePreferences(
+                        NotificationPreferencesPatch(
+                            dailyBriefingEnabled = true,
+                            dailyBriefingTimezone = timezone,
+                            dailyBriefingPrompted = true,
+                        ),
+                    )
+                if (!current(version)) return@launch
+                when (result) {
+                    is NetworkResult.Success -> {
+                        if (result.data.dailyBriefingEnabled) {
+                            _showMorningCard.value = false
+                        } else {
+                            _preferenceError.value = "Couldn't turn on your morning briefing. Try again."
+                        }
+                    }
+                    is NetworkResult.Failure ->
+                        _preferenceError.value = result.error.displayMessage("Couldn't turn on your morning briefing.")
+                }
+                _preferenceBusy.value = false
+            }
         }
 
         /** The primary home's id (null when there is none), or the failure. */
@@ -157,7 +298,12 @@ sealed interface TodayTabUiState {
     /** No primary home yet — the tab is a claim prompt. */
     data object NoPlace : TodayTabUiState
 
-    data class Loaded(val intelligence: PlaceIntelligence, val calendarHomeId: String? = null) : TodayTabUiState
+    data class Loaded(
+        val intelligence: PlaceIntelligence,
+        val calendarHomeId: String? = null,
+        val savedPlace: SavedPlaceDto? = null,
+        val savedAnchorMatches: Boolean = false,
+    ) : TodayTabUiState
 
     data class Error(val message: String) : TodayTabUiState
 }

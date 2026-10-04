@@ -264,6 +264,9 @@ data class HubTodayPayload(
 data class TodayLocationDto(
     val label: String? = null,
     val timezone: String? = null,
+    val source: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
 )
 
 @JsonClass(generateAdapter = true)
