@@ -19,7 +19,7 @@
 
 const logger = require('../../utils/logger');
 const { encodeGeohash } = require('../../utils/geohash');
-const { readThrough } = require('../placeSectionCache');
+const { readThrough, readRow } = require('../placeSectionCache');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
@@ -170,9 +170,8 @@ const inFlight = new Map();
 
 /**
  * A saved home's governments, cached per home and exact point. Past the
- * budget the caller gets null (the card goes out without the governments
- * line) and the lookup keeps running, so its answer fills the cache for
- * the next load.
+ * budget the caller gets an eligible cached answer, or null when there
+ * is none. The lookup keeps running to refresh the next load.
  */
 async function governmentsForHome(home, { budgetMs = HOME_BUDGET_MS } = {}) {
   const point = pointOf(home);
@@ -200,11 +199,19 @@ async function governmentsForHome(home, { budgetMs = HOME_BUDGET_MS } = {}) {
       .finally(() => inFlight.delete(cacheKey));
     inFlight.set(cacheKey, lookup);
   }
+  // Read alongside the refresh so a slow provider (or cache read) cannot
+  // extend the page budget. An expired answer is usable for seven days.
+  let cachedRow = null;
+  readRow(cacheKey, SECTION_ID).then((row) => { cachedRow = row; }).catch(() => {});
   let timer = null;
   const budget = new Promise((resolve) => {
     timer = setTimeout(() => {
       logger.warn('ballot: home governments lookup over budget', { homeId: home.id, budgetMs });
-      resolve(null);
+      const now = Date.now();
+      const age = cachedRow ? now - Date.parse(cachedRow.fetched_at) : NaN;
+      resolve(cachedRow && cachedRow.payload && age >= 0 && age <= CACHE_TTL_MS + MAX_STALE_MS
+        ? { ...cachedRow.payload, stale: Date.parse(cachedRow.expires_at) <= now }
+        : null);
     }, budgetMs);
     if (typeof timer.unref === 'function') timer.unref();
   });

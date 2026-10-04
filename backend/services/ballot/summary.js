@@ -56,7 +56,7 @@ function pickLinks(phase, stateLinks, countyLinks, orderKey = phase) {
   return picked;
 }
 
-function deadlinesFor(block, today, timezone) {
+function deadlinesFor(block, today, timezone, now = new Date()) {
   return (block.deadlines || [])
     .map((d) => ({
       key: d.key,
@@ -75,7 +75,8 @@ function deadlinesFor(block, today, timezone) {
       teaser_lead: d.teaser_lead || null,
       teaser_detail: d.teaser_detail || null,
     }))
-    .filter((d) => d.days_until >= 0)
+    .filter((d) => d.days_until > 0 || (d.days_until === 0
+      && (!d.time_local || referenceData.localTime(timezone, now) < d.time_local)))
     .sort((a, b) => a.date.localeCompare(b.date) || (a.timeline === b.timeline ? 0 : a.timeline ? -1 : 1));
 }
 
@@ -205,7 +206,7 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
   }
 
   const county = countyGeoid && state.counties ? state.counties[countyGeoid] : null;
-  const deadlines = deadlinesFor(block, today, state.timezone);
+  const deadlines = deadlinesFor(block, today, state.timezone, now);
   const govBlock = governmentsBlock(governmentsResult, { federalOnBallot: election.applies_to === 'all_states' });
   const registration = deadlines.find((d) => d.key === 'register_online_mail') || null;
   const cert = block.certification || null;
