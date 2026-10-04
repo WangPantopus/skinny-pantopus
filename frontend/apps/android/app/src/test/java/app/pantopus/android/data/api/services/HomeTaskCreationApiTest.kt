@@ -65,6 +65,33 @@ class HomeTaskCreationApiTest {
             assertTrue(confirmed.replayed)
             assertEquals("Current title", confirmed.task.title)
             assertEquals("request", confirmed.creationReceipt.requestId)
+
+            val radonTask = task.dropLast(1) + """, "details":{"suggestion":"radon_test","result_pci":2.3}}"""
+            server.enqueue(MockResponse().setBody(response.replace(task, radonTask)))
+            val radon =
+                repository.createHomeTaskWithReceipt(
+                    "home",
+                    CreateHomeTaskRequest(
+                        "reminder",
+                        "Radon test",
+                        dueAt = "2026-10-04T09:00:00-07:00",
+                        requestId = "request",
+                        status = "done",
+                        details = mapOf("suggestion" to "radon_test", "tested_on" to "2026-10-04", "result_pci" to 2.3),
+                        visibility = "members",
+                    ),
+                    session,
+                ) as NetworkResult.Success
+            val radonRequest = server.takeRequest()
+            val sent = Moshi.Builder().build().adapter(Map::class.java).fromJson(radonRequest.body.readUtf8())!!
+            assertEquals(session, radonRequest.getHeader("x-pantopus-session-scope"))
+            assertEquals("request", sent["request_id"])
+            assertEquals("done", sent["status"])
+            assertEquals("members", sent["visibility"])
+            assertEquals("2026-10-04T09:00:00-07:00", sent["due_at"])
+            assertEquals("radon_test", (sent["details"] as Map<*, *>)["suggestion"])
+            assertEquals("radon_test", radon.data.task.details?.get("suggestion"))
+            assertEquals(2.3, radon.data.task.details?.get("result_pci"))
         }
 
     @Test fun explicit_sparse_null_clears_survive_actual_http_serialization() =

@@ -51,6 +51,14 @@ class HomeTasksApiTest {
             val request = server.takeRequest()
             assertEquals("/api/homes/home/tasks", request.path)
             assertEquals(fingerprint, request.getHeader("x-pantopus-session-scope"))
+            for (legacyDetails in listOf("null", "\"legacy\"", "[\"legacy\"]", "42")) {
+                val legacy = task.dropLast(1) + ",\"details\":$legacyDetails}"
+                server.enqueue(MockResponse().setBody("""{"tasks":[$legacy],"task_session":$context}"""))
+                val legacyResult = repository.getHomeTasks("home", fingerprint) as NetworkResult.Success
+                assertEquals("task", legacyResult.data.tasks.single().id)
+                assertNull(legacyResult.data.tasks.single().details)
+                assertEquals(fingerprint, server.takeRequest().getHeader("x-pantopus-session-scope"))
+            }
         }
 
     @Test fun detail_uses_exact_path_and_missing_capabilities_stay_absent() =

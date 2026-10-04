@@ -104,6 +104,19 @@ final class PlaceMoneyLeadDecodingTests: XCTestCase {
         XCTAssertEqual(preview.sections?.count, 1)
         XCTAssertEqual(preview.sections?.first?.group, .riskReadiness)
         XCTAssertEqual(preview.sections?.first?.status, .ready)
+        let radon = """
+        {"id":"lead_radon","group":"risk_readiness","band":"A","access":"available","status":"ready",
+         "data":{"year_built":1979,"lead_paint_risk":"moderate","radon_zone":2,"county_name":"Clark County",
+                 "summary":"Screening only","disclaimer":"Test this home."}}
+        """
+        let named = try decoder.decode(PlaceSectionEnvelope.self, from: Data(radon.utf8))
+        XCTAssertEqual(named.leadRadon?.countyName, "Clark County")
+        XCTAssertEqual(named.leadRadon?.radonZone, 2)
+        let legacy = try decoder.decode(
+            PlaceSectionEnvelope.self, from: Data(radon.replacingOccurrences(of: ",\"county_name\":\"Clark County\"", with: "").utf8)
+        )
+        XCTAssertNil(legacy.leadRadon?.countyName)
+        XCTAssertEqual(legacy.leadRadon?.radonZone, 2)
     }
 
     func testUnknownAhaToneRendersAsInfoAndOlderBackendsCarryNoAha() throws {

@@ -423,6 +423,14 @@ describe('GET /api/homes/:id/intelligence', () => {
   });
 
   test('composes the grouped contract with per-section status', async () => {
+    seedTable('CountyRadonZone', [{ county_fips: '53011', zone: 2, county_label: 'Clark County' }]);
+    const radon = await require('../services/placeSectionAdapters').composeLeadRadon({ county_fips: '53011', year_built: 1979 });
+    expect(radon[0].data).toMatchObject({ radon_zone: 2, county_name: 'Clark County' });
+    for (const countyLabel of [null, '', '   ']) {
+      seedTable('CountyRadonZone', [{ county_fips: '53011', zone: 2, county_label: countyLabel }]);
+      const withoutName = await require('../services/placeSectionAdapters').composeLeadRadon({ county_fips: '53011', year_built: 1979 });
+      expect(withoutName[0].data).toMatchObject({ radon_zone: 2, county_name: null });
+    }
     seedHome();
     seedTable('NeighborhoodPreview', [{ geohash: GEOHASH, verified_users_count: 12 }]);
     seedBenchmarks([

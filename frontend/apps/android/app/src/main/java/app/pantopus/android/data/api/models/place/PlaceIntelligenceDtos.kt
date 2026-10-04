@@ -435,6 +435,7 @@ data class PlaceLeadRadonData(
     @Json(name = "radon_zone") val radonZone: Int? = null,
     val summary: String,
     val disclaimer: String,
+    @Json(name = "county_name") val countyName: String? = null,
 )
 
 /** Launch layer #7 — Drinking-water system (EPA SDWIS; coverage ~80%). */

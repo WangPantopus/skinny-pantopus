@@ -552,6 +552,7 @@ public struct PlaceLeadRadonData: Decodable, Sendable, Hashable {
     public let leadPaintRisk: LeadPaintRisk
     /// EPA radon zone (1 = highest potential), 1–3.
     public let radonZone: Int?
+    public var countyName: String?
     public let summary: String
     public let disclaimer: String
 
@@ -560,6 +561,7 @@ public struct PlaceLeadRadonData: Decodable, Sendable, Hashable {
         case yearBuilt = "year_built"
         case leadPaintRisk = "lead_paint_risk"
         case radonZone = "radon_zone"
+        case countyName = "county_name"
     }
 }
 
