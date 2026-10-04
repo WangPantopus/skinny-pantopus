@@ -1203,8 +1203,12 @@ describe('Provider Orchestrator', () => {
       orchestrator.clearHubTodayCache(MOCK_USER_ID);
       const unverified = await getHubToday(MOCK_USER_ID);
       const signal = unverified.signals.find((item) => item.kind === 'address_calendar');
-      expect(signal.detail).toContain('Unconfirmed');
-      expect(signal.detail).not.toContain('set your pickup day');
+      if (kind === 'garbage') {
+        expect(signal).toBeUndefined(); // Saved public context cannot imply a household pickup schedule.
+      } else {
+        expect(signal.detail).toContain('Unconfirmed');
+        expect(signal.detail).not.toContain('set your pickup day');
+      }
     }
     calendarService.composeForHome.mockClear();
     own.maybeSingle.mockResolvedValue({ data: null, error: null });
