@@ -57,9 +57,10 @@ class TodayTabViewModel
         private val appLock: AppLockManager,
         @ApplicationContext context: Context,
         val radonFactory: HomeTaskCreationFactory,
-        val pilotEvents: PilotEvents,
     ) : ViewModel(),
         AddressCalendarActions {
+        @Inject lateinit var pilotEvents: PilotEvents
+
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
         val state: StateFlow<TodayTabUiState> = _state.asStateFlow()
         private var homeId: String? = null

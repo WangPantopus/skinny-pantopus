@@ -103,16 +103,7 @@ fun PlaceTodayDetailContent(
     pilotEvents: PilotEvents? = null,
     radonContext: (suspend () -> Unit)? = null,
 ) {
-    intel.section(PlaceSectionId.WEATHER)?.let { env ->
-        PlaceDetailSectionLabel("Weather")
-        val data = env.weather
-        if (data != null && env.isLive()) {
-            NowCard(data)
-            PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf))
-        } else {
-            PlaceDetailFallbackCard(env)
-        }
-    }
+    TodayWeatherSection(intel)
     intel.section(PlaceSectionId.GOOD_DAY_TO)?.let { env ->
         val data = env.goodDayTo
         if (data != null && env.isLive() && data.tiles.isNotEmpty()) {
@@ -971,4 +962,18 @@ private fun RadonDateField(
             }.show()
         },
     )
+}
+
+@Composable
+private fun TodayWeatherSection(intel: PlaceIntelligence) {
+    intel.section(PlaceSectionId.WEATHER)?.let { env ->
+        PlaceDetailSectionLabel("Weather")
+        val data = env.weather
+        if (data != null && env.isLive()) {
+            NowCard(data)
+            PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf))
+        } else {
+            PlaceDetailFallbackCard(env)
+        }
+    }
 }
