@@ -1063,6 +1063,46 @@ describe('Provider Orchestrator', () => {
     const unreadable = await getHubToday(MOCK_USER_ID);
     expect(unreadable.weather.current_temp_f).toBe(52);
     expect(JSON.stringify(unreadable)).not.toContain('Unavailable authority provider');
+    // The separate household calendar must obey current authority with extras off.
+    process.env.LAUNCH_FEATURES = '';
+    const calendarService = require('../services/addressCalendarService');
+    const clearCalendarMemo = require('../services/context/providerOrchestrator').clearHubTodayCache;
+    const householdCalendar = { homeId: 'h1', upcoming: [{ kind: 'garbage', title: 'Private household pickup',
+      date: '2026-10-05', days_until: 1, lead_days: 1, scope: 'home', confidence: 'verified' }] };
+    collectInternalContext.mockResolvedValue(MOCK_INTERNAL_EMPTY);
+    clearCalendarMemo(MOCK_USER_ID);
+    calendarService.composeForHomeId.mockResolvedValue(householdCalendar);
+    const beforeCalendarWithdrawal = await getHubToday(MOCK_USER_ID);
+    expect(JSON.stringify(beforeCalendarWithdrawal)).toContain('Private household pickup');
+    calendarService.composeForHomeId.mockResolvedValue(null);
+    const memoAfterWithdrawal = await getHubToday(MOCK_USER_ID);
+    clearCalendarMemo(MOCK_USER_ID);
+    let releaseCalendarWeather;
+    delayedWeather.mockReturnValueOnce(new Promise(resolve => { releaseCalendarWeather = resolve; }));
+    calendarService.composeForHomeId.mockResolvedValueOnce(householdCalendar).mockResolvedValue(null);
+    const delayedCalendarHub = getHubToday(MOCK_USER_ID);
+    await Promise.resolve();
+    releaseCalendarWeather(MOCK_WEATHER);
+    const delayedAfterWithdrawal = await delayedCalendarHub;
+    expect([memoAfterWithdrawal, delayedAfterWithdrawal].map(hub => JSON.stringify(hub).includes('Private household pickup')))
+      .toEqual([false, false]);
+    clearCalendarMemo(MOCK_USER_ID);
+    calendarService.composeForHomeId.mockResolvedValueOnce(householdCalendar)
+      .mockRejectedValueOnce(Object.assign(new Error('Current calendar denied'), { status: 403 }));
+    const deniedCalendar = await getHubToday(MOCK_USER_ID);
+    expect(JSON.stringify(deniedCalendar)).not.toContain('Private household pickup');
+    expect(deniedCalendar.weather.current_temp_f).toBe(52);
+    clearCalendarMemo(MOCK_USER_ID);
+    calendarService.composeForHomeId.mockResolvedValue(householdCalendar);
+    const hubLocation = require('../services/context/locationResolver').resolveLocation;
+    const initialHomeLocation = hubLocation();
+    hubLocation.mockReturnValueOnce(initialHomeLocation)
+      .mockReturnValueOnce({ ...initialHomeLocation, homeId: 'different-current-home' });
+    const changedHomeCalendar = await getHubToday(MOCK_USER_ID);
+    expect(JSON.stringify(changedHomeCalendar)).not.toContain('Private household pickup');
+    expect(changedHomeCalendar.weather.current_temp_f).toBe(52);
+    calendarService.composeForHomeId.mockResolvedValue(null);
+    clearCalendarMemo(MOCK_USER_ID);
     process.env.LAUNCH_FEATURES = launch;
 
     const { fetchWeather } = require('../services/context/weatherProvider');

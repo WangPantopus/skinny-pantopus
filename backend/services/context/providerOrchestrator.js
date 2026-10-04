@@ -252,7 +252,7 @@ async function getHubToday(userId, options = {}) {
     active_gigs: [], unread_notifications: 0,
     collected_at: new Date().toISOString(),
   };
-  const addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
+  let addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
 
   // The collector may have completed while a slow public provider was still
   // pending. Recollect household records under current authority at this response
@@ -260,6 +260,17 @@ async function getHubToday(userId, options = {}) {
   if (internal.bills_due?.length || internal.tasks_due?.length || internal.calendar_events?.length) {
     try { internal = await collectInternalContext(userId, location.homeId); }
     catch (_) { internal = defaultInternalContext(); }
+  }
+
+  // AddressCalendarRule household rows use their own authorized reader, not
+  // internal.calendar_events. Refresh that projection after providers too, and
+  // drop it if the user's current Home anchor changed during the wait.
+  if (location.homeId) {
+    try {
+      const currentLocation = await resolveLocation(userId);
+      addressCalendar = currentLocation.homeId === location.homeId
+        ? await fetchAddressCalendar(currentLocation.homeId, userId) : null;
+    } catch (_) { addressCalendar = null; }
   }
 
   // Log per-provider status
@@ -441,7 +452,8 @@ async function getHubToday(userId, options = {}) {
   // Household records require current authority on each read. Preserve the
   // short memo for public context only; provider caches remain unchanged.
   if (!isLaunchFeatureEnabled('household_extras') && !internal.bills_due?.length
-    && !internal.tasks_due?.length && !internal.calendar_events?.length) {
+    && !internal.tasks_due?.length && !internal.calendar_events?.length
+    && !(location.homeId && addressCalendar)) {
     _hubTodayCache.set(cacheKey, { result, expiresAt: Date.now() + HUB_TODAY_CACHE_TTL_MS });
   }
   if (_hubTodayCache.size > HUB_TODAY_CACHE_MAX) {
