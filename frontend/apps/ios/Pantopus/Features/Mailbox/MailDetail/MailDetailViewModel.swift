@@ -176,7 +176,7 @@ public final class MailDetailViewModel {
     /// Acknowledge the mail item. Optimistic — flips the local
     /// `isAcknowledged` state then rolls back on transport failure.
     public func acknowledge() async {
-        guard case let .loaded(content) = state, !ackInFlight else { return }
+        guard case let .loaded(content) = state, !ackInFlight, !content.isAcknowledged else { return }
         ackInFlight = true
         defer { ackInFlight = false }
         let previous = content

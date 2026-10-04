@@ -88,7 +88,7 @@ struct GenericMailDetailLayout: View {
     /// synthesized from the projected content until the backend surfaces
     /// per-item activity.
     private var ackTimelineEvents: [ChainOfCustodyEvent] {
-        [
+        var events = [
             ChainOfCustodyEvent(
                 id: "ack",
                 icon: .badgeCheck,
@@ -100,15 +100,18 @@ struct GenericMailDetailLayout: View {
                 icon: .mailbox,
                 label: "Delivered to your Mailbox",
                 timestamp: content.createdAtLabel
-            ),
-            ChainOfCustodyEvent(
+            )
+        ]
+        if let summary = content.aiSummary, !summary.isEmpty {
+            events.append(ChainOfCustodyEvent(
                 id: "tldr",
                 icon: .sparkles,
                 label: "Pantopus drafted plain-language TL;DR",
                 timestamp: content.createdAtLabel,
                 isPantopusEvent: true
-            )
-        ]
+            ))
+        }
+        return events
     }
 
     private var topBar: MailTopBarConfig {
@@ -579,7 +582,7 @@ private struct ActionsRow: View {
                     size: 16,
                     color: content.isAcknowledged ? Theme.Color.success : Theme.Color.appTextInverse
                 )
-                Text(content.isAcknowledged ? "Acknowledged · Tap to undo" : "Acknowledge receipt")
+                Text(content.isAcknowledged ? "Acknowledged" : "Acknowledge receipt")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(
                         content.isAcknowledged ? Theme.Color.success : Theme.Color.appTextInverse
@@ -601,7 +604,7 @@ private struct ActionsRow: View {
             .opacity(ackInFlight ? 0.6 : 1)
         }
         .buttonStyle(.plain)
-        .disabled(ackInFlight)
+        .disabled(ackInFlight || content.isAcknowledged)
         .accessibilityIdentifier("mailDetail_acknowledge")
     }
 
