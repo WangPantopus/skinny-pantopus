@@ -41,6 +41,14 @@ final class DeepLinkRouterPlaceTests: XCTestCase {
         let url = try XCTUnwrap(URL(string: "pantopus://place"))
         DeepLinkRouter.shared.handle(url: url)
         XCTAssertEqual(DeepLinkRouter.shared.pending, .place(homeId: nil, slug: nil))
+        for path in ["pantopus://today", "https://pantopus.app/app/today", "/app/today"] {
+            DeepLinkRouter.shared.handle(path: path)
+            XCTAssertEqual(DeepLinkRouter.shared.consume(), .todayTab)
+        }
+        for alias in ["hub-today", "hub_today"] {
+            DeepLinkRouter.shared.handle(path: "/app/\(alias)?deliveryId=delivery&kind=evening")
+            XCTAssertEqual(DeepLinkRouter.shared.consume(), .hubToday(briefingDeliveryId: "delivery", kind: "evening"))
+        }
     }
 
     func testPlaceTakesHomeIdFromThePath() throws {

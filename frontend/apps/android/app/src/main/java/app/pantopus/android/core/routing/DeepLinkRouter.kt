@@ -316,6 +316,9 @@ object DeepLinkRouter {
          * `resolveNotificationRoute`'s `/hub-today?…` target
          * (`pantopus/frontend/apps/mobile/src/utils/notificationRouting.ts:18`).
          */
+        /** `/app/today` selects the address Today root. */
+        data object TodayTab : Destination
+
         data class HubToday(
             val briefingDeliveryId: String?,
             val kind: String?,
@@ -680,7 +683,8 @@ object DeepLinkRouter {
             "home" -> Destination.Home
             "nearby" -> if (segments.size == 1) Destination.Nearby else Destination.Unknown(raw)
             "notifications" -> Destination.Notifications
-            "hub-today", "hub_today", "today" ->
+            "today" -> if (segments.size == 1) Destination.TodayTab else Destination.Unknown(raw)
+            "hub-today", "hub_today" ->
                 // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.
                 Destination.HubToday(
                     briefingDeliveryId =

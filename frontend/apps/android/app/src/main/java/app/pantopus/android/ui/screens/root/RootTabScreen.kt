@@ -2433,6 +2433,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.waitingRoom(pending.homeId))
                 DeepLinkRouter.consume()
             }
+            DeepLinkRouter.Destination.TodayTab -> {
+                navController.navigateToRootTab(PantopusRoute.Today)
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.HubToday -> {
                 // Morning/Evening Briefing push → the stored delivery, not just
                 // the live `/api/hub/today` snapshot.

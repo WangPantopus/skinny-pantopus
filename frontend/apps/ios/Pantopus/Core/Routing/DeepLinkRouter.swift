@@ -181,6 +181,8 @@ final class DeepLinkRouter {
         /// Mirrors RN `resolveNotificationRoute`'s `/hub-today?…` target
         /// (`pantopus/frontend/apps/mobile/src/utils/notificationRouting.ts:18`).
         case hubToday(briefingDeliveryId: String?, kind: String?)
+        /// `/app/today` opens the address Today tab, without a briefing detail.
+        case todayTab
         /// `pantopus://profile?tab=receipt` — the profile tab with the Monthly
         /// Receipt card auto-expanded, the target RN resolves for a
         /// `monthly_receipt` notification
@@ -600,7 +602,9 @@ final class DeepLinkRouter {
             // token-accept surface it uses for `.invite`.
             if let code = segments.dropFirst().first, !code.isEmpty { return .joinInvite(code: code) }
             return .unknown(url)
-        case "hub-today", "hub_today", "today":
+        case "today":
+            return segments.count == 1 ? .todayTab : .unknown(url)
+        case "hub-today", "hub_today":
             // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.
             return .hubToday(
                 briefingDeliveryId: queryValue("deliveryId", in: comps)

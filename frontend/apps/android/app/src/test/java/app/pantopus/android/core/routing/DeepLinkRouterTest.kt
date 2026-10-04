@@ -57,6 +57,7 @@ class DeepLinkRouterTest {
                 "https://pantopus.app/app/feed?surface=personas" to DeepLinkRouter.Destination.Beacons,
                 "https://pantopus.app/app/feed?post=p1&surface=place" to DeepLinkRouter.Destination.Post("p1"),
                 "https://pantopus.app/persona/maria" to DeepLinkRouter.Destination.BeaconProfile("maria"),
+                "https://pantopus.app/app/today" to DeepLinkRouter.Destination.TodayTab,
             )
         cases.forEach { (url, expected) ->
             signedIn = false
@@ -148,6 +149,15 @@ class DeepLinkRouterTest {
     @Test
     fun home_https_host() {
         assertEquals(DeepLinkRouter.Destination.Home, DeepLinkRouter.resolveString("https://pantopus.app/home"))
+        for (path in listOf("pantopus://today", "https://pantopus.app/app/today", "/app/today")) {
+            assertEquals(DeepLinkRouter.Destination.TodayTab, DeepLinkRouter.resolveString(path))
+        }
+        for (alias in listOf("hub-today", "hub_today")) {
+            assertEquals(
+                DeepLinkRouter.Destination.HubToday("delivery", "evening"),
+                DeepLinkRouter.resolveString("/app/$alias?deliveryId=delivery&kind=evening"),
+            )
+        }
     }
 
     @Test
