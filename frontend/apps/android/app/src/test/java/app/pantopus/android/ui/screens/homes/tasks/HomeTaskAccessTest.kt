@@ -2,14 +2,20 @@
 
 package app.pantopus.android.ui.screens.homes.tasks
 
+import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskCapabilitiesDto
+import app.pantopus.android.data.api.models.homes.HomeTaskCollectionCapabilitiesDto
+import app.pantopus.android.data.api.models.homes.HomeTaskCreationReceiptDto
+import app.pantopus.android.data.api.models.homes.HomeTaskCreationResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskSessionDto
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.data.homes.HomeTasksRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
@@ -73,6 +79,59 @@ class HomeTaskAccessTest {
             assertEquals(task, access.read("task"))
             coVerify { repository.getHomeTasks("home", null) }
             coVerify { repository.getHomeTask("home", "task", server.sessionScope) }
+        }
+
+    @Test fun same_dispatch_guard_reaches_list_create_edit_and_delete() =
+        runTest {
+            var unlocked = true
+            var selected = TokenStorage.SessionCredentials("user-1", null, "opening-token")
+            val dispatched = mutableSetOf<String>()
+            val guards = mutableSetOf<AuthenticatedDispatchGuard>()
+            var currentTask = task.copy(description = "Keep")
+
+            suspend fun verify(
+                operation: String,
+                guard: AuthenticatedDispatchGuard?,
+            ) {
+                guards += checkNotNull(guard)
+                guard.verify(selected)
+                dispatched += operation
+            }
+            access = HomeTaskAccessFactory(repository, claimScopeFactory(identity)).create("home", scope) { check(unlocked) }
+            coEvery { repository.getHomeTasks(any(), any(), any()) } coAnswers {
+                verify("list", lastArg())
+                NetworkResult.Success(GetHomeTasksResponse(listOf(currentTask), HomeTaskCollectionCapabilitiesDto(true), server))
+            }
+            coEvery { repository.getHomeTask(any(), any(), any(), any()) } coAnswers {
+                verify("read", lastArg())
+                NetworkResult.Success(HomeTaskResponse(currentTask, server))
+            }
+            val receipt = HomeTaskCreationReceiptDto("home", "user-1", "request", "task", "b".repeat(64), "2026-10-04T00:00:00Z")
+            coEvery { repository.createHomeTaskWithReceipt(any(), any(), any(), any()) } coAnswers {
+                verify("create", lastArg())
+                NetworkResult.Success(HomeTaskCreationResponse(currentTask, receipt, server, true))
+            }
+            coEvery { repository.patchHomeTask(any(), any(), any(), any(), any()) } coAnswers {
+                verify("edit", lastArg())
+                currentTask = currentTask.copy(description = null)
+                NetworkResult.Success(HomeTaskResponse(currentTask))
+            }
+            coEvery { repository.deleteHomeTask(any(), any(), any(), any()) } coAnswers {
+                verify("delete", lastArg())
+                NetworkResult.Success(Unit)
+            }
+            access.list()
+            assertEquals(receipt, access.create(CreateHomeTaskRequest("chore", "Original", requestId = "request")).creationReceipt)
+            val edited = access.edit("task", HomeTaskEditPatch(mapOf("description" to null)))
+            assertEquals(currentTask, edited)
+            access.delete("task")
+            assertEquals(setOf("list", "read", "create", "edit", "delete"), dispatched)
+            assertEquals(1, guards.size)
+            unlocked = false
+            denied { access.list() }
+            unlocked = true
+            selected = TokenStorage.SessionCredentials("user-1", null, "replacement-token")
+            denied { access.list() }
         }
 
     @Test fun standalone_detail_binds_current_actor_without_collection() =

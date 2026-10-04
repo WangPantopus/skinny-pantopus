@@ -1,12 +1,19 @@
 package app.pantopus.android.data.auth
 
+import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatchJsonAdapter
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
+import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.services.HomeTasksApi
 import app.pantopus.android.data.api.services.NotificationPreferencesApi
 import app.pantopus.android.data.api.services.PlaceApi
+import app.pantopus.android.data.homes.HomeTaskEditPatch
+import app.pantopus.android.data.homes.HomeTasksRepository
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Lazy
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,6 +31,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import retrofit2.Retrofit
@@ -159,6 +167,90 @@ class AuthInterceptorsTest {
                 },
                 recorded.path,
             )
+            assertEquals(before + 1, server.requestCount)
+        }
+    }
+
+    @Test
+    fun `task repository guards refuse changed dispatch after auth wait and preserve unscoped callers`() {
+        val starting = TokenStorage.SessionCredentials("actor-a", "session-a", "old-at")
+        val replacement = TokenStorage.SessionCredentials("actor-b", "session-b", "replacement-at")
+        val session = "a".repeat(64)
+        val task = """{"id":"task","home_id":"home","task_type":"chore","title":"Current","created_by":"actor-a"}"""
+        val receipt =
+            """{"home_id":"home","actor_id":"actor-a","request_id":"request","task_id":"task",""" +
+                """"payload_hash":"$session","created_at":"2026-10-04T00:00:00Z"}"""
+        val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
+        val repository =
+            HomeTasksRepository(
+                Retrofit.Builder().baseUrl(server.url("/"))
+                    .client(client()).addConverterFactory(MoshiConverterFactory.create(moshi))
+                    .build().create(HomeTasksApi::class.java),
+            )
+        for (operation in listOf("list", "create", "edit", "delete")) {
+            var credentials = starting
+            var unlocked = true
+            coEvery { storage.sessionCredentials() } answers { credentials }
+            coEvery { storage.accessToken() } answers { credentials.accessToken }
+            val guard =
+                AuthenticatedDispatchGuard { selected ->
+                    check(selected != null && selected.userId == starting.userId && selected.sessionId == starting.sessionId)
+                    check(unlocked)
+                }
+
+            suspend fun invoke(dispatchGuard: AuthenticatedDispatchGuard? = null): NetworkResult<*> =
+                when (operation) {
+                    "list" -> repository.getHomeTasks("home", session, dispatchGuard)
+                    "create" ->
+                        repository.createHomeTaskWithReceipt(
+                            "home",
+                            CreateHomeTaskRequest("chore", "Original", requestId = "request"),
+                            session,
+                            dispatchGuard,
+                        )
+                    "edit" ->
+                        repository.patchHomeTask(
+                            "home",
+                            "task",
+                            HomeTaskEditPatch(mapOf("description" to null)),
+                            session,
+                            dispatchGuard,
+                        )
+                    else -> repository.deleteHomeTask("home", "task", session, dispatchGuard)
+                }
+            val before = server.requestCount
+            for (change in listOf("actor", "lock")) {
+                credentials = starting
+                unlocked = true
+                coEvery { repo.refreshIfExpiringSoon(any()) } answers {
+                    if (change == "actor") credentials = replacement else unlocked = false
+                    AuthRepository.RefreshOutcome.Rotated(credentials.accessToken)
+                }
+                val result = runBlocking { invoke(guard) }
+                assertTrue(result is NetworkResult.Failure && result.error is NetworkError.Transport)
+                assertEquals(before, server.requestCount)
+            }
+            credentials = replacement
+            coEvery { repo.refreshIfExpiringSoon(any()) } returns null
+            val body =
+                when (operation) {
+                    "list" -> """{"tasks":[$task]}"""
+                    "create" ->
+                        """{"task":$task,"creation_receipt":$receipt,""" +
+                            """"task_session":{"actor_id":"actor-a","home_id":"home","session_scope":"$session"},"replayed":true}"""
+                    "edit" -> """{"task":$task}"""
+                    else -> """{"message":"Task deleted"}"""
+                }
+            server.enqueue(MockResponse().setBody(body))
+            assertTrue(runBlocking { invoke() } is NetworkResult.Success)
+            val recorded = server.takeRequest()
+            assertEquals("Bearer replacement-at", recorded.getHeader("Authorization"))
+            assertEquals(session, recorded.getHeader("x-pantopus-session-scope"))
+            assertEquals(
+                if (operation in listOf("list", "create")) "/api/homes/home/tasks" else "/api/homes/home/tasks/task",
+                recorded.path,
+            )
+            assertEquals(mapOf("list" to "GET", "create" to "POST", "edit" to "PUT", "delete" to "DELETE")[operation], recorded.method)
             assertEquals(before + 1, server.requestCount)
         }
     }

@@ -52,6 +52,7 @@ interface HomeTasksApi {
     suspend fun getHomeTasks(
         @Path("id") homeId: String,
         @Header("x-pantopus-session-scope") expectedSession: String? = null,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): GetHomeTasksResponse
 
     @GET("api/homes/{id}/tasks/{taskId}")
@@ -74,6 +75,7 @@ interface HomeTasksApi {
         @Path("id") homeId: String,
         @Body body: CreateHomeTaskRequest,
         @Header("x-pantopus-session-scope") expectedSession: String,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): HomeTaskCreationResponse
 
     @PUT("api/homes/{id}/tasks/{taskId}")
@@ -82,6 +84,7 @@ interface HomeTasksApi {
         @Path("taskId") taskId: String,
         @Body body: RequestBody,
         @Header("x-pantopus-session-scope") expectedSession: String,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): HomeTaskResponse
 
     /** `PUT /api/homes/:id/tasks/:taskId` — route `backend/routes/home.js:4308`. */
@@ -100,5 +103,6 @@ interface HomeTasksApi {
         @Path("id") homeId: String,
         @Path("taskId") taskId: String,
         @Header("x-pantopus-session-scope") expectedSession: String? = null,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): HomeTaskDeleteResponse
 }
