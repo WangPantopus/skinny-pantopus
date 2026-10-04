@@ -16,6 +16,8 @@ import SwiftUI
 public struct AddHouseholdTaskFormView: View {
     @State var viewModel: AddHouseholdTaskFormViewModel
     @State private var isVisible = false
+    @State private var didFocusDueDate = false
+    private let focusDueDate: Bool
     @Environment(\.scenePhase) private var scenePhase
     private let onClose: @MainActor () -> Void
     private let onCreated: (@MainActor (String) -> Void)?
@@ -23,6 +25,7 @@ public struct AddHouseholdTaskFormView: View {
     init(
         homeId: String,
         taskId: String? = nil,
+        focusDueDate: Bool = false,
         api: APIClient = .shared,
         onClose: @escaping @MainActor () -> Void,
         onCreated: (@MainActor (String) -> Void)? = nil
@@ -34,6 +37,7 @@ public struct AddHouseholdTaskFormView: View {
                 api: api
             )
         )
+        self.focusDueDate = focusDueDate
         self.onClose = onClose
         self.onCreated = onCreated
     }
@@ -98,27 +102,34 @@ public struct AddHouseholdTaskFormView: View {
     }
 
     private var editor: some View {
-        FormShell(
-            title: viewModel.isEditing ? "Edit task" : "Add task",
-            rightActionLabel: viewModel.saveLabel,
-            isValid: viewModel.isValid,
-            isDirty: viewModel.isDirty,
-            isSaving: viewModel.isSaving,
-            onClose: onClose,
-            onCommit: { Task { await viewModel.save() } },
-            content: {
-                if let message = viewModel.recoveryMessage {
-                    Text(message).font(.callout).accessibilityIdentifier("homeTask.savedRequest")
+        ScrollViewReader { proxy in
+            FormShell(
+                title: viewModel.isEditing ? "Edit task" : "Add task",
+                rightActionLabel: viewModel.saveLabel,
+                isValid: viewModel.isValid,
+                isDirty: viewModel.isDirty,
+                isSaving: viewModel.isSaving,
+                onClose: onClose,
+                onCommit: { Task { await viewModel.save() } },
+                content: {
+                    if let message = viewModel.recoveryMessage {
+                        Text(message).font(.callout).accessibilityIdentifier("homeTask.savedRequest")
+                    }
+                    Group {
+                        titleAndCategorySection
+                        assigneeSection
+                        scheduleSection.id("taskDueDate")
+                        notesSection
+                    }.disabled(viewModel.hasPendingSave || viewModel.isSaving)
                 }
-                Group {
-                    titleAndCategorySection
-                    assigneeSection
-                    scheduleSection
-                    notesSection
-                }.disabled(viewModel.hasPendingSave || viewModel.isSaving)
+            )
+            .formShakeOnChange(of: viewModel.shakeTrigger)
+            .accessibilityIdentifier("addHouseholdTaskFormShell")
+            .task {
+                guard focusDueDate, !didFocusDueDate else { return }
+                didFocusDueDate = true
+                proxy.scrollTo("taskDueDate", anchor: .bottom)
             }
-        )
-        .formShakeOnChange(of: viewModel.shakeTrigger)
-        .accessibilityIdentifier("addHouseholdTaskFormShell")
+        }
     }
 }

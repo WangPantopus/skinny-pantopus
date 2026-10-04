@@ -20,6 +20,7 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
 
     let homeId: String
     private let api: APIClient
+    private let dispatchGuard: @MainActor @Sendable () throws -> Void
     private let scope: HomeClaimSessionScope
     private let actorId: String?
     private var serverSession: String?
@@ -27,7 +28,14 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
     private var mutating = false
     private var generation = 0
 
-    init(homeId: String, api: APIClient = .shared, actorId: String? = nil, identity: (() -> String?)? = nil) {
+    init(
+        homeId: String,
+        api: APIClient = .shared,
+        actorId: String? = nil,
+        identity: (() -> String?)? = nil,
+        dispatchGuard: @escaping @MainActor @Sendable () throws -> Void = {}
+    ) {
+        self.dispatchGuard = dispatchGuard
         self.homeId = homeId
         self.api = api
         scope = HomeClaimSessionScope(api: api, identity: identity)
@@ -99,7 +107,11 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
         return result.task
     }
 
-    func complete(taskId: String, status: String) async throws -> HomeTaskDTO {
+    func complete(
+        taskId: String,
+        status: String,
+        beforeDispatch: @escaping @MainActor @Sendable () throws -> Void = {}
+    ) async throws -> HomeTaskDTO {
         let revision = generation
         guard !mutating else { throw AccessError.busy }
         mutating = true
@@ -107,10 +119,13 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
         let before = try await detail(taskId: taskId)
         guard before.capabilities?.canComplete == true, ["open", "done"].contains(status) else { throw AccessError.denied }
         try requireCurrent(revision)
+        try beforeDispatch()
+        try requireCurrent(revision)
         let result: HomeTaskResponse = try await api.request(endpoint(
             taskId: taskId,
             method: .put,
-            body: UpdateHomeTaskRequest(status: status)
+            body: UpdateHomeTaskRequest(status: status),
+            beforeDispatch: beforeDispatch
         ))
         try requireCurrent(revision)
         guard valid(result.task), result.task.id == taskId, result.task.status == status else { throw APIError.invalidResponse }
@@ -267,13 +282,24 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
         serverSession = session.sessionScope
     }
 
-    private func endpoint(taskId: String? = nil, method: Endpoint.Method = .get, body: (any Encodable & Sendable)? = nil) -> Endpoint {
+    private func endpoint(
+        taskId: String? = nil,
+        method: Endpoint.Method = .get,
+        body: (any Encodable & Sendable)? = nil,
+        beforeDispatch: (@MainActor @Sendable () throws -> Void)? = nil
+    ) -> Endpoint {
         Endpoint(
             method: method,
             path: "/api/homes/\(homeId)/tasks" + (taskId.map { "/\($0)" } ?? ""),
             body: body,
             headers: currentHeaders,
-            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
+            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
+            dispatchGuard: { [weak self] in
+                guard let self else { throw CancellationError() }
+                try requireCurrent()
+                try dispatchGuard()
+                try beforeDispatch?()
+            }
         )
     }
 }

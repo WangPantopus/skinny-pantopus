@@ -87,6 +87,10 @@ class DeepLinkRouterTest {
             DeepLinkRouter.Destination.HomeTask(home, task),
             DeepLinkRouter.resolveString("/app/homes/${home.uppercase()}/tasks/${task.uppercase()}"),
         )
+        assertEquals(
+            DeepLinkRouter.Destination.HomeTask(home, task, openDueDateEdit = true),
+            DeepLinkRouter.resolveString("/app/homes/$home/tasks/$task?edit=due_date"),
+        )
     }
 
     @Test
@@ -144,6 +148,20 @@ class DeepLinkRouterTest {
         assertTrue(PendingDeepLinkStore.peek() != null)
         assertNull(PendingDeepLinkStore.take("replacement-account"))
         assertNull(PendingDeepLinkStore.peek())
+        DeepLinkRouter.clearPending()
+        val edit = "/app/homes/$home/tasks/$task?edit=due_date"
+        userId = "replacement-account"
+        DeepLinkRouter.handle(edit, expectedUserId = "original-account")
+        assertNull(DeepLinkRouter.pending.value)
+        signedIn = false
+        DeepLinkRouter.handle(edit, expectedUserId = "original-account")
+        assertNull(PendingDeepLinkStore.take("replacement-account"))
+        DeepLinkRouter.handle(edit, expectedUserId = "original-account")
+        val replay = requireNotNull(PendingDeepLinkStore.take("original-account"))
+        userId = "original-account"
+        signedIn = true
+        DeepLinkRouter.handle(replay)
+        assertEquals(DeepLinkRouter.Destination.HomeTask(home, task, openDueDateEdit = true), DeepLinkRouter.consume())
     }
 
     @Test

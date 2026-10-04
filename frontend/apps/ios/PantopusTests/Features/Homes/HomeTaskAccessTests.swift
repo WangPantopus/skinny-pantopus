@@ -137,6 +137,19 @@ final class HomeTaskAccessTests: XCTestCase {
             XCTFail("Suspended action continued")
         } catch {}
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET"])
+        SequencedURLProtocol.reset()
+        SequencedURLProtocol.sequence = [.status(200, body: detail(record(complete: true)))]
+        let guarded = access()
+        var gateRan = false
+        do {
+            _ = try await guarded.complete(taskId: task, status: "done") {
+                gateRan = true
+                throw CancellationError()
+            }
+            XCTFail("Locked background action continued")
+        } catch {}
+        XCTAssertTrue(gateRan)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET"])
     }
 
     func testRevokedCompletionCapabilityPreventsPut() async {

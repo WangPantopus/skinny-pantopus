@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceRequest
 import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceState
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import okhttp3.RequestBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -17,6 +18,7 @@ import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Tag
 
 /**
  * Home tasks endpoints from `backend/routes/home.js`. Kept separate
@@ -57,6 +59,7 @@ interface HomeTasksApi {
         @Path("id") homeId: String,
         @Path("taskId") taskId: String,
         @Header("x-pantopus-session-scope") expectedSession: String? = null,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): HomeTaskResponse
 
     /** `POST /api/homes/:id/tasks` — route `backend/routes/home.js:4238`. */
@@ -88,6 +91,7 @@ interface HomeTasksApi {
         @Path("taskId") taskId: String,
         @Body body: UpdateHomeTaskRequest,
         @Header("x-pantopus-session-scope") expectedSession: String? = null,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): HomeTaskResponse
 
     /** `DELETE /api/homes/:id/tasks/:taskId` — route `backend/routes/home.js:4354`. */

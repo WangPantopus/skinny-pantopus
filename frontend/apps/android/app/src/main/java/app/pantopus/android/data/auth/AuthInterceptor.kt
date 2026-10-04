@@ -6,8 +6,12 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 import timber.log.Timber
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** In-memory request tag only; never serialized or included in headers/logs. */
+class AuthenticatedDispatchGuard(val verify: suspend (TokenStorage.SessionCredentials?) -> Unit)
 
 /**
  * OkHttp interceptor that attaches `Authorization: Bearer <token>` on every
@@ -32,6 +36,7 @@ import javax.inject.Singleton
  * OkHttp dispatcher thread; the refresh runs on the separate refresh client so
  * it can never starve this client's dispatcher.
  */
+
 @Singleton
 class AuthInterceptor
     @Inject
@@ -43,6 +48,21 @@ class AuthInterceptor
             val original = chain.request()
             val token =
                 runBlocking {
+                    val guard = original.tag(AuthenticatedDispatchGuard::class.java)
+                    if (guard != null) {
+                        try {
+                            val before = tokenStorage.sessionCredentials()
+                            guard.verify(before)
+                            if (before != null && !original.url.encodedPath.endsWith(REFRESH_PATH_SUFFIX)) {
+                                preflightRefresh(before.accessToken)
+                            }
+                            val after = tokenStorage.sessionCredentials()
+                            guard.verify(after)
+                            return@runBlocking after?.accessToken ?: throw IOException("Session unavailable before dispatch")
+                        } catch (_: Exception) {
+                            throw IOException("Session changed before dispatch")
+                        }
+                    }
                     val current = tokenStorage.accessToken()
                     if (current.isNullOrBlank() || original.url.encodedPath.endsWith(REFRESH_PATH_SUFFIX)) {
                         current

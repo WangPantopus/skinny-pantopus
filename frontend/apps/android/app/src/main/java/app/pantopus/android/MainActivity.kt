@@ -17,14 +17,19 @@ import androidx.lifecycle.lifecycleScope
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.core.security.SecureWindowController
+import app.pantopus.android.data.analytics.PilotEvents
+import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.OAuthSessionStore
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
 import app.pantopus.android.push.PushTokenSyncer
+import app.pantopus.android.push.ReminderActionReceiver
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.navigation.PantopusNavHost
 import app.pantopus.android.ui.theme.PantopusTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -52,6 +57,12 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var appLockManager: AppLockManager
 
     @Inject lateinit var secureWindowController: SecureWindowController
+
+    @Inject lateinit var pilotEvents: PilotEvents
+
+    @Inject lateinit var authRepository: AuthRepository
+
+    @Inject lateinit var tokenStorage: TokenStorage
 
     /**
      * App-wide [ToastController]. Survives configuration changes via the
@@ -85,6 +96,9 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         secureWindowController.bind(this)
         observeAppLockPrivacyHold()
+        lifecycleScope.launch {
+            authRepository.state.collect { pilotEvents.authChanged() }
+        }
         // A recreated Activity retains its navigation/ViewModel state. Replaying the
         // launch link would replace that screen and discard its in-progress input.
         // Fresh processes still route the launch intent; onNewIntent handles new links.
@@ -108,6 +122,7 @@ class MainActivity : FragmentActivity() {
         // Foreground marker for chat-push suppression — a notification
         // for the on-screen conversation is skipped only while visible.
         activeChatThread.isForeground = true
+        pilotEvents.enterForeground()
         appLockManager.appDidBecomeActive()
         launchPushTokenSync()
     }
@@ -119,6 +134,7 @@ class MainActivity : FragmentActivity() {
         // iOS sees no `.background` for those at all, so arming here would
         // lock the app in the user's hands on every rotation.
         appLockManager.appDidEnterBackground(isConfigurationChange = isChangingConfigurations)
+        if (!isChangingConfigurations) pilotEvents.enterBackground()
         activeChatThread.isForeground = false
         super.onStop()
     }
@@ -131,6 +147,9 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun forwardDeepLink(intent: Intent?) {
+        if (intent?.getBooleanExtra(ReminderActionReceiver.PUSH_OPEN, false) == true) {
+            pilotEvents.notificationOpened(intent.getStringExtra(ReminderActionReceiver.PUSH_TYPE))
+        }
         val uri = intent?.data ?: return
         if (intent.action != Intent.ACTION_VIEW) return
         // Browser OAuth callbacks belong to the in-flight sign-in attempt,
@@ -138,6 +157,22 @@ class MainActivity : FragmentActivity() {
         // `guard !AuthManager.isOAuthCallback(url) else { return }`.
         if (OAuthSessionStore.isOAuthCallback(uri)) {
             OAuthSessionStore.deliver(uri)
+            return
+        }
+        if (intent.getStringExtra(ReminderActionReceiver.ACTION) == ReminderActionReceiver.TASK_NOT_NOW) {
+            val recipient = intent.getStringExtra(ReminderActionReceiver.RECIPIENT) ?: return
+            val session = intent.getStringExtra(ReminderActionReceiver.SESSION) ?: return
+            val destination = DeepLinkRouter.resolve(uri) as? DeepLinkRouter.Destination.HomeTask ?: return
+            if (!destination.openDueDateEdit) return
+            // Existing encrypted pending-route storage binds the cold login replay.
+            DeepLinkRouter.handle(uri.toString(), expectedUserId = recipient)
+            intent.removeExtra(ReminderActionReceiver.ACTION)
+            lifecycleScope.launch {
+                val hydrated = authRepository.state.first { it != AuthRepository.State.Unknown }
+                if ((hydrated as? AuthRepository.State.SignedIn)?.user?.id != recipient) return@launch
+                if (ReminderActionReceiver.sessionFingerprint(tokenStorage.sessionIdentity()) != session) return@launch
+                pilotEvents.send(PilotEvents.Event.ReminderAction, mapOf("kind" to "task", "action" to "not_now"), recipient)
+            }
             return
         }
         DeepLinkRouter.handle(uri)

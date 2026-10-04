@@ -3,10 +3,14 @@
 package app.pantopus.android.push
 
 import android.content.Context
+import app.pantopus.android.data.analytics.PilotEvents
+import app.pantopus.android.data.analytics.PilotSessionWindow
 import app.pantopus.android.data.chats.ActiveChatThread
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -23,6 +27,7 @@ class NotificationDispatcherTest {
         NotificationDispatcher(
             appContext = mockk<Context>(relaxed = true),
             activeChatThread = ActiveChatThread(),
+            tokens = mockk(relaxed = true),
         )
 
     // MARK: - channelFor
@@ -67,6 +72,37 @@ class NotificationDispatcherTest {
         assertEquals(NotificationDispatcher.Channel.SYSTEM, dispatcher.channelFor(""))
         assertEquals(NotificationDispatcher.Channel.SYSTEM, dispatcher.channelFor("address_verified"))
         assertEquals(NotificationDispatcher.Channel.SYSTEM, dispatcher.channelFor("announcement"))
+        val safe =
+            PilotEvents.payload(
+                PilotEvents.Event.ReminderAction,
+                mapOf(
+                    "kind" to "pickup",
+                    "action" to "bins_out",
+                    "date" to "2026-10-06",
+                    "home_id" to "private-id",
+                    "name" to "private-name",
+                    "push_type" to "a".repeat(41),
+                    "suggestion" to "free text",
+                    "decision" to "not_now",
+                ),
+            )
+        assertEquals(
+            mapOf("platform" to "android", "kind" to "pickup", "action" to "bins_out", "date" to "2026-10-06", "decision" to "not_now"),
+            safe.meta,
+        )
+        assertEquals("reminder_action", safe.eventType)
+        val pickup = dispatcher.route(mapOf("category" to "PICKUP_REMINDER", "pickupDate" to "2026-10-06", "date" to "2026-10-07"))
+        assertEquals("PICKUP_REMINDER", pickup.category)
+        assertEquals("2026-10-06", pickup.date)
+        val window = PilotSessionWindow()
+        assertTrue(window.enterForeground(0))
+        assertFalse(window.enterForeground(1))
+        window.enterBackground(10)
+        assertFalse(window.enterForeground(1_800_009))
+        window.enterBackground(1_800_010)
+        window.enterBackground(1_800_011)
+        assertTrue(window.enterForeground(3_600_010))
+        assertFalse(window.enterForeground(3_600_011))
     }
 
     // MARK: - route
@@ -75,7 +111,7 @@ class NotificationDispatcherTest {
     fun task_push_metadata_opens_exact_task_before_legacy_dashboard_link() {
         val home = "a1000000-0000-4000-8000-000000000001"
         val task = "b1000000-0000-4000-8000-000000000002"
-        for (type in listOf("task_assigned", "task_completed")) {
+        for (type in listOf("task_assigned", "task_completed", "task_due")) {
             val result =
                 dispatcher.route(
                     mapOf(

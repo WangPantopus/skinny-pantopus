@@ -80,6 +80,22 @@ class AuthInterceptorsTest {
 
         assertEquals("Bearer new-at", server.takeRequest().getHeader("Authorization"))
         coVerify(exactly = 1) { repo.refreshIfExpiringSoon(any()) }
+        val starting = TokenStorage.SessionCredentials("actor-a", "session-a", "old-at")
+        val replacement = TokenStorage.SessionCredentials("actor-b", "session-b", "replacement-at")
+        coEvery { storage.sessionCredentials() } returnsMany listOf(starting, replacement)
+        val guarded =
+            get("/api/hub/funnel-events").newBuilder().tag(
+                AuthenticatedDispatchGuard::class.java,
+                AuthenticatedDispatchGuard { selected ->
+                    check(selected != null && selected.userId == "actor-a" && selected.sessionId == "session-a")
+                },
+            ).build()
+        try {
+            client().newCall(guarded).execute().close()
+            org.junit.Assert.fail("Replacement actor was dispatched")
+        } catch (_: java.io.IOException) {
+            assertEquals(1, server.requestCount)
+        }
     }
 
     @Test

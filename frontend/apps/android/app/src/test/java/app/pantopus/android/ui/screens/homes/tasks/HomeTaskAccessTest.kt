@@ -137,6 +137,16 @@ class HomeTaskAccessTest {
             }
             coVerify(exactly = 0) { repository.updateHomeTask(any(), any(), any(), any()) }
             coVerify(exactly = 0) { repository.deleteHomeTask(any(), any(), any()) }
+            coEvery { repository.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(task, server))
+            var gateRan = false
+            denied {
+                access.complete("task", true) {
+                    gateRan = true
+                    error("locked")
+                }
+            }
+            assertEquals(true, gateRan)
+            coVerify(exactly = 0) { repository.updateHomeTask(any(), any(), any(), any()) }
         }
 
     @Test fun completion_sends_only_status_and_returns_current_projection() =

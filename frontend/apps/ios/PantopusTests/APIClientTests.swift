@@ -60,6 +60,33 @@ final class APIClientTests: XCTestCase {
         XCTAssertNil(headers["Authorization"], "Unauthenticated requests must not carry a Bearer token")
         XCTAssertEqual(headers["X-Client-Platform"]?.hasPrefix("ios-"), true)
         XCTAssertEqual(headers["Content-Type"], "application/json")
+        let body = PilotEvents.payload(.reminderAction, meta: [
+            "kind": "pickup", "action": "bins_out", "date": "2026-10-06",
+            "home_id": "private-id", "name": "private-name", "push_type": String(repeating: "a", count: 41),
+            "suggestion": "free text", "decision": "not_now"
+        ])
+        XCTAssertEqual(body.meta, ["platform": "ios", "kind": "pickup", "action": "bins_out", "date": "2026-10-06", "decision": "not_now"])
+        let data = try JSONEncoder().encode(body)
+        let wire = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(wire["event_type"] as? String, "reminder_action")
+        XCTAssertNil(wire["userId"])
+        var window = PilotSessionWindow()
+        XCTAssertTrue(window.enterForeground(now: 0))
+        XCTAssertFalse(window.enterForeground(now: 1))
+        window.enterBackground(now: 10)
+        XCTAssertFalse(window.enterForeground(now: 1809))
+        window.enterBackground(now: 1810)
+        window.enterBackground(now: 1811)
+        XCTAssertTrue(window.enterForeground(now: 3610))
+        XCTAssertFalse(window.enterForeground(now: 3611))
+        let previousRequests = URLProtocolStub.capturedRequests.count
+        do {
+            _ = try await client.request(Endpoint(method: .post, path: "/api/hub/funnel-events", dispatchGuard: {
+                throw CancellationError()
+            }))
+            XCTFail("Obsolete scope dispatched")
+        } catch {}
+        XCTAssertEqual(URLProtocolStub.capturedRequests.count, previousRequests)
     }
 
     func testNotFoundReceiptRequiresExplicitOptIn() async throws {

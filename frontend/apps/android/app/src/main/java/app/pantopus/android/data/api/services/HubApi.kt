@@ -5,12 +5,24 @@ import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
 import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubTodayPayload
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
+import okhttp3.RequestBody
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Tag
 
 /** Hub routes from `backend/routes/hub.js`. */
 interface HubApi {
+    /** Authenticated pilot measurements; successful responses have no body. */
+    @POST("api/hub/funnel-events")
+    suspend fun funnelEvent(
+        @Body body: RequestBody,
+        @Tag guard: AuthenticatedDispatchGuard? = null,
+    )
+
     /** `GET /api/hub` — route `backend/routes/hub.js:24`. */
     @GET("api/hub")
     suspend fun overview(): HubResponse

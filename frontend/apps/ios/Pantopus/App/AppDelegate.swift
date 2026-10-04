@@ -46,12 +46,30 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             // SDK is already linked (project.yml); we only set the key here.
             StripeBootstrap.configure(publishableKey: AppEnvironment.current.stripePublishableKey)
         }
+        registerReminderCategories()
         UNUserNotificationCenter.current().delegate = self
         requestNotificationPermission()
         return true
     }
 
     // MARK: - Push notifications
+
+    private func registerReminderCategories() {
+        let pickup = UNNotificationCategory(
+            identifier: "PICKUP_REMINDER",
+            actions: [UNNotificationAction(identifier: "BINS_OUT", title: "Bins out", options: [])],
+            intentIdentifiers: [], options: []
+        )
+        let task = UNNotificationCategory(
+            identifier: "TASK_REMINDER",
+            actions: [
+                UNNotificationAction(identifier: "TASK_DONE", title: "Done", options: [.authenticationRequired]),
+                UNNotificationAction(identifier: "TASK_NOT_NOW", title: "Not now", options: [.foreground])
+            ],
+            intentIdentifiers: [], options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([pickup, task])
+    }
 
     private func requestNotificationPermission() {
         if ProcessInfo.processInfo.environment["UI_TESTS_DISABLE_NOTIFICATIONS"] == "1" {
@@ -152,6 +170,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         // across the actor hop, so we never smuggle the non-Sendable
         // `UNNotification` onto the main actor.
         let userInfo = response.notification.request.content.userInfo
+        let action = response.actionIdentifier
+        let category = response.notification.request.content.categoryIdentifier
+        let type = userInfo["type"] as? String
+        let recipient = userInfo["recipient_user_id"] as? String
+        let date = userInfo["pickupDate"] as? String ?? userInfo["date"] as? String
+        let taskPath = HomeTaskNotificationRoute.pushPath(userInfo)
+        let homeId = userInfo["homeId"] as? String ?? userInfo["home_id"] as? String
+        let taskId = userInfo["taskId"] as? String ?? userInfo["task_id"] as? String
         let deepLink = HomeTaskNotificationRoute.pushPath(userInfo)
             ?? DeepLinkRouter.notificationPath(type: userInfo["type"] as? String, link: userInfo["link"] as? String)
             ?? (userInfo["deepLink"] as? String)
@@ -164,12 +190,58 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         // snapshot taken on completion asserts main-thread — a background
         // (HOME) banner tap crashed the app with SIGABRT (2026-09-22).
         Task { @MainActor in
+            defer { completionHandler() }
+            if action == UNNotificationDismissActionIdentifier { return }
+            if action == "TASK_NOT_NOW" {
+                guard category == "TASK_REMINDER", let recipient, UUID(uuidString: recipient) != nil,
+                      let taskPath else { return }
+                PilotEvents.shared.notificationOpened(type: type)
+                DeepLinkRouter.shared.handle(path: taskPath + "?edit=due_date", expectedUserID: recipient)
+                PilotEvents.shared.reminderOpened(recipient: recipient, meta: ["kind": "task", "action": "not_now"])
+                return
+            }
+            if action == "BINS_OUT" || action == "TASK_DONE" {
+                let auth = AuthManager.shared
+                if auth.state == .unknown { await auth.restoreSession() }
+                guard let recipient, case let .signedIn(user) = auth.state, user.id == recipient else { return }
+                AppLockManager.shared.configure(userID: user.id)
+                guard !AppLockManager.shared.isLocked else { return }
+                let scope = HomeClaimSessionScope(api: .shared)
+                guard scope.isCurrent else { return }
+                if action == "BINS_OUT" {
+                    guard category == "PICKUP_REMINDER", let date,
+                          date.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil else { return }
+                    await PilotEvents.shared.send(
+                        .reminderAction,
+                        meta: ["kind": "pickup", "action": "bins_out", "date": date],
+                        scope: scope
+                    )
+                } else {
+                    guard category == "TASK_REMINDER", let homeId, let taskId, taskPath != nil else { return }
+                    do {
+                        _ = try await HomeTaskAccess(homeId: homeId, dispatchGuard: {
+                            try scope.requireCurrent()
+                            guard !AppLockManager.shared.isLocked else { throw CancellationError() }
+                        }).complete(taskId: taskId, status: "done") {
+                            try scope.requireCurrent()
+                            guard !AppLockManager.shared.isLocked else { throw CancellationError() }
+                        }
+                        guard scope.isCurrent else { return }
+                        await PilotEvents.shared.send(.reminderAction, meta: ["kind": "task", "action": "done"], scope: scope)
+                    } catch {
+                        // Keep the original task and notification usable after denial
+                        // or an uncertain response; never claim a local completion.
+                    }
+                }
+                return
+            }
+            guard action == UNNotificationDefaultActionIdentifier else { return }
+            PilotEvents.shared.notificationOpened(type: type)
             if let deepLink, !deepLink.isEmpty {
                 // `link` is a path like `/chat/42`; handle(path:) normalises it
                 // to the pantopus:// scheme, matching the Android dispatcher.
                 DeepLinkRouter.shared.handle(path: deepLink)
             }
-            completionHandler()
         }
     }
 }

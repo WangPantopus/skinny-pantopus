@@ -10,7 +10,7 @@ object HomeTaskNotificationRoute {
     private val uuid = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
     private val metadataAdapter = Moshi.Builder().build().adapter(Any::class.java)
 
-    fun isTask(type: String?): Boolean = type?.lowercase(Locale.ROOT) in setOf("task_assigned", "task_completed")
+    fun isTask(type: String?): Boolean = type?.lowercase(Locale.ROOT) in setOf("task_assigned", "task_completed", "task_due")
 
     fun canonicalId(value: String?): String? = value?.takeIf(uuid::matches)?.lowercase(Locale.ROOT)
 
@@ -38,8 +38,8 @@ object HomeTaskNotificationRoute {
         val fields = runCatching { data["metadata"]?.let(metadataAdapter::fromJson) }.getOrNull() as? Map<*, *>
         return path(
             data["type"],
-            data["home_id"] ?: fields?.get("home_id") as? String,
-            data["task_id"] ?: fields?.get("task_id") as? String,
+            data["homeId"] ?: data["home_id"] ?: fields?.get("home_id") as? String,
+            data["taskId"] ?: data["task_id"] ?: fields?.get("task_id") as? String,
         )
     }
 }

@@ -77,7 +77,7 @@ public enum HubRoute: Hashable {
     case addHouseholdTask(homeId: String)
     /// P2.4 — Edit an existing household task. Reached from the
     /// "Edit recurring" overflow action on a Recurring row.
-    case editHouseholdTask(homeId: String, taskId: String)
+    case editHouseholdTask(homeId: String, taskId: String, focusDueDate: Bool = false)
     /// Maintenance sub-screen for a specific home (T6.3b / P10).
     case homeMaintenance(homeId: String)
     /// Per-home **issue tracker** (`HomeIssue`). A different backend
@@ -1005,8 +1005,11 @@ public struct HubTabRoot: View {
         case let .homeDetail(id), let .homeDashboard(id):
             path.append(.homeDashboard(homeId: id))
             _ = router.consume()
-        case let .homeTask(homeId, taskId):
+        case let .homeTask(homeId, taskId, openDueDateEdit):
             path.append(.householdTaskDetail(homeId: homeId, taskId: taskId))
+            if openDueDateEdit {
+                path.append(.editHouseholdTask(homeId: homeId, taskId: taskId, focusDueDate: true))
+            }
             _ = router.consume()
         case let .homeMemberRequests(id):
             path.append(.homeMemberRequests(homeId: id))
@@ -1960,10 +1963,11 @@ public struct HubTabRoot: View {
                     push(.householdTaskDetail(homeId: homeId, taskId: taskId))
                 }
             )
-        case let .editHouseholdTask(homeId, taskId):
+        case let .editHouseholdTask(homeId, taskId, focusDueDate):
             AddHouseholdTaskFormView(
                 homeId: homeId,
-                taskId: taskId
+                taskId: taskId,
+                focusDueDate: focusDueDate
             ) {
                 if !path.isEmpty { path.removeLast() }
             }

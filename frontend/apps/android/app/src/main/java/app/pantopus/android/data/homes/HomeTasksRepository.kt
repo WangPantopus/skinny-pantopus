@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeTasksApi
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import com.squareup.moshi.JsonDataException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,7 +49,8 @@ open class HomeTasksRepository
             homeId: String,
             taskId: String,
             expectedSession: String? = null,
-        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.getHomeTask(homeId, taskId, expectedSession) }
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.getHomeTask(homeId, taskId, expectedSession, dispatchGuard) }
 
         /** `POST /api/homes/:id/tasks`. */
         open suspend fun createHomeTask(
@@ -75,7 +77,8 @@ open class HomeTasksRepository
             taskId: String,
             request: UpdateHomeTaskRequest,
             expectedSession: String? = null,
-        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.updateHomeTask(homeId, taskId, request, expectedSession) }
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<HomeTaskResponse> = safeApiCall { api.updateHomeTask(homeId, taskId, request, expectedSession, dispatchGuard) }
 
         /** `DELETE /api/homes/:id/tasks/:taskId`. */
         open suspend fun deleteHomeTask(
