@@ -54,9 +54,9 @@ struct PlaceTodayDetailContent: View {
 
     private func todayContent(proxy: ScrollViewProxy) -> some View {
         loadedContent(proxy: proxy)
-            .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
-            .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
-            .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
+            .onChange(of: rootTabs.selected) { (_: RootTab, tab: RootTab) in resumeRadon(tab == .today) }
+            .onChange(of: scenePhase) { (_: ScenePhase, phase: ScenePhase) in resumeRadon(phase == .active && rootTabs.selected == .today) }
+            .onChange(of: AppLockManager.shared.isLocked) { (_: Bool, locked: Bool) in resumeRadon(!locked && rootTabs.selected == .today) }
     }
 
     private func loadedContent(proxy: ScrollViewProxy) -> some View {
