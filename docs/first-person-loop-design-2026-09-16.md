@@ -1,5 +1,7 @@
 # The first-person loop: design for sign-up and return with zero other users
 
+> **October 3, 2026: building from this design? Read the [mobile pilot build brief](mobile-pilot-build-brief-2026-10-03.md) first.** The pilot builds only part of this design, on iOS and Android with the backend they need, and the brief wins where the two differ. In: F1, F4, the rest of F9's truthfulness fixes, small versions of F2, F3 and F5, and F3b's server gate. Later: F7, F8, F10 and F12's appeal windows. Dropped: F6 and F11. Several "today" facts below have changed since September 16; the brief's anchors are current.
+
 **Date:** September 16, 2026
 **Status:** Implementation design. Nothing here is built; no application code, migration or configuration was changed to write it. Every "today" claim cites the file and line inspected on master `711340225` on September 16.
 **Reads with:** [NEXT_STEPS.md](../NEXT_STEPS.md) (the checklist), the [design docs review](https://claude.ai/code/artifact/09276a14-1587-41be-86ef-54e95505d2d8), the [idea ledger](https://claude.ai/code/artifact/51f601e7-1e56-416e-b549-fbd036e421ba), the [Wedge v2 strategy](https://claude.ai/artifact/GLUkeCRhnFZnsj7tRr1L4D), and [AGENTS.md](../AGENTS.md).

@@ -593,6 +593,7 @@ Unsubscribe: ${unsubUrl}
  * @param {string|null} opts.slotTime
  * @param {string} opts.contributionMode - cook | takeout | groceries
  * @param {string} opts.supportTrainId
+ * @param {boolean} [opts.isReminder=false] - reuse this receipt for an upcoming-slot reminder
  */
 async function sendGuestReservationConfirmationEmail({
   toEmail,
@@ -603,12 +604,13 @@ async function sendGuestReservationConfirmationEmail({
   slotTime,
   contributionMode,
   supportTrainId,
+  isReminder = false,
 }) {
   const modeLabels = { cook: 'Home-cooked meal', takeout: 'Takeout', groceries: 'Groceries' };
   const modeLabel = modeLabels[contributionMode] || contributionMode;
   const appUrl = `${APP_URL}/support-trains/${supportTrainId}`;
 
-  const subject = `You're signed up to help: ${trainTitle}`;
+  const subject = isReminder ? `Reminder: ${trainTitle}` : `You're signed up to help: ${trainTitle}`;
 
   const html = `
 <!DOCTYPE html>
@@ -622,12 +624,12 @@ async function sendGuestReservationConfirmationEmail({
 
     <div style="background:#111827; padding:32px 32px 24px; text-align:center;">
       <div style="font-size:32px; margin-bottom:8px;">🚂</div>
-      <h1 style="color:#ffffff; font-size:20px; font-weight:600; margin:0;">You're Signed Up!</h1>
+      <h1 style="color:#ffffff; font-size:20px; font-weight:600; margin:0;">${isReminder ? 'Your Slot Reminder' : "You're Signed Up!"}</h1>
     </div>
 
     <div style="padding:32px;">
       <p style="color:#374151; font-size:15px; line-height:1.6; margin:0 0 16px;">
-        Hi <strong>${escapeHtml(guestName)}</strong>, thank you for signing up to help with <strong>${escapeHtml(trainTitle)}</strong>.
+        Hi <strong>${escapeHtml(guestName)}</strong>, ${isReminder ? 'this is a reminder about your upcoming help with' : 'thank you for signing up to help with'} <strong>${escapeHtml(trainTitle)}</strong>.
       </p>
 
       <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin:0 0 20px;">
@@ -665,9 +667,9 @@ async function sendGuestReservationConfirmationEmail({
 </html>`;
 
   const text = `
-You're signed up to help: ${trainTitle}
+${subject}
 
-Hi ${guestName}, thank you for signing up!
+Hi ${guestName}, ${isReminder ? 'this is a reminder about your upcoming slot.' : 'thank you for signing up!'}
 
 ${slotLabel} · ${slotDate}${slotTime ? `\nTime: ${slotTime}` : ''}
 Type: ${modeLabel}

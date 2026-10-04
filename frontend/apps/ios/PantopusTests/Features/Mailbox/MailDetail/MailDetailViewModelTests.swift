@@ -61,7 +61,13 @@ final class MailDetailViewModelTests: XCTestCase {
           }
         }
         """
-        SequencedURLProtocol.sequence = [.status(200, body: body)]
+        SequencedURLProtocol.sequence = [
+            .status(200, body: body),
+            // Loading an unread notice marks it viewed before the acknowledgement requests.
+            .status(200, body: #"{"message":"Mail marked as viewed","alreadyViewed":false}"#),
+            .status(500, body: "{\"error\":\"Acknowledgment unavailable\"}"),
+            .status(200, body: "{\"message\":\"Mail acknowledged\",\"ackStatus\":\"acknowledged\"}")
+        ]
         let vm = MailDetailViewModel(mailId: "m1", api: makeAPI())
         await vm.load()
         guard case let .loaded(content) = vm.state else {
@@ -77,7 +83,32 @@ final class MailDetailViewModelTests: XCTestCase {
         XCTAssertEqual(content.attachments.count, 2)
         XCTAssertTrue(content.ackRequired)
         XCTAssertFalse(content.isAcknowledged)
+        XCTAssertEqual(content.readStatusLabel, "Read")
+        XCTAssertNil(content.aiSummary)
         XCTAssertEqual(content.detailTrust, .neutral)
+
+        await vm.acknowledge()
+        guard case let .loaded(failed) = vm.state else {
+            XCTFail("Expected the existing notice after failed acknowledgement")
+            return
+        }
+        XCTAssertFalse(failed.isAcknowledged)
+        XCTAssertFalse(vm.ackInFlight)
+
+        await vm.acknowledge()
+        guard case let .loaded(acknowledged) = vm.state else {
+            XCTFail("Expected acknowledged notice")
+            return
+        }
+        XCTAssertTrue(acknowledged.isAcknowledged)
+        XCTAssertEqual(vm.toast, "Acknowledged")
+        await vm.acknowledge()
+        XCTAssertEqual(
+            SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "PATCH" && $0.url?.path.hasSuffix("/mailbox/m1/ack") == true }
+                .count,
+            2,
+            "A saved receipt must not issue another acknowledgement"
+        )
     }
 
     /// Ceremonial mail (carrying `mail_extracted.stationeryTheme`) is
