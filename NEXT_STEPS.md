@@ -1,102 +1,129 @@
 # Pantopus next steps
 
-Founder checklist, in build order. Check items off as they ship. Started September 16, 2026.
+The founder's single checklist. Check items off as they ship. Started September 16, 2026; rewritten October 3, 2026 for the mobile pilot.
 
-Sources: the [design docs review](https://claude.ai/code/artifact/09276a14-1587-41be-86ef-54e95505d2d8),
-the [idea ledger](https://claude.ai/code/artifact/51f601e7-1e56-416e-b549-fbd036e421ba) (every idea with
-effort and priority), and the [Wedge v2 strategy](https://claude.ai/artifact/GLUkeCRhnFZnsj7tRr1L4D).
-The implementation design for sections 1–3 and 6 is [docs/first-person-loop-design-2026-09-16.md](docs/first-person-loop-design-2026-09-16.md) (features F1–F12, copy, states, contracts, acceptance, effort).
-Rules of the road stay [AGENTS.md](AGENTS.md): verify existing behavior first, extend rather than
-rebuild, no parallel tables, preserve screen designs, propose design changes before making them.
+**Agents: build from the [mobile pilot build brief](docs/mobile-pilot-build-brief-2026-10-03.md).** It says exactly what to build, on which platforms, against which code, in what order, and what not to build. This file tracks status and decisions; the brief holds the instructions.
 
-## 0. Decisions (made September 16)
+Sources, in order of authority for this work:
+
+1. [Mobile pilot build brief](docs/mobile-pilot-build-brief-2026-10-03.md): what to build now, on iOS and Android, plus the backend they need.
+2. The September 26 launch direction and its amendments, in `docs/launch-boundary-2026-09-26/` ([PR 1499](https://github.com/WangPantopus/skinny-pantopus/pull/1499) until merged). The brief carries every part this build needs.
+3. [First-person loop design](docs/first-person-loop-design-2026-09-16.md): the full F1 to F12 designs. The brief says which parts are in.
+4. Claude Design exports in `docs/design/exports/`, checked in `docs/design/exports/VERIFICATION.md`: the look of the screens that have one.
+5. Background: the [design docs review](https://claude.ai/code/artifact/09276a14-1587-41be-86ef-54e95505d2d8), the [idea ledger](https://claude.ai/code/artifact/51f601e7-1e56-416e-b549-fbd036e421ba) and the [Wedge v2 strategy](https://claude.ai/artifact/GLUkeCRhnFZnsj7tRr1L4D).
+
+Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`docs/workstreams/README.md` on the `codex/workstream-coordination` branch). Stream 1 runs the merge queue and assigns work.
+
+## 0. Decisions
+
+**Made September 16. All stand.**
 
 - [x] Navigation stays Place · Today · Nearby · Mail; no relabel.
-- [x] Density meter: scarcity gates status only, never access (open the Marketplace/Tasks rows with an honest meter, or lower the lock to the k-anon floor of 10 in a test cell).
-- [x] Seeder stays as a visibly labeled platform publisher; strip the engagement-question and neighbor-voice prompt lines; exclude from organic metrics.
+- [x] Density meter: scarcity gates status only, never access.
+- [x] Seeder stays as a visibly labeled platform publisher; strip the engagement-question and neighbor-voice prompt lines; exclude it from organic metrics.
 - [x] General ban stays; a Moment category only with an explicit place attachment, and not before place pages exist.
 - [x] No SavedItem / Action / Watch tables; extend `SavedPlace` and `HomeRecordWatch` instead.
-- [x] Pilot = available nationwide, observed locally: 30 movers in the seeded metro; paid spend only after week-four return is measured.
+- [x] Pilot is available nationwide and observed locally; paid spend only after week-four return is measured.
 - [x] Cash Earn hidden until a balance is withdrawable.
 - [x] Address-verified vs household-verified: only postcard, document, landlord or admin verification unlocks attested artifacts and neighbor messaging; an accepted household invite gives household tools only (design doc F3b).
-- [x] Write the design doc for the loop (`docs/first-person-loop-design-2026-09-16.md`).
-- [ ] Record the seven decisions in `docs/pantopus-product-design-index-2026-09-09.md`, `docs/PROJECT_HANDOFF.md`, and section 13 of the Wedge v2 page (documentation only).
 
-## 1. Hygiene set (about two days, ship before inviting anyone)
+**Made by the founder on October 3.**
 
-- [ ] Coordinate leak: unit test in `backend/tests/unit/feedService.test.js` that a non-author viewer of a home-identity approx-area post gets `effective_latitude/longitude` null or identically jittered; fix in `applyPostLocationPrivacy` (`backend/services/feedService.js:251`).
-- [ ] Founding label fails closed: `backend/routes/public.js:557` must not default "slots open" to true on a failed lookup.
-- [ ] Hide cash Earn from every user-visible surface (Hub "Earn today" item, earn routes behind a flag) until `EarnTransaction` balances reach the Wallet.
-- [ ] Curator label on web, iOS and Android from the existing `origin` field on feed rows ("Pantopus curator · Source: X").
-- [ ] Seeder prompt: remove the ENGAGEMENT question (`pantopus-seeder/src/pipeline/humanizer.py:51-55`) and the sports lane's "read like a neighbor" line (`:105`); exclude curator posts from taper and organic metrics.
-- [ ] Referral tiers pay something real: bind converted referrals to +1 weekly postcard invite (`WEEKLY_INVITE_CAP` in `backend/services/blockFoundersService.js`); rename the 10-tier "Founding Neighbor Badge" in `inviteRewardService.js` and both native ProfileInsightCards.
-- [ ] Collapse the three "Founding Neighbor" names to one (rank, tier, referral badge) and drop or wire the "permanent 0% marketplace fee" promise.
+- [x] New builds are mobile only: iOS and Android. Web waits. Backend, database and seeder changes the apps need are in scope and must not break the current web.
+- [x] F1 to F12 for the pilot: build F1, F4 and the rest of F9's truthfulness fixes; build small versions of F2, F3 and F5; ship F3b's server gate with F3; leave F7, F8, F10 and F12's appeal windows for later; drop F6 and F11; park the stylized home picture and the address QR inbox.
 
-## 2. Bridge and weekly hook (about two weeks)
+**Made on October 3 under the founder's standing instruction to go with the recommended option. Change any of them here.**
 
-- [ ] Save sets location: a T1 save writes `UserViewingLocation` (or `resolveLocation` falls back to the newest `SavedPlace`), so Today, the seasonal card and the briefing light up immediately. Aha follow-up copy: "Save this place" at T1, "Claim" at T2+.
-- [ ] Three-question first week in the setup checklist (`backend/routes/hub.js`): pickup day, one bill or lease date, the people you live with.
-- [ ] Household as the first network: onboarding prompt to invite co-residents; shared visibility of pickup and bills; "Sam marked the water bill paid" push.
-- [ ] Verification source split (F3b): `HomeOccupancy.verification_source` address | household | legacy; `isVerifiedResident` false for household; invitation copy updated on three platforms. Ship with the household item above.
-- [ ] Night-before pickup push from the address calendar (household-confirmed schedule only).
-- [ ] Conditional daily briefing: push only when weather, air or alerts cross a threshold or something is due; keep the fixed time as an opt-in.
-- [ ] Important dates in the calendar: lease end and notice deadline, insurance renewal, warranty expiry, HOA dues, with 60/30/7-day reminders.
-- [ ] JustMovedCard ticks move from localStorage to the account; add the voter-registration item from Civic data.
+- [x] Pickup reminders push only for a pickup day the household confirmed. City defaults show as unconfirmed in the app and never push.
+- [x] Pickup and radon reminders need a home. A private setup counts, so a household gets reminders the day it adds its home, without waiting for verification. A saved place without a home gets Today and an "Add your home" row where a reminder would be.
+- [x] The radon card and the first-use card live on the Today tab, so they work for private-setup homes, which have no Place dashboard. Radon answers are stored as home tasks; "Not now" is remembered on the device.
+- [x] The night-before pickup push rides the existing evening briefing. No new schedule.
+- [x] Holiday moves come from city-level holiday rows that shift that week's pickups. No per-home edits and no new table.
+- [x] F3b's server gate ships with the household step. Everyone verified before it ships stays verified.
+- [x] The election feature is shelved until the 2027 Washington local elections. Its canvas and guide stay as they are.
 
-## 3. The compare card, October headline (one to two weeks)
+**Still open. The brief builds the default until you decide.**
 
-- [ ] Signed compare payload (four grades + city + optional first name + expiry; never the address); `/start?vs=` parsing and compare state in `frontend/apps/web/src/app/start/page.tsx`.
-- [ ] "Compare with a friend" under the aha card; per-grade "how we know" line (county zone vs parcel).
-- [ ] Two-column variant of `/api/og/place`; light and dark.
-- [ ] `t0_compare_viewed` funnel event and a column in `GET /api/admin/funnel/summary`.
-- [ ] Rotating headline layer from the seasonal engine: October = voter-registration deadline for the November 3 election (Civic data + state deadline table); April/October = tax due and appeal window; January = radon zone + state free-kit link; summer = wildfire and smoke.
-- [ ] Same-cell branch on the wall: "N Founding Neighbor slots still open on this block, closes <date>".
-- [ ] Positioning line on `/start`, the store listings and the share card: "Nextdoor is what your neighbors say. Pantopus is what's on record about your address."
+- [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
+- [ ] Who builds each package. Default: the routing in section 11 of the brief; Stream 1 assigns.
+- [ ] Whether invited household members see pickup days and bills. Default: not in the pilot; they see and complete shared tasks.
+- [ ] Where the new promise appears. Default: the store listings and the app's first screen.
+- [ ] The pilot start date. Default: when section 2 below is done and one full journey works on the hosted backend.
+- [ ] Creator network and Places order. Decide in late November with the pilot's week-four number.
+- [ ] Record these decisions in `docs/pantopus-product-design-index-2026-09-09.md`, `docs/PROJECT_HANDOFF.md` and section 13 of the Wedge v2 page.
 
-## 4. Before the pilot (one afternoon plus founder time)
+## 1. Done since September 16 (checked on master October 3)
 
-- [ ] Five strangers, ten seconds on `/start`: "What does this do, and why would you type your address?" Fix copy before spending a postcard.
-- [ ] Production keys: `CENSUS_API_KEY`, `AIRNOW_API_KEY`, `GOOGLE_CIVIC_API_KEY`, Mapbox incl. `NEXT_PUBLIC_MAPBOX_TOKEN`, `ADMIN_ALERT_EMAIL`; apply migrations 158/195/196.
-- [ ] Confirm the Camas waste and council schedules (flip rows to `official`).
-- [ ] Rerun the aha audit on the first ten alpha addresses (`backend/tests/audit/ahaAudit.audit.js`); read `/api/admin/funnel/summary`.
-- [ ] Verify current Lob and USPS EDDM rate cards before budgeting any drop.
-- [ ] Agents' closing-gift kit with a `?r=` route per agent; first HOA conversation; the business walk.
-- [ ] Widgets: iOS WidgetKit and Android Glance reading the Today payload ("Recycling Tue · AQI 42 · tax due in 12 days").
+- [x] Coordinate leak: non-authors never get a post's exact point (fixed September 30).
+- [x] Founding label fails closed when its lookup fails.
+- [x] The radon follow-up no longer promises a reminder that didn't exist.
+- [x] Hub mail counts read the real `Mail` columns.
+- [x] The eight first-launch cuts sit behind launch flags (`docs/launch-scope-flags-2026-10-01.md`).
+- [x] The loop design and this checklist were written and committed.
 
-## 5. The pilot (mid-October, four weeks)
+## 2. Before the pilot (founder-owned; agents can prepare but never hold credentials)
 
-- [ ] Recruit 30 movers in the seeded metro (agents' kit, welcome postcards to recorded sales, own street first).
-- [ ] Define activation: address saved + briefing or widget on + one household fact (pickup day, a bill, or a co-resident) within seven days.
-- [ ] Track week-one, week-four and week-eight return among activated users, attributed to trigger (pickup push, conditional briefing, widget, email, compare card, household update, organic). Bar: 40% week-four return.
-- [ ] Track spread: k = compare rate × hop rate × reveal rate; rework under 0.3 after two weeks.
-- [ ] Watch the cohort that added pickup day and a bill in week one; if they retain and others do not, that is the onboarding.
-- [ ] Decide from the numbers: keeper + mail snap next, or another onboarding pass.
+- [ ] Turn the hosted backend on. One scheduled reminder reaches a physical iPhone and a physical Android phone.
+- [ ] Production keys the backend reads; the database baseline adopted in production; TestFlight; a Play internal testing track.
+- [ ] Confirm the Camas, Vancouver and Washougal pickup schedules and their holiday rules by hand for Thanksgiving (November 26), Christmas (December 25) and New Year's Day (January 1). Mark each official or unconfirmed. Today only Camas has rows, and all are unconfirmed.
+- [ ] Talk to ten first-time homeowners and ten meal-train organizers before and during the build.
+- [ ] Five strangers, ten seconds on the app's first screen: "What does this do, and why would you type your address?"
+- [ ] Review and merge PR 1499 (the September 26 drafts and the marketing draft), then reconcile it with this file.
+- [ ] Verify Lob and USPS Every Door Direct Mail rate cards before budgeting any mail drop.
+- [ ] Agents' closing-gift kit (draft in PR 1499), the first homeowners association conversation, the business walk.
+- [ ] Optional: draw the radon card in Claude Design. Agents build it from the brief and existing components if it isn't ready.
 
-## 6. Next, after the pilot's first read
+## 3. Build now: the mobile pilot (instructions in the brief)
 
-- [ ] Mail and bill snap as the keeper's first job (extends Mail Day and `summarizeMail`; private evidence storage pattern from `homeClaimEvidenceRoutes.js`).
-- [ ] Keeper thin persona: name, species, one mood line on Today derived from real obligations; grows with the home file.
-- [ ] Appeal-window deadline rows for the 50 largest counties in the address-calendar registry; assessment change from ATTOM if display terms allow.
-- [ ] Public bucket-only city founding map from the cells API.
-- [ ] Seasonal quarterly card and weekly email digest.
-- [ ] Address change watches (generalize `HomeRecordWatch` to ATTOM sales nearby, EPA SDWIS, FEMA revisions).
-- [ ] `SavedPlace` snapshot columns (kind, source ref, snapshot, captured version, client request id) and "Save this" on sections.
-- [ ] One or two national sections through `placeSectionAdapters` (IMLS library outlets, HRSA sites, USDA markets or SNAP retailers).
-- [ ] Home handover: outgoing resident leaves the home file for the incoming one over the existing external-share and membership services.
-- [ ] Address QR inbox via the Fridge Card code; keeper chat; draft-and-approve replies.
-- [ ] Free-tier home visual (user photo or confirmed Street View reference → stylized illustration, Rive/Lottie keeper, live overlays), "Only you" by default.
-- [ ] Density lock change per decision 2; apply the docs' §13.1 / B.7 checklist to `/start`, Today and Nearby as pass criteria for the open UI rows.
+- [ ] WP1 Truthfulness fixes: hide the Hub's "Earn today" offers line; label curator posts on iOS and Android; remove the seeder's engagement-question and neighbor-voice prompt lines and exclude curator posts from organic counts.
+- [ ] WP2 Today works for a saved place and for a newly added home in private setup (F1).
+- [ ] WP3 Night-before pickup reminders people can act on (F4): an evening push for confirmed pickup days, nothing on quiet days, holiday moves, a "Bins out" button, and a way to set a pickup day in cities with no calendar yet (today, everywhere but Camas).
+- [ ] WP4 Radon, from fact to reminder (F5, small): "Was it tested?", a home task with a date, a reminder with "Done" and "Not now". Includes two fixes to the task reminder job: finished tasks still get pushes, and pushes ignore a task's visibility.
+- [ ] WP5 One first-use prompt (F2, small).
+- [ ] WP6 The smallest household journey and the invite verification fix (F3 small, F3b gate).
+- [ ] WP7 Pilot measurement: app events, reminder events and the report.
+- [ ] WP8 Support Train slot reminders for helpers who signed up by email, and the day-of reminder that never fires after the 24-hour one.
+
+## 4. The pilot
+
+- [ ] Start with five households once one full journey works on the hosted backend and a scheduled reminder has reached a physical phone. Expand to 30 to 50 after two pickup weeks with no wrong or missed reminder. Eight weeks per household.
+- [ ] Measure activation within seven days; reminders sent, acted on, completed and found helpful; discoveries; household follow-through; week-four and week-eight return counted as handling a responsibility, not opening the app; founder minutes per household; zero unconfirmed dates pushed as confirmed.
+- [ ] Interview each household in weeks two and eight: "What did Pantopus help you notice or handle that would otherwise have slipped through?"
+- [ ] Decide from the numbers what comes next from section 5.
+
+## 5. After the pilot's first read (designed, not scheduled)
+
+- [ ] Web versions of everything in section 3.
+- [ ] F7 home-screen widgets.
+- [ ] F8 compare link, rotating headline and positioning line.
+- [ ] F10 photograph-your-mail with bill reminders.
+- [ ] F12 appeal windows computed from the owner's notice date, and radon kit links if a state program exists.
+- [ ] F3 extras: member permission defaults for pickup, calendar and bills; bill-paid and calendar notifications; roster and invitation-list redesigns.
+- [ ] F5 extras: lease, notice, insurance, warranty and dues dates; reminders for a saved place without a home.
+- [ ] F2's full first-week checklist.
+- [ ] F9 growth rows: referral rewards, tier rename, one Founding Neighbor name.
+- [ ] Ledger "Next" ideas: city founding map, open-slots card, seasonal card, weekly email digest, address-change watches, home-file chat, draft-and-approve replies, home handover, national library, health and market sections, the density-lock change, saved-place snapshot columns, an audit of shipped screens against the September docs' checklist.
+
+## 6. Dropped, parked or shelved
+
+- Dropped: F6 (just-moved ticks on the account and the voter step) and F11 (the keeper).
+- Parked: the stylized home picture; the address QR inbox; the Place tab rebuilt around a "place file" and "Your places"; the one-page notification settings redesign.
+- Shelved: the election feature until the 2027 local elections ([build guide](docs/ballot-build-guide-2026-09-23.md), [review](docs/ballot-product-review-2026-09-23.md) and the design canvas kept).
+- Creator network and Places: ten conversations first (five hobbyist photographers or hikers, five creators), then decide in late November.
 
 ## 7. Documentation
 
-- [ ] Wedge v2 page: add a v3 note pointing at the review and ledger; correct radon Zone 2 → Zone 1, the unwired 0% fee, "Android batches later"; record the decisions in section 13.
-- [ ] Nationwide doc A.7: cite `pickAha`, `/api/og/place`, `funnelEvents.js`, `JustMovedCard`, `homeClaimEvidenceRoutes.js:17-56`; fix the stale `upload.js:1833` row; cite the Supabase baseline migration instead of `schema.sql`.
-- [ ] Design index: "what already shipped Sep 1–2" section; condition "choose the first slice" on the decisions above; mark the v1 brief's navigation as retired.
+- [ ] Wedge v2 page: add a v3 note; fix "Clark County sits in Zone 2", the "permanent 0% marketplace fee" line and "Android batches later"; record the decisions in section 13.
+- [ ] The five September source docs, per the design review: rewrite the nationwide doc's entry section as a change over `/start`; shrink P1 to the smaller first slice; fix appendix A.7's stale citations; mark the v1 brief's navigation retired in the design index; narrow the places doc to libraries and parks with two records; add a true cold-start example to the prototype.
+- [ ] Ballot guide: fold the reviewer's twelve amendments into the body; correct the canvas lines the code can't support. Only when the feature is revived.
+- [ ] Add Places and Creator sections to the idea ledger.
+- [ ] Claude Design pack: stop drawing and fixing cut features; finish fix passes only for the pilot screens listed in section 12 of the brief.
+- [ ] Decide whether strategy documents belong on a public repository.
 
 ## Not now (decided)
 
-Bill paying by the keeper · generic shopping and deals · any navigation relabel · the source-discovery engine and new owner-scoped tables · a news feed against Nextdoor · Recent conditions and Moment posts · photoreal 3D homes · per-city permit adapters · nationwide paid acquisition before the pilot.
+Bill paying by an assistant · generic shopping and deals · any navigation relabel · the source-discovery engine and new owner-scoped tables · a news feed against Nextdoor · Recent conditions and Moment posts · photoreal 3D homes · per-city permit adapters · nationwide paid acquisition before the pilot.
 
 ## Parallel, unchanged
 
-The three verification workstreams on the 80-row acceptance backlog (`docs/REMAINING_WORK_2026-09-11.md`) continue; this checklist adds no scope to them.
+The acceptance backlog continues under the coordination guide. This checklist adds the packages in section 3, which Stream 1 assigns.
