@@ -1170,7 +1170,6 @@ describe('Provider Orchestrator', () => {
     expect(failed.meta.section_providers).toEqual({ weather: null, alerts: null });
     expect(failed.meta.partial_failures).toEqual(expect.arrayContaining(['weather', 'alerts']));
 
-    const calendarService = require('../services/addressCalendarService');
     expect(calendarService.composeForHomeId).toHaveBeenCalledWith('h1', { userId: MOCK_USER_ID });
     calendarService.composeForHomeId.mockClear();
     const { resolveLocation } = require('../services/context/locationResolver');
