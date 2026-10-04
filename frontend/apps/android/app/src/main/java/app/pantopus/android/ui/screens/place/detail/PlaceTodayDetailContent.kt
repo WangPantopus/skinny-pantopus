@@ -65,7 +65,7 @@ fun PlaceTodayDetailContent(
         val data = env.weather
         if (data != null && env.isLive()) {
             NowCard(data)
-            PlaceSourceNote("National Weather Service", PlacePresentation.fmtTime(env.asOf))
+            PlaceSourceNote(env.source ?: "Source unavailable", PlacePresentation.fmtTime(env.asOf))
         } else {
             PlaceDetailFallbackCard(env)
         }
@@ -99,7 +99,7 @@ fun PlaceTodayDetailContent(
         val data = env.alerts
         if (data != null && env.isLive()) {
             AlertsCard(data.active)
-            PlaceSourceNote("National Weather Service", "live")
+            PlaceSourceNote(env.source ?: "Source unavailable", "live")
         } else {
             PlaceDetailFallbackCard(env)
         }

@@ -407,6 +407,13 @@ async function getHubToday(userId, options = {}) {
     expires_at: expiresAt.toISOString(),
     meta: {
       providers_used: providersUsed,
+      // Preserve role-specific provenance with the memoized payload. The
+      // aggregate providers_used cannot distinguish weather from alerts,
+      // especially when an alert check succeeds with an empty list.
+      section_providers: {
+        weather: weather?.current && weather.source !== 'error' ? weather.provider || null : null,
+        alerts: Array.isArray(alerts?.alerts) && alerts.source !== 'error' ? alerts.provider || null : null,
+      },
       partial_failures: partialFailures,
       cache_hits: cacheHits,
       total_latency_ms: totalMs,
