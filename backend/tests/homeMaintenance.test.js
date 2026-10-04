@@ -364,30 +364,49 @@ describe('existing maintenance completion edits over HTTP', () => {
   });
   test('notes create, keyed retry, reread and omission preserve the saved text', async () => {
     const payload = { task: 'Filter replacement', notes: '  Installed a new filter.\nNext check in November.  ',
+      category: 'hvac', performer_contact: '  555-0142  ',
       clientRequestId: 'dddddddd-0000-4000-8000-000000000001' };
     const save = () => request(app).post(`/api/homes/${homeId}/maintenance`).set('x-test-user-id', ownerId).send(payload);
     const first = await save();
     expect(first.status).toBe(201);
     expect(first.body.task.notes).toBe('Installed a new filter.\nNext check in November.');
+    expect(first.body.task).toMatchObject({ category: 'hvac', performer_contact: '555-0142' });
     expect((await save()).body.task.id).toBe(first.body.task.id);
     expect(getTable('HomeMaintenanceLog')).toHaveLength(1);
     const changedRetry = await request(app).post(`/api/homes/${homeId}/maintenance`)
       .set('x-test-user-id', ownerId).send({ ...payload, notes: 'Different work' });
     expect(changedRetry.status).toBe(409);
+    for (const change of [{ category: 'plumbing' }, { performer_contact: 'Different contact' }]) {
+      const retry = await request(app).post(`/api/homes/${homeId}/maintenance`)
+        .set('x-test-user-id', ownerId).send({ ...payload, ...change });
+      expect(retry.status).toBe(409);
+      expect(getTable('HomeMaintenanceLog')).toHaveLength(1);
+    }
     const edit = await request(app).put(`/api/homes/${homeId}/maintenance/${first.body.task.id}`)
       .set('x-test-user-id', ownerId).send({ task: 'Filter replacement, complete' });
     expect(edit.status).toBe(200);
     const read = await request(app).get(`/api/homes/${homeId}/maintenance`).set('x-test-user-id', ownerId);
     expect(read.status).toBe(200);
     expect(read.body.tasks[0].notes).toBe(first.body.task.notes);
+    expect(read.body.tasks[0]).toMatchObject({ category: 'hvac', performer_contact: '555-0142' });
+    const changed = await request(app).put(`/api/homes/${homeId}/maintenance/${first.body.task.id}`)
+      .set('x-test-user-id', ownerId).send({ category: 'plumbing', performer_contact: '  New contact  ' });
+    expect(changed.status).toBe(200);
+    expect(changed.body.task).toMatchObject({ category: 'plumbing', performer_contact: 'New contact' });
+    seedTable('HomeMaintenanceLog', [{ ...original, task: 'HVAC service', category: null }]);
+    const legacy = await request(app).put(`/api/homes/${homeId}/maintenance/${original.id}`)
+      .set('x-test-user-id', ownerId).send({ task: 'Filter replacement', category: 'hvac' });
+    expect(legacy.status).toBe(200);
+    expect(legacy.body.task).toMatchObject({ task: 'Filter replacement', category: 'hvac',
+      performed_at: original.performed_at, performed_by: original.performed_by });
   });
 
   test.each(['', '   ', null])('explicit note clear %j persists without changing completion history', async notes => {
-    seedTable('HomeMaintenanceLog', [{ ...original, notes: 'Saved note' }]);
+    seedTable('HomeMaintenanceLog', [{ ...original, notes: 'Saved note', category: 'hvac', performer_contact: 'Saved contact' }]);
     const edit = await request(app).put(`/api/homes/${homeId}/maintenance/${original.id}`)
-      .set('x-test-user-id', ownerId).send({ notes });
+      .set('x-test-user-id', ownerId).send({ notes, category: null, performer_contact: notes });
     expect(edit.status).toBe(200);
-    expect(edit.body.task).toMatchObject({ notes: null, performed_at: original.performed_at,
+    expect(edit.body.task).toMatchObject({ notes: null, category: null, performer_contact: null, performed_at: original.performed_at,
       performed_by: original.performed_by });
     expect(getTable('HomeMaintenanceLog')[0].notes).toBeNull();
   });
@@ -395,18 +414,20 @@ describe('existing maintenance completion edits over HTTP', () => {
   test.each([42, {}, ['note'], 'x'.repeat(4001)])('invalid notes are refused before create or update', async notes => {
     seedTable('HomeMaintenanceLog', [{ ...original, notes: 'Saved note' }]);
     const before = structuredClone(getTable('HomeMaintenanceLog'));
-    const create = await request(app).post(`/api/homes/${homeId}/maintenance`)
-      .set('x-test-user-id', ownerId).send({ task: 'Invalid note', notes });
-    const edit = await request(app).put(`/api/homes/${homeId}/maintenance/${original.id}`)
-      .set('x-test-user-id', ownerId).send({ notes });
-    expect(create.status).toBe(400);
-    expect(edit.status).toBe(400);
-    expect(getTable('HomeMaintenanceLog')).toEqual(before);
+    for (const invalid of [{ notes }, { performer_contact: notes }, { category: notes }]) {
+      const create = await request(app).post(`/api/homes/${homeId}/maintenance`)
+        .set('x-test-user-id', ownerId).send({ task: 'Invalid field', ...invalid });
+      const edit = await request(app).put(`/api/homes/${homeId}/maintenance/${original.id}`)
+        .set('x-test-user-id', ownerId).send(invalid);
+      expect(create.status).toBe(400);
+      expect(edit.status).toBe(400);
+      expect(getTable('HomeMaintenanceLog')).toEqual(before);
+    }
   });
 
   test('a reader cannot alter a maintenance note', async () => {
     seedOccupancy(memberId, 'member');
-    seedTable('HomeMaintenanceLog', [{ ...original, notes: 'Saved note' }]);
+    seedTable('HomeMaintenanceLog', [{ ...original, notes: 'Saved note', category: 'hvac', performer_contact: 'Saved contact' }]);
     const edit = await request(app).put(`/api/homes/${homeId}/maintenance/${original.id}`)
       .set('x-test-user-id', memberId).send({ notes: 'Changed' });
     expect(edit.status).toBe(403);
