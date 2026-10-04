@@ -978,7 +978,7 @@ describe('Provider Orchestrator', () => {
     const revoked = await getHubToday(MOCK_USER_ID);
     expect(revoked.signals.some(signal => signal.kind === 'bill_due')).toBe(false);
     expect(JSON.stringify(revoked)).not.toContain('Private bill provider');
-    expect(collectInternalContext).toHaveBeenCalledTimes(3);
+    expect(collectInternalContext).toHaveBeenCalledTimes(4);
     // Household task projections are permission-sensitive with extras OFF too.
     process.env.LAUNCH_FEATURES = '';
     require('../services/context/providerOrchestrator').clearHubTodayCache();
@@ -987,6 +987,32 @@ describe('Provider Orchestrator', () => {
     expect(withTask.signals.some(signal => signal.kind === 'task_due')).toBe(true);
     collectInternalContext.mockResolvedValue(MOCK_INTERNAL_EMPTY);
     expect(JSON.stringify(await getHubToday(MOCK_USER_ID))).not.toContain('Private task');
+    process.env.LAUNCH_FEATURES = 'household_extras';
+    require('../services/context/providerOrchestrator').clearHubTodayCache();
+    const delayedWeather = require('../services/context/weatherProvider').fetchWeather;
+    delayedWeather.mockClear();
+    let releaseWeather;
+    const weatherPending = new Promise(resolve => { releaseWeather = resolve; });
+    delayedWeather.mockReturnValueOnce(weatherPending);
+    collectInternalContext.mockClear();
+    collectInternalContext.mockResolvedValueOnce({ ...MOCK_INTERNAL_EMPTY, bills_due: [{
+      id: 'bill', provider_name: 'Revoked private provider', amount: 144.72, due_date: new Date(Date.now() + 3600000).toISOString(), status: 'due',
+    }] }).mockResolvedValue(MOCK_INTERNAL_EMPTY);
+    const waiting = getHubToday(MOCK_USER_ID);
+    await Promise.resolve();
+    expect(collectInternalContext).toHaveBeenCalledTimes(1);
+    releaseWeather(MOCK_WEATHER);
+    const afterRevocation = await waiting;
+    expect(afterRevocation.signals.some(signal => signal.kind === 'bill_due')).toBe(false);
+    expect(JSON.stringify(afterRevocation)).not.toContain('Revoked private provider');
+    expect(collectInternalContext).toHaveBeenCalledTimes(2);
+    expect(delayedWeather).toHaveBeenCalledTimes(1);
+    collectInternalContext.mockResolvedValueOnce({ ...MOCK_INTERNAL_EMPTY, bills_due: [{
+      id: 'bill', provider_name: 'Unavailable authority provider', amount: 144.72, due_date: new Date(Date.now() + 3600000).toISOString(), status: 'due',
+    }] }).mockRejectedValueOnce(Object.assign(new Error('Authority unavailable'), { code: 'HOME_LIST_UNAVAILABLE' }));
+    const unreadable = await getHubToday(MOCK_USER_ID);
+    expect(unreadable.weather.current_temp_f).toBe(52);
+    expect(JSON.stringify(unreadable)).not.toContain('Unavailable authority provider');
     process.env.LAUNCH_FEATURES = launch;
 
     const { fetchWeather } = require('../services/context/weatherProvider');

@@ -246,13 +246,21 @@ async function getHubToday(userId, options = {}) {
   const weather = weatherResult.status === 'fulfilled' ? weatherResult.value : null;
   const aqi = aqiResult.status === 'fulfilled' ? aqiResult.value : null;
   const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : null;
-  const internal = internalResult.status === 'fulfilled' ? internalResult.value : {
+  let internal = internalResult.status === 'fulfilled' ? internalResult.value : {
     bills_due: [], tasks_due: [], calendar_events: [],
     unread_mail_count: 0, urgent_mail_count: 0,
     active_gigs: [], unread_notifications: 0,
     collected_at: new Date().toISOString(),
   };
   const addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
+
+  // The collector may have completed while a slow public provider was still
+  // pending. Recollect bills under current Home authority at this response
+  // boundary without repeating any weather/AQI/alerts request.
+  if (internal.bills_due?.length) {
+    try { internal = await collectInternalContext(userId, location.homeId); }
+    catch (_) { internal = defaultInternalContext(); }
+  }
 
   // Log per-provider status
   const providerTimings = { fetch_total_ms: fetchMs };
