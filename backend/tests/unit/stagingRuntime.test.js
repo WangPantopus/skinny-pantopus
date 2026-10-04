@@ -76,3 +76,56 @@ describe('address verification startup', () => {
     },
   );
 });
+
+describe('provider-free local Stripe startup', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.unmock('stripe');
+    process.env = { ...originalEnv, NODE_ENV: 'development', APP_ENV: 'local' };
+    delete process.env.STRIPE_SECRET_KEY;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    jest.resetModules();
+    jest.unmock('stripe');
+  });
+
+  test('allows local route imports but still refuses an unconfigured SDK access', () => {
+    const { getStripeClient } = require('../../stripe/getStripeClient');
+    const client = getStripeClient();
+    expect(() => client.paymentIntents).toThrow('Neither apiKey nor config.authenticator provided');
+  });
+
+  test.each([
+    ['production', 'local'],
+    ['production', 'staging'],
+    ['development', 'development'],
+  ])('retains missing-key startup refusal for %s / %s', (nodeEnv, appEnv) => {
+    process.env.NODE_ENV = nodeEnv;
+    process.env.APP_ENV = appEnv;
+    const { getStripeClient } = require('../../stripe/getStripeClient');
+    expect(() => getStripeClient()).toThrow('Neither apiKey nor config.authenticator provided');
+  });
+
+  test.each(['constructor', 'namespace'])('preserves the configured %s SDK import contract', (shape) => {
+    const client = {};
+    const constructor = jest.fn(() => client);
+    jest.doMock('stripe', () => shape === 'constructor' ? constructor : { default: constructor });
+    process.env.STRIPE_SECRET_KEY = staging.STRIPE_SECRET_KEY;
+    const { getStripeClient } = require('../../stripe/getStripeClient');
+    expect(getStripeClient()).toBe(client);
+    expect(constructor).toHaveBeenCalledWith(staging.STRIPE_SECRET_KEY);
+    expect(constructor).toHaveBeenCalledTimes(1);
+  });
+
+  test('preserves an existing instantiated test client', () => {
+    const client = { webhooks: { constructEvent: jest.fn() } };
+    jest.doMock('stripe', () => client);
+    const { getStripeClient } = require('../../stripe/getStripeClient');
+    expect(getStripeClient()).toBe(client);
+    expect(client.webhooks.constructEvent).not.toHaveBeenCalled();
+  });
+});
