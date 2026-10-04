@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.place.detail
 
+import app.pantopus.android.data.api.models.place.PlaceAddressCalendarData
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
 import kotlinx.coroutines.flow.StateFlow
 
@@ -9,6 +10,11 @@ import kotlinx.coroutines.flow.StateFlow
  * MO TU WE TH FR SA SU.
  */
 interface AddressCalendarActions {
+    val calendarHomeId: String? get() = null
+
+    /** Only the unavailable section uses the existing authorized calendar route. */
+    suspend fun loadAddressCalendar(): PlaceAddressCalendarData? = null
+
     val calendarBusy: StateFlow<Boolean>
     val calendarError: StateFlow<String?>
 

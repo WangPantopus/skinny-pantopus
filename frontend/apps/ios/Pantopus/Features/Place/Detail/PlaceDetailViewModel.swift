@@ -35,6 +35,9 @@ final class PlaceDetailViewModel {
     /// A locked section's "Verify address" shows the verify sheet.
     var showVerify = false
 
+    private(set) var fallbackCalendar: PlaceAddressCalendarData?
+    private var fallbackRequested = false
+    private let sessionScope: HomeClaimSessionScope
     private let api: APIClient
 
     init(
@@ -48,6 +51,7 @@ final class PlaceDetailViewModel {
         self.savedPlaceId = savedPlaceId
         self.group = group
         self.api = api
+        sessionScope = HomeClaimSessionScope(api: api)
         self.onStartVerify = onStartVerify
     }
 
@@ -67,6 +71,8 @@ final class PlaceDetailViewModel {
     }
 
     private func fetch() async {
+        fallbackRequested = false
+        fallbackCalendar = nil
         do {
             let intelligence: PlaceIntelligence = try await api.request(
                 savedPlaceId.map { SavedPlacesEndpoints.today(id: $0) }
@@ -83,6 +89,20 @@ final class PlaceDetailViewModel {
         } catch {
             accessDenied = false
             state = .error(message: "Couldn't load this section.")
+        }
+    }
+
+    func loadFallbackCalendar() async {
+        guard let id = calendarHomeId, !fallbackRequested else { return }
+        fallbackRequested = true
+        do {
+            try sessionScope.requireCurrent()
+            let response: AddressCalendarResponse = try await api.request(AddressCalendarEndpoints.calendar(homeId: id))
+            try Task.checkCancellation()
+            try sessionScope.requireCurrent()
+            fallbackCalendar = response.calendar
+        } catch {
+            fallbackCalendar = nil
         }
     }
 

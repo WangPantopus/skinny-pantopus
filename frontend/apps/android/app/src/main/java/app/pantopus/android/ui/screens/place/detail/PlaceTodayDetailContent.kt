@@ -20,8 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -411,8 +413,14 @@ private fun AddressCalendarSection(
 ) {
     val env = intel.section(PlaceSectionId.ADDRESS_CALENDAR) ?: return
     PlaceDetailSectionLabel("At this address")
-    val data = env.addressCalendar
-    if (data != null && env.isLive()) {
+    var fallback by remember(intel.generatedAt, viewModel?.calendarHomeId) { mutableStateOf<PlaceAddressCalendarData?>(null) }
+    LaunchedEffect(intel.generatedAt, env.status, viewModel?.calendarHomeId) {
+        if (env.status == app.pantopus.android.data.api.models.place.PlaceSectionStatus.UNAVAILABLE && viewModel != null) {
+            fallback = viewModel.loadAddressCalendar()
+        }
+    }
+    val data = env.addressCalendar ?: fallback
+    if (data != null && (env.isLive() || fallback != null)) {
         AddressCalendarCard(data, viewModel)
         PlaceSourceNote(data.source ?: "Pantopus registry", "next ${data.windowDays} days")
     } else {
@@ -425,7 +433,7 @@ private fun AddressCalendarCard(
     data: PlaceAddressCalendarData,
     viewModel: AddressCalendarActions?,
 ) {
-    var picking by rememberSaveable { mutableStateOf(false) }
+    var picking by rememberSaveable { mutableStateOf(data.needsPickupDay) }
     val busy = viewModel?.calendarBusy?.collectAsStateWithLifecycle()?.value ?: false
     val errorText = viewModel?.calendarError?.collectAsStateWithLifecycle()?.value
     Column(
@@ -438,7 +446,7 @@ private fun AddressCalendarCard(
             data.needsPickupDay && viewModel != null -> PickupPrompt { picking = true }
         }
         errorText?.let { Text(it, fontSize = 12.5.sp, color = PantopusColors.error) }
-        UpcomingEvents(data)
+        UpcomingEvents(data, canSetPickupDay = viewModel != null)
     }
 }
 
@@ -497,8 +505,16 @@ private fun PickupPrompt(onClick: () -> Unit) {
 }
 
 @Composable
-private fun UpcomingEvents(data: PlaceAddressCalendarData) {
+private fun UpcomingEvents(
+    data: PlaceAddressCalendarData,
+    canSetPickupDay: Boolean,
+) {
+    val setupMessage = data.pickupSetupMessage.takeIf { canSetPickupDay }
+    setupMessage?.let { message ->
+        Text(message, fontSize = 13.5.sp, lineHeight = 19.sp, color = PantopusColors.appTextSecondary)
+    }
     if (data.upcoming.isEmpty()) {
+        if (setupMessage != null) return
         Text(
             "Nothing on the calendar for the next two weeks.",
             fontSize = 13.5.sp,
@@ -514,6 +530,13 @@ private fun UpcomingEvents(data: PlaceAddressCalendarData) {
                 event.detail?.takeIf { it.isNotBlank() }?.let {
                     Text(it, fontSize = 12.5.sp, lineHeight = 17.sp, color = PantopusColors.appTextSecondary)
                 }
+                event.holidayMoveLine?.let { Text(it, fontSize = 12.5.sp, lineHeight = 17.sp, color = PantopusColors.appTextSecondary) }
+                Text(
+                    event.source.orEmpty().ifBlank { "Pantopus registry" } +
+                        if (event.confidence == "unverified") " · unconfirmed, please double-check" else "",
+                    fontSize = 11.5.sp,
+                    color = PantopusColors.appTextSecondary,
+                )
             }
             Text(
                 PlacePresentation.daysUntilLabel(event.daysUntil),

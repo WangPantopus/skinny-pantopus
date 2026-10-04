@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.place.PlaceRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -59,12 +60,16 @@ class PlaceDetailViewModel
         private val repo: PlaceRepository,
         private val adminRepo: HomeAdminRepository,
         savedStateHandle: SavedStateHandle,
+        sessionScopes: HomeClaimSessionScopeFactory,
     ) : ViewModel(),
         AddressCalendarActions {
         private val homeId: String =
             requireNotNull(savedStateHandle[PLACE_DETAIL_HOME_ID_KEY]) {
                 "PlaceDetailViewModel requires a '$PLACE_DETAIL_HOME_ID_KEY' nav arg."
             }
+        private val calendarSession = sessionScopes.create(viewModelScope)
+        override val calendarHomeId: String get() = homeId
+
         val group: PlaceDetailGroup =
             PlaceDetailGroup.fromSlug(savedStateHandle[PLACE_DETAIL_SLUG_KEY])
                 ?: PlaceDetailGroup.TODAY
@@ -77,6 +82,13 @@ class PlaceDetailViewModel
         override val calendarBusy: StateFlow<Boolean> = _calendarBusy.asStateFlow()
         private val _calendarError = MutableStateFlow<String?>(null)
         override val calendarError: StateFlow<String?> = _calendarError.asStateFlow()
+
+        override suspend fun loadAddressCalendar(): app.pantopus.android.data.api.models.place.PlaceAddressCalendarData? {
+            if (!calendarSession.confirmCurrent()) return null
+            val result = repo.addressCalendar(homeId)
+            if (!calendarSession.confirmCurrent()) return null
+            return (result as? NetworkResult.Success)?.data?.calendar
+        }
 
         /** `weekday` is MO TU WE TH FR SA SU; the section refreshes on success. */
         override fun setPickupDay(request: app.pantopus.android.data.api.models.place.SetPickupDayRequest) {

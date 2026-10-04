@@ -55,8 +55,14 @@ struct PlaceTodayDetailContent: View {
                    calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
                     AddressCalendarCard(homeId: vm.calendarHomeId, data: data) { await vm.load() }
                     PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
+                } else if calendar.status == .unavailable, let data = vm.fallbackCalendar {
+                    AddressCalendarCard(homeId: vm.calendarHomeId, data: data) { await vm.refresh() }
+                    PlaceSourceNote(name: "Pantopus registry", asOf: "next two weeks")
                 } else {
                     vm.fallbackCard(calendar)
+                        .task(id: calendar.status) {
+                            if calendar.status == .unavailable { await vm.loadFallbackCalendar() }
+                        }
                 }
             }
 
@@ -496,10 +502,15 @@ struct AddressCalendarCard: View {
             }
 
             if calendar.upcoming.isEmpty {
-                Text("Nothing on the calendar for the next two weeks.")
+                Text((homeId != nil ? calendar.pickupSetupMessage : nil) ?? "Nothing on the calendar for the next two weeks.")
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             } else {
+                if homeId != nil, let message = calendar.pickupSetupMessage {
+                    Text(message)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
                 VStack(spacing: 0) {
                     ForEach(calendar.upcoming) { event in
                         eventRow(event)
@@ -613,6 +624,11 @@ struct AddressCalendarCard: View {
                 }
                 if let detail = event.detail, !detail.isEmpty {
                     Text(detail)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
+                if let moved = event.holidayMoveLine {
+                    Text(moved)
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }

@@ -52,6 +52,7 @@ class TodayTabViewModel
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
         val state: StateFlow<TodayTabUiState> = _state.asStateFlow()
         private var homeId: String? = null
+        override val calendarHomeId: String? get() = homeId
         private var loadJob: Job? = null
         private var loadVersion = 0L
         private val sessionScope = sessionScopes.create(viewModelScope)
@@ -110,6 +111,15 @@ class TodayTabViewModel
                             is NetworkResult.Failure -> TodayTabUiState.Error(result.error.displayMessage("Couldn't load today."))
                         }
                 }
+        }
+
+        override suspend fun loadAddressCalendar(): app.pantopus.android.data.api.models.place.PlaceAddressCalendarData? {
+            val id = homeId ?: return null
+            val version = loadVersion
+            if (!current(version)) return null
+            val result = repo.addressCalendar(id)
+            if (!current(version) || homeId != id) return null
+            return (result as? NetworkResult.Success)?.data?.calendar
         }
 
         private suspend fun current(version: Long): Boolean {

@@ -1045,7 +1045,18 @@ data class PlaceCalendarEvent(
     val source: String? = null,
     @Json(name = "source_url") val sourceUrl: String? = null,
     val confidence: String = "",
-)
+    @Json(name = "moved_from") val movedFrom: String? = null,
+    val holiday: String? = null,
+    @Json(name = "shift_days") val shiftDays: Int? = null,
+) {
+    val holidayMoveLine: String?
+        get() {
+            val name = holiday?.takeIf { it.isNotBlank() } ?: return null
+            val days = shiftDays?.takeIf { it > 0 } ?: return null
+            if (movedFrom == null) return null
+            return if (days == 1) "Moved a day for $name." else "Moved for $name."
+        }
+}
 
 /**
  * The address calendar section — `needs_pickup_day` is the one thing
@@ -1068,7 +1079,15 @@ data class PlaceAddressCalendarData(
      * meanwhile on another device is not undone. Omitted by older servers.
      */
     @Json(name = "pickup_version") val pickupVersion: String? = null,
-)
+) {
+    val pickupSetupMessage: String?
+        get() =
+            if (needsPickupDay && upcoming.none { it.kind in setOf("garbage", "recycling", "yard_waste", "bulk_pickup") }) {
+                "Set your pickup day and your pickups start here."
+            } else {
+                null
+            }
+}
 
 @JsonClass(generateAdapter = true)
 data class HouseholdPickupSchedule(
