@@ -6,6 +6,11 @@ jest.mock('nodemailer', () => ({ createTransport: (...args) => mockCreateTranspo
 const originalEnv = { ...process.env };
 const smtp = { SMTP_HOST: 'smtp.test.local', SMTP_USER: 'test', SMTP_PASS: 'test' };
 const message = { to: 'test@example.com', subject: 'Verify', text: 'secret-auth-link', html: '<p>secret-auth-link</p>' };
+const guestSlot = {
+  toEmail: 'test@example.com', guestName: 'Helper <one>', trainTitle: 'Meals & help',
+  slotLabel: 'Dinner', slotDate: 'Mon, Oct 5', slotTime: '14:00',
+  contributionMode: 'cook', supportTrainId: 'train',
+};
 
 function loadService(env = {}) {
   jest.resetModules();
@@ -36,6 +41,8 @@ test.each([
   const service = loadService(env);
   expect(await service.checkDeliveryAvailability()).toMatchObject({ available: false });
   expect(await service.sendEmail(message)).toEqual({ success: false, error: 'EMAIL_UNAVAILABLE' });
+  expect(await service.sendGuestReservationConfirmationEmail({ ...guestSlot, isReminder: true }))
+    .toEqual({ success: false, error: 'EMAIL_UNAVAILABLE' });
   expect(mockSendMail).not.toHaveBeenCalled();
 });
 
@@ -43,6 +50,8 @@ test('explicit local preview is marked and does not log auth links', async () =>
   const service = loadService({ NODE_ENV: 'development', EMAIL_DELIVERY_MODE: 'log' });
   expect(await service.checkDeliveryAvailability()).toEqual({ available: true, preview: true });
   expect(await service.sendEmail(message)).toMatchObject({ success: true, preview: true });
+  expect(await service.sendGuestReservationConfirmationEmail({ ...guestSlot, isReminder: true }))
+    .toMatchObject({ success: true, preview: true });
   const logger = require('../../utils/logger');
   expect(JSON.stringify([logger.info.mock.calls, logger.debug.mock.calls])).not.toContain('secret-auth-link');
   expect(mockSendMail).not.toHaveBeenCalled();
@@ -54,6 +63,23 @@ test('SMTP readiness authenticates without sending a message', async () => {
   expect(mockVerify).toHaveBeenCalledTimes(1);
   expect(mockSendMail).not.toHaveBeenCalled();
   expect(await service.sendEmail(message)).toEqual({ success: true, messageId: 'smtp-id' });
+  expect(await service.sendGuestReservationConfirmationEmail(guestSlot))
+    .toEqual({ success: true, messageId: 'smtp-id' });
+  expect(mockSendMail).toHaveBeenLastCalledWith(expect.objectContaining({
+    to: 'test@example.com', subject: "You're signed up to help: Meals & help",
+    html: expect.stringContaining("You're Signed Up!"),
+  }));
+  expect(await service.sendGuestReservationConfirmationEmail({ ...guestSlot, isReminder: true }))
+    .toEqual({ success: true, messageId: 'smtp-id' });
+  const reminder = mockSendMail.mock.calls.at(-1)[0];
+  expect(reminder.subject).toBe('Reminder: Meals & help');
+  expect(reminder.html).toContain('Your Slot Reminder');
+  expect(reminder.html).toContain('Helper &lt;one&gt;');
+  expect(reminder.html).toContain('Meals &amp; help');
+  expect(reminder.text).toContain('Dinner · Mon, Oct 5\nTime: 14:00');
+  expect(reminder.text).toContain('Type: Home-cooked meal');
+  expect(reminder.text).not.toMatch(/private_note|delivery_address/);
+  expect(mockSendMail).toHaveBeenCalledTimes(3);
 });
 
 test('unreachable SMTP is unavailable without exposing provider details', async () => {
@@ -67,12 +93,16 @@ test('SMTP failure after readiness cannot become simulated success', async () =>
   expect(await service.checkDeliveryAvailability()).toEqual({ available: true });
   mockSendMail.mockRejectedValue(new Error('private provider response'));
   expect(await service.sendEmail(message)).toEqual({ success: false, error: 'EMAIL_SEND_FAILED' });
+  expect(await service.sendGuestReservationConfirmationEmail({ ...guestSlot, isReminder: true }))
+    .toEqual({ success: false, error: 'EMAIL_SEND_FAILED' });
 });
 
 test('a transport that accepts no recipients is not successful', async () => {
   const service = loadService(smtp);
   mockSendMail.mockResolvedValue({ accepted: [], rejected: ['test@example.com'] });
   expect(await service.sendEmail(message)).toEqual({ success: false, error: 'EMAIL_REJECTED' });
+  expect(await service.sendGuestReservationConfirmationEmail({ ...guestSlot, isReminder: true }))
+    .toEqual({ success: false, error: 'EMAIL_REJECTED' });
 });
 
 test('transport construction failure fails closed', async () => {
