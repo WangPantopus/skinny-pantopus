@@ -118,9 +118,37 @@ describe('POST /api/internal/briefing/send', () => {
       .send({ userId: USER_ID, title: 'Task due today', body: 'Test for radon is due today.', reminderType: 'task_due',
         data: { homeId: 'home-abc', taskId: 'task-1', category: 'TASK_REMINDER', link: taskLink, route: taskLink, recipient_user_id: 'other-account' } });
     expect(reminder.status).toBe(200);
-    expect(pushService.sendToUser.mock.calls[1][1].data).toMatchObject({
+    expect(pushService.sendToUserWithReceipt.mock.calls[0][1].data).toMatchObject({
       link: taskLink, route: taskLink, category: 'TASK_REMINDER', homeId: 'home-abc', taskId: 'task-1', recipient_user_id: USER_ID,
     });
+    expect(reminder.body).toEqual({ status: 'sent' });
+    expect(getTable('FunnelEvent')).toEqual([expect.objectContaining({ event_type: 'reminder_sent', user_id: USER_ID, meta: { kind: 'task' } })]);
+    // A receipt means provider acceptance, not delivery to every device.
+    // Partial acceptance settles this user/day rather than duplicating an
+    // already accepted device; zero acceptance remains retryable.
+    for (const receipt of [{ acceptedCount: 0, unresolvedCount: 0 }, { acceptedCount: 0, unresolvedCount: 1 }, undefined]) {
+      pushService.sendToUserWithReceipt.mockResolvedValueOnce(receipt);
+      const failed = await request(app).post('/api/internal/briefing/reminder-push')
+        .set('x-internal-api-key', 'test-internal-key')
+        .send({ userId: USER_ID, title: 'Task due today', body: 'Private task', reminderType: 'task_due' });
+      expect(failed.status).toBe(503);
+      expect(failed.body.status).toBe('failed');
+      expect(getTable('FunnelEvent')).toHaveLength(1);
+    }
+    pushService.sendToUserWithReceipt.mockRejectedValueOnce(new Error('Provider unavailable'));
+    const providerError = await request(app).post('/api/internal/briefing/reminder-push')
+      .set('x-internal-api-key', 'test-internal-key')
+      .send({ userId: USER_ID, title: 'Task due today', body: 'Private task', reminderType: 'task_due' });
+    expect(providerError.status).toBe(500);
+    expect(providerError.body.status).toBe('failed');
+    expect(getTable('FunnelEvent')).toHaveLength(1);
+    pushService.sendToUserWithReceipt.mockResolvedValueOnce({ acceptedCount: 1, unresolvedCount: 1 });
+    const partial = await request(app).post('/api/internal/briefing/reminder-push')
+      .set('x-internal-api-key', 'test-internal-key')
+      .send({ userId: USER_ID, title: 'Task due today', body: 'Private task', reminderType: 'task_due' });
+    expect(partial.body).toEqual({ status: 'sent' });
+    expect(getTable('FunnelEvent')).toHaveLength(2);
+    expect(getTable('FunnelEvent')[1]).toMatchObject({ event_type: 'reminder_sent', user_id: USER_ID, meta: { kind: 'task' } });
   });
 
   it('falls back to a bare Place link when the briefing has no home', async () => {
