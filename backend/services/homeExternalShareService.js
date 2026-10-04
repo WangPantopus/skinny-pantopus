@@ -21,6 +21,9 @@ function failure(code = 'SHARE_UNAVAILABLE', status = 503) {
     code, status, statusCode: status, requiresPasscode: code === 'SHARE_PASSCODE_REQUIRED',
   });
 }
+// A guest pass is an anonymous bearer link. Its emergency section shares where the
+// shutoffs are and whom to call, never a person's medical or legal details.
+const PERSONAL_EMERGENCY_TYPES = new Set(['allergy', 'medical_condition', 'medication', 'power_of_attorney']);
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const randomToken = () => crypto.randomBytes(32).toString('hex');
 const validToken = value => typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
@@ -89,6 +92,9 @@ async function read({ kind, token, recipientId = null, passcode }) {
     if (!view.pass || !view.sections) throw failure();
     return { pass: view.pass, sections: { ...view.sections,
       ...(view.sections.docs ? { docs: view.sections.docs.map(document => documentView(document, receipt)) } : {}),
+      ...(Array.isArray(view.sections.emergency) ? {
+        emergency: view.sections.emergency.filter(item => !PERSONAL_EMERGENCY_TYPES.has(item?.type)),
+      } : {}),
     } };
   }
   if (!view.grant || !view.resource) throw failure();

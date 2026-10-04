@@ -3838,8 +3838,13 @@ router.get('/:id/emergencies', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    // Emergency info holds the household's medical and legal details. Every
+    // client shows it only with sensitive.view (owners, and people an owner
+    // granted it), so membership alone must not return it.
+    const access = await checkHomePermission(homeId, userId, 'sensitive.view');
+    if (!access.hasAccess) {
+      return res.status(403).json({ error: 'You don\'t have permission to view this home\'s emergency info.' });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('HomeEmergency')
