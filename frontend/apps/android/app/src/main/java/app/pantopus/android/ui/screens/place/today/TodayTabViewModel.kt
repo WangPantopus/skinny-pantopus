@@ -142,18 +142,23 @@ class TodayTabViewModel
             if (!current(version)) return
             when (result) {
                 is NetworkResult.Failure -> _state.value = TodayTabUiState.Error(result.error.displayMessage("Couldn't load today."))
-                is NetworkResult.Success -> {
-                    val matches = checkSavedAnchor(place)
-                    if (current(version)) {
-                        _state.value = TodayTabUiState.Loaded(result.data, savedPlace = place, savedAnchorMatches = matches)
-                        if (matches) {
-                            val preferences = preferencesRepository.preferences()
-                            if (current(version) && preferences is NetworkResult.Success) {
-                                _showMorningCard.value = preferences.data.dailyBriefingPromptedAt == null
-                            }
-                        }
-                    }
-                }
+                is NetworkResult.Success -> loadSavedToday(version, place, result.data)
+            }
+        }
+
+        private suspend fun loadSavedToday(
+            version: Long,
+            place: SavedPlaceDto,
+            intelligence: PlaceIntelligence,
+        ) {
+            val matches = checkSavedAnchor(place)
+            if (!current(version)) return
+            _state.value = TodayTabUiState.Loaded(intelligence, savedPlace = place, savedAnchorMatches = matches)
+            if (!matches) return
+            val preferences = preferencesRepository.preferences()
+            if (!current(version)) return
+            if (preferences is NetworkResult.Success) {
+                _showMorningCard.value = preferences.data.dailyBriefingPromptedAt == null
             }
         }
 
