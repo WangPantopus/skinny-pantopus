@@ -155,41 +155,40 @@ class WaitingRoomContentTest {
     private fun withLoadedClaim(
         createdAt: String,
         assertion: (WaitingRoomViewModel) -> Unit,
-    ) =
-        runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
-            try {
-                val repository = mockk<HomesRepository>()
-                coEvery { repository.myOwnershipClaims() } returns
-                    NetworkResult.Success(
-                        MyOwnershipClaimsResponse(
-                            listOf(
-                                OwnershipClaimDto(
-                                    id = "claim-1",
-                                    homeId = "home-1",
-                                    claimType = "owner",
-                                    method = "invite",
-                                    status = "under_review",
-                                    createdAt = createdAt,
-                                    updatedAt = "2026-07-18T12:00:00Z",
-                                ),
+    ) = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val repository = mockk<HomesRepository>()
+            coEvery { repository.myOwnershipClaims() } returns
+                NetworkResult.Success(
+                    MyOwnershipClaimsResponse(
+                        listOf(
+                            OwnershipClaimDto(
+                                id = "claim-1",
+                                homeId = "home-1",
+                                claimType = "owner",
+                                method = "invite",
+                                status = "under_review",
+                                createdAt = createdAt,
+                                updatedAt = "2026-07-18T12:00:00Z",
                             ),
                         ),
-                    )
-                coEvery { repository.detail("home-1") } returns NetworkResult.Failure(NetworkError.Forbidden)
-                val model =
-                    WaitingRoomViewModel(
-                        repository,
-                        mockk<HomeDashboardAccessFactory>(relaxed = true),
-                        SavedStateHandle(mapOf(WAITING_ROOM_HOME_ID_KEY to "home-1")),
-                    )
-                model.refresh()
-                advanceUntilIdle()
-                assertEquals(WaitingRoomPhase.Loaded, model.phase.value)
-                assertEquals("CLAIM-1", model.content.value.claimRef)
-                assertion(model)
-            } finally {
-                Dispatchers.resetMain()
-            }
+                    ),
+                )
+            coEvery { repository.detail("home-1") } returns NetworkResult.Failure(NetworkError.Forbidden)
+            val model =
+                WaitingRoomViewModel(
+                    repository,
+                    mockk<HomeDashboardAccessFactory>(relaxed = true),
+                    SavedStateHandle(mapOf(WAITING_ROOM_HOME_ID_KEY to "home-1")),
+                )
+            model.refresh()
+            advanceUntilIdle()
+            assertEquals(WaitingRoomPhase.Loaded, model.phase.value)
+            assertEquals("CLAIM-1", model.content.value.claimRef)
+            assertion(model)
+        } finally {
+            Dispatchers.resetMain()
         }
+    }
 }
