@@ -118,7 +118,9 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let isVisitor: Bool
     /// Curator attribution comes from `origin`, never the cold-start fact flag.
     public let origin: String?
-    public var isCurator: Bool { origin == "curator" }
+    public var isCurator: Bool {
+        origin == "curator"
+    }
 
     /// Still-image URLs — kept for call sites (and tests) that only care
     /// about what the card displays, not the attachment kinds.
