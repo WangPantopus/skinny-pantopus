@@ -39,14 +39,17 @@ Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`
 - [x] The radon card and the first-use card live on the Today tab, so they work for private-setup homes, which have no Place dashboard. Radon answers are stored as home tasks; "Not now" is remembered on the device.
 - [x] The night-before pickup push rides the existing evening briefing. No new schedule.
 - [x] Holiday moves come from city-level holiday rows that shift that week's pickups. No per-home edits and no new table.
-- [x] F3b's server gate ships with the household step. Everyone verified before it ships stays verified.
+- [x] F3b's server gate ships with the household step. Everyone verified by postcard, document, landlord or admin stays verified; people who joined by invitation become household-verified.
 - [x] The election feature is shelved until the 2027 Washington local elections. Its canvas and guide stay as they are.
+- [x] On a pickup evening the pickup leads the push; only a serious weather alert beats it. Nearby updates never lead an evening push.
+- [x] Task reminders arrive the morning of the due day in the household's time zone; Support Train reminders use the train's local time.
+- [x] The task-completed push doesn't name the task or the person on the lock screen.
 
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
 - [ ] Who builds each package. Default: the routing in section 11 of the brief; Stream 1 assigns.
-- [ ] Whether invited household members see pickup days and bills. Default: not in the pilot; they see and complete shared tasks.
+- [ ] Whether invited household members see pickup days and bills. Default: not in the pilot; they see shared tasks and complete the ones assigned to them.
 - [ ] Where the new promise appears. Default: the store listings and the app's first screen.
 - [ ] The pilot start date. Default: when section 2 below is done and one full journey works on the hosted backend.
 - [ ] Creator network and Places order. Decide in late November with the pilot's week-four number.
@@ -77,7 +80,7 @@ Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`
 
 - [ ] WP1 Truthfulness fixes: hide the Hub's "Earn today" offers line; label curator posts on iOS and Android; remove the seeder's engagement-question and neighbor-voice prompt lines and exclude curator posts from organic counts.
 - [ ] WP2 Today works for a saved place and for a newly added home in private setup (F1).
-- [ ] WP3 Night-before pickup reminders people can act on (F4): an evening push for confirmed pickup days, nothing on quiet days, holiday moves, a "Bins out" button, and a way to set a pickup day in cities with no calendar yet (today, everywhere but Camas).
+- [ ] WP3 Night-before pickup reminders people can act on (F4): an evening push for confirmed pickup days, nothing on quiet days, holiday moves, a "Bins out" button, and the pickup editor opening on its own in cities with no pickup rows yet (today, everywhere but Camas).
 - [ ] WP4 Radon, from fact to reminder (F5, small): "Was it tested?", a home task with a date, a reminder with "Done" and "Not now". Includes two fixes to the task reminder job: finished tasks still get pushes, and pushes ignore a task's visibility.
 - [ ] WP5 One first-use prompt (F2, small).
 - [ ] WP6 The smallest household journey and the invite verification fix (F3 small, F3b gate).
