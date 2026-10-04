@@ -857,7 +857,8 @@ private struct PickupReminderPrimer: View {
                 notificationsOff = true
             }
         } catch {
-            guard lifecycleVersion == version else { return }
+            guard lifecycleVersion == version, !AppLockManager.shared.isLocked,
+                  UIApplication.shared.isProtectedDataAvailable else { return }
             if sessionScope.isCurrent {
                 primerError = "Couldn't enable pickup reminders. Try again."
             } else {

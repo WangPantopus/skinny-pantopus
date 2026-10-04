@@ -347,6 +347,8 @@ private struct AddressTodayLoaded: View {
             )
             try requirePreferenceCurrent(version)
         } catch {
+            guard lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
+                  !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { return }
             if scope.isCurrent {
                 preferenceError = "Couldn't save your choice. Try again."
             } else {
@@ -387,6 +389,8 @@ private struct AddressTodayLoaded: View {
                 preferenceError = "Couldn't turn on your morning briefing. Try again."
             }
         } catch {
+            guard lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
+                  !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { return }
             if scope.isCurrent {
                 preferenceError = "Couldn't turn on your morning briefing. Try again."
             } else {
