@@ -129,7 +129,20 @@ BEGIN
   PERFORM pg_temp.assignment_assert(before_rows=after_rows,'Enqueue failure partially committed');
   r:=public.create_home_task_with_receipt(h,o,gen_random_uuid(),p); t:=(r->'record'->>'id')::uuid;
   claimed:=public.claim_home_task_assignment_delivery(); event_id:=(claimed->>'id')::uuid; old_lease:=(claimed->>'lease_id')::uuid;
-  PERFORM public.mutate_home_record(h,o,'task','update',t,'{"status":"done"}');
+  -- Household-only provenance keeps the shipped assigned-member completion
+  -- permission. The marker is atomic across both HTTP callers' RPCs.
+  UPDATE public."HomeOccupancy" SET verification_source='household' WHERE home_id=h AND user_id=a;
+  again:=public.mutate_home_record(h,'ddf18000-0000-4000-8000-000000000003','task','update',t,'{"status":"done"}');
+  PERFORM pg_temp.assignment_assert(again->>'ok'='false' AND again->>'task_completed' IS DISTINCT FROM 'true','Denied completion emitted a marker');
+  r:=public.mutate_home_record(h,a,'task','update',t,'{"status":"done"}');
+  PERFORM pg_temp.assignment_assert(r->>'ok'='true' AND r->>'task_completed'='true','Assigned household member cannot complete');
+  again:=public.mutate_home_task_by_id(a,t,'update','{"status":"done"}');
+  PERFORM pg_temp.assignment_assert(again->>'task_completed'='false'
+    AND again->'record'->>'completed_at'=r->'record'->>'completed_at','Repeat done changed completion identity or marker');
+  PERFORM public.mutate_home_record(h,a,'task','update',t,'{"status":"open"}');
+  again:=public.mutate_home_task_by_id(a,t,'update','{"status":"done"}');
+  PERFORM pg_temp.assignment_assert(again->>'task_completed'='true'
+    AND again->'record'->>'completed_at' IS DISTINCT FROM r->'record'->>'completed_at','Reopened completion has no fresh identity');
   PERFORM pg_temp.assignment_assert(public.read_home_task_assignment_delivery(event_id,old_lease)->>'lease_lost'='true','Completed task retained assignment');
   r:=public.create_home_task_with_receipt(h,o,gen_random_uuid(),p); t:=(r->'record'->>'id')::uuid;
   claimed:=public.claim_home_task_assignment_delivery(); event_id:=(claimed->>'id')::uuid; old_lease:=(claimed->>'lease_id')::uuid;
