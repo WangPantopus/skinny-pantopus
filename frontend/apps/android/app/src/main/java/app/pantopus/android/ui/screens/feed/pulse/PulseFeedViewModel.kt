@@ -997,6 +997,7 @@ class PulseFeedViewModel
                 intent = intent,
                 chipLabel = intent.chipLabelFor(post.lostFoundType),
                 isVisitor = post.isVisitorPost,
+                origin = post.origin,
                 title = if (intent == PulseIntent.Event) post.title else null,
                 body = post.content.orEmpty(),
                 reactions =

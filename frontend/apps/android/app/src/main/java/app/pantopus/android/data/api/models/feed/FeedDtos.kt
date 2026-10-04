@@ -24,6 +24,8 @@ data class FeedPost(
     @Json(name = "userHasReposted") val userHasReposted: Boolean = false,
     /** Lifecycle state — `open` / `solved` (`backend/services/feedService.js:234`). */
     val state: String? = null,
+    /** Server-derived authorship: `user`, `curator` or `system`. */
+    @Json(name = "origin") val origin: String? = null,
     /**
      * True for cold-start neighborhood facts injected by the feed handler
      * (`backend/routes/posts.js:84`). Those rows are dismissable, never

@@ -48,11 +48,6 @@ def _build_system_prompt(region_display_name: str = "") -> str:
         "SEASONAL TIMING: For seasonal posts, never recommend an action for a "
         "calendar window that is already earlier than Today's date. If the source "
         "is only useful for a missed window, reply exactly \"SKIP\".\n\n"
-        "ENGAGEMENT: After the main content, add a short casual question on a new line "
-        "to invite locals to share their experience or opinion. Keep it natural and "
-        "relevant to the topic — not forced or generic. Examples:\n"
-        '  "Anyone else notice this?" / "Have you tried this spot?" / '
-        '"How are you preparing?" / "What route are you taking instead?"\n\n'
         'End with a source attribution on its own line: "Source: [name]"\n'
         "Do NOT include URLs in the source line — just the source name."
     )
@@ -101,8 +96,7 @@ def _build_sports_system_prompt(scope: str, region_display_name: str = "") -> st
         "- A dry standings/schedule dump with no storyline worth talking about\n"
         "- About something that already concluded more than 24 hours ago\n\n"
         "PART 2 — WRITE A CONVERSATION STARTER (not a news summary):\n"
-        "Your output must be a short, casual post that invites discussion. "
-        "It should read like something a neighbor might say, NOT like ESPN copy.\n\n"
+        "Your output must be a short, casual post that invites discussion.\n\n"
         "Rules:\n"
         "- 1–2 sentences of context + a short question inviting replies\n"
         "- End with a clear question on its own line\n"

@@ -10,6 +10,7 @@ import pytest
 from src.config.constants import MAX_HUMANIZED_LENGTH
 from src.pipeline.humanizer import (
     SYSTEM_PROMPT,
+    _build_sports_system_prompt,
     _build_system_prompt,
     _is_pnw_region,
     _validate_humanized_text,
@@ -420,6 +421,25 @@ class TestHumanize:
 # ---------------------------------------------------------------------------
 
 class TestBuildSystemPrompt:
+    @pytest.mark.parametrize("region", ["", "Vancouver, WA"])
+    def test_non_sports_prompt_keeps_attribution_without_engagement_question(self, region):
+        prompt = _build_system_prompt(region)
+        assert "ENGAGEMENT" not in prompt
+        assert "invite locals" not in prompt
+        assert "Anyone else notice this?" not in prompt
+        assert "neighbor might say" not in prompt
+        assert 'End with a source attribution on its own line: "Source: [name]"' in prompt
+        assert "SEASONAL TIMING" in prompt
+
+    @pytest.mark.parametrize("scope", ["local", "national"])
+    def test_sports_prompt_keeps_question_format_without_neighbor_voice(self, scope):
+        prompt = _build_sports_system_prompt(scope, "Vancouver, WA")
+        assert "neighbor might say" not in prompt
+        assert "ESPN copy" not in prompt
+        assert "1–2 sentences of context + a short question inviting replies" in prompt
+        assert "End with a clear question on its own line" in prompt
+        assert "Do NOT include a source attribution line for sports posts" in prompt
+
     def test_default_prompt(self):
         prompt = _build_system_prompt()
         assert "a local community" in prompt

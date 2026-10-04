@@ -89,6 +89,45 @@ final class PulseFeedViewModelTests: XCTestCase {
         XCTAssertEqual(rows.first?.authorName, "Maria L.")
     }
 
+    func testCuratorOriginProjectsWithoutChangingSourceOrModeration() async {
+        for origin in ["curator", "user", "system", "unknown", ""] {
+            SequencedURLProtocol.reset()
+            let originField = origin.isEmpty ? "" : ",\"origin\":\"\(origin)\""
+            let post = Self.askPostJSON.replacingOccurrences(
+                of: "\"content\": \"Anyone know a good dog-walker?\"",
+                with: "\"content\": \"Park opens Saturday.\\nSource: City Parks\"\(originField)"
+            )
+            SequencedURLProtocol.sequence = [.status(200, body: Self.feedJSON(post))]
+            let vm = makeVM()
+            await vm.load()
+            guard case let .loaded(rows) = vm.state, let row = rows.first else {
+                return XCTFail("Expected loaded row for origin \(origin)")
+            }
+            XCTAssertEqual(row.origin, origin.isEmpty ? nil : origin)
+            XCTAssertEqual(row.isCurator, origin == "curator")
+            XCTAssertEqual(row.body, "Park opens Saturday.\nSource: City Parks")
+            XCTAssertTrue(row.actions.canReport)
+            XCTAssertTrue(row.actions.canMuteAuthor)
+            XCTAssertTrue(row.actions.canMuteTopic)
+        }
+    }
+
+    func testSeededSystemFactDoesNotProjectCuratorChip() async {
+        let post = Self.askPostJSON.replacingOccurrences(
+            of: "\"post_type\": \"ask_local\"",
+            with: "\"post_type\": \"ask_local\",\"origin\":\"system\",\"is_seeded\":true"
+        )
+        SequencedURLProtocol.sequence = [.status(200, body: Self.feedJSON(post))]
+        let vm = makeVM()
+        await vm.load()
+        guard case let .loaded(rows) = vm.state, let row = rows.first else {
+            return XCTFail("Expected loaded system fact")
+        }
+        XCTAssertFalse(row.isCurator)
+        XCTAssertTrue(row.actions.isSeeded)
+        XCTAssertFalse(row.actions.canReport)
+    }
+
     func testLoadEmptyTransitionsEmpty() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.feedJSON())]
         let vm = makeVM()

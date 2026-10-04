@@ -5,7 +5,9 @@ package app.pantopus.android.data.api.models.feed
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FeedDtosTest {
@@ -13,6 +15,28 @@ class FeedDtosTest {
         Moshi.Builder()
             .add(KotlinJsonAdapterFactory())
             .build()
+
+    @Test
+    fun decodesOriginIndependentlyOfSeededFacts() {
+        for (origin in listOf("curator", "user", "system", "unknown")) {
+            val json =
+                """
+                {"id":"p1","created_at":"2026-10-04T00:00:00Z","origin":"$origin","is_seeded":false}
+                """.trimIndent()
+            val post = moshi.adapter(FeedPost::class.java).fromJson(json)!!
+            assertEquals(origin, post.origin)
+            assertFalse(post.isSeeded)
+        }
+        for (suffix in listOf("", ",\"origin\":null")) {
+            val json =
+                """
+                {"id":"fact_1","created_at":"2026-10-04T00:00:00Z","is_seeded":true$suffix}
+                """.trimIndent()
+            val post = moshi.adapter(FeedPost::class.java).fromJson(json)!!
+            assertNull(post.origin)
+            assertTrue(post.isSeeded)
+        }
+    }
 
     @Test
     fun decodesSeededFeedRowWithNullUserId() {

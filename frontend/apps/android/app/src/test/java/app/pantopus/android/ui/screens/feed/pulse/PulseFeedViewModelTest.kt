@@ -78,6 +78,50 @@ class PulseFeedViewModelTest {
     }
 
     @Test
+    fun curatorOrigin_projectsWithoutChangingSourceOrModeration() =
+        runTest {
+            for (origin in listOf("curator", "user", "system", "unknown", null)) {
+                val vm = makeVm()
+                coEvery { repo.feed(any(), any(), any(), any()) } returns
+                    NetworkResult.Success(
+                        FeedResponse(
+                            posts =
+                                listOf(
+                                    askPost().copy(origin = origin, content = "Park opens Saturday.\nSource: City Parks"),
+                                ),
+                            pagination = FeedPagination(hasMore = false),
+                        ),
+                    )
+                vm.load()
+                val row = (vm.state.value as PulseFeedUiState.Loaded).rows.single()
+                assertEquals(origin, row.origin)
+                assertEquals(origin == "curator", row.isCurator)
+                assertEquals("Park opens Saturday.\nSource: City Parks", row.body)
+                assertTrue(row.actions.canReport)
+                assertTrue(row.actions.canMuteAuthor)
+                assertTrue(row.actions.canMuteTopic)
+            }
+        }
+
+    @Test
+    fun seededSystemFact_doesNotProjectCuratorChip() =
+        runTest {
+            val vm = makeVm()
+            coEvery { repo.feed(any(), any(), any(), any()) } returns
+                NetworkResult.Success(
+                    FeedResponse(
+                        posts = listOf(askPost().copy(origin = "system", isSeeded = true)),
+                        pagination = FeedPagination(hasMore = false),
+                    ),
+                )
+            vm.load()
+            val row = (vm.state.value as PulseFeedUiState.Loaded).rows.single()
+            assertFalse(row.isCurator)
+            assertTrue(row.actions.isSeeded)
+            assertFalse(row.actions.canReport)
+        }
+
+    @Test
     fun load_projectsMediaUrlsPreferringThumbnails() =
         runTest {
             val vm = makeVm()
