@@ -1020,7 +1020,8 @@ private fun HomeFirstUseCard(
     onRadon: () -> Unit,
 ) {
     val needsRadon = state.hasRadon && state.loaded && state.task == null
-    if (!state.preferencesLoaded || state.firstUseDismissed || (!needsPickup && !needsRadon)) return
+    if (!state.preferencesLoaded || state.firstUseDismissed) return
+    if (!needsPickup && !needsRadon) return
     Column(
         modifier = Modifier.padding(bottom = 12.dp).fillMaxWidth().placeCard().padding(16.dp).testTag("todayHomeFirstUse"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
