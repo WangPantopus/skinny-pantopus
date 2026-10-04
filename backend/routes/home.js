@@ -2557,6 +2557,11 @@ function registerHomeRecordRoutes(path, kind) {
       if (kind === 'task' && !requireExpectedSessionScope(req, res)) return;
       const result = await homeRecordService.mutate({ homeId: req.params.id, actorId: req.user.id,
         kind, action: 'update', recordId: req.params.recordId, payload: req.body });
+      if (kind === 'task' && result.task_completed === true && result.record.created_by
+        && result.record.created_by !== req.user.id) {
+        await require('../services/notificationService').notifyTaskCompleted({ creatorUserId: result.record.created_by,
+          homeId: result.record.home_id, taskId: result.record.id, completedAt: result.record.completed_at });
+      }
       res.json({ [kind]: result.record });
     } catch (error) { homeRecordService.sendError(res, error); }
   });
@@ -3838,8 +3843,13 @@ router.get('/:id/emergencies', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkHomePermission(homeId, userId);
-    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    // Emergency info holds the household's medical and legal details. Every
+    // client shows it only with sensitive.view (owners, and people an owner
+    // granted it), so membership alone must not return it.
+    const access = await checkHomePermission(homeId, userId, 'sensitive.view');
+    if (!access.hasAccess) {
+      return res.status(403).json({ error: 'You don\'t have permission to view this home\'s emergency info.' });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('HomeEmergency')

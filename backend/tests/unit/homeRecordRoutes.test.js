@@ -72,6 +72,45 @@ test('a denied mail completion cannot notify the creator', async () => {
   expect(res.statusCode).toBe(403);
   expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
 });
+test.each([
+  [true, 'creator', true], [false, 'creator', false], [undefined, 'creator', false],
+  [true, 'actor', false], [true, null, false],
+])('home completion transition=%s creator=%s notifies=%s through the exact persisted task', async (task_completed, created_by, shouldNotify) => {
+  const completed_at = '2026-10-04T09:00:00+00:00';
+  db.setRpcMock(async () => ({ data: { ok: true, task_completed,
+    record: { ...record, status: 'done', created_by, completed_at } } }));
+  const res = response();
+  await handler(home, 'put', '/:id/tasks/:recordId')({ ...request, body: { status: 'done' } }, res);
+  expect(res.statusCode).toBe(200);
+  expect(res.body.task).toMatchObject({ id: 'record', home_id: 'home', status: 'done' });
+  if (shouldNotify) expect(notifications.notifyTaskCompleted).toHaveBeenCalledWith({ creatorUserId: 'creator',
+    homeId: 'home', taskId: 'record', completedAt: completed_at });
+  else expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
+});
+test('a denied home completion cannot notify the creator', async () => {
+  db.setRpcMock(async () => ({ data: { ok: false, code: 'HOME_RECORD_WRITE_DENIED', status: 403 } }));
+  const res = response();
+  await handler(home, 'put', '/:id/tasks/:recordId')({ ...request, body: { status: 'done' } }, res);
+  expect(res.statusCode).toBe(403);
+  expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
+});
+test('a stale home task session cannot mutate or notify', async () => {
+  const rpc = jest.fn(); db.setRpcMock(rpc);
+  const res = response();
+  await handler(home, 'put', '/:id/tasks/:recordId')({ ...request, body: { status: 'done' },
+    headers: { ...request.headers, 'x-pantopus-session-scope': 'a'.repeat(64) } }, res);
+  expect(res.statusCode).toBe(409);
+  expect(rpc).not.toHaveBeenCalled();
+  expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
+});
+test('an event update cannot consume a task completion marker', async () => {
+  db.setRpcMock(async () => ({ data: { ok: true, task_completed: true,
+    record: { ...record, created_by: 'creator', completed_at: '2026-10-04T09:00:00+00:00' } } }));
+  const res = response();
+  await handler(home, 'put', '/:id/events/:recordId')(request, res);
+  expect(res.statusCode).toBe(200);
+  expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
+});
 test('mail conversion binds immutable source and selected Home atomically',async()=>{
   const rpc=jest.fn(async()=>({data:{ok:true,record}}));db.setRpcMock(rpc);const res=response();
   await handler(mail,'post','/tasks/from-mail')({...request,body:{homeId:'home',mailId:'mail',title:'Exact task',priority:'medium'}},res);
