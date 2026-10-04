@@ -63,6 +63,8 @@ final class MailDetailViewModelTests: XCTestCase {
         """
         SequencedURLProtocol.sequence = [
             .status(200, body: body),
+            // Loading an unread notice marks it viewed before the acknowledgement requests.
+            .status(200, body: #"{"message":"Mail marked as viewed","alreadyViewed":false}"#),
             .status(500, body: "{\"error\":\"Acknowledgment unavailable\"}"),
             .status(200, body: "{\"message\":\"Mail acknowledged\",\"ackStatus\":\"acknowledged\"}")
         ]
@@ -81,6 +83,7 @@ final class MailDetailViewModelTests: XCTestCase {
         XCTAssertEqual(content.attachments.count, 2)
         XCTAssertTrue(content.ackRequired)
         XCTAssertFalse(content.isAcknowledged)
+        XCTAssertEqual(content.readStatusLabel, "Read")
         XCTAssertNil(content.aiSummary)
         XCTAssertEqual(content.detailTrust, .neutral)
 
