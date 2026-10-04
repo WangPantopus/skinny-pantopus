@@ -85,18 +85,19 @@ class HomeTaskAccess(
         requireCurrent()
         beforeDispatch()
         requireCurrent()
+        val requestedStatus = if (completed) "done" else "open"
         val response =
             repository.updateHomeTask(
                 homeId,
                 taskId,
-                UpdateHomeTaskRequest(status = if (completed) "done" else "open"),
+                UpdateHomeTaskRequest(status = requestedStatus),
                 checkNotNull(serverSession).sessionScope,
                 dispatchGuard,
             ).taskValue()
         requireCurrent()
-        exact(response.task, taskId)
+        check(exact(response.task, taskId).status == requestedStatus) { TASK_ACCESS_CHANGED }
         // Mutations return a raw receipt. Read the current projection and capabilities.
-        return read(taskId)
+        return read(taskId).also { check(it.status == requestedStatus) { TASK_ACCESS_CHANGED } }
     }
 
     suspend fun delete(taskId: String) {

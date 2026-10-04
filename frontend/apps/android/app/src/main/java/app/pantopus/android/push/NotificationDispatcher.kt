@@ -300,19 +300,29 @@ class NotificationDispatcher
                 )
             }
             if (routing.category == "PICKUP_REMINDER") {
-                if (routing.date?.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$")) != true) return
-                builder.addAction(NotificationCompat.Action.Builder(0, "Bins out", background(ReminderActionReceiver.BINS_OUT)).build())
+                if (routing.date?.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$")) == true) {
+                    builder.addAction(NotificationCompat.Action.Builder(0, "Bins out", background(ReminderActionReceiver.BINS_OUT)).build())
+                }
             } else {
-                val home = routing.homeId ?: return
-                val task = routing.taskId ?: return
-                if (routing.pushType != "task_due") return
-                builder.addAction(
-                    NotificationCompat.Action.Builder(0, "Done", background(ReminderActionReceiver.TASK_DONE))
-                        .setAuthenticationRequired(true).build(),
-                )
-                val editRouting = routing.copy(deepLink = "/app/homes/$home/tasks/$task?edit=due_date")
-                builder.addAction(NotificationCompat.Action.Builder(0, "Not now", buildContentIntent(editRouting, session)).build())
+                addTaskReminderActions(builder, routing, session, ::background)
             }
+        }
+
+        private fun addTaskReminderActions(
+            builder: NotificationCompat.Builder,
+            routing: Routing,
+            session: String,
+            background: (String) -> PendingIntent,
+        ) {
+            val home = routing.homeId ?: return
+            val task = routing.taskId ?: return
+            if (routing.pushType != "task_due") return
+            builder.addAction(
+                NotificationCompat.Action.Builder(0, "Done", background(ReminderActionReceiver.TASK_DONE))
+                    .setAuthenticationRequired(true).build(),
+            )
+            val editRouting = routing.copy(deepLink = "/app/homes/$home/tasks/$task?edit=due_date")
+            builder.addAction(NotificationCompat.Action.Builder(0, "Not now", buildContentIntent(editRouting, session)).build())
         }
 
         private fun buildContentIntent(

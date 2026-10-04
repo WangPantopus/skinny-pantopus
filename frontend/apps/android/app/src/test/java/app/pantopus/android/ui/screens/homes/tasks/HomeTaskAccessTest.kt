@@ -167,6 +167,18 @@ class HomeTaskAccessTest {
                     HomeTaskResponse(task.copy(id = "other")),
                 )
             denied { access.complete("task", true) }
+            for (completed in listOf(true, false)) {
+                val requested = if (completed) "done" else "open"
+                val wrong = task.copy(status = if (completed) "open" else "done")
+                coEvery { repository.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(task, server))
+                coEvery { repository.updateHomeTask(any(), any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(wrong))
+                denied { access.complete("task", completed) }
+                coEvery { repository.updateHomeTask(any(), any(), any(), any()) } answers {
+                    coEvery { repository.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(wrong, server))
+                    NetworkResult.Success(HomeTaskResponse(task.copy(status = requested)))
+                }
+                denied { access.complete("task", completed) }
+            }
         }
 
     @Test fun local_relogin_during_mutation_drops_late_success() =

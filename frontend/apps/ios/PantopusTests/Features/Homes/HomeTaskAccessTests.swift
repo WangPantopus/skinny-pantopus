@@ -183,6 +183,26 @@ final class HomeTaskAccessTests: XCTestCase {
             XCTFail("Wrong task accepted")
         } catch {}
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "PUT"])
+        for status in ["done", "open"] {
+            let wrongStatus = status == "done" ? "open" : "done"
+            for wrongReadback in [false, true] {
+                SequencedURLProtocol.reset()
+                SequencedURLProtocol.sequence = [
+                    .status(200, body: detail(record(complete: true))),
+                    .status(200, body: json(["task": record(status: wrongReadback ? status : wrongStatus)]))
+                ]
+                if wrongReadback {
+                    SequencedURLProtocol.sequence.append(.status(200, body: detail(record(status: wrongStatus))))
+                }
+                do { _ = try await access().complete(taskId: task, status: status)
+                    XCTFail("Same-ID incorrect status accepted")
+                } catch {}
+                XCTAssertEqual(
+                    SequencedURLProtocol.capturedRequests.map(\.httpMethod),
+                    wrongReadback ? ["GET", "PUT", "GET"] : ["GET", "PUT"]
+                )
+            }
+        }
     }
 
     func testMalformedSuccessfulDeleteDoesNotReportDeletion() async {

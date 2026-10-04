@@ -3,6 +3,7 @@ package app.pantopus.android
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -146,6 +147,28 @@ class MainActivity : FragmentActivity() {
         setIntent(intent)
     }
 
+    private fun forwardReminderAction(
+        intent: Intent,
+        uri: Uri,
+    ): Boolean {
+        if (intent.getStringExtra(ReminderActionReceiver.ACTION) != ReminderActionReceiver.TASK_NOT_NOW) return false
+        val recipient = intent.getStringExtra(ReminderActionReceiver.RECIPIENT)
+        val session = intent.getStringExtra(ReminderActionReceiver.SESSION)
+        val destination = DeepLinkRouter.resolve(uri) as? DeepLinkRouter.Destination.HomeTask
+        if (recipient == null || session == null) return true
+        if (destination == null || !destination.openDueDateEdit) return true
+        // Existing encrypted pending-route storage binds the cold login replay.
+        DeepLinkRouter.handle(uri.toString(), expectedUserId = recipient)
+        intent.removeExtra(ReminderActionReceiver.ACTION)
+        lifecycleScope.launch {
+            val hydrated = authRepository.state.first { it != AuthRepository.State.Unknown }
+            if ((hydrated as? AuthRepository.State.SignedIn)?.user?.id != recipient) return@launch
+            if (ReminderActionReceiver.sessionFingerprint(tokenStorage.sessionIdentity()) != session) return@launch
+            pilotEvents.send(PilotEvents.Event.ReminderAction, mapOf("kind" to "task", "action" to "not_now"), recipient)
+        }
+        return true
+    }
+
     private fun forwardDeepLink(intent: Intent?) {
         if (intent?.getBooleanExtra(ReminderActionReceiver.PUSH_OPEN, false) == true) {
             pilotEvents.notificationOpened(intent.getStringExtra(ReminderActionReceiver.PUSH_TYPE))
@@ -159,22 +182,7 @@ class MainActivity : FragmentActivity() {
             OAuthSessionStore.deliver(uri)
             return
         }
-        if (intent.getStringExtra(ReminderActionReceiver.ACTION) == ReminderActionReceiver.TASK_NOT_NOW) {
-            val recipient = intent.getStringExtra(ReminderActionReceiver.RECIPIENT) ?: return
-            val session = intent.getStringExtra(ReminderActionReceiver.SESSION) ?: return
-            val destination = DeepLinkRouter.resolve(uri) as? DeepLinkRouter.Destination.HomeTask ?: return
-            if (!destination.openDueDateEdit) return
-            // Existing encrypted pending-route storage binds the cold login replay.
-            DeepLinkRouter.handle(uri.toString(), expectedUserId = recipient)
-            intent.removeExtra(ReminderActionReceiver.ACTION)
-            lifecycleScope.launch {
-                val hydrated = authRepository.state.first { it != AuthRepository.State.Unknown }
-                if ((hydrated as? AuthRepository.State.SignedIn)?.user?.id != recipient) return@launch
-                if (ReminderActionReceiver.sessionFingerprint(tokenStorage.sessionIdentity()) != session) return@launch
-                pilotEvents.send(PilotEvents.Event.ReminderAction, mapOf("kind" to "task", "action" to "not_now"), recipient)
-            }
-            return
-        }
+        if (forwardReminderAction(intent, uri)) return
         DeepLinkRouter.handle(uri)
     }
 

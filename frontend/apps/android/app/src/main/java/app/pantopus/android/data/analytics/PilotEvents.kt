@@ -162,7 +162,8 @@ class PilotEvents
                 scope.launch {
                     delay(1_000)
                     val openingActor = actor ?: return@launch
-                    if (!pendingOpen || !window.foreground || (pendingActor != null && pendingActor != openingActor)) return@launch
+                    if (!pendingOpen || !window.foreground) return@launch
+                    if (pendingActor != null && pendingActor != openingActor) return@launch
                     pendingOpen = false
                     pendingActor = null
                     val meta = mutableMapOf("trigger" to if (pushType == null) "organic" else "push")

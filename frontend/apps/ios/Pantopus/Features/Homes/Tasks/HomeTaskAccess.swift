@@ -129,7 +129,9 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
         ))
         try requireCurrent(revision)
         guard valid(result.task), result.task.id == taskId, result.task.status == status else { throw APIError.invalidResponse }
-        return try await detail(taskId: taskId)
+        let current = try await detail(taskId: taskId)
+        guard current.status == status else { throw APIError.invalidResponse }
+        return current
     }
 
     func delete(taskId: String) async throws {

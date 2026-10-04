@@ -65,23 +65,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
                                 actor,
                             )
                         }
-                        TASK_DONE -> {
-                            val keyguard = context.getSystemService(KeyguardManager::class.java)
-                            if (keyguard == null || keyguard.isDeviceLocked) return@withTimeout
-                            val home = HomeTaskNotificationRoute.canonicalId(intent.getStringExtra(HOME)) ?: return@withTimeout
-                            val task = HomeTaskNotificationRoute.canonicalId(intent.getStringExtra(TASK)) ?: return@withTimeout
-                            val access =
-                                tasks.create(home, scope, dispatchGuard = {
-                                    check(sessionFingerprint(tokens.sessionIdentity()) == expectedSession)
-                                    check(!appLock.isLocked.value && !keyguard.isDeviceLocked)
-                                })
-                            access.complete(task, completed = true) {
-                                check(sessionFingerprint(tokens.sessionIdentity()) == expectedSession)
-                                check(!appLock.isLocked.value && !keyguard.isDeviceLocked)
-                            }
-                            if (sessionFingerprint(tokens.sessionIdentity()) != expectedSession) return@withTimeout
-                            events.send(PilotEvents.Event.ReminderAction, mapOf("kind" to "task", "action" to "done"), actor)
-                        }
+                        TASK_DONE -> if (!completeTask(context, intent, scope, expectedSession, actor)) return@withTimeout
                     }
                     if (intent.hasExtra(NOTIFICATION_ID)) {
                         NotificationManagerCompat.from(context).cancel(intent.getIntExtra(NOTIFICATION_ID, 0))
@@ -95,6 +79,32 @@ class ReminderActionReceiver : BroadcastReceiver() {
                 scope.cancel()
             }
         }
+    }
+
+    private suspend fun completeTask(
+        context: Context,
+        intent: Intent,
+        scope: CoroutineScope,
+        expectedSession: String,
+        actor: String,
+    ): Boolean {
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        if (keyguard == null || keyguard.isDeviceLocked) return false
+        val home = HomeTaskNotificationRoute.canonicalId(intent.getStringExtra(HOME))
+        val task = HomeTaskNotificationRoute.canonicalId(intent.getStringExtra(TASK))
+        if (home == null || task == null) return false
+        val access =
+            tasks.create(home, scope, dispatchGuard = {
+                check(sessionFingerprint(tokens.sessionIdentity()) == expectedSession)
+                check(!appLock.isLocked.value && !keyguard.isDeviceLocked)
+            })
+        access.complete(task, completed = true) {
+            check(sessionFingerprint(tokens.sessionIdentity()) == expectedSession)
+            check(!appLock.isLocked.value && !keyguard.isDeviceLocked)
+        }
+        if (sessionFingerprint(tokens.sessionIdentity()) != expectedSession) return false
+        events.send(PilotEvents.Event.ReminderAction, mapOf("kind" to "task", "action" to "done"), actor)
+        return true
     }
 
     companion object {
