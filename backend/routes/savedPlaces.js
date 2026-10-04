@@ -86,6 +86,13 @@ router.post('/', verifyToken, async (req, res) => {
 
     if (error) throw error;
     require('../services/context/providerOrchestrator').clearHubTodayCache(req.user.id);
+    // Insert only: saving an address must never opt a new account into
+    // briefings or overwrite an existing account's notification choices.
+    const { error: preferencesError } = await supabaseAdmin
+      .from('UserNotificationPreferences')
+      .upsert({ user_id: req.user.id, daily_briefing_enabled: false, evening_briefing_enabled: false },
+        { onConflict: 'user_id', ignoreDuplicates: true });
+    if (preferencesError) throw preferencesError;
     res.status(201).json({ savedPlace: data });
   } catch (err) {
     logger.error('Failed to save place:', err);

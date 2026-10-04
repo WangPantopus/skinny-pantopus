@@ -19,6 +19,11 @@ it('upserts once per account and never creates a household, claim, or membership
     expect(response.status).toBe(201);
   }
   expect(getTable('SavedPlace')).toHaveLength(1);
+  expect(getTable('UserNotificationPreferences')).toEqual([expect.objectContaining({user_id:'u1',daily_briefing_enabled:false,evening_briefing_enabled:false})]);
+  const preference = {...getTable('UserNotificationPreferences')[0], daily_briefing_enabled:true, evening_briefing_enabled:true, daily_briefing_timezone:'Asia/Tokyo'};
+  seedTable('UserNotificationPreferences', [preference]);
+  expect((await request(app).post('/saved-places').set('x-test-user-id','u1').send(place)).status).toBe(201);
+  expect(getTable('UserNotificationPreferences')).toEqual([preference]);
   // The shared in-memory adapter generates non-UUID ids; bind its saved row
   // to the real route's UUID contract before exercising the persisted reader.
   const id = '11111111-1111-4111-8111-111111111111';
