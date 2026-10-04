@@ -386,7 +386,9 @@ private struct AddressTodayLoaded: View {
                !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable { preferenceBusy = false }
         }
         do {
-            guard try await checkSavedAnchor() else { showMorningCard = false
+            let matches = try await checkSavedAnchor()
+            try requirePreferenceCurrent(version)
+            guard matches else { showMorningCard = false
                 savedAnchorMatches = false
                 return
             }
