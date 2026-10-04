@@ -8,7 +8,7 @@
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const homeRecordService = require('../homeRecordService');
-const homePermissions = require('../../utils/homePermissions');
+const homeListService = require('../homeListService');
 const logger = require('../../utils/logger');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 
@@ -71,10 +71,10 @@ async function collectInternalContext(userId, homeId = null) {
   // The service-role query bypasses RLS. Active membership and an explicit
   // Hub anchor never substitute for the bills route's finance read permission.
   const financeAccess = hasHomes && householdExtras
-    ? await Promise.all(homeIds.map(async id => ({ id, access: await homePermissions.getUserAccess(id, userId) })))
+    ? await Promise.all(homeIds.map(async id => ({ id, state: await homeListService.readAccessState(id, userId) })))
     : [];
   const financeHomeIds = financeAccess
-    .filter(({ access }) => access.hasAccess && access.permissions.includes('finance.view'))
+    .filter(({ state }) => state.mode === 'shared' && state.access.permissions.includes('finance.view'))
     .map(({ id }) => id);
 
   // ── Build all queries, run with Promise.allSettled ──
@@ -170,9 +170,11 @@ async function collectInternalContext(userId, homeId = null) {
 
   // Do not emit a bill fetched under authority that changed while queries
   // were pending. Failed policy reads likewise refuse the context result.
-  await Promise.all(financeHomeIds.map(async id => {
-    const current = await homePermissions.getUserAccess(id, userId);
-    if (!current.hasAccess || !current.permissions.includes('finance.view')) throw homePermissions.accessUnavailable();
+  await Promise.all(financeAccess.filter(({ id }) => financeHomeIds.includes(id)).map(async ({ id, state }) => {
+    const current = await homeListService.readAccessState(id, userId);
+    if (JSON.stringify(current) !== JSON.stringify(state)) {
+      throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
+    }
   }));
 
   return {

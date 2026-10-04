@@ -18,6 +18,7 @@ const { composeBriefing, composeTemplate } = require('./briefingComposer');
 const { getRecentBriefings } = require('./briefingHistoryService');
 const { getLocalUpdateContext } = require('./localUpdateProvider');
 const addressCalendarService = require('../addressCalendarService');
+const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 const { buildTomorrowWeatherIntro, selectEveningSignal } = require('./eveningBriefingService');
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -204,7 +205,7 @@ async function getHubToday(userId, options = {}) {
   // Check in-memory cache first
   const cached = _hubTodayCache.get(cacheKey);
   if (cached) {
-    if (Date.now() < cached.expiresAt) {
+    if (!isLaunchFeatureEnabled('household_extras') && Date.now() < cached.expiresAt) {
       return cached.result;
     }
     _hubTodayCache.delete(cacheKey); // evict expired entry
@@ -429,8 +430,12 @@ async function getHubToday(userId, options = {}) {
     });
   }
 
-  // Cache successful result
-  _hubTodayCache.set(cacheKey, { result, expiresAt: Date.now() + HUB_TODAY_CACHE_TTL_MS });
+  // Household records require current authority on each read. Preserve the
+  // short memo for public context only; provider caches remain unchanged.
+  if (!isLaunchFeatureEnabled('household_extras') && !internal.bills_due?.length
+    && !internal.tasks_due?.length && !internal.calendar_events?.length) {
+    _hubTodayCache.set(cacheKey, { result, expiresAt: Date.now() + HUB_TODAY_CACHE_TTL_MS });
+  }
   if (_hubTodayCache.size > HUB_TODAY_CACHE_MAX) {
     const firstKey = _hubTodayCache.keys().next().value;
     _hubTodayCache.delete(firstKey);

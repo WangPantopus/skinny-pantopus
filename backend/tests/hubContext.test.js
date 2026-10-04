@@ -960,6 +960,34 @@ describe('Provider Orchestrator', () => {
     expect(result.meta.providers_used.length).toBeGreaterThan(0);
     expect(typeof result.meta.total_latency_ms).toBe('number');
     expect(result.meta.section_providers).toEqual({ weather: 'OPEN_METEO', alerts: 'NOAA' });
+    const { collectInternalContext } = require('../services/context/internalContextCollector');
+    const launch = process.env.LAUNCH_FEATURES;
+    process.env.LAUNCH_FEATURES = '';
+    require('../services/context/providerOrchestrator').clearHubTodayCache();
+    collectInternalContext.mockClear();
+    await getHubToday(MOCK_USER_ID);
+    await getHubToday(MOCK_USER_ID);
+    expect(collectInternalContext).toHaveBeenCalledTimes(1);
+    process.env.LAUNCH_FEATURES = 'household_extras';
+    collectInternalContext.mockResolvedValue({ ...MOCK_INTERNAL_EMPTY, bills_due: [{
+      id: 'bill', provider_name: 'Private bill provider', amount: 144.72, currency: 'USD', due_date: new Date(Date.now() + 3600000).toISOString(), status: 'due',
+    }] });
+    const allowed = await getHubToday(MOCK_USER_ID);
+    expect(allowed.signals.some(signal => signal.kind === 'bill_due')).toBe(true);
+    collectInternalContext.mockResolvedValue(MOCK_INTERNAL_EMPTY);
+    const revoked = await getHubToday(MOCK_USER_ID);
+    expect(revoked.signals.some(signal => signal.kind === 'bill_due')).toBe(false);
+    expect(JSON.stringify(revoked)).not.toContain('Private bill provider');
+    expect(collectInternalContext).toHaveBeenCalledTimes(3);
+    // Household task projections are permission-sensitive with extras OFF too.
+    process.env.LAUNCH_FEATURES = '';
+    require('../services/context/providerOrchestrator').clearHubTodayCache();
+    collectInternalContext.mockResolvedValue({ ...MOCK_INTERNAL_EMPTY, tasks_due: [{ id: 'task', title: 'Private task', due_at: new Date(Date.now() + 3600000).toISOString(), priority: 'high', status: 'open' }] });
+    const withTask = await getHubToday(MOCK_USER_ID);
+    expect(withTask.signals.some(signal => signal.kind === 'task_due')).toBe(true);
+    collectInternalContext.mockResolvedValue(MOCK_INTERNAL_EMPTY);
+    expect(JSON.stringify(await getHubToday(MOCK_USER_ID))).not.toContain('Private task');
+    process.env.LAUNCH_FEATURES = launch;
 
     const { fetchWeather } = require('../services/context/weatherProvider');
     const { fetchAlerts } = require('../services/context/alertsProvider');
