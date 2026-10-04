@@ -53,7 +53,7 @@ struct PlaceTodayDetailContent: View {
                 PlaceDetailSectionLabel(text: "At this address")
                 if let data = calendar.addressCalendar,
                    calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
-                    AddressCalendarCard(homeId: vm.homeId, data: data) { await vm.load() }
+                    AddressCalendarCard(homeId: vm.calendarHomeId, data: data) { await vm.load() }
                     PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
                 } else {
                     vm.fallbackCard(calendar)
@@ -421,7 +421,7 @@ private func weatherTint(_ code: WeatherConditionCode) -> Color {
 /// the household's own: the pickup-day picker. Hand-seeded city defaults
 /// say "unconfirmed" until the household sets its day.
 struct AddressCalendarCard: View {
-    let homeId: String
+    let homeId: String?
     let data: PlaceAddressCalendarData
     let onChanged: () async -> Void
 
@@ -456,11 +456,11 @@ struct AddressCalendarCard: View {
         ("FR", "Friday"), ("SA", "Saturday"), ("SU", "Sunday")
     ]
 
-    init(homeId: String, data: PlaceAddressCalendarData, onChanged: @escaping () async -> Void) {
+    init(homeId: String?, data: PlaceAddressCalendarData, onChanged: @escaping () async -> Void) {
         self.homeId = homeId
         self.data = data
         self.onChanged = onChanged
-        _picking = State(initialValue: data.needsPickupDay)
+        _picking = State(initialValue: homeId != nil && data.needsPickupDay)
         _weekday = State(initialValue: data.pickupSchedule?.weekday ?? "")
         _frequency = State(initialValue: data.pickupSchedule?.recyclingFrequency ?? "not_set")
         _nextDate = State(initialValue: data.pickupSchedule?.recyclingNextDate ?? "")
@@ -475,21 +475,23 @@ struct AddressCalendarCard: View {
                     .kerning(0.7)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer(minLength: 0)
-                Button(picking ? "Cancel" : "Pickup schedule") {
-                    weekday = calendar.pickupSchedule?.weekday ?? ""
-                    frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
-                    nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
-                    openedVersion = calendar.pickupVersion
-                    errorText = nil
-                    picking.toggle()
+                if homeId != nil {
+                    Button(picking ? "Cancel" : "Pickup schedule") {
+                        weekday = calendar.pickupSchedule?.weekday ?? ""
+                        frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
+                        nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
+                        openedVersion = calendar.pickupVersion
+                        errorText = nil
+                        picking.toggle()
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.primaryInk)
+                    .accessibilityIdentifier("addressCalendarPickupToggle")
+                    .disabled(saving != nil)
                 }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.Color.primaryInk)
-                .accessibilityIdentifier("addressCalendarPickupToggle")
-                .disabled(saving != nil)
             }
 
-            if picking {
+            if picking, homeId != nil {
                 picker
             }
 
@@ -651,7 +653,7 @@ struct AddressCalendarCard: View {
 
     @MainActor
     private func choose(reset: Bool = false) async {
-        guard saving == nil else { return }
+        guard let homeId, saving == nil else { return }
         saving = "saving"
         errorText = nil
         do {

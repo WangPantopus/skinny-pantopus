@@ -24,6 +24,11 @@ final class PlaceDetailViewModel {
     /// retry can't change it, so the views drop their Try again.
     private(set) var accessDenied = false
     let homeId: String
+    let savedPlaceId: String?
+    var calendarHomeId: String? {
+        savedPlaceId == nil ? homeId : nil
+    }
+
     let group: PlaceDetailGroup
     /// The host's real verification flows (the dashboard's verify sheet doors).
     let onStartVerify: ((PlaceVerifyMethod) -> Void)?
@@ -36,9 +41,11 @@ final class PlaceDetailViewModel {
         homeId: String,
         group: PlaceDetailGroup,
         api: APIClient = .shared,
+        savedPlaceId: String? = nil,
         onStartVerify: ((PlaceVerifyMethod) -> Void)? = nil
     ) {
         self.homeId = homeId
+        self.savedPlaceId = savedPlaceId
         self.group = group
         self.api = api
         self.onStartVerify = onStartVerify
@@ -62,10 +69,14 @@ final class PlaceDetailViewModel {
     private func fetch() async {
         do {
             let intelligence: PlaceIntelligence = try await api.request(
-                PlaceEndpoints.intelligence(homeId: homeId)
+                savedPlaceId.map { SavedPlacesEndpoints.today(id: $0) }
+                    ?? PlaceEndpoints.intelligence(homeId: homeId)
             )
+            try Task.checkCancellation()
             accessDenied = false
             state = .loaded(intelligence)
+        } catch is CancellationError {
+            return
         } catch let error as APIError {
             if case .forbidden = error { accessDenied = true } else { accessDenied = false }
             state = .error(message: error.errorDescription ?? "Couldn't load this section.")

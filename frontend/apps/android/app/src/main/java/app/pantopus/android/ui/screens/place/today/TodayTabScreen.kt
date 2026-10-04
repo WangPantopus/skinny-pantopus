@@ -82,7 +82,7 @@ fun TodayTabScreen(
                     Column(
                         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                     ) {
-                        PlaceTodayDetailContent(current.intelligence, viewModel)
+                        PlaceTodayDetailContent(current.intelligence, viewModel.takeIf { current.calendarHomeId != null })
                         Spacer(modifier = Modifier.height(96.dp))
                     }
             }
