@@ -19,6 +19,37 @@ test('briefing labels use current record projections, canonical status and a nar
   expect(records.visibleRecords).toHaveBeenCalledWith(expect.objectContaining({homeId:'home',actorId:'actor',kind:'task'}));
   expect(records.visibleRecords).toHaveBeenCalledWith(expect.objectContaining({homeId:'home',actorId:'actor',kind:'event'}));
   expect(from.mock.calls.map(([table])=>table)).not.toEqual(expect.arrayContaining(['HomeTask','HomeCalendarEvent']));
+  // Bill context must observe the same per-home finance read fence as the
+  // bills route, even for an explicit Hub anchor or an active occupancy.
+  db.seedTable('Home', [{id:'home',owner_id:'owner'}]);
+  db.seedTable('HomeBill', [{id:'bill',home_id:'home',provider_name:'Private bill provider',amount:144.72,currency:'USD',due_date:soon,status:'due'}]);
+  for (const [role,verification] of [['guest','verified'],['service_provider','verified'],['member','unverified'],['member','verified']]) {
+    db.seedTable('HomeOccupancy', [{id:'occ',home_id:'home',user_id:'actor',role_base:role,is_active:true,verification_status:verification}]);
+    from.mockClear();
+    expect((await collectInternalContext('actor','home')).bills_due).toEqual([]);
+    expect(from.mock.calls.map(([table])=>table)).not.toContain('HomeBill');
+  }
+  db.seedTable('HomeRolePermission', [{role_base:'member',permission:'finance.view',allowed:true}]);
+  expect((await collectInternalContext('actor','home')).bills_due).toEqual([expect.objectContaining({id:'bill',amount:144.72})]);
+  db.seedTable('HomePermissionOverride', [{home_id:'home',user_id:'actor',permission:'finance.view',allowed:false}]);
+  expect((await collectInternalContext('actor','home')).bills_due).toEqual([]);
+  db.seedTable('HomeOccupancy', []);
+  // Preserve the existing bills route's admitted owner behavior.
+  expect((await collectInternalContext('owner','home')).bills_due).toEqual([expect.objectContaining({id:'bill'})]);
+  const permissions=require('../../utils/homePermissions');
+  const policy=jest.spyOn(permissions,'getUserAccess');
+  policy.mockResolvedValueOnce({hasAccess:true,permissions:['finance.view']})
+    .mockResolvedValueOnce({hasAccess:false,permissions:[]});
+  await expect(collectInternalContext('owner','home')).rejects.toMatchObject({code:'HOME_ACCESS_UNAVAILABLE'});
+  policy.mockRejectedValueOnce(permissions.accessUnavailable());
+  await expect(collectInternalContext('owner','home')).rejects.toMatchObject({code:'HOME_ACCESS_UNAVAILABLE'});
+  policy.mockRestore();
+  const launch=process.env.LAUNCH_FEATURES;
+  process.env.LAUNCH_FEATURES='';
+  from.mockClear();
+  expect((await collectInternalContext('owner','home')).bills_due).toEqual([]);
+  expect(from.mock.calls.map(([table])=>table)).not.toContain('HomeBill');
+  process.env.LAUNCH_FEATURES=launch;
   from.mockRestore();
 });
 test('briefing cannot quietly cache a result after record authority lookup failure', async () => {

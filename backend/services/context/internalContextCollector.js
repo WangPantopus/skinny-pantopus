@@ -8,6 +8,7 @@
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const homeRecordService = require('../homeRecordService');
+const homePermissions = require('../../utils/homePermissions');
 const logger = require('../../utils/logger');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 
@@ -67,14 +68,22 @@ async function collectInternalContext(userId, homeId = null) {
   // Launch cut #7 (Household extras): bills and the family calendar stay out of
   // the Hub Today card and the briefings for the first launch.
   const householdExtras = isLaunchFeatureEnabled('household_extras');
+  // The service-role query bypasses RLS. Active membership and an explicit
+  // Hub anchor never substitute for the bills route's finance read permission.
+  const financeAccess = hasHomes && householdExtras
+    ? await Promise.all(homeIds.map(async id => ({ id, access: await homePermissions.getUserAccess(id, userId) })))
+    : [];
+  const financeHomeIds = financeAccess
+    .filter(({ access }) => access.hasAccess && access.permissions.includes('finance.view'))
+    .map(({ id }) => id);
 
   // ── Build all queries, run with Promise.allSettled ──
   const queries = {
-    bills: hasHomes && householdExtras
+    bills: financeHomeIds.length > 0
       ? supabaseAdmin
           .from('HomeBill')
           .select('id, provider_name, amount, currency, due_date, status')
-          .in('home_id', homeIds)
+          .in('home_id', financeHomeIds)
           .neq('status', 'paid')
           .gte('due_date', now.toISOString())
           .lte('due_date', threeDaysOut.toISOString())
@@ -158,6 +167,13 @@ async function collectInternalContext(userId, homeId = null) {
       logger.warn('internalContextCollector: DB error', { key, userId, error: r.error.message });
     }
   }
+
+  // Do not emit a bill fetched under authority that changed while queries
+  // were pending. Failed policy reads likewise refuse the context result.
+  await Promise.all(financeHomeIds.map(async id => {
+    const current = await homePermissions.getUserAccess(id, userId);
+    if (!current.hasAccess || !current.permissions.includes('finance.view')) throw homePermissions.accessUnavailable();
+  }));
 
   return {
     bills_due: (resolved.bills.data || []).map((b) => ({
