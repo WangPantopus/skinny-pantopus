@@ -12,11 +12,16 @@
 import SwiftUI
 
 struct AddressTodayTabView: View {
+    let onAddHome: () -> Void
     @Environment(RootTabModel.self) private var rootTabs
     @State private var homeId: String?
     @State private var resolved = false
     @State private var loadFailed = false
     @State private var detail: PlaceDetailViewModel?
+
+    init(onAddHome: @escaping () -> Void) {
+        self.onAddHome = onAddHome
+    }
 
     var body: some View {
         VStack(spacing: 0) {
