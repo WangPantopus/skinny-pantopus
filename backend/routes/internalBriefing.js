@@ -306,7 +306,7 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
     // there was no way back to Place at all after a back-swipe. The home id
     // comes from the same location the briefing was composed for, so the
     // link opens the dashboard for the address the copy is about.
-    await pushService.sendToUser(userId, {
+    const receipt = await pushService.sendToUserWithReceipt(userId, {
       title: briefingConfig.title,
       body: result.text,
       data: {
@@ -318,6 +318,12 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
         briefingDeliveryId: deliveryId,
       },
     });
+
+    // A provider must accept at least one device before this user/day is
+    // settled. Partial acceptance settles it to avoid duplicating that device.
+    if (!Number.isInteger(receipt?.acceptedCount) || receipt.acceptedCount < 1) {
+      throw Object.assign(new Error('Push provider did not accept the briefing.'), { code: 'PUSH_NOT_ACCEPTED' });
+    }
 
     // 10. Update delivery row
     await supabaseAdmin
@@ -357,7 +363,7 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
       ).catch(() => {}); // Don't let logging fail the error response
     }
 
-    return res.status(500).json({ status: 'failed', error: err.message });
+    return res.status(err.code === 'PUSH_NOT_ACCEPTED' ? 503 : 500).json({ status: 'failed', error: err.message });
   }
 });
 
