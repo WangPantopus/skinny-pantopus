@@ -8,8 +8,10 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.place.PlaceRepository
+import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.ui.screens.place.detail.AddressCalendarActions
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,47 +32,65 @@ class TodayTabViewModel
     constructor(
         private val homesRepository: HomesRepository,
         private val repo: PlaceRepository,
+        private val savedPlacesRepository: SavedPlacesRepository,
     ) : ViewModel(),
         AddressCalendarActions {
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
         val state: StateFlow<TodayTabUiState> = _state.asStateFlow()
         private var homeId: String? = null
+        private var loadJob: Job? = null
 
         private val _calendarBusy = MutableStateFlow(false)
         override val calendarBusy: StateFlow<Boolean> = _calendarBusy.asStateFlow()
         private val _calendarError = MutableStateFlow<String?>(null)
         override val calendarError: StateFlow<String?> = _calendarError.asStateFlow()
 
-        /** Idempotent once loaded; `refresh()` forces a reload. */
+        /** Re-resolve on tab entry, including an address saved since the last visit. */
         fun load() {
-            if (_state.value is TodayTabUiState.Loaded) return
             refresh()
         }
 
         fun refresh() {
+            loadJob?.cancel()
+            homeId = null
             _state.value = TodayTabUiState.Loading
-            viewModelScope.launch {
-                val id =
-                    homeId ?: when (val homes = resolvePrimaryHome()) {
-                        is NetworkResult.Success -> homes.data
-                        is NetworkResult.Failure -> {
-                            // A failed lookup isn't "no place": offer a retry instead of
-                            // sending a resident off to claim an address they already have.
-                            _state.value = TodayTabUiState.Error(homes.error.displayMessage("Couldn't load your place."))
-                            return@launch
+            loadJob =
+                viewModelScope.launch {
+                    val id =
+                        when (val homes = resolvePrimaryHome()) {
+                            is NetworkResult.Success -> homes.data
+                            is NetworkResult.Failure -> {
+                                // A failed lookup isn't "no place": offer a retry instead of
+                                // sending a resident off to claim an address they already have.
+                                _state.value = TodayTabUiState.Error(homes.error.displayMessage("Couldn't load your place."))
+                                return@launch
+                            }
                         }
-                    }
-                if (id == null) {
-                    _state.value = TodayTabUiState.NoPlace
-                    return@launch
+                    val result =
+                        if (id != null) {
+                            homeId = id
+                            repo.intelligence(id)
+                        } else {
+                            val savedId =
+                                when (val saved = savedPlacesRepository.list()) {
+                                    is NetworkResult.Success -> saved.data.savedPlaces.firstOrNull()?.id
+                                    is NetworkResult.Failure -> {
+                                        _state.value = TodayTabUiState.Error(saved.error.displayMessage("Couldn't load your place."))
+                                        return@launch
+                                    }
+                                }
+                            if (savedId == null) {
+                                _state.value = TodayTabUiState.NoPlace
+                                return@launch
+                            }
+                            savedPlacesRepository.today(savedId)
+                        }
+                    _state.value =
+                        when (result) {
+                            is NetworkResult.Success -> TodayTabUiState.Loaded(result.data, calendarHomeId = id)
+                            is NetworkResult.Failure -> TodayTabUiState.Error(result.error.displayMessage("Couldn't load today."))
+                        }
                 }
-                homeId = id
-                _state.value =
-                    when (val result = repo.intelligence(id)) {
-                        is NetworkResult.Success -> TodayTabUiState.Loaded(result.data)
-                        is NetworkResult.Failure -> TodayTabUiState.Error(result.error.displayMessage("Couldn't load today."))
-                    }
-            }
         }
 
         /** The primary home's id (null when there is none), or the failure. */
@@ -134,7 +154,7 @@ sealed interface TodayTabUiState {
     /** No primary home yet — the tab is a claim prompt. */
     data object NoPlace : TodayTabUiState
 
-    data class Loaded(val intelligence: PlaceIntelligence) : TodayTabUiState
+    data class Loaded(val intelligence: PlaceIntelligence, val calendarHomeId: String? = null) : TodayTabUiState
 
     data class Error(val message: String) : TodayTabUiState
 }

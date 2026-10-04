@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDeleteResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceResponse
@@ -11,9 +12,7 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 /**
- * BLOCK 2E — "Saved places". All three routes already exist on the backend
- * (mounted at `/api/saved-places` in `backend/app.js:389`); this screen does
- * not change any server behaviour.
+ * Saved places and their owner-scoped public Today information.
  */
 interface SavedPlacesApi {
     /**
@@ -22,6 +21,11 @@ interface SavedPlacesApi {
      */
     @GET("api/saved-places")
     suspend fun list(): SavedPlacesListResponse
+
+    @GET("api/saved-places/{id}/today")
+    suspend fun today(
+        @Path("id") id: String,
+    ): PlaceIntelligence
 
     /**
      * `POST /api/saved-places` — upsert a saved place on

@@ -9,6 +9,7 @@ import { PreviewBody } from './StartFunnel';
 import ErrorState from '@/components/ui/ErrorState';
 import { extractApiError } from '@/lib/auth-utils';
 import { launchFeatures } from '@/lib/featureFlags';
+import { queryKeys } from '@/lib/query-keys';
 
 /** SavedPlace is a private bookmark, never a Home or an access credential. */
 export default function SavedPlaceContext({ previewId, savedPlaceId }: { previewId?: string; savedPlaceId?: string }) {
@@ -40,6 +41,7 @@ export default function SavedPlaceContext({ previewId, savedPlaceId }: { preview
       savedPlaces: [place, ...(current?.savedPlaces ?? []).filter((p) => p.id !== place.id && p.user_id === userId)],
     }));
     void queryClient.invalidateQueries({ queryKey: ['place-entry', userId, 'saved'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.hub() });
     router.replace(`/app/place?savedPlace=${encodeURIComponent(place.id)}`);
   }} />;
   if (saved.isPending || (saved.isFetching && !active)) return <p role="status">Loading your saved places…</p>;
@@ -78,6 +80,7 @@ export default function SavedPlaceContext({ previewId, savedPlaceId }: { preview
             try {
               await api.savedPlaces.remove(active.id);
               await queryClient.invalidateQueries({ queryKey: ['place-entry', userId, 'saved'] });
+              await queryClient.invalidateQueries({ queryKey: queryKeys.hub() });
               router.replace('/app/place');
             } catch (err) { setError(extractApiError(err, 'Could not remove this saved place. Try again.')); }
             finally { setRemoving(false); }

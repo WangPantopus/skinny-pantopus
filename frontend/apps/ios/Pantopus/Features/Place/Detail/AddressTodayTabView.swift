@@ -13,7 +13,6 @@ import SwiftUI
 
 struct AddressTodayTabView: View {
     @Environment(RootTabModel.self) private var rootTabs
-    @State private var homeId: String?
     @State private var resolved = false
     @State private var loadFailed = false
     @State private var detail: PlaceDetailViewModel?
@@ -57,6 +56,7 @@ struct AddressTodayTabView: View {
             PlaceDetailSkeleton()
         } else if let detail {
             AddressTodayLoaded(viewModel: detail)
+                .id(detail.savedPlaceId ?? detail.homeId)
         } else if loadFailed {
             couldNotLoad
         } else {
@@ -107,7 +107,7 @@ struct AddressTodayTabView: View {
                 .font(.system(size: 14))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            PrimaryButton(title: "Try again") { Task { await resolveHome(force: true) } }
+            PrimaryButton(title: "Try again") { Task { await resolveHome() } }
         }
         .padding(24)
         .frame(maxWidth: .infinity)
@@ -119,17 +119,25 @@ struct AddressTodayTabView: View {
         .accessibilityIdentifier("addressTodayLoadFailed")
     }
 
-    private func resolveHome(force: Bool = false) async {
-        // A failed lookup never latches: it retries on the next appearance
-        // or on the button. A successful one is final for this view's life.
-        guard force || !resolved || loadFailed else { return }
+    private func resolveHome() async {
+        // Resolve on every appearance so saving/removing a private address
+        // after visiting Today cannot leave the previous no-place result latched.
         resolved = false
         loadFailed = false
+        detail = nil
         do {
             let response: MyHomesResponse = try await APIClient.shared.request(HomesEndpoints.myHomes())
+            try Task.checkCancellation()
             let id = response.sharedHomes.first { $0.isPrimaryOwner == true }?.id ?? response.sharedHomes.first?.id
-            homeId = id
-            if let id { detail = PlaceDetailViewModel(homeId: id, group: .today) }
+            if let id {
+                detail = PlaceDetailViewModel(homeId: id, group: .today)
+            } else {
+                let saved: SavedPlacesListResponse = try await APIClient.shared.request(SavedPlacesEndpoints.list())
+                try Task.checkCancellation()
+                if let place = saved.savedPlaces.first {
+                    detail = PlaceDetailViewModel(homeId: "", group: .today, savedPlaceId: place.id)
+                }
+            }
         } catch is CancellationError {
             // The view went away mid-request; the next appearance asks again.
             return
