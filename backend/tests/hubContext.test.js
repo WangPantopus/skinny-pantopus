@@ -846,6 +846,13 @@ describe('Evening Briefing Service', () => {
 
     expect(signal?.kind).toBe('local_update');
     expect(signal?.detail).toContain('bridge closure');
+    const suggestion = selectEveningSignal({
+      alerts: null,
+      internal: { ...MOCK_INTERNAL_EMPTY, tasks_due: [{ id: 'radon', title: 'Test for radon', priority: 'urgent', due_at: '2026-04-08T16:00:00Z', is_suggestion: true }] },
+      timeZone: 'America/Los_Angeles', recentBriefings: [], includeEveningTip: false,
+      now: new Date('2026-04-08T03:00:00Z'),
+    });
+    expect(suggestion).toBeNull();
   });
 
   test('selectEveningSignal prefers tomorrow morning events over local updates', () => {
@@ -1095,4 +1102,3 @@ describe('Provider Orchestrator', () => {
     expect(getLocalUpdateContext).not.toHaveBeenCalled();
   });
 });
-

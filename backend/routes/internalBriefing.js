@@ -533,6 +533,9 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
         link: placeRoute(data?.homeId),
         route: placeRoute(data?.homeId),
         ...data,
+        // Notification actions must refuse a prior account's notification
+        // after a switch. Bind this to the server's exact push recipient.
+        recipient_user_id: userId,
       },
     });
 

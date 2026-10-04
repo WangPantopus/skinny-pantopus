@@ -404,6 +404,89 @@ class TestEndToEnd:
         assert result["eligible"] == 3
         mock_metrics.assert_called_once()
 
+        # The companion home-task scheduler must use the same truthful
+        # sent/skipped accounting without leaking a task to excluded members.
+        from src.handlers import home_reminders
+        from datetime import timezone
+        reminder_module = "src.handlers.home_reminders"
+        now = datetime(2026, 4, 7, 14, 0, tzinfo=timezone.utc)
+        task = {
+            "id": "task-1", "home_id": "home-1", "title": "Test for radon",
+            "due_at": "2026-04-07T09:00:00-07:00", "status": "open",
+            "created_by": "creator", "assigned_to": None, "visibility": "members",
+            "details": {"suggestion": "radon_test"}, "source_mail_id": None,
+        }
+        task_query = _mock_supabase().table.return_value
+        task_query.lte.return_value = task_query
+        task_query.execute.return_value.data = [task, {**task, "id": "done-task", "status": "done"}, {**task, "id": "canceled-task", "status": "canceled"}]
+        preference_query = _mock_supabase().table.return_value
+        preference_query.execute.return_value.data = [
+            {"user_id": "creator", "daily_briefing_timezone": "America/Los_Angeles"},
+            {"user_id": "member", "daily_briefing_timezone": "America/Los_Angeles"},
+            {"user_id": "tomorrow", "daily_briefing_timezone": "Asia/Tokyo"},
+            {"user_id": "next-day", "daily_briefing_timezone": "Pacific/Kiritimati"},
+        ]
+        history_query = _mock_supabase().table.return_value
+        history_query.execute.return_value.data = []
+        reminder_db = MagicMock()
+        reminder_db.table.side_effect = lambda name: {"HomeTask": task_query, "UserNotificationPreferences": preference_query, "AlertNotificationHistory": history_query}[name]
+        reminder_db.rpc.side_effect = lambda name, args: MagicMock(execute=MagicMock(return_value=MagicMock(data=(
+            args["p_user_id"] not in {"excluded", "withdrawn"} if name == "home_record_recipient"
+            else {"ok": True, "records": [task_query.execute.return_value.data[0]] if args["p_actor_id"] not in {"excluded", "withdrawn"} else []}
+        ))))
+        with (
+            patch(f"{reminder_module}.datetime") as mock_dt,
+            patch(f"{reminder_module}._get_home_members", return_value={"home-1": ["creator", "member", "excluded", "withdrawn", "tomorrow", "next-day"]}),
+            patch(f"{reminder_module}._send_reminder", return_value="sent") as send,
+            patch(f"{reminder_module}._record_sent") as record,
+        ):
+            mock_dt.now.return_value = now
+            mock_dt.fromisoformat.side_effect = datetime.fromisoformat
+            task_stats = {"tasks_notified": 0, "errors": 0}
+            home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
+            task_query.filter.assert_called_with("status", "not.in", '("done","canceled")')
+            assert task_stats["tasks_notified"] == 3
+            assert [item.args[1] for item in send.call_args_list] == ["creator", "member", "next-day"]
+            assert record.call_args_list == [call(reminder_db, "task_task-1_creator_2026-04-07", 1), call(reminder_db, "task_task-1_member_2026-04-07", 1), call(reminder_db, "task_task-1_next-day_2026-04-08", 1)]
+            payload = send.call_args_list[0].args[-1]
+            assert payload == {"entityId": "task-1", "category": "TASK_REMINDER", "taskId": "task-1", "homeId": "home-1", "link": "/app/homes/home-1/tasks/task-1", "route": "/app/homes/home-1/tasks/task-1"}
+            assert all(item.args[1]["p_visibility"] == "members" for item in reminder_db.rpc.call_args_list if item.args[0] == "home_record_recipient")
+
+            # Assignee-first remains private and is rechecked at delivery time.
+            task_query.execute.return_value.data = [{**task, "assigned_to": "withdrawn"}]
+            send.reset_mock(); record.reset_mock()
+            home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
+            send.assert_not_called(); record.assert_not_called()
+            task_query.execute.return_value.data = [{**task, "assigned_to": "member"}]
+            home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
+            assert [item.args[1] for item in send.call_args_list] == ["member"]
+
+            # Skipped/failed recipients do not suppress a later successful send.
+            send.reset_mock(); record.reset_mock(); send.return_value = "skipped"
+            home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
+            record.assert_not_called()
+            send.reset_mock(); send.return_value = "sent"
+            history_query.execute.side_effect = RuntimeError("history unavailable")
+            home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
+            send.assert_not_called()
+            history_query.execute.side_effect = None
+            reminder_db.rpc.side_effect = RuntimeError("permissions unavailable")
+            send.reset_mock()
+            home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
+            send.assert_not_called()
+
+        for schedule_time, expected_calls in [("2026-04-07T01:00:00Z", 0), ("2026-04-07T14:00:00Z", 1)]:
+            with (
+                patch(f"{reminder_module}.get_briefing_secrets", return_value=secrets),
+                patch("supabase.create_client", return_value=reminder_db),
+                patch(f"{reminder_module}._process_bills_due"),
+                patch(f"{reminder_module}._process_calendar_events"),
+                patch(f"{reminder_module}._process_tasks_due") as process_tasks,
+                patch(f"{reminder_module}._publish_metrics"),
+            ):
+                home_reminders.handler({"time": schedule_time}, None)
+                assert process_tasks.call_count == expected_calls
+
 
 # ---------------------------------------------------------------------------
 # 9. Respects batch size limit of 100

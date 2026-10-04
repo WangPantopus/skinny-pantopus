@@ -87,7 +87,8 @@ async function collectInternalContext(userId, homeId = null) {
           .then(groups => ({ data: groups.flat().filter(t => !['done', 'canceled'].includes(t.status)
             && t.due_at && Date.parse(t.due_at) >= now.getTime() && Date.parse(t.due_at) <= twoDaysOut.getTime())
             .sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at)).slice(0, 10)
-            .map(({ id, title, due_at, priority, status }) => ({ id, title, due_at, priority, status })) }))
+            .map(({ id, title, due_at, priority, status, details }) => ({ id, title, due_at, priority, status,
+              is_suggestion: Boolean(details?.suggestion) })) }))
       : Promise.resolve({ data: [] }),
 
     calendarEvents: hasHomes && householdExtras
@@ -173,6 +174,7 @@ async function collectInternalContext(userId, homeId = null) {
       due_at: t.due_at,
       priority: t.priority || 'medium',
       status: t.status,
+      is_suggestion: t.is_suggestion,
     })),
     calendar_events: (resolved.calendarEvents.data || []).map((e) => ({
       id: e.id,

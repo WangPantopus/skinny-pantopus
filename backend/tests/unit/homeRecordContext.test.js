@@ -6,13 +6,14 @@ beforeEach(() => { db.resetTables(); jest.clearAllMocks(); });
 test('briefing labels use current record projections, canonical status and a narrow DTO', async () => {
   const soon = new Date(Date.now()+3600000).toISOString();
   records.visibleRecords.mockImplementation(async ({kind}) => kind==='task'
-    ? [{id:'visible',home_id:'home',title:'Visible task',status:'open',due_at:soon,details:{private:'omit'}},
+    ? [{id:'visible',home_id:'home',title:'Visible task',status:'open',due_at:soon,details:{private:'omit',suggestion:'radon_test'}},
       {id:'done',title:'Completed task',status:'done',due_at:soon}]
     : [{id:'event',title:'Visible event',event_type:'other',start_at:soon,end_at:null,description:'omit'}]);
   const from=jest.spyOn(db,'from');
   const result=await collectInternalContext('actor','home');
   expect(result.tasks_due).toEqual([expect.objectContaining({id:'visible',title:'Visible task'})]);
   expect(result.tasks_due[0]).not.toHaveProperty('details');
+  expect(result.tasks_due[0].is_suggestion).toBe(true);
   expect(result.calendar_events).toEqual([expect.objectContaining({id:'event',title:'Visible event'})]);
   expect(result.calendar_events[0]).not.toHaveProperty('description');
   expect(records.visibleRecords).toHaveBeenCalledWith(expect.objectContaining({homeId:'home',actorId:'actor',kind:'task'}));

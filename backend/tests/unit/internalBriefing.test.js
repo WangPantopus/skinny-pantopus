@@ -111,6 +111,16 @@ describe('POST /api/internal/briefing/send', () => {
     expect(payload.data.route).toBe('/place/home-abc');
     expect(payload.data.homeId).toBe('home-abc');
     expect(payload.data.link).not.toContain('/hub');
+    const taskLink = '/app/homes/home-abc/tasks/task-1';
+    const reminder = await request(app)
+      .post('/api/internal/briefing/reminder-push')
+      .set('x-internal-api-key', 'test-internal-key')
+      .send({ userId: USER_ID, title: 'Task due today', body: 'Test for radon is due today.', reminderType: 'task_due',
+        data: { homeId: 'home-abc', taskId: 'task-1', category: 'TASK_REMINDER', link: taskLink, route: taskLink, recipient_user_id: 'other-account' } });
+    expect(reminder.status).toBe(200);
+    expect(pushService.sendToUser.mock.calls[1][1].data).toMatchObject({
+      link: taskLink, route: taskLink, category: 'TASK_REMINDER', homeId: 'home-abc', taskId: 'task-1', recipient_user_id: USER_ID,
+    });
   });
 
   it('falls back to a bare Place link when the briefing has no home', async () => {
