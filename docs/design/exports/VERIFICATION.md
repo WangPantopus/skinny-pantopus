@@ -1,5 +1,7 @@
 # Screen export verification
 
+> **Mobile pilot build (October 2026):** only the seven exports in section 12 of the [build brief](../../mobile-pilot-build-brief-2026-10-03.md#12-design-references) are design sources. Every other export here is out for now; section 12 says why.
+
 One entry per exported screen prompt, per [HANDOFF §5](../../notes/HANDOFF.md). How to repeat a check:
 
 ```
