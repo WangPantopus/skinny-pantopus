@@ -180,6 +180,7 @@ This brief is the founder's authorization for the new behavior in sections 3 to 
 **Acceptance** (both apps; set the runtime clock where needed)
 - A home confirms garbage on Tuesday and recycling every other Tuesday. On the Monday at 6 p.m. local it gets exactly one push, "Recycling and garbage tomorrow" / "Bins out tonight.", with "Bins out". Tapping the push opens Today. Tapping "Bins out" records the event and changes nothing else.
 - On an evening with nothing due the next day, the delivery is skipped with `low_signal_day` and no push is sent.
+- With the morning briefing also on, neither the Monday nor the Tuesday morning briefing leads with the pickup.
 - A city default schedule never pushes. Its Today card shows the unconfirmed suffix and "Set your pickup day".
 - A home in a city with no calendar rows (a Vancouver or Washougal address) shows "No calendar for {city} yet. Set your pickup day and it starts here." with the pickup editor open. After saving Tuesday, Today shows the household's own pickups, and the Monday evening push arrives.
 - With a Thanksgiving row (Thursday, November 26), a Thursday pickup moves to Friday and a Friday pickup to Saturday. For a Thursday-pickup home, Wednesday evening sends no pickup push, and Thursday evening sends "Garbage tomorrow" / "Bins out tonight. Moved a day for Thanksgiving." Today shows the moved dates and the holiday line.
