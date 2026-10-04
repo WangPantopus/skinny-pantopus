@@ -35,23 +35,31 @@ struct PlaceTodayDetailContent: View {
     /// what recurs at this address, then air, alerts and sun. The calendar
     /// is the reason the Today tab exists and sits above the fold.
     var body: some View {
+        loadedContent
+            .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
+            .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
+            .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
+    }
+
+    private var loadedContent: some View {
+        todaySections
+            .task(id: vm.calendarHomeId) {
+                guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
+                radonState?.suspend()
+                let current = RadonTodayState(homeId: homeId)
+                radonState = current
+                await current.load()
+            }
+            .onDisappear { radonState?.suspend() }
+    }
+
+    private var todaySections: some View {
         VStack(alignment: .leading, spacing: 0) {
             weatherAndGoodDay
             addressCalendar
             homeRadon
             airAlertsSun
         }
-        .task(id: vm.calendarHomeId) {
-            guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
-            radonState?.suspend()
-            let current = RadonTodayState(homeId: homeId)
-            radonState = current
-            await current.load()
-        }
-        .onDisappear { radonState?.suspend() }
-        .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
-        .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
-        .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
     }
 
     @ViewBuilder
