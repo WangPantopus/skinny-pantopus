@@ -27,6 +27,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let userHasReposted: Bool
     /// Lifecycle state — `open` / `solved` (`feedService.js:234`).
     public let state: String?
+    /// Server-derived authorship: `user`, `curator` or `system`.
+    public let origin: String?
     /// True for cold-start neighborhood facts injected by the feed handler
     /// (`backend/routes/posts.js:84`). Those rows are dismissable, not
     /// reportable.
@@ -59,7 +61,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case userHasLiked
         case userHasSaved
         case userHasReposted
-        case state
+        case state, origin
         case isSeeded = "is_seeded"
         case isVisitorPost = "is_visitor_post"
         case businessAuthorId = "business_author_id"
@@ -89,6 +91,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         userHasSaved = try c.decodeIfPresent(Bool.self, forKey: .userHasSaved) ?? false
         userHasReposted = try c.decodeIfPresent(Bool.self, forKey: .userHasReposted) ?? false
         state = try c.decodeIfPresent(String.self, forKey: .state)
+        origin = try c.decodeIfPresent(String.self, forKey: .origin)
         isSeeded = try c.decodeIfPresent(Bool.self, forKey: .isSeeded) ?? false
         isVisitorPost = try c.decodeIfPresent(Bool.self, forKey: .isVisitorPost) ?? false
         businessAuthorId = try c.decodeIfPresent(String.self, forKey: .businessAuthorId)

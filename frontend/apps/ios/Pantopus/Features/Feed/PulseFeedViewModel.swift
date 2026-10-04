@@ -864,7 +864,8 @@ public final class PulseFeedViewModel {
                 topicLabel: intent.cardChipLabel
             ),
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
-            isVisitor: post.isVisitorPost
+            isVisitor: post.isVisitorPost,
+            origin: post.origin
         )
     }
 
