@@ -257,8 +257,22 @@ private struct AddressTodayLoaded: View {
             }
             await loadSavedPrompt()
         }
-        .onAppear { lifecycleVersion += 1 }
-        .onDisappear { lifecycleVersion += 1 }
+        .onAppear { lifecycleVersion += 1
+            preferenceBusy = false
+        }
+        .onDisappear { lifecycleVersion += 1
+            preferenceBusy = false
+        }
+        .onChange(of: rootTabs.selected) { _, _ in lifecycleVersion += 1
+            preferenceBusy = false
+        }
+        .onChange(of: AppLockManager.shared.isLocked) { _, _ in lifecycleVersion += 1
+            preferenceBusy = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+            lifecycleVersion += 1
+            preferenceBusy = false
+        }
     }
 
     private var morningVisible: Bool {
@@ -337,7 +351,10 @@ private struct AddressTodayLoaded: View {
         let version = lifecycleVersion
         promptAttempted = true
         preferenceBusy = true
-        defer { preferenceBusy = false }
+        defer {
+            if lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
+               !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable { preferenceBusy = false }
+        }
         do {
             try requirePreferenceCurrent(version)
             let _: NotificationPreferencesResponseDTO = try await APIClient.shared.request(
@@ -364,7 +381,10 @@ private struct AddressTodayLoaded: View {
         let version = lifecycleVersion
         preferenceBusy = true
         preferenceError = nil
-        defer { preferenceBusy = false }
+        defer {
+            if lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
+               !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable { preferenceBusy = false }
+        }
         do {
             guard try await checkSavedAnchor() else { showMorningCard = false
                 savedAnchorMatches = false

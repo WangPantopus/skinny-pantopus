@@ -551,8 +551,19 @@ struct AddressCalendarCard: View {
                 )
             }
         }
-        .onAppear { lifecycleVersion += 1 }
-        .onDisappear { lifecycleVersion += 1 }
+        .onAppear { lifecycleVersion += 1
+            saving = nil
+        }
+        .onDisappear { lifecycleVersion += 1
+            saving = nil
+        }
+        .onChange(of: AppLockManager.shared.isLocked) { _, _ in lifecycleVersion += 1
+            saving = nil
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+            lifecycleVersion += 1
+            saving = nil
+        }
     }
 
     private var picker: some View {
@@ -613,17 +624,6 @@ struct AddressCalendarCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func pickupDateLabel(_ day: String) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let date = formatter.date(from: day) else { return day }
-        formatter.locale = .current
-        formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
-        return formatter.string(from: date)
-    }
-
     private func eventRow(_ event: PlaceCalendarEvent) -> some View {
         let soon = event.daysUntil <= event.leadDays
         return HStack(alignment: .top, spacing: 12) {
@@ -663,16 +663,6 @@ struct AddressCalendarCard: View {
         .padding(.vertical, 10)
     }
 
-    private func iconFor(_ kind: String) -> PantopusIcon {
-        switch kind {
-        case "garbage", "recycling", "yard_waste", "bulk_pickup", "street_sweeping": .trash
-        case "property_tax", "utility_bill": .receipt
-        case "council", "school": .landmark
-        case "permit_hearing", "election_deadline": .gavel
-        default: .calendarDays
-        }
-    }
-
     private func whenLabel(_ event: PlaceCalendarEvent) -> String {
         switch event.daysUntil {
         case 0: return "Today"
@@ -692,7 +682,10 @@ struct AddressCalendarCard: View {
         guard let homeId, saving == nil else { return }
         let version = lifecycleVersion
         saving = "saving"
-        defer { saving = nil }
+        defer {
+            if lifecycleVersion == version, !AppLockManager.shared.isLocked,
+               UIApplication.shared.isProtectedDataAvailable { saving = nil }
+        }
         errorText = nil
         let offerPrimer = !reset && (calendar.needsPickupDay || calendar.pickupSchedule == nil)
         do {
@@ -748,6 +741,27 @@ struct AddressCalendarCard: View {
 }
 
 extension AddressCalendarCard {
+    private func pickupDateLabel(_ day: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: day) else { return day }
+        formatter.locale = .current
+        formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
+        return formatter.string(from: date)
+    }
+
+    private func iconFor(_ kind: String) -> PantopusIcon {
+        switch kind {
+        case "garbage", "recycling", "yard_waste", "bulk_pickup", "street_sweeping": .trash
+        case "property_tax", "utility_bill": .receipt
+        case "council", "school": .landmark
+        case "permit_hearing", "election_deadline": .gavel
+        default: .calendarDays
+        }
+    }
+
     /// The current calendar a 409 PICKUP_SCHEDULE_CHANGED reply carries
     /// (`clientError`'s message is the raw body); nil if it has none.
     private static func currentCalendar(inConflict body: String?) -> PlaceAddressCalendarData? {
@@ -807,8 +821,19 @@ private struct PickupReminderPrimer: View {
         .presentationDetents([.height(primerHeight)])
         .presentationDragIndicator(.hidden)
         .interactiveDismissDisabled(primerBusy)
-        .onAppear { lifecycleVersion += 1 }
-        .onDisappear { lifecycleVersion += 1 }
+        .onAppear { lifecycleVersion += 1
+            primerBusy = false
+        }
+        .onDisappear { lifecycleVersion += 1
+            primerBusy = false
+        }
+        .onChange(of: AppLockManager.shared.isLocked) { _, _ in lifecycleVersion += 1
+            primerBusy = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+            lifecycleVersion += 1
+            primerBusy = false
+        }
     }
 
     @MainActor
@@ -817,7 +842,10 @@ private struct PickupReminderPrimer: View {
         let version = lifecycleVersion
         primerBusy = true
         primerError = nil
-        defer { primerBusy = false }
+        defer {
+            if lifecycleVersion == version, !AppLockManager.shared.isLocked,
+               UIApplication.shared.isProtectedDataAvailable { primerBusy = false }
+        }
         do {
             try requirePrimerCurrent(version)
             let calendarResponse: AddressCalendarResponse = try await api.request(AddressCalendarEndpoints.calendar(homeId: homeId))
