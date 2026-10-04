@@ -32,6 +32,25 @@ function getStripeClient() {
     throw new TypeError('Stripe SDK module did not export a constructor');
   }
 
+  // A provider-free local server still imports routes that hold a Stripe
+  // client. Delay construction there, without inventing credentials or a
+  // provider response: SDK access still invokes the real constructor and
+  // refuses the missing key. Configured and hosted startup is unchanged.
+  if (
+    process.env.NODE_ENV === 'development' &&
+    process.env.APP_ENV === 'local' &&
+    !process.env.STRIPE_SECRET_KEY
+  ) {
+    let client;
+    return new Proxy({}, {
+      get(_target, property) {
+        if (!client) client = stripeCtor(process.env.STRIPE_SECRET_KEY);
+        const value = Reflect.get(client, property, client);
+        return typeof value === 'function' ? value.bind(client) : value;
+      },
+    });
+  }
+
   return stripeCtor(process.env.STRIPE_SECRET_KEY);
 }
 
