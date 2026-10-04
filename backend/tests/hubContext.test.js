@@ -1000,6 +1000,15 @@ describe('Provider Orchestrator', () => {
     expect(morning.signals_snapshot.some((signal) => signal.kind === 'address_calendar')).toBe(true);
     expect(calendarService.composeForHome).toHaveBeenCalledTimes(3);
     expect(calendarService.composeForHomeId).not.toHaveBeenCalled();
+    for (const kind of ['property_tax', 'council', 'garbage']) {
+      calendarService.composeForHome.mockResolvedValue({ upcoming: [{ kind, title: 'Public date',
+        days_until: 1, lead_days: 3, confidence: 'unverified' }] });
+      orchestrator.clearHubTodayCache(MOCK_USER_ID);
+      const unverified = await getHubToday(MOCK_USER_ID);
+      const signal = unverified.signals.find((item) => item.kind === 'address_calendar');
+      expect(signal.detail).toContain('Unconfirmed');
+      expect(signal.detail).not.toContain('set your pickup day');
+    }
     calendarService.composeForHome.mockClear();
     own.maybeSingle.mockResolvedValue({ data: null, error: null });
     orchestrator.clearHubTodayCache(MOCK_USER_ID);

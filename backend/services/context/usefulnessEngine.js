@@ -310,7 +310,7 @@ function generateAddressCalendarSignals(addressCalendar) {
       kind: 'address_calendar',
       score,
       label: `${e.title} ${when}`,
-      detail: e.confidence === 'unverified' ? `${detail} (Unconfirmed — set your pickup day to make it yours.)` : detail,
+      detail: e.confidence === 'unverified' ? `${detail} (Unconfirmed — check the source before relying on this date.)` : detail,
       urgency,
       source_provider: 'pantopus',
       action: { label: 'See your calendar', route: '/place/today' },
