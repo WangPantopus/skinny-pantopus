@@ -16,6 +16,9 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { composeScheduledBriefing } = require('../services/context/providerOrchestrator');
 const { collectInternalContext } = require('../services/context/internalContextCollector');
+const { resolveLocation } = require('../services/context/locationResolver');
+const { buildTomorrowPickupSignal } = require('../services/context/eveningBriefingService');
+const addressCalendarService = require('../services/addressCalendarService');
 const pushService = require('../services/pushService');
 const { createNotification, isPushEnabled } = require('../services/notificationService');
 const { skipForLaunchCut } = require('../utils/featureFlags');
@@ -281,10 +284,25 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
       }
     }
 
+    const lead = result.signals_snapshot?.[0];
+    let pickup = null;
+    if (lead?.kind === 'address_calendar' && typeof lead.data?.identity === 'string' && lead.data.identity.startsWith('pickup:')) {
+      const currentLocation = await resolveLocation(userId);
+      if (briefingKind !== 'evening' || !result.home_id || currentLocation.homeId !== result.home_id) {
+        throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED' });
+      }
+      const calendar = await addressCalendarService.composeForHomeId(result.home_id, { userId });
+      pickup = buildTomorrowPickupSignal(calendar, currentLocation.timezone);
+      if (!pickup || pickup.label !== lead.label || JSON.stringify(pickup.data) !== JSON.stringify(lead.data)) {
+        throw Object.assign(new Error('The pickup schedule changed. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED' });
+      }
+    }
+    const messageText = pickup ? pickup.detail : result.text;
+
     if (!pushEnabled) {
       await supabaseAdmin
         .from('DailyBriefingDelivery')
-        .update({ status: 'skipped', skip_reason: 'push_disabled', summary_text: result.text })
+        .update({ status: 'skipped', skip_reason: 'push_disabled', summary_text: messageText })
         .eq('id', deliveryId);
 
       return res.json({ status: 'skipped', skip_reason: 'push_disabled' });
@@ -293,7 +311,7 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
     if (!tokens || tokens.length === 0) {
       await supabaseAdmin
         .from('DailyBriefingDelivery')
-        .update({ status: 'skipped', skip_reason: 'no_push_token', summary_text: result.text })
+        .update({ status: 'skipped', skip_reason: 'no_push_token', summary_text: messageText })
         .eq('id', deliveryId);
 
       return res.json({ status: 'skipped', skip_reason: 'no_push_token' });
@@ -307,8 +325,8 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
     // comes from the same location the briefing was composed for, so the
     // link opens the dashboard for the address the copy is about.
     const receipt = await pushService.sendToUserWithReceipt(userId, {
-      title: briefingConfig.title,
-      body: result.text,
+      title: pickup ? pickup.label : briefingConfig.title,
+      body: messageText,
       data: {
         type: briefingConfig.notificationType,
         link: placeRoute(result.home_id),
@@ -316,6 +334,9 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
         homeId: result.home_id || null,
         briefingKind,
         briefingDeliveryId: deliveryId,
+        ...(pickup ? { category: 'PICKUP_REMINDER', pickupDate: pickup.data.date, link: '/app/today', route: '/app/today' } : {}),
+        // The action receiver must never borrow another account's notification.
+        ...(pickup ? { recipient_user_id: userId } : {}),
       },
     });
 
@@ -324,6 +345,9 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
     if (!Number.isInteger(receipt?.acceptedCount) || receipt.acceptedCount < 1) {
       throw Object.assign(new Error('Push provider did not accept the briefing.'), { code: 'PUSH_NOT_ACCEPTED' });
     }
+    if (pickup) {
+      await recordFunnelEvent('reminder_sent', { userId, meta: { kind: 'pickup' } });
+    }
 
     // 10. Update delivery row
     await supabaseAdmin
@@ -331,7 +355,7 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
       .update({
         status: 'sent',
         delivered_at: new Date().toISOString(),
-        summary_text: result.text,
+        summary_text: messageText,
         signals_snapshot: result.signals_snapshot,
         location_geohash: result.location_geohash,
         composition_mode: result.mode,
@@ -346,7 +370,7 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
       signals: result.signals_snapshot?.length || 0,
     });
 
-    return res.json({ status: 'sent', text: result.text, mode: result.mode, briefing_kind: briefingKind });
+    return res.json({ status: 'sent', text: messageText, mode: result.mode, briefing_kind: briefingKind });
   } catch (err) {
     logger.error('Briefing send error', { userId, briefingKind, error: err.message });
 
