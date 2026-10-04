@@ -48,28 +48,26 @@ struct PlaceTodayDetailContent: View {
     /// is the reason the Today tab exists and sits above the fold.
     var body: some View {
         ScrollViewReader { proxy in
-            VStack(alignment: .leading, spacing: 0) {
-                firstUseCard(proxy: proxy)
-                weatherAndGoodDay
-
-                addressCalendar
-                homeRadon
-
-                airAlertsSun
-            }
-            .onChange(of: radonFocus) { _, _ in proxy.scrollTo("todayRadonCard", anchor: .top) }
-            .task(id: vm.calendarHomeId) {
-                guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
-                radonState?.suspend()
-                let current = RadonTodayState(homeId: homeId)
-                radonState = current
-                if radonAvailable { await current.load() }
-            }
-            .onDisappear { radonState?.suspend() }
-            .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
-            .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
-            .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
+            todayContent(proxy: proxy)
         }
+    }
+
+    private func todayContent(proxy: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            firstUseCard(proxy: proxy)
+            weatherAndGoodDay
+
+            addressCalendar
+            homeRadon
+
+            airAlertsSun
+        }
+        .onChange(of: radonFocus) { _, _ in proxy.scrollTo("todayRadonCard", anchor: .top) }
+        .task(id: vm.calendarHomeId) { await loadRadonState() }
+        .onDisappear { radonState?.suspend() }
+        .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
+        .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
+        .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
     }
 
     @ViewBuilder
@@ -184,6 +182,14 @@ struct PlaceTodayDetailContent: View {
                 vm.fallbackCard(sun)
             }
         }
+    }
+
+    private func loadRadonState() async {
+        guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
+        radonState?.suspend()
+        let current = RadonTodayState(homeId: homeId)
+        radonState = current
+        if radonAvailable { await current.load() }
     }
 
     private func resumeRadon(_ active: Bool) {
