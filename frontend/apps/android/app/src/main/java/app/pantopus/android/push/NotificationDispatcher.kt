@@ -18,9 +18,11 @@ import app.pantopus.android.MainActivity
 import app.pantopus.android.R
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.routing.HomeTaskNotificationRoute
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.runBlocking
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,6 +50,7 @@ class NotificationDispatcher
     constructor(
         @ApplicationContext private val appContext: Context,
         private val activeChatThread: ActiveChatThread,
+        private val tokens: TokenStorage,
     ) {
         /** Channels match the four top-level families the backend emits. */
         enum class Channel(
@@ -87,6 +90,12 @@ class NotificationDispatcher
             val title: String?,
             val body: String?,
             val deepLink: String?,
+            val category: String? = null,
+            val homeId: String? = null,
+            val taskId: String? = null,
+            val date: String? = null,
+            val recipientUserId: String? = null,
+            val pushType: String? = null,
         )
 
         /**
@@ -141,7 +150,13 @@ class NotificationDispatcher
             if (channel == Channel.CHAT && deepLink != null && !title.isNullOrBlank() && !deepLink.contains('?')) {
                 deepLink = "$deepLink?name=${java.net.URLEncoder.encode(title, "UTF-8")}"
             }
-            return Routing(channel = channel, title = title, body = body, deepLink = deepLink)
+            return Routing(
+                channel = channel, title = title, body = body, deepLink = deepLink,
+                category = data["category"],
+                homeId = HomeTaskNotificationRoute.canonicalId(data["homeId"] ?: data["home_id"]),
+                taskId = HomeTaskNotificationRoute.canonicalId(data["taskId"] ?: data["task_id"]),
+                date = data["pickupDate"] ?: data["date"], recipientUserId = data["recipient_user_id"], pushType = data["type"],
+            )
         }
 
         /**
@@ -208,7 +223,8 @@ class NotificationDispatcher
 
         private fun postNotification(routing: Routing) {
             ensureChannel(routing.channel)
-            val contentIntent = buildContentIntent(routing.deepLink)
+            val notificationId = Random.nextInt()
+            val contentIntent = buildContentIntent(routing)
             // Replace `ic_launcher` with a dedicated monochrome notification
             // icon (`ic_notification`) before public launch.
             // Status-bar icons must be white-on-transparent per Android
@@ -222,6 +238,7 @@ class NotificationDispatcher
                     .setAutoCancel(true)
                     .setContentIntent(contentIntent)
                     .setPriority(routing.channel.toCompatPriority())
+                    .apply { addReminderActions(this, routing, notificationId) }
                     .build()
 
             val nm = NotificationManagerCompat.from(appContext)
@@ -241,7 +258,7 @@ class NotificationDispatcher
                 return
             }
             runCatching {
-                nm.notify(Random.nextInt(), notification)
+                nm.notify(notificationId, notification)
             }.onFailure { Timber.w(it, "Failed to post FCM notification") }
         }
 
@@ -253,16 +270,83 @@ class NotificationDispatcher
             manager.createNotificationChannel(nc)
         }
 
-        private fun buildContentIntent(deepLink: String?): PendingIntent {
+        private fun addReminderActions(
+            builder: NotificationCompat.Builder,
+            routing: Routing,
+            notificationId: Int,
+        ) {
+            if (routing.category !in setOf("PICKUP_REMINDER", "TASK_REMINDER")) return
+            val identity = runCatching { runBlocking { tokens.sessionIdentity() } }.getOrNull() ?: return
+            if (identity.first != routing.recipientUserId) return
+            val session = ReminderActionReceiver.sessionFingerprint(identity) ?: return
+
+            fun background(action: String): PendingIntent {
+                val intent =
+                    Intent(appContext, ReminderActionReceiver::class.java).apply {
+                        this.action = action
+                        data = Uri.parse("pantopus-reminder-action://$notificationId/$action")
+                        putExtra(ReminderActionReceiver.RECIPIENT, routing.recipientUserId)
+                        putExtra(ReminderActionReceiver.SESSION, session)
+                        putExtra(ReminderActionReceiver.HOME, routing.homeId)
+                        putExtra(ReminderActionReceiver.TASK, routing.taskId)
+                        putExtra(ReminderActionReceiver.DATE, routing.date)
+                        putExtra(ReminderActionReceiver.NOTIFICATION_ID, notificationId)
+                    }
+                return PendingIntent.getBroadcast(
+                    appContext,
+                    notificationId,
+                    intent,
+                    PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            }
+            if (routing.category == "PICKUP_REMINDER") {
+                if (routing.date?.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$")) == true) {
+                    builder.addAction(NotificationCompat.Action.Builder(0, "Bins out", background(ReminderActionReceiver.BINS_OUT)).build())
+                }
+            } else {
+                addTaskReminderActions(builder, routing, session, ::background)
+            }
+        }
+
+        private fun addTaskReminderActions(
+            builder: NotificationCompat.Builder,
+            routing: Routing,
+            session: String,
+            background: (String) -> PendingIntent,
+        ) {
+            val home = routing.homeId ?: return
+            val task = routing.taskId ?: return
+            if (routing.pushType != "task_due") return
+            builder.addAction(
+                NotificationCompat.Action.Builder(0, "Done", background(ReminderActionReceiver.TASK_DONE))
+                    .setAuthenticationRequired(true).build(),
+            )
+            val editRouting = routing.copy(deepLink = "/app/homes/$home/tasks/$task?edit=due_date")
+            builder.addAction(NotificationCompat.Action.Builder(0, "Not now", buildContentIntent(editRouting, session)).build())
+        }
+
+        private fun buildContentIntent(
+            routing: Routing,
+            reminderSession: String? = null,
+        ): PendingIntent {
+            val deepLink = routing.deepLink
             val intent =
                 Intent(appContext, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra(ReminderActionReceiver.PUSH_OPEN, true)
+                    putExtra(ReminderActionReceiver.PUSH_TYPE, routing.pushType)
+                    if (reminderSession != null) {
+                        putExtra(ReminderActionReceiver.ACTION, ReminderActionReceiver.TASK_NOT_NOW)
+                        putExtra(ReminderActionReceiver.SESSION, reminderSession)
+                        putExtra(ReminderActionReceiver.RECIPIENT, routing.recipientUserId)
+                    }
                     if (!deepLink.isNullOrBlank()) {
                         action = Intent.ACTION_VIEW
                         data = normalizeForIntent(deepLink)
                     }
                 }
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            val update = if (reminderSession == null) PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_ONE_SHOT
+            val flags = update or PendingIntent.FLAG_IMMUTABLE
             return PendingIntent.getActivity(appContext, Random.nextInt(), intent, flags)
         }
 

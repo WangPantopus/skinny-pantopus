@@ -195,7 +195,7 @@ function buildTomorrowBillSignal(internal, timeZone, recentBriefings = [], now =
 function buildTomorrowTaskSignal(internal, timeZone, recentBriefings = [], now = new Date()) {
   const tomorrowKey = tomorrowDateKey(timeZone, now);
   const task = (internal.tasks_due || [])
-    .filter((item) => getLocalDateKey(item.due_at, timeZone) === tomorrowKey)
+    .filter((item) => !item.is_suggestion && getLocalDateKey(item.due_at, timeZone) === tomorrowKey)
     .sort((a, b) => {
       const aPriority = ['urgent', 'high', 'medium', 'low'].indexOf(String(a.priority || 'medium').toLowerCase());
       const bPriority = ['urgent', 'high', 'medium', 'low'].indexOf(String(b.priority || 'medium').toLowerCase());

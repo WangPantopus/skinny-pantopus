@@ -21,6 +21,7 @@ const placeIntelligenceService = require('../services/placeIntelligenceService')
 const { recordSystem, SYSTEM_KEYS } = require('../services/homeSystemsService');
 const { PLACE_SECTION_IDS } = require('../serializers/placeIntelligenceSerializer');
 const logger = require('../utils/logger');
+const homeListService = require('../services/homeListService');
 
 const VALID_SECTION_IDS = new Set(PLACE_SECTION_IDS);
 
@@ -53,16 +54,25 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
     }
 
     const access = await checkHomePermission(id, userId, 'home.view');
+    let privateSetup = null;
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      privateSetup = await homeListService.readAccessState(id, userId);
+      if (privateSetup.mode !== 'private_setup') {
+        return res.status(403).json({ error: 'You do not have access to this place.' });
+      }
     }
 
+    // Preserve the denied general access object: a private creator receives
+    // T1 public readings, never shared household/verification authority.
     const intelligence = await placeIntelligenceService.composeHomeIntelligence({
       homeId: id,
       userId,
       access,
       sectionIds,
     });
+    if (privateSetup && JSON.stringify(await homeListService.readAccessState(id, userId)) !== JSON.stringify(privateSetup)) {
+      throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
+    }
     if (!intelligence) {
       return res.status(404).json({ error: 'Home not found' });
     }
@@ -71,6 +81,7 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
     return res.json(intelligence);
   } catch (err) {
     logger.error('Place intelligence error', { error: err.message, homeId: id });
+    if (['HOME_LIST_UNAVAILABLE', 'HOME_LIST_ACCESS_CHANGED'].includes(err.code)) return homeListService.sendError(res, err);
     return res.status(500).json({ error: 'Failed to load place intelligence' });
   }
 });

@@ -57,6 +57,7 @@ class DeepLinkRouterTest {
                 "https://pantopus.app/app/feed?surface=personas" to DeepLinkRouter.Destination.Beacons,
                 "https://pantopus.app/app/feed?post=p1&surface=place" to DeepLinkRouter.Destination.Post("p1"),
                 "https://pantopus.app/persona/maria" to DeepLinkRouter.Destination.BeaconProfile("maria"),
+                "https://pantopus.app/app/today" to DeepLinkRouter.Destination.TodayTab,
             )
         cases.forEach { (url, expected) ->
             signedIn = false
@@ -85,6 +86,10 @@ class DeepLinkRouterTest {
         assertEquals(
             DeepLinkRouter.Destination.HomeTask(home, task),
             DeepLinkRouter.resolveString("/app/homes/${home.uppercase()}/tasks/${task.uppercase()}"),
+        )
+        assertEquals(
+            DeepLinkRouter.Destination.HomeTask(home, task, openDueDateEdit = true),
+            DeepLinkRouter.resolveString("/app/homes/$home/tasks/$task?edit=due_date"),
         )
     }
 
@@ -143,11 +148,34 @@ class DeepLinkRouterTest {
         assertTrue(PendingDeepLinkStore.peek() != null)
         assertNull(PendingDeepLinkStore.take("replacement-account"))
         assertNull(PendingDeepLinkStore.peek())
+        DeepLinkRouter.clearPending()
+        val edit = "/app/homes/$home/tasks/$task?edit=due_date"
+        userId = "replacement-account"
+        DeepLinkRouter.handle(edit, expectedUserId = "original-account")
+        assertNull(DeepLinkRouter.pending.value)
+        signedIn = false
+        DeepLinkRouter.handle(edit, expectedUserId = "original-account")
+        assertNull(PendingDeepLinkStore.take("replacement-account"))
+        DeepLinkRouter.handle(edit, expectedUserId = "original-account")
+        val replay = requireNotNull(PendingDeepLinkStore.take("original-account"))
+        userId = "original-account"
+        signedIn = true
+        DeepLinkRouter.handle(replay)
+        assertEquals(DeepLinkRouter.Destination.HomeTask(home, task, openDueDateEdit = true), DeepLinkRouter.consume())
     }
 
     @Test
     fun home_https_host() {
         assertEquals(DeepLinkRouter.Destination.Home, DeepLinkRouter.resolveString("https://pantopus.app/home"))
+        for (path in listOf("pantopus://today", "https://pantopus.app/app/today", "/app/today")) {
+            assertEquals(DeepLinkRouter.Destination.TodayTab, DeepLinkRouter.resolveString(path))
+        }
+        for (alias in listOf("hub-today", "hub_today")) {
+            assertEquals(
+                DeepLinkRouter.Destination.HubToday("delivery", "evening"),
+                DeepLinkRouter.resolveString("/app/$alias?deliveryId=delivery&kind=evening"),
+            )
+        }
     }
 
     @Test

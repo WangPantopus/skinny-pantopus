@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.saved_places
 
+import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDeleteResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceResponse
@@ -23,6 +24,8 @@ class SavedPlacesRepository
         private val api: SavedPlacesApi,
     ) {
         suspend fun list(): NetworkResult<SavedPlacesListResponse> = safeApiCall { api.list() }
+
+        suspend fun today(id: String): NetworkResult<PlaceIntelligence> = safeApiCall { api.today(id) }
 
         suspend fun save(body: SavePlaceBody): NetworkResult<SavedPlaceResponse> = safeApiCall { api.save(body) }
 

@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.NotificationPreferencesApi
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,6 +25,9 @@ class NotificationPreferencesRepository
             safeApiCall { NotificationPreferences.from(api.preferences().preferences) }
 
         /** `PUT /api/hub/preferences` — partial patch, echoes the saved row back. */
-        suspend fun updatePreferences(patch: NotificationPreferencesPatch): NetworkResult<NotificationPreferences> =
-            safeApiCall { NotificationPreferences.from(api.updatePreferences(patch).preferences) }
+        suspend fun updatePreferences(
+            patch: NotificationPreferencesPatch,
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<NotificationPreferences> =
+            safeApiCall { NotificationPreferences.from(api.updatePreferences(patch, dispatchGuard).preferences) }
     }

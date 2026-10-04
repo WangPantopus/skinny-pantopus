@@ -49,6 +49,33 @@ final class APIClientTests: XCTestCase {
         )
         XCTAssertEqual(user.id, "u_123")
         XCTAssertEqual(user.displayName, "Alice")
+        URLProtocolStub.stub(path: "/api/users/login", response: .json(Fixtures.loginJSON(sessionId: "pilot-session")))
+        URLProtocolStub.stub(
+            path: "/api/auth/devices/register",
+            response: .json("{\"device\":{\"id\":\"row\",\"deviceId\":\"x\",\"trustLevel\":\"trusted\"}}")
+        )
+        URLProtocolStub.stub(path: "/api/hub/funnel-events", response: .empty)
+        try await auth.signIn(email: "pilot@example.com", password: "test-only")
+        await auth.awaitBackgroundWork()
+        let pilot = PilotEvents(api: client)
+        pilot.notificationOpened(type: "task_due")
+        pilot.enterForeground(now: 0)
+        pilot.enterBackground(now: 0.1)
+        pilot.enterBackground(now: 0.2)
+        pilot.enterForeground(now: 0.3)
+        pilot.enterBackground(now: 0.4)
+        for _ in 0..<100 {
+            if URLProtocolStub.capturedRequests.contains(where: { $0.url?.path == "/api/hub/funnel-events" }) { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(URLProtocolStub.capturedRequests.filter { $0.url?.path == "/api/hub/funnel-events" }.count, 1)
+        XCTAssertNil(PilotEvents.openMeta(pendingActor: "actor-a", currentActor: "actor-b", pushType: nil))
+        XCTAssertNil(PilotEvents.openMeta(pendingActor: "actor-a", currentActor: nil, pushType: nil))
+        XCTAssertNil(PilotEvents.openMeta(pendingActor: nil, currentActor: nil, pushType: nil))
+        XCTAssertEqual(
+            PilotEvents.openMeta(pendingActor: "actor-a", currentActor: "actor-a", pushType: "task_due"),
+            ["trigger": "push", "push_type": "task_due"]
+        )
     }
 
     func testDoesNotAttachAuthHeaderWhenUnauthenticated() async throws {
@@ -60,6 +87,47 @@ final class APIClientTests: XCTestCase {
         XCTAssertNil(headers["Authorization"], "Unauthenticated requests must not carry a Bearer token")
         XCTAssertEqual(headers["X-Client-Platform"]?.hasPrefix("ios-"), true)
         XCTAssertEqual(headers["Content-Type"], "application/json")
+        let body = PilotEvents.payload(.reminderAction, meta: [
+            "kind": "pickup", "action": "bins_out", "date": "2026-10-06",
+            "home_id": "private-id", "name": "private-name", "push_type": String(repeating: "a", count: 41),
+            "suggestion": "free text", "decision": "not_now"
+        ])
+        XCTAssertEqual(body.meta, ["platform": "ios", "kind": "pickup", "action": "bins_out", "date": "2026-10-06", "decision": "not_now"])
+        let data = try JSONEncoder().encode(body)
+        let wire = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(wire["event_type"] as? String, "reminder_action")
+        XCTAssertNil(wire["userId"])
+        var window = PilotSessionWindow()
+        XCTAssertTrue(window.enterForeground(now: 0))
+        XCTAssertFalse(window.enterForeground(now: 1))
+        window.enterBackground(now: 10)
+        XCTAssertFalse(window.enterForeground(now: 1809))
+        window.enterBackground(now: 1810)
+        window.enterBackground(now: 1811)
+        XCTAssertTrue(window.enterForeground(now: 3610))
+        XCTAssertFalse(window.enterForeground(now: 3611))
+        let patch: [String: JSONValue] = ["evening_briefing_enabled": .bool(true)]
+        let pickup = SetPickupDayRequest(weekday: "TH")
+        XCTAssertNil(NotificationPreferencesEndpoints.update(patch).dispatchGuard)
+        XCTAssertNil(AddressCalendarEndpoints.setPickupDay(homeId: "home", request: pickup).dispatchGuard)
+        XCTAssertNil(AddressCalendarEndpoints.clearPickupDay(homeId: "home").dispatchGuard)
+        let refuseDispatch: @MainActor @Sendable () throws -> Void = { throw CancellationError() }
+        let endpoints = [
+            Endpoint(method: .post, path: "/api/hub/funnel-events", dispatchGuard: refuseDispatch),
+            NotificationPreferencesEndpoints.update(patch, dispatchGuard: refuseDispatch),
+            AddressCalendarEndpoints.setPickupDay(homeId: "home", request: pickup, dispatchGuard: refuseDispatch),
+            AddressCalendarEndpoints.clearPickupDay(homeId: "home", expectedVersion: "version", dispatchGuard: refuseDispatch)
+        ]
+        let previousRequests = URLProtocolStub.capturedRequests.count
+        for endpoint in endpoints {
+            do {
+                _ = try await client.request(endpoint)
+                XCTFail("Obsolete scope dispatched \(endpoint.path)")
+            } catch is CancellationError {} catch {
+                XCTFail("Expected scoped dispatch refusal: \(error)")
+            }
+            XCTAssertEqual(URLProtocolStub.capturedRequests.count, previousRequests)
+        }
     }
 
     func testNotFoundReceiptRequiresExplicitOptIn() async throws {

@@ -31,11 +31,15 @@ public enum NotificationPreferencesEndpoints {
     /// `hub.js:697-714` with `.min(1)` — so send only the keys that
     /// changed, using the backend's snake_case names. `quiet_hours_*`
     /// accept explicit `null` to clear.
-    public static func update(_ patch: [String: JSONValue]) -> Endpoint {
+    public static func update(
+        _ patch: [String: JSONValue],
+        dispatchGuard: (@MainActor @Sendable () throws -> Void)? = nil
+    ) -> Endpoint {
         Endpoint(
             method: .put,
             path: "/api/hub/preferences",
-            body: patch
+            body: patch,
+            dispatchGuard: dispatchGuard
         )
     }
 }

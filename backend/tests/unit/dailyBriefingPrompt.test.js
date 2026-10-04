@@ -23,7 +23,7 @@ jest.mock('../../services/context/providerOrchestrator', () => ({
 
 const express = require('express');
 const request = require('supertest');
-const { resetTables, getTable } = require('../__mocks__/supabaseAdmin');
+const { resetTables, getTable, seedTable } = require('../__mocks__/supabaseAdmin');
 
 const USER = '33333333-3333-3333-3333-333333333333';
 
@@ -79,6 +79,7 @@ describe('daily briefing prompt', () => {
   });
 
   test('the timestamp is the server clock, not something the caller chose', async () => {
+    seedTable('SavedPlace', [{id:'saved-place',user_id:USER}]);
     await request(app())
       .put('/api/hub/preferences')
       .set('x-test-user-id', USER)
@@ -87,6 +88,19 @@ describe('daily briefing prompt', () => {
     const stamped = Date.parse(prefsRow().daily_briefing_prompted_at);
     expect(Number.isFinite(stamped)).toBe(true);
     expect(Math.abs(Date.now() - stamped)).toBeLessThan(60_000);
+    expect(prefsRow().daily_briefing_enabled).toBe(false);
+    expect(prefsRow().evening_briefing_enabled).toBe(false);
+    await request(app()).put('/api/hub/preferences').set('x-test-user-id',USER)
+      .send({daily_briefing_enabled:true,daily_briefing_timezone:'Asia/Tokyo'});
+    expect(prefsRow().daily_briefing_enabled).toBe(true);
+    expect(prefsRow().daily_briefing_timezone).toBe('Asia/Tokyo');
+    expect(prefsRow().evening_briefing_enabled).toBe(false);
+    seedTable('UserNotificationPreferences', [{user_id:USER,evening_briefing_enabled:true}]);
+    await request(app()).put('/api/hub/preferences').set('x-test-user-id',USER).send({daily_briefing_prompted:true});
+    expect(prefsRow().evening_briefing_enabled).toBe(true);
+    seedTable('UserNotificationPreferences', []);
+    await request(app()).put('/api/hub/preferences').set('x-test-user-id',USER).send({evening_briefing_enabled:true,daily_briefing_prompted:true});
+    expect(prefsRow().evening_briefing_enabled).toBe(true);
   });
 
   test('rejects a raw timestamp — the field is not client-writable', async () => {

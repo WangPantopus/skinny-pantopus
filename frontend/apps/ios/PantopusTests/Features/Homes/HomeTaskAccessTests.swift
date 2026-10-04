@@ -63,6 +63,14 @@ final class HomeTaskAccessTests: XCTestCase {
         XCTAssertEqual(current.capabilities?.canComplete, false)
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.last?.url?.path, "/api/homes/\(home)/tasks/\(task)")
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.last?.value(forHTTPHeaderField: "X-Pantopus-Session-Scope"), scope)
+        for legacyDetails in [NSNull(), "legacy", ["legacy"], 42] as [Any] {
+            let decoded = try JSONDecoder().decode(
+                HomeTaskDTO.self,
+                from: Data(json(record().merging(["details": legacyDetails]) { _, value in value }).utf8)
+            )
+            XCTAssertEqual(decoded.id, task)
+            XCTAssertNil(decoded.details)
+        }
     }
 
     func testWrongActorHomeOrScopeCannotBindARead() async {
@@ -137,6 +145,19 @@ final class HomeTaskAccessTests: XCTestCase {
             XCTFail("Suspended action continued")
         } catch {}
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET"])
+        SequencedURLProtocol.reset()
+        SequencedURLProtocol.sequence = [.status(200, body: detail(record(complete: true)))]
+        let guarded = access()
+        var gateRan = false
+        do {
+            _ = try await guarded.complete(taskId: task, status: "done") {
+                gateRan = true
+                throw CancellationError()
+            }
+            XCTFail("Locked background action continued")
+        } catch {}
+        XCTAssertTrue(gateRan)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET"])
     }
 
     func testRevokedCompletionCapabilityPreventsPut() async {
@@ -170,6 +191,26 @@ final class HomeTaskAccessTests: XCTestCase {
             XCTFail("Wrong task accepted")
         } catch {}
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "PUT"])
+        for status in ["done", "open"] {
+            let wrongStatus = status == "done" ? "open" : "done"
+            for wrongReadback in [false, true] {
+                SequencedURLProtocol.reset()
+                SequencedURLProtocol.sequence = [
+                    .status(200, body: detail(record(complete: true))),
+                    .status(200, body: json(["task": record(status: wrongReadback ? status : wrongStatus)]))
+                ]
+                if wrongReadback {
+                    SequencedURLProtocol.sequence.append(.status(200, body: detail(record(status: wrongStatus))))
+                }
+                do { _ = try await access().complete(taskId: task, status: status)
+                    XCTFail("Same-ID incorrect status accepted")
+                } catch {}
+                XCTAssertEqual(
+                    SequencedURLProtocol.capturedRequests.map(\.httpMethod),
+                    wrongReadback ? ["GET", "PUT", "GET"] : ["GET", "PUT"]
+                )
+            }
+        }
     }
 
     func testMalformedSuccessfulDeleteDoesNotReportDeletion() async {

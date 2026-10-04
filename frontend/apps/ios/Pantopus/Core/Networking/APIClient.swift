@@ -301,6 +301,15 @@ final class APIClient: @unchecked Sendable {
                 for: endpoint,
                 extraHeaders: stepUpToken.map { [Self.stepUpHeader: $0] } ?? [:]
             )
+            if let dispatchGuard = endpoint.dispatchGuard {
+                try await MainActor.run {
+                    try dispatchGuard()
+                    if endpoint.authenticated {
+                        let currentAuthorization = auth.accessToken.map { "Bearer \($0)" }
+                        guard request.value(forHTTPHeaderField: "Authorization") == currentAuthorization else { throw CancellationError() }
+                    }
+                }
+            }
             do {
                 return try await executeOnce(
                     request, endpoint: endpoint, includingForbidden: includingForbidden, includingNotFound: includingNotFound
@@ -549,6 +558,7 @@ public struct Endpoint: Sendable {
         }
     }
 
+    public let dispatchGuard: (@MainActor @Sendable () throws -> Void)?
     public let method: Method
     public let path: String
     public let query: [String: String]
@@ -587,8 +597,10 @@ public struct Endpoint: Sendable {
         cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy,
         timeout: TimeInterval? = nil,
         requiresDPoP: Bool = false,
-        verifiesCredential: Bool = false
+        verifiesCredential: Bool = false,
+        dispatchGuard: (@MainActor @Sendable () throws -> Void)? = nil
     ) {
+        self.dispatchGuard = dispatchGuard
         self.method = method
         self.path = path
         self.query = query

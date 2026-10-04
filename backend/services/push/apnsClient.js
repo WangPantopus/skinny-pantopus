@@ -88,6 +88,10 @@ function buildPayload({ title, body, data } = {}) {
       sound: 'default',
     },
   };
+  // Only native pilot reminder categories may opt into OS action buttons.
+  if (['PICKUP_REMINDER', 'TASK_REMINDER'].includes(data?.category)) {
+    payload.aps.category = data.category;
+  }
   for (const [key, value] of Object.entries(data || {})) {
     if (value !== null && value !== undefined && key !== 'aps') {
       payload[key] = value;

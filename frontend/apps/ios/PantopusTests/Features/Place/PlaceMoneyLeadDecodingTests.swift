@@ -104,6 +104,20 @@ final class PlaceMoneyLeadDecodingTests: XCTestCase {
         XCTAssertEqual(preview.sections?.count, 1)
         XCTAssertEqual(preview.sections?.first?.group, .riskReadiness)
         XCTAssertEqual(preview.sections?.first?.status, .ready)
+        let radon = """
+        {"id":"lead_radon","group":"risk_readiness","band":"A","access":"available","status":"ready",
+         "as_of":null,"source":"EPA radon zones","coverage":"full","unavailable_reason":null,
+         "data":{"year_built":1979,"lead_paint_risk":"moderate","radon_zone":2,"county_name":"Clark County",
+                 "summary":"Screening only","disclaimer":"Test this home."}}
+        """
+        let named = try decoder.decode(PlaceSectionEnvelope.self, from: Data(radon.utf8))
+        XCTAssertEqual(named.leadRadon?.countyName, "Clark County")
+        XCTAssertEqual(named.leadRadon?.radonZone, 2)
+        let legacy = try decoder.decode(
+            PlaceSectionEnvelope.self, from: Data(radon.replacingOccurrences(of: ",\"county_name\":\"Clark County\"", with: "").utf8)
+        )
+        XCTAssertNil(legacy.leadRadon?.countyName)
+        XCTAssertEqual(legacy.leadRadon?.radonZone, 2)
     }
 
     func testUnknownAhaToneRendersAsInfoAndOlderBackendsCarryNoAha() throws {
@@ -117,5 +131,58 @@ final class PlaceMoneyLeadDecodingTests: XCTestCase {
         let older = try decoder.decode(PlacePreview.self, from: Data(#"{"status":"ready","tier":"preview"}"#.utf8))
         XCTAssertNil(older.aha)
         XCTAssertNil(older.sections)
+        // The Today caller preserves canonical task selection, members visibility and local-day dates.
+        let date = try XCTUnwrap(RadonToday.date("2026-11-12"))
+        let tested = try RadonToday.payload(tested: true, date: date, hasDate: true, result: "2.5")
+        XCTAssertEqual(tested.status, "done")
+        XCTAssertEqual(tested.visibility, "members")
+        XCTAssertEqual(tested.details?["tested_on"]?.stringValue, "2026-11-12")
+        XCTAssertEqual(tested.details?["result_pci"]?.numberValue, 2.5)
+        XCTAssertThrowsError(try RadonToday.payload(tested: true, date: date, hasDate: false, result: "NaN"))
+        XCTAssertThrowsError(try RadonToday.payload(tested: true, date: date, hasDate: false, result: "-1"))
+        let reminder = try RadonToday.payload(tested: false, date: date, hasDate: false, result: "")
+        XCTAssertEqual(reminder.title, "Test for radon")
+        XCTAssertNil(reminder.status)
+        XCTAssertEqual(reminder.visibility, "members")
+        XCTAssertTrue(reminder.dueAt?.contains("T09:00:00") == true)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+        let fall = try XCTUnwrap(RadonToday.date("2026-11-01T20:00:00Z"))
+        XCTAssertEqual(RadonToday.dueAt(fall, calendar: calendar), "2026-11-01T09:00:00-08:00")
+        let rows = [
+            HomeTaskDTO(
+                id: "open",
+                homeId: "home",
+                taskType: "reminder",
+                title: "Test for radon",
+                dueAt: "2026-11-12T17:00:00Z",
+                status: "in_progress",
+                createdAt: "2026-10-02T12:00:00Z",
+                details: ["suggestion": .string("radon_test")]
+            ),
+            HomeTaskDTO(
+                id: "done",
+                homeId: "home",
+                taskType: "reminder",
+                title: "Radon test",
+                status: "done",
+                createdAt: "2026-10-03T12:00:00Z",
+                details: tested.details
+            ),
+            HomeTaskDTO(
+                id: "canceled",
+                homeId: "home",
+                taskType: "reminder",
+                title: "Test for radon",
+                status: "canceled",
+                createdAt: "2026-10-04T12:00:00Z",
+                details: reminder.details
+            )
+        ]
+        XCTAssertEqual(RadonToday.selected(rows)?.id, "open")
+        XCTAssertEqual(RadonToday.selected(Array(rows.dropFirst()))?.id, "done")
+        XCTAssertNil(RadonToday.selected([rows[2]]))
+        XCTAssertTrue(RadonToday.message(rows[1]).hasPrefix("Radon tested"))
+        XCTAssertTrue(RadonToday.message(rows[1]).hasSuffix("2.5 pCi/L"))
     }
 }

@@ -799,13 +799,14 @@ private object ChildRoutes {
     /** P2.4 — Edit an existing household task. Reached from the
      *  "Edit recurring" overflow action on a Recurring row. */
     const val EDIT_HOUSEHOLD_TASK =
-        "homes/{$ADD_HOUSEHOLD_TASK_HOME_ID_KEY}/tasks/{$ADD_HOUSEHOLD_TASK_TASK_ID_KEY}/edit"
+        "homes/{$ADD_HOUSEHOLD_TASK_HOME_ID_KEY}/tasks/{$ADD_HOUSEHOLD_TASK_TASK_ID_KEY}/edit?focusDueDate={focusDueDate}"
 
     /** Build the concrete path for the Edit Household Task form. */
     fun editHouseholdTask(
         homeId: String,
         taskId: String,
-    ): String = "homes/$homeId/tasks/$taskId/edit"
+        focusDueDate: Boolean = false,
+    ): String = "homes/$homeId/tasks/$taskId/edit?focusDueDate=$focusDueDate"
 
     /** Maintenance list per home (T6.3b / P10). */
     const val HOME_MAINTENANCE = "homes/{$MAINTENANCE_HOME_ID_KEY}/maintenance"
@@ -2256,6 +2257,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             }
             is DeepLinkRouter.Destination.HomeTask -> {
                 navController.navigate(ChildRoutes.householdTaskDetail(pending.homeId, pending.taskId))
+                if (pending.openDueDateEdit) {
+                    navController.navigate(ChildRoutes.editHouseholdTask(pending.homeId, pending.taskId, focusDueDate = true))
+                }
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.HomeMemberRequests -> {
@@ -2431,6 +2435,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // waiting room lands on the home, mirroring HomeOwnersTransfer.
                 navController.navigate(ChildRoutes.homeDashboard(pending.homeId))
                 navController.navigate(ChildRoutes.waitingRoom(pending.homeId))
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.TodayTab -> {
+                navController.navigateToRootTab(PantopusRoute.Today)
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.HubToday -> {
@@ -4220,10 +4228,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         listOf(
                             navArgument(ADD_HOUSEHOLD_TASK_HOME_ID_KEY) { type = NavType.StringType },
                             navArgument(ADD_HOUSEHOLD_TASK_TASK_ID_KEY) { type = NavType.StringType },
+                            navArgument("focusDueDate") {
+                                type = NavType.BoolType
+                                defaultValue = false
+                            },
                         ),
-                ) {
+                ) { entry ->
                     AddHouseholdTaskFormScreen(
                         onClose = { navController.popBackStack() },
+                        focusDueDate = entry.arguments?.getBoolean("focusDueDate") == true,
                     )
                 }
                 composable(

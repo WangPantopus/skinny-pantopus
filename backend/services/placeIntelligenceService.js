@@ -43,6 +43,7 @@ const { getSystemsLedger } = require('./homeSystemsService');
 const nfipPremiumService = require('./nfipPremiumService');
 const exemptionCheckService = require('./exemptionCheckService');
 const realRentService = require('./realRentService');
+const { locationFromCoordinates } = require('./context/locationResolver');
 
 const HOME_SELECT =
   'id, owner_id, address, address2, city, state, zipcode, map_center_lat, map_center_lng, year_built, sq_ft, bedrooms, bathrooms, lot_sq_ft, home_type';
@@ -484,7 +485,9 @@ async function composeAddressCalendar(home) {
     if (!data.rule_count) {
       return [serializePlaceSection('address_calendar', {
         status: 'unavailable',
-        unavailableReason: `No calendar for ${home.city} yet. Set your pickup day and it starts here.`,
+        unavailableReason: home.id
+          ? `No calendar for ${home.city} yet. Set your pickup day and it starts here.`
+          : `No public calendar for ${home.city} yet.`,
       })];
     }
     return [serializePlaceSection('address_calendar', { asOf: new Date().toISOString(), data })];
@@ -1050,7 +1053,32 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
   });
 }
 
+// SavedPlace Today reuses only the public point composers. In particular its
+// calendar has no Home id, so it cannot load household pickup overrides.
+async function composeSavedPlaceToday(place) {
+  const anchor = locationFromCoordinates({ latitude: place.latitude, longitude: place.longitude, label: place.label });
+  if (!anchor) throw new Error('Saved place coordinates are unavailable');
+  const address = {
+    map_center_lat: anchor.latitude,
+    map_center_lng: anchor.longitude,
+    city: place.city,
+    state: place.state,
+    timezone: anchor.timezone,
+  };
+  const sections = await Promise.all([
+    composeTodayForPoint(anchor.latitude, anchor.longitude),
+    placeSectionAdapters.composeSunriseSunset(address),
+    composeAddressCalendar(address),
+  ]);
+  return serializePlaceIntelligence({
+    place: { label: place.label, line1: place.label, city: place.city, state: place.state },
+    tier: 'T1',
+    sections: sections.flat(),
+  });
+}
+
 module.exports = {
+  composeSavedPlaceToday,
   composeHomeIntelligence,
   composeTodayForPoint,
   // Exported for unit testing.

@@ -31,9 +31,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -77,6 +80,7 @@ import kotlinx.coroutines.delay
 fun AddHouseholdTaskFormScreen(
     onClose: () -> Unit,
     onCreated: ((String) -> Unit)? = null,
+    focusDueDate: Boolean = false,
     viewModel: AddHouseholdTaskFormViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -124,6 +128,7 @@ fun AddHouseholdTaskFormScreen(
                 AddHouseholdTaskSkeleton()
             AddHouseholdTaskFormUiState.Editing ->
                 AddHouseholdTaskLoaded(
+                    focusDueDate = focusDueDate,
                     state =
                         AddHouseholdTaskLoadedState(
                             fields = fields,
@@ -222,6 +227,7 @@ internal fun AddHouseholdTaskLoaded(
     onSelectCustomUnit: (AddHouseholdTaskCustomUnit) -> Unit,
     onSelectAssignee: (String?) -> Unit,
     onSetDueDate: (String?) -> Unit,
+    focusDueDate: Boolean = false,
 ) {
     FormShell(
         title = if (state.isEditing) "Edit task" else "Add task",
@@ -258,6 +264,7 @@ internal fun AddHouseholdTaskLoaded(
                 fields = state.fields,
                 isRecurring = state.selectedRecurrence.isRecurring,
                 onSetDueDate = onSetDueDate,
+                focusDueDate = focusDueDate,
             )
         }
         FormFieldGroup("Notes") {
@@ -641,9 +648,12 @@ private fun DueDateField(
     fields: Map<AddHouseholdTaskField, FormFieldState>,
     isRecurring: Boolean,
     onSetDueDate: (String?) -> Unit,
+    focusDueDate: Boolean,
 ) {
     val snapshot = fields[AddHouseholdTaskField.DueAt]
     val value = snapshot?.value.orEmpty()
+    val dueFocus = remember { FocusRequester() }
+    LaunchedEffect(focusDueDate) { if (focusDueDate) dueFocus.requestFocus() }
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -681,6 +691,7 @@ private fun DueDateField(
             state = fieldStateFor(snapshot),
             keyboardType = KeyboardType.Number,
             fieldTestTag = "field_dueAt",
+            modifier = Modifier.focusRequester(dueFocus),
         )
     }
 }

@@ -279,13 +279,15 @@ async function composeLeadRadon(home) {
   try {
     const countyFips = await homeCountyFips(home);
     let zone = null;
+    let countyName = null;
     if (countyFips) {
       const { data } = await supabaseAdmin
         .from('CountyRadonZone')
-        .select('zone')
+        .select('zone, county_label')
         .eq('county_fips', countyFips)
         .maybeSingle();
       zone = (data && data.zone) || null;
+      countyName = typeof data?.county_label === 'string' ? data.county_label.trim() || null : null;
     }
 
     const yearBuilt = Number.isFinite(Number(home.year_built)) && Number(home.year_built) > 0
@@ -307,6 +309,7 @@ async function composeLeadRadon(home) {
         year_built: yearBuilt,
         lead_paint_risk: risk,
         radon_zone: zone,
+        county_name: countyName,
         summary: leadRadonSummary(yearBuilt, risk, zone),
         disclaimer: 'Screening based on build year and county radon zone — not a test of this home. Test kits settle both.',
       },

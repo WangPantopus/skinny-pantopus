@@ -11,86 +11,193 @@
 //  populated now; adding those strips is outstanding parity work.
 //
 
+import Observation
 import SwiftUI
+import UserNotifications
 
 // swiftlint:disable multiline_arguments file_length
 
 struct PlaceTodayDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    var showHomeRadon = false
+    @Environment(RootTabModel.self) private var rootTabs
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var radonState: RadonTodayState?
+    @State private var pickupOpenTrigger = 0
+    @State private var radonFocus = 0
+
+    private var radonAvailable: Bool {
+        vm.section(.leadRadon, in: intel)?.leadRadon?.radonZone.map { (1...3).contains($0) } ?? false
+    }
+
+    private var needsPickup: Bool {
+        guard let section = vm.section(.addressCalendar, in: intel) else { return false }
+        if [.ready, .stale, .partial].contains(section.status) { return section.addressCalendar?.needsPickupDay ?? false }
+        return section.status == .unavailable && vm.fallbackCalendar?.needsPickupDay == true
+    }
+
+    init(intel: PlaceIntelligence, vm: PlaceDetailViewModel, showHomeRadon: Bool = false) {
+        self.intel = intel
+        self.vm = vm
+        self.showHomeRadon = showHomeRadon
+    }
 
     /// Order (matches Android): what it is like now, what to do with it,
     /// what recurs at this address, then air, alerts and sun. The calendar
     /// is the reason the Today tab exists and sits above the fold.
     var body: some View {
+        ScrollViewReader { proxy in
+            todayContent(proxy: proxy)
+        }
+    }
+
+    private func todayContent(proxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let weather = vm.section(.weather, in: intel) {
-                PlaceDetailSectionLabel(text: "Weather")
-                if let data = weather.weather, weather.status == .ready || weather.status == .stale {
-                    NowCard(data: data)
-                    PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
-                } else {
-                    vm.fallbackCard(weather)
-                }
-            }
+            firstUseCard(proxy: proxy)
+            weatherAndGoodDay
 
-            // Verdicts, not readings. Silent when there is nothing to
-            // answer — an empty verdict row is worse than no row.
-            if let goodDay = vm.section(.goodDayTo, in: intel),
-               let data = goodDay.goodDayTo,
-               !data.tiles.isEmpty,
-               goodDay.status == .ready || goodDay.status == .stale {
-                PlaceDetailSectionLabel(text: "Good day to…")
-                GoodDayRow(tiles: data.tiles)
-                PlaceSourceNote(
-                    name: "Derived from today's conditions",
-                    asOf: PlacePresentation.fmtTime(goodDay.asOf)
-                )
-            }
+            addressCalendar
+            homeRadon
 
-            // The address calendar (Wedge Phase 2, D6): what recurs at THIS address.
-            if let calendar = vm.section(.addressCalendar, in: intel) {
-                PlaceDetailSectionLabel(text: "At this address")
-                if let data = calendar.addressCalendar,
-                   calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
-                    AddressCalendarCard(homeId: vm.homeId, data: data) { await vm.load() }
-                    PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
-                } else {
-                    vm.fallbackCard(calendar)
-                }
-            }
+            airAlertsSun
+        }
+        .onChange(of: radonFocus) { _, _ in proxy.scrollTo("todayRadonCard", anchor: .top) }
+        .task(id: vm.calendarHomeId) { await loadRadonState() }
+        .onDisappear { radonState?.suspend() }
+        .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
+        .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
+        .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
+    }
 
-            if let aqi = vm.section(.airQuality, in: intel) {
-                PlaceDetailSectionLabel(text: "Air quality")
-                if let data = aqi.airQuality, aqi.status == .ready || aqi.status == .stale {
-                    AqiCard(data: data)
-                    PlaceSourceNote(name: "AirNow · EPA", asOf: PlacePresentation.fmtTime(aqi.asOf))
-                } else {
-                    vm.fallbackCard(aqi)
+    @ViewBuilder
+    private func firstUseCard(proxy: ScrollViewProxy) -> some View {
+        if showHomeRadon, let state = radonState, state.homeId == vm.calendarHomeId {
+            HomeFirstUseCard(
+                state: state,
+                needsPickup: needsPickup,
+                radonAvailable: radonAvailable,
+                onPickup: {
+                    guard (try? state.context.requireCurrent()) != nil else { return }
+                    pickupOpenTrigger += 1
+                    proxy.scrollTo("todayAddressCalendar", anchor: .top)
+                },
+                onRadon: {
+                    guard (try? state.context.requireCurrent()) != nil else { return }
+                    state.dismissedUntil = nil
+                    UserDefaults.standard.removeObject(forKey: "radonCard.dismissedUntil.\(state.homeId)")
+                    radonFocus += 1
                 }
-            }
+            )
+        }
+    }
 
-            if let alerts = vm.section(.alerts, in: intel) {
-                PlaceDetailSectionLabel(text: "Alerts")
-                // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
-                if let data = alerts.alerts, alerts.status == .ready || alerts.status == .stale {
-                    AlertsCard(active: data.active)
-                    PlaceSourceNote(name: alerts.source ?? "Source unavailable", asOf: "live")
-                } else {
-                    vm.fallbackCard(alerts)
-                }
-            }
-
-            if let sun = vm.section(.sunriseSunset, in: intel) {
-                PlaceDetailSectionLabel(text: "Sun")
-                if let data = sun.sunriseSunset {
-                    SunCard(data: data)
-                    PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data.sunrise))
-                } else {
-                    vm.fallbackCard(sun)
-                }
+    @ViewBuilder
+    private var addressCalendar: some View {
+        // The address calendar (Wedge Phase 2, D6): what recurs at THIS address.
+        if let calendar = vm.section(.addressCalendar, in: intel) {
+            PlaceDetailSectionLabel(text: "At this address")
+            if let data = calendar.addressCalendar,
+               calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
+                AddressCalendarCard(homeId: vm.calendarHomeId, data: data, openTrigger: pickupOpenTrigger) { await vm.refresh() }
+                    .id("todayAddressCalendar")
+                PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
+            } else if calendar.status == .unavailable, let data = vm.fallbackCalendar {
+                AddressCalendarCard(homeId: vm.calendarHomeId, data: data, openTrigger: pickupOpenTrigger) { await vm.refresh() }
+                    .id("todayAddressCalendar")
+                PlaceSourceNote(name: "Pantopus registry", asOf: "next two weeks")
+            } else {
+                vm.fallbackCard(calendar)
+                    .task(id: calendar.status) {
+                        if calendar.status == .unavailable { await vm.loadFallbackCalendar() }
+                    }
             }
         }
+    }
+
+    @ViewBuilder
+    private var homeRadon: some View {
+        if showHomeRadon, let homeId = vm.calendarHomeId, let state = radonState, state.homeId == homeId,
+           let data = vm.section(.leadRadon, in: intel)?.leadRadon, let zone = data.radonZone, (1...3).contains(zone) {
+            RadonTodayCard(state: state, data: data).id("todayRadonCard")
+        }
+    }
+
+    @ViewBuilder
+    private var weatherAndGoodDay: some View {
+        if let weather = vm.section(.weather, in: intel) {
+            PlaceDetailSectionLabel(text: "Weather")
+            if let data = weather.weather, weather.status == .ready || weather.status == .stale {
+                NowCard(data: data)
+                PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
+            } else {
+                vm.fallbackCard(weather)
+            }
+        }
+
+        // Verdicts, not readings. Silent when there is nothing to
+        // answer — an empty verdict row is worse than no row.
+        if let goodDay = vm.section(.goodDayTo, in: intel),
+           let data = goodDay.goodDayTo,
+           !data.tiles.isEmpty,
+           goodDay.status == .ready || goodDay.status == .stale {
+            PlaceDetailSectionLabel(text: "Good day to…")
+            GoodDayRow(tiles: data.tiles)
+            PlaceSourceNote(
+                name: "Derived from today's conditions",
+                asOf: PlacePresentation.fmtTime(goodDay.asOf)
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var airAlertsSun: some View {
+        if let aqi = vm.section(.airQuality, in: intel) {
+            PlaceDetailSectionLabel(text: "Air quality")
+            if let data = aqi.airQuality, aqi.status == .ready || aqi.status == .stale {
+                AqiCard(data: data)
+                PlaceSourceNote(name: "AirNow · EPA", asOf: PlacePresentation.fmtTime(aqi.asOf))
+            } else {
+                vm.fallbackCard(aqi)
+            }
+        }
+
+        if let alerts = vm.section(.alerts, in: intel) {
+            PlaceDetailSectionLabel(text: "Alerts")
+            // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
+            if let data = alerts.alerts, alerts.status == .ready || alerts.status == .stale {
+                AlertsCard(active: data.active)
+                PlaceSourceNote(name: alerts.source ?? "Source unavailable", asOf: "live")
+            } else {
+                vm.fallbackCard(alerts)
+            }
+        }
+
+        if let sun = vm.section(.sunriseSunset, in: intel) {
+            PlaceDetailSectionLabel(text: "Sun")
+            if let data = sun.sunriseSunset {
+                SunCard(data: data)
+                PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data.sunrise))
+            } else {
+                vm.fallbackCard(sun)
+            }
+        }
+    }
+
+    private func loadRadonState() async {
+        guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
+        radonState?.suspend()
+        let current = RadonTodayState(homeId: homeId)
+        radonState = current
+        if radonAvailable { await current.load() }
+    }
+
+    private func resumeRadon(_ active: Bool) {
+        radonState?.suspend()
+        guard active, showHomeRadon, let homeId = vm.calendarHomeId else { return }
+        let current = RadonTodayState(homeId: homeId)
+        radonState = current
+        if radonAvailable { Task { await current.load() } }
     }
 }
 
@@ -421,8 +528,9 @@ private func weatherTint(_ code: WeatherConditionCode) -> Color {
 /// the household's own: the pickup-day picker. Hand-seeded city defaults
 /// say "unconfirmed" until the household sets its day.
 struct AddressCalendarCard: View {
-    let homeId: String
+    let homeId: String?
     let data: PlaceAddressCalendarData
+    var openTrigger = 0
     let onChanged: () async -> Void
 
     @State private var picking = false
@@ -432,6 +540,9 @@ struct AddressCalendarCard: View {
     @State private var frequency = "not_set"
     @State private var nextDate = ""
     @State private var confirmed: PlaceAddressCalendarData?
+    @State private var showPickupPrimer = false
+    @State private var sessionScope = HomeClaimSessionScope(api: .shared)
+    @State private var lifecycleVersion = 0
     /// The schedule this editor started from. A save sends it back, so a
     /// change saved meanwhile on another device is not silently undone.
     @State private var openedVersion: String?
@@ -456,11 +567,12 @@ struct AddressCalendarCard: View {
         ("FR", "Friday"), ("SA", "Saturday"), ("SU", "Sunday")
     ]
 
-    init(homeId: String, data: PlaceAddressCalendarData, onChanged: @escaping () async -> Void) {
+    init(homeId: String?, data: PlaceAddressCalendarData, openTrigger: Int = 0, onChanged: @escaping () async -> Void) {
+        self.openTrigger = openTrigger
         self.homeId = homeId
         self.data = data
         self.onChanged = onChanged
-        _picking = State(initialValue: data.needsPickupDay)
+        _picking = State(initialValue: homeId != nil && data.needsPickupDay)
         _weekday = State(initialValue: data.pickupSchedule?.weekday ?? "")
         _frequency = State(initialValue: data.pickupSchedule?.recyclingFrequency ?? "not_set")
         _nextDate = State(initialValue: data.pickupSchedule?.recyclingNextDate ?? "")
@@ -475,29 +587,36 @@ struct AddressCalendarCard: View {
                     .kerning(0.7)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer(minLength: 0)
-                Button(picking ? "Cancel" : "Pickup schedule") {
-                    weekday = calendar.pickupSchedule?.weekday ?? ""
-                    frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
-                    nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
-                    openedVersion = calendar.pickupVersion
-                    errorText = nil
-                    picking.toggle()
+                if homeId != nil {
+                    Button(picking ? "Cancel" : "Pickup schedule") {
+                        weekday = calendar.pickupSchedule?.weekday ?? ""
+                        frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
+                        nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
+                        openedVersion = calendar.pickupVersion
+                        errorText = nil
+                        picking.toggle()
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.primaryInk)
+                    .accessibilityIdentifier("addressCalendarPickupToggle")
+                    .disabled(saving != nil)
                 }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.Color.primaryInk)
-                .accessibilityIdentifier("addressCalendarPickupToggle")
-                .disabled(saving != nil)
             }
 
-            if picking {
+            if picking, homeId != nil {
                 picker
             }
 
             if calendar.upcoming.isEmpty {
-                Text("Nothing on the calendar for the next two weeks.")
+                Text((homeId != nil ? calendar.pickupSetupMessage : nil) ?? "Nothing on the calendar for the next two weeks.")
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             } else {
+                if homeId != nil, let message = calendar.pickupSetupMessage {
+                    Text(message)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
                 VStack(spacing: 0) {
                     ForEach(calendar.upcoming) { event in
                         eventRow(event)
@@ -520,6 +639,34 @@ struct AddressCalendarCard: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
         .accessibilityIdentifier("addressCalendarCard")
         .onChange(of: data) { _, _ in confirmed = nil }
+        .sheet(isPresented: $showPickupPrimer) {
+            if let homeId {
+                PickupReminderPrimer(
+                    homeId: homeId,
+                    api: api,
+                    sessionScope: sessionScope,
+                    onClose: { showPickupPrimer = false },
+                    onSessionChanged: {
+                        showPickupPrimer = false
+                        errorText = "Your session changed. Reopen Today to continue."
+                    }
+                )
+            }
+        }
+        .onChange(of: openTrigger) { _, trigger in if trigger > 0 { picking = true } }
+        .onAppear { lifecycleVersion += 1
+            saving = nil
+        }
+        .onDisappear { lifecycleVersion += 1
+            saving = nil
+        }
+        .onChange(of: AppLockManager.shared.isLocked) { _, _ in lifecycleVersion += 1
+            saving = nil
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+            lifecycleVersion += 1
+            saving = nil
+        }
     }
 
     private var picker: some View {
@@ -580,17 +727,6 @@ struct AddressCalendarCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func pickupDateLabel(_ day: String) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let date = formatter.date(from: day) else { return day }
-        formatter.locale = .current
-        formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
-        return formatter.string(from: date)
-    }
-
     private func eventRow(_ event: PlaceCalendarEvent) -> some View {
         let soon = event.daysUntil <= event.leadDays
         return HStack(alignment: .top, spacing: 12) {
@@ -614,6 +750,11 @@ struct AddressCalendarCard: View {
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
+                if let moved = event.holidayMoveLine {
+                    Text(moved)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
                 Text(
                     (event.source ?? "Pantopus registry")
                         + (event.confidence == "unverified" ? " · unconfirmed, please double-check" : "")
@@ -623,16 +764,6 @@ struct AddressCalendarCard: View {
             }
         }
         .padding(.vertical, 10)
-    }
-
-    private func iconFor(_ kind: String) -> PantopusIcon {
-        switch kind {
-        case "garbage", "recycling", "yard_waste", "bulk_pickup", "street_sweeping": .trash
-        case "property_tax", "utility_bill": .receipt
-        case "council", "school": .landmark
-        case "permit_hearing", "election_deadline": .gavel
-        default: .calendarDays
-        }
     }
 
     private func whenLabel(_ event: PlaceCalendarEvent) -> String {
@@ -651,22 +782,39 @@ struct AddressCalendarCard: View {
 
     @MainActor
     private func choose(reset: Bool = false) async {
-        guard saving == nil else { return }
+        guard let homeId, saving == nil else { return }
+        let version = lifecycleVersion
         saving = "saving"
+        defer {
+            if lifecycleVersion == version, !AppLockManager.shared.isLocked,
+               UIApplication.shared.isProtectedDataAvailable { saving = nil }
+        }
         errorText = nil
+        let offerPrimer = !reset && (calendar.needsPickupDay || calendar.pickupSchedule == nil)
         do {
-            let endpoint = reset ? AddressCalendarEndpoints.clearPickupDay(homeId: homeId, expectedVersion: openedVersion)
+            try requirePickupCurrent(version)
+            let guardCurrent: @MainActor @Sendable () throws -> Void = { try requirePickupCurrent(version) }
+            let endpoint = reset ? AddressCalendarEndpoints.clearPickupDay(
+                homeId: homeId, expectedVersion: openedVersion, dispatchGuard: guardCurrent
+            )
                 : AddressCalendarEndpoints.setPickupDay(homeId: homeId, request: SetPickupDayRequest(
                     weekday: weekday, recyclingFrequency: frequency,
                     recyclingNextDate: frequency == "not_set" ? nil : nextDate,
                     expectedVersion: openedVersion
-                ))
+                ), dispatchGuard: guardCurrent)
             let response: AddressCalendarResponse = try await api.request(endpoint)
+            try requirePickupCurrent(version)
             confirmed = response.calendar
             openedVersion = response.calendar.pickupVersion
             picking = false
+            let key = "pickupPrimer.shown.\(homeId)"
+            if offerPrimer, !response.calendar.needsPickupDay, !UserDefaults.standard.bool(forKey: key) {
+                UserDefaults.standard.set(true, forKey: key)
+                showPickupPrimer = true
+            }
             await onChanged()
         } catch let APIError.clientError(status: 409, message: body) {
+            guard (try? requirePickupCurrent(version)) != nil else { return }
             // Changed meanwhile: nothing was saved. Show the current schedule
             // in the editor so the person can review it and try again.
             if let current = Self.currentCalendar(inConflict: body) {
@@ -678,11 +826,43 @@ struct AddressCalendarCard: View {
             }
             errorText = "The pickup schedule changed since you opened it. Review the current schedule and try again."
         } catch let APIError.forbidden(message) {
+            guard (try? requirePickupCurrent(version)) != nil else { return }
             errorText = message ?? "You don't have permission to change this household's pickup schedule."
         } catch {
+            guard (try? requirePickupCurrent(version)) != nil else { return }
             errorText = "Could not save your pickup schedule. Check the next collection date and try again."
         }
-        saving = nil
+    }
+
+    @MainActor
+    private func requirePickupCurrent(_ version: Int) throws {
+        try sessionScope.requireCurrent()
+        try Task.checkCancellation()
+        guard lifecycleVersion == version, !AppLockManager.shared.isLocked,
+              UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
+    }
+}
+
+extension AddressCalendarCard {
+    private func pickupDateLabel(_ day: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: day) else { return day }
+        formatter.locale = .current
+        formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
+        return formatter.string(from: date)
+    }
+
+    private func iconFor(_ kind: String) -> PantopusIcon {
+        switch kind {
+        case "garbage", "recycling", "yard_waste", "bulk_pickup", "street_sweeping": .trash
+        case "property_tax", "utility_bill": .receipt
+        case "council", "school": .landmark
+        case "permit_hearing", "election_deadline": .gavel
+        default: .calendarDays
+        }
     }
 
     /// The current calendar a 409 PICKUP_SCHEDULE_CHANGED reply carries
@@ -691,5 +871,505 @@ struct AddressCalendarCard: View {
         struct Conflict: Decodable { let calendar: PlaceAddressCalendarData? }
         guard let data = body?.data(using: .utf8) else { return nil }
         return (try? JSONDecoder().decode(Conflict.self, from: data))?.calendar
+    }
+}
+
+/// Screen-local primer; the save's account scope also fences preference and permission replies.
+private struct PickupReminderPrimer: View {
+    let homeId: String
+    let api: APIClient
+    let sessionScope: HomeClaimSessionScope
+    let onClose: () -> Void
+    let onSessionChanged: () -> Void
+    @State private var primerBusy = false
+    @State private var primerError: String?
+    @State private var notificationsOff = false
+    @State private var primerHeight: CGFloat = 280
+    @State private var lifecycleVersion = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Spacer()
+                Button("Close") { onClose() }
+                    .disabled(primerBusy)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.Color.primaryInk)
+            }
+            Text("Get a reminder the night before?")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Theme.Color.appText)
+            Text("One notification the evening before each pickup. Nothing on other days.")
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            if let primerError {
+                Text(primerError).font(.system(size: 13)).foregroundStyle(Theme.Color.error)
+            }
+            if notificationsOff {
+                Text("Notifications are off for Pantopus. Turn them on in Settings.")
+                    .font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary)
+                GhostButton(title: "Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { await UIApplication.shared.open(url) }
+                }
+            } else {
+                GhostButton(title: "Remind me", isLoading: primerBusy, isEnabled: !primerBusy) { await enablePickupReminders() }
+            }
+            GhostButton(title: "Not now", isEnabled: !primerBusy) { onClose() }
+        }
+        .padding(20)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Theme.Color.appSurface)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { primerHeight = $0 }
+        .accessibilityIdentifier("pickupReminderPrimer")
+        .presentationDetents([.height(primerHeight)])
+        .presentationDragIndicator(.hidden)
+        .interactiveDismissDisabled(primerBusy)
+        .onAppear { lifecycleVersion += 1
+            primerBusy = false
+        }
+        .onDisappear { lifecycleVersion += 1
+            primerBusy = false
+        }
+        .onChange(of: AppLockManager.shared.isLocked) { _, _ in lifecycleVersion += 1
+            primerBusy = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+            lifecycleVersion += 1
+            primerBusy = false
+        }
+    }
+
+    @MainActor
+    private func enablePickupReminders() async {
+        guard !primerBusy else { return }
+        let version = lifecycleVersion
+        primerBusy = true
+        primerError = nil
+        defer {
+            if lifecycleVersion == version, !AppLockManager.shared.isLocked,
+               UIApplication.shared.isProtectedDataAvailable { primerBusy = false }
+        }
+        do {
+            try requirePrimerCurrent(version)
+            let calendarResponse: AddressCalendarResponse = try await api.request(AddressCalendarEndpoints.calendar(homeId: homeId))
+            try requirePrimerCurrent(version)
+            guard !calendarResponse.calendar.needsPickupDay else {
+                primerError = "Confirm your pickup schedule before turning on reminders."
+                return
+            }
+            let timezone = TimeZone.autoupdatingCurrent.identifier
+            guard TimeZone.knownTimeZoneIdentifiers.contains(timezone) else {
+                primerError = "Couldn't read your time zone. Try again."
+                return
+            }
+            let response: NotificationPreferencesResponseDTO = try await api.request(
+                NotificationPreferencesEndpoints.update([
+                    "evening_briefing_enabled": .bool(true), "daily_briefing_timezone": .string(timezone)
+                ]) { try requirePrimerCurrent(version) }
+            )
+            try requirePrimerCurrent(version)
+            guard response.preferences.eveningBriefingEnabled else {
+                primerError = "Couldn't enable pickup reminders. Try again."
+                return
+            }
+            let center = UNUserNotificationCenter.current()
+            let settings = await center.notificationSettings()
+            try requirePrimerCurrent(version)
+            let granted: Bool = if settings.authorizationStatus == .notDetermined {
+                try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            } else {
+                [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
+            }
+            try requirePrimerCurrent(version)
+            if granted {
+                UIApplication.shared.registerForRemoteNotifications()
+                onClose()
+            } else {
+                notificationsOff = true
+            }
+        } catch {
+            guard lifecycleVersion == version, !AppLockManager.shared.isLocked,
+                  UIApplication.shared.isProtectedDataAvailable else { return }
+            if sessionScope.isCurrent {
+                primerError = "Couldn't enable pickup reminders. Try again."
+            } else {
+                onSessionChanged()
+            }
+        }
+    }
+
+    @MainActor
+    private func requirePrimerCurrent(_ version: Int) throws {
+        try sessionScope.requireCurrent()
+        try Task.checkCancellation()
+        guard lifecycleVersion == version, !AppLockManager.shared.isLocked,
+              UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
+    }
+}
+
+/// The pilot's single suggestion uses existing Home task authority and receipts.
+enum RadonToday {
+    static func selected(_ tasks: [HomeTaskDTO]) -> HomeTaskDTO? {
+        let sorted = tasks.filter { $0.details?["suggestion"]?.stringValue == "radon_test" }
+            .sorted { (date($0.createdAt) ?? .distantPast) > (date($1.createdAt) ?? .distantPast) }
+        return sorted.first { ["open", "in_progress"].contains($0.status) } ?? sorted.first { $0.status == "done" }
+    }
+
+    static func date(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: value) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: value) { return date }
+        let day = DateFormatter()
+        day.locale = Locale(identifier: "en_US_POSIX")
+        day.calendar = Calendar(identifier: .gregorian)
+        day.timeZone = .autoupdatingCurrent
+        day.dateFormat = "yyyy-MM-dd"
+        day.isLenient = false
+        guard let date = day.date(from: value), day.string(from: date) == value else { return nil }
+        return date
+    }
+
+    static func day(_ date: Date) -> String {
+        let format = DateFormatter()
+        format.locale = Locale(identifier: "en_US_POSIX")
+        format.dateFormat = "yyyy-MM-dd"
+        return format.string(from: date)
+    }
+
+    static func dueAt(_ date: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
+        let morning = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        let format = ISO8601DateFormatter()
+        format.timeZone = calendar.timeZone
+        return format.string(from: morning)
+    }
+
+    static func label(_ value: String?) -> String? {
+        guard let date = date(value) else { return nil }
+        let format = DateFormatter()
+        format.setLocalizedDateFormatFromTemplate("MMM d")
+        return format.string(from: date)
+    }
+
+    static func payload(tested: Bool, date: Date, hasDate: Bool, result: String) throws -> CreateHomeTaskRequest {
+        var details: [String: JSONValue] = ["suggestion": .string("radon_test")]
+        if tested, hasDate { details["tested_on"] = .string(day(date)) }
+        if tested, !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard let value = Double(result), value.isFinite, value >= 0 else { throw APIError.invalidResponse }
+            details["result_pci"] = .number(value)
+        }
+        return CreateHomeTaskRequest(
+            taskType: "reminder", title: tested ? "Radon test" : "Test for radon",
+            description: tested ? nil :
+                "The EPA recommends testing every home. Short-term test kits are sold at hardware stores and online. https://www.epa.gov/radon",
+            dueAt: dueAt(tested && !hasDate ? Date() : date), status: tested ? "done" : nil,
+            details: details, visibility: "members"
+        )
+    }
+
+    static func message(_ task: HomeTaskDTO) -> String {
+        if task.status != "done" {
+            let prefix = (date(task.dueAt).map { $0 < Date() } ?? false) ? "Radon test was due" : "Radon test on your list for"
+            return label(task.dueAt).map { "\(prefix) \($0)" } ?? "Radon test on your list"
+        }
+        let tested = task.details?["tested_on"]?.stringValue
+        let prefix = tested != nil || task.title == "Radon test" ? "Radon tested" : "Radon test done"
+        let value = prefix == "Radon tested" ? (tested ?? task.dueAt) : task.completedAt
+        var text = label(value).map { "\(prefix) \($0)" } ?? prefix
+        if prefix == "Radon tested", let result = task.details?["result_pci"]?.numberValue, result.isFinite, result >= 0 {
+            text += " · \(result.formatted()) pCi/L"
+        }
+        return text
+    }
+}
+
+@Observable
+@MainActor
+private final class RadonTodayContext {
+    var active = true
+    let scope = HomeClaimSessionScope(api: .shared)
+
+    func requireCurrent() throws {
+        try scope.requireCurrent()
+        try Task.checkCancellation()
+        guard active, !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
+    }
+}
+
+@Observable
+@MainActor
+private final class RadonTodayState {
+    let homeId: String
+    let context: RadonTodayContext
+    let access: HomeTaskAccess
+    var task: HomeTaskDTO?
+    var canCreate = false
+    var loaded = false
+    var busy = false
+    var error: String?
+    var dismissedUntil: Date?
+    var firstUseDismissed = false
+    var coordinator: HomeTaskCreationCoordinator?
+    var sheet: String?
+    var selectedDate = Date()
+    var hasDate = false
+    var result = ""
+    var retained: CreateHomeTaskRequest?
+
+    init(homeId: String) {
+        self.homeId = homeId
+        let context = RadonTodayContext()
+        self.context = context
+        access = HomeTaskAccess(homeId: homeId) { try context.requireCurrent() }
+        dismissedUntil = UserDefaults.standard.object(forKey: "radonCard.dismissedUntil.\(homeId)") as? Date
+        firstUseDismissed = UserDefaults.standard.bool(forKey: "firstUse.dismissed.\(homeId)")
+    }
+
+    var hidden: Bool {
+        task == nil && (dismissedUntil.map { $0 > Date() } ?? false)
+    }
+
+    func suspend() {
+        context.active = false
+        access.invalidatePending()
+        coordinator?.hide()
+        busy = false
+        sheet = nil
+    }
+
+    func load() async {
+        let revision = access.lifecycleRevision
+        do {
+            try context.requireCurrent()
+            let response = try await access.list()
+            try context.requireCurrent()
+            try access.requireCurrent(revision)
+            task = RadonToday.selected(response.tasks)
+            canCreate = response.collectionCapabilities?.canCreate == true
+            loaded = true
+            error = nil
+        } catch {
+            guard (try? context.requireCurrent()) != nil, access.lifecycleRevision == revision, access.isCurrent else { return }
+            loaded = false
+            canCreate = false
+            self.error = "Couldn't check your home's radon tasks. Try again."
+        }
+    }
+
+    func open(_ kind: String) throws {
+        try context.requireCurrent()
+        guard loaded, kind == "change" ? task?.capabilities?.canEdit == true : canCreate else { throw HomeTaskAccess.AccessError.denied }
+        error = nil
+        hasDate = false
+        result = ""
+        selectedDate = kind == "yes" ? Date() : (Calendar.autoupdatingCurrent.date(byAdding: .day, value: 14, to: Date()) ?? Date())
+        retained = nil
+        if kind != "change" {
+            let creation = HomeTaskCreationCoordinator(
+                home: homeId,
+                origin: APIClient.shared.apiBaseURL,
+                access: access,
+                store: PendingHomeTaskCreateStore()
+            )
+            try creation.restore()
+            if let pending = creation.pending {
+                guard pending.payload.details?["suggestion"]?.stringValue == "radon_test", pending.payload.visibility == "members" else {
+                    throw HomeTaskCreationCoordinator.RecoveryError.changedRequest
+                }
+                retained = pending.payload
+                selectedDate = RadonToday.date(pending.payload.dueAt) ?? Date()
+                hasDate = pending.payload.details?["tested_on"]?.stringValue != nil
+                result = pending.payload.details?["result_pci"]?.numberValue.map { String($0) } ?? ""
+            }
+            coordinator = creation
+        } else {
+            selectedDate = RadonToday.date(task?.dueAt) ?? selectedDate
+        }
+        sheet = retained.map { $0.status == "done" ? "yes" : "no" } ?? kind
+    }
+
+    func save() async {
+        guard let sheet, !busy else { return }
+        let revision = access.lifecycleRevision
+        busy = true
+        defer { if access.lifecycleRevision == revision, context.active { busy = false } }
+        do {
+            try context.requireCurrent()
+            if sheet != "yes",
+               Calendar.autoupdatingCurrent.startOfDay(for: selectedDate) < Calendar.autoupdatingCurrent.startOfDay(for: Date()),
+               retained == nil {
+                throw APIError.invalidResponse
+            }
+            if sheet == "change", let task {
+                _ = try await access.edit(taskId: task.id, patch: HomeTaskEditPatch(values: ["due_at": RadonToday.dueAt(selectedDate)]))
+            } else {
+                guard let coordinator else { throw APIError.invalidResponse }
+                _ = try await coordinator.save(retained ?? RadonToday.payload(
+                    tested: sheet == "yes",
+                    date: selectedDate,
+                    hasDate: hasDate,
+                    result: result
+                ))
+            }
+            try context.requireCurrent()
+            try access.requireCurrent(revision)
+            self.sheet = nil
+            retained = nil
+            await load()
+            try context.requireCurrent()
+            if sheet != "change" {
+                await PilotEvents.shared.send(
+                    .suggestionDecision,
+                    meta: ["suggestion": "radon_test", "decision": sheet == "yes" ? "already_tested" : "reminder_added"],
+                    scope: context.scope
+                )
+            }
+        } catch {
+            guard (try? context.requireCurrent()) != nil, access.isCurrent, access.lifecycleRevision == revision else { return }
+            retained = coordinator?.pending?.payload
+            self.error = retained == nil ? "Couldn't save this task. Check the date and result, then try again."
+                : "Couldn't confirm your task. Your saved request is retained; try again."
+        }
+    }
+
+    func dismiss() async {
+        guard (try? context.requireCurrent()) != nil else { return }
+        dismissedUntil = Calendar.autoupdatingCurrent.date(byAdding: .day, value: 30, to: Date())
+        UserDefaults.standard.set(dismissedUntil, forKey: "radonCard.dismissedUntil.\(homeId)")
+        await PilotEvents.shared.send(.suggestionDecision, meta: ["suggestion": "radon_test", "decision": "not_now"], scope: context.scope)
+    }
+}
+
+private struct RadonTodayCard: View {
+    @Bindable var state: RadonTodayState
+    let data: PlaceLeadRadonData
+
+    var body: some View {
+        if !state.hidden {
+            PlaceDetailSectionLabel(text: "Radon")
+            PlaceDetailCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    if !state.loaded {
+                        Text("Checking your home's radon tasks…").font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary)
+                    } else if let task = state.task {
+                        Text(RadonToday.message(task)).font(.system(size: 16, weight: .semibold))
+                        if task.status != "done", task.capabilities?.canEdit == true {
+                            GhostButton(title: "Change date") { open("change") }
+                        }
+                    } else {
+                        Text("Was radon tested during your inspection or since you moved in?")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text(
+                            "\(data.countyName ?? "Your county") is in the EPA's \(zone) radon zone. "
+                                + "The EPA recommends testing every home, whatever the zone."
+                        )
+                        .font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary)
+                        if state.loaded {
+                            HStack {
+                                GhostButton(title: "Yes", isEnabled: state.canCreate) { open("yes") }
+                                GhostButton(title: "No or not sure", isEnabled: state.canCreate) { open("no") }
+                            }
+                            GhostButton(title: "Not now") { await state.dismiss() }
+                        }
+                    }
+                    if let error = state.error {
+                        Text(error).font(.system(size: 13)).foregroundStyle(Theme.Color.error)
+                        if !state.loaded { GhostButton(title: "Try again") { await state.load() } }
+                    }
+                    Link("EPA radon zones", destination: URL(string: "https://www.epa.gov/radon/epa-map-radon-zones-0")!)
+                        .font(.system(size: 12)).foregroundStyle(Theme.Color.primaryInk)
+                }
+            }
+            .accessibilityIdentifier("todayRadonCard")
+            .sheet(isPresented: Binding(get: { state.sheet != nil }, set: { if !$0 { state.sheet = nil } })) {
+                RadonTodaySheet(state: state)
+            }
+        }
+    }
+
+    private var zone: String {
+        data.radonZone == 1 ? "highest" : (data.radonZone == 2 ? "moderate" : "lowest")
+    }
+
+    private func open(_ kind: String) {
+        do { try state.open(kind) } catch {
+            guard (try? state.context.requireCurrent()) != nil else { return }
+            state.error = "Couldn't open this task action. Reopen Tasks to recover any saved request."
+        }
+    }
+}
+
+private struct RadonTodaySheet: View {
+    @Bindable var state: RadonTodayState
+
+    var body: some View {
+        FormShell(
+            title: state.sheet == "yes" ? "When was it tested?" : "Add a radon test to your list",
+            rightActionLabel: state.sheet == "yes" ? "Save" : "Add reminder",
+            isValid: state.retained != nil || valid, isDirty: true, isSaving: state.busy,
+            onClose: { state.sheet = nil }, onCommit: { Task { await state.save() } },
+            content: {
+                VStack(alignment: .leading, spacing: 16) {
+                    if state.retained != nil {
+                        Text("An earlier task request is saved. Save retries that exact request.")
+                            .font(.callout)
+                    }
+                    if state.sheet == "yes" {
+                        Toggle("Test date (optional)", isOn: $state.hasDate)
+                        if state.hasDate { DatePicker("Test date", selection: $state.selectedDate, displayedComponents: .date) }
+                        TextField("Result (pCi/L)", text: $state.result).keyboardType(.decimalPad)
+                    } else {
+                        DatePicker(
+                            "Reminder date",
+                            selection: $state.selectedDate,
+                            in: Calendar.autoupdatingCurrent.startOfDay(for: Date())...,
+                            displayedComponents: .date
+                        )
+                    }
+                    if let error = state.error { Text(error).foregroundStyle(Theme.Color.error) }
+                }
+                .disabled(state.busy || state.retained != nil)
+            }
+        )
+        .interactiveDismissDisabled(state.busy)
+        .presentationDetents([.medium, .large])
+    }
+
+    private var valid: Bool {
+        if state.sheet == "yes" {
+            return state.result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || Double(state.result)
+                .map { $0.isFinite && $0 >= 0 } == true
+        }
+        return Calendar.autoupdatingCurrent.startOfDay(for: state.selectedDate) >= Calendar.autoupdatingCurrent.startOfDay(for: Date())
+    }
+}
+
+private struct HomeFirstUseCard: View {
+    @Bindable var state: RadonTodayState
+    let needsPickup: Bool
+    let radonAvailable: Bool
+    let onPickup: () -> Void
+    let onRadon: () -> Void
+
+    var body: some View {
+        let needsRadon = radonAvailable && state.loaded && state.task == nil
+        if !state.firstUseDismissed, needsPickup || needsRadon {
+            PlaceDetailCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Two things for your home").font(.system(size: 16, weight: .semibold))
+                    if needsPickup { GhostButton(title: "Set your pickup day") { onPickup() } }
+                    if needsRadon { GhostButton(title: "Was radon tested?") { onRadon() } }
+                    GhostButton(title: "Later") {
+                        guard (try? state.context.requireCurrent()) != nil else { return }
+                        UserDefaults.standard.set(true, forKey: "firstUse.dismissed.\(state.homeId)")
+                        state.firstUseDismissed = true
+                    }
+                }
+            }
+            .padding(.bottom, 12)
+            .accessibilityIdentifier("todayHomeFirstUse")
+        }
     }
 }

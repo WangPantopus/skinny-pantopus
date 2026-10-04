@@ -131,6 +131,7 @@ describe('Location Resolver', () => {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       order: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
       single: jest.fn().mockResolvedValue(returnValue),
       maybeSingle: jest.fn().mockResolvedValue(returnValue),
     };
@@ -144,6 +145,24 @@ describe('Location Resolver', () => {
     expect(result.source).toBe('none');
     expect(result.confidence).toBe(0);
     expect(result.latitude).toBeNull();
+
+    const supabase = require('../config/supabaseAdmin');
+    const saved = { id: 'saved-1', label: 'Saved address', latitude: 45.5, longitude: -122.6 };
+    const savedChain = { ...chain, maybeSingle: jest.fn().mockResolvedValue({ data: saved, error: null }) };
+    supabase.from.mockImplementation((table) => table === 'SavedPlace' ? savedChain : chain);
+    const anchored = await resolveLocation(MOCK_USER_ID);
+    expect(anchored).toMatchObject({ source: 'saved_place', label: saved.label, latitude: 45.5,
+      longitude: -122.6, homeId: null, savedPlaceId: saved.id, timezone: 'America/Los_Angeles' });
+    expect(anchored.geohash).toBeTruthy();
+    expect(savedChain.eq).toHaveBeenCalledWith('user_id', MOCK_USER_ID);
+    expect(savedChain.order).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(savedChain.limit).toHaveBeenCalledWith(1);
+    for (const invalid of [{ latitude: 91 }, { longitude: -181 }, { latitude: null }, { latitude: 0, longitude: 0 }]) {
+      savedChain.maybeSingle.mockResolvedValue({ data: { ...saved, ...invalid }, error: null });
+      expect((await resolveLocation(MOCK_USER_ID)).source).toBe('none');
+    }
+    savedChain.maybeSingle.mockResolvedValue({ data: null, error: { message: 'unavailable' } });
+    expect((await resolveLocation(MOCK_USER_ID)).source).toBe('none');
   });
 
   test('returns custom when prefs have custom location_mode', async () => {
@@ -846,6 +865,13 @@ describe('Evening Briefing Service', () => {
 
     expect(signal?.kind).toBe('local_update');
     expect(signal?.detail).toContain('bridge closure');
+    const suggestion = selectEveningSignal({
+      alerts: null,
+      internal: { ...MOCK_INTERNAL_EMPTY, tasks_due: [{ id: 'radon', title: 'Test for radon', priority: 'urgent', due_at: '2026-04-08T16:00:00Z', is_suggestion: true }] },
+      timeZone: 'America/Los_Angeles', recentBriefings: [], includeEveningTip: false,
+      now: new Date('2026-04-08T03:00:00Z'),
+    });
+    expect(suggestion).toBeNull();
   });
 
   test('selectEveningSignal prefers tomorrow morning events over local updates', () => {
@@ -953,6 +979,78 @@ describe('Provider Orchestrator', () => {
     expect(result.meta.providers_used.length).toBeGreaterThan(0);
     expect(typeof result.meta.total_latency_ms).toBe('number');
     expect(result.meta.section_providers).toEqual({ weather: 'OPEN_METEO', alerts: 'NOAA' });
+    const { collectInternalContext } = require('../services/context/internalContextCollector');
+    const launch = process.env.LAUNCH_FEATURES;
+    process.env.LAUNCH_FEATURES = '';
+    require('../services/context/providerOrchestrator').clearHubTodayCache();
+    collectInternalContext.mockClear();
+    await getHubToday(MOCK_USER_ID);
+    await getHubToday(MOCK_USER_ID);
+    expect(collectInternalContext).toHaveBeenCalledTimes(1);
+    process.env.LAUNCH_FEATURES = 'household_extras';
+    collectInternalContext.mockResolvedValue({ ...MOCK_INTERNAL_EMPTY, bills_due: [{
+      id: 'bill', provider_name: 'Private bill provider', amount: 144.72, currency: 'USD', due_date: new Date(Date.now() + 3600000).toISOString(), status: 'due',
+    }] });
+    const allowed = await getHubToday(MOCK_USER_ID);
+    expect(allowed.signals.some(signal => signal.kind === 'bill_due')).toBe(true);
+    collectInternalContext.mockResolvedValue(MOCK_INTERNAL_EMPTY);
+    const revoked = await getHubToday(MOCK_USER_ID);
+    expect(revoked.signals.some(signal => signal.kind === 'bill_due')).toBe(false);
+    expect(JSON.stringify(revoked)).not.toContain('Private bill provider');
+    expect(collectInternalContext).toHaveBeenCalledTimes(4);
+    // Household task projections are permission-sensitive with extras OFF too.
+    process.env.LAUNCH_FEATURES = '';
+    require('../services/context/providerOrchestrator').clearHubTodayCache();
+    collectInternalContext.mockResolvedValue({ ...MOCK_INTERNAL_EMPTY, tasks_due: [{ id: 'task', title: 'Private task', due_at: new Date(Date.now() + 3600000).toISOString(), priority: 'high', status: 'open' }] });
+    const withTask = await getHubToday(MOCK_USER_ID);
+    expect(withTask.signals.some(signal => signal.kind === 'task_due')).toBe(true);
+    collectInternalContext.mockResolvedValue(MOCK_INTERNAL_EMPTY);
+    expect(JSON.stringify(await getHubToday(MOCK_USER_ID))).not.toContain('Private task');
+    process.env.LAUNCH_FEATURES = 'household_extras';
+    require('../services/context/providerOrchestrator').clearHubTodayCache();
+    const delayedWeather = require('../services/context/weatherProvider').fetchWeather;
+    delayedWeather.mockClear();
+    let releaseWeather;
+    const weatherPending = new Promise(resolve => { releaseWeather = resolve; });
+    delayedWeather.mockReturnValueOnce(weatherPending);
+    collectInternalContext.mockClear();
+    collectInternalContext.mockResolvedValueOnce({ ...MOCK_INTERNAL_EMPTY, bills_due: [{
+      id: 'bill', provider_name: 'Revoked private provider', amount: 144.72, due_date: new Date(Date.now() + 3600000).toISOString(), status: 'due',
+    }] }).mockResolvedValue(MOCK_INTERNAL_EMPTY);
+    const waiting = getHubToday(MOCK_USER_ID);
+    await Promise.resolve();
+    expect(collectInternalContext).toHaveBeenCalledTimes(1);
+    releaseWeather(MOCK_WEATHER);
+    const afterRevocation = await waiting;
+    expect(afterRevocation.signals.some(signal => signal.kind === 'bill_due')).toBe(false);
+    expect(JSON.stringify(afterRevocation)).not.toContain('Revoked private provider');
+    expect(collectInternalContext).toHaveBeenCalledTimes(2);
+    expect(delayedWeather).toHaveBeenCalledTimes(1);
+    for (const projection of [
+      { tasks_due: [{ id: 'task', title: 'Revoked private task', due_at: new Date(Date.now() + 3600000).toISOString(), priority: 'high', status: 'open' }] },
+      { calendar_events: [{ id: 'event', title: 'Revoked private event', start_at: new Date(Date.now() + 3600000).toISOString(), event_type: 'appointment' }] },
+    ]) {
+      delayedWeather.mockClear();
+      delayedWeather.mockReturnValueOnce(new Promise(resolve => { releaseWeather = resolve; }));
+      collectInternalContext.mockClear();
+      collectInternalContext.mockResolvedValueOnce({ ...MOCK_INTERNAL_EMPTY, ...projection }).mockResolvedValue(MOCK_INTERNAL_EMPTY);
+      const pending = getHubToday(MOCK_USER_ID);
+      await Promise.resolve();
+      expect(collectInternalContext).toHaveBeenCalledTimes(1);
+      releaseWeather(MOCK_WEATHER);
+      const revokedProjection = await pending;
+      expect(JSON.stringify(revokedProjection)).not.toContain('Revoked private');
+      expect(revokedProjection.weather.current_temp_f).toBe(52);
+      expect(collectInternalContext).toHaveBeenCalledTimes(2);
+      expect(delayedWeather).toHaveBeenCalledTimes(1);
+    }
+    collectInternalContext.mockResolvedValueOnce({ ...MOCK_INTERNAL_EMPTY, bills_due: [{
+      id: 'bill', provider_name: 'Unavailable authority provider', amount: 144.72, due_date: new Date(Date.now() + 3600000).toISOString(), status: 'due',
+    }] }).mockRejectedValueOnce(Object.assign(new Error('Authority unavailable'), { code: 'HOME_LIST_UNAVAILABLE' }));
+    const unreadable = await getHubToday(MOCK_USER_ID);
+    expect(unreadable.weather.current_temp_f).toBe(52);
+    expect(JSON.stringify(unreadable)).not.toContain('Unavailable authority provider');
+    process.env.LAUNCH_FEATURES = launch;
 
     const { fetchWeather } = require('../services/context/weatherProvider');
     const { fetchAlerts } = require('../services/context/alertsProvider');
@@ -978,6 +1076,50 @@ describe('Provider Orchestrator', () => {
     const failed = await getHubToday(MOCK_USER_ID);
     expect(failed.meta.section_providers).toEqual({ weather: null, alerts: null });
     expect(failed.meta.partial_failures).toEqual(expect.arrayContaining(['weather', 'alerts']));
+
+    const calendarService = require('../services/addressCalendarService');
+    expect(calendarService.composeForHomeId).toHaveBeenCalledWith('h1', { userId: MOCK_USER_ID });
+    calendarService.composeForHomeId.mockClear();
+    const { resolveLocation } = require('../services/context/locationResolver');
+    resolveLocation.mockReturnValue({ latitude: 45.5, longitude: -122.6, label: 'Saved address', source: 'saved_place',
+      timezone: 'America/Los_Angeles', geohash: 'c20g8', confidence: 0.95, homeId: null, savedPlaceId: 'saved-1' });
+    const own = { select: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({ data: { city: 'Portland', state: 'OR' }, error: null }) };
+    require('../config/supabaseAdmin').from.mockReturnValue(own);
+    calendarService.composeForHome.mockResolvedValue({ upcoming: [{ kind: 'property_tax', title: 'Public tax date',
+      days_until: 1, lead_days: 3, confidence: 'verified' }] });
+    const orchestrator = require('../services/context/providerOrchestrator');
+    orchestrator.clearHubTodayCache(MOCK_USER_ID);
+    const savedToday = await getHubToday(MOCK_USER_ID);
+    expect(savedToday.location.source).toBe('saved_place');
+    expect(savedToday.signals.some((signal) => signal.kind === 'address_calendar')).toBe(true);
+    expect(own.eq).toHaveBeenCalledWith('id', 'saved-1');
+    expect(own.eq).toHaveBeenCalledWith('user_id', MOCK_USER_ID);
+    expect(calendarService.composeForHome).toHaveBeenCalledWith({ city: 'Portland', state: 'OR', timezone: 'America/Los_Angeles' });
+    expect(calendarService.composeForHomeId).not.toHaveBeenCalled();
+    require('../services/context/weatherProvider').fetchWeather.mockReturnValue(null);
+    const morning = await composeDailyBriefing(MOCK_USER_ID);
+    const evening = await composeScheduledBriefing(MOCK_USER_ID, { kind: 'evening' });
+    expect(morning.home_id).toBeNull();
+    expect(evening.home_id).toBeNull();
+    expect(morning.signals_snapshot.some((signal) => signal.kind === 'address_calendar')).toBe(true);
+    expect(calendarService.composeForHome).toHaveBeenCalledTimes(3);
+    expect(calendarService.composeForHomeId).not.toHaveBeenCalled();
+    for (const kind of ['property_tax', 'council', 'garbage']) {
+      calendarService.composeForHome.mockResolvedValue({ upcoming: [{ kind, title: 'Public date',
+        days_until: 1, lead_days: 3, confidence: 'unverified' }] });
+      orchestrator.clearHubTodayCache(MOCK_USER_ID);
+      const unverified = await getHubToday(MOCK_USER_ID);
+      const signal = unverified.signals.find((item) => item.kind === 'address_calendar');
+      expect(signal.detail).toContain('Unconfirmed');
+      expect(signal.detail).not.toContain('set your pickup day');
+    }
+    calendarService.composeForHome.mockClear();
+    own.maybeSingle.mockResolvedValue({ data: null, error: null });
+    orchestrator.clearHubTodayCache(MOCK_USER_ID);
+    const removed = await getHubToday(MOCK_USER_ID);
+    expect(calendarService.composeForHome).not.toHaveBeenCalled();
+    expect(removed.signals.some((signal) => signal.kind === 'address_calendar')).toBe(false);
   });
 
   test('getHubToday returns hidden when no location', async () => {
@@ -998,6 +1140,59 @@ describe('Provider Orchestrator', () => {
     expect(result.location_geohash).toBeTruthy();
     expect(typeof result.mode).toBe('string');
     expect(result.signals_snapshot.length).toBeLessThanOrEqual(1);
+    const billContext = { ...MOCK_INTERNAL_EMPTY, bills_due: [{ id: 'bill', provider_name: 'Private finance provider', amount: 144.72,
+      due_date: new Date(Date.now() + 86400000).toISOString(), status: 'due' }] };
+    const collector = require('../services/context/internalContextCollector').collectInternalContext;
+    const weather = require('../services/context/weatherProvider').fetchWeather;
+    for (const kind of ['morning', 'evening']) {
+      for (const privateContext of [billContext,
+        { ...MOCK_INTERNAL_EMPTY, tasks_due: [{ id: 'task', title: 'Private household task', due_at: new Date(Date.now() + 86400000).toISOString(), priority: 'high', status: 'open' }] },
+        { ...MOCK_INTERNAL_EMPTY, calendar_events: [{ id: 'event', title: 'Private household event', start_at: new Date(Date.now() + (kind === 'morning' ? 3600000 : 86400000)).toISOString(), event_type: 'appointment' }] },
+      ]) {
+      let release;
+      weather.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+      collector.mockClear();
+      collector.mockResolvedValueOnce(privateContext).mockResolvedValue(MOCK_INTERNAL_EMPTY);
+      const pending = composeScheduledBriefing(MOCK_USER_ID, { kind });
+      await Promise.resolve();
+      expect(collector).toHaveBeenCalledTimes(1);
+      release(MOCK_WEATHER);
+      const revoked = await pending;
+      expect(revoked.signals_snapshot.some(signal => ['bill_due', 'task_due', 'calendar'].includes(signal.kind))).toBe(false);
+      expect(JSON.stringify(revoked)).not.toContain('Private');
+      }
+    }
+    // The real template composer is async too. Hold its return to exercise
+    // the final finance guard after composition without invoking a provider.
+    const compose = jest.fn();
+    jest.doMock('../services/context/briefingComposer', () => ({
+      composeTemplate: jest.requireActual('../services/context/briefingComposer').composeTemplate,
+      composeBriefing: compose,
+    }));
+    jest.resetModules();
+    try {
+      const current = require('../services/context/providerOrchestrator');
+      const currentCollector = require('../services/context/internalContextCollector').collectInternalContext;
+      require('../services/context/weatherProvider').fetchWeather.mockResolvedValue({ ...MOCK_WEATHER,
+        current: { ...MOCK_WEATHER.current, temp_f: 62 }, hourly: MOCK_WEATHER.hourly.map(hour => ({ ...hour, precip_chance_pct: 5 })) });
+      for (const kind of ['morning', 'evening']) {
+        for (const privateContext of [billContext,
+          { ...MOCK_INTERNAL_EMPTY, tasks_due: [{ id: 'task', title: 'Private household task', due_at: new Date(Date.now() + (kind === 'morning' ? 3600000 : 86400000)).toISOString(), priority: 'high', status: 'open' }] },
+          { ...MOCK_INTERNAL_EMPTY, calendar_events: [{ id: 'event', title: 'Private household event', start_at: new Date(Date.now() + (kind === 'morning' ? 3600000 : 86400000)).toISOString(), event_type: 'appointment' }] },
+        ]) {
+        let release;
+        let entered;
+        const started = new Promise(resolve => { entered = resolve; });
+        compose.mockImplementationOnce(() => { entered(); return new Promise(resolve => { release = resolve; }); });
+        currentCollector.mockResolvedValue(privateContext);
+        const pending = current.composeScheduledBriefing(MOCK_USER_ID, { kind });
+        await started;
+        currentCollector.mockResolvedValue(MOCK_INTERNAL_EMPTY);
+        release({ text: 'Private finance provider bill is due.', mode: 'template', tokens_used: 0 });
+        await expect(pending).rejects.toMatchObject({ code: 'HOME_LIST_ACCESS_CHANGED' });
+        }
+      }
+    } finally { jest.dontMock('../services/context/briefingComposer'); }
   });
 
   test('composeDailyBriefing returns no_location skip when location unavailable', async () => {

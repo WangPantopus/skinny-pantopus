@@ -48,5 +48,37 @@ final class AddressCalendarContractTests: XCTestCase {
         let current = try JSONDecoder().decode(PlaceAddressCalendarData.self, from: JSONSerialization.data(withJSONObject: json))
         XCTAssertEqual(current.pickupSchedule?.weekday, "TH")
         XCTAssertEqual(current.pickupSchedule?.recyclingNextDate, "2026-09-11")
+        XCTAssertNil(legacy.pickupSetupMessage)
+        json["needs_pickup_day"] = true
+        let missing = try JSONDecoder().decode(PlaceAddressCalendarData.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(missing.pickupSetupMessage, "Set your pickup day and your pickups start here.")
+        var event: [String: Any] = [
+            "rule_id": "pickup",
+            "kind": "garbage",
+            "title": "Garbage",
+            "date": "2026-11-27",
+            "days_until": 1,
+            "all_day": true,
+            "lead_days": 1,
+            "scope": "home",
+            "confidence": "official"
+        ]
+        let oldEvent = try JSONDecoder().decode(PlaceCalendarEvent.self, from: JSONSerialization.data(withJSONObject: event))
+        XCTAssertNil(oldEvent.holidayMoveLine)
+        event["moved_from"] = "2026-11-26"
+        event["holiday"] = "Thanksgiving"
+        for (days, line) in [(1, "Moved a day for Thanksgiving."), (2, "Moved for Thanksgiving.")] {
+            event["shift_days"] = days
+            let moved = try JSONDecoder().decode(PlaceCalendarEvent.self, from: JSONSerialization.data(withJSONObject: event))
+            XCTAssertEqual(moved.movedFrom, "2026-11-26")
+            XCTAssertEqual(moved.holidayMoveLine, line)
+        }
+        json["upcoming"] = [event]
+        let withPickup = try JSONDecoder().decode(PlaceAddressCalendarData.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(withPickup.pickupSetupMessage)
+        event["kind"] = "property_tax"
+        json["upcoming"] = [event]
+        let onlyTax = try JSONDecoder().decode(PlaceAddressCalendarData.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(onlyTax.pickupSetupMessage, missing.pickupSetupMessage)
     }
 }
