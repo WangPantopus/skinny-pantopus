@@ -552,6 +552,7 @@ public struct PlaceLeadRadonData: Decodable, Sendable, Hashable {
     public let leadPaintRisk: LeadPaintRisk
     /// EPA radon zone (1 = highest potential), 1–3.
     public let radonZone: Int?
+    public var countyName: String?
     public let summary: String
     public let disclaimer: String
 
@@ -560,6 +561,7 @@ public struct PlaceLeadRadonData: Decodable, Sendable, Hashable {
         case yearBuilt = "year_built"
         case leadPaintRisk = "lead_paint_risk"
         case radonZone = "radon_zone"
+        case countyName = "county_name"
     }
 }
 
@@ -1131,6 +1133,14 @@ public struct PlaceCalendarEvent: Decodable, Sendable, Hashable, Identifiable {
     public let source: String?
     public let sourceUrl: String?
     public let confidence: String
+    public var movedFrom: String?
+    public var holiday: String?
+    public var shiftDays: Int?
+
+    public var holidayMoveLine: String? {
+        guard movedFrom != nil, let holiday, !holiday.isEmpty, let shiftDays, shiftDays > 0 else { return nil }
+        return shiftDays == 1 ? "Moved a day for \(holiday)." : "Moved for \(holiday)."
+    }
 
     public var id: String {
         "\(ruleId):\(date)"
@@ -1143,6 +1153,9 @@ public struct PlaceCalendarEvent: Decodable, Sendable, Hashable, Identifiable {
         case allDay = "all_day"
         case leadDays = "lead_days"
         case sourceUrl = "source_url"
+        case movedFrom = "moved_from"
+        case holiday
+        case shiftDays = "shift_days"
     }
 }
 
@@ -1161,6 +1174,13 @@ public struct PlaceAddressCalendarData: Decodable, Sendable, Hashable {
     /// `expected_version`, so a change saved meanwhile on another device is
     /// not undone. Omitted by older servers.
     public var pickupVersion: String?
+
+    public var pickupSetupMessage: String? {
+        let kinds = ["garbage", "recycling", "yard_waste", "bulk_pickup"]
+        let hasPickup = upcoming.contains { kinds.contains($0.kind) }
+        return needsPickupDay && !hasPickup
+            ? "Set your pickup day and your pickups start here." : nil
+    }
 
     private enum CodingKeys: String, CodingKey {
         case upcoming, next, today

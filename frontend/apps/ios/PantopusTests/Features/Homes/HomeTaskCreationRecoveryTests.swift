@@ -25,6 +25,44 @@ final class HomeTaskCreationRecoveryTests: HomeTaskCreationTestCase {
         XCTAssertEqual(try body(posts[0]) as NSDictionary, try body(posts[1]) as NSDictionary)
         XCTAssertEqual(try body(posts[1])["request_id"] as? String, requestId)
         XCTAssertEqual(posts[1].value(forHTTPHeaderField: "X-Pantopus-Session-Scope"), session)
+
+        SequencedURLProtocol.reset()
+        let radonPayload = CreateHomeTaskRequest(
+            taskType: "reminder",
+            title: "Radon test",
+            dueAt: "2026-10-04T09:00:00-07:00",
+            status: "done",
+            details: ["suggestion": .string("radon_test"), "tested_on": .string("2026-10-04"), "result_pci": .number(2.3)],
+            visibility: "members"
+        )
+        let radonStore = CreationMemoryStore()
+        SequencedURLProtocol.sequence = [.status(200, body: collection()), .status(503, body: "{}")]
+        do { _ = try await coordinator(radonStore).save(radonPayload) } catch {}
+        XCTAssertEqual(radonStore.singleDraft?.payload, radonPayload)
+        let radonRetry = coordinator(radonStore)
+        try radonRetry.restore()
+        SequencedURLProtocol.sequence = [
+            .status(200, body: collection()),
+            .status(200, body: created(taskChanges: [
+                "task_type": "reminder",
+                "status": "done",
+                "details": ["suggestion": "radon_test", "result_pci": 2.3]
+            ]))
+        ]
+        let radonTask = try await radonRetry.save(payload)
+        XCTAssertEqual(radonTask.details?["suggestion"]?.stringValue, "radon_test")
+        XCTAssertEqual(radonTask.details?["result_pci"]?.numberValue, 2.3)
+        XCTAssertNil(radonStore.singleDraft)
+        let radonPosts = SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "POST" }
+        XCTAssertEqual(radonPosts.count, 2)
+        XCTAssertEqual(try body(radonPosts[0]) as NSDictionary, try body(radonPosts[1]) as NSDictionary)
+        let sent = try body(radonPosts[1])
+        XCTAssertEqual(sent["status"] as? String, "done")
+        XCTAssertEqual(sent["visibility"] as? String, "members")
+        XCTAssertEqual(sent["due_at"] as? String, "2026-10-04T09:00:00-07:00")
+        XCTAssertEqual((sent["details"] as? [String: Any])?["suggestion"] as? String, "radon_test")
+        XCTAssertEqual(sent["request_id"] as? String, requestId)
+        XCTAssertEqual(radonPosts[1].value(forHTTPHeaderField: "X-Pantopus-Session-Scope"), session)
     }
 
     func test408And429KeepOriginalRequestForExactRecovery() async throws {

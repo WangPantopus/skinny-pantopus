@@ -17,6 +17,7 @@ const HOME_LOCATION_SELECT = 'id, name, address, city, state, map_center_lat, ma
 
 // Confidence scores by source type
 const CONFIDENCE = {
+  saved_place: 0.95,
   custom: 0.95,
   viewing_pinned: 0.90,
   primary_home: 0.95,
@@ -324,6 +325,26 @@ async function resolveLocation(userId) {
         homeId: homeLocation.homeId,
       });
       return homeLocation;
+    }
+
+    // A private saved address supplies Today and opted-in briefings without
+    // creating residency. The existing explicit preferences, pinned location and
+    // Home fallback above keep their priority.
+    const { data: saved, error: savedError } = await supabaseAdmin
+      .from('SavedPlace')
+      .select('id, label, latitude, longitude')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (savedError) {
+      logger.warn('locationResolver: saved place query error', { userId, error: savedError.message });
+    }
+    if (!savedError && saved && Number.isFinite(saved.latitude) && Number.isFinite(saved.longitude)
+      && Math.abs(saved.latitude) <= 90 && Math.abs(saved.longitude) <= 180
+      && (saved.latitude !== 0 || saved.longitude !== 0)) {
+      return { ...makeResult(saved.latitude, saved.longitude, saved.label, 'saved_place', null, fallbackTimezone), savedPlaceId: saved.id };
     }
 
     // ── Step 6: Last known viewing location (not pinned) ──

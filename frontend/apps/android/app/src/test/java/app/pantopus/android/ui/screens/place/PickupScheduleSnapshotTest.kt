@@ -26,7 +26,10 @@ class PickupScheduleSnapshotTest {
             override val calendarBusy = MutableStateFlow(false)
             override val calendarError = MutableStateFlow<String?>(null)
 
-            override fun setPickupDay(request: SetPickupDayRequest) = Unit
+            override fun setPickupDay(
+                request: SetPickupDayRequest,
+                offerPrimer: Boolean,
+            ) = Unit
 
             override fun clearPickupDay(expectedVersion: String?) = Unit
         }

@@ -249,6 +249,28 @@ describe('GET /api/public/place', () => {
       expect(m.census_context).toMatchObject({ status: 'ready', data: { median_year_built: 1985 } });
       // Seeded count is 5: below the audited k-anon floor it reads `forming` (PR 353 made the public floor universal).
       expect(m.block_density).toMatchObject({ status: 'ready', data: { bucket: 'forming' } });
+      expect(m.weather.source).toBe('Open-Meteo');
+      expect(m.alerts.source).toBe('National Weather Service');
+
+      const { composeTodayForPoint } = require('../services/placeIntelligenceService');
+      for (const source of ['live', 'cache', 'cache_stale']) {
+        weatherProvider.fetchWeather.mockResolvedValue({ ...TODAY_FIXTURES.weather, provider: 'WEATHERKIT', source });
+        alertsProvider.fetchAlerts.mockResolvedValue({ ...TODAY_FIXTURES.alerts, provider: 'WEATHERKIT', source });
+        const pointSections = Object.fromEntries((await composeTodayForPoint(45.51, -122.65)).map((section) => [section.id, section]));
+        expect(pointSections.weather).toMatchObject({ source: 'Apple WeatherKit', status: 'ready' });
+        expect(pointSections.alerts).toMatchObject({ source: 'Apple WeatherKit', status: 'ready', data: { active: [] } });
+      }
+      weatherProvider.fetchWeather.mockResolvedValue({ ...TODAY_FIXTURES.weather, provider: undefined });
+      alertsProvider.fetchAlerts.mockResolvedValue({ ...TODAY_FIXTURES.alerts, provider: 'future_provider' });
+      const unknown = Object.fromEntries((await composeTodayForPoint(45.51, -122.65)).map((section) => [section.id, section]));
+      expect(unknown.weather.source).toBe('Source unavailable');
+      expect(unknown.alerts.source).toBe('Source unavailable');
+
+      weatherProvider.fetchWeather.mockRejectedValue(new Error('Weather unavailable'));
+      alertsProvider.fetchAlerts.mockResolvedValue({ alerts: [], provider: 'NOAA', source: 'error' });
+      const failed = Object.fromEntries((await composeTodayForPoint(45.51, -122.65)).map((section) => [section.id, section]));
+      expect(failed.weather).toMatchObject({ status: 'unavailable', source: 'Source unavailable', data: null });
+      expect(failed.alerts).toMatchObject({ status: 'unavailable', source: 'Source unavailable', data: null });
     });
 
     it('never shows a zero on the density card — below the floor it is an invitation', async () => {

@@ -34,6 +34,18 @@ const FUNNEL_EVENT_TYPES = Object.freeze([
   't0_wall_viewed',
   'register_started',
   't1_account_created',
+  'session_open',
+  'reminder_sent',
+  'reminder_action',
+  'suggestion_decision',
+]);
+
+// Only these pilot events are accepted from an authenticated app. Delivery
+// remains server-owned; the anonymous beacon vocabulary stays unchanged.
+const APP_POSTABLE_EVENT_TYPES = Object.freeze([
+  'session_open',
+  'reminder_action',
+  'suggestion_decision',
 ]);
 
 // The subset a browser may post directly. All T0-stage events are
@@ -84,4 +96,5 @@ module.exports = {
   recordFunnelEvent,
   FUNNEL_EVENT_TYPES,
   CLIENT_POSTABLE_EVENT_TYPES,
+  APP_POSTABLE_EVENT_TYPES,
 };

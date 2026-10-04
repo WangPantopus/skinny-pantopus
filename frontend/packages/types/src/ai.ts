@@ -299,7 +299,7 @@ export interface AISummarizeMailRequest {
 
 export interface HubTodayLocation {
   label: string;
-  source: 'custom' | 'viewing_pinned' | 'primary_home' | 'home' | 'viewing_recent' | 'none';
+  source: 'custom' | 'viewing_pinned' | 'primary_home' | 'home' | 'saved_place' | 'viewing_recent' | 'none';
   latitude: number | null;
   longitude: number | null;
   timezone: string;

@@ -38,6 +38,7 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
     public let createdAt: String?
     public let updatedAt: String?
     public let capabilities: HomeTaskCapabilities?
+    public let details: [String: JSONValue]?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -55,7 +56,7 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         case createdBy = "created_by"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
-        case capabilities
+        case capabilities, details
     }
 
     public init(
@@ -74,7 +75,8 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         createdAt: String? = nil,
         updatedAt: String? = nil,
         capabilities: HomeTaskCapabilities? = nil,
-        automaticRecurrence: HomeTaskAutomaticRecurrence? = nil
+        automaticRecurrence: HomeTaskAutomaticRecurrence? = nil,
+        details: [String: JSONValue]? = nil
     ) {
         self.id = id
         self.homeId = homeId
@@ -92,6 +94,28 @@ public struct HomeTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         self.updatedAt = updatedAt
         self.capabilities = capabilities
         self.automaticRecurrence = automaticRecurrence
+        self.details = details
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let fields = try decoder.container(keyedBy: CodingKeys.self)
+        id = try fields.decode(String.self, forKey: .id)
+        homeId = try fields.decode(String.self, forKey: .homeId)
+        taskType = try fields.decode(String.self, forKey: .taskType)
+        title = try fields.decode(String.self, forKey: .title)
+        description = try fields.decodeIfPresent(String.self, forKey: .description)
+        assignedTo = try fields.decodeIfPresent(String.self, forKey: .assignedTo)
+        dueAt = try fields.decodeIfPresent(String.self, forKey: .dueAt)
+        recurrenceRule = try fields.decodeIfPresent(String.self, forKey: .recurrenceRule)
+        automaticRecurrence = try fields.decodeIfPresent(HomeTaskAutomaticRecurrence.self, forKey: .automaticRecurrence)
+        status = try fields.decode(String.self, forKey: .status)
+        priority = try fields.decodeIfPresent(String.self, forKey: .priority)
+        completedAt = try fields.decodeIfPresent(String.self, forKey: .completedAt)
+        createdBy = try fields.decodeIfPresent(String.self, forKey: .createdBy)
+        createdAt = try fields.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try fields.decodeIfPresent(String.self, forKey: .updatedAt)
+        capabilities = try fields.decodeIfPresent(HomeTaskCapabilities.self, forKey: .capabilities)
+        details = try? fields.decodeIfPresent([String: JSONValue].self, forKey: .details)
     }
 }
 
@@ -130,6 +154,9 @@ public struct CreateHomeTaskRequest: Codable, Sendable, Equatable {
     public let dueAt: String?
     public let recurrenceRule: String?
     public let priority: String?
+    public let status: String?
+    public let details: [String: JSONValue]?
+    public let visibility: String?
 
     private enum CodingKeys: String, CodingKey {
         case taskType = "task_type"
@@ -138,7 +165,7 @@ public struct CreateHomeTaskRequest: Codable, Sendable, Equatable {
         case assignedTo = "assigned_to"
         case dueAt = "due_at"
         case recurrenceRule = "recurrence_rule"
-        case priority
+        case priority, status, details, visibility
     }
 
     public init(
@@ -148,7 +175,10 @@ public struct CreateHomeTaskRequest: Codable, Sendable, Equatable {
         assignedTo: String? = nil,
         dueAt: String? = nil,
         recurrenceRule: String? = nil,
-        priority: String? = nil
+        priority: String? = nil,
+        status: String? = nil,
+        details: [String: JSONValue]? = nil,
+        visibility: String? = nil
     ) {
         self.taskType = taskType
         self.title = title
@@ -157,6 +187,9 @@ public struct CreateHomeTaskRequest: Codable, Sendable, Equatable {
         self.dueAt = dueAt
         self.recurrenceRule = recurrenceRule
         self.priority = priority
+        self.status = status
+        self.details = details
+        self.visibility = visibility
     }
 }
 

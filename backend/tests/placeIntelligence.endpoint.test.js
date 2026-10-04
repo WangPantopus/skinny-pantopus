@@ -58,6 +58,8 @@ function seedHome(extra = {}) {
     bathrooms: 2,
     lot_sq_ft: 5200,
     home_type: 'single_family',
+    home_status: 'active',
+    security_state: 'normal',
     ...extra,
   }]);
 }
@@ -253,6 +255,27 @@ describe('GET /api/homes/:id/intelligence', () => {
         { date: '2026-06-07', condition_code: 'clear', high_f: 68, low_f: 49, precip_chance: 10 },
         { date: '2026-06-08', condition_code: 'partly_cloudy', high_f: 71, low_f: 52, precip_chance: 20 },
       ]);
+      expect(w.source).toBe('Source unavailable');
+      for (const [weatherProvider, alertsProvider, weatherLabel, alertsLabel] of [
+        ['WEATHERKIT', 'NOAA', 'Apple WeatherKit', 'National Weather Service'],
+        ['OPEN_METEO', 'WEATHERKIT', 'Open-Meteo', 'Apple WeatherKit'],
+        ['future_provider', null, 'Source unavailable', 'Source unavailable'],
+      ]) {
+        providerOrchestrator.getHubToday.mockResolvedValue({
+          ...detailedHubToday(),
+          meta: { section_providers: { weather: weatherProvider, alerts: alertsProvider } },
+        });
+        const labeled = await request(app).get(`/api/homes/${HOME_ID}/intelligence?sections=weather,alerts`).set('x-test-user-id', USER);
+        expect(labeled.status).toBe(200);
+        expect(sectionsById(labeled.body).weather.source).toBe(weatherLabel);
+        expect(sectionsById(labeled.body).alerts.source).toBe(alertsLabel);
+      }
+      providerOrchestrator.getHubToday.mockResolvedValue({
+        ...defaultHubToday(),
+        meta: { section_providers: { weather: 'OPEN_METEO', alerts: 'NOAA' }, partial_failures: ['alerts'] },
+      });
+      const unchecked = await request(app).get(`/api/homes/${HOME_ID}/intelligence?sections=alerts`).set('x-test-user-id', USER);
+      expect(sectionsById(unchecked.body).alerts).toMatchObject({ status: 'unavailable', source: 'Source unavailable', data: null });
     });
 
     test('air quality names the dominant pollutant as a machine token', async () => {
@@ -400,6 +423,14 @@ describe('GET /api/homes/:id/intelligence', () => {
   });
 
   test('composes the grouped contract with per-section status', async () => {
+    seedTable('CountyRadonZone', [{ county_fips: '53011', zone: 2, county_label: 'Clark County' }]);
+    const radon = await require('../services/placeSectionAdapters').composeLeadRadon({ county_fips: '53011', year_built: 1979 });
+    expect(radon[0].data).toMatchObject({ radon_zone: 2, county_name: 'Clark County' });
+    for (const countyLabel of [null, '', '   ']) {
+      seedTable('CountyRadonZone', [{ county_fips: '53011', zone: 2, county_label: countyLabel }]);
+      const withoutName = await require('../services/placeSectionAdapters').composeLeadRadon({ county_fips: '53011', year_built: 1979 });
+      expect(withoutName[0].data).toMatchObject({ radon_zone: 2, county_name: null });
+    }
     seedHome();
     seedTable('NeighborhoodPreview', [{ geohash: GEOHASH, verified_users_count: 12 }]);
     seedBenchmarks([
@@ -561,8 +592,37 @@ describe('GET /api/homes/:id/intelligence', () => {
 
   test('denies a viewer with no access', async () => {
     seedHome();
+    setRpcMock(async name => name === 'home_record_context'
+      ? {data:{allowed:true,private:true,user_id:OTHER,permissions:[]},error:null}
+      : {data:null,error:{message:'Unconfigured RPC'}});
     const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', OTHER);
     expect(res.status).toBe(403);
+    seedHome({owner_id:'someone-else',created_by_user_id:OTHER});
+    const own = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', OTHER);
+    expect(own.status).toBe(200);
+    expect(own.body.tier).toBe('T1');
+    expect(own.headers['cache-control']).toBe('private, no-store');
+    for (const section of Object.values(sectionsById(own.body))) {
+      if (['B','C','D'].includes(section.band)) {
+        expect(section.access).toBe('locked');
+        expect(section.data).toBeNull();
+      }
+    }
+    for (const [home_status,security_state] of [['archived','normal'],['merged','normal'],['active','frozen'],['active','frozen_silent'],['active','disputed']]) {
+      seedHome({owner_id:'someone-else',created_by_user_id:OTHER,home_status,security_state});
+      expect((await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id',OTHER)).status).toBe(403);
+    }
+    seedHome({owner_id:'someone-else',created_by_user_id:OTHER});
+    seedTable('HomeOwner', [{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',home_id:HOME_ID,subject_id:OTHER,subject_type:'user',owner_status:'revoked',is_primary_owner:false}]);
+    expect((await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id',OTHER)).status).toBe(403);
+    seedTable('HomeOwner', []);
+    setRpcMock(async () => ({data:null,error:{message:'Authority unavailable'}}));
+    expect((await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id',OTHER)).status).toBe(503);
+    let reads=0;
+    setRpcMock(async name => name==='home_record_context'
+      ? {data:{allowed:++reads===1,private:true,user_id:OTHER,permissions:[]},error:null}
+      : {data:null,error:{message:'Unconfigured RPC'}});
+    expect((await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id',OTHER)).status).toBe(503);
   });
 
   // real_rent is the FIRST section to use Band D (the proven-resident

@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.hub.TodayLocationDto
 import app.pantopus.android.data.api.models.hub.TodaySignalDto
 import app.pantopus.android.data.api.models.hub.TodayWeatherDto
 import app.pantopus.android.ui.theme.PantopusIcon
+import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -59,6 +60,14 @@ class TodayDetailMapperTest {
         assertEquals("42", content.chips[0].value)
         assertEquals(TodayTone.Success, content.chips[0].dotTone)
         assertFalse(content.isAlert)
+        val adapter = Moshi.Builder().build().adapter(HubTodayPayload::class.java)
+        val decoded = adapter.fromJson("""{"location":{"source":"saved_place","latitude":45.6,"longitude":-122.7}}""")
+        assertEquals("saved_place", decoded?.location?.source)
+        assertEquals(45.6, decoded?.location?.latitude)
+        assertEquals(-122.7, decoded?.location?.longitude)
+        val legacy = adapter.fromJson("""{"location":{"label":"Home"}}""")
+        assertNull(legacy?.location?.source)
+        assertEquals("Home", legacy?.location?.label)
     }
 
     @Test

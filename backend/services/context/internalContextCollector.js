@@ -8,6 +8,7 @@
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const homeRecordService = require('../homeRecordService');
+const homeListService = require('../homeListService');
 const logger = require('../../utils/logger');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 
@@ -67,14 +68,22 @@ async function collectInternalContext(userId, homeId = null) {
   // Launch cut #7 (Household extras): bills and the family calendar stay out of
   // the Hub Today card and the briefings for the first launch.
   const householdExtras = isLaunchFeatureEnabled('household_extras');
+  // The service-role query bypasses RLS. Active membership and an explicit
+  // Hub anchor never substitute for the bills route's finance read permission.
+  const financeAccess = hasHomes && householdExtras
+    ? await Promise.all(homeIds.map(async id => ({ id, state: await homeListService.readAccessState(id, userId) })))
+    : [];
+  const financeHomeIds = financeAccess
+    .filter(({ state }) => state.mode === 'shared' && state.access.permissions.includes('finance.view'))
+    .map(({ id }) => id);
 
   // ── Build all queries, run with Promise.allSettled ──
   const queries = {
-    bills: hasHomes && householdExtras
+    bills: financeHomeIds.length > 0
       ? supabaseAdmin
           .from('HomeBill')
           .select('id, provider_name, amount, currency, due_date, status')
-          .in('home_id', homeIds)
+          .in('home_id', financeHomeIds)
           .neq('status', 'paid')
           .gte('due_date', now.toISOString())
           .lte('due_date', threeDaysOut.toISOString())
@@ -87,7 +96,8 @@ async function collectInternalContext(userId, homeId = null) {
           .then(groups => ({ data: groups.flat().filter(t => !['done', 'canceled'].includes(t.status)
             && t.due_at && Date.parse(t.due_at) >= now.getTime() && Date.parse(t.due_at) <= twoDaysOut.getTime())
             .sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at)).slice(0, 10)
-            .map(({ id, title, due_at, priority, status }) => ({ id, title, due_at, priority, status })) }))
+            .map(({ id, title, due_at, priority, status, details }) => ({ id, title, due_at, priority, status,
+              is_suggestion: Boolean(details?.suggestion) })) }))
       : Promise.resolve({ data: [] }),
 
     calendarEvents: hasHomes && householdExtras
@@ -158,6 +168,15 @@ async function collectInternalContext(userId, homeId = null) {
     }
   }
 
+  // Do not emit a bill fetched under authority that changed while queries
+  // were pending. Failed policy reads likewise refuse the context result.
+  await Promise.all(financeAccess.filter(({ id }) => financeHomeIds.includes(id)).map(async ({ id, state }) => {
+    const current = await homeListService.readAccessState(id, userId);
+    if (JSON.stringify(current) !== JSON.stringify(state)) {
+      throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
+    }
+  }));
+
   return {
     bills_due: (resolved.bills.data || []).map((b) => ({
       id: b.id,
@@ -173,6 +192,7 @@ async function collectInternalContext(userId, homeId = null) {
       due_at: t.due_at,
       priority: t.priority || 'medium',
       status: t.status,
+      is_suggestion: t.is_suggestion,
     })),
     calendar_events: (resolved.calendarEvents.data || []).map((e) => ({
       id: e.id,

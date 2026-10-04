@@ -63,6 +63,14 @@ final class HomeTaskAccessTests: XCTestCase {
         XCTAssertEqual(current.capabilities?.canComplete, false)
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.last?.url?.path, "/api/homes/\(home)/tasks/\(task)")
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.last?.value(forHTTPHeaderField: "X-Pantopus-Session-Scope"), scope)
+        for legacyDetails in [NSNull(), "legacy", ["legacy"], 42] as [Any] {
+            let decoded = try JSONDecoder().decode(
+                HomeTaskDTO.self,
+                from: Data(json(record().merging(["details": legacyDetails]) { _, value in value }).utf8)
+            )
+            XCTAssertEqual(decoded.id, task)
+            XCTAssertNil(decoded.details)
+        }
     }
 
     func testWrongActorHomeOrScopeCannotBindARead() async {

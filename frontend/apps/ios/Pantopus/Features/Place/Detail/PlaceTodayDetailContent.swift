@@ -12,6 +12,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 // swiftlint:disable multiline_arguments file_length
 
@@ -28,7 +29,7 @@ struct PlaceTodayDetailContent: View {
                 PlaceDetailSectionLabel(text: "Weather")
                 if let data = weather.weather, weather.status == .ready || weather.status == .stale {
                     NowCard(data: data)
-                    PlaceSourceNote(name: "National Weather Service", asOf: PlacePresentation.fmtTime(weather.asOf))
+                    PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
                 } else {
                     vm.fallbackCard(weather)
                 }
@@ -53,10 +54,16 @@ struct PlaceTodayDetailContent: View {
                 PlaceDetailSectionLabel(text: "At this address")
                 if let data = calendar.addressCalendar,
                    calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
-                    AddressCalendarCard(homeId: vm.homeId, data: data) { await vm.load() }
+                    AddressCalendarCard(homeId: vm.calendarHomeId, data: data) { await vm.refresh() }
                     PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
+                } else if calendar.status == .unavailable, let data = vm.fallbackCalendar {
+                    AddressCalendarCard(homeId: vm.calendarHomeId, data: data) { await vm.refresh() }
+                    PlaceSourceNote(name: "Pantopus registry", asOf: "next two weeks")
                 } else {
                     vm.fallbackCard(calendar)
+                        .task(id: calendar.status) {
+                            if calendar.status == .unavailable { await vm.loadFallbackCalendar() }
+                        }
                 }
             }
 
@@ -75,7 +82,7 @@ struct PlaceTodayDetailContent: View {
                 // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
                 if let data = alerts.alerts, alerts.status == .ready || alerts.status == .stale {
                     AlertsCard(active: data.active)
-                    PlaceSourceNote(name: "National Weather Service", asOf: "live")
+                    PlaceSourceNote(name: alerts.source ?? "Source unavailable", asOf: "live")
                 } else {
                     vm.fallbackCard(alerts)
                 }
@@ -421,7 +428,7 @@ private func weatherTint(_ code: WeatherConditionCode) -> Color {
 /// the household's own: the pickup-day picker. Hand-seeded city defaults
 /// say "unconfirmed" until the household sets its day.
 struct AddressCalendarCard: View {
-    let homeId: String
+    let homeId: String?
     let data: PlaceAddressCalendarData
     let onChanged: () async -> Void
 
@@ -432,6 +439,8 @@ struct AddressCalendarCard: View {
     @State private var frequency = "not_set"
     @State private var nextDate = ""
     @State private var confirmed: PlaceAddressCalendarData?
+    @State private var showPickupPrimer = false
+    @State private var sessionScope = HomeClaimSessionScope(api: .shared)
     /// The schedule this editor started from. A save sends it back, so a
     /// change saved meanwhile on another device is not silently undone.
     @State private var openedVersion: String?
@@ -456,11 +465,11 @@ struct AddressCalendarCard: View {
         ("FR", "Friday"), ("SA", "Saturday"), ("SU", "Sunday")
     ]
 
-    init(homeId: String, data: PlaceAddressCalendarData, onChanged: @escaping () async -> Void) {
+    init(homeId: String?, data: PlaceAddressCalendarData, onChanged: @escaping () async -> Void) {
         self.homeId = homeId
         self.data = data
         self.onChanged = onChanged
-        _picking = State(initialValue: data.needsPickupDay)
+        _picking = State(initialValue: homeId != nil && data.needsPickupDay)
         _weekday = State(initialValue: data.pickupSchedule?.weekday ?? "")
         _frequency = State(initialValue: data.pickupSchedule?.recyclingFrequency ?? "not_set")
         _nextDate = State(initialValue: data.pickupSchedule?.recyclingNextDate ?? "")
@@ -475,29 +484,36 @@ struct AddressCalendarCard: View {
                     .kerning(0.7)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer(minLength: 0)
-                Button(picking ? "Cancel" : "Pickup schedule") {
-                    weekday = calendar.pickupSchedule?.weekday ?? ""
-                    frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
-                    nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
-                    openedVersion = calendar.pickupVersion
-                    errorText = nil
-                    picking.toggle()
+                if homeId != nil {
+                    Button(picking ? "Cancel" : "Pickup schedule") {
+                        weekday = calendar.pickupSchedule?.weekday ?? ""
+                        frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
+                        nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
+                        openedVersion = calendar.pickupVersion
+                        errorText = nil
+                        picking.toggle()
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.primaryInk)
+                    .accessibilityIdentifier("addressCalendarPickupToggle")
+                    .disabled(saving != nil)
                 }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.Color.primaryInk)
-                .accessibilityIdentifier("addressCalendarPickupToggle")
-                .disabled(saving != nil)
             }
 
-            if picking {
+            if picking, homeId != nil {
                 picker
             }
 
             if calendar.upcoming.isEmpty {
-                Text("Nothing on the calendar for the next two weeks.")
+                Text((homeId != nil ? calendar.pickupSetupMessage : nil) ?? "Nothing on the calendar for the next two weeks.")
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             } else {
+                if homeId != nil, let message = calendar.pickupSetupMessage {
+                    Text(message)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
                 VStack(spacing: 0) {
                     ForEach(calendar.upcoming) { event in
                         eventRow(event)
@@ -520,6 +536,20 @@ struct AddressCalendarCard: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
         .accessibilityIdentifier("addressCalendarCard")
         .onChange(of: data) { _, _ in confirmed = nil }
+        .sheet(isPresented: $showPickupPrimer) {
+            if let homeId {
+                PickupReminderPrimer(
+                    homeId: homeId,
+                    api: api,
+                    sessionScope: sessionScope,
+                    onClose: { showPickupPrimer = false },
+                    onSessionChanged: {
+                        showPickupPrimer = false
+                        errorText = "Your session changed. Reopen Today to continue."
+                    }
+                )
+            }
+        }
     }
 
     private var picker: some View {
@@ -614,6 +644,11 @@ struct AddressCalendarCard: View {
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
+                if let moved = event.holidayMoveLine {
+                    Text(moved)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
                 Text(
                     (event.source ?? "Pantopus registry")
                         + (event.confidence == "unverified" ? " · unconfirmed, please double-check" : "")
@@ -651,10 +686,13 @@ struct AddressCalendarCard: View {
 
     @MainActor
     private func choose(reset: Bool = false) async {
-        guard saving == nil else { return }
+        guard let homeId, saving == nil else { return }
         saving = "saving"
+        defer { saving = nil }
         errorText = nil
+        let offerPrimer = !reset && (calendar.needsPickupDay || calendar.pickupSchedule == nil)
         do {
+            try sessionScope.requireCurrent()
             let endpoint = reset ? AddressCalendarEndpoints.clearPickupDay(homeId: homeId, expectedVersion: openedVersion)
                 : AddressCalendarEndpoints.setPickupDay(homeId: homeId, request: SetPickupDayRequest(
                     weekday: weekday, recyclingFrequency: frequency,
@@ -662,11 +700,21 @@ struct AddressCalendarCard: View {
                     expectedVersion: openedVersion
                 ))
             let response: AddressCalendarResponse = try await api.request(endpoint)
+            try sessionScope.requireCurrent()
             confirmed = response.calendar
             openedVersion = response.calendar.pickupVersion
             picking = false
+            let key = "pickupPrimer.shown.\(homeId)"
+            if offerPrimer, !response.calendar.needsPickupDay, !UserDefaults.standard.bool(forKey: key) {
+                UserDefaults.standard.set(true, forKey: key)
+                showPickupPrimer = true
+            }
             await onChanged()
         } catch let APIError.clientError(status: 409, message: body) {
+            guard sessionScope.isCurrent else {
+                errorText = "Your session changed. Reopen Today to continue."
+                return
+            }
             // Changed meanwhile: nothing was saved. Show the current schedule
             // in the editor so the person can review it and try again.
             if let current = Self.currentCalendar(inConflict: body) {
@@ -682,7 +730,6 @@ struct AddressCalendarCard: View {
         } catch {
             errorText = "Could not save your pickup schedule. Check the next collection date and try again."
         }
-        saving = nil
     }
 
     /// The current calendar a 409 PICKUP_SCHEDULE_CHANGED reply carries
@@ -691,5 +738,108 @@ struct AddressCalendarCard: View {
         struct Conflict: Decodable { let calendar: PlaceAddressCalendarData? }
         guard let data = body?.data(using: .utf8) else { return nil }
         return (try? JSONDecoder().decode(Conflict.self, from: data))?.calendar
+    }
+}
+
+/// Screen-local primer; the save's account scope also fences preference and permission replies.
+private struct PickupReminderPrimer: View {
+    let homeId: String
+    let api: APIClient
+    let sessionScope: HomeClaimSessionScope
+    let onClose: () -> Void
+    let onSessionChanged: () -> Void
+    @State private var primerBusy = false
+    @State private var primerError: String?
+    @State private var notificationsOff = false
+    @State private var primerHeight: CGFloat = 280
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Spacer()
+                Button("Close") { onClose() }
+                    .disabled(primerBusy)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.Color.primaryInk)
+            }
+            Text("Get a reminder the night before?")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Theme.Color.appText)
+            Text("One notification the evening before each pickup. Nothing on other days.")
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            if let primerError {
+                Text(primerError).font(.system(size: 13)).foregroundStyle(Theme.Color.error)
+            }
+            if notificationsOff {
+                Text("Notifications are off for Pantopus. Turn them on in Settings.")
+                    .font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary)
+                GhostButton(title: "Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { await UIApplication.shared.open(url) }
+                }
+            } else {
+                GhostButton(title: "Remind me", isLoading: primerBusy, isEnabled: !primerBusy) { await enablePickupReminders() }
+            }
+            GhostButton(title: "Not now", isEnabled: !primerBusy) { onClose() }
+        }
+        .padding(20)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Theme.Color.appSurface)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { primerHeight = $0 }
+        .accessibilityIdentifier("pickupReminderPrimer")
+        .presentationDetents([.height(primerHeight)])
+        .presentationDragIndicator(.hidden)
+        .interactiveDismissDisabled(primerBusy)
+    }
+
+    @MainActor
+    private func enablePickupReminders() async {
+        guard !primerBusy else { return }
+        primerBusy = true
+        primerError = nil
+        defer { primerBusy = false }
+        do {
+            try sessionScope.requireCurrent()
+            let calendarResponse: AddressCalendarResponse = try await api.request(AddressCalendarEndpoints.calendar(homeId: homeId))
+            try sessionScope.requireCurrent()
+            guard !calendarResponse.calendar.needsPickupDay else {
+                primerError = "Confirm your pickup schedule before turning on reminders."
+                return
+            }
+            let timezone = TimeZone.autoupdatingCurrent.identifier
+            guard TimeZone.knownTimeZoneIdentifiers.contains(timezone) else {
+                primerError = "Couldn't read your time zone. Try again."
+                return
+            }
+            let response: NotificationPreferencesResponseDTO = try await api.request(NotificationPreferencesEndpoints.update([
+                "evening_briefing_enabled": .bool(true), "daily_briefing_timezone": .string(timezone)
+            ]))
+            try sessionScope.requireCurrent()
+            guard response.preferences.eveningBriefingEnabled else {
+                primerError = "Couldn't enable pickup reminders. Try again."
+                return
+            }
+            let center = UNUserNotificationCenter.current()
+            let settings = await center.notificationSettings()
+            try sessionScope.requireCurrent()
+            let granted: Bool = if settings.authorizationStatus == .notDetermined {
+                try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            } else {
+                [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
+            }
+            try sessionScope.requireCurrent()
+            if granted {
+                UIApplication.shared.registerForRemoteNotifications()
+                onClose()
+            } else {
+                notificationsOff = true
+            }
+        } catch {
+            if sessionScope.isCurrent {
+                primerError = "Couldn't enable pickup reminders. Try again."
+            } else {
+                onSessionChanged()
+            }
+        }
     }
 }

@@ -15,9 +15,11 @@ const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { composeScheduledBriefing } = require('../services/context/providerOrchestrator');
+const { collectInternalContext } = require('../services/context/internalContextCollector');
 const pushService = require('../services/pushService');
 const { createNotification, isPushEnabled } = require('../services/notificationService');
 const { skipForLaunchCut } = require('../utils/featureFlags');
+const { recordFunnelEvent } = require('../services/funnelEvents');
 
 // ── Internal API key auth ───────────────────────────────────────────
 
@@ -253,7 +255,33 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
     }
 
     // 8. Check the account's Push Notifications switch (Settings), as every other push does, then push tokens
-    if (!(await isPushEnabled(userId))) {
+    const pushEnabled = await isPushEnabled(userId);
+    const { data: tokens } = pushEnabled ? await supabaseAdmin
+      .from('PushToken')
+      .select('token')
+      .eq('user_id', userId) : { data: [] };
+
+    // Settings/token reads may outlast composition. Recheck the same current
+    // private projections before either storing the text or handing it to push.
+    const householdSignals = (result.signals_snapshot || []).filter(signal => ['bill_due', 'task_due', 'calendar'].includes(signal.kind));
+    if (householdSignals.length) {
+      const current = await collectInternalContext(userId, result.home_id || null);
+      const records = {
+        bill_due: { rows: current.bills_due || [], id: 'bill_id', due: 'due_date', fields: ['amount'] },
+        task_due: { rows: current.tasks_due || [], id: 'task_id', due: 'due_at', fields: ['priority'] },
+        calendar: { rows: current.calendar_events || [], id: 'event_id', due: 'start_at', fields: ['event_type'] },
+      };
+      if (householdSignals.some(signal => {
+        const group = records[signal.kind];
+        const row = group.rows.find(record => record.id === signal.data?.[group.id]);
+        return !row || row[group.due] !== signal.data?.[group.due]
+          || group.fields.some(field => signal.data?.[field] !== undefined && row[field] !== signal.data[field]);
+      })) {
+        throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
+      }
+    }
+
+    if (!pushEnabled) {
       await supabaseAdmin
         .from('DailyBriefingDelivery')
         .update({ status: 'skipped', skip_reason: 'push_disabled', summary_text: result.text })
@@ -261,11 +289,6 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
 
       return res.json({ status: 'skipped', skip_reason: 'push_disabled' });
     }
-
-    const { data: tokens } = await supabaseAdmin
-      .from('PushToken')
-      .select('token')
-      .eq('user_id', userId);
 
     if (!tokens || tokens.length === 0) {
       await supabaseAdmin
@@ -283,7 +306,7 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
     // there was no way back to Place at all after a back-swipe. The home id
     // comes from the same location the briefing was composed for, so the
     // link opens the dashboard for the address the copy is about.
-    await pushService.sendToUser(userId, {
+    const receipt = await pushService.sendToUserWithReceipt(userId, {
       title: briefingConfig.title,
       body: result.text,
       data: {
@@ -295,6 +318,12 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
         briefingDeliveryId: deliveryId,
       },
     });
+
+    // A provider must accept at least one device before this user/day is
+    // settled. Partial acceptance settles it to avoid duplicating that device.
+    if (!Number.isInteger(receipt?.acceptedCount) || receipt.acceptedCount < 1) {
+      throw Object.assign(new Error('Push provider did not accept the briefing.'), { code: 'PUSH_NOT_ACCEPTED' });
+    }
 
     // 10. Update delivery row
     await supabaseAdmin
@@ -334,7 +363,7 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
       ).catch(() => {}); // Don't let logging fail the error response
     }
 
-    return res.status(500).json({ status: 'failed', error: err.message });
+    return res.status(err.code === 'PUSH_NOT_ACCEPTED' ? 503 : 500).json({ status: 'failed', error: err.message });
   }
 });
 
@@ -525,7 +554,7 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
       return res.json({ status: 'skipped', reason: 'no_push_token' });
     }
 
-    await pushService.sendToUser(userId, {
+    const receipt = await pushService.sendToUserWithReceipt(userId, {
       title,
       body,
       data: {
@@ -533,9 +562,21 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
         link: placeRoute(data?.homeId),
         route: placeRoute(data?.homeId),
         ...data,
+        // Notification actions must refuse a prior account's notification
+        // after a switch. Bind this to the server's exact push recipient.
+        recipient_user_id: userId,
       },
     });
 
+    // At least one provider must accept the notification before the
+    // scheduler records its user/day dedup. Zero acceptance stays retryable;
+    // partial acceptance settles it without repeating an accepted device.
+    if (!Number.isInteger(receipt?.acceptedCount) || receipt.acceptedCount < 1) {
+      return res.status(503).json({ status: 'failed', reason: 'push_not_accepted' });
+    }
+    if (reminderType === 'task_due') {
+      await recordFunnelEvent('reminder_sent', { userId, meta: { kind: 'task' } });
+    }
     return res.json({ status: 'sent' });
   } catch (err) {
     logger.error('Reminder push failed', { userId, reminderType, error: err.message });

@@ -2,6 +2,7 @@ package app.pantopus.android.place
 
 import app.pantopus.android.data.api.models.place.BlockFounding
 import app.pantopus.android.data.api.models.place.BlockStatusResponse
+import app.pantopus.android.data.api.models.place.PlaceCalendarEvent
 import app.pantopus.android.data.api.models.place.PlaceEnumAdapterFactory
 import app.pantopus.android.data.api.models.place.PlaceGroup
 import app.pantopus.android.data.api.models.place.PlacePreview
@@ -63,6 +64,19 @@ class PlaceWedgeDecodingTest {
         assertEquals(PlaceGroup.RISK_READINESS, preview.sections?.first()?.groupId)
         assertEquals(PlaceSectionStatus.READY, preview.sections?.first()?.status)
         assertNotNull(preview.sections?.first()?.flood)
+        val radon =
+            """
+            {"id":"lead_radon","group":"risk_readiness","band":"A","access":"available","status":"ready",
+             "data":{"year_built":1979,"lead_paint_risk":"moderate","radon_zone":2,"county_name":"Clark County",
+                     "summary":"Screening only","disclaimer":"Test this home."}}
+            """.trimIndent()
+        val adapter = moshi.adapter(PlaceSectionEnvelope::class.java)
+        val named = adapter.fromJson(radon)!!
+        assertEquals("Clark County", named.leadRadon?.countyName)
+        assertEquals(2, named.leadRadon?.radonZone)
+        val legacy = adapter.fromJson(radon.replace(",\"county_name\":\"Clark County\"", ""))!!
+        assertNull(legacy.leadRadon?.countyName)
+        assertEquals(2, legacy.leadRadon?.radonZone)
     }
 
     @Test
@@ -107,6 +121,28 @@ class PlaceWedgeDecodingTest {
         assertTrue(needsDay.addressCalendar?.needsPickupDay == true)
         assertEquals("Set your pickup day", PlacePresentation.reading(needsDay).value)
         assertEquals("Address calendar", PlacePresentation.config(PlaceSectionId.ADDRESS_CALENDAR).title)
+        assertEquals("Set your pickup day and your pickups start here.", needsDay.addressCalendar?.pickupSetupMessage)
+        assertNull(withNext.addressCalendar?.pickupSetupMessage)
+        val legacy = checkNotNull(withNext.addressCalendar?.upcoming?.first())
+        assertNull(legacy.holidayMoveLine)
+        val eventAdapter = moshi.adapter(PlaceCalendarEvent::class.java)
+        for ((days, line) in listOf(1 to "Moved a day for Thanksgiving.", 2 to "Moved for Thanksgiving.")) {
+            val moved =
+                checkNotNull(
+                    eventAdapter.fromJson(
+                        """{"rule_id":"pickup","kind":"garbage","date":"2026-11-27",
+                            "moved_from":"2026-11-26","holiday":"Thanksgiving","shift_days":$days}""",
+                    ),
+                )
+            assertEquals("2026-11-26", moved.movedFrom)
+            assertEquals(line, moved.holidayMoveLine)
+        }
+        val emptyPickup = checkNotNull(needsDay.addressCalendar)
+        assertNull(emptyPickup.copy(upcoming = listOf(legacy)).pickupSetupMessage)
+        assertEquals(
+            emptyPickup.pickupSetupMessage,
+            emptyPickup.copy(upcoming = listOf(legacy.copy(kind = "property_tax"))).pickupSetupMessage,
+        )
     }
 
     @Test

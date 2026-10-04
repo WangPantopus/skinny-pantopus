@@ -36,6 +36,7 @@ data class NotificationPreferencesDto(
     @Json(name = "daily_briefing_time_local") val dailyBriefingTimeLocal: String? = null,
     /** IANA zone the briefing times are interpreted in. */
     @Json(name = "daily_briefing_timezone") val dailyBriefingTimezone: String? = null,
+    @Json(name = "daily_briefing_prompted_at") val dailyBriefingPromptedAt: String? = null,
     @Json(name = "evening_briefing_enabled") val eveningBriefingEnabled: Boolean? = null,
     @Json(name = "evening_briefing_time_local") val eveningBriefingTimeLocal: String? = null,
     @Json(name = "weather_alerts_enabled") val weatherAlertsEnabled: Boolean? = null,
@@ -70,6 +71,7 @@ data class NotificationPreferences(
     val quietHoursStartLocal: String?,
     val quietHoursEndLocal: String?,
     val locationMode: String,
+    val dailyBriefingPromptedAt: String? = null,
 ) {
     /** Mirrors RN (`notification-preferences.tsx:205`). */
     val quietHoursEnabled: Boolean get() = quietHoursStartLocal != null
@@ -97,6 +99,7 @@ data class NotificationPreferences(
                 quietHoursStartLocal = dto.quietHoursStartLocal,
                 quietHoursEndLocal = dto.quietHoursEndLocal,
                 locationMode = dto.locationMode ?: MODE_PRIMARY_HOME,
+                dailyBriefingPromptedAt = dto.dailyBriefingPromptedAt,
             )
     }
 }
@@ -123,6 +126,8 @@ data class NotificationPreferencesPatch(
     val homeRemindersEnabled: Boolean? = null,
     val quietHours: QuietHoursPatch? = null,
     val locationMode: String? = null,
+    val dailyBriefingTimezone: String? = null,
+    val dailyBriefingPrompted: Boolean? = null,
 ) {
     /** Last write wins per key; untouched keys survive the merge. */
     fun mergedWith(newer: NotificationPreferencesPatch): NotificationPreferencesPatch =
@@ -139,6 +144,8 @@ data class NotificationPreferencesPatch(
             homeRemindersEnabled = newer.homeRemindersEnabled ?: homeRemindersEnabled,
             quietHours = newer.quietHours ?: quietHours,
             locationMode = newer.locationMode ?: locationMode,
+            dailyBriefingTimezone = newer.dailyBriefingTimezone ?: dailyBriefingTimezone,
+            dailyBriefingPrompted = newer.dailyBriefingPrompted ?: dailyBriefingPrompted,
         )
 
     /** Nothing to send — Joi's `.min(1)` would 400 on an empty body. */
@@ -183,6 +190,8 @@ class NotificationPreferencesPatchJsonAdapter {
             writer.serializeNulls = previous
         }
         value.locationMode?.let { writer.name("location_mode").value(it) }
+        value.dailyBriefingTimezone?.let { writer.name("daily_briefing_timezone").value(it) }
+        value.dailyBriefingPrompted?.let { writer.name("daily_briefing_prompted").value(it) }
         writer.endObject()
     }
 

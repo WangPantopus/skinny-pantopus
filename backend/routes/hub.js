@@ -22,6 +22,25 @@ const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const { getHubToday, clearHubTodayCache } = require('../services/context/providerOrchestrator');
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
+const { recordFunnelEvent, APP_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
+
+// Authenticated pilot beacons: account identity comes only from verifyToken.
+// The app-wide JSON parser runs first, so enforce the small body here.
+const PILOT_EVENT_META_KEYS = ['platform', 'trigger', 'push_type', 'kind', 'action', 'date', 'suggestion', 'decision'];
+router.post('/funnel-events', verifyToken, async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)
+    || JSON.stringify(body).length > 2048
+    || !APP_POSTABLE_EVENT_TYPES.includes(body.event_type)) {
+    return res.status(204).end();
+  }
+  const input = body.meta && typeof body.meta === 'object' && !Array.isArray(body.meta) ? body.meta : {};
+  const meta = Object.fromEntries(PILOT_EVENT_META_KEYS
+    .filter(key => typeof input[key] === 'string' && input[key].length <= 40)
+    .map(key => [key, input[key]]));
+  await recordFunnelEvent(body.event_type, { userId: req.user.id, meta });
+  return res.status(204).end();
+});
 
 /**
  * GET /api/hub
@@ -448,7 +467,7 @@ router.get('/', verifyToken, async (req, res) => {
         severity: 'info', count: unreadPersonal, route: '/app/mailbox',
       });
     }
-    if (offerItems.length > 0) {
+    if (offerItems.length > 0 && isLaunchFeatureEnabled('mail_extras')) {
       statusItems.push({
         id: 'inbox_offers', type: 'system_alert', pillar: 'personal',
         title: `${offerItems.length} offer${offerItems.length > 1 ? 's' : ''} available`,
@@ -803,12 +822,26 @@ router.put('/preferences', verifyToken, validate(preferencesSchema), async (req,
     if (prompted === true) patch.daily_briefing_prompted_at = new Date().toISOString();
     if (prompted === false) patch.daily_briefing_prompted_at = null;
 
+    const { data: existing, error: readError } = await supabaseAdmin
+      .from('UserNotificationPreferences').select('user_id').eq('user_id', userId).maybeSingle();
+    if (readError) throw readError;
+    if (!existing) {
+      const { data: saved, error: savedError } = await supabaseAdmin
+        .from('SavedPlace').select('id').eq('user_id', userId).limit(1);
+      if (savedError) throw savedError;
+      const savedOnly = saved?.length > 0 && !(await homeListService.read(userId)).homes
+        .some(home => ['shared', 'private_setup'].includes(home.access_kind));
+      const { error: createError } = await supabaseAdmin.from('UserNotificationPreferences')
+        .upsert({ user_id: userId, daily_briefing_enabled: false, evening_briefing_enabled: !savedOnly },
+          { onConflict: 'user_id', ignoreDuplicates: true });
+      if (createError) throw createError;
+    }
+    // Apply only explicit choices. The insert-only default above cannot
+    // overwrite a row created concurrently by another preference write.
     const { data, error } = await supabaseAdmin
       .from('UserNotificationPreferences')
-      .upsert(
-        { user_id: userId, ...patch, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' }
-      )
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
       .select('*')
       .single();
 

@@ -2,9 +2,7 @@
 //  SavedPlacesEndpoints.swift
 //  Pantopus
 //
-//  BLOCK 2E — "Saved places". The three routes already exist on the backend
-//  (mounted at `/api/saved-places` in `backend/app.js:389`); this screen does
-//  not add or change any server behaviour.
+//  Saved places and their owner-scoped public Today information.
 //
 
 import Foundation
@@ -14,6 +12,10 @@ public enum SavedPlacesEndpoints {
     /// first (`order created_at desc`). Route `backend/routes/savedPlaces.js:8`.
     public static func list() -> Endpoint {
         Endpoint(method: .get, path: "/api/saved-places")
+    }
+
+    public static func today(id: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/saved-places/\(id)/today")
     }
 
     /// `POST /api/saved-places` — upsert a saved place on
