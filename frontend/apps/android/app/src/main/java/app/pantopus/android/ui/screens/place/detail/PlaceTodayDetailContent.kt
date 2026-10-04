@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.place.detail
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -95,6 +100,7 @@ private const val RADON_MORNING_HOUR = 9
 private const val RADON_REMINDER_DAYS = 14L
 private const val RADON_DISMISS_DAYS = 30L
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlaceTodayDetailContent(
     intel: PlaceIntelligence,
@@ -103,6 +109,30 @@ fun PlaceTodayDetailContent(
     pilotEvents: PilotEvents? = null,
     radonContext: (suspend () -> Unit)? = null,
 ) {
+    val homeState =
+        if (radonFactory != null && pilotEvents != null && radonContext != null) {
+            rememberHomeTodayState(intel, viewModel, radonFactory, pilotEvents, radonContext)
+        } else {
+            null
+        }
+    val calendarFocus = remember { BringIntoViewRequester() }
+    val radonFocus = remember { BringIntoViewRequester() }
+    var pickupOpenTrigger by remember(viewModel?.calendarHomeId) { mutableStateOf(0) }
+    var calendarFallback by remember(intel, viewModel?.calendarHomeId) { mutableStateOf<PlaceAddressCalendarData?>(null) }
+    val calendar = intel.section(PlaceSectionId.ADDRESS_CALENDAR)
+    val needsPickup = (calendar?.addressCalendar?.takeIf { calendar.isLive() } ?: calendarFallback)?.needsPickupDay == true
+    if (homeState != null) {
+        HomeFirstUseCard(homeState, needsPickup, onPickup = {
+            pickupOpenTrigger++
+            homeState.lifetime.launch { calendarFocus.bringIntoView() }
+        }, onRadon = {
+            homeState.lifetime.launch {
+                homeState.clearRadonDismissal()
+                withFrameNanos { }
+                radonFocus.bringIntoView()
+            }
+        })
+    }
     TodayWeatherSection(intel)
     intel.section(PlaceSectionId.GOOD_DAY_TO)?.let { env ->
         val data = env.goodDayTo
@@ -116,41 +146,17 @@ fun PlaceTodayDetailContent(
     }
     // The calendar is the reason the Today tab exists; it sits above the
     // fold, after what it is like now and what to do with it.
-    AddressCalendarSection(intel, viewModel)
-    if (radonFactory != null && pilotEvents != null && radonContext != null) {
-        HomeRadonCard(intel, viewModel, radonFactory, pilotEvents, radonContext)
+    Column(modifier = Modifier.bringIntoViewRequester(calendarFocus)) {
+        AddressCalendarSection(intel, viewModel, pickupOpenTrigger) { calendarFallback = it }
     }
-    intel.section(PlaceSectionId.AIR_QUALITY)?.let { env ->
-        PlaceDetailSectionLabel("Air quality")
-        val data = env.airQuality
-        if (data != null && env.isLive()) {
-            AqiCard(data)
-            PlaceSourceNote("AirNow · EPA", PlacePresentation.fmtTime(env.asOf))
-        } else {
-            PlaceDetailFallbackCard(env)
+    if (homeState != null && homeState.hasRadon && !homeState.hidden) {
+        Column(modifier = Modifier.bringIntoViewRequester(radonFocus)) {
+            PlaceDetailSectionLabel("Radon")
+            intel.section(PlaceSectionId.LEAD_RADON)?.leadRadon?.let { RadonCardContent(homeState, it) }
         }
+        if (homeState.sheet != null) RadonTaskSheet(homeState)
     }
-    intel.section(PlaceSectionId.ALERTS)?.let { env ->
-        PlaceDetailSectionLabel("Alerts")
-        // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
-        val data = env.alerts
-        if (data != null && env.isLive()) {
-            AlertsCard(data.active)
-            PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, "live")
-        } else {
-            PlaceDetailFallbackCard(env)
-        }
-    }
-    intel.section(PlaceSectionId.SUNRISE_SUNSET)?.let { env ->
-        PlaceDetailSectionLabel("Sun")
-        val data = env.sunriseSunset
-        if (data != null) {
-            SunCard(data)
-            PlaceSourceNote("Your location", PlacePresentation.fmtSunDay(data.sunrise))
-        } else {
-            PlaceDetailFallbackCard(env)
-        }
-    }
+    TodayAirAlertsSunSections(intel)
 }
 
 /**
@@ -445,6 +451,8 @@ private fun weatherTint(code: WeatherConditionCode): Color =
 private fun AddressCalendarSection(
     intel: PlaceIntelligence,
     viewModel: AddressCalendarActions?,
+    openTrigger: Int = 0,
+    onCalendar: (PlaceAddressCalendarData?) -> Unit = {},
 ) {
     val env = intel.section(PlaceSectionId.ADDRESS_CALENDAR) ?: return
     PlaceDetailSectionLabel("At this address")
@@ -454,9 +462,10 @@ private fun AddressCalendarSection(
             fallback = viewModel.loadAddressCalendar()
         }
     }
-    val data = env.addressCalendar ?: fallback
-    if (data != null && (env.isLive() || fallback != null)) {
-        AddressCalendarCard(data, viewModel)
+    val data = env.addressCalendar?.takeIf { env.isLive() } ?: fallback
+    LaunchedEffect(data) { onCalendar(data) }
+    if (data != null) {
+        AddressCalendarCard(data, viewModel, openTrigger)
         PlaceSourceNote(data.source ?: "Pantopus registry", "next ${data.windowDays} days")
     } else {
         PlaceDetailFallbackCard(env)
@@ -467,9 +476,11 @@ private fun AddressCalendarSection(
 private fun AddressCalendarCard(
     data: PlaceAddressCalendarData,
     viewModel: AddressCalendarActions?,
+    openTrigger: Int = 0,
 ) {
     var picking by rememberSaveable { mutableStateOf(data.needsPickupDay) }
     LaunchedEffect(data.pickupVersion, data.needsPickupDay) { picking = data.needsPickupDay }
+    LaunchedEffect(openTrigger) { if (openTrigger > 0) picking = true }
     val busy = viewModel?.calendarBusy?.collectAsStateWithLifecycle()?.value ?: false
     val errorText = viewModel?.calendarError?.collectAsStateWithLifecycle()?.value
     Column(
@@ -661,6 +672,7 @@ private class RadonTodayState(
     private val contextGuard: suspend () -> Unit,
     private val events: PilotEvents,
     private val preferences: DataStore<Preferences>,
+    val hasRadon: Boolean,
 ) {
     val lifetime = CoroutineScope(parent.coroutineContext + Job(parent.coroutineContext[Job]))
     private var active = true
@@ -671,6 +683,8 @@ private class RadonTodayState(
     var busy by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     var dismissedUntil by mutableStateOf(0L)
+    var firstUseDismissed by mutableStateOf(false)
+    var preferencesLoaded by mutableStateOf(false)
     var sheet by mutableStateOf<String?>(null)
     var selectedDate by mutableStateOf(LocalDate.now())
     var hasDate by mutableStateOf(false)
@@ -693,13 +707,17 @@ private class RadonTodayState(
     suspend fun load() {
         try {
             requireCurrent()
-            val response = coordinator.access.list()
             val saved = preferences.data.first()
+            requireCurrent()
+            firstUseDismissed = saved[booleanPreferencesKey("firstUse.dismissed.$homeId")] ?: false
+            dismissedUntil = saved[longPreferencesKey("radonCard.dismissedUntil.$homeId")] ?: 0L
+            preferencesLoaded = true
+            if (!hasRadon) return
+            val response = coordinator.access.list()
             requireCurrent()
             checkNotNull(response.collectionCapabilities)
             task = RadonToday.selected(response.tasks)
             canCreate = response.collectionCapabilities.canCreate
-            dismissedUntil = saved[longPreferencesKey("radonCard.dismissedUntil.$homeId")] ?: 0L
             loaded = true
             error = null
         } catch (cancelled: CancellationException) {
@@ -782,6 +800,20 @@ private class RadonTodayState(
         }
     }
 
+    suspend fun hideFirstUse() {
+        requireCurrent()
+        preferences.edit { it[booleanPreferencesKey("firstUse.dismissed.$homeId")] = true }
+        requireCurrent()
+        firstUseDismissed = true
+    }
+
+    suspend fun clearRadonDismissal() {
+        requireCurrent()
+        preferences.edit { it.remove(longPreferencesKey("radonCard.dismissedUntil.$homeId")) }
+        requireCurrent()
+        dismissedUntil = 0L
+    }
+
     suspend fun dismiss() {
         requireCurrent()
         val until = Instant.now().atZone(ZoneId.systemDefault()).plusDays(RADON_DISMISS_DAYS).toInstant().toEpochMilli()
@@ -797,22 +829,23 @@ private class RadonTodayState(
 }
 
 @Composable
-private fun HomeRadonCard(
+private fun rememberHomeTodayState(
     intel: PlaceIntelligence,
     actions: AddressCalendarActions?,
     factory: HomeTaskCreationFactory,
     events: PilotEvents,
     contextGuard: suspend () -> Unit,
-) {
-    val homeId = actions?.calendarHomeId ?: return
-    val data = intel.section(PlaceSectionId.LEAD_RADON)?.leadRadon ?: return
-    if (data.radonZone !in 1..3) return
+): RadonTodayState? {
+    val homeId = actions?.calendarHomeId ?: return null
+    val hasRadon = intel.section(PlaceSectionId.LEAD_RADON)?.leadRadon?.radonZone in 1..3
     val context = LocalContext.current
     val parent = rememberCoroutineScope()
     var epoch by remember(homeId) { mutableStateOf(0) }
     var paused by remember(homeId) { mutableStateOf(false) }
     val state =
-        remember(homeId, intel, epoch) { RadonTodayState(homeId, factory, parent, contextGuard, events, context.homeTodayPreferences) }
+        remember(homeId, intel, epoch) {
+            RadonTodayState(homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon)
+        }
     DisposableEffect(state) { onDispose { state.close() } }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
         paused = true
@@ -825,11 +858,7 @@ private fun HomeRadonCard(
         }
     }
     LaunchedEffect(state) { state.load() }
-    if (!state.hidden) {
-        PlaceDetailSectionLabel("Radon")
-        RadonCardContent(state, data)
-        if (state.sheet != null) RadonTaskSheet(state)
-    }
+    return state
 }
 
 @Composable
@@ -972,6 +1001,61 @@ private fun TodayWeatherSection(intel: PlaceIntelligence) {
         if (data != null && env.isLive()) {
             NowCard(data)
             PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf))
+        } else {
+            PlaceDetailFallbackCard(env)
+        }
+    }
+}
+
+@Composable
+private fun HomeFirstUseCard(
+    state: RadonTodayState,
+    needsPickup: Boolean,
+    onPickup: () -> Unit,
+    onRadon: () -> Unit,
+) {
+    val needsRadon = state.hasRadon && state.loaded && state.task == null
+    if (!state.preferencesLoaded || state.firstUseDismissed || (!needsPickup && !needsRadon)) return
+    Column(
+        modifier = Modifier.padding(bottom = 12.dp).fillMaxWidth().placeCard().padding(16.dp).testTag("todayHomeFirstUse"),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Two things for your home", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+        if (needsPickup) GhostButton("Set your pickup day", onClick = onPickup)
+        if (needsRadon) GhostButton("Was radon tested?", onClick = onRadon)
+        GhostButton("Later", onClick = { state.lifetime.launch { state.hideFirstUse() } })
+    }
+}
+
+@Composable
+private fun TodayAirAlertsSunSections(intel: PlaceIntelligence) {
+    intel.section(PlaceSectionId.AIR_QUALITY)?.let { env ->
+        PlaceDetailSectionLabel("Air quality")
+        val data = env.airQuality
+        if (data != null && env.isLive()) {
+            AqiCard(data)
+            PlaceSourceNote("AirNow · EPA", PlacePresentation.fmtTime(env.asOf))
+        } else {
+            PlaceDetailFallbackCard(env)
+        }
+    }
+    intel.section(PlaceSectionId.ALERTS)?.let { env ->
+        PlaceDetailSectionLabel("Alerts")
+        // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
+        val data = env.alerts
+        if (data != null && env.isLive()) {
+            AlertsCard(data.active)
+            PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, "live")
+        } else {
+            PlaceDetailFallbackCard(env)
+        }
+    }
+    intel.section(PlaceSectionId.SUNRISE_SUNSET)?.let { env ->
+        PlaceDetailSectionLabel("Sun")
+        val data = env.sunriseSunset
+        if (data != null) {
+            SunCard(data)
+            PlaceSourceNote("Your location", PlacePresentation.fmtSunDay(data.sunrise))
         } else {
             PlaceDetailFallbackCard(env)
         }

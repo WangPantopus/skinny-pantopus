@@ -24,6 +24,18 @@ struct PlaceTodayDetailContent: View {
     @Environment(RootTabModel.self) private var rootTabs
     @Environment(\.scenePhase) private var scenePhase
     @State private var radonState: RadonTodayState?
+    @State private var pickupOpenTrigger = 0
+    @State private var radonFocus = 0
+
+    private var radonAvailable: Bool {
+        vm.section(.leadRadon, in: intel)?.leadRadon?.radonZone.map { (1...3).contains($0) } ?? false
+    }
+
+    private var needsPickup: Bool {
+        guard let section = vm.section(.addressCalendar, in: intel) else { return false }
+        if [.ready, .stale, .partial].contains(section.status) { return section.addressCalendar?.needsPickupDay ?? false }
+        return section.status == .unavailable && vm.fallbackCalendar?.needsPickupDay == true
+    }
 
     init(intel: PlaceIntelligence, vm: PlaceDetailViewModel, showHomeRadon: Bool = false) {
         self.intel = intel
@@ -35,96 +47,119 @@ struct PlaceTodayDetailContent: View {
     /// what recurs at this address, then air, alerts and sun. The calendar
     /// is the reason the Today tab exists and sits above the fold.
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let weather = vm.section(.weather, in: intel) {
-                PlaceDetailSectionLabel(text: "Weather")
-                if let data = weather.weather, weather.status == .ready || weather.status == .stale {
-                    NowCard(data: data)
-                    PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
-                } else {
-                    vm.fallbackCard(weather)
-                }
-            }
-
-            // Verdicts, not readings. Silent when there is nothing to
-            // answer — an empty verdict row is worse than no row.
-            if let goodDay = vm.section(.goodDayTo, in: intel),
-               let data = goodDay.goodDayTo,
-               !data.tiles.isEmpty,
-               goodDay.status == .ready || goodDay.status == .stale {
-                PlaceDetailSectionLabel(text: "Good day to…")
-                GoodDayRow(tiles: data.tiles)
-                PlaceSourceNote(
-                    name: "Derived from today's conditions",
-                    asOf: PlacePresentation.fmtTime(goodDay.asOf)
-                )
-            }
-
-            // The address calendar (Wedge Phase 2, D6): what recurs at THIS address.
-            if let calendar = vm.section(.addressCalendar, in: intel) {
-                PlaceDetailSectionLabel(text: "At this address")
-                if let data = calendar.addressCalendar,
-                   calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
-                    AddressCalendarCard(homeId: vm.calendarHomeId, data: data) { await vm.refresh() }
-                    PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
-                } else if calendar.status == .unavailable, let data = vm.fallbackCalendar {
-                    AddressCalendarCard(homeId: vm.calendarHomeId, data: data) { await vm.refresh() }
-                    PlaceSourceNote(name: "Pantopus registry", asOf: "next two weeks")
-                } else {
-                    vm.fallbackCard(calendar)
-                        .task(id: calendar.status) {
-                            if calendar.status == .unavailable { await vm.loadFallbackCalendar() }
+        ScrollViewReader { proxy in
+            VStack(alignment: .leading, spacing: 0) {
+                if showHomeRadon, let state = radonState, state.homeId == vm.calendarHomeId {
+                    HomeFirstUseCard(
+                        state: state,
+                        needsPickup: needsPickup,
+                        radonAvailable: radonAvailable,
+                        onPickup: {
+                            guard (try? state.context.requireCurrent()) != nil else { return }
+                            pickupOpenTrigger += 1
+                            proxy.scrollTo("todayAddressCalendar", anchor: .top)
+                        },
+                        onRadon: {
+                            guard (try? state.context.requireCurrent()) != nil else { return }
+                            state.dismissedUntil = nil
+                            UserDefaults.standard.removeObject(forKey: "radonCard.dismissedUntil.\(state.homeId)")
+                            radonFocus += 1
                         }
+                    )
+                }
+                if let weather = vm.section(.weather, in: intel) {
+                    PlaceDetailSectionLabel(text: "Weather")
+                    if let data = weather.weather, weather.status == .ready || weather.status == .stale {
+                        NowCard(data: data)
+                        PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
+                    } else {
+                        vm.fallbackCard(weather)
+                    }
+                }
+
+                // Verdicts, not readings. Silent when there is nothing to
+                // answer — an empty verdict row is worse than no row.
+                if let goodDay = vm.section(.goodDayTo, in: intel),
+                   let data = goodDay.goodDayTo,
+                   !data.tiles.isEmpty,
+                   goodDay.status == .ready || goodDay.status == .stale {
+                    PlaceDetailSectionLabel(text: "Good day to…")
+                    GoodDayRow(tiles: data.tiles)
+                    PlaceSourceNote(
+                        name: "Derived from today's conditions",
+                        asOf: PlacePresentation.fmtTime(goodDay.asOf)
+                    )
+                }
+
+                // The address calendar (Wedge Phase 2, D6): what recurs at THIS address.
+                if let calendar = vm.section(.addressCalendar, in: intel) {
+                    PlaceDetailSectionLabel(text: "At this address")
+                    if let data = calendar.addressCalendar,
+                       calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
+                        AddressCalendarCard(homeId: vm.calendarHomeId, data: data, openTrigger: pickupOpenTrigger) { await vm.refresh() }
+                            .id("todayAddressCalendar")
+                        PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
+                    } else if calendar.status == .unavailable, let data = vm.fallbackCalendar {
+                        AddressCalendarCard(homeId: vm.calendarHomeId, data: data, openTrigger: pickupOpenTrigger) { await vm.refresh() }
+                            .id("todayAddressCalendar")
+                        PlaceSourceNote(name: "Pantopus registry", asOf: "next two weeks")
+                    } else {
+                        vm.fallbackCard(calendar)
+                            .task(id: calendar.status) {
+                                if calendar.status == .unavailable { await vm.loadFallbackCalendar() }
+                            }
+                    }
+                }
+
+                if showHomeRadon, let homeId = vm.calendarHomeId, let state = radonState, state.homeId == homeId,
+                   let data = vm.section(.leadRadon, in: intel)?.leadRadon, let zone = data.radonZone, (1...3).contains(zone) {
+                    RadonTodayCard(state: state, data: data).id("todayRadonCard")
+                }
+
+                if let aqi = vm.section(.airQuality, in: intel) {
+                    PlaceDetailSectionLabel(text: "Air quality")
+                    if let data = aqi.airQuality, aqi.status == .ready || aqi.status == .stale {
+                        AqiCard(data: data)
+                        PlaceSourceNote(name: "AirNow · EPA", asOf: PlacePresentation.fmtTime(aqi.asOf))
+                    } else {
+                        vm.fallbackCard(aqi)
+                    }
+                }
+
+                if let alerts = vm.section(.alerts, in: intel) {
+                    PlaceDetailSectionLabel(text: "Alerts")
+                    // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
+                    if let data = alerts.alerts, alerts.status == .ready || alerts.status == .stale {
+                        AlertsCard(active: data.active)
+                        PlaceSourceNote(name: alerts.source ?? "Source unavailable", asOf: "live")
+                    } else {
+                        vm.fallbackCard(alerts)
+                    }
+                }
+
+                if let sun = vm.section(.sunriseSunset, in: intel) {
+                    PlaceDetailSectionLabel(text: "Sun")
+                    if let data = sun.sunriseSunset {
+                        SunCard(data: data)
+                        PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data.sunrise))
+                    } else {
+                        vm.fallbackCard(sun)
+                    }
                 }
             }
-
-            if showHomeRadon, let homeId = vm.calendarHomeId, let state = radonState, state.homeId == homeId,
-               let data = vm.section(.leadRadon, in: intel)?.leadRadon, let zone = data.radonZone, (1...3).contains(zone) {
-                RadonTodayCard(state: state, data: data)
+            .onChange(of: radonFocus) { _, _ in proxy.scrollTo("todayRadonCard", anchor: .top) }
+            .task(id: vm.calendarHomeId) {
+                guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
+                radonState?.suspend()
+                let current = RadonTodayState(homeId: homeId)
+                radonState = current
+                if radonAvailable { await current.load() }
             }
-
-            if let aqi = vm.section(.airQuality, in: intel) {
-                PlaceDetailSectionLabel(text: "Air quality")
-                if let data = aqi.airQuality, aqi.status == .ready || aqi.status == .stale {
-                    AqiCard(data: data)
-                    PlaceSourceNote(name: "AirNow · EPA", asOf: PlacePresentation.fmtTime(aqi.asOf))
-                } else {
-                    vm.fallbackCard(aqi)
-                }
-            }
-
-            if let alerts = vm.section(.alerts, in: intel) {
-                PlaceDetailSectionLabel(text: "Alerts")
-                // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
-                if let data = alerts.alerts, alerts.status == .ready || alerts.status == .stale {
-                    AlertsCard(active: data.active)
-                    PlaceSourceNote(name: alerts.source ?? "Source unavailable", asOf: "live")
-                } else {
-                    vm.fallbackCard(alerts)
-                }
-            }
-
-            if let sun = vm.section(.sunriseSunset, in: intel) {
-                PlaceDetailSectionLabel(text: "Sun")
-                if let data = sun.sunriseSunset {
-                    SunCard(data: data)
-                    PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data.sunrise))
-                } else {
-                    vm.fallbackCard(sun)
-                }
-            }
+            .onDisappear { radonState?.suspend() }
+            .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
+            .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
+            .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
         }
-        .task(id: vm.calendarHomeId) {
-            guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
-            radonState?.suspend()
-            let current = RadonTodayState(homeId: homeId)
-            radonState = current
-            await current.load()
-        }
-        .onDisappear { radonState?.suspend() }
-        .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
-        .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
-        .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
     }
 
     private func resumeRadon(_ active: Bool) {
@@ -132,7 +167,7 @@ struct PlaceTodayDetailContent: View {
         guard active, showHomeRadon, let homeId = vm.calendarHomeId else { return }
         let current = RadonTodayState(homeId: homeId)
         radonState = current
-        Task { await current.load() }
+        if radonAvailable { Task { await current.load() } }
     }
 }
 
@@ -465,6 +500,7 @@ private func weatherTint(_ code: WeatherConditionCode) -> Color {
 struct AddressCalendarCard: View {
     let homeId: String?
     let data: PlaceAddressCalendarData
+    var openTrigger = 0
     let onChanged: () async -> Void
 
     @State private var picking = false
@@ -501,7 +537,8 @@ struct AddressCalendarCard: View {
         ("FR", "Friday"), ("SA", "Saturday"), ("SU", "Sunday")
     ]
 
-    init(homeId: String?, data: PlaceAddressCalendarData, onChanged: @escaping () async -> Void) {
+    init(homeId: String?, data: PlaceAddressCalendarData, openTrigger: Int = 0, onChanged: @escaping () async -> Void) {
+        self.openTrigger = openTrigger
         self.homeId = homeId
         self.data = data
         self.onChanged = onChanged
@@ -586,6 +623,7 @@ struct AddressCalendarCard: View {
                 )
             }
         }
+        .onChange(of: openTrigger) { _, trigger in if trigger > 0 { picking = true } }
         .onAppear { lifecycleVersion += 1
             saving = nil
         }
@@ -1042,6 +1080,7 @@ private final class RadonTodayState {
     var busy = false
     var error: String?
     var dismissedUntil: Date?
+    var firstUseDismissed = false
     var coordinator: HomeTaskCreationCoordinator?
     var sheet: String?
     var selectedDate = Date()
@@ -1055,6 +1094,7 @@ private final class RadonTodayState {
         self.context = context
         access = HomeTaskAccess(homeId: homeId) { try context.requireCurrent() }
         dismissedUntil = UserDefaults.standard.object(forKey: "radonCard.dismissedUntil.\(homeId)") as? Date
+        firstUseDismissed = UserDefaults.standard.bool(forKey: "firstUse.dismissed.\(homeId)")
     }
 
     var hidden: Bool {
@@ -1273,5 +1313,33 @@ private struct RadonTodaySheet: View {
                 .map { $0.isFinite && $0 >= 0 } == true
         }
         return Calendar.autoupdatingCurrent.startOfDay(for: state.selectedDate) >= Calendar.autoupdatingCurrent.startOfDay(for: Date())
+    }
+}
+
+private struct HomeFirstUseCard: View {
+    @Bindable var state: RadonTodayState
+    let needsPickup: Bool
+    let radonAvailable: Bool
+    let onPickup: () -> Void
+    let onRadon: () -> Void
+
+    var body: some View {
+        let needsRadon = radonAvailable && state.loaded && state.task == nil
+        if !state.firstUseDismissed, needsPickup || needsRadon {
+            PlaceDetailCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Two things for your home").font(.system(size: 16, weight: .semibold))
+                    if needsPickup { GhostButton(title: "Set your pickup day") { onPickup() } }
+                    if needsRadon { GhostButton(title: "Was radon tested?") { onRadon() } }
+                    GhostButton(title: "Later") {
+                        guard (try? state.context.requireCurrent()) != nil else { return }
+                        UserDefaults.standard.set(true, forKey: "firstUse.dismissed.\(state.homeId)")
+                        state.firstUseDismissed = true
+                    }
+                }
+            }
+            .padding(.bottom, 12)
+            .accessibilityIdentifier("todayHomeFirstUse")
+        }
     }
 }
