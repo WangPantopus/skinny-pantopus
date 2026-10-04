@@ -12,6 +12,7 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -51,7 +52,15 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
     stats = {"bills_notified": 0, "tasks_notified": 0, "calendar_notified": 0, "errors": 0}
 
     _process_bills_due(supabase, secrets, stats)
-    _process_tasks_due(supabase, secrets, stats)
+    # Use the scheduled event time, so a delayed morning invocation remains
+    # morning. The 01:00 UTC run must never send due-day task reminders.
+    try:
+        scheduled_at = datetime.fromisoformat(event["time"].replace("Z", "+00:00")) if event.get("time") else datetime.now(timezone.utc)
+        morning_run = scheduled_at.astimezone(timezone.utc).hour == 14
+    except (ValueError, TypeError):
+        morning_run = False
+    if morning_run:
+        _process_tasks_due(supabase, secrets, stats)
     _process_calendar_events(supabase, secrets, stats)
 
     elapsed_ms = time.monotonic_ns() // 1_000_000 - start_ms
@@ -145,18 +154,20 @@ def _process_bills_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
 
 
 def _process_tasks_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
-    """Find incomplete tasks due today, notify assigned user or household."""
+    """Find incomplete tasks due on each authorized recipient's local day."""
     now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    today_end = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    # A UTC candidate window covers today's dates across recipient timezones;
+    # exact local-day selection happens after the per-recipient access check.
+    window_start = (now - timedelta(days=1)).isoformat()
+    window_end = (now + timedelta(days=1)).isoformat()
 
     try:
         result = (
             supabase.table("HomeTask")
-            .select("id, home_id, title, due_at, assigned_to, status")
-            .filter("status", "not.in", '("completed","cancelled")')
-            .gte("due_at", today_start)
-            .lte("due_at", today_end)
+            .select("id, home_id, title, due_at, assigned_to, status, created_by, visibility")
+            .filter("status", "not.in", '("done","canceled")')
+            .gte("due_at", window_start)
+            .lt("due_at", window_end)
             .execute()
         )
         tasks = result.data or []
@@ -168,8 +179,6 @@ def _process_tasks_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
     if not tasks:
         return
 
-    today_str = now.strftime("%Y-%m-%d")
-
     # Collect home_ids for tasks without assigned_to
     home_ids_needed = list(set(
         t["home_id"] for t in tasks if not t.get("assigned_to")
@@ -177,32 +186,68 @@ def _process_tasks_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
     members = _get_home_members(supabase, home_ids_needed) if home_ids_needed else {}
 
     for task in tasks:
-        dedup_key = f"task_{task['id']}_{today_str}"
-        if _already_sent(supabase, dedup_key):
+        if task.get("status") not in {"open", "in_progress"}:
             continue
-
-        title_text = task.get("title") or "Home task"
-        title = "Task due today"
-        body = f'"{title_text}" is due today.'
-
-        # Send to assigned user, or all household members
-        targets = []
-        if task.get("assigned_to"):
-            targets = [task["assigned_to"]]
-        else:
-            targets = members.get(task["home_id"], [])
-
-        sent = 0
+        # The creator may still be in a private setup. The existing record
+        # projection validates that exception, rather than granting access
+        # merely because an old task remembers a creator or assignee.
+        targets = [task["assigned_to"]] if task.get("assigned_to") else [task.get("created_by"), *members.get(task["home_id"], [])]
+        targets = list(dict.fromkeys(uid for uid in targets if uid))
+        if not targets:
+            continue
+        try:
+            preferences = supabase.table("UserNotificationPreferences").select("user_id, daily_briefing_timezone").in_("user_id", targets).execute().data or []
+            timezones = {row["user_id"]: row.get("daily_briefing_timezone") for row in preferences}
+        except Exception:
+            log.warning("Task reminder timezone lookup failed", exc_info=True)
+            stats["errors"] += 1
+            continue
         for uid in targets:
-            result = _send_reminder(secrets, uid, title, body, "task_due", {
+            try:
+                if uid != task.get("created_by"):
+                    eligible = supabase.rpc("home_record_recipient", {
+                        "p_home_id": task["home_id"], "p_user_id": uid,
+                        "p_kind": "task", "p_visibility": task.get("visibility"),
+                    }).execute().data
+                    if eligible is not True:
+                        continue
+                # Reuse the actual task read contract, including source-mail
+                # access, private setup, current permissions and finished state.
+                projection = supabase.rpc("get_home_records", {
+                    "p_home_id": task["home_id"], "p_actor_id": uid, "p_kind": "task",
+                    "p_record_id": task["id"], "p_start_after": None,
+                    "p_start_before": None, "p_mail_only": False,
+                }).execute().data
+                rows = projection.get("records", []) if isinstance(projection, dict) and projection.get("ok") is True else []
+                if len(rows) != 1:
+                    continue
+                current = rows[0]
+                if current.get("id") != task["id"] or current.get("home_id") != task["home_id"] or current.get("status") not in {"open", "in_progress"} or current.get("assigned_to") != task.get("assigned_to"):
+                    continue
+                try:
+                    local_tz = ZoneInfo(timezones.get(uid) or "America/Los_Angeles")
+                except (ValueError, KeyError):
+                    local_tz = ZoneInfo("America/Los_Angeles")
+                due = datetime.fromisoformat(current["due_at"].replace("Z", "+00:00"))
+                if due.tzinfo is None or due.astimezone(local_tz).date() != now.astimezone(local_tz).date():
+                    continue
+                local_date = now.astimezone(local_tz).strftime("%Y-%m-%d")
+                dedup_key = f"task_{task['id']}_{uid}_{local_date}"
+                if _already_sent(supabase, dedup_key, fail_closed=True):
+                    continue
+            except Exception:
+                log.warning("Task reminder access/date check failed", exc_info=True)
+                stats["errors"] += 1
+                continue
+            result = _send_reminder(secrets, uid, "Task due today", f'"{current.get("title") or "Home task"}" is due today.', "task_due", {
                 "entityId": task["id"],
-                "route": f"/homes/{task['home_id']}",
+                "category": "TASK_REMINDER", "taskId": task["id"], "homeId": task["home_id"],
+                "link": f"/app/homes/{task['home_id']}/tasks/{task['id']}",
+                "route": f"/app/homes/{task['home_id']}/tasks/{task['id']}",
             })
             if result == "sent":
-                sent += 1
-
-        _record_sent(supabase, dedup_key, sent)
-        stats["tasks_notified"] += sent
+                _record_sent(supabase, dedup_key, 1)
+                stats["tasks_notified"] += 1
 
 
 # ── Calendar events starting soon ───────────────────────────────
@@ -293,7 +338,7 @@ def _get_home_members(supabase, home_ids: list[str]) -> dict[str, list[str]]:
         return {}
 
 
-def _already_sent(supabase, dedup_key: str) -> bool:
+def _already_sent(supabase, dedup_key: str, *, fail_closed: bool = False) -> bool:
     """Check if a reminder was already sent today (using AlertNotificationHistory)."""
     try:
         result = (
@@ -307,7 +352,7 @@ def _already_sent(supabase, dedup_key: str) -> bool:
     except Exception as exc:
         if is_missing_table_error(exc, "AlertNotificationHistory"):
             log_missing_table_once(log, "AlertNotificationHistory", "home reminder dedup", exc)
-        return False
+        return fail_closed
 
 
 def _record_sent(supabase, dedup_key: str, users_notified: int) -> None:
