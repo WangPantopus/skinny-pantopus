@@ -36,9 +36,9 @@ struct PlaceTodayDetailContent: View {
     /// is the reason the Today tab exists and sits above the fold.
     var body: some View {
         loadedContent
-            .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
-            .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
-            .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
+            .onChange(of: rootTabs.selected) { (_: RootTab, tab: RootTab) in resumeRadon(tab == .today) }
+            .onChange(of: scenePhase) { (_: ScenePhase, phase: ScenePhase) in resumeRadon(phase == .active && rootTabs.selected == .today) }
+            .onChange(of: AppLockManager.shared.isLocked) { (_: Bool, locked: Bool) in resumeRadon(!locked && rootTabs.selected == .today) }
     }
 
     private var loadedContent: some View {
