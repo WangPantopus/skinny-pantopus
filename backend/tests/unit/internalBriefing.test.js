@@ -104,8 +104,9 @@ describe('POST /api/internal/briefing/send', () => {
       .send({ userId: USER_ID, briefingKind: 'morning' });
 
     expect(res.status).toBe(200);
-    expect(pushService.sendToUser).toHaveBeenCalledTimes(1);
-    const payload = pushService.sendToUser.mock.calls[0][1];
+    expect(pushService.sendToUser).not.toHaveBeenCalled();
+    expect(pushService.sendToUserWithReceipt).toHaveBeenCalledTimes(1);
+    const payload = pushService.sendToUserWithReceipt.mock.calls[0][1];
     // BOTH clients read `link` (then `deepLink`) and neither reads `route`,
     // so a route-only payload produces no deep link at all.
     expect(payload.data.link).toBe('/place/home-abc');
@@ -119,7 +120,7 @@ describe('POST /api/internal/briefing/send', () => {
       .send({ userId: USER_ID, title: 'Task due today', body: 'Test for radon is due today.', reminderType: 'task_due',
         data: { homeId: 'home-abc', taskId: 'task-1', category: 'TASK_REMINDER', link: taskLink, route: taskLink, recipient_user_id: 'other-account' } });
     expect(reminder.status).toBe(200);
-    expect(pushService.sendToUserWithReceipt.mock.calls[0][1].data).toMatchObject({
+    expect(pushService.sendToUserWithReceipt.mock.calls.at(-1)[1].data).toMatchObject({
       link: taskLink, route: taskLink, category: 'TASK_REMINDER', homeId: 'home-abc', taskId: 'task-1', recipient_user_id: USER_ID,
     });
     expect(reminder.body).toEqual({ status: 'sent' });
@@ -169,6 +170,7 @@ describe('POST /api/internal/briefing/send', () => {
       for (const unreadable of [false, true]) {
         seedTable('DailyBriefingDelivery', []);
         pushService.sendToUser.mockClear();
+        pushService.sendToUserWithReceipt.mockClear();
         let release;
         let entered;
         const started = new Promise(resolve => { entered = resolve; });
@@ -183,6 +185,7 @@ describe('POST /api/internal/briefing/send', () => {
         expect(revoked.status).toBe(500);
         expect(revoked.body.status).toBe('failed');
         expect(pushService.sendToUser).not.toHaveBeenCalled();
+        expect(pushService.sendToUserWithReceipt).not.toHaveBeenCalled();
         expect(getTable('DailyBriefingDelivery')[0].status).toBe('failed');
         expect(getTable('DailyBriefingDelivery')[0].summary_text).toBeUndefined();
       }
@@ -220,8 +223,36 @@ describe('POST /api/internal/briefing/send', () => {
       .send({ userId: USER_ID, briefingKind: 'morning' });
 
     // The client resolves the primary home, exactly as the auto-land does.
-    expect(pushService.sendToUser.mock.calls[0][1].data.link).toBe('/place');
-    expect(pushService.sendToUser.mock.calls[0][1].data.route).toBe('/place');
+    expect(pushService.sendToUserWithReceipt.mock.calls[0][1].data.link).toBe('/place');
+    expect(pushService.sendToUserWithReceipt.mock.calls[0][1].data.route).toBe('/place');
+    for (const receipt of [undefined, { acceptedCount: 0, unresolvedCount: 1 }, { acceptedCount: -1 }, { acceptedCount: 0.5 }]) {
+      seedTable('DailyBriefingDelivery', []);
+      pushService.sendToUserWithReceipt.mockResolvedValueOnce(receipt);
+      const refused = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+        .send({ userId: USER_ID, briefingKind: 'morning' });
+      expect(refused.status).toBe(503);
+      expect(refused.body.status).toBe('failed');
+      expect(getTable('DailyBriefingDelivery')[0].status).toBe('failed');
+      expect(getTable('DailyBriefingDelivery')[0].summary_text).toBeUndefined();
+      expect(getTable('FunnelEvent')).toHaveLength(0);
+    }
+    pushService.sendToUserWithReceipt.mockRejectedValueOnce(new Error('Provider unavailable'));
+    const providerError = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+      .send({ userId: USER_ID, briefingKind: 'morning' });
+    expect(providerError.status).toBe(500);
+    expect(getTable('DailyBriefingDelivery')).toHaveLength(1);
+    expect(getTable('DailyBriefingDelivery')[0].status).toBe('failed');
+    pushService.sendToUserWithReceipt.mockResolvedValueOnce({ acceptedCount: 1, unresolvedCount: 1 });
+    const retry = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+      .send({ userId: USER_ID, briefingKind: 'morning' });
+    expect(retry.body.status).toBe('sent');
+    expect(getTable('DailyBriefingDelivery')).toHaveLength(1);
+    expect(getTable('DailyBriefingDelivery')[0].status).toBe('sent');
+    const acceptedCalls = pushService.sendToUserWithReceipt.mock.calls.length;
+    const duplicate = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+      .send({ userId: USER_ID, briefingKind: 'morning' });
+    expect(duplicate.body).toEqual({ status: 'skipped', skip_reason: 'already_processed' });
+    expect(pushService.sendToUserWithReceipt).toHaveBeenCalledTimes(acceptedCalls);
   });
 });
 
