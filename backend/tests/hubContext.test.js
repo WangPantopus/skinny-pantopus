@@ -1103,6 +1103,27 @@ describe('Provider Orchestrator', () => {
     expect(changedHomeCalendar.weather.current_temp_f).toBe(52);
     calendarService.composeForHomeId.mockResolvedValue(null);
     clearCalendarMemo(MOCK_USER_ID);
+    process.env.LAUNCH_FEATURES = 'household_extras';
+    clearCalendarMemo(MOCK_USER_ID);
+    let currentTaskAuthority = true;
+    collectInternalContext.mockImplementation(async () => currentTaskAuthority ? {
+      ...MOCK_INTERNAL_EMPTY, tasks_due: [{ id: 'task', title: 'Added calendar wait private task',
+        due_at: new Date(Date.now() + 3600000).toISOString(), priority: 'high', status: 'open' }],
+    } : MOCK_INTERNAL_EMPTY);
+    let releaseAddedCalendar;
+    let enteredAddedCalendar;
+    const addedCalendarEntered = new Promise(resolve => { enteredAddedCalendar = resolve; });
+    calendarService.composeForHomeId.mockResolvedValueOnce(householdCalendar)
+      .mockImplementationOnce(() => new Promise(resolve => { releaseAddedCalendar = resolve; enteredAddedCalendar(); }));
+    const addedCalendarPending = getHubToday(MOCK_USER_ID);
+    await addedCalendarEntered;
+    currentTaskAuthority = false;
+    releaseAddedCalendar(householdCalendar);
+    const afterAddedCalendarWait = await addedCalendarPending;
+    expect(JSON.stringify(afterAddedCalendarWait).includes('Added calendar wait private task')).toBe(false);
+    expect(afterAddedCalendarWait.weather.current_temp_f).toBe(52);
+    calendarService.composeForHomeId.mockResolvedValue(null);
+    collectInternalContext.mockResolvedValue(MOCK_INTERNAL_EMPTY);
     process.env.LAUNCH_FEATURES = launch;
 
     const { fetchWeather } = require('../services/context/weatherProvider');

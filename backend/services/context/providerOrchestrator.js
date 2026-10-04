@@ -254,14 +254,6 @@ async function getHubToday(userId, options = {}) {
   };
   let addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
 
-  // The collector may have completed while a slow public provider was still
-  // pending. Recollect household records under current authority at this response
-  // boundary without repeating any weather/AQI/alerts request.
-  if (internal.bills_due?.length || internal.tasks_due?.length || internal.calendar_events?.length) {
-    try { internal = await collectInternalContext(userId, location.homeId); }
-    catch (_) { internal = defaultInternalContext(); }
-  }
-
   // AddressCalendarRule household rows use their own authorized reader, not
   // internal.calendar_events. Refresh that projection after providers too, and
   // drop it if the user's current Home anchor changed during the wait.
@@ -271,6 +263,14 @@ async function getHubToday(userId, options = {}) {
       addressCalendar = currentLocation.homeId === location.homeId
         ? await fetchAddressCalendar(currentLocation.homeId, userId) : null;
     } catch (_) { addressCalendar = null; }
+  }
+
+  // The collector may have completed while a slow public provider was still
+  // pending. Recollect household records under current authority at this response
+  // boundary, after the calendar awaits too, without repeating public providers.
+  if (internal.bills_due?.length || internal.tasks_due?.length || internal.calendar_events?.length) {
+    try { internal = await collectInternalContext(userId, location.homeId); }
+    catch (_) { internal = defaultInternalContext(); }
   }
 
   // Log per-provider status
