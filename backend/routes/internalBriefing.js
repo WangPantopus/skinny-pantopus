@@ -15,6 +15,7 @@ const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { composeScheduledBriefing } = require('../services/context/providerOrchestrator');
+const { collectInternalContext } = require('../services/context/internalContextCollector');
 const pushService = require('../services/pushService');
 const { createNotification, isPushEnabled } = require('../services/notificationService');
 const { skipForLaunchCut } = require('../utils/featureFlags');
@@ -254,7 +255,33 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
     }
 
     // 8. Check the account's Push Notifications switch (Settings), as every other push does, then push tokens
-    if (!(await isPushEnabled(userId))) {
+    const pushEnabled = await isPushEnabled(userId);
+    const { data: tokens } = pushEnabled ? await supabaseAdmin
+      .from('PushToken')
+      .select('token')
+      .eq('user_id', userId) : { data: [] };
+
+    // Settings/token reads may outlast composition. Recheck the same current
+    // private projections before either storing the text or handing it to push.
+    const householdSignals = (result.signals_snapshot || []).filter(signal => ['bill_due', 'task_due', 'calendar'].includes(signal.kind));
+    if (householdSignals.length) {
+      const current = await collectInternalContext(userId, result.home_id || null);
+      const records = {
+        bill_due: { rows: current.bills_due || [], id: 'bill_id', due: 'due_date', fields: ['amount'] },
+        task_due: { rows: current.tasks_due || [], id: 'task_id', due: 'due_at', fields: ['priority'] },
+        calendar: { rows: current.calendar_events || [], id: 'event_id', due: 'start_at', fields: ['event_type'] },
+      };
+      if (householdSignals.some(signal => {
+        const group = records[signal.kind];
+        const row = group.rows.find(record => record.id === signal.data?.[group.id]);
+        return !row || row[group.due] !== signal.data?.[group.due]
+          || group.fields.some(field => signal.data?.[field] !== undefined && row[field] !== signal.data[field]);
+      })) {
+        throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
+      }
+    }
+
+    if (!pushEnabled) {
       await supabaseAdmin
         .from('DailyBriefingDelivery')
         .update({ status: 'skipped', skip_reason: 'push_disabled', summary_text: result.text })
@@ -262,11 +289,6 @@ router.post('/send', verifyInternalApiKey, async (req, res) => {
 
       return res.json({ status: 'skipped', skip_reason: 'push_disabled' });
     }
-
-    const { data: tokens } = await supabaseAdmin
-      .from('PushToken')
-      .select('token')
-      .eq('user_id', userId);
 
     if (!tokens || tokens.length === 0) {
       await supabaseAdmin

@@ -12,6 +12,7 @@ jest.mock('../../utils/logger', () => ({
 jest.mock('../../services/context/providerOrchestrator', () => ({
   composeScheduledBriefing: jest.fn(),
 }));
+jest.mock('../../services/context/internalContextCollector', () => ({ collectInternalContext: jest.fn() }));
 
 const { composeScheduledBriefing } = require('../../services/context/providerOrchestrator');
 // jest.config maps `../services/pushService` (the route's specifier) to this
@@ -149,6 +150,44 @@ describe('POST /api/internal/briefing/send', () => {
     expect(partial.body).toEqual({ status: 'sent' });
     expect(getTable('FunnelEvent')).toHaveLength(2);
     expect(getTable('FunnelEvent')[1]).toMatchObject({ event_type: 'reminder_sent', user_id: USER_ID, meta: { kind: 'task' } });
+    const collector = require('../../services/context/internalContextCollector').collectInternalContext;
+    const notifications = require('../__mocks__/notificationService');
+    const due = new Date(Date.now() + 3600000).toISOString();
+    const household = [
+      { kind: 'bill_due', data: { bill_id: 'bill', due_date: due, amount: 144.72 }, context: { bills_due: [{ id: 'bill', due_date: due, amount: 144.72 }] } },
+      { kind: 'task_due', data: { task_id: 'task', due_at: due, priority: 'high' }, context: { tasks_due: [{ id: 'task', due_at: due, priority: 'high' }] } },
+      { kind: 'calendar', data: { event_id: 'event', start_at: due, event_type: 'appointment' }, context: { calendar_events: [{ id: 'event', start_at: due, event_type: 'appointment' }] } },
+    ];
+    for (const signal of household) {
+      composeScheduledBriefing.mockResolvedValue({ should_send: true, text: 'Private household detail', mode: 'template', tokens_used: 0,
+        signals_snapshot: [{ kind: signal.kind, data: signal.data }], home_id: 'home-abc', location_geohash: 'c20g8' });
+      seedTable('DailyBriefingDelivery', []);
+      collector.mockResolvedValue({ bills_due: [], tasks_due: [], calendar_events: [], ...signal.context });
+      const accepted = await request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+        .send({ userId: USER_ID, briefingKind: 'morning' });
+      expect(accepted.body.status).toBe('sent');
+      for (const unreadable of [false, true]) {
+        seedTable('DailyBriefingDelivery', []);
+        pushService.sendToUser.mockClear();
+        let release;
+        let entered;
+        const started = new Promise(resolve => { entered = resolve; });
+        notifications.isPushEnabled.mockImplementationOnce(() => { entered(); return new Promise(resolve => { release = resolve; }); });
+        const pending = request(app).post('/api/internal/briefing/send').set('x-internal-api-key', 'test-internal-key')
+          .send({ userId: USER_ID, briefingKind: 'morning' }).then(response => response);
+        await started;
+        if (unreadable) collector.mockRejectedValueOnce(new Error('Home authority unavailable'));
+        else collector.mockResolvedValue({ bills_due: [], tasks_due: [], calendar_events: [] });
+        release(true);
+        const revoked = await pending;
+        expect(revoked.status).toBe(500);
+        expect(revoked.body.status).toBe('failed');
+        expect(pushService.sendToUser).not.toHaveBeenCalled();
+        expect(getTable('DailyBriefingDelivery')[0].status).toBe('failed');
+        expect(getTable('DailyBriefingDelivery')[0].summary_text).toBeUndefined();
+      }
+      expect(collector).toHaveBeenLastCalledWith(USER_ID, 'home-abc');
+    }
   });
 
   it('falls back to a bare Place link when the briefing has no home', async () => {
