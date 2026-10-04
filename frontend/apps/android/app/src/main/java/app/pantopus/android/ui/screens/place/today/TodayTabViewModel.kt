@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.security.AppLockManager
+import app.pantopus.android.data.analytics.PilotEvents
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
@@ -18,6 +19,7 @@ import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
+import app.pantopus.android.ui.screens.homes.tasks.HomeTaskCreationFactory
 import app.pantopus.android.ui.screens.place.detail.AddressCalendarActions
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -54,12 +56,20 @@ class TodayTabViewModel
         sessionScopes: HomeClaimSessionScopeFactory,
         private val appLock: AppLockManager,
         @ApplicationContext context: Context,
+        val radonFactory: HomeTaskCreationFactory,
+        val pilotEvents: PilotEvents,
     ) : ViewModel(),
         AddressCalendarActions {
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
         val state: StateFlow<TodayTabUiState> = _state.asStateFlow()
         private var homeId: String? = null
         override val calendarHomeId: String? get() = homeId
+        val radonContext: suspend () -> Unit
+            get() {
+                val id = homeId
+                val version = loadVersion
+                return { check(id != null && pickupCurrent(id, version)) }
+            }
         private var loadJob: Job? = null
         private var loadVersion = 0L
         private val sessionScope = sessionScopes.create(viewModelScope)

@@ -212,7 +212,7 @@ private struct AddressTodayLoaded: View {
                                 StatusChip("Saved place · Only you", variant: .neutral)
                                     .padding(.bottom, 12)
                             }
-                            PlaceTodayDetailContent(intel: intel, vm: viewModel)
+                            PlaceTodayDetailContent(intel: intel, vm: viewModel, showHomeRadon: savedPlace == nil)
                             if savedPlace != nil {
                                 remindersRow.padding(.top, 12)
                             }

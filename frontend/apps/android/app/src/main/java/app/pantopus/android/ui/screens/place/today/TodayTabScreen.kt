@@ -97,7 +97,13 @@ fun TodayTabScreen(
                         if (current.savedAnchorMatches) {
                             StatusChip("Saved place · Only you", modifier = Modifier.padding(bottom = 12.dp))
                         }
-                        PlaceTodayDetailContent(current.intelligence, viewModel.takeIf { current.calendarHomeId != null })
+                        PlaceTodayDetailContent(
+                            current.intelligence,
+                            viewModel.takeIf { current.calendarHomeId != null },
+                            radonFactory = viewModel.radonFactory.takeIf { current.calendarHomeId != null },
+                            pilotEvents = viewModel.pilotEvents,
+                            radonContext = viewModel.radonContext,
+                        )
                         if (current.savedPlace != null) {
                             SavedPlaceReminders(onClaim)
                         }

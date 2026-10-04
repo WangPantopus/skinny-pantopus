@@ -11,6 +11,7 @@
 //  populated now; adding those strips is outstanding parity work.
 //
 
+import Observation
 import SwiftUI
 import UserNotifications
 
@@ -19,6 +20,16 @@ import UserNotifications
 struct PlaceTodayDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    var showHomeRadon = false
+    @Environment(RootTabModel.self) private var rootTabs
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var radonState: RadonTodayState?
+
+    init(intel: PlaceIntelligence, vm: PlaceDetailViewModel, showHomeRadon: Bool = false) {
+        self.intel = intel
+        self.vm = vm
+        self.showHomeRadon = showHomeRadon
+    }
 
     /// Order (matches Android): what it is like now, what to do with it,
     /// what recurs at this address, then air, alerts and sun. The calendar
@@ -67,6 +78,11 @@ struct PlaceTodayDetailContent: View {
                 }
             }
 
+            if showHomeRadon, let homeId = vm.calendarHomeId, let state = radonState, state.homeId == homeId,
+               let data = vm.section(.leadRadon, in: intel)?.leadRadon, let zone = data.radonZone, (1...3).contains(zone) {
+                RadonTodayCard(state: state, data: data)
+            }
+
             if let aqi = vm.section(.airQuality, in: intel) {
                 PlaceDetailSectionLabel(text: "Air quality")
                 if let data = aqi.airQuality, aqi.status == .ready || aqi.status == .stale {
@@ -98,6 +114,25 @@ struct PlaceTodayDetailContent: View {
                 }
             }
         }
+        .task(id: vm.calendarHomeId) {
+            guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
+            if radonState?.homeId != homeId { radonState?.suspend()
+                radonState = RadonTodayState(homeId: homeId)
+            }
+            radonState?.context.active = true
+            await radonState?.load()
+        }
+        .onDisappear { radonState?.suspend() }
+        .onChange(of: rootTabs.selected) { _, tab in resumeRadon(tab == .today) }
+        .onChange(of: scenePhase) { _, phase in resumeRadon(phase == .active && rootTabs.selected == .today) }
+        .onChange(of: AppLockManager.shared.isLocked) { _, locked in resumeRadon(!locked && rootTabs.selected == .today) }
+    }
+
+    private func resumeRadon(_ active: Bool) {
+        radonState?.suspend()
+        guard active else { return }
+        radonState?.context.active = true
+        Task { await radonState?.load() }
     }
 }
 
@@ -901,5 +936,342 @@ private struct PickupReminderPrimer: View {
         try Task.checkCancellation()
         guard lifecycleVersion == version, !AppLockManager.shared.isLocked,
               UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
+    }
+}
+
+/// The pilot's single suggestion uses existing Home task authority and receipts.
+enum RadonToday {
+    static func selected(_ tasks: [HomeTaskDTO]) -> HomeTaskDTO? {
+        let sorted = tasks.filter { $0.details?["suggestion"]?.stringValue == "radon_test" }
+            .sorted { (date($0.createdAt) ?? .distantPast) > (date($1.createdAt) ?? .distantPast) }
+        return sorted.first { ["open", "in_progress"].contains($0.status) } ?? sorted.first { $0.status == "done" }
+    }
+
+    static func date(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: value) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: value) { return date }
+        let day = DateFormatter()
+        day.locale = Locale(identifier: "en_US_POSIX")
+        day.calendar = Calendar(identifier: .gregorian)
+        day.timeZone = .autoupdatingCurrent
+        day.dateFormat = "yyyy-MM-dd"
+        day.isLenient = false
+        guard let date = day.date(from: value), day.string(from: date) == value else { return nil }
+        return date
+    }
+
+    static func day(_ date: Date) -> String {
+        let format = DateFormatter()
+        format.locale = Locale(identifier: "en_US_POSIX")
+        format.dateFormat = "yyyy-MM-dd"
+        return format.string(from: date)
+    }
+
+    static func dueAt(_ date: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
+        let morning = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        let format = ISO8601DateFormatter()
+        format.timeZone = calendar.timeZone
+        return format.string(from: morning)
+    }
+
+    static func label(_ value: String?) -> String? {
+        guard let date = date(value) else { return nil }
+        let format = DateFormatter()
+        format.setLocalizedDateFormatFromTemplate("MMM d")
+        return format.string(from: date)
+    }
+
+    static func payload(tested: Bool, date: Date, hasDate: Bool, result: String) throws -> CreateHomeTaskRequest {
+        var details: [String: JSONValue] = ["suggestion": .string("radon_test")]
+        if tested, hasDate { details["tested_on"] = .string(day(date)) }
+        if tested, !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard let value = Double(result), value.isFinite, value >= 0 else { throw APIError.invalidResponse }
+            details["result_pci"] = .number(value)
+        }
+        return CreateHomeTaskRequest(
+            taskType: "reminder", title: tested ? "Radon test" : "Test for radon",
+            description: tested ? nil :
+                "The EPA recommends testing every home. Short-term test kits are sold at hardware stores and online. https://www.epa.gov/radon",
+            dueAt: dueAt(tested && !hasDate ? Date() : date), status: tested ? "done" : nil,
+            details: details, visibility: "members"
+        )
+    }
+
+    static func message(_ task: HomeTaskDTO) -> String {
+        if task.status != "done" {
+            let prefix = (date(task.dueAt).map { $0 < Date() } ?? false) ? "Radon test was due" : "Radon test on your list for"
+            return label(task.dueAt).map { "\(prefix) \($0)" } ?? "Radon test on your list"
+        }
+        let tested = task.details?["tested_on"]?.stringValue
+        let prefix = tested != nil || task.title == "Radon test" ? "Radon tested" : "Radon test done"
+        let value = prefix == "Radon tested" ? (tested ?? task.dueAt) : task.completedAt
+        var text = label(value).map { "\(prefix) \($0)" } ?? prefix
+        if prefix == "Radon tested", let result = task.details?["result_pci"]?.numberValue, result.isFinite, result >= 0 {
+            text += " · \(result.formatted()) pCi/L"
+        }
+        return text
+    }
+}
+
+@Observable
+@MainActor
+private final class RadonTodayContext {
+    var active = true
+    let scope = HomeClaimSessionScope(api: .shared)
+
+    func requireCurrent() throws {
+        try scope.requireCurrent()
+        try Task.checkCancellation()
+        guard active, !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
+    }
+}
+
+@Observable
+@MainActor
+private final class RadonTodayState {
+    let homeId: String
+    let context: RadonTodayContext
+    let access: HomeTaskAccess
+    var task: HomeTaskDTO?
+    var canCreate = false
+    var loaded = false
+    var busy = false
+    var error: String?
+    var dismissedUntil: Date?
+    var coordinator: HomeTaskCreationCoordinator?
+    var sheet: String?
+    var selectedDate = Date()
+    var hasDate = false
+    var result = ""
+    var retained: CreateHomeTaskRequest?
+
+    init(homeId: String) {
+        self.homeId = homeId
+        let context = RadonTodayContext()
+        self.context = context
+        access = HomeTaskAccess(homeId: homeId) { try context.requireCurrent() }
+        dismissedUntil = UserDefaults.standard.object(forKey: "radonCard.dismissedUntil.\(homeId)") as? Date
+    }
+
+    var hidden: Bool {
+        task == nil && (dismissedUntil.map { $0 > Date() } ?? false)
+    }
+
+    func suspend() {
+        context.active = false
+        access.invalidatePending()
+        coordinator?.hide()
+        busy = false
+        sheet = nil
+    }
+
+    func load() async {
+        let revision = access.lifecycleRevision
+        do {
+            try context.requireCurrent()
+            let response = try await access.list()
+            try context.requireCurrent()
+            try access.requireCurrent(revision)
+            task = RadonToday.selected(response.tasks)
+            canCreate = response.collectionCapabilities?.canCreate == true
+            loaded = true
+            error = nil
+        } catch {
+            guard (try? context.requireCurrent()) != nil, access.lifecycleRevision == revision, access.isCurrent else { return }
+            loaded = false
+            canCreate = false
+            error = "Couldn't check your home's radon tasks. Try again."
+        }
+    }
+
+    func open(_ kind: String) throws {
+        try context.requireCurrent()
+        guard loaded, kind == "change" ? task?.capabilities?.canEdit == true : canCreate else { throw HomeTaskAccess.AccessError.denied }
+        error = nil
+        hasDate = false
+        result = ""
+        selectedDate = kind == "yes" ? Date() : (Calendar.autoupdatingCurrent.date(byAdding: .day, value: 14, to: Date()) ?? Date())
+        retained = nil
+        if kind != "change" {
+            let creation = HomeTaskCreationCoordinator(
+                home: homeId,
+                origin: APIClient.shared.apiBaseURL,
+                access: access,
+                store: PendingHomeTaskCreateStore()
+            )
+            try creation.restore()
+            if let pending = creation.pending {
+                guard pending.payload.details?["suggestion"]?.stringValue == "radon_test", pending.payload.visibility == "members" else {
+                    throw HomeTaskCreationCoordinator.RecoveryError.changedRequest
+                }
+                retained = pending.payload
+                selectedDate = RadonToday.date(pending.payload.dueAt) ?? Date()
+                hasDate = pending.payload.details?["tested_on"]?.stringValue != nil
+                result = pending.payload.details?["result_pci"]?.numberValue.map { String($0) } ?? ""
+            }
+            coordinator = creation
+        } else {
+            selectedDate = RadonToday.date(task?.dueAt) ?? selectedDate
+        }
+        sheet = retained.map { $0.status == "done" ? "yes" : "no" } ?? kind
+    }
+
+    func save() async {
+        guard let sheet, !busy else { return }
+        let revision = access.lifecycleRevision
+        busy = true
+        defer { if access.lifecycleRevision == revision, context.active { busy = false } }
+        do {
+            try context.requireCurrent()
+            if sheet != "yes",
+               Calendar.autoupdatingCurrent.startOfDay(for: selectedDate) < Calendar.autoupdatingCurrent.startOfDay(for: Date()),
+               retained == nil {
+                throw APIError.invalidResponse
+            }
+            if sheet == "change", let task {
+                _ = try await access.edit(taskId: task.id, patch: HomeTaskEditPatch(values: ["due_at": RadonToday.dueAt(selectedDate)]))
+            } else {
+                guard let coordinator else { throw APIError.invalidResponse }
+                _ = try await coordinator.save(retained ?? RadonToday.payload(
+                    tested: sheet == "yes",
+                    date: selectedDate,
+                    hasDate: hasDate,
+                    result: result
+                ))
+            }
+            try context.requireCurrent()
+            try access.requireCurrent(revision)
+            self.sheet = nil
+            retained = nil
+            await load()
+            try context.requireCurrent()
+            if sheet != "change" {
+                await PilotEvents.shared.send(
+                    .suggestionDecision,
+                    meta: ["suggestion": "radon_test", "decision": sheet == "yes" ? "already_tested" : "reminder_added"],
+                    scope: context.scope
+                )
+            }
+        } catch {
+            guard (try? context.requireCurrent()) != nil, access.isCurrent, access.lifecycleRevision == revision else { return }
+            retained = coordinator?.pending?.payload
+            error = retained == nil ? "Couldn't save this task. Check the date and result, then try again."
+                : "Couldn't confirm your task. Your saved request is retained; try again."
+        }
+    }
+
+    func dismiss() async {
+        guard (try? context.requireCurrent()) != nil else { return }
+        dismissedUntil = Calendar.autoupdatingCurrent.date(byAdding: .day, value: 30, to: Date())
+        UserDefaults.standard.set(dismissedUntil, forKey: "radonCard.dismissedUntil.\(homeId)")
+        await PilotEvents.shared.send(.suggestionDecision, meta: ["suggestion": "radon_test", "decision": "not_now"], scope: context.scope)
+    }
+}
+
+private struct RadonTodayCard: View {
+    @Bindable var state: RadonTodayState
+    let data: PlaceLeadRadonData
+
+    var body: some View {
+        if !state.hidden {
+            PlaceDetailSectionLabel(text: "Radon")
+            PlaceDetailCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    if !state.loaded {
+                        Text("Checking your home's radon tasks…").font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary)
+                    } else if let task = state.task {
+                        Text(RadonToday.message(task)).font(.system(size: 16, weight: .semibold))
+                        if task.status != "done", task.capabilities?.canEdit == true {
+                            GhostButton(title: "Change date") { open("change") }
+                        }
+                    } else {
+                        Text("Was radon tested during your inspection or since you moved in?")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text(
+                            "\(data.countyName ?? "Your county") is in the EPA's \(zone) radon zone. "
+                                + "The EPA recommends testing every home, whatever the zone."
+                        )
+                        .font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary)
+                        if state.loaded {
+                            HStack {
+                                GhostButton(title: "Yes", isEnabled: state.canCreate) { open("yes") }
+                                GhostButton(title: "No or not sure", isEnabled: state.canCreate) { open("no") }
+                            }
+                            GhostButton(title: "Not now") { await state.dismiss() }
+                        }
+                    }
+                    if let error = state.error {
+                        Text(error).font(.system(size: 13)).foregroundStyle(Theme.Color.error)
+                        if !state.loaded { GhostButton(title: "Try again") { await state.load() } }
+                    }
+                    Link("EPA radon zones", destination: URL(string: "https://www.epa.gov/radon/epa-map-radon-zones-0")!)
+                        .font(.system(size: 12)).foregroundStyle(Theme.Color.primaryInk)
+                }
+            }
+            .accessibilityIdentifier("todayRadonCard")
+            .sheet(isPresented: Binding(get: { state.sheet != nil }, set: { if !$0 { state.sheet = nil } })) {
+                RadonTodaySheet(state: state)
+            }
+        }
+    }
+
+    private var zone: String {
+        data.radonZone == 1 ? "highest" : (data.radonZone == 2 ? "moderate" : "lowest")
+    }
+
+    private func open(_ kind: String) {
+        do { try state.open(kind) } catch {
+            guard (try? state.context.requireCurrent()) != nil else { return }
+            state.error = "Couldn't open this task action. Reopen Tasks to recover any saved request."
+        }
+    }
+}
+
+private struct RadonTodaySheet: View {
+    @Bindable var state: RadonTodayState
+
+    var body: some View {
+        FormShell(
+            title: state.sheet == "yes" ? "When was it tested?" : "Add a radon test to your list",
+            rightActionLabel: state.sheet == "yes" ? "Save" : "Add reminder",
+            isValid: state.retained != nil || valid, isDirty: true, isSaving: state.busy,
+            onClose: { state.sheet = nil }, onCommit: { Task { await state.save() } },
+            content: {
+                VStack(alignment: .leading, spacing: 16) {
+                    if state.retained != nil {
+                        Text("An earlier task request is saved. Save retries that exact request.")
+                            .font(.callout)
+                    }
+                    if state.sheet == "yes" {
+                        Toggle("Test date (optional)", isOn: $state.hasDate)
+                        if state.hasDate { DatePicker("Test date", selection: $state.selectedDate, displayedComponents: .date) }
+                        TextField("Result (pCi/L)", text: $state.result).keyboardType(.decimalPad)
+                    } else {
+                        DatePicker(
+                            "Reminder date",
+                            selection: $state.selectedDate,
+                            in: Calendar.autoupdatingCurrent.startOfDay(for: Date())...,
+                            displayedComponents: .date
+                        )
+                    }
+                    if let error = state.error { Text(error).foregroundStyle(Theme.Color.error) }
+                }
+                .disabled(state.busy || state.retained != nil)
+            }
+        )
+        .interactiveDismissDisabled(state.busy)
+        .presentationDetents([.medium, .large])
+    }
+
+    private var valid: Bool {
+        if state.sheet == "yes" {
+            return state.result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || Double(state.result)
+                .map { $0.isFinite && $0 >= 0 } == true
+        }
+        return Calendar.autoupdatingCurrent.startOfDay(for: state.selectedDate) >= Calendar.autoupdatingCurrent.startOfDay(for: Date())
     }
 }

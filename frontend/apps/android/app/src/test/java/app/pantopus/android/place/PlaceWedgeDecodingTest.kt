@@ -1,5 +1,6 @@
 package app.pantopus.android.place
 
+import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.place.BlockFounding
 import app.pantopus.android.data.api.models.place.BlockStatusResponse
 import app.pantopus.android.data.api.models.place.PlaceCalendarEvent
@@ -13,6 +14,7 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.isRecentMove
+import app.pantopus.android.ui.screens.place.detail.RadonToday
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import org.junit.Assert.assertEquals
@@ -22,6 +24,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Wedge v2 on Android — the aha card + Band-A sections on the anonymous
@@ -90,6 +93,55 @@ class PlaceWedgeDecodingTest {
         val older = adapter.fromJson("""{"status":"ready","tier":"preview"}""")!!
         assertNull(older.aha)
         assertNull(older.sections)
+        val date = LocalDate.of(2026, 11, 12)
+        val tested = RadonToday.payload(true, date, true, "2.5")
+        assertEquals("done", tested.status)
+        assertEquals("members", tested.visibility)
+        assertEquals("2026-11-12", tested.details?.get("tested_on"))
+        assertEquals(2.5, tested.details?.get("result_pci"))
+        assertTrue(runCatching { RadonToday.payload(true, date, false, "NaN") }.isFailure)
+        assertTrue(runCatching { RadonToday.payload(true, date, false, "-1") }.isFailure)
+        val reminder = RadonToday.payload(false, date, false, "")
+        assertEquals("Test for radon", reminder.title)
+        assertNull(reminder.status)
+        assertEquals("members", reminder.visibility)
+        assertTrue(reminder.dueAt?.contains("T09:00:00") == true)
+        assertEquals("2026-11-01T09:00:00-08:00", RadonToday.dueAt(LocalDate.of(2026, 11, 1), ZoneId.of("America/Los_Angeles")))
+        val rows =
+            listOf(
+                HomeTaskDto(
+                    "open",
+                    "home",
+                    "reminder",
+                    "Test for radon",
+                    status = "in_progress",
+                    createdAt = "2026-10-02T12:00:00Z",
+                    detailsValue = reminder.details,
+                ),
+                HomeTaskDto(
+                    "done",
+                    "home",
+                    "reminder",
+                    "Radon test",
+                    status = "done",
+                    createdAt = "2026-10-03T12:00:00Z",
+                    detailsValue = tested.details,
+                ),
+                HomeTaskDto(
+                    "canceled",
+                    "home",
+                    "reminder",
+                    "Test for radon",
+                    status = "canceled",
+                    createdAt = "2026-10-04T12:00:00Z",
+                    detailsValue = reminder.details,
+                ),
+            )
+        assertEquals("open", RadonToday.selected(rows)?.id)
+        assertEquals("done", RadonToday.selected(rows.drop(1))?.id)
+        assertNull(RadonToday.selected(listOf(rows[2])))
+        assertTrue(RadonToday.message(rows[1]).startsWith("Radon tested"))
+        assertTrue(RadonToday.message(rows[1]).endsWith("2.5 pCi/L"))
     }
 
     @Test

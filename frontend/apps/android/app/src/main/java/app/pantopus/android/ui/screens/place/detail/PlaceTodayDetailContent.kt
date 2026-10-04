@@ -18,12 +18,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -31,36 +38,70 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.analytics.PilotEvents
+import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
+import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.place.GoodDayVerdict
 import app.pantopus.android.data.api.models.place.PlaceAddressCalendarData
 import app.pantopus.android.data.api.models.place.PlaceAirQualityData
 import app.pantopus.android.data.api.models.place.PlaceGoodDayTile
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlaceLeadRadonData
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSunriseSunsetData
 import app.pantopus.android.data.api.models.place.PlaceWeatherAlert
 import app.pantopus.android.data.api.models.place.PlaceWeatherData
 import app.pantopus.android.data.api.models.place.WeatherAlertSeverity
 import app.pantopus.android.data.api.models.place.WeatherConditionCode
+import app.pantopus.android.data.homes.HomeTaskEditPatch
+import app.pantopus.android.ui.components.GhostButton
+import app.pantopus.android.ui.screens.homes.tasks.HomeTaskCreationFactory
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
 /** The row shows at most five tiles; the rest stay in the group page. */
 private const val GOOD_DAY_TILE_CAP = 5
+private const val RADON_MORNING_HOUR = 9
+private const val RADON_REMINDER_DAYS = 14L
+private const val RADON_DISMISS_DAYS = 30L
 
 @Composable
 fun PlaceTodayDetailContent(
     intel: PlaceIntelligence,
     viewModel: AddressCalendarActions? = null,
+    radonFactory: HomeTaskCreationFactory? = null,
+    pilotEvents: PilotEvents? = null,
+    radonContext: (suspend () -> Unit)? = null,
 ) {
     intel.section(PlaceSectionId.WEATHER)?.let { env ->
         PlaceDetailSectionLabel("Weather")
@@ -85,6 +126,9 @@ fun PlaceTodayDetailContent(
     // The calendar is the reason the Today tab exists; it sits above the
     // fold, after what it is like now and what to do with it.
     AddressCalendarSection(intel, viewModel)
+    if (radonFactory != null && pilotEvents != null && radonContext != null) {
+        HomeRadonCard(intel, viewModel, radonFactory, pilotEvents, radonContext)
+    }
     intel.section(PlaceSectionId.AIR_QUALITY)?.let { env ->
         PlaceDetailSectionLabel("Air quality")
         val data = env.airQuality
@@ -548,4 +592,383 @@ private fun UpcomingEvents(
             )
         }
     }
+}
+
+// Home UI preferences are separate from credential and management-token stores.
+private val android.content.Context.homeTodayPreferences by preferencesDataStore(name = "home_today")
+
+internal object RadonToday {
+    fun selected(tasks: List<HomeTaskDto>): HomeTaskDto? {
+        val newest =
+            tasks.filter { it.details?.get("suggestion") == "radon_test" }
+                .sortedByDescending { instant(it.createdAt) ?: Instant.MIN }
+        return newest.firstOrNull { it.status in setOf("open", "in_progress") } ?: newest.firstOrNull { it.status == "done" }
+    }
+
+    fun instant(value: String?): Instant? = value?.let { runCatching { Instant.parse(it) }.getOrNull() }
+
+    fun date(value: String?): LocalDate? =
+        value?.let {
+            runCatching { LocalDate.parse(it) }.getOrNull() ?: instant(it)?.atZone(ZoneId.systemDefault())?.toLocalDate()
+        }
+
+    fun dueAt(
+        date: LocalDate,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): String = date.atTime(RADON_MORNING_HOUR, 0).atZone(zone).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+
+    fun payload(
+        tested: Boolean,
+        date: LocalDate,
+        hasDate: Boolean,
+        result: String,
+    ): CreateHomeTaskRequest {
+        val details = mutableMapOf<String, Any?>("suggestion" to "radon_test")
+        if (tested && hasDate) details["tested_on"] = date.toString()
+        if (tested && result.isNotBlank()) {
+            val value = checkNotNull(result.trim().toDoubleOrNull()) { "Enter a numeric result." }
+            check(value.isFinite() && value >= 0) { "Enter a nonnegative result." }
+            details["result_pci"] = value
+        }
+        return CreateHomeTaskRequest(
+            taskType = "reminder",
+            title = if (tested) "Radon test" else "Test for radon",
+            description =
+                if (tested) {
+                    null
+                } else {
+                    "The EPA recommends testing every home. " +
+                        "Short-term test kits are sold at hardware stores and online. https://www.epa.gov/radon"
+                },
+            dueAt = dueAt(if (tested && !hasDate) LocalDate.now() else date),
+            status = if (tested) "done" else null,
+            details = details,
+            visibility = "members",
+        )
+    }
+
+    fun label(value: String?): String? = date(value)?.format(DateTimeFormatter.ofPattern("MMM d"))
+
+    fun message(task: HomeTaskDto): String {
+        if (task.status != "done") {
+            val prefix = if (instant(task.dueAt)?.isBefore(Instant.now()) == true) "Radon test was due" else "Radon test on your list for"
+            return label(task.dueAt)?.let { "$prefix $it" } ?: "Radon test on your list"
+        }
+        val tested = task.details?.get("tested_on") as? String
+        val prefix = if (tested != null || task.title == "Radon test") "Radon tested" else "Radon test done"
+        val value = if (prefix == "Radon tested") tested ?: task.dueAt else task.completedAt
+        val text = label(value)?.let { "$prefix $it" } ?: prefix
+        val result = (task.details?.get("result_pci") as? Number)?.toDouble()?.takeIf { it.isFinite() && it >= 0 }
+        return if (prefix == "Radon tested" && result != null) "$text · $result pCi/L" else text
+    }
+}
+
+private class RadonTodayState(
+    val homeId: String,
+    private val factory: HomeTaskCreationFactory,
+    parent: CoroutineScope,
+    private val contextGuard: suspend () -> Unit,
+    private val events: PilotEvents,
+    private val preferences: DataStore<Preferences>,
+) {
+    val lifetime = CoroutineScope(parent.coroutineContext + Job(parent.coroutineContext[Job]))
+    private var active = true
+    private var coordinator = factory.create(homeId, lifetime, contextGuard)
+    var task by mutableStateOf<HomeTaskDto?>(null)
+    var loaded by mutableStateOf(false)
+    var canCreate by mutableStateOf(false)
+    var busy by mutableStateOf(false)
+    var error by mutableStateOf<String?>(null)
+    var dismissedUntil by mutableStateOf(0L)
+    var sheet by mutableStateOf<String?>(null)
+    var selectedDate by mutableStateOf(LocalDate.now())
+    var hasDate by mutableStateOf(false)
+    var result by mutableStateOf("")
+    var retained by mutableStateOf<CreateHomeTaskRequest?>(null)
+    val hidden get() = task == null && dismissedUntil > Instant.now().toEpochMilli()
+
+    private suspend fun requireCurrent() {
+        lifetime.coroutineContext.ensureActive()
+        check(active)
+        contextGuard()
+        coordinator.access.requireCurrent()
+    }
+
+    fun close() {
+        active = false
+        lifetime.cancel()
+    }
+
+    suspend fun load() {
+        try {
+            requireCurrent()
+            val response = coordinator.access.list()
+            val saved = preferences.data.first()
+            requireCurrent()
+            checkNotNull(response.collectionCapabilities)
+            task = RadonToday.selected(response.tasks)
+            canCreate = response.collectionCapabilities.canCreate
+            dismissedUntil = saved[longPreferencesKey("radonCard.dismissedUntil.$homeId")] ?: 0L
+            loaded = true
+            error = null
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            if (runCatching { requireCurrent() }.isFailure) return
+            loaded = false
+            canCreate = false
+            error = "Couldn't check your home's radon tasks. Try again."
+        }
+    }
+
+    suspend fun open(kind: String) {
+        try {
+            requireCurrent()
+            check(loaded && if (kind == "change") task?.capabilities?.canEdit == true else canCreate)
+            if (kind != "change") {
+                coordinator = factory.create(homeId, lifetime, contextGuard)
+                val pending = coordinator.load()?.request
+                requireCurrent()
+                check(pending == null || (pending.details?.get("suggestion") == "radon_test" && pending.visibility == "members")) {
+                    "Reopen Tasks to recover your saved request."
+                }
+                retained = pending
+            } else {
+                retained = null
+            }
+            selectedDate = RadonToday.date(retained?.dueAt ?: if (kind == "change") task?.dueAt else null)
+                ?: if (kind == "yes") LocalDate.now() else LocalDate.now().plusDays(RADON_REMINDER_DAYS)
+            hasDate = retained?.details?.get("tested_on") != null
+            result = retained?.details?.get("result_pci")?.toString().orEmpty()
+            error = null
+            sheet = retained?.let { if (it.status == "done") "yes" else "no" } ?: kind
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            if (runCatching { requireCurrent() }.isSuccess) {
+                error = "Couldn't open this task action. Reopen Tasks to recover any saved request."
+            }
+        }
+    }
+
+    suspend fun save() {
+        val kind = sheet ?: return
+        if (busy) return
+        busy = true
+        try {
+            requireCurrent()
+            check(kind == "yes" || retained != null || !selectedDate.isBefore(LocalDate.now()))
+            if (kind == "change") {
+                coordinator.access.edit(checkNotNull(task).id, HomeTaskEditPatch(mapOf("due_at" to RadonToday.dueAt(selectedDate))))
+            } else {
+                coordinator.submit(retained ?: RadonToday.payload(kind == "yes", selectedDate, hasDate, result))
+            }
+            requireCurrent()
+            sheet = null
+            retained = null
+            load()
+            requireCurrent()
+            if (kind != "change") {
+                events.send(
+                    PilotEvents.Event.SuggestionDecision,
+                    mapOf("suggestion" to "radon_test", "decision" to if (kind == "yes") "already_tested" else "reminder_added"),
+                    expectedActor = coordinator.access.actorId,
+                )
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            if (runCatching { requireCurrent() }.isFailure) return
+            retained = coordinator.pending?.request
+            error =
+                if (retained == null) {
+                    "Couldn't save this task. Check the date and result, then try again."
+                } else {
+                    "Couldn't confirm your task. Your saved request is retained; try again."
+                }
+        } finally {
+            if (runCatching { requireCurrent() }.isSuccess) busy = false
+        }
+    }
+
+    suspend fun dismiss() {
+        requireCurrent()
+        val until = Instant.now().atZone(ZoneId.systemDefault()).plusDays(RADON_DISMISS_DAYS).toInstant().toEpochMilli()
+        preferences.edit { it[longPreferencesKey("radonCard.dismissedUntil.$homeId")] = until }
+        requireCurrent()
+        dismissedUntil = until
+        events.send(
+            PilotEvents.Event.SuggestionDecision,
+            mapOf("suggestion" to "radon_test", "decision" to "not_now"),
+            coordinator.access.actorId,
+        )
+    }
+}
+
+@Composable
+private fun HomeRadonCard(
+    intel: PlaceIntelligence,
+    actions: AddressCalendarActions?,
+    factory: HomeTaskCreationFactory,
+    events: PilotEvents,
+    contextGuard: suspend () -> Unit,
+) {
+    val homeId = actions?.calendarHomeId ?: return
+    val data = intel.section(PlaceSectionId.LEAD_RADON)?.leadRadon ?: return
+    if (data.radonZone !in 1..3) return
+    val context = LocalContext.current
+    val parent = rememberCoroutineScope()
+    var epoch by remember(homeId) { mutableStateOf(0) }
+    var paused by remember(homeId) { mutableStateOf(false) }
+    val state =
+        remember(homeId, intel, epoch) { RadonTodayState(homeId, factory, parent, contextGuard, events, context.homeTodayPreferences) }
+    DisposableEffect(state) { onDispose { state.close() } }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        paused = true
+        state.close()
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (paused) {
+            paused = false
+            epoch++
+        }
+    }
+    LaunchedEffect(state) { state.load() }
+    if (!state.hidden) {
+        PlaceDetailSectionLabel("Radon")
+        RadonCardContent(state, data)
+        if (state.sheet != null) RadonTaskSheet(state)
+    }
+}
+
+@Composable
+private fun RadonCardContent(
+    state: RadonTodayState,
+    data: PlaceLeadRadonData,
+) {
+    val uri = LocalUriHandler.current
+    Column(
+        modifier = Modifier.fillMaxWidth().placeCard().padding(16.dp).testTag("todayRadonCard"),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        val task = state.task
+        if (!state.loaded) {
+            Text("Checking your home's radon tasks…", fontSize = 14.sp, color = PantopusColors.appTextSecondary)
+        } else if (task != null) {
+            Text(RadonToday.message(task), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            if (task.status != "done" && task.capabilities?.canEdit == true) {
+                GhostButton("Change date", onClick = { state.lifetime.launch { state.open("change") } })
+            }
+        } else {
+            Text(
+                "Was radon tested during your inspection or since you moved in?",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.appText,
+            )
+            val zone =
+                when (data.radonZone) {
+                    1 -> "highest"
+                    2 -> "moderate"
+                    else -> "lowest"
+                }
+            Text(
+                "${data.countyName ?: "Your county"} is in the EPA's $zone radon zone. " +
+                    "The EPA recommends testing every home, whatever the zone.",
+                fontSize = 14.sp,
+                color = PantopusColors.appTextSecondary,
+            )
+            if (state.loaded) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GhostButton("Yes", onClick = { state.lifetime.launch { state.open("yes") } }, isEnabled = state.canCreate)
+                    GhostButton("No or not sure", onClick = { state.lifetime.launch { state.open("no") } }, isEnabled = state.canCreate)
+                }
+                GhostButton("Not now", onClick = { state.lifetime.launch { state.dismiss() } })
+            }
+        }
+        state.error?.let { Text(it, fontSize = 13.sp, color = PantopusColors.error) }
+        if (!state.loaded) GhostButton("Try again", onClick = { state.lifetime.launch { state.load() } })
+        Text(
+            "EPA radon zones",
+            fontSize = 12.sp,
+            color = PantopusColors.primaryInk,
+            modifier = Modifier.clickable { uri.openUri("https://www.epa.gov/radon/epa-map-radon-zones-0") },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RadonTaskSheet(state: RadonTodayState) {
+    val tested = state.sheet == "yes"
+    val value = state.result.trim().toDoubleOrNull()
+    val valid =
+        if (tested) {
+            state.result.isBlank() || (value != null && value.isFinite() && value >= 0)
+        } else {
+            !state.selectedDate.isBefore(LocalDate.now())
+        }
+    ModalBottomSheet(onDismissRequest = { if (!state.busy) state.sheet = null }, containerColor = PantopusColors.appSurface) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                if (tested) "When was it tested?" else "Add a radon test to your list",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.appText,
+            )
+            if (state.retained != null) Text("An earlier task request is saved. Save retries that exact request.")
+            if (tested) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Test date (optional)", modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = state.hasDate,
+                        onCheckedChange = { state.hasDate = it },
+                        enabled = !state.busy && state.retained == null,
+                    )
+                }
+                if (state.hasDate) RadonDateField(state, pastAllowed = true)
+                OutlinedTextField(
+                    value = state.result,
+                    onValueChange = { state.result = it },
+                    label = { Text("Result (pCi/L)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    enabled = !state.busy && state.retained == null,
+                )
+            } else {
+                RadonDateField(state, pastAllowed = false)
+            }
+            state.error?.let { Text(it, color = PantopusColors.error) }
+            GhostButton(
+                if (tested) "Save" else "Add reminder",
+                isLoading = state.busy,
+                isEnabled = !state.busy && (state.retained != null || valid),
+                onClick = { state.lifetime.launch { state.save() } },
+            )
+            GhostButton("Close", isEnabled = !state.busy, onClick = { state.sheet = null })
+        }
+    }
+}
+
+@Composable
+private fun RadonDateField(
+    state: RadonTodayState,
+    pastAllowed: Boolean,
+) {
+    val context = LocalContext.current
+    GhostButton(
+        "Date: ${state.selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))}",
+        isEnabled = !state.busy && state.retained == null,
+        onClick = {
+            val date = state.selectedDate
+            android.app.DatePickerDialog(
+                context,
+                { _, year, month, day -> state.selectedDate = LocalDate.of(year, month + 1, day) },
+                date.year,
+                date.monthValue - 1,
+                date.dayOfMonth,
+            ).apply {
+                if (!pastAllowed) datePicker.minDate = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }.show()
+        },
+    )
 }
