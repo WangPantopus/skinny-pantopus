@@ -32,8 +32,8 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
         homeId: String,
         api: APIClient = .shared,
         actorId: String? = nil,
-        identity: (() -> String?)? = nil,
-        dispatchGuard: @escaping @MainActor @Sendable () throws -> Void = {}
+        dispatchGuard: @escaping @MainActor @Sendable () throws -> Void = {},
+        identity: (() -> String?)? = nil
     ) {
         self.dispatchGuard = dispatchGuard
         self.homeId = homeId

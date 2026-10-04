@@ -189,13 +189,12 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             guard payload.category == "TASK_REMINDER", let homeId = payload.homeId, let taskId = payload.taskId,
                   payload.taskPath != nil else { return }
             do {
-                _ = try await HomeTaskAccess(homeId: homeId) {
-                    try scope.requireCurrent()
-                    guard !AppLockManager.shared.isLocked else { throw CancellationError() }
-                }.complete(taskId: taskId, status: "done") {
+                let dispatchGuard: @MainActor @Sendable () throws -> Void = {
                     try scope.requireCurrent()
                     guard !AppLockManager.shared.isLocked else { throw CancellationError() }
                 }
+                _ = try await HomeTaskAccess(homeId: homeId, dispatchGuard: dispatchGuard)
+                    .complete(taskId: taskId, status: "done", beforeDispatch: dispatchGuard)
                 guard scope.isCurrent else { return }
                 await PilotEvents.shared.send(.reminderAction, meta: ["kind": "task", "action": "done"], scope: scope)
             } catch {
