@@ -34,6 +34,10 @@ describe('supportTrainSlotAvailability', () => {
         { name: 'guest today', date: '2026-10-04', email: true },
         { name: 'account tomorrow', date: '2026-10-05', account: true },
         { name: 'account today', date: '2026-10-04', account: true },
+        { name: 'guest late today', date: '2026-10-04', clock: '22:00', start: '23:00', email: true },
+        { name: 'account late today', date: '2026-10-04', clock: '22:00', start: '23:00', account: true },
+        { name: 'past slot late today', date: '2026-10-04', clock: '22:00', start: '20:00' },
+        { name: 'outside four hours', date: '2026-10-04', clock: '12:00', start: '17:00' },
         { name: 'canceled reservation', date: '2026-10-05', status: 'canceled' },
         { name: 'canceled slot', date: '2026-10-05', slotStatus: 'canceled' },
         { name: 'completed slot', date: '2026-10-04', slotStatus: 'completed' },
@@ -43,6 +47,7 @@ describe('supportTrainSlotAvailability', () => {
         { name: 'already reminded', date: '2026-10-05', reminded: true },
       ];
       for (const scenario of cases) {
+        jest.setSystemTime(new Date(`2026-10-04T${scenario.clock || '12:00'}:00Z`));
         supabase.resetTables();
         sendGuestReservationConfirmationEmail.mockReset().mockResolvedValue({ success: true });
         createNotification.mockReset().mockResolvedValue({ id: 'notification' });
@@ -57,7 +62,7 @@ describe('supportTrainSlotAvailability', () => {
           last_reminder_sent: scenario.reminded ? '2026-10-03T12:00:00Z' : null,
           SupportTrainSlot: {
             id: 'slot', slot_date: scenario.date, slot_label: 'Dinner',
-            start_time: '14:00', end_time: '15:00', status: scenario.slotStatus || 'full',
+            start_time: scenario.start || '14:00', end_time: '15:00', status: scenario.slotStatus || 'full',
           },
         }]);
         await runSupportTrainReminders();
@@ -74,6 +79,8 @@ describe('supportTrainSlotAvailability', () => {
           expect(JSON.stringify(sendGuestReservationConfirmationEmail.mock.calls)).not.toMatch(/address|private_note/);
         }
       }
+
+      jest.setSystemTime(new Date('2026-10-04T12:00:00Z'));
 
       // Failed sends and local previews remain retryable; a successful retry is
       // marked once and the next scheduler run does not deliver again.

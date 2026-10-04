@@ -106,6 +106,7 @@ async function _sendDayOfReminders() {
     const fourHoursLater = new Date(now.getTime() + 4 * 60 * 60 * 1000);
     const nowTimeStr = now.toISOString().split('T')[1].slice(0, 5);       // HH:mm
     const laterTimeStr = fourHoursLater.toISOString().split('T')[1].slice(0, 5);
+    const crossesMidnight = fourHoursLater.toISOString().split('T')[0] !== todayDate;
 
     const { data: reservations, error } = await supabaseAdmin
       .from('SupportTrainReservation')
@@ -128,7 +129,7 @@ async function _sendDayOfReminders() {
       const slot = r.SupportTrainSlot;
       if (!slot || slot.slot_date !== todayDate || !slot.start_time) return false;
       if (!['open', 'full'].includes(slot.status)) return false;
-      return slot.start_time >= nowTimeStr && slot.start_time <= laterTimeStr;
+      return slot.start_time >= nowTimeStr && (crossesMidnight || slot.start_time <= laterTimeStr);
     });
 
     let sent = 0;
