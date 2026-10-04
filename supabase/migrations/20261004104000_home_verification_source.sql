@@ -816,9 +816,9 @@ BEGIN
         SELECT jsonb_build_object('primary_user_id',v_home.owner_id,'proofs',coalesce(jsonb_agg(to_jsonb(owner_row) ORDER BY owner_row.id),'[]'))
           INTO v_ownership FROM public."HomeOwner" owner_row WHERE home_id=h AND subject_type='user' AND subject_id=c.claimant_user_id;
         IF c.state<>'approved' OR c.claim_phase_v2<>'verified' OR o.verification_status IS DISTINCT FROM 'verified'
-          OR to_jsonb(o) IS DISTINCT FROM CASE WHEN v_receipt.occupancy_snapshot ? 'verification_source'
+          OR to_jsonb(o) IS DISTINCT FROM (CASE WHEN v_receipt.occupancy_snapshot ? 'verification_source'
             THEN v_receipt.occupancy_snapshot ELSE v_receipt.occupancy_snapshot
-              ||jsonb_build_object('verification_source',o.verification_source) END
+              ||jsonb_build_object('verification_source',o.verification_source) END)
           OR v_target->'permissions' IS DISTINCT FROM v_receipt.permissions_snapshot
           OR v_ownership IS DISTINCT FROM v_receipt.ownership_snapshot
           OR (v_role='owner' AND NOT EXISTS(SELECT FROM public."HomeOwner" WHERE home_id=h AND subject_type='user'
