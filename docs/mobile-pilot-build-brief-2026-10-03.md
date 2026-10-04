@@ -347,6 +347,8 @@ Stream 1 assigns. This is the proposal.
 
 ## 12. Design references
 
+**Only the exports in the first table are design sources for this build.** Every other folder in `docs/design/exports/` is out for now, even where it draws a screen this build touches; the second table says why. Where an export and this brief differ, this brief wins, including all copy.
+
 Build each component into the shipped screen and keep that screen's layout. The "host" screens in the exports are the design board's, not the app's. Don't copy the drawing defects listed here; they come from `docs/design/exports/VERIFICATION.md`.
 
 | Surface | Export | Use it for | Drawing defects not to copy |
@@ -357,9 +359,24 @@ Build each component into the shipped screen and keep that screen's layout. The 
 | Morning opt-in card | `f4-briefing-optin-card` | The card | Links shown by color alone; the cut-off AX5 link |
 | Date picker for pickup and radon | `x-date-sheet` | Pickup mode and a single date only | Leader lines through labels |
 | Source and "unconfirmed" line | `x-provenance-sheet` | The source line style only | Hosts hidden under the sheet |
-| Curator chip | `f9-curator-chip` | The chip | None noted |
+| Curator chip | `f9-curator-chip` | The chip on a post card only, with the copy in 3.2. Not its "Why am I seeing this?" explainer or its mute and report flows | Not reviewed in `VERIFICATION.md`; page 15 is out of manifest order |
 
-No export exists for the radon card, the first-use card or the notification buttons. Build them from existing design-system components and this brief's copy. The founder may draw them later.
+**No export exists** for the radon card, the first-use card or the notification buttons. Build them from existing design-system components (the foundations in `docs/design/exports/00a` to `00d` and the shipped components) and this brief's copy.
+
+**Not design sources for this build:**
+
+| Exports | Why they're out |
+|---|---|
+| `f1-add-place-sheet`, `f1-email-verify-handoff`, `f1-claim-receipt`, `f1-save-confirmation`, `f1-today-air-band`, `f5-today-calendar-strip` | The build keeps the shipped arrival flows and Today content; WP2 changes behavior, not these screens |
+| `f3-bill-detail-web`, `f3-bills-list`, `f3-household-block`, `f3-household-calendar`, `f3-household-notifications`, `f3-invite-banner`, `f3-invite-composer`, `f3-member-home-dashboard`, `f3-members-roster` | F3 beyond WP6 (section 13) |
+| `f3b-invitation-decision`, `f3b-locked-action-row`, `f3b-owner-attestation`, `f3b-verify-address-sheet` | WP6 changes one line of copy on the shipped invitation screen (8.2); the redesigns are in section 13 |
+| `f1-your-places`, `x-place-file`, `f4-notification-settings` | Redesigns the founder decided against (section 13) |
+| `f6-home-basics-rows`, `f6-place-section-details` | F6 is dropped |
+| `f7-today-widget`, `f7-widget-gallery`, `f7-widget-howto-sheet`, `f7-widget-tap-landing` | F7 comes later |
+| `f8-compare-arrival-header`, `f8-compare-reveal`, `f8-compare-sheet`, `f8-native-share-compare`, `f8-og-compare-card`, `f8-positioning-copy`, `f8-scale-strips`, `f8-seasonal-aha` | F8 comes later |
+| `f9-earn-removal`, `f9-verification-promise-copy`, `f9-privacy-mirror`, `f9-nearby-cells-map`, `f9-block-founders-panel`, `f9-founding-meter-preview` | Outside WP1, which needs only the curator chip; the growth panels come later |
+
+Design work for this build: finish the fix passes for the seven exports in the first table only.
 
 ## 13. Not in this build
 
