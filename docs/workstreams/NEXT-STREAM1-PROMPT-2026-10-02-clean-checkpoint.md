@@ -1,3 +1,11 @@
+## CURRENT — integrated pilot source CI passed; real journeys pending — 2026-10-04T19:51:52.955425+00:00
+
+[Stream1's sole record](01-trains-coordination.md) records draft [1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) exact9e6: **37226156043 now16 SUCCESS/0 FAIL/0 SKIP**, alljobs/head personallyread. Both native component drafts are16green. Existing32 executions/27declarations and Hub52 reused/qualified. Prior3149 backend/aggregate failures and ordinary supersession cancellation fullyread; no Source CI control.
+
+Signed arm64 iOS Debug build/product649/fullconfig/signature/return/seal68bb/independent1f1 intake passes **within compilation scope only**; real native/install/API/SQL/persistence/OS/provider/distribution remains open. The Android operator/source packet is prepared by4-1 for Root review; no actual build yet. Read-only prerequisite operator520eb76a is prepared after two recording closures and minimum raw-OID protocol correction; bounded3-1 source review67e8 passed and Root read it; fresh admission/actualexecution remain future. Local schema unchanged; narrow four-version question pending under180000-only.
+
+Master1b5/15 SUCCESS/1configuredSKIP and nextsolebatch358 remain. All eight realchats Sol/Extra High/no subagents; pilot owners/starts/estimates/sevenexports/section15 IDs and paused unrelated verification stay. No Root resource holder/freshgrant/newcatalog/readiness percentage/web buildout/Agent implementation. Real pilot journeys remain unfinished.
+
 ## CURRENT — signed pilot iOS product passed; real journeys pending — 2026-10-04T19:18:14.135362+00:00
 
 The [sole Stream1 record](01-trains-coordination.md) records current draft [1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) at 9e6bcbb22bd1ff0126a789f71889ddbd092b7f09. Existing pilot sources are composed; one stale Unconfirmed-copy assertion is repaired, existing 32 checks pass and unchanged Hub 52 is reused. Both native component drafts completed all 16 required CI jobs; current exact integration CI 37226156043 remains in progress, with backend/schema/Android emulator passed and mobile builds running. Source CI is untouched.
