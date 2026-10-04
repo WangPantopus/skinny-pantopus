@@ -20,6 +20,7 @@ import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailDetailTrust
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -280,7 +281,10 @@ class MailDetailViewModelTest {
             val state = vm.state.value
             assertTrue(state is MailDetailUiState.Loaded)
             assertTrue((state as MailDetailUiState.Loaded).content.isAcknowledged)
+            assertNull(state.content.aiSummary)
             assertEquals("Acknowledged", vm.toast.value)
+            vm.acknowledge()
+            coVerify(exactly = 1) { repo.acknowledge("m1") }
         }
 
     @Test
@@ -297,5 +301,11 @@ class MailDetailViewModelTest {
             assertTrue(state is MailDetailUiState.Loaded)
             assertFalse((state as MailDetailUiState.Loaded).content.isAcknowledged)
             assertNotNull(vm.toast.value)
+            coEvery { repo.acknowledge("m1") } returns
+                NetworkResult.Success(AckResponse(message = "ok", ackStatus = "acknowledged"))
+            vm.acknowledge()
+            assertTrue((vm.state.value as MailDetailUiState.Loaded).content.isAcknowledged)
+            vm.acknowledge()
+            coVerify(exactly = 2) { repo.acknowledge("m1") }
         }
 }
