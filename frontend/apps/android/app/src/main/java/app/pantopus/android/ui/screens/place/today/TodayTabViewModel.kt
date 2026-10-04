@@ -98,7 +98,10 @@ class TodayTabViewModel
             when (val result = homesRepository.myHomes()) {
                 is NetworkResult.Success -> {
                     val homes = result.data.sharedHomes
-                    NetworkResult.Success((homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull())?.id)
+                    val privateHome =
+                        result.data.homes.filter { it.hasValidListContext && it.accessKind == "private_setup" }
+                            .sortedByDescending { it.createdAt.orEmpty() }.firstOrNull()
+                    NetworkResult.Success((homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull() ?: privateHome)?.id)
                 }
                 is NetworkResult.Failure -> result
             }

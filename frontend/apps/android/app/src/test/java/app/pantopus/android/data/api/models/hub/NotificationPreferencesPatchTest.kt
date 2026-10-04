@@ -53,6 +53,20 @@ class NotificationPreferencesPatchTest {
             """{"daily_briefing_time_local":"09:30"}""",
             encode(NotificationPreferencesPatch(dailyBriefingTimeLocal = "09:30")),
         )
+        val adapter = moshi.adapter(NotificationPreferencesDto::class.java)
+        assertEquals(null, NotificationPreferences.from(adapter.fromJson("{}")!!).dailyBriefingPromptedAt)
+        val asked = "2026-10-04T11:00:00Z"
+        assertEquals(
+            asked,
+            NotificationPreferences.from(adapter.fromJson("""{"daily_briefing_prompted_at":"$asked"}""")!!).dailyBriefingPromptedAt,
+        )
+        val prompt =
+            NotificationPreferencesPatch(dailyBriefingPrompted = true)
+                .mergedWith(NotificationPreferencesPatch(dailyBriefingEnabled = true, dailyBriefingTimezone = "Asia/Tokyo"))
+        assertEquals(
+            """{"daily_briefing_enabled":true,"daily_briefing_timezone":"Asia/Tokyo","daily_briefing_prompted":true}""",
+            encode(prompt),
+        )
     }
 
     @Test

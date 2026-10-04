@@ -23,7 +23,9 @@ struct AddressTodayTabView: View {
             content
         }
         .background(Theme.Color.appBg)
-        .task { await resolveHome() }
+        .task(id: rootTabs.selected) {
+            if rootTabs.selected == .today { await resolveHome() }
+        }
         .accessibilityIdentifier("addressTodayTab")
     }
 
@@ -128,7 +130,11 @@ struct AddressTodayTabView: View {
         do {
             let response: MyHomesResponse = try await APIClient.shared.request(HomesEndpoints.myHomes())
             try Task.checkCancellation()
-            let id = response.sharedHomes.first { $0.isPrimaryOwner == true }?.id ?? response.sharedHomes.first?.id
+            let privateHome = response.homes
+                .filter { $0.hasValidListContext && $0.accessKind == "private_setup" }
+                .max { ($0.home.createdAt ?? "", $0.id) < ($1.home.createdAt ?? "", $1.id) }
+            let id = response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
+                ?? response.sharedHomes.first?.id ?? privateHome?.id
             if let id {
                 detail = PlaceDetailViewModel(homeId: id, group: .today)
             } else {

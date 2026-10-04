@@ -46,6 +46,7 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
     public var dailyBriefingTimeLocal: String
     /// IANA zone the briefing times are interpreted in.
     public var dailyBriefingTimezone: String?
+    public var dailyBriefingPromptedAt: String?
     public var eveningBriefingEnabled: Bool
     /// `HH:mm`, 24-hour.
     public var eveningBriefingTimeLocal: String
@@ -88,11 +89,13 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         homeRemindersEnabled: Bool = true,
         quietHoursStartLocal: String? = nil,
         quietHoursEndLocal: String? = nil,
-        locationMode: String = BriefingLocationMode.primaryHome.rawValue
+        locationMode: String = BriefingLocationMode.primaryHome.rawValue,
+        dailyBriefingPromptedAt: String? = nil
     ) {
         self.dailyBriefingEnabled = dailyBriefingEnabled
         self.dailyBriefingTimeLocal = dailyBriefingTimeLocal
         self.dailyBriefingTimezone = dailyBriefingTimezone
+        self.dailyBriefingPromptedAt = dailyBriefingPromptedAt
         self.eveningBriefingEnabled = eveningBriefingEnabled
         self.eveningBriefingTimeLocal = eveningBriefingTimeLocal
         self.weatherAlertsEnabled = weatherAlertsEnabled
@@ -110,6 +113,7 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         case dailyBriefingEnabled = "daily_briefing_enabled"
         case dailyBriefingTimeLocal = "daily_briefing_time_local"
         case dailyBriefingTimezone = "daily_briefing_timezone"
+        case dailyBriefingPromptedAt = "daily_briefing_prompted_at"
         case eveningBriefingEnabled = "evening_briefing_enabled"
         case eveningBriefingTimeLocal = "evening_briefing_time_local"
         case weatherAlertsEnabled = "weather_alerts_enabled"
@@ -142,7 +146,8 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
             quietHoursStartLocal: container.decodeIfPresent(String.self, forKey: .quietHoursStartLocal),
             quietHoursEndLocal: container.decodeIfPresent(String.self, forKey: .quietHoursEndLocal),
             locationMode: container.decodeIfPresent(String.self, forKey: .locationMode)
-                ?? BriefingLocationMode.primaryHome.rawValue
+                ?? BriefingLocationMode.primaryHome.rawValue,
+            dailyBriefingPromptedAt: container.decodeIfPresent(String.self, forKey: .dailyBriefingPromptedAt)
         )
     }
 }
