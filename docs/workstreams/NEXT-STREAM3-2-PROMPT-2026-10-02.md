@@ -1,3 +1,105 @@
+## CURRENT — Stream 3-2 successor prompt — October 5, 2026 (PDT)
+
+Copy this CURRENT section, through END CURRENT PROMPT, into the next agent. It supersedes older CURRENT blocks, CI-pending snapshots, runtime reservations and model instructions below. Historical evidence remains preserved.
+
+Resume **Stream 3-2 — Home security, privacy and guest access**, personally as one **GPT-6 Astra / Extra High main agent**. No subagents, new chats or automations. Continue until all work belonging to this stream is completed within its authorized scope. Deliver working iOS and Android features and usable flows; source review and documentation support that delivery. Do not repeat the predecessor pattern of spending a session on inventories or verification machinery without application outcomes.
+
+The human wants an exact, durable handoff and honest NEXT_STEPS check-offs. Reuse implemented work and accepted evidence. Never treat an unchecked row as proof of missing code. Before each change, locate the existing screen, caller, endpoint, service and database contract, establish a concrete unmet requirement or failure, read the applicable design exports, and repair the existing implementation. Preserve current layouts, styling and navigation. This build is mobile only; backend support is allowed, new web UI is not. The mobile brief's sections 12–13 limit which design exports authorize changes: F3b redesigns and new locked-action-row designs are outside this pilot.
+
+### Read first, then act
+
+The single live coordination checkout is `/Users/yingpengwang/pantopus-coordination`, branch `codex/workstream-coordination`. Read only its newest relevant sections first:
+
+1. `docs/PROJECT_HANDOFF.md` and `docs/workstreams/README.md` — current coordinator, runtime ownership, integration and sole merge queue.
+2. `docs/workstreams/03-2-home-security-privacy.md` — this stream's current result and detailed evidence history.
+3. `docs/workstreams/03-stream3-split-2026-10-02.md` and `docs/workstreams/03-home-access-residency.md` — exact action ownership, the original acceptance rows and U02–U05 cells.
+4. Source checkout `NEXT_STEPS.md` and `docs/mobile-pilot-build-brief-2026-10-03.md`, especially WP6 section 8 and scope/design sections 12–13.
+
+Refresh Git status, branch, remote PR state and CI before trusting this checkpoint. Do not reread all historical review packets or repeat accepted journeys whose relevant source/configuration/behavior is unchanged. The source checkout's coordination files may be stale; the live checkout above is authoritative.
+
+### Exact source and integration checkpoint
+
+- Own source: `/Users/yingpengwang/.codex/worktrees/24ec/skinny-pantopus`, branch `codex/stream3-2-mailbox-proof`, clean and pushed at `ba425c46e451ad17de87cd0d3236deab451dbab7`.
+- Previous owned branch `codex/stream3-2-mobile-household-gates` is preserved at `bdfd09a22e01d281b5d146d2b7464bf79aa617cf`.
+- Coordinator's integrated [PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533): draft, clean/mergeable. Tested application head `74327981051c1fd19393f3f2d2534b0003e421cb`, tree `6f7b1de3ce61f48ef556dea7151236d01fa0af6d`, contains both repairs below. All eleven owned changed-file blobs were independently compared equal to this head. The current pushed PR tip is `132f1134ff0cb4679a76501f2f5677af02d259b1`, which changes only NEXT_STEPS.md to record completed substeps; application source is unchanged.
+- Exact integrated [CI37375810539](https://github.com/WangPantopus/skinny-pantopus/actions/runs/37375810539): **16/16 checks successful**, including all three iOS simulator jobs, Android quality/assembly/instrumented checks, backend, schema and compatibility checks. This was personally refreshed from GitHub; it supersedes older CI-pending statements, not their historical failure records.
+- Remote master remains `d8c9fb1c803e714a48b8745faa36951b8be10193`. No new merge occurred here. Root alone owns the next queue, 360. Green CI does not close missing actual/provider acceptance or authorize a merge by this stream.
+- The old9431 checkout disappeared during this session. All changes were already pushed and were recovered on the exact existing branch in24ec. No work was lost; do not look for new source in9431.
+
+| PR | Current disposition | What remains |
+|---|---|---|
+| [1544](https://github.com/WangPantopus/skinny-pantopus/pull/1544), `ba425c46e`, base1533 | Mailbox repair and native cache protection implemented, integrated, actual native checks and focused tests accepted; draft retained | Coordinator disposition/merge; do not rebuild or rerun accepted mailbox cases |
+| [1537](https://github.com/WangPantopus/skinny-pantopus/pull/1537), `bdfd09a22`, base1533 | Emergency client refresh ordering implemented and integrated; own CI11 successes/5 skips plus integrated16 successes | Actual repaired native caller/API ordering cases remain unverified |
+| [1518](https://github.com/WangPantopus/skinny-pantopus/pull/1518), `1f598539c23fa29d8c5ac264a2c80dcd63c56133`, base `claude/stream3-home-32-emergency-sensitive` | Existing server final-response privacy fence already in1533; own CI6 successes/5 skips | Actual changed-boundary server query races; never cherry-pick a duplicate |
+| [1496](https://github.com/WangPantopus/skinny-pantopus/pull/1496), `2892b78ab2c3f8f1e05db93ff04306a0638dc0cd`, base master | Existing Custom Guest date validation repair; CI11 successes/5 skips | Exact repaired compatible iOS/Android products and bounded native AFTER; outside the current frozen pilot pass |
+
+All four topic PRs were still open drafts when refreshed. Root decides integration/merge/closure; no new PR is needed for handoff-only updates.
+
+### What this session actually delivered
+
+**1. Emergency privacy race repair on both native apps — four existing files.** A delayed older success could overwrite a newer denial and restore private rows/share/print data; an older failure could overwrite a newer success. Both existing EmergencyInfoViewModels now publish only the newest fetch. Android also clears stale category counts after the latest failure. No UI, navigation, API or schema change.
+
+Three regressions were added to each existing native test suite: old success after denial, old failure after success, and denied-refresh clearing of derived/share/print state. Android delayed completions are explicitly drained before assertions. Root's integrated Android suite passed14/14; the three new iOS cases passed on iPhone16,16Pro andSE in [CI37353838369](https://github.com/WangPantopus/skinny-pantopus/actions/runs/37353838369). The initial test-only baseline was never executed because the heavy-resource helper refused acquisition; do not claim a RED native run. Application commits are `59ad0af08` plus test refinements `89848a0cc`/`bdfd09a22`; Root integrated equivalents `f78430f36`/`66681b2c4`/`b1c9c2b2c` (test baseline `1ad09538f` → `8bc10e29b`). Actual native/API ordering remains separate from mocked tests and CI.
+
+**2. False mailbox postcard-proof repair, verified through both native callers — seven existing files.** Root actually observed an invited Android Member with household provenance seeing a green claim that a postcard had arrived and its code had been entered, although no postcard existed. The service derived PROVEN from generic occupancy verification. Both native screens displayed that server result directly.
+
+Backend `041ab5ca3` (integrated `42c3c479d`) reads the caller's existing latest HomePostcardCode, binds it to the current Home destination, requires recorded code confirmation for PROVEN, and distinguishes accepted mailing, a saved request, uncertain delivery and absent proof. Postal database findings and permission policy are unchanged; failed evidence reads remain errors. The response is private/no-store. No new table, migration, service, DTO or screen was added.
+
+Native `ba425c46e` (integrated `86ca92f88`) adds the existing endpoint cache-bypass options on iOS and Android, with regressions in the existing networking/Place test files. No VM, cancellation, error or layout semantics changed. The backend suite reproduced22 failures/8 passes before repair and then passed93/93 with effective-permission tests. The first invocation from the wrong working directory ran zero tests; it is not RED evidence.
+
+Root's actual Android Member Identity remount/current GET and iOS Owner Identity current GET both show “No postcard verification on file,” neutral information treatment and unchanged “No postal check” findings. No postcard or database mutation occurred. Android assembly, all7 PlaceWaveDtosTest cases including cached PROVEN→fresh NOT_RUN, ktlint and Detekt passed. The iOS specific `RetryAndErrorTests/testMailboxReadReplacesAndRemovesCachedPostalProof` passed on1C8/iOS27 at4399c8df7. Its combined run separately failed an unrelated Add-navigation diagnostic; preserve that original nonzero result. Root subsequently repaired that other flow, completed the final suite and returned all callers/resources.
+
+Own1544 CI37368924353 failed before application tests because both initial jobs could not acquire GitHub-hosted runners; their annotations were personally checked. That failure remains historical. Exact integrated743 CI now supplies the successful full checks on identical owned source. Do not rerun merely to erase the earlier runner failure.
+
+**3. Reused existing WP6/F3b implementation, without rebuilding it.** Existing1516/104000 already supplies household→T3 versus address/legacy→T4, letter/pass/Real Rent gates, sender gating and invitation copy. Recipient lookup intentionally permits household members to receive neighbor messages. Root's actual Android invited Member saw locked residency-letter/pass and Real Rent/Rate Watch controls, no issue/watch controls or rent values. Root also completed the cross-platform household invitation, assignment, Member completion and generic owner in-app notice flow;3-1 owns those actions. This does not prove reciprocal invited-member iOS gates, real neighbor sending/receiving, pre-migration address proof, external delivery or all WP6 acceptance.
+
+### Evidence and accounting
+
+- Detailed current record: `docs/workstreams/03-2-home-security-privacy.md`; preserve the original parent acceptance ledger and screen catalogs.
+- Root private evidence root: `/Users/yingpengwang/.config/pantopus/stream1-mobile-delivery-20261005/`.
+- Android actual mailbox AFTER: `android-native/member-postal-fixed-private.xml` and `member-postal-fixed.png`; Money denial: `member-money-denial-private.xml`.
+- Android cache/build result: `android-combined/mailbox-cache-local-cache-result.json` (exit0 personally read; test counts/install attributed to Root).
+- iOS focused cache evidence: `ios-combined/task-transition-before-and-cache-private.log` and Root's retained result bundle. Link evidence; do not paste operator logs or private data into Git/chat.
+- Final integrated CI and runtime return: `ci-743-final-private.json` and `runtime-return-private.json`; Root's current PROJECT_HANDOFF records their limits.
+- Root committed and pushed the earned check-offs in [NEXT_STEPS.md](/Users/yingpengwang/.codex/worktrees/s1-pilot-contracts/skinny-pantopus/NEXT_STEPS.md:126) at `132f1134f`: WP6 now checks off the mailbox/cache repair, truthful copy on both native apps and the observed Android Member letter/pass/Real Rent/Rate Watch restrictions. The same package records the accepted household journey from the other owners. No whole WP6 checkbox or inherited feature row is newly closed. All seven 3-2 rows remain partial; the parent remains 8/20 closed. Two concrete functional repairs were delivered. NEXT_STEPS remains the sole founder checklist; Root is its writer. Reuse this checklist update and only mark additional substeps when their acceptance is earned.
+
+### Next actions, in order
+
+1. Refresh the current Root handoff and source/PR state, acknowledge this takeover to the current coordinator, and reuse final743 CI and the completed mailbox/native evidence. Reconcile1544's ready bounded repair with Root's sole queue; do not merge or rebuild independently. Coordinate any needed parent-ledger update through3-1.
+2. Finish the remaining **owned WP6/F3b actual gates** in an admitted bounded native window: especially the household Member's iOS Identity/Real Rent denial and remaining sender/recipient/address-versus-legacy acceptance with3-1/Root. Keep mailbox absence-of-proof distinct from address proof. Do not issue/send artifacts merely to inspect a locked state. Real/provider/external sends remain held unless their exact scope is authorized. Reuse the Android denial evidence; do not replay it solely for a new report.
+3. Complete **Emergency1537 client ordering and1518 server fence actual scope** through the existing screen/API/persistence. Reuse `/Users/yingpengwang/.config/pantopus/stream3-2-studio-resume-20261004/pilot-reviews/emergency-response-fence-real-case-proposal-r2.json` (historical SHA51a55e85).3-1 owns Home/member/IAM changes. Minimum server cases remain owner200, explicitly sensitive-authorized member200 with safe synthetic DTO/aliases/private-no-store and read nonmutation; opening FROZEN403; held actual awaited row query then freeze403; held query then loss of sensitive.view403; and still-sensitive-allowed finance.view change503 HOME_LIST_ACCESS_CHANGED. Holding already produced HTTP JSON can test the client race, but cannot establish the server query fence. Do not add a hook/RPC/table lock/schema workaround. If no existing admitted query gate exists, complete the independently possible stable/opening cases, leave the races unverified, and advance another concrete owned flow.
+4. Complete **1496 Custom Guest dates** only on an exact repaired compatible integrated product in a later Root-admitted window. Existing route: My Homes → synthetic Home → Settings/People → Guest passes → Add Guest. Fresh guest/email, unchanged Welcome;2h enabled → Custom dismiss without a committed range disabled →2h recovers → ordered default Custom/Use These Dates enables. On iOS also preset → Custom Clear → reselect/dismiss remains disabled. Close → Discard → empty. No Send/issue/share, clock change, picker bypass or design change. Do not replay a known-broken old product or add1496 to a frozen product without Root integration.
+5. Continue the remaining original row/cell backlog below, choosing a genuine unmet requirement or uncovered acceptance boundary. Preserve existing accepted evidence, make a smallest functional repair only for an established failure, and run the actual changed journey plus affected regressions/required CI. Do not spend a session creating replacement harnesses, broad inventories or duplicate tests while independent owned application work is available.
+
+### Complete ownership and remaining boundaries
+
+| Existing row | This stream's scope and next limits |
+|---|---|
+| R06 | Residency letter/PDF/pass issue/view/revoke and issued-code/public verifier; remaining hosted, issuer/account/restart/full-day/device-clock boundaries. Existing request identity and qualified ANR evidence are reused; ordinary address/residency verification belongs3-1. |
+| D05 | Home Settings shell, rename/clear/retained intent/recovery and links. Existing rename AFTERs are accepted; reconcile only uncovered lifetime/concurrent cases. Stop shell checks at3-1-owned leave/ownership destinations. |
+| D06 | Privacy, Mirror and actual privacy consumers. Home visibility/document-default changes require explicit design approval and Root/S4 writer assignment; do not implement a redesign from an open row. Historical web failed-save E1 is outside this mobile build priority. |
+| D07 | Lockdown/security summary/access-secret actions and their consumers; Emergency privacy continuation above.3-1 alone executes membership, ordinary invitations, roles/permissions and audit actions. Reuse accepted Lockdown command/race/audit cases; do not duplicate them. |
+| D08 + M02 | Guest passes, share/public rendering, passcodes, scheduled start/expiry/revoke and account/background/hosted lifetimes.1496 native AFTER comes first. Later four native Weekend/Custom issuance flows plus real server-relative before-start403/no view → manual Retry after actual start200/one view → revoke/refusal require the existing separately admitted captured-PK cleanup extension. No clock manipulation. |
+| D10 | Preserve accepted delete/linked-data evidence; non-writing source/eligibility review and3-1 self-leave/move-out receipt reuse. New general Home/account/parent deletion, linked files, balances and live obligations remain held. Exact captured synthetic-fixture cleanup is separate and requires its existing scope. |
+
+S2-05 Visit setup/access-code linkage and the related U02 accessibility, U03 recovery and U04 lifetime cells remain with the actual action owner.3-1 assembles U05 and the parent ledger. No duplicate acceptance table, independent percentage or speculative completion date.
+
+### Current collaborators and resource boundary
+
+Current Root coordinator: `01a10d30-e7f5-73c2-8bc1-415b67568ce1` (Build mobile NEXT_STEPS features).3-1: `01a10d32-6919-7c93-820b-379868d9f1dc`.4-1: `01a10d31-852a-72c0-a72d-e115491bc169`.4-2: `01a10d32-2e86-7a30-8a87-76feed6ca2c6`. Refresh the live guide if the human starts successors. Human-authorized coordination uses those existing chats; do not wake the older stopped chats or create replacements yourself.
+
+This3-2 session owns no runtime, device, heavy build, SQL operation, background watcher or lease. Root's current handoff records all its local callers joined and runtime/devices/heavy returned; installed products, account/data and retained DB64554 remain. A free snapshot is not admission. Do not probe processes/devices/sockets/SQL to test someone else's custody. Obtain current named scope, actor/product/configuration bindings and serialized admission before actual operations. Do not reset retained accounts to manufacture first use. The local ignored backend/node_modules symlink points to existing `/Users/yingpengwang/skinny-pantopus/backend/node_modules`; it was used only for focused source-mocked Jest, not a shared service.
+
+### Non-negotiable constraints and reporting
+
+Never read/hash/compare/apply/unapply migration BODY `20260926100000` or the four excluded host bodies (three.pyc and Supabase binary). Never run a local full migration checker that reads it. Preserve all six Auth histories, retained data and accepted forward migrations; no replay/reset/archive restore, parallel table or applied-history rewrite. Shared files have one exact writer. Root owns PROJECT_HANDOFF/README/NEXT_STEPS and the sole merge queue;3-1 owns parent ledger and operator custody. Edit only this stream's two existing coordination documents unless assigned a concrete shared change. Explicit-path commits, pull--ff-only/push; preserve unrelated local work, no stash/reset.
+
+Google/Smarty/Mapbox provider configuration and physical-device/signing/hosted-delivery boundaries are already known; do not ask for missing credentials again or invent provider proof. Existing external sends, money movement, destructive account/parent operations and design approvals remain held. Keep secrets, tokens, database archives, private preimages and operator logs out of Git/chat. Do not make new web UI or activate cut features to fill acceptance cells.
+
+At each meaningful milestone, update completed behavior, evidence, next action, exact source/CI and verification limits in the two existing owned docs; ask Root to reconcile earned NEXT_STEPS substeps and3-1 to reconcile original cells. Check a complete package only when all its required scope is met. Keep current statements at the top so an agent need not reconstruct them from dated history.
+
+**END CURRENT PROMPT — older sections below are preserved history, not current reservations or instructions.**
+
 ## CURRENT — mailbox postcard claim repaired; both native backend AFTERs passed — October 5, 2026 (PDT)
 
 Current own source is clean/pushed `ba425c46e451ad17de87cd0d3236deab451dbab7` on `codex/stream3-2-mailbox-proof` in checkout24ec. Draft [PR1544](https://github.com/WangPantopus/skinny-pantopus/pull/1544) is stacked on1533, based on Root's6a359eae9 union. Earlier Emergency PR1537/bdfd09a22 is preserved with its accepted11-success/5-skip CI and separate actual ordering limits.
