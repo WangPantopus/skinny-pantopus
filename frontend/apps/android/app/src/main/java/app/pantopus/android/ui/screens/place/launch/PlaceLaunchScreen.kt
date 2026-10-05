@@ -510,36 +510,49 @@ private fun PreviewBody(
                 Spacer(modifier = Modifier.height(120.dp))
             }
         }
-        Column(
-            modifier =
-                Modifier.align(
-                    Alignment.BottomCenter,
-                ).fillMaxWidth().background(PantopusColors.appSurface).padding(horizontal = 16.dp).padding(top = 14.dp, bottom = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                if (signedInEntry) {
-                    "Keep this address handy. Choose whether to save it privately."
-                } else {
-                    "Keep this address handy. Choose whether to save it privately after sign-in."
-                },
-                fontSize = 14.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appText,
-            )
-            PrimaryButton(title = "Continue", onClick = onCreateAccount, modifier = Modifier.fillMaxWidth())
-            Text(
-                if (signedInEntry) {
-                    "Saving a place does not create or verify a Home."
-                } else {
-                    "Your preview stays on this device for up to 24 hours while you sign in."
-                },
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                color = PantopusColors.appTextMuted,
-            )
-            preview.place?.let { place -> ShareAddressLink(place) }
-        }
+        PreviewSaveFooter(
+            place = preview.place,
+            onContinue = onCreateAccount,
+            signedInEntry = signedInEntry,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+@Composable
+private fun PreviewSaveFooter(
+    place: PlacePreviewPlaceRef?,
+    onContinue: () -> Unit,
+    signedInEntry: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier.fillMaxWidth().background(PantopusColors.appSurface).padding(horizontal = 16.dp).padding(top = 14.dp, bottom = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            if (signedInEntry) {
+                "Keep this address handy. Choose whether to save it privately."
+            } else {
+                "Keep this address handy. Choose whether to save it privately after sign-in."
+            },
+            fontSize = 14.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appText,
+        )
+        PrimaryButton(title = "Continue", onClick = onContinue, modifier = Modifier.fillMaxWidth())
+        Text(
+            if (signedInEntry) {
+                "Saving a place does not create or verify a Home."
+            } else {
+                "Your preview stays on this device for up to 24 hours while you sign in."
+            },
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            color = PantopusColors.appTextMuted,
+        )
+        place?.let { ShareAddressLink(it) }
     }
 }
 

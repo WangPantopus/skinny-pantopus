@@ -61,7 +61,9 @@ class PlaceLaunchViewModel
                 authRepository.state.collect { state ->
                     val signedIn = state is AuthRepository.State.SignedIn
                     val currentUserId = (state as? AuthRepository.State.SignedIn)?.user?.id
-                    if ((signedIn && wasSignedIn == false) || (entryUserId != null && currentUserId != entryUserId)) startOver()
+                    val signedInAfterSignOut = signedIn && wasSignedIn == false
+                    val entryAccountChanged = entryUserId != null && currentUserId != entryUserId
+                    if (signedInAfterSignOut || entryAccountChanged) startOver()
                     wasSignedIn = signedIn
                 }
             }
