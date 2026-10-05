@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { hash, validate } = require('./check-migrations.cjs');
+const { hash, validate, repositoryGitEnv } = require('./check-migrations.cjs');
 const historical = 'supabase/migrations/20250101000000_old.sql';
 const original = 'ALTER TABLE public.missing ADD COLUMN x int;';
 const policy = { mode: 'legacy', cliVersion: '2.116.0', legacyFiles: { [historical]: hash(original) } };
@@ -31,7 +31,7 @@ test('changing the inventory cannot hide an edit to historical SQL', () => {
   const { execFileSync } = require('node:child_process');
   const { check } = require('./check-migrations.cjs');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'migration-history-test-'));
-  const git = args => execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
+  const git = args => execFileSync('git', args, { cwd: dir, env: repositoryGitEnv(), stdio: 'pipe' });
   try {
     fs.mkdirSync(path.join(dir, 'supabase/migrations'), { recursive: true });
     fs.writeFileSync(path.join(dir, historical), original);
@@ -50,7 +50,7 @@ test('adopted history enforces append-only SQL and merge ordering even for basel
   const { execFileSync } = require('node:child_process');
   const { check } = require('./check-migrations.cjs');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'migration-order-test-'));
-  const git = args => execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
+  const git = args => execFileSync('git', args, { cwd: dir, env: repositoryGitEnv(), stdio: 'pipe' });
   const baseline = 'supabase/migrations/20260906000000_baseline.sql';
   const existing = 'supabase/migrations/20260908000000_existing.sql';
   const sql = "-- Backwards compatible: yes\nset local lock_timeout='5s';\nselect 1;";
@@ -95,7 +95,7 @@ test('a new migration cannot use a policy note instead of its own compatibility 
   const { execFileSync } = require('node:child_process');
   const { check } = require('./check-migrations.cjs');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'migration-note-test-'));
-  const git = args => execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
+  const git = args => execFileSync('git', args, { cwd: dir, env: repositoryGitEnv(), stdio: 'pipe' });
   const baseline = 'supabase/migrations/20260906000000_baseline.sql';
   const baselineSql = 'create table example(id int);';
   const fresh = 'supabase/migrations/20260909000000_fresh.sql';
@@ -116,5 +116,40 @@ test('a new migration cannot use a policy note instead of its own compatibility 
     const note = { backwardsCompatible: 'yes', reason: 'Adds a column the deployed app ignores.', sha256: hash(freshSql) };
     put('supabase/migration-policy.json', JSON.stringify({ ...active, compatibilityNotes: { [fresh]: note } }));
     assert.match(check(dir, 'HEAD').errors.join(), /Compatibility notes are only for applied migrations/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('fixture repositories and policy reads leave an inherited caller repository untouched', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const os = require('node:os');
+  const { execFileSync } = require('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'migration-caller-test-'));
+  const git = args => execFileSync('git', args, { cwd: dir, env: repositoryGitEnv(), stdio: 'pipe' });
+  try {
+    fs.writeFileSync(path.join(dir, 'owner.txt'), 'Preserve caller work.\n');
+    git(['init']); git(['add', '.']);
+    git(['-c', 'user.name=CI', '-c', 'user.email=ci@example.invalid', 'commit', '-m', 'Caller work']);
+    fs.appendFileSync(path.join(dir, 'owner.txt'), 'Uncommitted owner work.\n');
+    const gitDir = path.join(dir, '.git');
+    const beforeHead = git(['rev-parse', 'HEAD']);
+    const beforeIndex = fs.readFileSync(path.join(gitDir, 'index'));
+    const beforeStatus = git(['status', '--porcelain']);
+    const inherited = {
+      GIT_DIR: gitDir,
+      GIT_WORK_TREE: dir,
+      GIT_COMMON_DIR: gitDir,
+      GIT_INDEX_FILE: path.join(gitDir, 'index'),
+      GIT_OBJECT_DIRECTORY: path.join(gitDir, 'objects'),
+    };
+    // Select only the three existing fixture journeys, avoiding recursive runs.
+    const args = ['--test', '--test-name-pattern=changing the inventory|adopted history|a new migration', __filename];
+    for (const routing of [{ GIT_DIR: gitDir }, inherited]) {
+      execFileSync(process.execPath, args, { cwd: dir, env: { ...repositoryGitEnv(), ...routing }, stdio: 'pipe' });
+      assert.deepEqual(git(['rev-parse', 'HEAD']), beforeHead);
+      assert.deepEqual(fs.readFileSync(path.join(gitDir, 'index')), beforeIndex);
+      assert.deepEqual(git(['status', '--porcelain']), beforeStatus);
+      assert.equal(fs.readFileSync(path.join(dir, 'owner.txt'), 'utf8'), 'Preserve caller work.\nUncommitted owner work.\n');
+    }
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

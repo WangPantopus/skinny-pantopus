@@ -5,6 +5,12 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
+// Git hooks and callers can export repository routing/configuration variables.
+// Every command here must resolve the repository from its explicit cwd instead.
+function repositoryGitEnv() {
+  return Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
+}
+
 // An applied migration that shipped without its compatibility line cannot be
 // edited, so its statement is recorded in the policy instead, pinned to the
 // file's exact bytes.
@@ -224,7 +230,8 @@ function check(root, base) {
     }
   }
   if (base && !/^0+$/.test(base)) {
-    const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const env = repositoryGitEnv();
+    const git = args => execFileSync('git', args, { cwd: root, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     let previous;
     try { previous = JSON.parse(git(['show', `${base}:supabase/migration-policy.json`])); } catch { /* first adoption PR */ }
     const canonical = value => JSON.stringify(Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b)));
@@ -245,7 +252,7 @@ function check(root, base) {
         // dump through stdout (canonical baselines can exceed Node's 1 MiB cap).
         const original = git(['rev-parse', `${base}:${name}`]).trim();
         const current = files[name] === undefined ? null : execFileSync('git', ['hash-object', '--no-filters', '--', name], {
-          cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+          cwd: root, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
         }).trim();
         if (current !== original) errors.push(`Applied migrations are immutable: ${name}`);
       }
@@ -264,4 +271,4 @@ if (require.main === module) {
   if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
   else console.log(policy.mode === 'legacy' ? 'Migration history unchanged. Hosted migration execution is disabled until baseline adoption.' : 'Migration policy passed; fresh-database replay is required.');
 }
-module.exports = { hash, validate, collect, check };
+module.exports = { hash, validate, collect, check, repositoryGitEnv };
