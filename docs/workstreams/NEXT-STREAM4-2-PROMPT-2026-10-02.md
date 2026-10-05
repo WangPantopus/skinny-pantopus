@@ -1,3 +1,98 @@
+# Stream 4-2 successor prompt — direct human STOP and product-delivery priority
+
+Updated: 2026-10-05T17:11:26.318751+00:00. This top block supersedes older continuation, model, runtime and next-action instructions below. Older blocks remain historical evidence, not current grants.
+
+## The human's current instructions
+
+Continue Stream 4-2 personally with GPT-6 Astra / Extra High. Do not substitute Sol, create subagents, start another chat or schedule an automation. The outgoing agent was explicitly told to STOP immediately and provide this handoff. Do not revive its old runtime grants.
+
+The next session must focus on BUILDING and FINISHING the new features, functions and user flows in the authoritative NEXT STEPS backlog. The human explicitly rejected spending further sessions on verification-machinery loops. Product delivery is the objective. Use existing branches and working implementations first; build verified missing behavior and repair concrete defects in place. Keep verification proportionate to completing a real user flow. Do not create speculative verifier infrastructure, replacement architectures, extra unit tests or duplicate implementation. Do not repeatedly re-review accepted unchanged source or repeat CI without a changed behavior, failure or concrete risk.
+
+Preserve existing iOS/Android/web designs, layouts and navigation patterns. Trace the existing caller, endpoint, service and persistence contract before an application repair. Do not mistake an open checklist row or old report for missing code. Existing feature branches must be reused and merged when their recorded gates are met, through the coordinator's sole merge queue.
+
+## Read first and establish the current owner
+
+1. Read AGENTS.md, docs/PROJECT_HANDOFF.md and docs/VERIFICATION_FIRST_2026-09-13.md in the project.
+2. The LIVE coordination checkout is /Users/yingpengwang/pantopus-coordination, branch codex/workstream-coordination. Read the TOP current block of docs/workstreams/README.md, then docs/workstreams/04-2-mailbox-mailday.md and this prompt. Master's coordination copy is historical. Read the existing NEXT STEPS/product backlog linked by those documents; do not invent a new roadmap or tracking system.
+3. Root/coordinator chat at handoff is “Resume Stream1 pilot coordination”, 01a10a5f-1817-7c93-8faa-f72c50c0b221. Use its current successor if the live guide has changed. Root alone integrates shared status, admits shared runtime and merges. Stream4-1 chat01a10a5f-a40f-7141-bd95-25765c0e7b6b owns common iOS/SavedPlace/Turn-on/Pickup/Radon support. Stream3-2 chat01a10a5f-8244-7722-8727-e53f8d0301d6 reviews security/source;3-1 chat01a10a5f-4ab8-79b1-a779-e7b2a162fc95 owns task/actual-return review. Human-authorized coordination with these existing chats continues; no new chats or agents.
+4. Verify current branch/worktree/remote PR state before editing or merging. Preserve unrelated local work. Do not stash/reset/force-push or modify a serving checkout to make an old report match.
+
+## Exact stop boundary and resources
+
+Stream4-2 owns NO running process, listener, resource reservation, device, fixture or incomplete return. Its R13 source is completely reviewed and frozen. No application source changed in this session and no new product feature was completed in this session. Completed work was private execution-support repair and continuity documentation.
+
+At direct STOP, Root alone owned seventeenth iOS operation0840559c and explicitly began safe return, with no further test attempt. Root's current process/resource return may still have been active when this handoff was written. Read Root's final handoff/return evidence before requesting any successor runtime. Do not assume globally free resources from Stream4-2's empty custody, and never signal or adopt Root's processes. The outgoing agent stopped waiting and did not launch a sixth Android case.
+
+Root explicitly accepted handing over R13 at its reviewed-source boundary. The next Android run is queued, not cancelled, but actual R13 latency/native success is UNEXECUTED. No extra review of unchanged R13 is needed. A new coordinator must bind fresh setup/current facts and admit any real case.
+
+## Product work to finish next
+
+Start from the authoritative NEXT STEPS and make a short product-focused list of the missing deliverables in this stream, reusing the existing branches below. Prioritize the actual feature/functions/flows, not a new evidence framework.
+
+- Complete WP3 native notification actions: Bins out/Pickup and task Done; task Done must use the existing capability GET → PUT done → status readback. Not now must open the existing real due-date editor, and Save must persist the due-only change. It is not a silent snooze. Verify the actual native caller/API/persistence where relevant and fix only reproduced app defects.
+- Complete Today-root routing and preserve legacy briefing-detail routes. /app/today selects the actual Today root; legacy hub-today/hub_today retain detail navigation. Existing wizard callbacks, task focus outlets and designs are already implemented.
+- Complete ordinary contextual notification-permission and guarded Pickup preference flows using4-1's existing screens/producer and this stream's SDK dispatch guards. Do not add a permission-bypass trigger or request permission on arbitrary startup.
+- Complete WP7 safe client events and lifecycle behavior: session_open, reminder_action and suggestion_decision; actual204/finality and stored event join; correct actor/session/recipient/AppLock refusal; cold/eligible30-minute foreground exactly once; short foreground/history restore and callback dedup. Reuse qualifying existing traces rather than repeat the same cold case. Thirty-minute eligibility requires actual OS background time, not just elapsed test time.
+- Coordinate shared WP2 Saved Place Not now → remove → re-save → cold/API persistence and subsequent Turn on prerequisites. The accepted R13 is available if Android verifier timing blocks that real flow. Do not rebuild either app or rereview all source as a substitute for completing the flow. Sole4-1 owns common iOS/navigation work; do not duplicate its repair.
+- Follow additional NEW features/functions/flows in the existing assigned NEXT STEPS/WP1–WP8 backlog. The WP1 feed and WP7 passive support packets below already exist. Do not resurrect old Stamps/seven retained Mail verification campaigns just because they are unfinished historical rows.
+
+Most remaining local simulator/emulator coding, ordinary UI flows, API/persistence checks, focused repairs, CI and coordinated PR preparation can be handled autonomously. Real external APNs/FCM/provider/physical-device delivery requires the corresponding real configured environment and authorization if absent. A local notification or emulator run must not be called physical/provider delivery. Do not block independent product work on an unavailable external boundary.
+
+## Existing PRs: preserve and merge through Root when ready
+
+Latest personally refreshed metadata in this session showed all four OPEN/Draft/CLEAN/MERGEABLE with unchanged heads and completed required CI. Do not call them merge-ready from Git mergeability alone: real pilot journeys remain the recorded holds. Root's next sole queue is360. No new PR or merge was created during this stop/handoff.
+
+| PR | Exact source head | CI | Disposition |
+| --- | --- | --- | --- |
+|1515 https://github.com/WangPantopus/skinny-pantopus/pull/1515|4eaac34464f9aad73004510d5332c5b42622b44d|13 SUCCESS /3 configured SKIP|Native notification actions, Today routing, safe events/lifecycle; already in1533; real journeys pending.|
+|1526 https://github.com/WangPantopus/skinny-pantopus/pull/1526|c259c5d4452f7b2966ac74bbc8064036d06e4777|11 SUCCESS /5 configured SKIP|Existing Pickup/preference SDK guards and contextual permission deferral; already in1533.|
+|1531 https://github.com/WangPantopus/skinny-pantopus/pull/1531|8c68dcf2b51ed231bf761c2de8e4f4e3d83d97b0|6 SUCCESS /6 configured SKIP|Android task CRUD dispatch forwarding; existing iOS equivalent reused; already in1533.|
+|1533 https://github.com/WangPantopus/skinny-pantopus/pull/1533|9e6bcbb22bd1ff0126a789f71889ddbd092b7f09|16 SUCCESS|Root integrated app source and accepted installed products; native acceptance still open.|
+
+Known master d8c9fb1c803e714a48b8745faa36951b8be10193 has accepted15 SUCCESS/1 configured SKIP and merged1509/1512 via1535. Refresh if needed, do not rerun unchanged CI. Original32-PR reconciliation was already done; later Root audit had28 open. Reuse existing current/archive inventories instead of another broad audit.
+
+Owned application checkouts were clean and pushed: /Users/yingpengwang/.codex/worktrees/c0d1/skinny-pantopus (codex/pilot-native-notification-actions,4ea) and /Users/yingpengwang/.codex/worktrees/pilot-pickup-dispatch-guard/skinny-pantopus (codex/pilot-task-dispatch-guard,8c68). Current chat checkout /Users/yingpengwang/.codex/worktrees/1d7b/skinny-pantopus is clean detached1b532259faf8e2b671bba1f2f16f79431a1e5ff0. Protected primary /Users/yingpengwang/skinny-pantopus is read-only. Frozen serving worktree /Users/yingpengwang/.codex/worktrees/s1-pilot-contracts/skinny-pantopus is9e6, tree82c563cd155d0835a270fe99577536820487b269; do not mutate it for a new source repair.
+
+## Exact accepted Android continuation packet
+
+Private base B=/Users/yingpengwang/.config/pantopus/stream4-2-studio-resume-20261004. Root base R=/Users/yingpengwang/.config/pantopus/stream1-studio-resume-20261004.4-1 base C=/Users/yingpengwang/.config/pantopus/stream4-1-studio-pilot-20261004. These are private local evidence/source paths, not Git payloads.
+
+- B/android-saved-only-outer-source-r13/root_savedplace_android_outer_r13.py: SHA949066518e000c3b1c42b5704d2ff5649e24c164d238b6f2cfb5465579c87da8,201289B.
+- B/android-saved-only-outer-source-r13/source-receipt-r13.json: SHA0e9f295b902376f741b18c161c2fdf0f983ed611e3f21950d6656fdde5cd89fe,7149B.
+- Full1929B diff r12-to-r13-focused.diff SHA f2ef2ad6dc943c8f56c3cc25b1c9be5ecb9dfd6f95c0367ede2e2ba97a1a09cc; single declared edit67062ecebf7b51ab7c37cc8fc8d1e065d8492880a2b9fa1918f0b75b79e88147.
+- Root review R/wp2-android-r13-source-root-r1.json:605fc076a4244ddddb7cbed9f962fbc0a55472b5b758ce2f2b141265e6605920,1495B. Independent3-2 intake R/wp2-android-r13-independent-message-intake-root-r1.json:553651f9eb02072e74c024fa4d0c778466a9bb71b9abf97e025d5d59136b3c99,649B. Both SOURCE PASS; no finding remains.
+
+R13 changes ONLY actual_wait polling for the exact registered positive direct ps/lsof readonly Popen. It reuses installed Python3.9 POSIX exponential poll: first1ms, capped50ms/remaining deadline. Other waits retain50ms. Original raw waitpid, wait lock, status, timeout error, consume_short/EOF/group absence, all77 other Root methods, Bound platform, R12 same-frame guest proof, R11 network binding, helper, leaves, app and deadlines remain exact. Full inverse toR12/whole outside AST/selectedPython3.9 compile-only pass. No runtime success is claimed. Do not write another controller or widen a timeout preemptively.
+
+Fifth Android R12 operation9e75f214-b1ac-4778-9c87-b9cd4950529d demonstrated11 successful same-frame native proofs and16 probes/~1.5s per BEFORE,15/~1.45s per return/finally. The serial queue still exceeded helper15s. Profile backend200/finality was delayed past firstfault; no completed native restoration or Saved journey passed. Existing actual_wait50ms polling clustered42 recorded probe waits at50.510–61.248ms. Exact earlier kernel exits were not observed. Diagnosis B/android-fifth-native-queue-diagnosis-r1.json SHAa1a2644a800b5c1dc64105ece10d8a5dcefdf057792aa4616d8a724f2605fd23,68622B. Preserve its timing/source inference qualification; no missing typed timeout log is invented.
+
+Fifth Root return has a SEPARATE provider-fact integration error: Root supplied null nativeActorId from absent high-level login marker, even though delayed current-profile finality could set the internal actor. All original3258 short+4 long children had returned. Final19877-event chain retains12faults/caller1/originalfullreturnfalse. Separate recovery completed16:55:11Z with seven children and full releases. Root receipt R/wp2-fifth-android-failed-warm-external-return-root-r1.json SHA854f56324b3969beee7f00e935ae26c8a0d65ec0ac8061b5321f150ed5e7666d,8084B; recovery R/wp2-fifth-android-external-recovery-r1/recovery.json prefix2200f78b; independent intake2b392105 accepted. Preserve the bad fact and original failure. NativeActor return facts must come from actual current-profile/source state, not an absent completed-login marker. R13 deliberately changes no actor/fact/ACK logic.
+
+Reuse the installed accepted Android b3b76188 APK, retained isolated ownAVD pantopus_root_ea566a52d70b/emulator-5584, dedicated ADB16438, console5584 and existing four R3 leaves/helper97. Root alone verifies current facts before a new operation. The fifth setup R/wp2-fifth-android-setup-admission-r1.json SHA170b37712276677476f81bcae9e466b4770551ef5b9fa603d595c960816d5d4c/51091B is historical, not a reusable live grant. Actual current caches/auth/session must be conserved, not reset or assumed empty. Existing common iOS source/Turn-on/navigation belong4-1.
+
+## Other finished support to reuse, not rebuild
+
+- Task action DATA B/task-notification-native-action-data-r2/task-notification-actions-SOURCE-DATA-r2.json SHAbaf7fb3ba44132adc1ff04677281169386722d8ae0d11f1e22a4c2a6d481046a,27188B; receiptab61d110. Root+3-1 SOURCE PASS. Both editors send raw YYYY-MM-DD; stored timestamp/timezone semantics require actual independent proof. Reuse4-1 stateful task observerR4 (source-input0e8af01d/leaf835554d7). No reset/deleted fixture to fake due persistence.
+- WP7 B/wp7-native-lifecycle-source-r2/source-receipt-r2.json SHAe0005776ba1f39e4a4d254883998d1440c7144a009aee130b62fc0a88ee99b37,2995B; helper1a3c03d7/leafaa03c902 and existing DATAb25b7946. Root+3-2+4-1 SOURCE PASS. Exact push_type evening_briefing only. No full parent was requested; do not build one speculatively. Reuse real cold evidence first.
+- WP1/WP7 passive helper B/wp1-wp7-passive-feed-source-r2/native-evidence-proxy.cjs SHAda322d5724c915dbd1876d9c9669256e84103f5484ea07afb7420f726f417042,37750B; receiptf58581cb/contract4d26f27f. Root+3-2+WP1 SOURCE PASS. Current retained-pair query/public-author mappings/ordinary OS-denial recipe are linked by that packet. Sole4-1 already composed future WP1 standalone305c0b55 with Root/3-2/WP1 acceptance; do not duplicate its parent.
+
+## Conserved acceptance and hard holds
+
+MailDay1492→1494 and Generic1503→1507 remain accepted/closed within their recorded scope. Their unchanged app/accepted screenshots, Android AX-only evidence under FLAG_SECURE and cleanup/conservation must be reused. Do not repeat them to manufacture activity.
+
+Keep credentials, raw tokens, private database rows/archives, operator logs, commands and binaries out of Git/chat. Private support/evidence packets remain in the paths above. Do not read/hash/apply the held20260926100000 migration body or run the full migration checker. No /api/b/:username, held LegalOwnerVM, real money, provider-key, passcode/presence, secure-pixel or business bypass. No physical APNs/FCM claim from local injection. Existing source/CI pass is not end-to-end acceptance, and failed original returns stay failed even after separate recovery.
+
+## Publication and how to report progress
+
+Only this stream's two coordination files are writable here: docs/workstreams/04-2-mailbox-mailday.md and docs/workstreams/NEXT-STREAM4-2-PROMPT-2026-10-02.md. Use scoped commits; other owners may edit concurrently. Root owns shared README/handoff/merge state. Earlier current records were pushed through c6ef62b28; the outgoing final message records this handoff's final commit. Application source branches are already pushed; private evidence is intentionally not committed.
+
+Be candid about progress: zero new product features completed during this outgoing session; it repaired execution support. Known pilot implementation and CI exist in the four drafts, while required real pilot acceptance and their integration remain unfinished. The expanded ALL NEXT STEPS scope has not been re-audited after STOP, so do not invent an overall completion percentage. Give a bounded estimate after a short product-focused reconciliation, clearly separating inherited code, newly completed functions and accepted real flows. Most remaining local work is autonomous; list only actual missing external/provider/device or human credential decisions as human dependencies.
+
+Start by coordinating the returned shared runtime and the authoritative product backlog, then complete the next missing feature/flow using the existing source. Do not turn this handoff into another open-ended verification-support project.
+
+---
+Historical source and evidence blocks follow; superseded runtime/model/next-action instructions below are not current.
+
 ## CURRENT — fifth Android queue failure measured; minimal R13 polling repair delivered — 2026-10-05T16:58:38.891572+00:00
 
 The fifth actual R12 operation9e75f214-b1ac-4778-9c87-b9cd4950529d exercised eleven successful single-frame native guest proofs. Representative BEFORE frames now use16 probes/~1.5s; return/finally still use15/~1.45s. Native refresh returned200 with normal finality, and protected profile returned200 with its actor projection, but its delayed finality was processed after firstfault and the completed normal-restoration/journey gate was not reached. Socket requestbc7ad304 entered16:45:11.323 and closed26.326,15.003s later; parent allow13337 arrived26.640 after that closure. The next queued chatstats request then had no current socket at13343, firstfault13344@26.699. This strongly matches the unchanged helper15s deadline and queue chronology; no uncaptured typed timeout log or application login defect is asserted. [Finite diagnosis a1a2644a](/Users/yingpengwang/.config/pantopus/stream4-2-studio-resume-20261004/android-fifth-native-queue-diagnosis-r1.json) pins the source/events and safe timings. All42 sampled direct probes with recorded ready took50.510–61.248ms to recorded terminal, median55.620ms; exact kernel-exit instants are not captured. Source actual_wait always slept50ms after an unreaped wait.
