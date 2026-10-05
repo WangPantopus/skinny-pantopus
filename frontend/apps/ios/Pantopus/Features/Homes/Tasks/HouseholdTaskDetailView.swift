@@ -35,7 +35,8 @@ struct HouseholdTaskDetailView: View {
     }
 
     var body: some View {
-        Group {
+        // Keep screen lifecycle callbacks on one container as its content changes.
+        ZStack {
             if viewModel.loading {
                 ProgressView("Loading task…")
             } else if let task = viewModel.task, viewModel.isCurrent {
