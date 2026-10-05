@@ -112,13 +112,13 @@ final class HomeTaskNotificationRoutingTests: XCTestCase {
         }) else { return XCTFail("Save did not open/request its detail") }
         host.view.layoutIfNeeded()
         XCTAssertTrue(SequencedURLProtocol.release("created-detail"), "Detail read was canceled during arrival")
-        guard try await waitFor({ !model.detail.loading && navigation.transitionCoordinator == nil }) else {
+        guard try await waitFor({ model.details.allSatisfy { !$0.loading } && navigation.transitionCoordinator == nil }) else {
             return XCTFail("Detail did not settle")
         }
         host.view.layoutIfNeeded()
         await Task.yield()
-        XCTAssertEqual(model.detail.task?.id, model.task, "Detail cleared at revision \(model.detail.activationRevision)")
-        XCTAssertNil(model.detail.error)
+        XCTAssertEqual(model.details.compactMap { $0.task?.id }, [model.task], "Exactly one surviving detail must retain the saved task")
+        XCTAssertTrue(model.details.allSatisfy { $0.error == nil })
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "POST" }.count, 1)
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.url?.path == model.detailPath }.count, 1)
         model.path.removeLast()
@@ -231,7 +231,7 @@ private final class TaskCreationNavigationModel: ObservableObject {
     let task = "30000000-0000-4000-8000-000000000005"
     private let api: APIClient
     let form: AddHouseholdTaskFormViewModel
-    let detail: HouseholdTaskDetailViewModel
+    private(set) var details: [HouseholdTaskDetailViewModel] = []
     lazy var list = HouseholdTasksListViewModel(
         homeId: home,
         onAddTask: { [weak self] in
@@ -268,11 +268,18 @@ private final class TaskCreationNavigationModel: ObservableObject {
             access: HomeTaskAccess(homeId: home, api: api, actorId: actor) { "creation-navigation-session" },
             store: CreationMemoryStore()
         ) { "30000000-0000-4000-8000-000000000006" }
-        detail = HouseholdTaskDetailViewModel(
+    }
+
+    func makeDetail() -> HouseholdTaskDetailViewModel {
+        // Like the production initializer, construct a fresh candidate per view
+        // value; SwiftUI keeps the model belonging to the mounted State identity.
+        let detail = HouseholdTaskDetailViewModel(
             homeId: home,
             taskId: task,
             access: HomeTaskAccess(homeId: home, api: api, actorId: actor) { "creation-navigation-session" }
         )
+        details.append(detail)
+        return detail
     }
 
     func created(_ taskId: String) {
@@ -312,7 +319,7 @@ private struct TaskCreationNavigationView: View {
                 onCreated: model.created
             )
         case .householdTaskDetail:
-            HouseholdTaskDetailView(homeId: model.home, taskId: model.task, viewModel: model.detail)
+            HouseholdTaskDetailView(homeId: model.home, taskId: model.task, viewModel: model.makeDetail())
                 .id(route)
         default:
             EmptyView()
