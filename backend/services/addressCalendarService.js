@@ -204,7 +204,9 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
   const pickupSchedule = garbage ? {
     weekday: /BYDAY=([A-Z]{2})/.exec(garbage.rrule)?.[1] || null,
     recycling_frequency: recycling ? (/INTERVAL=2(?:;|$)/.test(recycling.rrule) ? 'biweekly' : 'weekly') : 'not_set',
-    recycling_next_date: recycling ? expandRule(recycling, today, end, { holidays })[0] || null : null,
+    // The editor saves a recurring weekday/week, not a holiday exception.
+    // Only upcoming moves; feeding its shifted date back would move every week.
+    recycling_next_date: recycling ? expandRule(recycling, today, end)[0] || null : null,
   } : null;
 
   return {
@@ -255,9 +257,22 @@ async function setPickupDay(home, { weekday, recyclingFrequency = 'not_set', rec
   } else if (recyclingNextDate != null) {
     throw invalidPickup('Choose a recycling frequency for this date.');
   }
-  // Anchor: the next occurrence of that weekday on or after today.
+  // Preserve an unchanged rule's anchor: its original day may have passed
+  // while a holiday-shifted pickup is still pending. Advancing DTSTART then
+  // would silently remove that pickup when the household saves the editor.
+  const { rules: currentRules } = await getPickupContext(home.id, userId);
+  const householdRules = currentRules.filter(rule => rule.scope_type === 'home' && String(rule.scope_key) === String(home.id));
+  const currentGarbage = householdRules.find(rule => rule.kind === 'garbage');
+  const currentRecycling = householdRules.find(rule => rule.kind === 'recycling');
+  const unchangedGarbage = /BYDAY=([A-Z]{2})/.exec(currentGarbage?.rrule || '')?.[1] === wd;
+  const currentFrequency = currentRecycling
+    ? (/INTERVAL=2(?:;|$)/.test(currentRecycling.rrule) ? 'biweekly' : 'weekly') : 'not_set';
+  const end = isoDate(new Date(noonUtc(today).getTime() + WINDOW_DAYS * 86400000));
+  const unchangedRecycling = currentRecycling && recyclingFrequency === currentFrequency
+    && recyclingNextDate === expandRule(currentRecycling, today, end)[0];
+  // Changed rules start at the next occurrence chosen by the household.
   const anchor = new RRule({ freq: RRule.WEEKLY, byweekday: [WEEKDAYS[wd]], dtstart: noonUtc(today) }).after(noonUtc(today), true);
-  const dtstart = isoDate(anchor);
+  const dtstart = unchangedGarbage ? String(currentGarbage.dtstart).slice(0, 10) : isoDate(anchor);
   const base = {
     scope_type: 'home',
     scope_key: String(home.id),
@@ -276,7 +291,7 @@ async function setPickupDay(home, { weekday, recyclingFrequency = 'not_set', rec
   if (recyclingFrequency !== 'not_set') {
     const recyclingDay = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][noonUtc(recyclingNextDate).getUTCDay()];
     rows.push({
-      ...base, dtstart: recyclingNextDate, kind: 'recycling', title: 'Recycling day',
+      ...base, dtstart: unchangedRecycling ? String(currentRecycling.dtstart).slice(0, 10) : recyclingNextDate, kind: 'recycling', title: 'Recycling day',
       detail: recyclingFrequency === 'biweekly' ? 'Every other week, on the schedule your household set.' : 'Weekly, on the schedule your household set.',
       rrule: `FREQ=WEEKLY;INTERVAL=${recyclingFrequency === 'biweekly' ? 2 : 1};BYDAY=${recyclingDay}`,
     });
