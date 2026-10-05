@@ -86,8 +86,7 @@ async function sendEmail({ to, subject, html, text, attachments }) {
 
   if (previewMode) {
     logger.info('Local email preview (not delivered)', {
-      to: mailOptions.to,
-      subject: mailOptions.subject,
+      status: 'preview',
     });
     return { success: true, preview: true, messageId: `dev-${Date.now()}` };
   }
@@ -100,13 +99,11 @@ async function sendEmail({ to, subject, html, text, attachments }) {
       return { success: false, error: 'EMAIL_REJECTED' };
     }
     logger.info('Email sent', {
-      to,
-      subject,
-      messageId: info.messageId,
+      status: 'accepted',
     });
     return { success: true, messageId: info.messageId };
   } catch (err) {
-    logger.error('Failed to send email', { to, subject, errorCode: err.code });
+    logger.error('Failed to send email', { errorCode: 'EMAIL_SEND_FAILED' });
     return { success: false, error: 'EMAIL_SEND_FAILED' };
   }
 }
@@ -605,12 +602,21 @@ async function sendGuestReservationConfirmationEmail({
   contributionMode,
   supportTrainId,
   isReminder = false,
+  reminderDay,
+  dishTitle,
+  restaurantName,
+  guestAddressSharedAt,
+  addressLabel,
 }) {
   const modeLabels = { cook: 'Home-cooked meal', takeout: 'Takeout', groceries: 'Groceries' };
   const modeLabel = modeLabels[contributionMode] || contributionMode;
   const appUrl = `${APP_URL}/support-trains/${supportTrainId}`;
 
-  const subject = isReminder ? `Reminder: ${trainTitle}` : `You're signed up to help: ${trainTitle}`;
+  const daySuffix = ['tomorrow', 'today'].includes(reminderDay) ? ` ${reminderDay}` : '';
+  const subject = isReminder ? `Reminder: ${trainTitle}${daySuffix}` : `You're signed up to help: ${trainTitle}`;
+  const contributionDetail = isReminder ? (contributionMode === 'takeout' ? restaurantName : dishTitle) : null;
+  // A reminder can repeat an address only after this reservation's share receipt.
+  const sharedAddress = isReminder && guestAddressSharedAt ? addressLabel : null;
 
   const html = `
 <!DOCTYPE html>
@@ -635,11 +641,11 @@ async function sendGuestReservationConfirmationEmail({
       <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin:0 0 20px;">
         <div style="font-size:15px; font-weight:600; color:#111827;">📅 ${escapeHtml(slotLabel)} · ${escapeHtml(slotDate)}</div>
         ${slotTime ? `<div style="font-size:13px; color:#6b7280; margin-top:4px;">⏰ ${escapeHtml(slotTime)}</div>` : ''}
-        <div style="font-size:13px; color:#6b7280; margin-top:4px;">🍽 ${escapeHtml(modeLabel)}</div>
+        <div style="font-size:13px; color:#6b7280; margin-top:4px;">🍽 ${escapeHtml(modeLabel)}</div>${contributionDetail ? `\n        <div style="font-size:13px; color:#6b7280; margin-top:4px;">${escapeHtml(contributionDetail)}</div>` : ''}
       </div>
 
       <p style="color:#374151; font-size:14px; line-height:1.6; margin:0 0 16px;">
-        The organizer will share exact delivery details with you closer to the date. Keep an eye on your inbox for updates.
+        ${sharedAddress ? `<strong>Drop-off address</strong><br>${escapeHtml(sharedAddress).replace(/\n/g, '<br>')}` : 'The organizer will share exact delivery details with you closer to the date. Keep an eye on your inbox for updates.'}
       </p>
 
       <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:16px; margin:0 0 20px;">
@@ -672,9 +678,9 @@ ${subject}
 Hi ${guestName}, ${isReminder ? 'this is a reminder about your upcoming slot.' : 'thank you for signing up!'}
 
 ${slotLabel} · ${slotDate}${slotTime ? `\nTime: ${slotTime}` : ''}
-Type: ${modeLabel}
+Type: ${modeLabel}${contributionDetail ? `\nBring: ${contributionDetail}` : ''}
 
-The organizer will share exact delivery details with you closer to the date.
+${sharedAddress ? `Drop-off address:\n${sharedAddress}` : 'The organizer will share exact delivery details with you closer to the date.'}
 
 Want a better experience? Download the Pantopus app for one-tap signups, real-time updates, and direct chat with the organizer.
 
@@ -682,6 +688,11 @@ View Support Train: ${appUrl}
 `;
 
   return sendEmail({ to: toEmail, subject, html, text });
+}
+
+// Reuse the accepted guest receipt renderer and transport; no separate delivery path.
+async function sendGuestReservationReminderEmail(options) {
+  return sendGuestReservationConfirmationEmail({ ...options, isReminder: true });
 }
 
 // ============================================================
@@ -1064,6 +1075,7 @@ module.exports = {
   sendVerificationEmail,
   sendMonthlyReceipt,
   sendGuestReservationConfirmationEmail,
+  sendGuestReservationReminderEmail,
   sendGuestReservationAddressEmail,
   sendDisplayNameMigrationEmail,
   buildDisplayNameMigrationEmailContent,
