@@ -1974,8 +1974,12 @@ public struct HubTabRoot: View {
                 homeId: homeId,
                 onClose: { pop() },
                 onCreated: { taskId in
-                    if !path.isEmpty { path.removeLast() }
-                    push(.householdTaskDetail(homeId: homeId, taskId: taskId))
+                    // Publish one replacement, without activating the list
+                    // between the saved form and its task detail.
+                    var destinationPath = path
+                    if !destinationPath.isEmpty { destinationPath.removeLast() }
+                    destinationPath.append(.householdTaskDetail(homeId: homeId, taskId: taskId))
+                    path = destinationPath
                 }
             )
         case let .editHouseholdTask(homeId, taskId, focusDueDate):
