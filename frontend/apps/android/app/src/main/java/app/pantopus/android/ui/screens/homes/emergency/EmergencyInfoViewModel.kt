@@ -132,6 +132,7 @@ class EmergencyInfoViewModel
         }
 
         private var emergencies: List<HomeEmergencyDto>? = null
+
         // A delayed success must not restore private rows after a newer access denial.
         private var fetchGeneration = 0L
         private var onAction: (HomeEmergencyDto) -> Unit = {}
