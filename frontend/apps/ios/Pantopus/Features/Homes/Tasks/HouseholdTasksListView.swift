@@ -17,9 +17,10 @@ struct HouseholdTasksListView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var deleteTarget: DeleteTarget?
     @State private var isVisible = false
-    @State private var hasAppeared = false
+    private let isActive: Bool
 
-    init(viewModel: HouseholdTasksListViewModel) {
+    init(viewModel: HouseholdTasksListViewModel, isActive: Bool = true) {
+        self.isActive = isActive
         _viewModel = State(initialValue: viewModel)
     }
 
@@ -29,17 +30,21 @@ struct HouseholdTasksListView: View {
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .onAppear { isVisible = true
                 Analytics.track(.screenHouseholdTasksViewed)
-                // The shared list owns its initial load. A retained navigation
-                // destination must also refresh after editing/completing a task.
-                if hasAppeared { resumeCurrentScreen() }
-                hasAppeared = true
             }
             .onDisappear { isVisible = false
                 viewModel.suspend()
                 deleteTarget = nil
             }
+            .onChange(of: isActive) { _, active in
+                // NavigationStack can retain the list without another appearance
+                // callback. Reload from the server when Back makes it current.
+                if active { resumeCurrentScreen() } else {
+                    viewModel.suspend()
+                    deleteTarget = nil
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
-                guard isVisible else { return }
+                guard isVisible, isActive else { return }
                 if phase == .active {
                     resumeCurrentScreen()
                 } else { viewModel.suspend()
@@ -85,7 +90,7 @@ struct HouseholdTasksListView: View {
     private func resumeCurrentScreen() {
         let revision = viewModel.activationRevision
         Task {
-            guard isVisible, scenePhase == .active else { return }
+            guard isActive, scenePhase == .active else { return }
             await viewModel.resume(ifCurrent: revision)
         }
     }
