@@ -30,7 +30,7 @@ class PlaceLaunchViewModel
     @Inject
     constructor(
         private val repo: PlaceRepository,
-        authRepository: AuthRepository,
+        private val authRepository: AuthRepository,
     ) : ViewModel() {
         private val _step = MutableStateFlow<LaunchStep>(LaunchStep.Hero)
         val step: StateFlow<LaunchStep> = _step.asStateFlow()
@@ -49,6 +49,7 @@ class PlaceLaunchViewModel
         val error: StateFlow<String?> = _error.asStateFlow()
         private var lookupJob: Job? = null
         private var autocompleteJob: Job? = null
+        private val entryUserId = (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
         init {
             // This view model outlives the signed-in session (the funnel sits outside the nav graph), so
@@ -59,7 +60,8 @@ class PlaceLaunchViewModel
                 var wasSignedIn: Boolean? = null
                 authRepository.state.collect { state ->
                     val signedIn = state is AuthRepository.State.SignedIn
-                    if (signedIn && wasSignedIn == false) startOver()
+                    val currentUserId = (state as? AuthRepository.State.SignedIn)?.user?.id
+                    if ((signedIn && wasSignedIn == false) || (entryUserId != null && currentUserId != entryUserId)) startOver()
                     wasSignedIn = signedIn
                 }
             }
@@ -79,17 +81,23 @@ class PlaceLaunchViewModel
         fun onQueryChange(value: String) {
             _query.value = value
             autocompleteJob?.cancel()
+            lookupJob?.cancel()
+            _loadingPreview.value = false
+            _error.value = null
+            _suggestions.value = emptyList()
+            if (selected?.label != value) selected = null
             val q = value.trim()
             if (q.length < MIN_QUERY_LENGTH) {
-                _suggestions.value = emptyList()
                 return
             }
             autocompleteJob =
                 viewModelScope.launch {
                     delay(AUTOCOMPLETE_DEBOUNCE_MS)
-                    when (val r = repo.geoAutocomplete(q)) {
+                    val r = repo.geoAutocomplete(q)
+                    if (_query.value != value) return@launch
+                    when (r) {
                         is NetworkResult.Success -> _suggestions.value = r.data.suggestions
-                        is NetworkResult.Failure -> Unit
+                        is NetworkResult.Failure -> _error.value = "We couldn’t look up addresses. Please try again."
                     }
                 }
         }
@@ -126,7 +134,12 @@ class PlaceLaunchViewModel
 
         fun retryPreview() {
             if (_loadingPreview.value) return
-            selected?.let { loadPreview(it.label) }
+            val suggestion = selected
+            if (suggestion != null && suggestion.label == _query.value) {
+                loadPreview(suggestion.label)
+            } else {
+                onQueryChange(_query.value)
+            }
         }
 
         fun prepareForAuth(): Boolean {
@@ -134,6 +147,24 @@ class PlaceLaunchViewModel
             if (suggestion == null || suggestion.label != _query.value || !PlacePendingStore.stash(suggestion)) {
                 _step.value = LaunchStep.Hero
                 _error.value = "Choose an address suggestion to keep this preview through sign-in."
+                return false
+            }
+            return true
+        }
+
+        /** The signed-in entry must not hand an unbound preview to another account. */
+        fun prepareForSave(): Boolean {
+            val currentUserId = (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id
+            if (entryUserId == null || currentUserId != entryUserId) {
+                startOver()
+                _error.value = "Your account changed. Reopen Saved places to continue."
+                return false
+            }
+            if (!prepareForAuth()) return false
+            if (PlacePendingStore.bind(entryUserId) == null) {
+                PlacePendingStore.clear()
+                _step.value = LaunchStep.Hero
+                _error.value = "We couldn’t keep this preview. Please choose the address again."
                 return false
             }
             return true
