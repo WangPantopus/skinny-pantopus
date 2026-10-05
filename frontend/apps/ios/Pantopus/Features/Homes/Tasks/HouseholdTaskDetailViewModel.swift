@@ -1,8 +1,5 @@
 import Foundation
 import Observation
-#if DEBUG
-import OSLog
-#endif
 
 @Observable
 @MainActor
@@ -18,9 +15,6 @@ final class HouseholdTaskDetailViewModel {
     private var pendingReload = false
     private var mountedViews = Set<UUID>()
     private var readTask: (revision: Int, task: Task<Void, Never>)?
-    #if DEBUG
-    private static let lifecycleLogger = Logger(subsystem: "app.pantopus", category: "HomeTaskDetailLifecycle")
-    #endif
 
     var isCurrent: Bool {
         access.isCurrent
@@ -29,7 +23,6 @@ final class HouseholdTaskDetailViewModel {
     init(homeId: String, taskId: String, api: APIClient = .shared, access: HomeTaskAccess? = nil) {
         self.taskId = taskId
         self.access = access ?? HomeTaskAccess(homeId: homeId, api: api)
-        traceLifecycle("init")
     }
 
     var activationRevision: Int {
@@ -39,7 +32,6 @@ final class HouseholdTaskDetailViewModel {
     func attachView() -> UUID {
         let owner = UUID()
         mountedViews.insert(owner)
-        traceLifecycle("view.owner.attach")
         return owner
     }
 
@@ -48,26 +40,19 @@ final class HouseholdTaskDetailViewModel {
     @discardableResult
     func detachView(_ owner: UUID) -> Bool {
         guard mountedViews.remove(owner) != nil else { return false }
-        guard mountedViews.isEmpty else {
-            traceLifecycle("view.owner.retained")
-            return false
-        }
+        guard mountedViews.isEmpty else { return false }
         suspend()
         return true
     }
 
     func resume(ifCurrent revision: Int) async {
-        traceLifecycle("resume", expectedRevision: revision)
         guard revision == generation else { return }
         await load()
     }
 
     func load() async {
-        traceLifecycle("load.enter")
-        defer { traceLifecycle("load.exit") }
         guard !Task.isCancelled else { return }
         if let readTask {
-            traceLifecycle("load.join", expectedRevision: readTask.revision)
             await readTask.task.value
             return
         }
@@ -92,15 +77,11 @@ final class HouseholdTaskDetailViewModel {
     }
 
     private func fetch(revision: Int) async {
-        traceLifecycle("load.read", expectedRevision: revision)
         do {
             let current = try await access.detail(taskId: taskId)
-            traceLifecycle("load.response", expectedRevision: revision)
             guard revision == generation else { return }
             task = current
-            traceLifecycle("load.applied", expectedRevision: revision)
         } catch {
-            traceLifecycle(error is CancellationError ? "load.cancel" : "load.error", expectedRevision: revision)
             guard revision == generation else { return }
             self.error = error.localizedDescription
         }
@@ -170,7 +151,6 @@ final class HouseholdTaskDetailViewModel {
         readTask = nil
         task = nil
         loading = false
-        traceLifecycle("suspend")
     }
 
     func retire() {
@@ -182,31 +162,5 @@ final class HouseholdTaskDetailViewModel {
         task = nil
         loading = false
         error = HomeTaskAccess.AccessError.changed.localizedDescription
-        traceLifecycle("retire")
-    }
-
-    /// Temporary native diagnosis: constants and lifecycle state only. Never
-    /// include record IDs, titles, response bodies, session values or tokens.
-    func traceLifecycle(
-        _ event: StaticString,
-        expectedRevision: Int = -1,
-        viewVisible: Bool? = nil,
-        sceneActive: Bool? = nil
-    ) {
-        #if DEBUG
-        let instance = String(describing: ObjectIdentifier(self))
-        let revision = generation
-        let current = isCurrent
-        let modelVisible = visible
-        let view = viewVisible.map(String.init) ?? "unknown"
-        let scene = sceneActive.map(String.init) ?? "unknown"
-        Self.lifecycleLogger.notice(
-            """
-            event=\(event.description, privacy: .public) instance=\(instance, privacy: .public) \
-            generation=\(revision) expected=\(expectedRevision) current=\(current) visible=\(modelVisible) \
-            viewVisible=\(view, privacy: .public) sceneActive=\(scene, privacy: .public) cancel=\(Task.isCancelled)
-            """
-        )
-        #endif
     }
 }
