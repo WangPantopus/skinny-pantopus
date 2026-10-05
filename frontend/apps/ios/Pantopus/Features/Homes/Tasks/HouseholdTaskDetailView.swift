@@ -5,6 +5,7 @@ struct HouseholdTaskDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: HouseholdTaskDetailViewModel
     @State private var isVisible = false
+    @State private var mountOwner: UUID?
     @State private var mediaModel: HomeTaskMediaViewModel?
     @State private var attachmentPresentation: AttachmentPresentation?
     @State private var recurrencePresentation: RecurrencePresentation?
@@ -92,7 +93,10 @@ struct HouseholdTaskDetailView: View {
                         }
                     }
                 }
-                .refreshable { await viewModel.load() }
+                .refreshable {
+                    guard isVisible, scenePhase == .active else { return }
+                    await viewModel.load()
+                }
             } else {
                 ContentUnavailableView {
                     Label("Task unavailable", systemImage: "checklist")
@@ -118,11 +122,14 @@ struct HouseholdTaskDetailView: View {
             HomeTaskGigView(model: presentation.model)
         })
         .onAppear { isVisible = true
+            attachIfNeeded()
             traceLifecycle("view.appear")
         }
         .task {
             traceLifecycle("view.task.begin")
             defer { traceLifecycle("view.task.end") }
+            guard !Task.isCancelled, scenePhase == .active else { return }
+            attachIfNeeded()
             await viewModel.load()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -149,9 +156,13 @@ struct HouseholdTaskDetailView: View {
             }
         }
         .onDisappear { traceLifecycle("view.disappear")
-            DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
             isVisible = false
-            viewModel.suspend()
+            if let owner = mountOwner {
+                mountOwner = nil
+                if viewModel.detachView(owner) {
+                    DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
+                }
+            }
             if attachmentPresentation == nil { mediaModel?.retire()
                 mediaModel = nil
             }
@@ -183,6 +194,10 @@ struct HouseholdTaskDetailView: View {
             guard isVisible, scenePhase == .active else { return }
             await viewModel.resume(ifCurrent: revision)
         }
+    }
+
+    private func attachIfNeeded() {
+        if mountOwner == nil { mountOwner = viewModel.attachView() }
     }
 
     private func traceLifecycle(_ event: StaticString, expectedRevision: Int = -1) {
