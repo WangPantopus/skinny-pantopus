@@ -167,6 +167,18 @@ class TestSeasonalTimingValidation:
         text = "The March council meeting notes were released today. Source: City"
         assert _validate_humanized_text(text, "local_news", today=date(2026, 4, 20)) is None
 
+    @pytest.mark.parametrize("category", ["local_news", "event", "seasonal"])
+    def test_non_sports_closing_question_before_inline_source_is_rejected(self, category):
+        text = 'The park is open. Anyone going?\u201d Source: City of Camas'
+        assert _validate_humanized_text(text, category) == "engagement_question"
+
+    def test_source_name_does_not_trigger_publisher_voice_checks(self):
+        text = "The park is open.\nSource: Our Community — What's New?"
+        assert _validate_humanized_text(text, "local_news") is None
+
+    def test_sports_question_stays_valid(self):
+        assert _validate_humanized_text("Blazers play tonight. Anyone watching?", "sports") is None
+
 
 # ---------------------------------------------------------------------------
 # humanize function
@@ -179,6 +191,29 @@ class TestHumanize:
         text, error = result
         assert text == good_text
         assert error is None
+
+    @pytest.mark.parametrize("bad", [
+        "The city opens the park Saturday. Anyone planning to go?\nSource: City of Camas",
+        "Our neighborhood has a new park opening Saturday.\nSource: City of Camas",
+    ])
+    def test_non_sports_publisher_copy_retries_before_posting(self, bad):
+        good = "The city opens the park Saturday.\nSource: City of Camas"
+        (text, error), client = _call_humanize([bad, good])
+        assert (text, error) == (good, None)
+        assert client.chat.completions.create.call_count == 2
+
+    def test_repeated_non_sports_question_is_not_publishable(self):
+        bad = "The city opens the park Saturday. Anyone planning to go?\nSource: City of Camas"
+        (text, error), client = _call_humanize([bad, bad])
+        assert text is None
+        assert error == "validation_failed:engagement_question"
+        assert client.chat.completions.create.call_count == 2
+
+    def test_retry_quality_gate_skip_is_not_publishable(self):
+        bad = "The city opens the park Saturday. Anyone planning to go?\nSource: City of Camas"
+        (text, error), client = _call_humanize([bad, "SKIP"])
+        assert (text, error) == (None, "ai_quality_gate:skipped")
+        assert client.chat.completions.create.call_count == 2
 
     def test_stale_seasonal_source_skips_before_openai_call(self):
         class FakeDate(date):

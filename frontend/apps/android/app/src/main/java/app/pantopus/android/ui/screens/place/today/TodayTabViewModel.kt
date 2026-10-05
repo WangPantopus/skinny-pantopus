@@ -76,6 +76,7 @@ class TodayTabViewModel
         private val sessionScope = sessionScopes.create(viewModelScope)
         private val keyguard = context.getSystemService(KeyguardManager::class.java)
         private var promptAttempted = false
+        private var promptConfirmed = false
         private val _showMorningCard = MutableStateFlow(false)
         val showMorningCard = _showMorningCard.asStateFlow()
         private val _preferenceBusy = MutableStateFlow(false)
@@ -142,6 +143,7 @@ class TodayTabViewModel
             loadJob?.cancel()
             val version = ++loadVersion
             promptAttempted = false
+            promptConfirmed = false
             _showMorningCard.value = false
             _preferenceBusy.value = false
             _preferenceError.value = null
@@ -232,6 +234,7 @@ class TodayTabViewModel
             val preferences = preferencesRepository.preferences()
             if (!current(version)) return
             if (preferences is NetworkResult.Success) {
+                promptConfirmed = !preferences.data.dailyBriefingPromptedAt.isNullOrBlank()
                 _showMorningCard.value = preferences.data.dailyBriefingPromptedAt == null
             }
         }
@@ -248,11 +251,12 @@ class TodayTabViewModel
                 abs(latitude - place.latitude) < SAVED_ANCHOR_TOLERANCE && abs(longitude - place.longitude) < SAVED_ANCHOR_TOLERANCE
         }
 
-        fun markPromptDisplayed() {
-            if (!_showMorningCard.value || promptAttempted) return
-            promptAttempted = true
+        fun markPromptDisplayed(dismissAfterSave: Boolean = false) {
+            if (!_showMorningCard.value || _preferenceBusy.value || (promptAttempted && !dismissAfterSave)) return
             val version = loadVersion
+            promptAttempted = true
             _preferenceBusy.value = true
+            _preferenceError.value = null
             viewModelScope.launch {
                 if (!current(version)) return@launch
                 val result =
@@ -261,13 +265,25 @@ class TodayTabViewModel
                         dispatchGuard = todayDispatchGuard(null, version),
                     )
                 if (!current(version)) return@launch
-                if (result is NetworkResult.Failure) _preferenceError.value = "Couldn't save your choice. Try again."
+                if (result is NetworkResult.Success && !result.data.dailyBriefingPromptedAt.isNullOrBlank()) {
+                    promptConfirmed = true
+                    if (dismissAfterSave) _showMorningCard.value = false
+                } else {
+                    _preferenceError.value = "Couldn't save your choice. Try again."
+                }
                 _preferenceBusy.value = false
             }
         }
 
         fun hideMorningCard() {
-            if (!_preferenceBusy.value) _showMorningCard.value = false
+            if (!_showMorningCard.value || _preferenceBusy.value) return
+            // Keep the prompt available when its display stamp failed, so a
+            // retry can persist the choice instead of asking again on reentry.
+            if (promptConfirmed) {
+                _showMorningCard.value = false
+            } else {
+                markPromptDisplayed(dismissAfterSave = true)
+            }
         }
 
         fun turnOnMorning() {

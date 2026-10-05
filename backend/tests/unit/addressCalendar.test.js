@@ -170,7 +170,7 @@ describe('composeForHome', () => {
     expect(cal.upcoming.filter(e => e.kind === 'garbage').map(e => e.date)).toEqual(['2026-11-27', '2026-12-03']);
     expect(cal.upcoming.find(e => e.kind === 'garbage')).toMatchObject({ moved_from: '2026-11-26', holiday: 'Thanksgiving', shift_days: 1, scope: 'home', source: 'Set by your household', confidence: 'official' });
     expect(cal.upcoming.find(e => e.kind === 'recycling')).toMatchObject({ date: '2026-11-28', moved_from: '2026-11-27' });
-    expect(cal.pickup_schedule.recycling_next_date).toBe('2026-11-28');
+    expect(cal.pickup_schedule.recycling_next_date).toBe('2026-11-27');
     expect(cal.upcoming.find(e => e.kind === 'pickup_holiday')).toMatchObject({ date: '2026-11-26', source: holiday.source, source_url: holiday.source_url, confidence: 'official' });
     const after = await svc.composeForHome(home, { rules, now: new Date('2026-11-27T18:00:00Z') });
     expect(after.upcoming.find(e => e.kind === 'garbage')).toMatchObject({ date: '2026-11-27', days_until: 0, moved_from: '2026-11-26' });
@@ -179,6 +179,23 @@ describe('composeForHome', () => {
     const unverified = await svc.composeForHome(home, { rules: [garbage, { ...holiday, confidence: 'unverified' }], now: new Date('2026-11-25T18:00:00Z') });
     expect(unverified.upcoming.find(e => e.kind === 'garbage').date).toBe('2026-11-26');
     expect(unverified.upcoming.some(e => e.kind === 'pickup_holiday')).toBe(true);
+    // Both mobile editors round-trip pickup_schedule when saving. A holiday
+    // must neither become the recurring weekday nor drop a still-pending move.
+    seedTable('Home', [home]);
+    for (const day of ['2026-11-25', '2026-11-27', '2026-11-28']) {
+      seedTable('AddressCalendarRule', rules);
+      const now = new Date(`${day}T18:00:00Z`);
+      const before = await svc.composeForHome(home, { now });
+      await svc.setPickupDay(home, { userId: USER, weekday: before.pickup_schedule.weekday,
+        recyclingFrequency: before.pickup_schedule.recycling_frequency,
+        recyclingNextDate: before.pickup_schedule.recycling_next_date, now });
+      const saved = getTable('AddressCalendarRule').filter(rule => rule.scope_type === 'home');
+      expect(saved.find(rule => rule.kind === 'garbage').dtstart).toBe(garbage.dtstart);
+      expect(saved.find(rule => rule.kind === 'recycling')).toMatchObject({ dtstart: recycling.dtstart, rrule: recycling.rrule });
+      const afterSave = await svc.composeForHome(home, { now });
+      const occurrences = calendar => calendar.upcoming.map(({ kind, date, moved_from }) => ({ kind, date, moved_from }));
+      expect(occurrences(afterSave)).toEqual(occurrences(before));
+    }
   });
 
   it('limits holiday shifts to listed pickup kinds and the holiday through Saturday, including window edges', async () => {
@@ -196,6 +213,7 @@ describe('composeForHome', () => {
     seedCamas();
     await svc.setPickupDay(home, { userId: USER, weekday: 'TH', now: NOW });
     const other = { ...home, id: 'other-home' };
+    getTable('Home').push(other);
     await svc.setPickupDay(other, { userId: USER, weekday: 'FR', now: NOW });
     const before = structuredClone(getTable('AddressCalendarRule'));
     pickupRpc.mockResolvedValueOnce({ data: null, error: { message: 'transaction failed' } });

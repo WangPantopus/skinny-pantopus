@@ -536,7 +536,12 @@ class TestEndToEndFlow:
                 for c in update_calls
             )
 
-    def test_humanizer_failure(self):
+    @pytest.mark.parametrize("bad_text, reason", [
+        ("x" * 501, "too_long:501"),
+        ("The park opens Saturday. Anyone going?\nSource: City", "engagement_question"),
+        ("Our neighborhood has a new park.\nSource: City", "neighbor_voice"),
+    ])
+    def test_humanizer_failure(self, bad_text, reason):
         one_region = [_make_region_config("test_region")]
         patches = _standard_patches(_pt(7), regions=one_region)
         with (
@@ -549,9 +554,9 @@ class TestEndToEndFlow:
             patches["check_density"] as mock_density,
             patches["should_post"],
             patches["allowed_cats"],
-            patches["humanize"] as mock_humanize,
-            patches["auth_curator"],
-            patches["post_api"],
+            patch("src.pipeline.humanizer.openai") as mock_openai,
+            patches["auth_curator"] as mock_auth,
+            patches["post_api"] as mock_post,
             patch(f"{_HANDLER}._select_items", return_value=[_make_queue_item()]),
             patch(f"{_HANDLER}._get_source_display_name", return_value="Test"),
         ):
@@ -560,16 +565,22 @@ class TestEndToEndFlow:
             mock_density.return_value = MagicMock(
                 stage="full", avg_daily_posts=0, active_posters=0
             )
-            mock_humanize.return_value = (None, "validation_failed:too_long")
+            client = mock_openai.OpenAI.return_value
+            client.chat.completions.create.return_value = MagicMock(
+                choices=[MagicMock(message=MagicMock(content=bad_text))]
+            )
 
             result = handler({}, None)
 
             assert result["items_failed"] == 1
+            assert result["items_posted"] == 0
+            assert client.chat.completions.create.call_count == 2
+            mock_auth.assert_not_called()
+            mock_post.assert_not_called()
             update_calls = sb.table.return_value.update.call_args_list
-            assert any(
-                c.args[0].get("status") == "failed"
-                for c in update_calls
-            )
+            assert len(update_calls) == 1
+            assert update_calls[0].args[0]["status"] == "failed"
+            assert update_calls[0].args[0]["failure_reason"] == f"validation_failed:{reason}"
 
     def test_ai_quality_gate_skips_first_candidate_and_posts_next(self):
         one_region = [_make_region_config("test_region")]

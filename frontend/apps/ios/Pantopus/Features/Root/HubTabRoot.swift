@@ -3141,6 +3141,10 @@ public struct HubTabRoot: View {
                     return nil
                 },
                 onDone: { pop() },
+                onToday: {
+                    pop()
+                    router.handle(path: "/app/today", expectedUserID: currentUserId)
+                },
                 onSavedPlaces: { push(.savedPlaces) },
                 onSetUpHome: { push(.addHome) }
             )

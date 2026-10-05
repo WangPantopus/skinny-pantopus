@@ -410,6 +410,81 @@ extension HomeTaskAccessTests {
     }
 }
 
+extension HomeTaskAccessTests {
+    func testDetailCompletesAndReopensWithoutEditPermission() async {
+        for status in ["open", "done"] {
+            SequencedURLProtocol.reset()
+            let next = status == "done" ? "open" : "done"
+            SequencedURLProtocol.sequence = [
+                .status(200, body: detail(record(status: status, complete: true))),
+                .status(200, body: detail(record(status: status, complete: true))),
+                .status(200, body: json(["task": record(status: next, complete: true)])),
+                .status(200, body: detail(record(status: next)))
+            ]
+            let vm = HouseholdTaskDetailViewModel(homeId: home, taskId: task, access: access())
+            await vm.load()
+            await vm.toggleDone()
+            XCTAssertEqual(vm.task?.status, next)
+            XCTAssertEqual(vm.task?.capabilities?.canComplete, false)
+            XCTAssertNil(vm.error)
+            XCTAssertFalse(vm.acting)
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "GET", "PUT", "GET"])
+        }
+    }
+
+    func testDetailCompletionDeniesReadOnlyAndRevokedAssignment() async {
+        for initiallyAllowed in [false, true] {
+            SequencedURLProtocol.reset()
+            SequencedURLProtocol.sequence = [
+                .status(200, body: detail(record(complete: initiallyAllowed))), .status(200, body: detail())
+            ]
+            let vm = HouseholdTaskDetailViewModel(homeId: home, taskId: task, access: access())
+            await vm.load()
+            await vm.toggleDone()
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, initiallyAllowed ? 2 : 1)
+            XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.httpMethod == "PUT" })
+            if initiallyAllowed { XCTAssertNil(vm.task)
+                XCTAssertNotNil(vm.error)
+            }
+        }
+    }
+
+    func testDetailCompletionSerializesAndDiscardsSuspendedOrFailedResult() async throws {
+        for boundary in ["before-write", "after-write", "lost-response"] {
+            SequencedURLProtocol.reset()
+            SequencedURLProtocol.sequence = [
+                .status(200, body: detail(record(complete: true))),
+                .status(200, body: detail(record(complete: true)), gate: boundary == "before-write" ? boundary : nil),
+                .status(boundary == "lost-response" ? 503 : 200, body: json(["task": record(status: "done")]), gate: boundary),
+                .status(200, body: detail(record(status: "done")))
+            ]
+            let vm = HouseholdTaskDetailViewModel(homeId: home, taskId: task, access: access())
+            await vm.load()
+            let action = Task { await vm.toggleDone() }
+            let requestCount = boundary == "before-write" ? 2 : 3
+            try await waitForRequest(count: requestCount)
+            XCTAssertTrue(vm.acting)
+            await vm.toggleDone()
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, requestCount)
+            if boundary != "lost-response" { vm.suspend() }
+            for _ in 0..<100 {
+                if SequencedURLProtocol.release(boundary) { break }
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            await action.value
+            XCTAssertNil(vm.task)
+            XCTAssertFalse(vm.acting)
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, requestCount)
+            if boundary == "lost-response" {
+                XCTAssertNotNil(vm.error)
+                await vm.load()
+                XCTAssertEqual(vm.task?.status, "done")
+                XCTAssertNil(vm.error)
+            }
+        }
+    }
+}
+
 @MainActor
 private final class NavigationCount {
     var value = 0

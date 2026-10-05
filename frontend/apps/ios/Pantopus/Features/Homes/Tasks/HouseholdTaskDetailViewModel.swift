@@ -63,17 +63,7 @@ final class HouseholdTaskDetailViewModel {
         acting = true
         generation += 1
         let revision = generation
-        defer {
-            acting = false
-            if pendingReload, visible {
-                pendingReload = false
-                let revision = generation
-                Task { [weak self] in
-                    guard let self, self.visible else { return }
-                    await self.resume(ifCurrent: revision)
-                }
-            }
-        }
+        defer { finishAction() }
         do {
             let current = try await access.detail(taskId: taskId)
             guard visible, revision == generation, isCurrent else { return }
@@ -84,6 +74,38 @@ final class HouseholdTaskDetailViewModel {
             guard revision == generation else { return }
             task = nil
             self.error = error.localizedDescription
+        }
+    }
+
+    func toggleDone() async {
+        guard visible, !acting, isCurrent, let task, task.capabilities?.canComplete == true else { return }
+        acting = true
+        generation += 1
+        let revision = generation
+        error = nil
+        defer { finishAction() }
+        do {
+            let current = try await access.complete(taskId: taskId, status: task.status == "done" ? "open" : "done") {
+                guard self.visible, revision == self.generation, self.isCurrent else { throw CancellationError() }
+            }
+            guard visible, revision == generation, isCurrent else { return }
+            self.task = current
+        } catch {
+            guard visible, revision == generation else { return }
+            self.task = nil
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func finishAction() {
+        acting = false
+        if pendingReload, visible {
+            pendingReload = false
+            let revision = generation
+            Task { [weak self] in
+                guard let self, visible else { return }
+                await resume(ifCurrent: revision)
+            }
         }
     }
 
