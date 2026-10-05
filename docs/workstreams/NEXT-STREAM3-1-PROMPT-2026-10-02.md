@@ -4,6 +4,12 @@ Handoff: October 5, 2026. The human explicitly stopped this session. This prompt
 
 ## Latest human direction — highest priority
 
+**Latest explicit handoff correction:** The human's assessment of this session is: **“you delivered shit.”** Carry that assessment honestly: this successor session delivered zero new application-code changes or user-facing features. Do not present its verification records as product delivery.
+
+The next agent must deliver its best work through concrete, working new features, functions and flows in **`NEXT_STEPS.md`**. Follow the repository's actual designs in **`./docs/design/exports/`**: inspect the relevant exported designs before implementation and use them for the intended appearance, interaction and navigation. These feature deliverables are **mobile only: iOS and Android**. Do not build web versions or expand into web UI work. Shared backend/API/database changes are appropriate only where needed to support those mobile features, while preserving existing compatibility and reusing completed branch work.
+
+Deliver complete mobile flows, not another evidence campaign. Reuse existing implementations, finish real gaps, validate the changed behavior on both mobile platforms when available, and report actual product outcomes and any remaining limits. This latest direction governs any broader platform references in inherited history below.
+
 Use **GPT-6 Astra / Extra High**, one main agent, no subagents. The human will start the successor chat; do not create one yourself.
 
 The outgoing session spent too much effort reviewing verification machinery and delivered no new user-facing features in its final review phase. The human explicitly requires the next session to **BUILD and finish the new features, functions and flows in the repository's `NEXT_STEPS.md`**. Make concrete product progress. Do not resume the sequence of harness reviews, hash checks, evidence repackaging or repeated failed journeys as the default task.

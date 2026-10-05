@@ -1,3 +1,7 @@
+## Latest handoff correction — mobile feature delivery and repository designs
+
+The human explicitly assessed this session as **“you delivered shit.”** The factual output was zero new application-code changes or user-facing features in this successor session. The next agent must deliver its best work by building the active **NEXT_STEPS** features/functions/flows for **iOS and Android only**, following the actual designs in **`./docs/design/exports/`**. No web feature implementation. Supporting shared API/backend changes may be made where necessary for those mobile flows. Reuse existing branch work and avoid another verification-machinery loop. The complete successor prompt now carries these instructions prominently; this update does not resume product/runtime work.
+
 ## STOPPED — human-requested successor handoff — October 5, 2026
 
 The human explicitly stopped this session and requires the next agent to prioritize **building the new NEXT_STEPS features, functions and flows**, using existing branches and avoiding duplicate implementations. No new source/runtime/test/audit/review/merge work is authorized in this outgoing session. Only this minimal committed/pushed handoff is being finished. The final review phase delivered verification records, not new user-facing features or acceptance closures.
