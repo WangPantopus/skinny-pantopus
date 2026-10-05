@@ -251,12 +251,8 @@ class TodayTabViewModel
                 abs(latitude - place.latitude) < SAVED_ANCHOR_TOLERANCE && abs(longitude - place.longitude) < SAVED_ANCHOR_TOLERANCE
         }
 
-        fun markPromptDisplayed() {
-            if (!_showMorningCard.value || promptAttempted) return
-            persistPromptDisplayed(dismissAfterSave = false)
-        }
-
-        private fun persistPromptDisplayed(dismissAfterSave: Boolean) {
+        fun markPromptDisplayed(dismissAfterSave: Boolean = false) {
+            if (!_showMorningCard.value || _preferenceBusy.value || (promptAttempted && !dismissAfterSave)) return
             val version = loadVersion
             promptAttempted = true
             _preferenceBusy.value = true
@@ -286,7 +282,7 @@ class TodayTabViewModel
             if (promptConfirmed) {
                 _showMorningCard.value = false
             } else {
-                persistPromptDisplayed(dismissAfterSave = true)
+                markPromptDisplayed(dismissAfterSave = true)
             }
         }
 
