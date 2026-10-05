@@ -313,6 +313,7 @@ private struct TaskCreationNavigationView: View {
             )
         case .householdTaskDetail:
             HouseholdTaskDetailView(homeId: model.home, taskId: model.task, viewModel: model.detail)
+                .id(route)
         default:
             EmptyView()
         }
