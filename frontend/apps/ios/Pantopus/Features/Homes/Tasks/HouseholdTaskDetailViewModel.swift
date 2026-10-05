@@ -1,5 +1,8 @@
 import Foundation
 import Observation
+#if DEBUG
+import OSLog
+#endif
 
 @Observable
 @MainActor
@@ -13,6 +16,9 @@ final class HouseholdTaskDetailViewModel {
     private var generation = 0
     private var visible = false
     private var pendingReload = false
+    #if DEBUG
+    private static let lifecycleLogger = Logger(subsystem: "app.pantopus", category: "HomeTaskDetailLifecycle")
+    #endif
 
     var isCurrent: Bool {
         access.isCurrent
@@ -21,6 +27,7 @@ final class HouseholdTaskDetailViewModel {
     init(homeId: String, taskId: String, api: APIClient = .shared, access: HomeTaskAccess? = nil) {
         self.taskId = taskId
         self.access = access ?? HomeTaskAccess(homeId: homeId, api: api)
+        traceLifecycle("init")
     }
 
     var activationRevision: Int {
@@ -28,11 +35,14 @@ final class HouseholdTaskDetailViewModel {
     }
 
     func resume(ifCurrent revision: Int) async {
+        traceLifecycle("resume", expectedRevision: revision)
         guard revision == generation else { return }
         await load()
     }
 
     func load() async {
+        traceLifecycle("load.enter")
+        defer { traceLifecycle("load.exit") }
         guard !Task.isCancelled else { return }
         visible = true
         if acting { pendingReload = true
@@ -43,11 +53,15 @@ final class HouseholdTaskDetailViewModel {
         loading = true
         task = nil
         error = nil
+        traceLifecycle("load.read", expectedRevision: revision)
         do {
             let current = try await access.detail(taskId: taskId)
+            traceLifecycle("load.response", expectedRevision: revision)
             guard revision == generation else { return }
             task = current
+            traceLifecycle("load.applied", expectedRevision: revision)
         } catch {
+            traceLifecycle(error is CancellationError ? "load.cancel" : "load.error", expectedRevision: revision)
             guard revision == generation else { return }
             self.error = error.localizedDescription
         }
@@ -115,6 +129,7 @@ final class HouseholdTaskDetailViewModel {
         access.invalidatePending()
         task = nil
         loading = false
+        traceLifecycle("suspend")
     }
 
     func retire() {
@@ -124,5 +139,28 @@ final class HouseholdTaskDetailViewModel {
         task = nil
         loading = false
         error = HomeTaskAccess.AccessError.changed.localizedDescription
+        traceLifecycle("retire")
+    }
+
+    /// Temporary native diagnosis: constants and lifecycle state only. Never
+    /// include record IDs, titles, response bodies, session values or tokens.
+    func traceLifecycle(
+        _ event: StaticString,
+        expectedRevision: Int = -1,
+        viewVisible: Bool? = nil,
+        sceneActive: Bool? = nil
+    ) {
+        #if DEBUG
+        let instance = String(describing: ObjectIdentifier(self))
+        let view = viewVisible.map(String.init) ?? "unknown"
+        let scene = sceneActive.map(String.init) ?? "unknown"
+        Self.lifecycleLogger.notice(
+            """
+            event=\(event.description, privacy: .public) instance=\(instance, privacy: .public) \
+            generation=\(generation) expected=\(expectedRevision) current=\(isCurrent) visible=\(visible) \
+            viewVisible=\(view, privacy: .public) sceneActive=\(scene, privacy: .public) cancel=\(Task.isCancelled)
+            """
+        )
+        #endif
     }
 }
