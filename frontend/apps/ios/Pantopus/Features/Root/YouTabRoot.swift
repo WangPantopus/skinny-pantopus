@@ -2545,8 +2545,12 @@ public struct YouTabRoot: View {
                 homeId: homeId,
                 onClose: { pop() },
                 onCreated: { taskId in
-                    if !path.isEmpty { path.removeLast() }
-                    path.append(.householdTaskDetail(homeId: homeId, taskId: taskId))
+                    // Publish one replacement, without activating the list
+                    // between the saved form and its task detail.
+                    var destinationPath = path
+                    if !destinationPath.isEmpty { destinationPath.removeLast() }
+                    destinationPath.append(.householdTaskDetail(homeId: homeId, taskId: taskId))
+                    path = destinationPath
                 }
             )
         case let .editHouseholdTask(homeId, taskId):
