@@ -15,7 +15,7 @@ WP1 is repairing it against the supplied export. Normal Connections location
 permission was declined; data/auth histories and one resaved place are retained.
 No WP1 detail/menu or real-provider acceptance is inferred.
 
-New concrete application candidates are ready for one common integration/build:
+The focused application candidates are now integrated in [PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533), pushed at `47d5072a3`:
 [1536](https://github.com/WangPantopus/skinny-pantopus/pull/1536) iOS task-detail Done,
 [1537](https://github.com/WangPantopus/skinny-pantopus/pull/1537) stale Emergency read fence,
 [1538](https://github.com/WangPantopus/skinny-pantopus/pull/1538) paired Not now date pickers,
@@ -23,9 +23,9 @@ New concrete application candidates are ready for one common integration/build:
 [1540](https://github.com/WangPantopus/skinny-pantopus/pull/1540) holiday-safe pickup resave,
 [1541](https://github.com/WangPantopus/skinny-pantopus/pull/1541) failed prompt stamp retry and iOS pickup-primer lifetime;
 [1511](https://github.com/WangPantopus/skinny-pantopus/pull/1511) also has actual non-sports publication quality fixes.
-Native product evidence above predates these candidates. Review/integrate exact
-changes, run required CI and one combined native build, then verify changed
-flows. No new feature completion or merge readiness follows from source checks.
+Android source `b52644546` builds successfully; both existing arrival snapshots pass after visually reviewing the See Today golden (retry image unchanged). Five Today and fourteen Emergency focused regressions pass. Later Android guard factoring preserves the same conditions; final required CI is running. Signed iOS source `8b4c79afa` is building; the only subsequent change is the Android golden. The actual iOS journey above still predates these repairs.
+
+WP3 confirmed both retained accounts have no Home by normal authenticated API and SQL; its backend and runtime lease returned cleanly. Normal Add Home needs the unavailable Google/Smarty provider boundary, so check its real UI outcome and keep downstream synthetic-Home evidence explicitly separate. Root holds only the combined-build heavy slot; native devices and runtime are returned. Next: install the changed products, verify changed mobile flows, then integrate only accepted scope through queue360. No new feature completion or merge readiness follows from source checks.
 
 ## CURRENT — mobile delivery resumed by successor — October 5, 2026
 

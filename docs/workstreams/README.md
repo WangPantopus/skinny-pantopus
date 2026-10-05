@@ -3,10 +3,22 @@
 The human supplied the successor prompt in current coordinator chat
 `01a10d30-e7f5-73c2-8bc1-415b67568ce1`. Outgoing chats remain stopped. Root
 reuses product checkout `s1-pilot-contracts`, branch
-`codex/s1-pilot-products-20261004-r2`, clean at `9e6bcbb22`; remote draft
-[PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) is unchanged,
-mergeable, with all16 checks successful. Native acceptance remains open; next
-sole queue360. Root returned backend18142 with exit0, simulator1C8 Shutdown, device/runtime releases0 at18:11Z. Root holds only the heavy slot `stream1: Root 01a10d30-e7f5 combined pilot build` (18:12Z) for one combined Android then iOS build. WP3 backend successor has the bounded next runtime lease/API18143/retainedSQL64554 window for existing Home pickup API/persistence; no device, fixtures, migrations or resets. Other owners remain source/CI only.
+`codex/s1-pilot-products-20261004-r2`, now pushed at `47d5072a3` in draft
+[PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533). The focused
+mobile repairs from all seven owners are integrated. Android `b52644546` builds,
+its arrival golden is visually reviewed, retry golden is unchanged, and 19
+focused Today/Emergency regressions pass. The later Android guard factoring
+preserves the same conditions. Signed iOS `8b4c79afa` is building (only the Android
+golden was committed afterward). Required current CI/native acceptance remain
+open; next sole queue360.
+
+Root holds the heavy slot `stream1: Root 01a10d30-e7f5 combined pilot build`.
+Own simulator1C8 remains Shutdown and device/runtime leases are returned.
+WP3 returned backend18143 and its lease at18:19Z after actual authenticated API
+and SQL confirmed neither retained account has a Home; no pickup data changed.
+Normal Add Home provider validation is the prerequisite; synthetic fixtures are
+only downstream test context and never proof of successful address onboarding.
+Other owners remain source/CI only; no competing local native build.
 
 Human-resumed successors retain their feature ownership: WP1
 `01a10d30-4867-7870-90b3-87aadb50e686` (curator/seeder); 4-1
