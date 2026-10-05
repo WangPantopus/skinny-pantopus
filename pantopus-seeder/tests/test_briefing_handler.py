@@ -429,10 +429,14 @@ class TestEndToEnd:
         history_query = _mock_supabase().table.return_value
         history_query.execute.return_value.data = []
         reminder_db = MagicMock()
+        task_capabilities = {
+            "creator": {"can_edit": True, "can_complete": True},
+            "member": {"can_edit": False, "can_complete": False},
+        }
         reminder_db.table.side_effect = lambda name: {"HomeTask": task_query, "UserNotificationPreferences": preference_query, "AlertNotificationHistory": history_query}[name]
         reminder_db.rpc.side_effect = lambda name, args: MagicMock(execute=MagicMock(return_value=MagicMock(data=(
             args["p_user_id"] not in {"excluded", "withdrawn"} if name == "home_record_recipient"
-            else {"ok": True, "records": [task_query.execute.return_value.data[0]] if args["p_actor_id"] not in {"excluded", "withdrawn"} else []}
+            else {"ok": True, "records": [{**task_query.execute.return_value.data[0], "capabilities": task_capabilities.get(args["p_actor_id"])}] if args["p_actor_id"] not in {"excluded", "withdrawn"} else []}
         ))))
         with (
             patch(f"{reminder_module}.datetime") as mock_dt,
@@ -450,6 +454,7 @@ class TestEndToEnd:
             assert record.call_args_list == [call(reminder_db, "task_task-1_creator_2026-04-07", 1), call(reminder_db, "task_task-1_member_2026-04-07", 1), call(reminder_db, "task_task-1_next-day_2026-04-08", 1)]
             payload = send.call_args_list[0].args[-1]
             assert payload == {"entityId": "task-1", "category": "TASK_REMINDER", "taskId": "task-1", "homeId": "home-1", "link": "/app/homes/home-1/tasks/task-1", "route": "/app/homes/home-1/tasks/task-1"}
+            assert all("category" not in item.args[-1] for item in send.call_args_list[1:])
             assert all(item.args[1]["p_visibility"] == "members" for item in reminder_db.rpc.call_args_list if item.args[0] == "home_record_recipient")
 
             # Assignee-first remains private and is rechecked at delivery time.
@@ -458,8 +463,33 @@ class TestEndToEnd:
             home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
             send.assert_not_called(); record.assert_not_called()
             task_query.execute.return_value.data = [{**task, "assigned_to": "member"}]
+            task_capabilities["member"] = {"can_edit": False, "can_complete": True}
             home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
             assert [item.args[1] for item in send.call_args_list] == ["member"]
+            assert send.call_args.args[-1] == {**payload, "category": "TASK_REMINDER_DONE_ONLY"}
+
+            # Only explicit supported capabilities advertise actions. Keep the
+            # exact task route and successful-send dedup for body-only reminders.
+            body_payload = {key: value for key, value in payload.items() if key != "category"}
+            for capabilities, category in [
+                ({"can_edit": True, "can_complete": True}, "TASK_REMINDER"),
+                ({"can_edit": False, "can_complete": True}, "TASK_REMINDER_DONE_ONLY"),
+                ({"can_edit": False, "can_complete": False}, None),
+                ({"can_edit": True, "can_complete": False}, None),
+                (None, None), ({}, None), ([], None),
+                ({"can_complete": True}, None),
+                ({"can_edit": "false", "can_complete": True}, None),
+                ({"can_edit": False, "can_complete": "true"}, None),
+                ({"can_edit": False, "can_complete": 1}, None),
+            ]:
+                task_capabilities["member"] = capabilities
+                send.reset_mock(); record.reset_mock()
+                home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
+                assert [item.args[1] for item in send.call_args_list] == ["member"]
+                expected = {**body_payload, "category": category} if category else body_payload
+                assert send.call_args.args[-1] == expected
+                assert record.call_args_list == [call(reminder_db, "task_task-1_member_2026-04-07", 1)]
+            task_capabilities["member"] = {"can_edit": False, "can_complete": True}
 
             # Skipped/failed recipients do not suppress a later successful send.
             send.reset_mock(); record.reset_mock(); send.return_value = "skipped"

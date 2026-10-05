@@ -239,12 +239,21 @@ def _process_tasks_due(supabase, secrets: BriefingSecrets, stats: dict) -> None:
                 log.warning("Task reminder access/date check failed", exc_info=True)
                 stats["errors"] += 1
                 continue
-            result = _send_reminder(secrets, uid, "Task due today", f'"{current.get("title") or "Home task"}" is due today.', "task_due", {
+            reminder_data = {
                 "entityId": task["id"],
-                "category": "TASK_REMINDER", "taskId": task["id"], "homeId": task["home_id"],
+                "taskId": task["id"], "homeId": task["home_id"],
                 "link": f"/app/homes/{task['home_id']}/tasks/{task['id']}",
                 "route": f"/app/homes/{task['home_id']}/tasks/{task['id']}",
-            })
+            }
+            # Assignees can complete without editing. Advertise only actions
+            # explicitly allowed by this recipient's current task projection.
+            capabilities = current.get("capabilities")
+            if isinstance(capabilities, dict) and capabilities.get("can_complete") is True:
+                if capabilities.get("can_edit") is True:
+                    reminder_data["category"] = "TASK_REMINDER"
+                elif capabilities.get("can_edit") is False:
+                    reminder_data["category"] = "TASK_REMINDER_DONE_ONLY"
+            result = _send_reminder(secrets, uid, "Task due today", f'"{current.get("title") or "Home task"}" is due today.', "task_due", reminder_data)
             if result == "sent":
                 _record_sent(supabase, dedup_key, 1)
                 stats["tasks_notified"] += 1

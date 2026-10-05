@@ -70,7 +70,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             intentIdentifiers: [],
             options: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([pickup, task])
+        let taskDoneOnly = UNNotificationCategory(
+            identifier: "TASK_REMINDER_DONE_ONLY",
+            actions: [UNNotificationAction(identifier: "TASK_DONE", title: "Done", options: [.authenticationRequired])],
+            intentIdentifiers: [],
+            options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([pickup, task, taskDoneOnly])
     }
 
     private func registerAuthorizedPushNotifications() {
@@ -180,7 +186,8 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
                 scope: scope
             )
         } else {
-            guard payload.category == "TASK_REMINDER", let homeId = payload.homeId, let taskId = payload.taskId,
+            guard ["TASK_REMINDER", "TASK_REMINDER_DONE_ONLY"].contains(payload.category ?? ""),
+                  let homeId = payload.homeId, let taskId = payload.taskId,
                   payload.taskPath != nil else { return }
             do {
                 let dispatchGuard: @MainActor @Sendable () throws -> Void = {
