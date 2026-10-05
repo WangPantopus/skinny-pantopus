@@ -1,5 +1,18 @@
 # Pantopus project handoff
 
+**October 3 owner-checkout recovery:** local `master` contained nine migration-test
+fixture commits and tracked only four files. The disk matched the last real
+checkout `ed5ea9ec5`, apart from five local documents. The original head is retained
+on `codex/backup-master-before-recovery-20261003`; those documents and recovery
+metadata are preserved privately. Owner `master` was restored and fast-forwarded
+to `2f7bea45f`; 33 absent-worktree registrations were archived/pruned, with all 19
+present worktrees retained. The inherited Git-environment defect is reproduced
+and repaired on a separate branch. All 75 safeguard tests and the migration policy
+check pass locally. Next: coordinator review/integration after required CI; then
+refresh owner `master`. Latest master CI still awaited iOS jobs at inspection.
+See [the recovery report](local-git-recovery-2026-10-03.md) for source, preservation,
+evidence and verification limits. Existing application acceptance is unchanged.
+
 > **2026-09-30 — this copy is an older snapshot; workstreams renumbered.** The live hub and the live handoff are `docs/workstreams/README.md` and `docs/PROJECT_HANDOFF.md` on the `codex/workstream-coordination` branch. The user renumbered the workstreams that day: the former Streams 1 and 2 are each being split in two (Streams 1–4), and the former **Stream 3 (Accounts and Social) is now Stream 5**, with its status in `docs/workstreams/05-accounts-social.md`. Below, "Stream 3" means today's Stream 5.
 
 > **2026-09-30 — the former Stream 1 (gigs, payments and coordination) is split into Streams 1 and 2.** Stream 1 — Support Trains and coordination ([`01-trains-coordination.md`](workstreams/01-trains-coordination.md)) owns Support Trains, the merge queue and hub status for all streams, rows G01–G05, O01–O06, L01–L04 and the U05 assembly. Stream 2 — Posts, Hub and payments ([`02-posts-hub-payments.md`](workstreams/02-posts-hub-payments.md)) owns Posts and Pulse, Start and Place preview, the Hub cards, money screens, rows P01–P10 and the launch-cut areas #3, #4 and #6. The U02–U04 checklists split 230 = 122 + 108 ([`checklists/`](workstreams/checklists/README.md)); the former file is [`former-stream1-gigs-payments.md`](workstreams/former-stream1-gigs-payments.md). The live copies are on `codex/workstream-coordination`.
@@ -8,6 +21,21 @@
 
 
 **September 26 product research — Porchlight (documentation only):** the founder asked for product vision, not implementation. [The Porchlight product design](product/porchlight-product-design-2026-09-26.md) proposes watching over the homes of people you love with daily check-ins, address alerts and verified neighbors who knock, built on existing verified homes, gigs, mailbox, chat and civic data. Revised the same day after an outside review (direct competitors Snug, Iamfine and Life360; corrected status and scam-check overclaims; first version cut to 7 features; trial-then-paid pricing). Next: founder decisions (doc "Open decisions"), then a small hand-run pilot with families' existing trusted contacts and announced drills before any build. Limits: no codebase audit, no application change, no acceptance count change.
+
+**October 3 preserved local documents:** the user requested a PR for the five
+uncommitted documents saved during owner-checkout recovery. The
+[September 26 launch-planning drafts](launch-boundary-2026-09-26/README.md) and
+[October 1 marketing draft](marketing/launch-assets-2026-10-01.md) are restored
+byte-for-byte on `codex/preserved-local-docs-20261003`, based on freshly fetched
+master `2f7bea45f`. SHA-256 checks match all five private backup records, and every
+relative document link resolves. Their dated facts, proposed tiers and scope are
+historical drafts; the current live coordination guide still governs work. Next:
+review the drafts and reconcile approved direction with the existing authoritative
+plans. No application verification, acceptance-row change or implementation is
+claimed. The owner checkout returns to clean master after PR creation; the private
+backup remains retained. The separate Git-isolation repair is
+[PR1498](https://github.com/WangPantopus/skinny-pantopus/pull/1498), whose required
+CI now passes; coordinator integration remains pending.
 
 **September 24 local Git recovery:** preserved the original `new designs` commit `34e3a1860` on `codex/backup-designs-before-sync-20260924` and merged remote master `fd48ccfd2` into the owner checkout. Both handoff contributions are retained. Verification: original design-file Git blobs remain unchanged; remote changes are incorporated; no application acceptance rerun. Remote CI [35968123763](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35968123763) passed on the fetched remote head, not this local merge. Next: before publishing, remove the accidentally committed Chrome profile from outgoing history while retaining its local files and private recovery copy. Nothing was pushed during recovery.
 
