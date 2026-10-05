@@ -49,6 +49,13 @@ struct HouseholdTaskDetailView: View {
                             LabeledContent("Repeat preference", value: recurrence)
                             Text("Automatic repeats are off.").font(.caption)
                         }
+                        if task.capabilities?.canComplete == true {
+                            Button(task.status == "done" ? "Mark not done" : "Mark done") {
+                                Task { await viewModel.toggleDone() }
+                            }
+                            .disabled(viewModel.acting)
+                            .accessibilityIdentifier("householdTaskDetail.complete")
+                        }
                     }
                     Section {
                         Button("Repeat schedule") {
