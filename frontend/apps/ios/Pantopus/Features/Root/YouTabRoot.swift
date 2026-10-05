@@ -2540,6 +2540,7 @@ public struct YouTabRoot: View {
             HouseholdTaskDetailView(homeId: homeId, taskId: taskId) {
                 path.append(.editHouseholdTask(homeId: homeId, taskId: taskId))
             }
+            .id(route)
         case let .addHouseholdTask(homeId):
             AddHouseholdTaskFormView(
                 homeId: homeId,
