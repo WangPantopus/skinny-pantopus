@@ -13,8 +13,13 @@ struct HouseholdTaskDetailView: View {
     private let taskId: String
     private let onEdit: @MainActor () -> Void
 
-    init(homeId: String, taskId: String, onEdit: @escaping @MainActor () -> Void = {}) {
-        _viewModel = State(initialValue: HouseholdTaskDetailViewModel(homeId: homeId, taskId: taskId))
+    init(
+        homeId: String,
+        taskId: String,
+        viewModel: HouseholdTaskDetailViewModel? = nil,
+        onEdit: @escaping @MainActor () -> Void = {}
+    ) {
+        _viewModel = State(initialValue: viewModel ?? HouseholdTaskDetailViewModel(homeId: homeId, taskId: taskId))
         self.onEdit = onEdit
         self.homeId = homeId
         self.taskId = taskId
