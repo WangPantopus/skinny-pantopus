@@ -132,6 +132,8 @@ class EmergencyInfoViewModel
         }
 
         private var emergencies: List<HomeEmergencyDto>? = null
+        // A delayed success must not restore private rows after a newer access denial.
+        private var fetchGeneration = 0L
         private var onAction: (HomeEmergencyDto) -> Unit = {}
         private var onAdd: () -> Unit = {}
         private var onShare: () -> Unit = {}
@@ -154,13 +156,17 @@ class EmergencyInfoViewModel
         }
 
         fun refresh() {
+            val generation = ++fetchGeneration
             _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
-                when (val result = repo.getHomeEmergencies(homeId)) {
+                val result = repo.getHomeEmergencies(homeId)
+                if (generation != fetchGeneration) return@launch
+                when (result) {
                     is NetworkResult.Success -> applySuccess(result.data.emergencies)
                     is NetworkResult.Failure -> {
                         emergencies = null
                         _banner.value = null
+                        _chipStrip.value = chipStripFromState()
                         _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
                     }
                 }
