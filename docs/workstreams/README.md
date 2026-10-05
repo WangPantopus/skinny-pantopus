@@ -1,3 +1,28 @@
+## CURRENT — mobile delivery resumed by successor — October 5, 2026
+
+The human supplied the successor prompt in current coordinator chat
+`01a10d30-e7f5-73c2-8bc1-415b67568ce1`. Outgoing chats remain stopped. Root
+reuses product checkout `s1-pilot-contracts`, branch
+`codex/s1-pilot-products-20261004-r2`, clean at `9e6bcbb22`; remote draft
+[PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) is unchanged,
+mergeable, with all16 checks successful. Native acceptance remains open; next
+sole queue360. Root returned backend18142 with exit0, simulator1C8 Shutdown, device/runtime releases0 at18:11Z. Root holds only the heavy slot `stream1: Root 01a10d30-e7f5 combined pilot build` (18:12Z) for one combined Android then iOS build. WP3 backend successor has the bounded next runtime lease/API18143/retainedSQL64554 window for existing Home pickup API/persistence; no device, fixtures, migrations or resets. Other owners remain source/CI only.
+
+Human-resumed successors retain their feature ownership: WP1
+`01a10d30-4867-7870-90b3-87aadb50e686` (curator/seeder); 4-1
+`01a10d31-852a-72c0-a72d-e115491bc169` (WP2–WP5 Today/pickup/radon/first-use);
+3-2 `01a10d31-a60d-74d3-a56d-53549f1fc7c2` (security/privacy/F3b gates);
+4-2 `01a10d32-2e86-7a30-8a87-76feed6ca2c6` (native notification actions/events);
+3-1 `01a10d32-6919-7c93-820b-379868d9f1dc` (household task/invitation flow).
+WP3 backend successor `01a10d33-f5c0-76e1-8e8e-37470dff3080` owns pickup rules/briefing delivery. WP8 successor `01a10d34-1ef1-72c0-aef4-fd21aecd3ffe` takes the independent WP2 Save privately → sign-in → saved confirmation/Today entry slice, reusing existing SavePlace/pending-place callers; Today content remains 4-1.
+Root is the sole integration writer and is tracing the existing Saved Place →
+Today real caller/API/persistence journey. 4-1 is the sole feature-source writer
+for that flow. Other owners continue independent application work; no new
+subagents, chats or automations. Use assembled9e6 as the feature baseline and
+preserve union source; do not copy older topic files over it. Read applicable
+exports before edits. Record concrete defects and focused results, not repeated
+unchanged-source reviews. Shared runtime/device use needs a current named owner.
+
 ## STOPPED — human requested immediate handoff and feature-delivery reset — October 5, 2026
 
 **Latest human correction — mobile feature delivery only (October 5):** The user's assessment of this session was “you delivered shit.” The outgoing coordinator acknowledges that it failed to deliver the requested new user-facing features and allowed verification machinery to consume the work. The successor must deliver its best engineering work: **build and finish the new NEXT_STEPS features, functions and complete user flows for iOS and Android only, following the repository designs in `./docs/design/exports/`.** Read the applicable exported designs before implementing each feature; reuse existing components and branch work, preserve the specified layouts and navigation, and complete the necessary backend/API/persistence integration. Web versions of these features are out of scope. Measure progress by working mobile features and completed flows, with relevant tests, not by the number of reviews, reports or harness revisions. This clarification updates the handoff only; all outgoing workstreams remain stopped.

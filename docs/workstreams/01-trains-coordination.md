@@ -1,3 +1,56 @@
+## CURRENT — actual iOS saved-place journey and focused app repairs — October 5, 2026
+
+Retained signed9e6 iOS now passes normal local Saved Place → Today → visible
+Not now → leave/reentry → Remove → no-place → resave → actual process cold
+restart → restored Today. Ordinary backend18142 and retained SQL64554 were
+used, with no mocked native transport. Scoped persistence reads show one saved
+place, then zero, then one; both briefing preferences remain false and the
+prompted timestamp persists. Air provider is unavailable and displayed honestly.
+See [bounded native evidence](/Users/yingpengwang/.config/pantopus/stream1-mobile-delivery-20261005/ios-saved-place-journey.json).
+This closes only this iOS saved-place slice on9e6, not all WP2 or Android.
+
+Actual iOS Pulse renders the retained genuine curator and ordinary author with
+correct differing attribution. The curator chip visibly breaks into four lines;
+WP1 is repairing it against the supplied export. Normal Connections location
+permission was declined; data/auth histories and one resaved place are retained.
+No WP1 detail/menu or real-provider acceptance is inferred.
+
+New concrete application candidates are ready for one common integration/build:
+[1536](https://github.com/WangPantopus/skinny-pantopus/pull/1536) iOS task-detail Done,
+[1537](https://github.com/WangPantopus/skinny-pantopus/pull/1537) stale Emergency read fence,
+[1538](https://github.com/WangPantopus/skinny-pantopus/pull/1538) paired Not now date pickers,
+[1539](https://github.com/WangPantopus/skinny-pantopus/pull/1539) saved confirmation See Today,
+[1540](https://github.com/WangPantopus/skinny-pantopus/pull/1540) holiday-safe pickup resave,
+[1541](https://github.com/WangPantopus/skinny-pantopus/pull/1541) failed prompt stamp retry and iOS pickup-primer lifetime;
+[1511](https://github.com/WangPantopus/skinny-pantopus/pull/1511) also has actual non-sports publication quality fixes.
+Native product evidence above predates these candidates. Review/integrate exact
+changes, run required CI and one combined native build, then verify changed
+flows. No new feature completion or merge readiness follows from source checks.
+
+## CURRENT — mobile delivery resumed by successor — October 5, 2026
+
+The human supplied the successor prompt in current coordinator chat
+`01a10d30-e7f5-73c2-8bc1-415b67568ce1`. Outgoing chats remain stopped. Root
+reuses product checkout `s1-pilot-contracts`, branch
+`codex/s1-pilot-products-20261004-r2`, clean at `9e6bcbb22`; remote draft
+[PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) is unchanged,
+mergeable, with all16 checks successful. Native acceptance remains open; next
+sole queue360. No runtime is currently acquired by this successor.
+
+Human-resumed successors retain their feature ownership: WP1
+`01a10d30-4867-7870-90b3-87aadb50e686` (curator/seeder); 4-1
+`01a10d31-852a-72c0-a72d-e115491bc169` (WP2–WP5 Today/pickup/radon/first-use);
+3-2 `01a10d31-a60d-74d3-a56d-53549f1fc7c2` (security/privacy/F3b gates);
+4-2 `01a10d32-2e86-7a30-8a87-76feed6ca2c6` (native notification actions/events);
+3-1 `01a10d32-6919-7c93-820b-379868d9f1dc` (household task/invitation flow).
+Root is the sole integration writer and is tracing the existing Saved Place →
+Today real caller/API/persistence journey. 4-1 is the sole feature-source writer
+for that flow. Other owners continue independent application work; no new
+subagents, chats or automations. Use assembled9e6 as the feature baseline and
+preserve union source; do not copy older topic files over it. Read applicable
+exports before edits. Record concrete defects and focused results, not repeated
+unchanged-source reviews. Shared runtime/device use needs a current named owner.
+
 ## STOPPED — human requested immediate handoff and feature-delivery reset — October 5, 2026
 
 **Latest human correction — mobile feature delivery only (October 5):** The user's assessment of this session was “you delivered shit.” The outgoing coordinator acknowledges that it failed to deliver the requested new user-facing features and allowed verification machinery to consume the work. The successor must deliver its best engineering work: **build and finish the new NEXT_STEPS features, functions and complete user flows for iOS and Android only, following the repository designs in `./docs/design/exports/`.** Read the applicable exported designs before implementing each feature; reuse existing components and branch work, preserve the specified layouts and navigation, and complete the necessary backend/API/persistence integration. Web versions of these features are out of scope. Measure progress by working mobile features and completed flows, with relevant tests, not by the number of reviews, reports or harness revisions. This clarification updates the handoff only; all outgoing workstreams remain stopped.
