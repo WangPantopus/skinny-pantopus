@@ -1,6 +1,6 @@
 # Successor prompt — Stream 3-1: Home access, residency and ownership
 
-Updated October 5, 2026, 12:08 AM PDT for completed area/curator/map intakes, actual six-forward application and prepared synthetic Home setup. This existing prompt and child status remain the continuity location; preserve accepted evidence and working native designs.
+Updated October 5, 2026, 12:46 AM PDT for failed native R6/external recovery intake, completed area/curator/map intakes, actual six-forward application and prepared synthetic Home setup. This existing prompt and child status remain the continuity location; preserve accepted evidence and working native designs.
 
 ## Objective and working rules
 
@@ -11,6 +11,8 @@ Current3-1 is `01a10a5f-4ab8-79b1-a779-e7b2a162fc95`, Root is `01a10a5f-1817-7c9
 Finish code and actual functional flows; reproduce and minimally fix real issues. Do not start a unit-test/coverage backlog or add new unit tests. Retain existing accepted evidence and required automatic CI; do not cancel/control source CI. Source/green CI/build/setup evidence does not close a native/API/persistence journey. Pilot defects and security/privacy/money defects take priority, then WP1–WP8. Other retained verification is otherwise-idle-only. Preserve working iOS/Android/web screen designs, layouts, styling, navigation, defaults and privacy treatment. No speculative rebuild/refactor/parallel table/service/outbox/screen.
 
 Own **WP6 Household/F3b** and review **WP4's existing task path**; run WP6's real household journey after WP4. 3-2 owns privacy/security review;4-1 owns Place/HomeTask models, Today/privateSetup and their native callers;4-2 owns lifecycle/deep-link/notification routing and the passive helper. Root owns integration, the sole queue (next358), shared README/PROJECT_HANDOFF and all fresh runtime/device/heavy/fixture/schema/case/cleanup/return admissions. Send shared-file requirements through Root instead of competing edits.
+
+**Latest actual recovery:** [3-1 intake f89a2472](/Users/yingpengwang/.config/pantopus/stream3-1-resume-mac-studio-20261004/root-first-native-external-recovery-actual-return-intake-r1.json), full SHA `f89a2472a04ba5b06063979736085218fc7b91780f36e3a5149faee7d2a6259a`, accepts bounded external recovery c520daf8 at07:35:26.539849Z. All353 full-row count/digest maps and six Auth PK sets independently equal accepted map final; original three faults/caller1 and unavailable child waits remain. Recorded PG0/simulator shutdown/device→heavy→runtime release is coherent; OS/live observations remain Root-attributed. Original full controller return is false and native app entry/warm baseline/acceptance remains unproven. Do not rerun/review these unchanged records. Root is sequencing the next native attempt and will route its actual warm baseline. Private result7a079 embeds full fingerprints/PK hashes in a string: read only filtered aggregates; the initial diagnostic exposure was reported to Root and is not repeated in the receipt. Home SQLr3 remains prepared only, after both saved-only case returns; provider credentials remain unavailable, with downstream local work authorized.
 
 ## Read once, then establish the current snapshot
 
