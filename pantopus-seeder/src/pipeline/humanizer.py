@@ -352,7 +352,7 @@ def humanize(
     try:
         client = openai.OpenAI(api_key=openai_api_key)
     except Exception as exc:
-        return None, f"api_error:{exc}"
+        return None, f"api_error:{type(exc).__name__}"
 
     messages = [{"role": "user", "content": user_message}]
 
@@ -410,5 +410,5 @@ def _call_api(client, messages: list[dict], system_prompt: str = "") -> tuple[st
             return None, "empty_response"
         return text, None
     except Exception as exc:
-        log.warning("OpenAI API error: %s", exc, exc_info=True)
-        return None, f"api_error:{exc}"
+        log.warning("OpenAI API error (error_type=%s)", type(exc).__name__)
+        return None, f"api_error:{type(exc).__name__}"
