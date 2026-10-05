@@ -191,7 +191,7 @@ extension AddHouseholdTaskFormViewModel {
             title: title,
             description: notes.isEmpty ? nil : notes,
             assignedTo: assignee.isEmpty ? nil : assignee,
-            dueAt: due.isEmpty ? nil : due,
+            dueAt: due.isEmpty ? nil : Self.dueTimestamp(for: due) ?? due,
             recurrenceRule: buildRecurrenceRule()
         )
     }
@@ -259,12 +259,29 @@ extension AddHouseholdTaskFormViewModel {
 
     private static func isoDayOnly(from iso: String?) -> String? {
         guard let iso, !iso.isEmpty else { return nil }
-        // Backend can return either `yyyy-MM-dd` or a full ISO
-        // timestamp. The form only edits the day; strip the time.
-        if let dash = iso.firstIndex(of: "T") {
-            return String(iso[..<dash])
-        }
-        return iso.prefix(10).isEmpty ? nil : String(iso.prefix(10))
+        if iso.count == 10 { return iso }
+        let format = ISO8601DateFormatter()
+        format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fractional = format.date(from: iso)
+        format.formatOptions = [.withInternetDateTime]
+        guard let date = fractional ?? format.date(from: iso) else { return nil }
+        // The server returns an instant; edit the same local day shown in detail.
+        let day = makeDayFormatter()
+        day.timeZone = .autoupdatingCurrent
+        return day.string(from: date)
+    }
+
+    private static func dueTimestamp(for day: String) -> String? {
+        let local = makeDayFormatter()
+        local.timeZone = .autoupdatingCurrent
+        guard let date = local.date(from: day) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .autoupdatingCurrent
+        // A day-only edit uses the pilot's 9 a.m. local reminder convention.
+        guard let morning = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date) else { return nil }
+        let timestamp = ISO8601DateFormatter()
+        timestamp.timeZone = calendar.timeZone
+        return timestamp.string(from: morning)
     }
 
     static func parseISODay(_ value: String) -> Date? {
