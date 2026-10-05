@@ -17,6 +17,7 @@ struct HouseholdTasksListView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var deleteTarget: DeleteTarget?
     @State private var isVisible = false
+    @State private var hasAppeared = false
 
     init(viewModel: HouseholdTasksListViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -28,6 +29,10 @@ struct HouseholdTasksListView: View {
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .onAppear { isVisible = true
                 Analytics.track(.screenHouseholdTasksViewed)
+                // The shared list owns its initial load. A retained navigation
+                // destination must also refresh after editing/completing a task.
+                if hasAppeared { resumeCurrentScreen() }
+                hasAppeared = true
             }
             .onDisappear { isVisible = false
                 viewModel.suspend()
@@ -36,11 +41,7 @@ struct HouseholdTasksListView: View {
             .onChange(of: scenePhase) { _, phase in
                 guard isVisible else { return }
                 if phase == .active {
-                    let revision = viewModel.activationRevision
-                    Task {
-                        guard isVisible, scenePhase == .active else { return }
-                        await viewModel.resume(ifCurrent: revision)
-                    }
+                    resumeCurrentScreen()
                 } else { viewModel.suspend()
                     deleteTarget = nil
                 }
@@ -79,6 +80,14 @@ struct HouseholdTasksListView: View {
             } message: {
                 Text(viewModel.actionError ?? "")
             }
+    }
+
+    private func resumeCurrentScreen() {
+        let revision = viewModel.activationRevision
+        Task {
+            guard isVisible, scenePhase == .active else { return }
+            await viewModel.resume(ifCurrent: revision)
+        }
     }
 
     private func handle(_ event: HouseholdTasksListEvent?) {
