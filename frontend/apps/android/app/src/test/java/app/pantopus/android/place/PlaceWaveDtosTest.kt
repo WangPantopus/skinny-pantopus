@@ -13,13 +13,23 @@ import app.pantopus.android.data.api.models.place.ResidencyClaimStatus
 import app.pantopus.android.data.api.models.place.ResidencyClaimsResponse
 import app.pantopus.android.data.api.models.place.ResidencyLetterStatus
 import app.pantopus.android.data.api.models.place.ResidencyLetterVerification
+import app.pantopus.android.data.api.services.MailboxCheckApi
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.test.runTest
+import okhttp3.Cache
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import retrofit2.Retrofit
+import retrofit2.converter.moshi.MoshiConverterFactory
+import java.nio.file.Files
 
 /**
  * Decoding contract for the Wave endpoint DTOs that ride beside the
@@ -65,6 +75,50 @@ class PlaceWaveDtosTest {
         assertEquals(MailboxFindingSeverity.ATTENTION, check.findings[0].severity)
         assertEquals(MailboxPhysicalStatus.PROVEN, check.physical.status)
     }
+
+    @Test
+    fun `mailbox read bypasses previously cached postal proof`() =
+        runTest {
+            val directory = Files.createTempDirectory("mailbox-cache-test").toFile()
+            val cache = Cache(directory, 1_000_000)
+            val server = MockWebServer()
+            val client = OkHttpClient.Builder().cache(cache).build()
+            try {
+                server.start()
+                val oldBody =
+                    """
+                    {"check":{"verdict":"unknown","findings":[],
+                      "physical":{"status":"proven","title":"Old proof","detail":"Old claim"},"checked_at":null}}
+                    """.trimIndent()
+                val freshBody =
+                    """
+                    {"check":{"verdict":"unknown","findings":[],
+                      "physical":{"status":"not_run","title":"No postcard verification on file","detail":"No recorded proof"},
+                      "checked_at":null}}
+                    """.trimIndent()
+                server.enqueue(MockResponse().setHeader("Cache-Control", "max-age=3600").setBody(oldBody))
+                val request = Request.Builder().url(server.url("/api/homes/mailbox-test/mailbox-check")).build()
+                repeat(2) {
+                    client.newCall(request).execute().use { response -> assertEquals(oldBody, response.body?.string()) }
+                }
+                assertEquals(1, server.requestCount)
+                server.enqueue(MockResponse().setHeader("Cache-Control", "private, no-store").setBody(freshBody))
+                val api =
+                    Retrofit.Builder().baseUrl(server.url("/")).client(client)
+                        .addConverterFactory(MoshiConverterFactory.create(moshi)).build()
+                        .create(MailboxCheckApi::class.java)
+                assertEquals(MailboxPhysicalStatus.NOT_RUN, api.check("mailbox-test").check.physical.status)
+                assertEquals(2, server.requestCount)
+                server.takeRequest()
+                assertEquals("no-cache, no-store", server.takeRequest().getHeader("Cache-Control"))
+            } finally {
+                client.connectionPool.evictAll()
+                client.dispatcher.executorService.shutdown()
+                server.shutdown()
+                cache.close()
+                directory.deleteRecursively()
+            }
+        }
 
     @Test
     fun `mailbox vocabulary additions fall back safely`() {
