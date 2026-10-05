@@ -8,6 +8,10 @@ This block and the [successor prompt](NEXT-STREAM4-2-PROMPT-2026-10-02.md) super
 - Root checkout `/Users/yingpengwang/.codex/worktrees/s1-pilot-contracts/skinny-pantopus`, branch `codex/s1-pilot-products-20261004-r2`; [PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) is OPEN/Draft at freshly verified `74327981051c1fd19393f3f2d2534b0003e421cb`. **All 16 required checks PASS** on [CI37375810539](https://github.com/WangPantopus/skinny-pantopus/actions/runs/37375810539). This includes all three iOS simulator suites, Android build/unit/instrumented checks, backend, seeder, database and web compatibility. No merge/pilot-wide completion is claimed.
 - Standalone24b CI37371488972 has green native/schema checks but canceled backend/Docker/seeder jobs and failed aggregate CI OK. Earlier668 had the unrelated Marketplace SE failure. Preserve those outcomes; final743's complete green integration is the acceptance source, not a relabeling of canceled runs. No unchanged suite needs repeating.
 
+### NEXT_STEPS reconciliation saved
+
+Root, the single checklist writer, published documentation commit `132f1134ff0cb4679a76501f2f5677af02d259b1` after code743. [Current checklist](https://github.com/WangPantopus/skinny-pantopus/blob/132f1134ff0cb4679a76501f2f5677af02d259b1/NEXT_STEPS.md#3-build-now-the-mobile-pilot-instructions-in-the-brief) now checks off bounded paired date-save/reopen, integrated picker/capability source with its explicit OS-action limit, safe organic/radon event writes, and Android actual31-minute/short-return acceptance. WP3/WP4/WP7 parents and their outstanding native-action/provider/iOS timing/summary joins stay open. Current remote1533 head is132f1134 (documentation only); the application/16-check CI head remains743279810. Own NEXT_STEPS was intentionally untouched to preserve the single writer. The retained Android reopen XML also shows the clickable Save parent disabled; enabled text descendants are not the button's authority.
+
 ### Exactly what was delivered
 
 | Work | Source and result | Acceptance boundary |
