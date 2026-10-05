@@ -290,13 +290,7 @@ public struct PulsePostCard: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
-                HStack(spacing: Spacing.s1) {
-                    if content.isCurator { curatorChip }
-                    Text(content.meta)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(1)
-                }
+                headerMetadata
             }
             Spacer(minLength: Spacing.s2)
             PulseIntentChip(intent: content.intent, label: content.chipLabel)
@@ -508,6 +502,31 @@ public struct PulsePostCard: View {
 
 /// The card's VoiceOver actions sit in an extension so the card's body stays within SwiftLint's type length.
 private extension PulsePostCard {
+    @ViewBuilder var headerMetadata: some View {
+        if content.isCurator {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.s1) {
+                    curatorChip
+                    metadataText
+                }
+                .fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 2) {
+                    curatorChip
+                    metadataText
+                }
+            }
+        } else {
+            metadataText
+        }
+    }
+
+    var metadataText: some View {
+        Text(content.meta)
+            .font(.system(size: 10.5))
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .lineLimit(1)
+    }
+
     /// The f9 export's neutral origin chip, without its out-of-scope explainer.
     var curatorChip: some View {
         PulseCuratorChip()
@@ -544,7 +563,9 @@ private struct PulseCuratorChip: View {
             Text("Pantopus curator")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.Color.appTextStrong)
+                .lineLimit(1)
         }
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, 3)
         .background(colorScheme == .dark ? Theme.Color.appSurfaceRaised : Theme.Color.appSurfaceSunken)
