@@ -31,12 +31,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -62,6 +63,9 @@ import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 /**
  * P2.4 — Add / Edit Household Task form. Single screen built on
@@ -91,6 +95,9 @@ fun AddHouseholdTaskFormScreen(
     val members by viewModel.assignableMembers.collectAsStateWithLifecycle()
     val memberListUnavailable by viewModel.memberListUnavailable.collectAsStateWithLifecycle()
     val createdId by viewModel.createdTaskId.collectAsStateWithLifecycle()
+    // Keep this outside the loaded form: foreground permission rechecks briefly
+    // remove it, and must not reopen a calendar the user already dismissed.
+    var showDueDatePicker by rememberSaveable { mutableStateOf(focusDueDate) }
 
     HomeTaskResumeEffect(onResume = viewModel::resume, onPause = viewModel::pause)
     val close = {
@@ -128,7 +135,8 @@ fun AddHouseholdTaskFormScreen(
                 AddHouseholdTaskSkeleton()
             AddHouseholdTaskFormUiState.Editing ->
                 AddHouseholdTaskLoaded(
-                    focusDueDate = focusDueDate,
+                    focusDueDate = showDueDatePicker,
+                    onDueDatePickerDismiss = { showDueDatePicker = false },
                     state =
                         AddHouseholdTaskLoadedState(
                             fields = fields,
@@ -228,6 +236,7 @@ internal fun AddHouseholdTaskLoaded(
     onSelectAssignee: (String?) -> Unit,
     onSetDueDate: (String?) -> Unit,
     focusDueDate: Boolean = false,
+    onDueDatePickerDismiss: () -> Unit = {},
 ) {
     FormShell(
         title = if (state.isEditing) "Edit task" else "Add task",
@@ -265,6 +274,7 @@ internal fun AddHouseholdTaskLoaded(
                 isRecurring = state.selectedRecurrence.isRecurring,
                 onSetDueDate = onSetDueDate,
                 focusDueDate = focusDueDate,
+                onPickerDismiss = onDueDatePickerDismiss,
             )
         }
         FormFieldGroup("Notes") {
@@ -649,11 +659,20 @@ private fun DueDateField(
     isRecurring: Boolean,
     onSetDueDate: (String?) -> Unit,
     focusDueDate: Boolean,
+    onPickerDismiss: () -> Unit,
 ) {
     val snapshot = fields[AddHouseholdTaskField.DueAt]
     val value = snapshot?.value.orEmpty()
-    val dueFocus = remember { FocusRequester() }
-    LaunchedEffect(focusDueDate) { if (focusDueDate) dueFocus.requestFocus() }
+    if (focusDueDate) {
+        TaskReminderDatePicker(
+            value = value,
+            onSelect = {
+                onSetDueDate(it.toString())
+                onPickerDismiss()
+            },
+            onDismiss = onPickerDismiss,
+        )
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -678,11 +697,8 @@ private fun DueDateField(
                 )
             }
         }
-        // Compose's `DatePicker` is `Modifier`-incompatible with our
-        // 44dp inline field and unsupported by Paparazzi; surface a
-        // text field accepting `yyyy-MM-dd` to match the iOS
-        // counterpart. The system picker can wire later via a host
-        // activity dialog.
+        // Keep the existing editable date field; notification entry also opens
+        // the same Material calendar used by the household calendar/bill forms.
         PantopusTextField(
             label = "",
             value = value,
@@ -691,7 +707,39 @@ private fun DueDateField(
             state = fieldStateFor(snapshot),
             keyboardType = KeyboardType.Number,
             fieldTestTag = "field_dueAt",
-            modifier = Modifier.focusRequester(dueFocus),
+        )
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun TaskReminderDatePicker(
+    value: String,
+    onSelect: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val initial = remember(value) { runCatching { LocalDate.parse(value) }.getOrDefault(LocalDate.now()) }
+    // Material dates are UTC midnight, not an instant in the device's zone.
+    val picker =
+        androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = initial.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        )
+    androidx.compose.material3.DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                enabled = picker.selectedDateMillis != null,
+                onClick = {
+                    picker.selectedDateMillis?.let { onSelect(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) }
+                },
+                modifier = Modifier.testTag("taskReminderDueDateDone"),
+            ) { Text("Done") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    ) {
+        androidx.compose.material3.DatePicker(
+            state = picker,
+            modifier = Modifier.testTag("taskReminderDueDatePicker"),
         )
     }
 }

@@ -164,6 +164,7 @@ extension AddHouseholdTaskFormView {
                 ),
                 displayedComponents: .date
             )
+            .environment(\.timeZone, TimeZone(secondsFromGMT: 0) ?? .current)
             .labelsHidden()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Spacing.s3)

@@ -17,6 +17,8 @@ public struct AddHouseholdTaskFormView: View {
     @State var viewModel: AddHouseholdTaskFormViewModel
     @State private var isVisible = false
     @State private var didFocusDueDate = false
+    @State private var showDueDatePicker = false
+    @State private var selectedDueDate = Date()
     private let focusDueDate: Bool
     @Environment(\.scenePhase) private var scenePhase
     private let onClose: @MainActor () -> Void
@@ -125,10 +127,42 @@ public struct AddHouseholdTaskFormView: View {
             )
             .formShakeOnChange(of: viewModel.shakeTrigger)
             .accessibilityIdentifier("addHouseholdTaskFormShell")
+            .sheet(isPresented: $showDueDatePicker) {
+                NavigationStack {
+                    ScrollView {
+                        DatePicker("Due date", selection: $selectedDueDate, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                            // The task form stores a calendar day at UTC midnight.
+                            // Use that zone here and in its compact field too.
+                            .environment(\.timeZone, TimeZone(secondsFromGMT: 0) ?? .current)
+                            .padding(Spacing.s4)
+                            .accessibilityIdentifier("taskReminderDueDatePicker")
+                    }
+                    .navigationTitle("Due date")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showDueDatePicker = false }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                guard viewModel.isCurrent, scenePhase == .active else { return }
+                                viewModel.setDueDate(selectedDueDate)
+                                showDueDatePicker = false
+                            }
+                            .accessibilityIdentifier("taskReminderDueDateDone")
+                        }
+                    }
+                }
+                .tint(Theme.Color.primaryInk)
+                .presentationDetents([.medium, .large])
+            }
             .task {
                 guard focusDueDate, !didFocusDueDate else { return }
                 didFocusDueDate = true
                 proxy.scrollTo("taskDueDate", anchor: .bottom)
+                selectedDueDate = viewModel.dueDate ?? Date()
+                showDueDatePicker = true
             }
         }
     }
