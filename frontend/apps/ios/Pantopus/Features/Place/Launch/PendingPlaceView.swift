@@ -4,6 +4,7 @@ import SwiftUI
 struct PendingPlaceView: View {
     @State var viewModel: PendingPlaceViewModel
     var onDone: () -> Void
+    var onToday: () -> Void
     var onSavedPlaces: () -> Void
     var onSetUpHome: () -> Void
 
@@ -21,7 +22,9 @@ struct PendingPlaceView: View {
                             .accessibilityIdentifier("place.arrival.error")
                     }
                     if viewModel.saved != nil {
-                        PrimaryButton(title: "View saved places", action: onSavedPlaces)
+                        PrimaryButton(title: "See Today", action: onToday)
+                            .accessibilityIdentifier("place.arrival.today")
+                        Button("View saved places", action: onSavedPlaces)
                         Button("Set up a Home", action: onSetUpHome)
                         Button("Continue exploring", action: onDone)
                     } else {
