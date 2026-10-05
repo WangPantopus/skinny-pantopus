@@ -29,11 +29,12 @@ public struct AddHouseholdTaskFormView: View {
         taskId: String? = nil,
         focusDueDate: Bool = false,
         api: APIClient = .shared,
+        viewModel: AddHouseholdTaskFormViewModel? = nil,
         onClose: @escaping @MainActor () -> Void,
         onCreated: (@MainActor (String) -> Void)? = nil
     ) {
         _viewModel = State(
-            initialValue: AddHouseholdTaskFormViewModel(
+            initialValue: viewModel ?? AddHouseholdTaskFormViewModel(
                 homeId: homeId,
                 taskId: taskId,
                 api: api
