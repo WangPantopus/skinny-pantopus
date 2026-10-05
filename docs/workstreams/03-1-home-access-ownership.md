@@ -1,4 +1,12 @@
-## CURRENT — coordinated restart handoff — October 4, 2026, 8:45 p.m. PDT
+## CURRENT — Astra successor resumed — October 4, 2026, 9:46 p.m. PDT
+
+The human explicitly superseded **only** the Sol model requirement: continue on **GPT-6 Astra / Extra High**. All other instructions, ownership, holds and accepted evidence remain. Current3-1 chat is `01a10a5f-4ab8-79b1-a779-e7b2a162fc95`; actual turn `01a10a61-a228-7411-841a-c40fdffb9535` at `2026-10-05T04:45:33.116Z` records `gpt-6-astra` / `xhigh`. Work personally, without subagents. Current Root successor is `01a10a5f-1817-7c93-8faa-f72c50c0b221`; current3-2 is `01a10a5f-8244-7722-8727-e53f8d0301d6`.
+
+Read-only refresh confirms clean/pushed own7fd2e5b4 and integrated9e6bcbb2; PR1516 remains open draft with13SUCCESS/3configuredSKIP, PR1533 open draft with16SUCCESS. Coordination is clean/in sync at105dd60e before this two-file correction. Root confirms [intake30a9c243](/Users/yingpengwang/.config/pantopus/stream1-studio-resume-20261004/wp2-r3-independent-navigation-closure-intake-root-r1.json) already accepts R3 closure0eb8; do not repeat the review from older pending wording.
+
+**Next:** Root prepares the real WP2 flow and will route one bounded actual warm-baseline intake to3-1 when available. Own task order remains WP4, then WP6 under fresh scope. Forward104000 is still source-only and is not automatically included in the earlier four-forward question; Root has the explicit household-provenance dependency. No new case, source repair, test/build, runtime/device/SQL/API action or resource reservation occurred during this successor intake. Counts and actual journey limitations are unchanged. This update records the human's changed model instruction, not new functional acceptance.
+
+## Previous coordinated restart handoff — October 4, 2026, 8:45 p.m. PDT
 
 Human-directed handoff; read-only Git/PR/check refresh at `2026-10-05T03:45:56Z`. The [existing successor prompt](NEXT-STREAM3-1-PROMPT-2026-10-02.md) is now the concise, complete restart instruction; detailed accepted history below and linked private reports remain. Work as one real **GPT-6.1 Sol / Extra High MAIN agent**, personally, without subagents. Latest direction is code plus actual functional flows and focused repairs, with no new unit tests or unit-test/coverage backlog. Keep required automatic source CI and accepted evidence. Pilot defects/security/privacy/money first, WP1–WP8 next, retained work only in otherwise-idle slots.
 
