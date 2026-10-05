@@ -1,3 +1,11 @@
+## LATEST HUMAN HANDOFF CORRECTION — mobile feature delivery
+
+The human describes the outgoing result as “delivered shit”: zero application-code changes and zero newly completed end-to-end feature flows. The successor must deliver its best work and prioritize completing the new features, functions and flows in NEXT STEPS. Tooling/reviews/documentation are supporting work and must not displace product delivery.
+
+These features are **iOS and Android mobile apps only**. Follow the relevant repository designs and flow references in **`./docs/design/exports/`**, including layout, styling, interactions and navigation; no invented redesign or web feature buildout. Backend/API/persistence work is limited to supporting these mobile flows. This latest direction supersedes historical web backlog references for the new feature work. The [canonical successor prompt](NEXT-STREAM4-1-PROMPT-2026-10-02.md) includes this instruction at the top and in its required reading. The outgoing agent remains stopped; this update changes only the requested handoff.
+
+---
+
 ## HANDOFF NOW — human stopped this agent — 2026-10-05 17:07 UTC
 
 The human explicitly stopped outgoing4-1 and requested an immediate handoff, superseding waiting for the ideal runtime checkpoint. No further implementation, review campaign, device or runtime work is underway in this chat. **Outgoing4-1 owns no process/device/runtime/heavy reservation/fixture or pending tool session. Root's seventeenth iOS operation0840559c remains active under Root's sole custody**; its current gate/result/full return must be obtained from the coordinator before a successor starts device work. Last known runner gate867 at17:01:17Z, original600s deadline17:11:17Z; selected runner appeared17:03:59Z. These are historical facts, never an adoption/replay grant. Root was directly notified to route future4-1 work to the successor. No full return or SavedPlace acceptance is claimed for that active run.
