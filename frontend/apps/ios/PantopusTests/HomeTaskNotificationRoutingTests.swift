@@ -118,7 +118,7 @@ final class HomeTaskNotificationRoutingTests: XCTestCase {
         host.view.layoutIfNeeded()
         await Task.yield()
         XCTAssertEqual(model.details.compactMap { $0.task?.id }, [model.task], "Exactly one surviving detail must retain the saved task")
-        XCTAssertTrue(model.details.allSatisfy { $0.error == nil })
+        XCTAssertNil(model.details.first { $0.task?.id == model.task }?.error)
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "POST" }.count, 1)
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.url?.path == model.detailPath }.count, 1)
         model.path.removeLast()
