@@ -51,7 +51,15 @@ class PlaceArrivalSnapshotTest {
     private fun render(state: PlaceArrivalState) {
         paparazzi.snapshot {
             PantopusTheme {
-                PendingPlaceScreen(state, onSave = {}, onDone = {}, onSavedPlaces = {}, onSetUpHome = {}, onRetryPreview = {})
+                PendingPlaceScreen(
+                    state,
+                    onSave = {},
+                    onDone = {},
+                    onToday = {},
+                    onSavedPlaces = {},
+                    onSetUpHome = {},
+                    onRetryPreview = {},
+                )
             }
         }
     }

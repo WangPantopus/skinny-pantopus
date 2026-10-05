@@ -2577,6 +2577,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             state = arrival,
                             onSave = placeHostVm::save,
                             onDone = placeHostVm::finish,
+                            onToday = {
+                                placeHostVm.finish()
+                                navController.navigateToRootTab(PantopusRoute.Today, restoreState = false)
+                            },
                             onSavedPlaces = { navController.navigate(ChildRoutes.SAVED_PLACES) },
                             onSetUpHome = { navController.navigate(ChildRoutes.ADD_HOME) },
                             onRetryPreview = placeHostVm::loadPreview,

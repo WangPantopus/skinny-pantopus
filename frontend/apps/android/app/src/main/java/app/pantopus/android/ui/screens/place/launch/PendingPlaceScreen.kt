@@ -28,6 +28,7 @@ fun PendingPlaceScreen(
     state: PlaceArrivalState,
     onSave: () -> Unit,
     onDone: () -> Unit,
+    onToday: () -> Unit,
     onSavedPlaces: () -> Unit,
     onSetUpHome: () -> Unit,
     onRetryPreview: () -> Unit,
@@ -50,7 +51,12 @@ fun PendingPlaceScreen(
         )
         state.error?.let { Text(it, color = PantopusColors.appTextSecondary, modifier = Modifier.testTag("place.arrival.error")) }
         if (state.saved != null) {
-            PrimaryButton(title = "View saved places", onClick = onSavedPlaces, modifier = Modifier.fillMaxWidth())
+            PrimaryButton(
+                title = "See Today",
+                onClick = onToday,
+                modifier = Modifier.fillMaxWidth().testTag("place.arrival.today"),
+            )
+            TextButton(onClick = onSavedPlaces) { Text("View saved places") }
             TextButton(onClick = onSetUpHome) { Text("Set up a Home") }
             TextButton(onClick = onDone) { Text("Continue exploring") }
         } else {
