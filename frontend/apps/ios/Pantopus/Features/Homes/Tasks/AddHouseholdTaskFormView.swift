@@ -161,7 +161,7 @@ public struct AddHouseholdTaskFormView: View {
                 guard focusDueDate, !didFocusDueDate else { return }
                 didFocusDueDate = true
                 proxy.scrollTo("taskDueDate", anchor: .bottom)
-                selectedDueDate = viewModel.dueDate ?? Date()
+                selectedDueDate = dueDatePickerSelection
                 showDueDatePicker = true
             }
         }
