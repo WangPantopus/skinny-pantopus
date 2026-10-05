@@ -1,3 +1,11 @@
+## CURRENT — existing PRs first; duplicate implementation prohibited — October 5, 2026
+
+Latest human direction: inspect every draft/open workstream PR, merge existing branch work to master first where possible, and do not duplicate completed implementation. Read the full current disposition table at the top of [Stream4-1 status](04-1-place-home-records-money.md). Fresh origin/master is1b532259. All14 owned open drafts are CLEAN/MERGEABLE with current checks success/skipped;13 exact heads are already ancestors of integration1533@9e6 (16SUCCESS). Reuse that union and accepted products; do not recreate or separately overwrite its integrated topics. Old “CI pending” prose is not a failure or rerun reason. Actual native/API/persistence/privacy/OS/provider acceptance remains the concrete merge hold, not missing implementation.
+
+Maintenance1495@83816745 is the sole separate existing repair (20files/3commits/13success+3skip). Its existing180000 migration and installed warm/cold/reopen AFTER remain required; current accepted18-column HomeMaintenanceLog lacks category/contact. Only backend/routes/home.js overlaps1533's changed paths. Root has the exact per-PR audit/ancestry/schema facts and retains sole composition/merge/cleanup decisions. No PR action or new implementation occurred in this audit; all reviewed PRs are attached. R9 actual first-case run stays frozen. R8 resources returned07:57:21Z with originalfault/caller1 preserved. Later Turn-on packet589c/outer9fa has independent Source PASS, no actualzone/admission/journey yet. Continue the accepted next flows and needed repairs without restarting preparation or waiting for unchanged checks.
+
+---
+
 ## CURRENT — R9 recorder fix verified; separate Turn-on source ready — October 5, 2026
 
 Continue **GPT-6 Astra / Extra High** personally through the authorized backlog. Root's second actual first-case attempt used accepted R8, but stopped before backend/app startup when the recorder mistook the harmless `PushToken` table fingerprint for a secret. Actual initial SQL returned0; event749 records the original failure and event750 requests qualified return at `2026-10-05T07:49:26.166854Z`. Keep that failed run and its actual return limits; it is not native journey acceptance. Root owns its return and the next serialized dispatch.4-1 remains free of runtime/device/database ownership.
