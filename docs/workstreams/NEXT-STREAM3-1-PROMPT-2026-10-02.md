@@ -1,6 +1,8 @@
 # Successor prompt — Stream 3-1: Home access, residency and ownership
 
-Updated October 5, 2026 after native action source reviews and the fifteenth pre-app external return. This existing prompt and child status remain the continuity location; preserve accepted evidence and working native designs.
+Updated October 5, 2026 after native action source reviews, the fifteenth iOS pre-app external return and the successful Android bootstrap/install return. This existing prompt and child status remain the continuity location; preserve accepted evidence and working native designs.
+
+**Newest actual prerequisite:** Android bootstrap/install intake `4db6982c` (10697B/0600; full link/hash in current child status) passed. Root7382238d/result857674e2/admission9b0c5289 bind operatione37e3ec3:93 steps,27 owned children,25 exits0 plus two expected absence exits1/empty streams. Isolated loopback ADB/sole own emulator/API34/arm64/display and first install join accepted b3b product/9e6 without APK reread/rebuild. Both long children end0; qualified later group absence precedes D→H→runtime-LAST0 at13:46:33.735191Z. Root caller exit/absence and actual OS/guest/lock semantics remain attributed. No app/permission/API/SQL/native or merge acceptance. Root owns the next native admission with the retained installed AVD. Reuse this completed intake; do not repeat setup or create another Android product.
 
 ## Objective and working rules
 
