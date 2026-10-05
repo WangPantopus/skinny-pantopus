@@ -112,8 +112,9 @@ struct HouseholdTaskDetailView: View {
         .sheet(item: $gigPresentation, onDismiss: { resumeCurrentScreen() }, content: { presentation in
             HomeTaskGigView(model: presentation.model)
         })
-        .onAppear { isVisible = true }
-        .task { await viewModel.load() }
+        .onAppear { isVisible = true
+            resumeCurrentScreen()
+        }
         .onChange(of: scenePhase) { _, phase in
             guard isVisible else { return }
             if phase == .active { resumeCurrentScreen() } else { viewModel.suspend() }
