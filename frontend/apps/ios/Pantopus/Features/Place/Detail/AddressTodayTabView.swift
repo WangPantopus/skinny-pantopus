@@ -192,6 +192,7 @@ private struct AddressTodayLoaded: View {
     @State private var preferenceBusy = false
     @State private var preferenceError: String?
     @State private var promptAttempted = false
+    @State private var promptConfirmed = false
     @State private var scrollFrame = CGRect.zero
     @State private var cardFrame = CGRect.zero
     @State private var sessionChanged = false
@@ -306,7 +307,7 @@ private struct AddressTodayLoaded: View {
             }
             HStack(spacing: 8) {
                 GhostButton(title: "Turn on", isLoading: preferenceBusy) { await turnOnMorning() }
-                GhostButton(title: "Not now", isEnabled: !preferenceBusy) { showMorningCard = false }
+                GhostButton(title: "Not now", isEnabled: !preferenceBusy) { await hideMorningCard() }
             }
         }
         .padding(16)
@@ -338,6 +339,7 @@ private struct AddressTodayLoaded: View {
             let response: NotificationPreferencesResponseDTO = try await APIClient.shared.request(NotificationPreferencesEndpoints.fetch())
             try Task.checkCancellation()
             try scope.requireCurrent()
+            promptConfirmed = response.preferences.dailyBriefingPromptedAt?.isEmpty == false
             if !promptAttempted { showMorningCard = response.preferences.dailyBriefingPromptedAt == nil }
         } catch {
             savedAnchorMatches = false
@@ -348,24 +350,43 @@ private struct AddressTodayLoaded: View {
 
     private func markPromptDisplayed() async {
         guard showMorningCard, savedAnchorMatches, !promptAttempted else { return }
+        _ = await persistPromptDisplayed()
+    }
+
+    private func hideMorningCard() async {
+        guard showMorningCard, !preferenceBusy else { return }
+        // A failed display stamp must be retried before dismissal; otherwise
+        // the next visit treats this already-answered prompt as first use.
+        if promptConfirmed {
+            showMorningCard = false
+        } else if await persistPromptDisplayed() {
+            showMorningCard = false
+        }
+    }
+
+    private func persistPromptDisplayed() async -> Bool {
         let version = lifecycleVersion
         promptAttempted = true
         preferenceBusy = true
+        preferenceError = nil
         defer {
             if lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
                !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable { preferenceBusy = false }
         }
         do {
             try requirePreferenceCurrent(version)
-            let _: NotificationPreferencesResponseDTO = try await APIClient.shared.request(
+            let response: NotificationPreferencesResponseDTO = try await APIClient.shared.request(
                 NotificationPreferencesEndpoints.update(
                     ["daily_briefing_prompted": .bool(true)]
                 ) { try requirePreferenceCurrent(version) }
             )
             try requirePreferenceCurrent(version)
+            guard response.preferences.dailyBriefingPromptedAt?.isEmpty == false else { throw APIError.invalidResponse }
+            promptConfirmed = true
+            return true
         } catch {
             guard lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
-                  !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { return }
+                  !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { return false }
             if scope.isCurrent {
                 preferenceError = "Couldn't save your choice. Try again."
             } else {
@@ -373,6 +394,7 @@ private struct AddressTodayLoaded: View {
                 savedAnchorMatches = false
                 sessionChanged = true
             }
+            return false
         }
     }
 
