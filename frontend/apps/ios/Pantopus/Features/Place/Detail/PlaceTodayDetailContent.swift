@@ -647,13 +647,7 @@ struct AddressCalendarCard: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
         .accessibilityIdentifier("addressCalendarCard")
         .onChange(of: data) { _, _ in confirmed = nil }
-        .sheet(isPresented: $showPickupPrimer, onDismiss: {
-            Task { @MainActor in
-                guard (try? sessionScope.requireCurrent()) != nil, !AppLockManager.shared.isLocked,
-                      UIApplication.shared.isProtectedDataAvailable else { return }
-                await onChanged()
-            }
-        }) {
+        .sheet(isPresented: $showPickupPrimer, onDismiss: refreshAfterPrimer) {
             if let homeId {
                 PickupReminderPrimer(
                     homeId: homeId,
@@ -862,6 +856,14 @@ struct AddressCalendarCard: View {
 }
 
 extension AddressCalendarCard {
+    private func refreshAfterPrimer() {
+        Task { @MainActor in
+            guard (try? sessionScope.requireCurrent()) != nil, !AppLockManager.shared.isLocked,
+                  UIApplication.shared.isProtectedDataAvailable else { return }
+            await onChanged()
+        }
+    }
+
     private func pickupDateLabel(_ day: String) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
