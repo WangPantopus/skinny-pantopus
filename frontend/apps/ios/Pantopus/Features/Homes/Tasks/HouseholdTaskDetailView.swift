@@ -117,18 +117,27 @@ struct HouseholdTaskDetailView: View {
         .sheet(item: $gigPresentation, onDismiss: { resumeCurrentScreen() }, content: { presentation in
             HomeTaskGigView(model: presentation.model)
         })
-        .onAppear { isVisible = true }
-        .task { await viewModel.load() }
+        .onAppear { isVisible = true
+            traceLifecycle("view.appear")
+        }
+        .task {
+            traceLifecycle("view.task.begin")
+            defer { traceLifecycle("view.task.end") }
+            await viewModel.load()
+        }
         .onChange(of: scenePhase) { _, phase in
+            traceLifecycle(phase == .active ? "view.scene.active" : "view.scene.inactive")
             guard isVisible else { return }
             if phase == .active { resumeCurrentScreen() } else { viewModel.suspend() }
         }
         .onChange(of: viewModel.loading) { _, loading in
+            traceLifecycle(loading ? "view.loading.true" : "view.loading.false")
             if !loading, isVisible, viewModel.isCurrent, viewModel.task != nil || viewModel.error != nil {
                 DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
             }
         }
         .onChange(of: viewModel.isCurrent) { _, current in
+            traceLifecycle("view.current.changed")
             viewModel.accessChanged()
             if !current { mediaModel?.retire()
                 mediaModel = nil
@@ -139,7 +148,8 @@ struct HouseholdTaskDetailView: View {
                 gigPresentation = nil
             }
         }
-        .onDisappear { DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
+        .onDisappear { traceLifecycle("view.disappear")
+            DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
             isVisible = false
             viewModel.suspend()
             if attachmentPresentation == nil { mediaModel?.retire()
@@ -167,9 +177,15 @@ struct HouseholdTaskDetailView: View {
 
     private func resumeCurrentScreen() {
         let revision = viewModel.activationRevision
+        traceLifecycle("view.resume.queued", expectedRevision: revision)
         Task {
+            traceLifecycle("view.resume.start", expectedRevision: revision)
             guard isVisible, scenePhase == .active else { return }
             await viewModel.resume(ifCurrent: revision)
         }
+    }
+
+    private func traceLifecycle(_ event: StaticString, expectedRevision: Int = -1) {
+        viewModel.traceLifecycle(event, expectedRevision: expectedRevision, viewVisible: isVisible, sceneActive: scenePhase == .active)
     }
 }

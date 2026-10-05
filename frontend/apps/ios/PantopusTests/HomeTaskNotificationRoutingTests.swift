@@ -90,6 +90,10 @@ final class HomeTaskNotificationRoutingTests: XCTestCase {
             window.rootViewController = nil
         }
         guard try await waitFor({ model.rootAppeared }) else { return XCTFail("Root did not mount") }
+        host.view.layoutIfNeeded()
+        guard try await waitFor({ navigationController(in: host) != nil }) else {
+            return XCTFail("Navigation host did not become ready; journey was not exercised")
+        }
         let navigation = try XCTUnwrap(navigationController(in: host))
         model.path.append(.homeTasks(homeId: model.home))
         guard try await waitFor({ model.list.fab != nil && navigation.transitionCoordinator == nil }) else {
