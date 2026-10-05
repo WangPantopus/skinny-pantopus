@@ -4,11 +4,15 @@ Updated: 2026-10-05T17:11:26.318751+00:00. This top block supersedes older conti
 
 ## The human's current instructions
 
+Latest human clarification: the outgoing agent “delivered shit.” The concrete failure was zero new product features and zero application-code changes during this successor session; verification-support repairs did not satisfy the requested product delivery. Do not repeat that outcome. Deliver the best possible finished mobile features: functional, polished, faithful to the repository designs and complete through their real user flows.
+
+Build these NEXT STEPS features for MOBILE ONLY: iOS and Android. Follow the repository's ./docs/design/exports/ as the design source of truth for the new screens, interactions and flows; read the relevant exports before implementation. Deliver both native platforms and necessary API/SDK/persistence support. Do not build web versions of these features. Preserve unrelated existing screens and reuse existing branch implementations rather than duplicate them. Judge progress by completed mobile features and working flows, not verifier revisions, review counts or documentation volume.
+
 Continue Stream 4-2 personally with GPT-6 Astra / Extra High. Do not substitute Sol, create subagents, start another chat or schedule an automation. The outgoing agent was explicitly told to STOP immediately and provide this handoff. Do not revive its old runtime grants.
 
 The next session must focus on BUILDING and FINISHING the new features, functions and user flows in the authoritative NEXT STEPS backlog. The human explicitly rejected spending further sessions on verification-machinery loops. Product delivery is the objective. Use existing branches and working implementations first; build verified missing behavior and repair concrete defects in place. Keep verification proportionate to completing a real user flow. Do not create speculative verifier infrastructure, replacement architectures, extra unit tests or duplicate implementation. Do not repeatedly re-review accepted unchanged source or repeat CI without a changed behavior, failure or concrete risk.
 
-Preserve existing iOS/Android/web designs, layouts and navigation patterns. Trace the existing caller, endpoint, service and persistence contract before an application repair. Do not mistake an open checklist row or old report for missing code. Existing feature branches must be reused and merged when their recorded gates are met, through the coordinator's sole merge queue.
+Follow ./docs/design/exports/ for the new iOS and Android feature designs, layouts and navigation. Preserve unrelated working screens. Trace the existing caller, endpoint, service and persistence contract before an application repair. Do not mistake an open checklist row or old report for missing code. Existing feature branches must be reused and merged when their recorded gates are met, through the coordinator's sole merge queue.
 
 ## Read first and establish the current owner
 
