@@ -7,7 +7,7 @@
 // missing-unit flags) surfaced as a diagnostic with fix-it guidance,
 // plus the caller's postcard state as the physical leg. Read-only,
 // zero vendor calls; any home member may read it — the physical-leg
-// copy is per-caller (their own verification status), which is also
+// copy is per-caller (their own recorded postcard), which is also
 // the section's T3→T4 nudge.
 //
 // Mounted at /api/homes BEFORE the generic home router.
@@ -22,6 +22,7 @@ const mailboxCheckService = require('../services/mailboxCheckService');
 const logger = require('../utils/logger');
 
 router.get('/:id/mailbox-check', verifyToken, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
   const { id } = req.params;
   const userId = req.user.id;
   try {
@@ -34,7 +35,7 @@ router.get('/:id/mailbox-check', verifyToken, async (req, res) => {
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'You do not have access to this place.' });
     }
-    const check = await mailboxCheckService.getMailboxCheck({ homeId: id, occupancy: access.occupancy });
+    const check = await mailboxCheckService.getMailboxCheck({ homeId: id, userId });
     if (!check) {
       return res.status(404).json({ error: 'Home not found.' });
     }
