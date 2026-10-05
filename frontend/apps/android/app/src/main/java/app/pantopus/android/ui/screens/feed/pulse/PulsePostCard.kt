@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -213,6 +215,7 @@ fun PulsePostCard(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun CardHeader(
     content: PulsePostCardContent,
     onOverflow: (() -> Unit)?,
@@ -237,18 +240,16 @@ private fun CardHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            ) {
-                if (content.isCurator) CuratorChip(postId = content.id)
-                Text(
-                    text = content.meta,
-                    fontSize = 10.5.sp,
-                    color = PantopusColors.appTextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            if (content.isCurator) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    CuratorChip(postId = content.id)
+                    CardMetadata(content.meta, Modifier.align(Alignment.CenterVertically))
+                }
+            } else {
+                CardMetadata(content.meta)
             }
         }
         PulseIntentChip(intent = content.intent, label = content.chipLabel)
@@ -258,6 +259,21 @@ private fun CardHeader(
             onDismissSeeded = onDismissSeeded,
         )
     }
+}
+
+@Composable
+private fun CardMetadata(
+    meta: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = meta,
+        modifier = modifier,
+        fontSize = 10.5.sp,
+        color = PantopusColors.appTextSecondary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 /** The f9 export's neutral origin chip, without its out-of-scope explainer. */
@@ -282,6 +298,8 @@ private fun CuratorChip(postId: String) {
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = if (dark) PantopusColors.appTextStrongDark else PantopusColors.appTextStrong,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
