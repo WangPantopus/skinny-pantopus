@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -113,8 +114,10 @@ class EmergencyInfoViewModelTest {
                     GetHomeEmergenciesResponse(listOf(dto(type = "first_aid", label = "Private medical details"))),
                 ),
             )
+            runCurrent()
 
             assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            assertEquals(2, calls)
             assertNull(vm.shareSummaryText())
             assertNull(vm.printableCard())
             assertNull(vm.banner.value)
@@ -138,8 +141,10 @@ class EmergencyInfoViewModelTest {
             vm.load()
             vm.refresh()
             older.complete(NetworkResult.Failure(NetworkError.Forbidden()))
+            runCurrent()
 
             assertTrue(vm.state.value is ListOfRowsUiState.Loaded)
+            assertEquals(2, calls)
             assertEquals("All 1", vm.chipStrip.value.chips.first().label)
             assertTrue(vm.shareSummaryText()?.contains("Item") == true)
         }
