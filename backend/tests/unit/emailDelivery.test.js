@@ -43,6 +43,8 @@ test.each([
   expect(await service.sendEmail(message)).toEqual({ success: false, error: 'EMAIL_UNAVAILABLE' });
   expect(await service.sendGuestReservationConfirmationEmail({ ...guestSlot, isReminder: true }))
     .toEqual({ success: false, error: 'EMAIL_UNAVAILABLE' });
+  expect(await service.sendGuestReservationReminderEmail({ ...guestSlot, reminderDay: 'tomorrow' }))
+    .toEqual({ success: false, error: 'EMAIL_UNAVAILABLE' });
   expect(mockSendMail).not.toHaveBeenCalled();
 });
 
@@ -51,6 +53,8 @@ test('explicit local preview is marked and does not log auth links', async () =>
   expect(await service.checkDeliveryAvailability()).toEqual({ available: true, preview: true });
   expect(await service.sendEmail(message)).toMatchObject({ success: true, preview: true });
   expect(await service.sendGuestReservationConfirmationEmail({ ...guestSlot, isReminder: true }))
+    .toMatchObject({ success: true, preview: true });
+  expect(await service.sendGuestReservationReminderEmail({ ...guestSlot, reminderDay: 'today' }))
     .toMatchObject({ success: true, preview: true });
   const logger = require('../../utils/logger');
   expect(JSON.stringify([logger.info.mock.calls, logger.debug.mock.calls])).not.toContain('secret-auth-link');
@@ -95,6 +99,8 @@ test('SMTP failure after readiness cannot become simulated success', async () =>
   expect(await service.sendEmail(message)).toEqual({ success: false, error: 'EMAIL_SEND_FAILED' });
   expect(await service.sendGuestReservationConfirmationEmail({ ...guestSlot, isReminder: true }))
     .toEqual({ success: false, error: 'EMAIL_SEND_FAILED' });
+  expect(await service.sendGuestReservationReminderEmail({ ...guestSlot, reminderDay: 'today' }))
+    .toEqual({ success: false, error: 'EMAIL_SEND_FAILED' });
 });
 
 test('a transport that accepts no recipients is not successful', async () => {
@@ -103,6 +109,63 @@ test('a transport that accepts no recipients is not successful', async () => {
   expect(await service.sendEmail(message)).toEqual({ success: false, error: 'EMAIL_REJECTED' });
   expect(await service.sendGuestReservationConfirmationEmail({ ...guestSlot, isReminder: true }))
     .toEqual({ success: false, error: 'EMAIL_REJECTED' });
+  expect(await service.sendGuestReservationReminderEmail({ ...guestSlot, reminderDay: 'today' }))
+    .toEqual({ success: false, error: 'EMAIL_REJECTED' });
+});
+
+test.each(['tomorrow', 'today'])('guest reminder %s reuses the receipt with full safe context', async reminderDay => {
+  const service = loadService(smtp);
+  expect(await service.sendGuestReservationReminderEmail({
+    ...guestSlot, reminderDay, slotTime: '14:00 - 15:00', dishTitle: 'Pasta <bake>',
+  })).toEqual({ success: true, messageId: 'smtp-id' });
+  const reminder = mockSendMail.mock.calls.at(-1)[0];
+  expect(reminder.subject).toBe(`Reminder: Meals & help ${reminderDay}`);
+  expect(reminder.html).toContain('Your Slot Reminder');
+  expect(reminder.html).toContain('Pasta &lt;bake&gt;');
+  expect(reminder.text).toContain('Time: 14:00 - 15:00');
+  expect(reminder.text).toContain('Type: Home-cooked meal\nBring: Pasta <bake>');
+  expect(reminder.text).toContain('View Support Train:');
+  expect(reminder.html).toContain('/support-trains/train');
+});
+
+test('takeout reminder names the restaurant and includes an already shared address', async () => {
+  const service = loadService(smtp);
+  await service.sendGuestReservationReminderEmail({
+    ...guestSlot, reminderDay: 'today', contributionMode: 'takeout', dishTitle: 'unused dish',
+    restaurantName: 'Noodles & more', guestAddressSharedAt: '2026-10-03T20:00:00Z',
+    addressLabel: '123 <Shared> St\nCamas, WA',
+  });
+  const reminder = mockSendMail.mock.calls.at(-1)[0];
+  expect(reminder.html).toContain('Noodles &amp; more');
+  expect(reminder.html).toContain('123 &lt;Shared&gt; St<br>Camas, WA');
+  expect(reminder.text).toContain('Drop-off address:\n123 <Shared> St\nCamas, WA');
+  expect(reminder.text).not.toContain('unused dish');
+  expect(reminder.text).not.toContain('will share exact delivery details');
+});
+
+test('unshared address is omitted even if supplied to the reminder wrapper', async () => {
+  const service = loadService(smtp);
+  await service.sendGuestReservationReminderEmail({
+    ...guestSlot, reminderDay: 'tomorrow', addressLabel: 'private address sentinel',
+  });
+  const reminder = mockSendMail.mock.calls.at(-1)[0];
+  expect(`${reminder.html}\n${reminder.text}`).not.toContain('private address sentinel');
+  expect(reminder.text).toContain('The organizer will share exact delivery details');
+});
+
+test.each(['accepted', 'preview', 'failed'])('email %s logs no recipient, subject, address, link or raw provider response', async status => {
+  const service = loadService(status === 'preview'
+    ? { NODE_ENV: 'test', EMAIL_DELIVERY_MODE: 'log' } : smtp);
+  if (status === 'failed') mockSendMail.mockRejectedValue(new Error('private response test@example.com /support-trains/train'));
+  await service.sendGuestReservationReminderEmail({
+    ...guestSlot, reminderDay: 'today', guestAddressSharedAt: '2026-10-03T20:00:00Z',
+    addressLabel: 'private address sentinel',
+  });
+  const logger = require('../../utils/logger');
+  const logs = JSON.stringify([logger.info.mock.calls, logger.error.mock.calls, logger.debug.mock.calls]);
+  for (const forbidden of ['test@example.com', 'Meals & help', 'private address sentinel', '/support-trains/train', 'private response']) {
+    expect(logs).not.toContain(forbidden);
+  }
 });
 
 test('transport construction failure fails closed', async () => {
