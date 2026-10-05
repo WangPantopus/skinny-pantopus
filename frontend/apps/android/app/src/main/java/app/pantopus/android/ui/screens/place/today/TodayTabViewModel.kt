@@ -252,7 +252,8 @@ class TodayTabViewModel
         }
 
         fun markPromptDisplayed(dismissAfterSave: Boolean = false) {
-            if (!_showMorningCard.value || _preferenceBusy.value || (promptAttempted && !dismissAfterSave)) return
+            if (!_showMorningCard.value || _preferenceBusy.value) return
+            if (promptAttempted && !dismissAfterSave) return
             val version = loadVersion
             promptAttempted = true
             _preferenceBusy.value = true
