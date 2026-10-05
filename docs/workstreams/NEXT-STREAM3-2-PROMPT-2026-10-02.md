@@ -1,3 +1,99 @@
+## CURRENT — IMMEDIATE HANDOFF: build NEXT STEPS features and flows — October 5, 2026 (PDT)
+
+Resume Stream 3-2 (Home security, privacy and guest access) personally as **one GPT-6 Astra / Extra High main agent**. The human explicitly replaces every older GPT-6.1 Sol instruction. No subagents, new chats or automations. This current block supersedes all historical CURRENT/next-action/model/runtime snapshots below; historical evidence remains preserved.
+
+### Human direction — deliver application functionality
+
+The human stopped the predecessor immediately and requested this handoff. Their latest instruction is: **the next session must focus on building all the new features, functions and flows in NEXT STEPS.** They were dissatisfied that the preceding session mostly reviewed verifier/operator changes instead of delivering application features. Do not repeat that pattern. Continue the existing NEXT STEPS/ordered backlog and pilot WP1–WP8 through concrete application outcomes. Reuse already implemented work, merge ready existing branches through the coordinator first, and complete verified missing behavior in the existing implementation. Do not use an open acceptance row as proof that a feature needs rebuilding.
+
+At startup, identify the next owned deliverable from the authoritative backlog, trace its existing screen/caller/API/service/database contract, reconcile existing and archived branches, and then implement the missing feature or smallest necessary functional repair. Finish its real flow plus affected regressions and required CI. Source review is a supporting step, not the session's deliverable. Do not start another broad inventory, proof-packet campaign, replacement harness or duplicate tests. A harness fix should address a reproduced blocker for the selected application flow and stay bounded. While Root owns an active runtime, advance independent owned application work that has an established gap; do not spend the session merely polling peers.
+
+Preserve existing iOS/Android/web designs, layouts, navigation and styles. No speculative architecture replacement or applied migration rewrite. Shared-file changes need one coordinated writer. Existing external/provider/design/deletion holds remain unless the human explicitly lifts them. This priority does not authorize money movement, external sends, credential exposure or destructive account operations.
+
+### Read once; refresh only the current boundary
+
+Single live coordination location: `/Users/yingpengwang/pantopus-coordination`, branch `codex/workstream-coordination`.
+
+Read the newest sections of:
+- `docs/PROJECT_HANDOFF.md` and `docs/workstreams/README.md` for live Root ownership, NEXT STEPS and the sole merge queue.
+- `docs/workstreams/03-2-home-security-privacy.md` for this lane's complete attributed evidence/history.
+- `docs/workstreams/03-home-access-residency.md` and `03-stream3-split-2026-10-02.md` for authoritative scope/acceptance and shared writers.
+- Existing ordered feature/design references linked by those records. Historical source checkout copies of coordination are stale.
+
+Do not reread all historical packets. Source/CI/actual evidence already accepted is reusable when its relevant bindings are unchanged. The historical Studio transfer is accepted at `/Users/yingpengwang/pantopus-handoff/stream3-2-20261004-r1/`; do not redo it. Credentials, tokens, private preimages, DB archives, operator logs and excluded bodies stay out of Git and chat.
+
+### Exact Git and PR checkpoint — refresh metadata before action
+
+Own source checkout: `/Users/yingpengwang/.codex/worktrees/9431/skinny-pantopus`, branch `codex/stream3-2-emergency-privacy-forward`, HEAD `1f598539c23fa29d8c5ac264a2c80dcd63c56133`, tree `408101a7998d6091c2134f9ecedd2a37634e1365`; clean and pushed at stop. Initial chat cwd9122 is an old detached checkout; do not use it for new source edits.
+
+Live source serving Root's installed candidate: `/Users/yingpengwang/.codex/worktrees/s1-pilot-contracts/skinny-pantopus`, frozen HEAD `9e6bcbb22bd1ff0126a789f71889ddbd092b7f09`, tree `82c563cd155d0835a270fe99577536820487b269`, draft PR1533 with16 successful checks. This is not current master.
+
+Last accepted master: `d8c9fb1c803e714a48b8745faa36951b8be10193`, tree `55a562d53173721454764c9db365582acf33fb6c`. Batch359/PR1535 merged1509+1512 and schema-only1495 prerequisite; earlier batch358/PR1534 merged1498+1499. Exact master CI37301664212 completed15SUCCESS/1configuredSKIP. Reuse these merged implementations and evidence, do not rebuild them. Root's next sole queue is360, subject to fresh live guide.
+
+Own remaining PRs, personally refreshed in this session:
+- **1496**, draft `2892b78ab2c3f8f1e05db93ff04306a0638dc0cd`, base master, CLEAN/MERGEABLE,11SUCCESS/5configuredSKIP, all3 iOS simulator jobs successful. Existing Custom-date validation repair. Not present in frozen9e6; real AFTERs must use exact repaired compatible products. Native actual gate remains, so not ready for merge.
+- **1518**, draft `1f598539c23fa29d8c5ac264a2c80dcd63c56133`, base `claude/stream3-home-32-emergency-sensitive`, CLEAN/MERGEABLE,6SUCCESS/5configuredSKIP. Emergency final-response privacy fence. Already in frozen9e6/PR1533, not master. Do not cherry-pick a duplicate. Actual changed-boundary gate remains, so not ready for merge.
+- Parent1513 is merged. Earlier1491/3060 and accepted names/Lockdown work are integrated; do not reopen or reimplement them.
+
+The broader104-ref audit found100 already in master; remaining1496/1518 and superseded Lockdown refs were classified. Root's28-open-PR inventory and branch-composition review are accepted. Refresh changed heads/checks/merge readiness, not the whole audit. Existing clean CI does not substitute for the still-required native flows. Root alone merges; no new PR is needed for coordination-only handoff updates.
+
+### Live owners and resource boundary at stop
+
+Existing chats (human-authorized coordination; use these, do not create replacements yourself):
+- Root: `01a10a5f-1817-7c93-8faa-f72c50c0b221`, **Resume Stream1 pilot coordination** — runtime/admissions/shared guide/PROJECT_HANDOFF/sole merge queue.
+-3-1: `01a10a5f-4ab8-79b1-a779-e7b2a162fc95`, **Coordinate Stream 3-1 handoff** — Home/member/IAM actors, parent ledger and operator custody.
+-4-1: `01a10a5f-a40f-7141-bd95-25765c0e7b6b`, **Resume Stream 4-1 handoff** — common/iOS outer, WP2 navigation, WP4/task/date/provider labels.
+-4-2: `01a10a5f-d2c2-7773-bdd6-6c79a59187dc`, **Complete Stream 4-2 pilot journeys** — Android outer, passive helper, actions/lifecycle/deep links.
+-WP1 owner `01a10a5f-fdb8-7b43-a5c9-c4e579499336` is reached through Root.
+
+This predecessor chat is `01a10a5f-8244-7722-8727-e53f8d0301d6`, **Continue Stream 3-2 repairs**. It stops after publishing this handoff and must not be awaited for further review. R12/R13 reviews are finished; no partially reviewed patch, owned server/controller/device/heavy/runtime/SQL operation or lock is being transferred by3-2.
+
+**Root's seventeenth iOS run was ACTIVE at the immediate human stop**, operation `0840559c-6b71-4c76-b5ee-b481776aa434`, unchanged commonR20. Setup `R/wp2-seventeenth-native-setup-admission-r1.json` SHA3743f4ec, inert intake42cc60a0. Only the redundant initial Place-tab tap was removed; existing Hub→Explore remains. Root owns its public tab-control observation, full return and any follow-up. Do not infer completion, interrupt/adopt it, or run independent PID/socket/device/SQL probes. Refresh Root's live guide/chat first; Root was notified of this immediate3-2 stop. Subsequent current facts supersede this snapshot.
+
+### Latest source work is complete — reuse, do not re-review
+
+Private roots: R=`/Users/yingpengwang/.config/pantopus/stream1-studio-resume-20261004`; A=`/Users/yingpengwang/.config/pantopus/stream4-2-studio-resume-20261004`; I=`/Users/yingpengwang/.config/pantopus/stream4-1-studio-pilot-20261004`; B=`/Users/yingpengwang/.config/pantopus/stream3-2-studio-resume-20261004/pilot-reviews`.
+
+- **AndroidR13**: `A/android-saved-only-outer-source-r13/source-receipt-r13.json` SHA0e9f295b902376f741b18c161c2fdf0f983ed611e3f21950d6656fdde5cd89fe; outer949066518e000c3b1c42b5704d2ff5649e24c164d238b6f2cfb5465579c87da8/201289B. Root review605fc076 and intake553651f9;3-2 full focused SOURCE PASS delivered and recorded.12pins, complete1929B difff2ef2ad6, one declared replacement67062ece/full inverseR12;77 other methods/all Bound/module conserved. Only exact registered direct read-only ps/lsof Popen waits use selectedPython3.9's1ms exponential polling, cap50ms/remaining existing deadline. Original positive OSwait/status/lock/error, EOF/groupabsence, timeout/deferred return and all other waits/predicates remain. No actual R13 latency/native acceptance yet; next Android follows Root's completed iOS return. No new review is owed by this chat.
+- **AndroidR12**: receiptc461bd21, outer2a585e6bf0e09b919e358762f5b7a9c375cc007826af6dd49fdd5d371313eb48/200347B. Full20-pin/diff/inverse/AST source PASS, eight methods plus narrow Bound override;70 other Root methods unchanged. Same actual native BEFORE frame may reuse its just-measured guest once with exact request/thread/actor/scope and fresh final host/custody checks; finally clears before reply. CommonR20 fresh protected-profile restoration port exact. Four leaves/helper97 unchanged. Do not repeat this review.
+- **CommonR20**: `I/wp2-savedplace-preready-custody-source-r20/root_savedplace_outer_r20.py`,57fb5df0b23ff3d2d50a1787e48506a95576128fa6355f35728fbc3f90e68798/183977B. Complete accepted custody/source/syntax; original positive child/readers retained before racy readiness, real OSwait+EOF+groupabsence required; no invented wait. Turn-onR12 outer16f96266/190046B is exact accepted common port with separate actual scope still pending.
+- **WP1 standaloneR1**: `I/wp1-standalone-composition-source-r1/source-receipt-r1.json` f8f1fad3; outer305c0b55b8837bc4c48e29803088e9d00addff4e0c1b48c8d0a2aa906011f70c/205658B. Root/3-2/WP1-owner source PASS and selectedPython3.9 compile-only PASS. Reuses retained-card07fa0252/locationaff4f0c6 leaves, helperda322d57, exact WP7 projectionaa03. Actual two native feeds/AX/card/OS-location/current actor/producer/query/permission/settlement+347/scoped/outside/priorAuth conservation remain mandatory. No SavedPlace actions/cleanup/fixture replay. Existing query reuse DATA13bd203c has3-1 source PASS: one fresh existing353 observation may supply four qualified facets when current nine-table fingerprints match; do not duplicate producers/queries.
+
+Detailed proof and olderR11 network binding/R9 group drain/bootstrap records remain in the existing status. Author receipts are source inputs; this agent's delivered review messages and attributed status are its independent review record, not invented new private receipts. No new application feature or UI change was delivered by this predecessor's final review segment.
+
+### Actual outcomes and limits to preserve
+
+Fifth Android9e75f214-b1ac-4778-9c87-b9cd4950529d failed before accepted restoration or SavedPlace. Root `R/wp2-fifth-android-failed-warm-external-return-root-r1.json` SHA854f56324b3969beee7f00e935ae26c8a0d65ec0ac8061b5321f150ed5e7666d/8084B; separate recovery2200f78b/10682B completed16:55:11.322Z.3-1 independent `.../stream3-1-resume-mac-studio-20261004/root-fifth-android-failed-warm-external-return-intake-r1.json`2b392105/17561B. Reuse that intake.
+
+Original19877events/**12 final faults**, caller1/originalfullreturnfalse remain (earlier11 was before the final return fault).3258short and four original long returns joined; seven recovery children/PGabsence/device→heavy→runtimeLAST0 complete. Protected profile200 was observed but normal restoration not accepted. Root separately supplied wrong null nativeActorId in provider factc936; absent final login marker did not mean absent internal actor. Neither that error nor the queue delay is an established application defect.346business tables unchanged, normal FunnelEvent2→3/caches retained, all six priorAuth histories preserved; **all347/all353 equality is false**. No cleanup/reset or second353 scan.
+
+Sixteenth iOS restored a current native protected profile, then failed because setup requested tab.place while app was already on Hub with Explore visible. Original full return completed; independent intake8b6207cb accepted. Seventeenth removes only that redundant step and observes actual later tab controls. Four earlier Android attempts/bootstrap and their distinct original/external returns remain qualified history. Installation/build/auth HTTP200/source PASS is not a native journey PASS.
+
+### Concrete owned deliverables still open
+
+1. **Emergency privacy/PR1518 actual flow:** reuse `B/emergency-response-fence-real-case-proposal-r2.json`,51a55e85. Trace existing Emergency caller→endpoint→Home authority/sensitivity/query/final fence. Existing18RED→88PASS/38authorization/68wrapper/CI accepted; primary1513 earlier10 actual requests do not close new1518. Minimum six GETs: owner200 and explicitly sensitive-authorized member200 with full safe synthetic DTO/aliases/private-no-store/readnonmutation; opening FROZEN403; held actual awaited server-row-query then freeze403; held query then sensitive.view loss403; still-sensitive-allowed finance.view change503 HOME_LIST_ACCESS_CHANGED.3-1 owns Home/member/IAM mutations. An actual gate must hold after opening authority and before final recheck; holding already-produced HTTP JSON or assuming an ordinary SELECT row lock is insufficient. No new hook/RPC/tablelock/schema workaround. If no existing admitted query gate, complete independently possible stable/opening cases, report races unverified and advance another concrete feature. Do not restore private fields for screenshots or invent owner-only policy.
+2. **PR1496 Custom dates on both native apps:** exact repaired products are required because9e6 lacks this patch. Existing valid dates/order/same-calendar-day repair is implemented and CI passes. MyHomes→synthetic Home→Settings/People→Guest passes→AddGuest; fresh Guest/email, unchanged Welcome;2h enabled→Custom dismiss without committed range disabled→2h recovery enabled→Custom ordered default UseTheseDates enabled. iOS also preset→Custom Clear→reselect/dismiss disabled. Close→Discard→empty; NO Send/issue/share, clock change/state injection/picker bypass/design change. Preserve Guest validation-before-missing-PNG-skip qualification; Android secure XML is not pixels, iOS AX/echo is not strict focus proof.
+3. **Complete NEXT STEPS application features/flows in this family** using the existing backlog and branch implementations. Stream3-2 owns R06,D05,D06,D07,D08,D10,M02 and S2-05/related U02–U04 cells;3-1 owns membership/leave/role commands even when embedded. Root/4-1/4-2 retain pilot implementation ownership. Review actual WP4 recipient privacy and WP6/F3b when concrete changes/results arrive; no competing implementation. Synthetic Home creation belongs3-1 after both saved-only native cases; capture first-use before task/radon writes. Do not assume a Home fixture exists.
+4. Retained later guest timing: four iOS/Android Weekend+Custom issuance flows plus short server-relative public beforestart403/no view→manualRetry after actualstart200/one view→revoke/refusal. GuestPass/Audit/View/ShareReadReceipt requires the existing separately admitted captured-PK cleanup extension. Web Privacy failed-saveE1 is independent: settings/security caller→homeOwnership.updateSecuritySettings→PATCH home/security→Home.privacy_mask_level+Audit. Two Identity/changed-pass draft leads are unverified leads, not defects. Existing rename/security/Lockdown/access-secret/transport/idempotency/expiry/ANR evidence stays accepted and is not replayed merely to produce activity.
+
+### Non-negotiable conservation and ownership
+
+Never read/hash/compare/apply/unapply migration BODY20260926100000 or the four excluded host bodies (three.pyc and Supabase binary). Never run a full migration checker that reads it. Preserve all six Auth histories; normal new sessions/device/security history remain. No reset, archive restore, new parallel tables or applied-history rewrite. Six accepted forwards181/182/101/102/103/104 were already applied once, registry112/current353; do not replay. Schema-only1495 migration20261003180000 is in master but NOT locally applied by this work; whole1495 remains draft with native scope open.
+
+Root solely owns current runtime/admissions/acquisitions/qualified actual return and merge queue;3-2 holds none. Do not probe devices/processes/sockets/SQL to verify peers' free state. Fresh source/config/product/actor/device/353 and exact scoped admission precede actual work. No resource authority follows from a stale snapshot or this prompt. Shared home.js/auth/DTO/Place/navigation/operator files require one coordinated writer. Only3-2 status and this NEXT prompt are owned documentation; Root owns shared guide/handoff,3-1 parent ledger. Explicit-path commits, pullffonly/push; preserve peer edits, no stash/reset.
+
+Google/Smarty credentials are unavailable and the human already knows; do not ask again. Provider/physical phone/signing/OS presence/secure pixels/real money/Legal/business-read/account-parent deletion/design approvals remain external or held boundaries. Finish all possible autonomous application work without claiming these verified.
+
+### Progress reporting and successor output
+
+All seven inherited3-2 feature rows remain partial; no new formal row closure was earned by the verifier reviews. The shared parent ledger is8/20 closed (40%); its historical70–75% planning readiness is an unmeasured estimate, not3-2 acceptance. Do not claim this session completed features based on source work. Most immediate local implementation/native/API/merge work can proceed through the existing agents without new human input; physical/provider/held decisions cannot. State denominators and uncertainty rather than inventing a precise lane percentage or date.
+
+Start with the current Root handoff/runtime state, then choose and finish a concrete owned NEXT STEPS feature/flow. Preserve ready branch work, publish focused PRs only when needed, have Root merge those whose actual gates are met, and keep progress updates tied to application behavior delivered. At milestones update current state/next action/limits/evidence in the two existing owned files. Continue until the authorized work is complete or the human directs another handoff.
+
+**END OF CURRENT COPYABLE SUCCESSOR PROMPT.** Historical records below are reference only; do not treat their old model/PID/grant/queued-CI/next-action statements as current instructions.
+
+---
+
 ## CURRENT — Android R13 bounded polling reviewed; fifth return correction pending — October 5, 2026 (PDT)
 
 **Android R13 focused SOURCE PASS:** [author receipt](/Users/yingpengwang/.config/pantopus/stream4-2-studio-resume-20261004/android-saved-only-outer-source-r13/source-receipt-r13.json), independently pinned `0e9f295b902376f741b18c161c2fdf0f983ed611e3f21950d6656fdde5cd89fe`; source `949066518e000c3b1c42b5704d2ff5649e24c164d238b6f2cfb5465579c87da8` (201289 bytes), complete1929-byte difff2ef2ad6/one declared replacement67062ece. All12 reference pins, full generated diff and whole forward/inverse to acceptedR12 matched. Only actual_wait changes;77 other Root methods/all Bound/module AST exact. Read whole actual_wait and unchanged probe/consume_short plus selected Python3.9 subprocess.py POSIX wait implementationd2f73c71. Actual diagnosis referencea1a2644a was hash-checked only; owner timing intake is reused, not repeated.
