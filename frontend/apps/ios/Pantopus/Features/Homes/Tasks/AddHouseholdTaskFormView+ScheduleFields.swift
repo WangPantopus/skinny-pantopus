@@ -6,6 +6,17 @@
 import SwiftUI
 
 extension AddHouseholdTaskFormView {
+    /// Existing dates are stored as UTC calendar days; an empty field starts
+    /// with the user's local day, represented in that same format.
+    var dueDatePickerSelection: Date {
+        if let date = viewModel.dueDate { return date }
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = .current
+        let today = calendar.dateComponents([.year, .month, .day], from: Date())
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        return calendar.date(from: today) ?? Date()
+    }
+
     // MARK: - Schedule and notes sections
 
     var scheduleSection: some View {
@@ -159,7 +170,7 @@ extension AddHouseholdTaskFormView {
             DatePicker(
                 "Due date",
                 selection: Binding<Date>(
-                    get: { viewModel.dueDate ?? Date() },
+                    get: { dueDatePickerSelection },
                     set: { viewModel.setDueDate($0) }
                 ),
                 displayedComponents: .date
