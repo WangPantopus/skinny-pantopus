@@ -12,6 +12,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.theme.PantopusIcon
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -22,6 +23,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -92,6 +94,73 @@ class EmergencyInfoViewModelTest {
             val vm = makeVm()
             vm.load()
             assertTrue(vm.state.value is ListOfRowsUiState.Error)
+        }
+
+    @Test fun older_success_cannot_restore_private_rows_after_a_newer_denial() =
+        runTest {
+            val older = CompletableDeferred<NetworkResult<GetHomeEmergenciesResponse>>()
+            var calls = 0
+            coEvery { repo.getHomeEmergencies("home-1") } coAnswers {
+                if (calls++ == 0) older.await() else NetworkResult.Failure(NetworkError.Forbidden())
+            }
+            val vm = makeVm()
+            vm.load()
+            vm.refresh()
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+
+            older.complete(
+                NetworkResult.Success(
+                    GetHomeEmergenciesResponse(listOf(dto(type = "first_aid", label = "Private medical details"))),
+                ),
+            )
+
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            assertNull(vm.shareSummaryText())
+            assertNull(vm.printableCard())
+            assertNull(vm.banner.value)
+            assertEquals("All 0", vm.chipStrip.value.chips.first().label)
+            vm.selectFilter(EmergencyFilter.Medical.id)
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+        }
+
+    @Test fun older_failure_cannot_replace_a_newer_successful_refresh() =
+        runTest {
+            val older = CompletableDeferred<NetworkResult<GetHomeEmergenciesResponse>>()
+            var calls = 0
+            coEvery { repo.getHomeEmergencies("home-1") } coAnswers {
+                if (calls++ == 0) {
+                    older.await()
+                } else {
+                    NetworkResult.Success(GetHomeEmergenciesResponse(listOf(dto(type = "shutoff_water"))))
+                }
+            }
+            val vm = makeVm()
+            vm.load()
+            vm.refresh()
+            older.complete(NetworkResult.Failure(NetworkError.Forbidden()))
+
+            assertTrue(vm.state.value is ListOfRowsUiState.Loaded)
+            assertEquals("All 1", vm.chipStrip.value.chips.first().label)
+            assertTrue(vm.shareSummaryText()?.contains("Item") == true)
+        }
+
+    @Test fun denied_refresh_clears_counts_and_export_payloads() =
+        runTest {
+            coEvery { repo.getHomeEmergencies("home-1") } returnsMany
+                listOf(
+                    NetworkResult.Success(GetHomeEmergenciesResponse(listOf(dto(type = "first_aid")))),
+                    NetworkResult.Failure(NetworkError.Forbidden()),
+                )
+            val vm = makeVm()
+            vm.load()
+            assertEquals("All 1", vm.chipStrip.value.chips.first().label)
+            vm.refresh()
+
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            assertEquals("All 0", vm.chipStrip.value.chips.first().label)
+            assertNull(vm.shareSummaryText())
+            assertNull(vm.printableCard())
+            assertNull(vm.banner.value)
         }
 
     @Test fun loaded_response_buckets_by_category() =
