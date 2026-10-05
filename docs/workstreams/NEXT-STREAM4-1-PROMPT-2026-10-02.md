@@ -1,3 +1,9 @@
+# CURRENT SUCCESSOR UPDATE — mobile source delivery — October 5, 2026
+
+Sole4-1 active chat is `01a10d31-852a-72c0-a72d-e115491bc169`; Root is `01a10d30-e7f5-73c2-8bc1-415b67568ce1`. Latest current state is at the top of [the existing stream status](04-1-place-home-records-money.md). Reuse application candidate `3d4eecbc6` on `codex/stream4-1-mobile-flow-repairs` in existing d993 checkout, based on assembled9e6; [PR1541](https://github.com/WangPantopus/skinny-pantopus/pull/1541) contains actual iOS/Android morning prompt recovery and iOS first-save primer lifetime repairs. Required CI and candidate native checks remain pending. Five focused Android regressions added; source parse/lint/format passes. Preserve frozenW, original2ff0 and shared fixtures. Root owns runtime/device/SQL/integration/queue and is performing direct retained-product UI/API/SQL acceptance. Baseline9e6 iOS Save/Today/Not now/reentry/remove works within reported limits; resave/cold still underway. No complete WP2–WP5 claim. Continue the product flow; do not return to verifier/controller work.
+
+---
+
 # CURRENT — Stream 4-1 successor prompt — 2026-10-05 17:07 UTC
 
 You are the ONE main Stream 4-1 agent. Use **GPT-6 Astra / Extra High** as the human explicitly requests. Do not switch to GPT-6.1 Sol. No subagents, new chats, automations or duplicate workstreams. This is a same-Mac handoff; use the existing checkouts, installed products, private source and accepted evidence.
