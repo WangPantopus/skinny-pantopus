@@ -152,12 +152,15 @@ final class HouseholdTaskDetailViewModel {
     ) {
         #if DEBUG
         let instance = String(describing: ObjectIdentifier(self))
+        let revision = generation
+        let current = isCurrent
+        let modelVisible = visible
         let view = viewVisible.map(String.init) ?? "unknown"
         let scene = sceneActive.map(String.init) ?? "unknown"
         Self.lifecycleLogger.notice(
             """
             event=\(event.description, privacy: .public) instance=\(instance, privacy: .public) \
-            generation=\(generation) expected=\(expectedRevision) current=\(isCurrent) visible=\(visible) \
+            generation=\(revision) expected=\(expectedRevision) current=\(current) visible=\(modelVisible) \
             viewVisible=\(view, privacy: .public) sceneActive=\(scene, privacy: .public) cancel=\(Task.isCancelled)
             """
         )
