@@ -2533,7 +2533,8 @@ public struct YouTabRoot: View {
                     homeId: homeId,
                     onOpenTask: { taskId in path.append(.householdTaskDetail(homeId: homeId, taskId: taskId)) },
                     onAddTask: { path.append(.addHouseholdTask(homeId: homeId)) }
-                )
+                ),
+                isActive: path.last == route
             )
         case let .householdTaskDetail(homeId, taskId):
             HouseholdTaskDetailView(homeId: homeId, taskId: taskId) {

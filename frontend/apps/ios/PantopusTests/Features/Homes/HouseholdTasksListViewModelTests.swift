@@ -363,6 +363,41 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
 extension HouseholdTasksListViewModelTests {
     // MARK: - Current access and projection
 
+    func testNavigationReturnReloadsEditedDueDateAndCompletedStatus() async throws {
+        let taskId = "10000000-0000-4000-8000-000000000101"
+        let due = "2026-05-16T16:00:00Z"
+        let record = """
+        "id":"\(taskId)","home_id":"10000000-0000-4000-8000-000000000001",
+        "task_type":"chore","title":"Vacuum","created_by":"u"
+        """
+        SequencedURLProtocol.sequence = [
+            .status(200, body: "{\"tasks\":[{\(record),\"status\":\"open\"}]}"),
+            .status(200, body: "{\"tasks\":[{\(record),\"status\":\"open\",\"due_at\":\"\(due)\"}]}"),
+            .status(200, body: """
+            {"tasks":[{\(record),"status":"done","due_at":"\(due)","completed_at":"2026-05-15T12:00:00Z"}]}
+            """)
+        ]
+        let vm = makeVM()
+        await vm.load()
+        guard case let .loaded(before, _) = vm.state else { return XCTFail("Expected initial task") }
+        XCTAssertEqual(try XCTUnwrap(before.first?.rows.first).subtitle, "Unassigned")
+
+        vm.suspend() // The detail/editor covers the retained list.
+        await vm.resume(ifCurrent: vm.activationRevision) // Back makes its route active.
+        guard case let .loaded(edited, _) = vm.state else { return XCTFail("Expected edited task") }
+        let expected = HouseholdTasksListViewModel.project(task: makeTask(dueAt: due), now: Self.fixedNow)
+        XCTAssertEqual(try XCTUnwrap(edited.first?.rows.first).subtitle, expected.subtitle)
+        XCTAssertNotEqual(expected.subtitle, "Unassigned")
+
+        vm.suspend()
+        await vm.resume(ifCurrent: vm.activationRevision)
+        guard case .empty = vm.state else { return XCTFail("Completed task must leave Active") }
+        vm.selectedTab = HouseholdTasksTab.done.rawValue
+        guard case let .loaded(done, _) = vm.state else { return XCTFail("Completed task must enter Done") }
+        XCTAssertEqual(done.first?.rows.map(\.id), [taskId])
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "GET", "GET"])
+    }
+
     func testFailedCurrentAccessClearsTaskSnapshot() async {
         SequencedURLProtocol.sequence = [
             // Initial load

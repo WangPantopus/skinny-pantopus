@@ -1962,7 +1962,8 @@ public struct HubTabRoot: View {
                     homeId: homeId,
                     onOpenTask: { taskId in push(.householdTaskDetail(homeId: homeId, taskId: taskId)) },
                     onAddTask: { push(.addHouseholdTask(homeId: homeId)) }
-                )
+                ),
+                isActive: path.last == route && rootTabs.selected == owningTab
             )
         case let .householdTaskDetail(homeId, taskId):
             HouseholdTaskDetailView(homeId: homeId, taskId: taskId) {
