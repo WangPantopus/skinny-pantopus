@@ -1,6 +1,6 @@
 ## CURRENT — iOS task creation fixed and native household flow passed — October 5, 2026
 
-Product [PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) is draft, clean/pushed at `cf039ab3d`. No merge this session; next sole queue360. Latest required [CI37374120557](https://github.com/WangPantopus/skinny-pantopus/actions/runs/37374120557) is queued with initial jobs not started. Earlier86ca run failed after externally canceled initial jobs; it is not green. Preserve existing mobile designs and navigation.
+Product [PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) is draft, clean/pushed at `cf039ab3d`. No merge this session; next sole queue360. Latest required [CI37374120557](https://github.com/WangPantopus/skinny-pantopus/actions/runs/37374120557) is queued with initial jobs not started. Earlier86ca run failed before tests: GitHub annotations explicitly report that a hosted runner was not acquired after multiple attempts. It is not green. Preserve existing mobile designs and navigation.
 
 Actual iOS owner → Android member → owner flow passed: household invitation accepted with verification_source=household; owner assigned the October8 task; member completed it; owner Active/Done list refreshed; owner Android completion notice opened the correct done task. Paired local-date repair passed native iOS and Android save/reopen, persisting09:00 local (16:00Z). Radon Done appears in Today. Previously accepted saved-place, Home precedence, pickup/primer and curator flows remain reusable within their recorded scope.
 
@@ -14,7 +14,7 @@ Signed-in Android first-save entry/error/Retry/Cancel passed. Successful Mapbox 
 
 Evidence remains private under [mobile delivery](/Users/yingpengwang/.config/pantopus/stream1-mobile-delivery-20261005/): ios-combined/task-transition-trace-compile-fixed-*, native-create-trace-before-*, task-transition-container-after-*, native-create-container-after-*, task-route-identity-after-*; Android mailbox, completion notice, date and reminder-build receipts. Failed candidate results remain preserved.
 
-Root owns backend18142/session81924, iOS1C8 slot1 and Android5584/isolatedADB16438 slot2. All build/test/install callers are joined; heavy is free. Other owners are source/CI only. Retained DB64554 and foreign runtimes/devices stay untouched. Next: finish Android elapsed session/parity checks, current required CI, and owned resource return. Notification OS actions remain unverified with current CUA control limitations; no external delivery is claimed.
+Root owns backend18142/session81924 and Android5584/isolatedADB16438 slot2. iOS1C8 was normally shut down at21:13:20Z, its caller joined0 and exact slot1 released0; installedcf039/data preserved. All build/test/install callers are joined; heavy is free. Other owners are source/CI only. Retained DB64554 and foreign runtimes/devices stay untouched. Next: finish Android elapsed session/parity checks, current required CI, and owned resource return. Notification OS actions remain unverified with current CUA control limitations; no external delivery is claimed.
 
 Human-resumed successors retain their feature ownership: WP1
 `01a10d30-4867-7870-90b3-87aadb50e686` (curator/seeder); 4-1
