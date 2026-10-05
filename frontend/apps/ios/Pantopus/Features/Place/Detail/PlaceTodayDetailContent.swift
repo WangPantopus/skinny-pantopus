@@ -647,7 +647,13 @@ struct AddressCalendarCard: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
         .accessibilityIdentifier("addressCalendarCard")
         .onChange(of: data) { _, _ in confirmed = nil }
-        .sheet(isPresented: $showPickupPrimer) {
+        .sheet(isPresented: $showPickupPrimer, onDismiss: {
+            Task { @MainActor in
+                guard (try? sessionScope.requireCurrent()) != nil, !AppLockManager.shared.isLocked,
+                      UIApplication.shared.isProtectedDataAvailable else { return }
+                await onChanged()
+            }
+        }) {
             if let homeId {
                 PickupReminderPrimer(
                     homeId: homeId,
@@ -819,8 +825,12 @@ struct AddressCalendarCard: View {
             if offerPrimer, !response.calendar.needsPickupDay, !UserDefaults.standard.bool(forKey: key) {
                 UserDefaults.standard.set(true, forKey: key)
                 showPickupPrimer = true
+            } else {
+                await onChanged()
             }
-            await onChanged()
+            // Refresh after the primer closes. The unavailable-calendar path
+            // clears its fallback during refresh, which removes this card and
+            // would dismiss the primer before the person can answer it.
         } catch let APIError.clientError(status: 409, message: body) {
             guard (try? requirePickupCurrent(version)) != nil else { return }
             // Changed meanwhile: nothing was saved. Show the current schedule
