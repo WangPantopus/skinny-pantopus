@@ -73,6 +73,93 @@ final class EmergencyInfoViewModelTests: XCTestCase {
         }
     }
 
+    func testOlderSuccessCannotRestorePrivateRowsAfterNewerDenial() async {
+        let gate = UUID().uuidString
+        let vm = makeRefreshVM([
+            .status(200, body: Self.privateEmergencyJSON, gate: gate),
+            .status(403, body: #"{"error":"Access revoked"}"#)
+        ])
+        let older = Task { await vm.load() }
+        await waitForEmergencyRequest()
+        await vm.refresh()
+        await releaseEmergencyResponse(gate)
+        await older.value
+
+        guard case .error = vm.state else { return XCTFail("An older success replaced the access denial") }
+        XCTAssertNil(vm.shareSummaryText())
+        XCTAssertNil(vm.printableCard())
+        XCTAssertNil(vm.banner)
+        XCTAssertEqual(vm.currentBannerSummary().totalItems, 0)
+        vm.selectedTab = EmergencyFilter.medical.rawValue
+        guard case .error = vm.state else { return XCTFail("Filtering restored denied content") }
+    }
+
+    func testOlderFailureCannotReplaceNewerSuccessfulRefresh() async {
+        let gate = UUID().uuidString
+        let vm = makeRefreshVM([
+            .status(403, body: #"{"error":"Access revoked"}"#, gate: gate),
+            .status(200, body: Self.privateEmergencyJSON)
+        ])
+        let older = Task { await vm.load() }
+        await waitForEmergencyRequest()
+        await vm.refresh()
+        await releaseEmergencyResponse(gate)
+        await older.value
+
+        guard case .loaded = vm.state else { return XCTFail("An older failure replaced current content") }
+        XCTAssertEqual(vm.currentBannerSummary().totalItems, 1)
+        XCTAssertTrue(vm.shareSummaryText()?.contains("Private medical details") == true)
+    }
+
+    func testDeniedRefreshClearsCountsAndExportPayloads() async {
+        let vm = makeRefreshVM([
+            .status(200, body: Self.privateEmergencyJSON),
+            .status(403, body: #"{"error":"Access revoked"}"#)
+        ])
+        await vm.load()
+        XCTAssertEqual(vm.currentBannerSummary().totalItems, 1)
+        await vm.refresh()
+
+        guard case .error = vm.state else { return XCTFail("Expected denied refresh") }
+        XCTAssertNil(vm.shareSummaryText())
+        XCTAssertNil(vm.printableCard())
+        XCTAssertNil(vm.banner)
+        XCTAssertEqual(vm.currentBannerSummary().totalItems, 0)
+    }
+
+    private static let privateEmergencyJSON = """
+    {"emergencies":[{"id":"e1","home_id":"home-1","type":"first_aid","label":"Private medical details"}]}
+    """
+
+    private func makeRefreshVM(_ responses: [SequencedURLProtocol.Response]) -> EmergencyInfoViewModel {
+        EmergencyInfoViewModel(
+            homeId: "home-1",
+            api: APIClient(
+                environment: .current,
+                session: SequencedURLProtocol.makeSession(routeResponses: ["/api/homes/home-1/emergencies": responses]),
+                retryPolicy: .none
+            )
+        )
+    }
+
+    private func waitForEmergencyRequest() async {
+        for _ in 0..<200 {
+            if SequencedURLProtocol.capturedRequests.contains(where: { $0.url?.path == "/api/homes/home-1/emergencies" }) {
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Expected the original Emergency request")
+    }
+
+    private func releaseEmergencyResponse(_ gate: String) async {
+        for _ in 0..<200 {
+            if SequencedURLProtocol.release(gate) { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Expected a held Emergency response")
+    }
+
     func testLoadedResponseBucketsByCategory() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
