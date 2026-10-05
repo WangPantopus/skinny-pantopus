@@ -64,7 +64,7 @@ private const val DIVIDER_INSET_DP = 70
 @Composable
 fun SavedPlacesScreen(
     onBack: () -> Unit,
-    onExplore: () -> Unit = {},
+    onSavePlace: () -> Unit,
     onOpenMap: (latitude: Double, longitude: Double, label: String) -> Unit = { _, _, _ -> },
     viewModel: SavedPlacesViewModel = hiltViewModel(),
 ) {
@@ -110,7 +110,7 @@ fun SavedPlacesScreen(
                         onOverflow = viewModel::openActions,
                     )
                 }
-                is SavedPlacesUiState.Empty -> SavedPlacesEmpty(onExplore)
+                is SavedPlacesUiState.Empty -> SavedPlacesEmpty(onSavePlace)
                 is SavedPlacesUiState.Error -> SavedPlacesError(s.message, viewModel::refresh)
             }
         }
@@ -430,7 +430,7 @@ private fun SavedPlacesLoadingList() {
 }
 
 @Composable
-private fun SavedPlacesEmpty(onExplore: () -> Unit) {
+private fun SavedPlacesEmpty(onSavePlace: () -> Unit) {
     Column(
         modifier =
             Modifier
@@ -463,7 +463,7 @@ private fun SavedPlacesEmpty(onExplore: () -> Unit) {
         )
         Spacer(Modifier.height(Spacing.s2))
         Text(
-            text = "Save spots you visit often from Explore — your home, your go-to coffee shop, the park down the block.",
+            text = "Look up an address and save it privately. You can also save spots you visit often from Explore.",
             fontSize = 13.5.sp,
             color = PantopusColors.appTextSecondary,
             modifier = Modifier.padding(horizontal = Spacing.s2),
@@ -474,20 +474,20 @@ private fun SavedPlacesEmpty(onExplore: () -> Unit) {
                 Modifier
                     .clip(RoundedCornerShape(Radii.pill))
                     .background(PantopusColors.primary600)
-                    .clickable(onClick = onExplore)
+                    .clickable(onClick = onSavePlace)
                     .padding(horizontal = Spacing.s6, vertical = 12.dp)
-                    .testTag("savedPlaces.exploreNearbyBtn"),
+                    .testTag("savedPlaces.savePlaceBtn"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             PantopusIconImage(
-                icon = PantopusIcon.Compass,
+                icon = PantopusIcon.Bookmark,
                 contentDescription = null,
                 size = 16.dp,
                 strokeWidth = 2.4f,
                 tint = PantopusColors.appTextInverse,
             )
-            Text("Explore nearby", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appTextInverse)
+            Text("Save a place", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appTextInverse)
         }
     }
 }

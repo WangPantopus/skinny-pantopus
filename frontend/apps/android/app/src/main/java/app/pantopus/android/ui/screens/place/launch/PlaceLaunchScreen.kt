@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -75,31 +76,45 @@ fun PlaceLaunchScreen(
     onSignIn: () -> Unit,
     onCreateAccount: () -> Unit,
     viewModel: PlaceLaunchViewModel = hiltViewModel(),
+    onSavePreview: (() -> Unit)? = null,
 ) {
     val step by viewModel.step.collectAsStateWithLifecycle()
     val retrying by viewModel.loadingPreview.collectAsStateWithLifecycle()
     val browse = {
-        PlacePendingStore.clear()
-        // Launch cut #1 (Beacon): with Beacon updates hidden, sign-up lands on the app's own start.
-        if (LaunchFeatures.beacon) {
-            app.pantopus.android.core.routing.DeepLinkRouter.handle(Uri.parse("pantopus://beacons"))
+        if (onSavePreview != null) {
+            onSignIn()
+        } else {
+            PlacePendingStore.clear()
+            // Launch cut #1 (Beacon): with Beacon updates hidden, sign-up lands on the app's own start.
+            if (LaunchFeatures.beacon) {
+                app.pantopus.android.core.routing.DeepLinkRouter.handle(Uri.parse("pantopus://beacons"))
+            }
+            onCreateAccount()
         }
-        onCreateAccount()
+    }
+    val continuePreview = {
+        if (onSavePreview != null) {
+            if (viewModel.prepareForSave()) onSavePreview()
+        } else if (viewModel.prepareForAuth()) {
+            onCreateAccount()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
         when (val current = step) {
-            LaunchStep.Hero -> Hero(viewModel, onSignIn, browse)
+            LaunchStep.Hero -> Hero(viewModel, onSignIn, browse, signedInEntry = onSavePreview != null)
             is LaunchStep.Preview ->
                 PreviewBody(
                     current.preview,
-                    { if (viewModel.prepareForAuth()) onSignIn() },
-                    { if (viewModel.prepareForAuth()) onCreateAccount() },
+                    { if (onSavePreview != null || viewModel.prepareForAuth()) onSignIn() },
+                    continuePreview,
                     onBack = viewModel::backToHero,
                     onRetry = viewModel::retryPreview,
                     retrying = retrying,
+                    signedInEntry = onSavePreview != null,
                 )
-            is LaunchStep.Region -> RegionBody(current.message, browse, onBack = viewModel::backToHero)
+            is LaunchStep.Region ->
+                RegionBody(current.message, browse, onBack = viewModel::backToHero, signedInEntry = onSavePreview != null)
         }
     }
 }
@@ -110,6 +125,7 @@ private fun Hero(
     viewModel: PlaceLaunchViewModel,
     onSignIn: () -> Unit,
     onCreateAccount: () -> Unit,
+    signedInEntry: Boolean,
 ) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
@@ -138,7 +154,7 @@ private fun Hero(
                 )
             }
             Text(
-                "Sign in",
+                if (signedInEntry) "Cancel" else "Sign in",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.primary600,
@@ -164,13 +180,20 @@ private fun Hero(
                 color = PantopusColors.appText,
             )
             Text(
-                "Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account.",
+                if (signedInEntry) {
+                    "Look up an address, preview its public information, and choose whether to save it privately."
+                } else {
+                    "Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account."
+                },
                 fontSize = 15.sp,
                 lineHeight = 21.sp,
                 color = PantopusColors.appTextSecondary,
             )
 
-            error?.let { Text(it, color = PantopusColors.appTextSecondary, modifier = Modifier.testTag("place.launch.error")) }
+            error?.let {
+                Text(it, color = PantopusColors.appTextSecondary, modifier = Modifier.testTag("place.launch.error"))
+                TextButton(onClick = viewModel::retryPreview, modifier = Modifier.testTag("place.launch.retry")) { Text("Try again") }
+            }
             AddressField(query = query, onChange = viewModel::onQueryChange, onClear = { viewModel.onQueryChange("") })
 
             if (query.isNotBlank() && suggestions.isNotEmpty()) {
@@ -204,10 +227,14 @@ private fun Hero(
                 PrimaryButton(title = "See your place", isLoading = loading, isEnabled = query.isNotBlank(), onClick = {
                     viewModel.loadPreview(query)
                 }, modifier = Modifier.fillMaxWidth())
-                PrivacyProof()
+                if (signedInEntry) {
+                    Text("Only you will see this.", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
+                } else {
+                    PrivacyProof()
+                }
                 ExampleCard(modifier = Modifier.padding(top = 8.dp))
                 Text(
-                    "Just here to follow someone or browse?",
+                    if (signedInEntry) "Back to saved places" else "Just here to follow someone or browse?",
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Medium,
                     color = PantopusColors.appTextMuted,
@@ -372,6 +399,7 @@ private fun PreviewBody(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     retrying: Boolean,
+    signedInEntry: Boolean,
 ) {
     Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -408,7 +436,7 @@ private fun PreviewBody(
                     }
                 }
                 Text(
-                    "Sign in",
+                    if (signedInEntry) "Cancel" else "Sign in",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.primary600,
@@ -491,14 +519,22 @@ private fun PreviewBody(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                "Keep this address handy. Choose whether to save it privately after sign-in.",
+                if (signedInEntry) {
+                    "Keep this address handy. Choose whether to save it privately."
+                } else {
+                    "Keep this address handy. Choose whether to save it privately after sign-in."
+                },
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
             )
             PrimaryButton(title = "Continue", onClick = onCreateAccount, modifier = Modifier.fillMaxWidth())
             Text(
-                "Your preview stays on this device for up to 24 hours while you sign in.",
+                if (signedInEntry) {
+                    "Saving a place does not create or verify a Home."
+                } else {
+                    "Your preview stays on this device for up to 24 hours while you sign in."
+                },
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                 color = PantopusColors.appTextMuted,
             )
@@ -641,6 +677,7 @@ private fun RegionBody(
     message: String,
     onBrowse: () -> Unit,
     onBack: () -> Unit,
+    signedInEntry: Boolean,
 ) {
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 28.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -683,7 +720,11 @@ private fun RegionBody(
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-            PrimaryButton(title = "Follow people & places", onClick = onBrowse, modifier = Modifier.fillMaxWidth())
+            PrimaryButton(
+                title = if (signedInEntry) "Back to saved places" else "Follow people & places",
+                onClick = onBrowse,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
         Spacer(modifier = Modifier.weight(1f))
     }
