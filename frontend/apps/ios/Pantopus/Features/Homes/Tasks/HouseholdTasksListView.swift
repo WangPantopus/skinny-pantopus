@@ -17,8 +17,10 @@ struct HouseholdTasksListView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var deleteTarget: DeleteTarget?
     @State private var isVisible = false
+    private let isActive: Bool
 
-    init(viewModel: HouseholdTasksListViewModel) {
+    init(viewModel: HouseholdTasksListViewModel, isActive: Bool = true) {
+        self.isActive = isActive
         _viewModel = State(initialValue: viewModel)
     }
 
@@ -33,14 +35,18 @@ struct HouseholdTasksListView: View {
                 viewModel.suspend()
                 deleteTarget = nil
             }
+            .onChange(of: isActive) { _, active in
+                // NavigationStack can retain the list without another appearance
+                // callback. Reload from the server when Back makes it current.
+                if active { resumeCurrentScreen() } else {
+                    viewModel.suspend()
+                    deleteTarget = nil
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
-                guard isVisible else { return }
+                guard isVisible, isActive else { return }
                 if phase == .active {
-                    let revision = viewModel.activationRevision
-                    Task {
-                        guard isVisible, scenePhase == .active else { return }
-                        await viewModel.resume(ifCurrent: revision)
-                    }
+                    resumeCurrentScreen()
                 } else { viewModel.suspend()
                     deleteTarget = nil
                 }
@@ -79,6 +85,14 @@ struct HouseholdTasksListView: View {
             } message: {
                 Text(viewModel.actionError ?? "")
             }
+    }
+
+    private func resumeCurrentScreen() {
+        let revision = viewModel.activationRevision
+        Task {
+            guard isActive, scenePhase == .active else { return }
+            await viewModel.resume(ifCurrent: revision)
+        }
     }
 
     private func handle(_ event: HouseholdTasksListEvent?) {

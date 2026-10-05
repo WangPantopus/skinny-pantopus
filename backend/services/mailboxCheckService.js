@@ -50,13 +50,13 @@ function dpvFinding(dpv) {
 
 /**
  * Compose the diagnostic for a home from its stored HomeAddress
- * validation + the caller's occupancy (the physical leg).
+ * validation + the caller's recorded postcard (the physical leg).
  * @returns {Promise<object|null>} null when the home doesn't exist.
  */
-async function getMailboxCheck({ homeId, occupancy }) {
+async function getMailboxCheck({ homeId, userId }) {
   const { data: home, error: homeErr } = await supabaseAdmin
     .from('Home')
-    .select('id, address, address2, city, state, zipcode, address_id, address_hash')
+    .select('id, address, address2, city, state, zipcode, country, address_id, address_hash')
     .eq('id', homeId)
     .maybeSingle();
   if (homeErr || !home) return null;
@@ -104,27 +104,58 @@ async function getMailboxCheck({ homeId, occupancy }) {
       'USPS expects a unit/secondary number at this address. If deliveries go missing, make sure every service has your exact unit.'));
   }
 
-  // The physical leg — the postcard IS the end-to-end test.
-  const verification = occupancy && occupancy.verification_status;
-  let physical;
-  if (verification === 'verified') {
+  // Household approval and legacy/address verification can all grant access
+  // without a postcard. Read the same latest per-caller record used by the
+  // postal status flow; never infer delivery from HomeOccupancy.
+  if (!userId) throw new Error('A caller is required for the mailbox check.');
+  const { data: postcard, error: postcardError } = await supabaseAdmin
+    .from('HomePostcardCode')
+    .select('status, verified_at, expires_at, dispatch_status, vendor_job_id, destination')
+    .eq('home_id', homeId)
+    .eq('user_id', userId)
+    .order('requested_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (postcardError) throw new Error('Could not read postcard verification.');
+
+  // Preserve the existing postal flow's exact destination binding. Historical
+  // cards without a destination cannot prove the Home's current address.
+  const matchesAddress = postcard?.destination && (home.country || 'US') === 'US'
+    && ['address', 'address2', 'city', 'state', 'zipcode']
+      .every(key => (postcard.destination[key] ?? null) === (home[key] ?? null));
+  let physical = {
+    status: 'not_run',
+    title: 'No postcard verification on file',
+    detail: 'No completed postcard verification is recorded for your account at this address.',
+  };
+  if (matchesAddress && postcard.status === 'verified' && Number.isFinite(Date.parse(postcard.verified_at))) {
     physical = {
       status: 'proven',
-      title: 'Mail physically reaches this mailbox',
-      detail: 'A Pantopus verification postcard was delivered here and its code entered — the end-to-end proof that real mail arrives.',
+      title: 'Postcard verification recorded',
+      detail: 'A verification postcard sent to this address had its code confirmed for your account.',
     };
-  } else if (verification === 'pending') {
-    physical = {
-      status: 'in_progress',
-      title: 'The physical test is in the mail',
-      detail: 'Your verification postcard is the real-world leg of this check: when its code arrives, you’ll have proven the mailbox works.',
-    };
-  } else {
-    physical = {
-      status: 'not_run',
-      title: 'The physical test hasn’t run',
-      detail: 'Verifying your address mails a real postcard here — the definitive test that mail reaches this box, and it unlocks your verified badge.',
-    };
+  } else if (matchesAddress && postcard.status === 'pending'
+    && Date.parse(postcard.expires_at) > Date.now() && postcard.dispatch_status !== 'rejected') {
+    if (postcard.dispatch_status === 'accepted' && postcard.vendor_job_id) {
+      physical = {
+        status: 'in_progress',
+        title: 'Verification postcard accepted for mailing',
+        detail: 'The mail provider accepted your postcard. Delivery and code confirmation are still unverified.',
+      };
+    } else if (postcard.dispatch_status === 'pending') {
+      physical = {
+        status: 'in_progress',
+        title: 'Your postcard request is saved',
+        detail: 'Mailing has not been confirmed. Check your postcard status before requesting another card.',
+      };
+    } else {
+      physical = {
+        status: 'in_progress',
+        title: 'Postcard delivery is unconfirmed',
+        detail: 'Your postcard request is recorded, but delivery is not confirmed. You can enter its code if it arrives.',
+      };
+    }
   }
 
   const worst = findings.reduce((acc, f) => (SEVERITY_RANK[f.severity] > SEVERITY_RANK[acc] ? f.severity : acc), 'ok');

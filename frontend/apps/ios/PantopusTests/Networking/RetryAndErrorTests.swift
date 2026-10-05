@@ -139,4 +139,50 @@ final class RetryAndErrorTests: XCTestCase {
         XCTAssertGreaterThan(d2, 0.6)
         XCTAssertLessThan(d2, 1.2)
     }
+
+    func testMailboxReadReplacesAndRemovesCachedPostalProof() async throws {
+        SequencedURLProtocol.reset()
+        defer { SequencedURLProtocol.reset() }
+        let cache = URLCache(memoryCapacity: 1_000_000, diskCapacity: 0, diskPath: nil)
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [SequencedURLProtocol.self]
+        config.urlCache = cache
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let environment = AppEnvironment.current
+        let url = environment.apiBaseURL.appendingPathComponent("/api/homes/mailbox-test/mailbox-check")
+        let oldRequest = URLRequest(url: url)
+        let oldResponse = try XCTUnwrap(HTTPURLResponse(
+            url: url,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Cache-Control": "max-age=3600"]
+        ))
+        let oldBody = """
+        {"check":{"verdict":"unknown","findings":[],
+          "physical":{"status":"proven","title":"Old proof","detail":"Old claim"},"checked_at":null}}
+        """
+        cache.storeCachedResponse(CachedURLResponse(response: oldResponse, data: Data(oldBody.utf8)), for: oldRequest)
+        XCTAssertNotNil(cache.cachedResponse(for: oldRequest))
+        SequencedURLProtocol.sequence = [
+            .status(
+                200,
+                body: """
+                {"check":{"verdict":"unknown","findings":[],
+                  "physical":{"status":"not_run","title":"No postcard verification on file","detail":"No recorded proof"},
+                  "checked_at":null}}
+                """,
+                headers: ["Cache-Control": "private, no-store"]
+            )
+        ]
+        let api = APIClient(environment: environment, session: session, retryPolicy: .none)
+        let viewModel = PlaceMailboxCheckViewModel(homeId: "mailbox-test", api: api)
+        await viewModel.load()
+        guard case let .loaded(check) = viewModel.state else { return XCTFail("Expected a fresh mailbox result") }
+        XCTAssertEqual(check.physical.status, .notRun)
+        let request = try XCTUnwrap(SequencedURLProtocol.capturedRequests.last)
+        XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Cache-Control"), "no-cache, no-store")
+        XCTAssertNil(cache.cachedResponse(for: oldRequest))
+    }
 }

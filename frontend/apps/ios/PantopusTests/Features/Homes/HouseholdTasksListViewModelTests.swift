@@ -15,6 +15,7 @@
 //    - optimistic toggleDone() roll-back on failure
 //
 
+import SwiftUI
 import XCTest
 @testable import Pantopus
 
@@ -362,6 +363,82 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
 
 extension HouseholdTasksListViewModelTests {
     // MARK: - Current access and projection
+
+    func testDetailMountKeepsReadAliveAcrossLoadingAndContentChanges() async throws {
+        let home = "10000000-0000-4000-8000-000000000001"
+        let actor = "10000000-0000-4000-8000-000000000002"
+        let task = "10000000-0000-4000-8000-000000000101"
+        let body = """
+        {"task":{"id":"\(task)","home_id":"\(home)","task_type":"chore","title":"Exact saved task",
+        "status":"open","capabilities":{"can_edit":true,"can_complete":true,"can_delete":true,"can_upload":false}},
+        "task_session":{"home_id":"\(home)","actor_id":"\(actor)","session_scope":"\(String(repeating: "a", count: 64))"}}
+        """
+        SequencedURLProtocol.sequence = [.status(200, body: body, gate: "detail-render")]
+        let access = HomeTaskAccess(homeId: home, api: makeAPI(), actorId: actor) { "hosted-detail-session" }
+        let vm = HouseholdTaskDetailViewModel(homeId: home, taskId: task, access: access)
+        let host = UIHostingController(rootView: NavigationStack {
+            HouseholdTaskDetailView(homeId: home, taskId: task, viewModel: vm)
+        })
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        for _ in 0..<100 {
+            if !SequencedURLProtocol.capturedRequests.isEmpty { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        // Keep the response pending while SwiftUI renders its loading branch.
+        try await Task.sleep(for: .milliseconds(100))
+        host.view.layoutIfNeeded()
+        XCTAssertTrue(SequencedURLProtocol.release("detail-render"), "Rendering loading must not cancel the read")
+        for _ in 0..<100 {
+            if vm.task != nil || vm.error != nil { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(vm.task?.id, task, "Rendering content must not suspend the detail model")
+        XCTAssertNil(vm.error)
+        XCTAssertFalse(vm.loading)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET"])
+    }
+
+    func testNavigationReturnReloadsEditedDueDateAndCompletedStatus() async throws {
+        let taskId = "10000000-0000-4000-8000-000000000101"
+        let due = "2026-05-16T16:00:00Z"
+        let record = """
+        "id":"\(taskId)","home_id":"10000000-0000-4000-8000-000000000001",
+        "task_type":"chore","title":"Vacuum","created_by":"u"
+        """
+        SequencedURLProtocol.sequence = [
+            .status(200, body: "{\"tasks\":[{\(record),\"status\":\"open\"}]}"),
+            .status(200, body: "{\"tasks\":[{\(record),\"status\":\"open\",\"due_at\":\"\(due)\"}]}"),
+            .status(200, body: """
+            {"tasks":[{\(record),"status":"done","due_at":"\(due)","completed_at":"2026-05-15T12:00:00Z"}]}
+            """)
+        ]
+        let vm = makeVM()
+        await vm.load()
+        guard case let .loaded(before, _) = vm.state else { return XCTFail("Expected initial task") }
+        XCTAssertEqual(try XCTUnwrap(before.first?.rows.first).subtitle, "Unassigned")
+
+        vm.suspend() // The detail/editor covers the retained list.
+        await vm.resume(ifCurrent: vm.activationRevision) // Back makes its route active.
+        guard case let .loaded(edited, _) = vm.state else { return XCTFail("Expected edited task") }
+        let expected = HouseholdTasksListViewModel.project(task: makeTask(dueAt: due), now: Self.fixedNow)
+        XCTAssertEqual(try XCTUnwrap(edited.first?.rows.first).subtitle, expected.subtitle)
+        XCTAssertNotEqual(expected.subtitle, "Unassigned")
+
+        vm.suspend()
+        await vm.resume(ifCurrent: vm.activationRevision)
+        guard case .empty = vm.state else { return XCTFail("Completed task must leave Active") }
+        vm.selectedTab = HouseholdTasksTab.done.rawValue
+        guard case let .loaded(done, _) = vm.state else { return XCTFail("Completed task must enter Done") }
+        XCTAssertEqual(done.first?.rows.map(\.id), [taskId])
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "GET", "GET"])
+    }
 
     func testFailedCurrentAccessClearsTaskSnapshot() async {
         SequencedURLProtocol.sequence = [

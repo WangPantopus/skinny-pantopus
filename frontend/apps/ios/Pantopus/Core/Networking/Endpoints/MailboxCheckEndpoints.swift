@@ -15,6 +15,11 @@ public enum MailboxCheckEndpoints {
     /// `backend/routes/mailboxCheck.js:24`. Read-only, zero vendor
     /// calls; any home member. The physical-leg copy is per-caller.
     public static func check(homeId: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/homes/\(homeId)/mailbox-check")
+        Endpoint(
+            method: .get,
+            path: "/api/homes/\(homeId)/mailbox-check",
+            headers: ["Cache-Control": "no-cache, no-store"],
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
     }
 }

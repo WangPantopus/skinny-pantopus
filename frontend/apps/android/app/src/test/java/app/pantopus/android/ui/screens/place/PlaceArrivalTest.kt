@@ -1,7 +1,10 @@
 package app.pantopus.android.ui.screens.place
 
 import app.pantopus.android.core.routing.PlacePendingStore
+import app.pantopus.android.data.api.models.geo.GeoAutocompleteResponse
 import app.pantopus.android.data.api.models.geo.GeoSuggestion
+import app.pantopus.android.data.api.models.place.PlacePreview
+import app.pantopus.android.data.api.models.place.PlacePreviewStatus
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceResponse
@@ -13,6 +16,8 @@ import app.pantopus.android.data.auth.InMemorySharedPreferences
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.ui.screens.place.launch.LaunchStep
+import app.pantopus.android.ui.screens.place.launch.PlaceLaunchViewModel
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -107,7 +112,32 @@ class PlaceArrivalTest {
 
     @Test fun noAutomaticSaveAndFailureSurvivesRestartBeforeRetry() =
         runTest {
-            PlacePendingStore.stash(suggestion)
+            coEvery { places.publicPreview(any()) } returnsMany
+                listOf(
+                    NetworkResult.Success(PlacePreview(status = PlacePreviewStatus.READY, tier = "preview")),
+                    NetworkResult.Failure(NetworkError.Server(503, null)),
+                )
+            val launch = PlaceLaunchViewModel(places, auth)
+            coEvery { places.geoAutocomplete(any()) } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(500, null)),
+                    NetworkResult.Success(GeoAutocompleteResponse(suggestions = listOf(suggestion))),
+                )
+            launch.onQueryChange("12 Example")
+            advanceUntilIdle()
+            assertNotNull(launch.error.value)
+            assertTrue(launch.suggestions.value.isEmpty())
+            assertNull(PlacePendingStore.read())
+            launch.retryPreview()
+            advanceUntilIdle()
+            assertNull(launch.error.value)
+            assertEquals(listOf(suggestion), launch.suggestions.value)
+            launch.select(suggestion)
+            advanceUntilIdle()
+            assertTrue(launch.step.value is LaunchStep.Preview)
+            assertNull(PlacePendingStore.read())
+            assertTrue(launch.prepareForSave())
+            assertEquals("a", PlacePendingStore.read()?.userId)
             coEvery { saves.save(any()) } returnsMany
                 listOf(
                     NetworkResult.Failure(NetworkError.Server(503, null)),
@@ -149,6 +179,14 @@ class PlaceArrivalTest {
 
     @Test fun changedSessionPreventsSaveAndWrongResponseKeepsDraft() =
         runTest {
+            val launch = PlaceLaunchViewModel(places, auth)
+            launch.select(suggestion)
+            signedIn.value = session("b")
+            assertFalse(launch.prepareForSave())
+            assertNull(PlacePendingStore.read())
+            assertTrue(launch.step.value is LaunchStep.Hero)
+            assertNotNull(launch.error.value)
+            signedIn.value = session("a")
             PlacePendingStore.stash(suggestion)
             coEvery { saves.save(any()) } returns NetworkResult.Success(SavedPlaceResponse(savedPlace("b")))
             val vm = model()
