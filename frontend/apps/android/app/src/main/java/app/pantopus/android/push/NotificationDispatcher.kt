@@ -275,7 +275,7 @@ class NotificationDispatcher
             routing: Routing,
             notificationId: Int,
         ) {
-            if (routing.category !in setOf("PICKUP_REMINDER", "TASK_REMINDER")) return
+            if (routing.category !in setOf("PICKUP_REMINDER", "TASK_REMINDER", "TASK_REMINDER_DONE_ONLY")) return
             val identity = runCatching { runBlocking { tokens.sessionIdentity() } }.getOrNull() ?: return
             if (identity.first != routing.recipientUserId) return
             val session = ReminderActionReceiver.sessionFingerprint(identity) ?: return
@@ -321,8 +321,10 @@ class NotificationDispatcher
                 NotificationCompat.Action.Builder(0, "Done", background(ReminderActionReceiver.TASK_DONE))
                     .setAuthenticationRequired(true).build(),
             )
-            val editRouting = routing.copy(deepLink = "/app/homes/$home/tasks/$task?edit=due_date")
-            builder.addAction(NotificationCompat.Action.Builder(0, "Not now", buildContentIntent(editRouting, session)).build())
+            if (routing.category == "TASK_REMINDER") {
+                val editRouting = routing.copy(deepLink = "/app/homes/$home/tasks/$task?edit=due_date")
+                builder.addAction(NotificationCompat.Action.Builder(0, "Not now", buildContentIntent(editRouting, session)).build())
+            }
         }
 
         private fun buildContentIntent(
