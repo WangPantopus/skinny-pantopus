@@ -1,24 +1,18 @@
-## CURRENT — mobile delivery resumed by successor — October 5, 2026
+## CURRENT — actual mobile flows and two reproduced gaps — October 5, 2026
 
-The human supplied the successor prompt in current coordinator chat
-`01a10d30-e7f5-73c2-8bc1-415b67568ce1`. Outgoing chats remain stopped. Root
-reuses product checkout `s1-pilot-contracts`, branch
-`codex/s1-pilot-products-20261004-r2`, now pushed at `47d5072a3` in draft
-[PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533). The focused
-mobile repairs from all seven owners are integrated. Android `b52644546` builds,
-its arrival golden is visually reviewed, retry golden is unchanged, and 19
-focused Today/Emergency regressions pass. The later Android guard factoring
-preserves the same conditions. Signed iOS `8b4c79afa` is building (only the Android
-golden was committed afterward). Required current CI/native acceptance remain
-open; next sole queue360.
+Combined [PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) is clean/pushed at `47d5072a3`. Signed iOS `8b4c79afa` and Android `47d5072a3` build and are installed without data resets. Nineteen focused Android Today/Emergency tests pass; current CI Android lint/test/assemble and instrumented tests, iOS build/lint, backend/privacy and schema jobs pass. Three iOS simulator jobs remain pending. Next sole merge queue360; no merge readiness is claimed.
 
-Root holds the heavy slot `stream1: Root 01a10d30-e7f5 combined pilot build`.
-Own simulator1C8 remains Shutdown and device/runtime leases are returned.
-WP3 returned backend18143 and its lease at18:19Z after actual authenticated API
-and SQL confirmed neither retained account has a Home; no pickup data changed.
-Normal Add Home provider validation is the prerequisite; synthetic fixtures are
-only downstream test context and never proof of successful address onboarding.
-Other owners remain source/CI only; no competing local native build.
+Actual iOS9e6 saved-place Save → Today → Not now → reentry → Remove → resave → process-cold restoration passed through ordinary backend18142/SQL64554. On rebuilt iOS8b4 the curator chip is readable on one line; curator and ordinary cards/details/menu permissions were checked. The brief specifies the chip on cards only; no detail-chip or taxonomy redesign is required. Genuine provider generation remains unverified.
+
+Normal Add Home was attempted: manual address reaches Confirm2/4, then “Address verification is unavailable. Try again.” with Continue disabled. Google/Smarty validation remains unavailable. To exercise downstream household tools, Root reused the existing three-row synthetic Home/owner/occupancy fixture; it is not real-address/onboarding acceptance. Prior public/Auth rows were preserved by that transaction. Root captured iOS pristine first-use two rows, but saved pickup before Android's pristine same-Home observation; that Android boundary remains UNVERIFIED and will not be manufactured by resetting data.
+
+Rebuilt iOS now passes Home precedence over SavedPlace, automatic no-city pickup editor, Tuesday garbage plus alternating recycling save, visible first-save primer → Remind me → OS Allow, persisted rules/evening=true, editor reopen and unchanged resave without a second primer. First-use then shows only the unanswered radon question. Radon No/not sure → native Oct6 date → Add reminder created an unassigned HomeTask and showed it in the real task list/detail. The initial detail displayed Oct6 09:00; independent pre-edit SQL was not captured. Android47 restored the same Owner/Home and correctly showed only the remaining radon first-use item; its original two-row state was already missed.
+
+Actual task editing exposed a defect: choosing Oct7 stores `2026-10-07T00:00:00Z`, while iOS detail displays Oct6 17:00. Sole4-2 owns the smallest date-contract repair, coordinated with3-1. Android's retained Member has normally signed in with no Home/SavedPlace. The first-save route is circular with location declined: Today asks to claim, Explore has no area, and Pulse's area picker asks for an existing Home/SavedPlace. WP8 is tracing/reusing the existing route and repairing only a confirmed gap. These remain open, not accepted flows.
+
+Private evidence: [iOS saved-place journey](/Users/yingpengwang/.config/pantopus/stream1-mobile-delivery-20261005/ios-saved-place-journey.json), [pickup persistence](/Users/yingpengwang/.config/pantopus/stream1-mobile-delivery-20261005/ios-combined/pickup-persisted-private.json), [task after due edit](/Users/yingpengwang/.config/pantopus/stream1-mobile-delivery-20261005/ios-combined/radon-task-after-editor-private.json). Actual same-process short return wrote no new session_open; 30-minute eligibility remains unverified.
+
+Root owns ordinary backend18142 and runtime `stream4: Root 01a10d30-e7f5 mobile Today runtime`; own iOS1C8 slot1 `stream4: Root 01a10d30-e7f5 Today 1C8C7C10`; own Android5584 slot2 `stream4: Root 01a10d30-e7f5 Android 5584`, isolated ADB16438; and heavy slot `stream1: Root 01a10d30-e7f5 Android pilot journey`. The combined-build heavy lease was returned before this acquisition. Human explicitly authorized ADB/Maestro for only this Android/port. Scheduled jobs are disabled; retained DB64554 and foreign devices remain untouched. Other owners are source/CI only. Next: repair and rerun the two demonstrated flows, complete task/household actions, and finish relevant native/CI acceptance.
 
 Human-resumed successors retain their feature ownership: WP1
 `01a10d30-4867-7870-90b3-87aadb50e686` (curator/seeder); 4-1
