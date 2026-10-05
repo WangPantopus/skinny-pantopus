@@ -1229,44 +1229,48 @@ describe('Provider Orchestrator', () => {
   });
 
   test('composeDailyBriefing returns should_send=false for low signal day', async () => {
-    const result = await composeDailyBriefing(MOCK_USER_ID);
-    // With good AQI, no alerts, calm weather, empty internal — likely low signal
-    // The seasonal tip alone scores ~0.22 which might be above 0.20 threshold
-    expect(typeof result.should_send).toBe('boolean');
-    expect(result.location_geohash).toBeTruthy();
-    expect(typeof result.mode).toBe('string');
-    expect(result.signals_snapshot.length).toBeLessThanOrEqual(1);
-    const billContext = { ...MOCK_INTERNAL_EMPTY, bills_due: [{ id: 'bill', provider_name: 'Private finance provider', amount: 144.72,
-      due_date: new Date(Date.now() + 86400000).toISOString(), status: 'due' }] };
-    const collector = require('../services/context/internalContextCollector').collectInternalContext;
-    const weather = require('../services/context/weatherProvider').fetchWeather;
-    for (const kind of ['morning', 'evening']) {
-      for (const privateContext of [billContext,
-        { ...MOCK_INTERNAL_EMPTY, tasks_due: [{ id: 'task', title: 'Private household task', due_at: new Date(Date.now() + 86400000).toISOString(), priority: 'high', status: 'open' }] },
-        { ...MOCK_INTERNAL_EMPTY, calendar_events: [{ id: 'event', title: 'Private household event', start_at: new Date(Date.now() + (kind === 'morning' ? 3600000 : 86400000)).toISOString(), event_type: 'appointment' }] },
-      ]) {
-      let release;
-      weather.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
-      collector.mockClear();
-      collector.mockResolvedValueOnce(privateContext).mockResolvedValue(MOCK_INTERNAL_EMPTY);
-      const pending = composeScheduledBriefing(MOCK_USER_ID, { kind });
-      await Promise.resolve();
-      expect(collector).toHaveBeenCalledTimes(1);
-      release(MOCK_WEATHER);
-      const revoked = await pending;
-      expect(revoked.signals_snapshot.some(signal => ['bill_due', 'task_due', 'calendar'].includes(signal.kind))).toBe(false);
-      expect(JSON.stringify(revoked)).not.toContain('Private');
-      }
-    }
-    // The real template composer is async too. Hold its return to exercise
-    // the final finance guard after composition without invoking a provider.
-    const compose = jest.fn();
-    jest.doMock('../services/context/briefingComposer', () => ({
-      composeTemplate: jest.requireActual('../services/context/briefingComposer').composeTemplate,
-      composeBriefing: compose,
-    }));
-    jest.resetModules();
+    // The evening calendar guard requires a tomorrow-morning event. Keep
+    // its relative fixture eligible even when CI runs after noon Pacific.
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-05T16:00:00Z')); // 09:00 America/Los_Angeles
     try {
+      const result = await composeDailyBriefing(MOCK_USER_ID);
+      // With good AQI, no alerts, calm weather, empty internal — likely low signal
+      // The seasonal tip alone scores ~0.22 which might be above 0.20 threshold
+      expect(typeof result.should_send).toBe('boolean');
+      expect(result.location_geohash).toBeTruthy();
+      expect(typeof result.mode).toBe('string');
+      expect(result.signals_snapshot.length).toBeLessThanOrEqual(1);
+      const billContext = { ...MOCK_INTERNAL_EMPTY, bills_due: [{ id: 'bill', provider_name: 'Private finance provider', amount: 144.72,
+        due_date: new Date(Date.now() + 86400000).toISOString(), status: 'due' }] };
+      const collector = require('../services/context/internalContextCollector').collectInternalContext;
+      const weather = require('../services/context/weatherProvider').fetchWeather;
+      for (const kind of ['morning', 'evening']) {
+        for (const privateContext of [billContext,
+          { ...MOCK_INTERNAL_EMPTY, tasks_due: [{ id: 'task', title: 'Private household task', due_at: new Date(Date.now() + 86400000).toISOString(), priority: 'high', status: 'open' }] },
+          { ...MOCK_INTERNAL_EMPTY, calendar_events: [{ id: 'event', title: 'Private household event', start_at: new Date(Date.now() + (kind === 'morning' ? 3600000 : 86400000)).toISOString(), event_type: 'appointment' }] },
+        ]) {
+        let release;
+        weather.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+        collector.mockClear();
+        collector.mockResolvedValueOnce(privateContext).mockResolvedValue(MOCK_INTERNAL_EMPTY);
+        const pending = composeScheduledBriefing(MOCK_USER_ID, { kind });
+        await Promise.resolve();
+        expect(collector).toHaveBeenCalledTimes(1);
+        release(MOCK_WEATHER);
+        const revoked = await pending;
+        expect(revoked.signals_snapshot.some(signal => ['bill_due', 'task_due', 'calendar'].includes(signal.kind))).toBe(false);
+        expect(JSON.stringify(revoked)).not.toContain('Private');
+        }
+      }
+      // The real template composer is async too. Hold its return to exercise
+      // the final finance guard after composition without invoking a provider.
+      const compose = jest.fn();
+      jest.doMock('../services/context/briefingComposer', () => ({
+        composeTemplate: jest.requireActual('../services/context/briefingComposer').composeTemplate,
+        composeBriefing: compose,
+      }));
+      jest.resetModules();
       const current = require('../services/context/providerOrchestrator');
       const currentCollector = require('../services/context/internalContextCollector').collectInternalContext;
       require('../services/context/weatherProvider').fetchWeather.mockResolvedValue({ ...MOCK_WEATHER,
@@ -1288,7 +1292,10 @@ describe('Provider Orchestrator', () => {
         await expect(pending).rejects.toMatchObject({ code: 'HOME_LIST_ACCESS_CHANGED' });
         }
       }
-    } finally { jest.dontMock('../services/context/briefingComposer'); }
+    } finally {
+      jest.dontMock('../services/context/briefingComposer');
+      jest.useRealTimers();
+    }
   });
 
   test('composeDailyBriefing returns no_location skip when location unavailable', async () => {
