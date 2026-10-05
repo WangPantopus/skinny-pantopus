@@ -16,6 +16,8 @@ final class HouseholdTaskDetailViewModel {
     private var generation = 0
     private var visible = false
     private var pendingReload = false
+    private var mountedViews = Set<UUID>()
+    private var readTask: (revision: Int, task: Task<Void, Never>)?
     #if DEBUG
     private static let lifecycleLogger = Logger(subsystem: "app.pantopus", category: "HomeTaskDetailLifecycle")
     #endif
@@ -34,6 +36,26 @@ final class HouseholdTaskDetailViewModel {
         generation
     }
 
+    func attachView() -> UUID {
+        let owner = UUID()
+        mountedViews.insert(owner)
+        traceLifecycle("view.owner.attach")
+        return owner
+    }
+
+    /// A replacement can temporarily mount two copies sharing this model.
+    /// Only the last departure ends the screen's authority and pending read.
+    @discardableResult
+    func detachView(_ owner: UUID) -> Bool {
+        guard mountedViews.remove(owner) != nil else { return false }
+        guard mountedViews.isEmpty else {
+            traceLifecycle("view.owner.retained")
+            return false
+        }
+        suspend()
+        return true
+    }
+
     func resume(ifCurrent revision: Int) async {
         traceLifecycle("resume", expectedRevision: revision)
         guard revision == generation else { return }
@@ -44,6 +66,11 @@ final class HouseholdTaskDetailViewModel {
         traceLifecycle("load.enter")
         defer { traceLifecycle("load.exit") }
         guard !Task.isCancelled else { return }
+        if let readTask {
+            traceLifecycle("load.join", expectedRevision: readTask.revision)
+            await readTask.task.value
+            return
+        }
         visible = true
         if acting { pendingReload = true
             return
@@ -53,6 +80,18 @@ final class HouseholdTaskDetailViewModel {
         loading = true
         task = nil
         error = nil
+        // The model owns this read. Canceling one view-bound waiter must not
+        // cancel the read still needed by another mounted copy.
+        let operation = Task { [weak self] in
+            guard let self else { return }
+            await fetch(revision: revision)
+            if readTask?.revision == revision { readTask = nil }
+        }
+        readTask = (revision, operation)
+        await operation.value
+    }
+
+    private func fetch(revision: Int) async {
         traceLifecycle("load.read", expectedRevision: revision)
         do {
             let current = try await access.detail(taskId: taskId)
@@ -127,6 +166,8 @@ final class HouseholdTaskDetailViewModel {
         visible = false
         generation += 1
         access.invalidatePending()
+        readTask?.task.cancel()
+        readTask = nil
         task = nil
         loading = false
         traceLifecycle("suspend")
@@ -136,6 +177,8 @@ final class HouseholdTaskDetailViewModel {
         visible = false
         generation += 1
         access.retire()
+        readTask?.task.cancel()
+        readTask = nil
         task = nil
         loading = false
         error = HomeTaskAccess.AccessError.changed.localizedDescription

@@ -41,7 +41,7 @@ final class HomeTaskNotificationRoutingTests: XCTestCase {
         let vm = HouseholdTaskDetailViewModel(homeId: home, taskId: task, access: access)
         let host = UIHostingController(rootView: NavigationStack {
             HouseholdTaskDetailView(homeId: home, taskId: task, viewModel: vm)
-        })
+        }.environment(\.scenePhase, .active))
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = host
         window.makeKeyAndVisible()
@@ -131,6 +131,57 @@ final class HomeTaskNotificationRoutingTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         return condition()
+    }
+
+    func testDepartingCopyAndCanceledWaiterKeepSurvivingDetailRead() async throws {
+        let harness = TaskCreationNavigationModel()
+        let model = harness.makeDetail()
+        let firstOwner = model.attachView()
+        let secondOwner = model.attachView()
+        let first = Task { await model.load() }
+        guard try await waitFor({ !SequencedURLProtocol.capturedRequests.isEmpty }) else {
+            return XCTFail("Read did not start")
+        }
+        var secondStarted = false
+        let second = Task {
+            secondStarted = true
+            await model.load()
+        }
+        guard try await waitFor({ secondStarted }) else { return XCTFail("Second waiter did not start") }
+        second.cancel()
+        XCTAssertFalse(model.detachView(secondOwner))
+        XCTAssertTrue(SequencedURLProtocol.release("created-detail"))
+        await first.value
+        await second.value
+        XCTAssertEqual(model.task?.id, harness.task)
+        XCTAssertNil(model.error)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET"])
+        XCTAssertTrue(model.detachView(firstOwner))
+        XCTAssertNil(model.task)
+        XCTAssertFalse(model.loading)
+    }
+
+    func testLastDepartureBackgroundAndRetirementDiscardPendingDetail() async throws {
+        for boundary in ["departure", "background", "retirement"] {
+            SequencedURLProtocol.reset()
+            let harness = TaskCreationNavigationModel()
+            let model = harness.makeDetail()
+            let owner = model.attachView()
+            let read = Task { await model.load() }
+            guard try await waitFor({ !SequencedURLProtocol.capturedRequests.isEmpty }) else {
+                return XCTFail("Read did not start")
+            }
+            switch boundary {
+            case "departure": XCTAssertTrue(model.detachView(owner))
+            case "background": model.suspend()
+            default: model.retire()
+            }
+            SequencedURLProtocol.release("created-detail")
+            await read.value
+            XCTAssertNil(model.task, boundary)
+            XCTAssertFalse(model.loading, boundary)
+            XCTAssertEqual(model.isCurrent, boundary != "retirement")
+        }
     }
 
     private func navigationController(in controller: UIViewController) -> UINavigationController? {
@@ -320,7 +371,6 @@ private struct TaskCreationNavigationView: View {
             )
         case .householdTaskDetail:
             HouseholdTaskDetailView(homeId: model.home, taskId: model.task, viewModel: model.makeDetail())
-                .id(route)
         default:
             EmptyView()
         }

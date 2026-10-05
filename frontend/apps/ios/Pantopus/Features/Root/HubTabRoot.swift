@@ -1969,7 +1969,6 @@ public struct HubTabRoot: View {
             HouseholdTaskDetailView(homeId: homeId, taskId: taskId) {
                 push(.editHouseholdTask(homeId: homeId, taskId: taskId))
             }
-            .id(route)
         case let .addHouseholdTask(homeId):
             AddHouseholdTaskFormView(
                 homeId: homeId,
