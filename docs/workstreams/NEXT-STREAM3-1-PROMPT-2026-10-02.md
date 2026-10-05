@@ -1,145 +1,89 @@
 # Successor prompt — Stream 3-1: Home access, residency and ownership
 
-Handoff: October 5, 2026. The human explicitly stopped this session. This prompt supersedes the older operational instructions in this file's Git history.
+Handoff updated October 5, 2026 (America/Los_Angeles). This is the current copyable prompt. It supersedes earlier STOP/resume instructions and stale CI/resource snapshots in this file's Git history. The previous session's zero-delivery accounting is historical; the session being handed off here delivered the application repairs below. The outgoing turn is documentation only; the human starts the next chat.
 
-## Latest human direction — highest priority
+## Your assignment
 
-**Latest explicit handoff correction:** The human's assessment of this session is: **“you delivered shit.”** Carry that assessment honestly: this successor session delivered zero new application-code changes or user-facing features. Do not present its verification records as product delivery.
+You are Stream 3-1, not coordinator Root. Continue until every currently authorized item belonging to this stream is completed or explicitly recorded with its remaining external prerequisite. Build and finish working mobile functions and flows from `NEXT_STEPS.md`, then continue the inherited Home backlog. Use GPT-6 Astra / Extra High, one main agent, no subagents. Do not create a successor chat or automation yourself.
 
-The next agent must deliver its best work through concrete, working new features, functions and flows in **`NEXT_STEPS.md`**. Follow the repository's actual designs in **`./docs/design/exports/`**: inspect the relevant exported designs before implementation and use them for the intended appearance, interaction and navigation. These feature deliverables are **mobile only: iOS and Android**. Do not build web versions or expand into web UI work. Shared backend/API/database changes are appropriate only where needed to support those mobile features, while preserving existing compatibility and reusing completed branch work.
+New feature work is iOS and Android only. Supporting backend/API/database changes are allowed where needed; preserve web compatibility without building web features. Read the applicable repository designs in `docs/design/exports/` before changing an application screen. Preserve working layouts, styling and navigation. Reproduce a failure or identify a concrete unmet requirement before a minimal repair. Reuse existing code and open PRs, integrate ready work through Root first, and do not confuse an unchecked acceptance item with missing implementation. Do not replace product delivery with harness reviews, hash campaigns or repeated accepted journeys.
 
-Deliver complete mobile flows, not another evidence campaign. Reuse existing implementations, finish real gaps, validate the changed behavior on both mobile platforms when available, and report actual product outcomes and any remaining limits. This latest direction governs any broader platform references in inherited history below.
+Own H01–H08 and R01–R05, related U02–U04, U01 preservation, and the combined Stream 3 U05 contribution. Current inherited count remains eight closed and five partial (H07/H08/R03/R04/R05) out of thirteen; it is not WP6/pilot completion. Preserve H01–H06/R01/R02 and the accepted UX cases S2-01/06/10/17/23. Root owns integration, shared documentation, runtime/devices/heavy builds and the sole merge queue. 3-2 owns security/privacy/guest/credential flows; 4-1 owns Place/Today/HomeTask models and callers; 4-2 owns notification/lifecycle routing. Get an exact writer grant for shared files and coordinate only necessary dependencies.
 
-Use **GPT-6 Astra / Extra High**, one main agent, no subagents. The human will start the successor chat; do not create one yourself.
+## Read once, selectively
 
-The outgoing session spent too much effort reviewing verification machinery and delivered no new user-facing features in its final review phase. The human explicitly requires the next session to **BUILD and finish the new features, functions and flows in the repository's `NEXT_STEPS.md`**. Make concrete product progress. Do not resume the sequence of harness reviews, hash checks, evidence repackaging or repeated failed journeys as the default task.
+1. Applicable `AGENTS.md` and `docs/PROJECT_HANDOFF.md`; refresh actual Git/PR/CI state before relying on recorded hashes.
+2. Live guide and handoff in `/Users/yingpengwang/pantopus-coordination`, branch `codex/workstream-coordination`: `docs/workstreams/README.md` and `docs/PROJECT_HANDOFF.md`. Source-checkout copies are older snapshots.
+3. [Current stream status and detailed evidence](03-1-home-access-ownership.md), especially its top handoff block, and [ownership/action boundaries](03-stream3-split-2026-10-02.md).
+4. The current source checkout's `NEXT_STEPS.md` and `docs/mobile-pilot-build-brief-2026-10-03.md` §§8,11,12,15. Root is the sole shared checklist writer. His new completed WP6 substeps do not close the parent package.
+5. Only the specific next row/cell in [the existing parent ledger](03-home-access-residency.md). Do not reread all archived operational history or create a duplicate tracker.
 
-Also preserve the human's earlier requirement: inspect and reuse existing branch/PR implementations, integrate ready existing work into master through the coordinator first, and avoid duplicate work. An open acceptance row does not mean its implementation is missing. If code already exists, finish its missing integration or flow instead of rebuilding it; if no implementation work remains on that item, advance to the next active NEXT STEPS feature within this stream.
+Design references already inspected for this work include `docs/design/exports/f3b-invitation-decision/f3b-invitation-decision.html` and `docs/design/exports/00a/foundations-00a/`. The brief authorizes invitation copy changes; the invitation/roster/locked-row redesigns remain deferred.
 
-The current STOP means this outgoing agent does no more product, runtime, source, audit, test or merge work. It is saving/pushing this handoff only. The successor resumes when the human starts it with this prompt.
+## Current Git and PR state
 
-## Accountability for the outgoing session
+Freshly verified October 5 before this documentation publication:
 
-Application-code changes completed in this successor session: **zero**. New user-facing features completed: **zero**. Feature acceptance rows closed: **zero**. WP6/PR1516 and the other existing application repairs were inherited work, not new output from this review session.
+| Item | Exact state and next use |
+|---|---|
+| Own source checkout | `/Users/yingpengwang/.codex/worktrees/b3c1/skinny-pantopus`, clean/pushed `codex/stream3-1-task-list-return`, `dd9e594f7a2b9e73c5a72974a7f41b5371d3ad26`. It is an older topic base, not the latest combined source. |
+| Root integration | `/Users/yingpengwang/.codex/worktrees/s1-pilot-contracts/skinny-pantopus`, Root-owned `codex/s1-pilot-products-20261004-r2`, `74327981051c1fd19393f3f2d2534b0003e421cb`; [PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) OPEN/DRAFT. All16 current required checks SUCCESS in [CI37375810539](https://github.com/WangPantopus/skinny-pantopus/actions/runs/37375810539). No merge. Read-only to this stream. |
+| Remote master | `d8c9fb1c803e714a48b8745faa36951b8be10193`, batch359. Sole next queue360, Root-owned; refresh before use. |
+| [PR1516](https://github.com/WangPantopus/skinny-pantopus/pull/1516) | Household provenance/F3b, `7fd2e5b4d542b8c1afec9ca1d2cbff7a2244e6b1`, branch `claude/stream3-home-31-pilot-household`; draft,13 success/3 configured skips. Already integrated1533. Do not rebuild it. |
+| [PR1536](https://github.com/WangPantopus/skinny-pantopus/pull/1536) | iOS task completion, `57686669b191c41f2166e4c64d8992c5d5311c77`, branch `codex/stream3-1-task-detail-completion`; draft,9 success/6 configured skips, stacked on1533 and integrated there. |
+| [PR1543](https://github.com/WangPantopus/skinny-pantopus/pull/1543) | iOS task arrival/list refresh, current own `dd9e594f7`; draft, stacked on1533, integrated there. Its standalone rollup is empty; final combined743 CI is green. Do not invent a standalone run or re-cherry-pick identical code. |
+| [PR1500](https://github.com/WangPantopus/skinny-pantopus/pull/1500) | Existing native ownership Waiting Room dates, `c3a90c5c94631ccf154ca66414d9fc6fef22f073`, branch `claude/stream3-home-31-ownership-timeline`; draft,11 success/5 configured skips. Not in1533; two-platform native AFTER still pending. Reuse this repair. |
 
-The session actually audited existing PR/branch reuse, reviewed WP1 query reuse and shared task/notification/timezone source contracts, inspected repeated iOS/Android failed-run and resource-return records, checked saved event/hash/process/database joins, wrote private intake receipts, sent coordination messages, and committed/pushed status and successor documentation. These are verification/support outputs, not shipped features.
+All four own PRs remain open/draft; no code was merged by this stream. Root decides how integrated topic PRs are dispositioned after review/merge. Current CI is no longer blocked: earlier86ca never acquired a hosted runner; cf039 later exposed a timing-dependent existing backend test. 4-1's test-only clock repair became743279810 and all16 checks passed. Do not repeat either stale failure as current or change application behavior for it.
 
-Root assigned finite evidence/source reviews and retained exclusive runtime ownership. Harness failures, resource-return errors and sequential runtime windows created repeated review work. Those coordination choices explain the assignments but do not justify this stream's lack of product progress. This agent kept accepting and expanding that loop, used overly detailed checks/output/documentation, and failed to redirect or escalate the absence of feature delivery early enough. Missing Google/Smarty keys block real address-provider checks only; they did not prevent independent implementation. No policy required this volume of repeated process work.
+## Product work completed in this session
 
-The human reports22,000 credits consumed. There is no per-stream credit ledger in the available records, so this handoff cannot assign an exact share or invent a cost/time breakdown. The successor should spend effort on the first concrete unfinished NEXT_STEPS function/flow, reuse the existing1516 code, and restrict verification to what is necessary to deliver that changed behavior.
+- **iOS completion:** existing `HouseholdTaskDetailView` now exposes Mark done/Mark not done under `canComplete`. Its existing model serializes completion through `HomeTaskAccess.complete`, rechecks current authority and displays the server result. Complete-only assignees do not need edit permission. Existing HomeTaskAccessTests cover permission loss, duplicate taps, suspension and lost responses. PR1536; real retained owner radon task reached Done, and its completed state must be preserved.
+- **List return:** Root's actual edit/completion showed stale Active/Done rows after Back. `bff950b78777b585f7f3e415c7053f382e1994a8` passes current-route state from the two granted Hub/You constructors into the existing list; it reloads when current and suspends when covered. Actual iOS edit→Save→Back showed the new assignment/due date; after Android member completion, Active/Done immediately reflected it without refresh/restart.
+- **Creation arrival:** Save with the title keyboard visible persisted one task but showed unavailable. Actual and hosted traces proved duplicate mounted detail copies shared a model; outgoing disappearance invalidated the surviving copy's read. `860af2334086b149fe5d6c3ea2809bca5df082ac` gives mounted views distinct ownership and coalesces reads into one model-owned Task. One departing/canceled waiter cannot clear another mounted copy; last departure, backgrounding and access retirement still cancel/clear. The form-to-detail path is replaced atomically in existing Hub/You callbacks. Existing layout and Back behavior remain.
+- **Regression and cleanup:** the real List→Add→Save→detail test uses existing fixtures and fresh model candidates, asserts the exact task, one POST/GET and Back. Additional existing-file cases cover duplicate cancellation and final departure/background/retirement. All45 tests (30 HomeTaskAccess,15 HomeTaskNotificationRouting) passed before and after `dd9e594f7` removed temporary diagnostics. Native `73efa1266` Save-with-keyboard immediately showed the exact new task/Open/actions without Retry; Back listed it; persistence held one row. Trace-only Root cleanup `cf039ab3d` preserves that acceptance.
 
-## Your role and scope
+No new application file, screen, service, table, test framework or redesigned presentation was added for these repairs. Temporary traces are gone. Failed appearance-only, Group→ZStack and explicit route-ID candidates were removed; their evidence remains in the status history. Do not resurrect them.
 
-You are **Stream 3-1**, not coordinator Root. Own Home access, joining/admission, residency and ownership: H01–H08/R01–R05, assigned U02–U04, and the WP6 Household/F3b pilot. Review the existing WP4 task path only as necessary to finish WP6. Root coordinates shared source, exclusive resources, integration and the sole merge queue; 3-2 owns Home security/privacy; 4-1 owns Place/Today/HomeTask models and native callers; 4-2 owns lifecycle, deep links and notifications. Do not compete with those writers.
+## Reused completed WP6 work and accepted scope
 
-Read once, selectively:
+PR1516 already supplies forward `20261004104000_home_verification_source.sql`, existing occupancy-writer provenance, address-first compatibility rules, household T3/address-only gates, both native invitation copy changes, generic completion notices carrying exact `task_id`, and done-transition/repeat guards in both existing task endpoints. Local application occurred with empty occupancy: populated backfill is not proven. No migration replay or duplicate implementation is needed merely because acceptance remains open.
 
-1. Applicable `AGENTS.md`, `docs/PROJECT_HANDOFF.md`, and the repo-root **`NEXT_STEPS.md`** on the intended current development base.
-2. Live coordination: `/Users/yingpengwang/pantopus-coordination/docs/workstreams/README.md` on `codex/workstream-coordination`. Master's copy is an older snapshot.
-3. The current top of `docs/workstreams/03-1-home-access-ownership.md` and the ownership sections of `03-stream3-split-2026-10-02.md`. Detailed history stays there; do not reread the entire archive.
-4. Existing parent `03-home-access-residency.md` only for the specific acceptance/screen row being implemented. Reuse its catalogs instead of creating another tracker.
+Root actually verified: iOS owner invitation → Android member accepts → persisted `verification_source=household` → owner assigns the retained shared task → Android member completes without Edit → owner iOS detail/Active/Done updates → owner Android inbox shows “A Home task was completed” with no task detail → tapping opens the exact Done task. This is accepted bounded local behavior, using a synthetic shared Home. It is not external email/push delivery or genuine address proof, and the task was a retained household task rather than a reset of the completed radon task.
 
-Translate the active NEXT STEPS items in your scope into the first concrete missing function or unfinished user flow, reuse its existing screen/caller/API/service/database contract, and implement it. Preserve current iOS/Android/web appearance and navigation patterns. Make the smallest changes needed for the intended new behavior. Run affected checks and required CI, then verify the changed flow through its real caller/API/persistence when available. Do not build a unit-test coverage backlog or add speculative architecture, tables, services, screens or duplicate fixtures.
+3-2's bounded evidence also covers Android Member Identity letter/pass and Money Real Rent/Rate Watch locked controls. Their separate mailbox fix removes false postcard proof on iOS Owner and Android Member; native cache regressions passed. Reuse it; do not duplicate that repair. 4-2's task date fix passed iOS and Android save/reopen at09:00 local/16:00Z; do not undo it based on older YYYY-MM-DD handoff text. Notification action/delivery ownership stays4-2.
 
-## Exact resume actions
+## What remains, in order
 
-1. Read the current NEXT_STEPS feature requirements and reconcile them against PR1516 and the integrated pilot source below. Select the first actual unfinished implementation in this stream and state the user-visible outcome you will deliver. Avoid a broad audit or re-review of already accepted source.
-2. Coordinate only the necessary shared-file or runtime dependency with the current Root. Root is returning its seventeenth iOS run because of the human's stop; confirm its final disposition before any later runtime operation. No resource reservation transfers with this prompt.
-3. Finish the assigned feature/flow. WP6 source already implements household provenance, invitation copy, T3 restrictions and safe task-completion notices. Do not recreate those. Complete any concrete gaps revealed by current NEXT STEPS requirements; advance another active feature while a runtime boundary is unavailable.
-4. Reuse already prepared real-journey components when checking changed behavior. Root sequences the common saved-place prerequisites, then WP4/WP6. Do not create another controller or spend the session revising evidence wrappers. A remaining test limitation is not a reason to stop independent feature implementation.
-5. Present completed, reviewable product changes, obtain the required CI/behavior evidence, and hand ready existing PRs to Root's queue. Never call green CI alone native acceptance, and never create a replacement PR for identical code already in an open branch.
+1. **Integration first:** confirm current Root and refresh PR1533/own PR states. Offer the existing accepted1536/1543 and implemented1516 for Root's review/queue. All16 CI checks passed on743; do not impose an unrelated whole-pilot or missing-provider hold on an independently reviewable repair. Do not merge or replace Root's branch yourself.
+2. **Finish bounded WP6 mobile coverage:** reuse retained Home/member/task state for the reciprocal invited-member iOS completion path and iOS owner notification destination. Coordinate actual external invite/push/hosted delivery with Root/4-2 when services/devices exist. Reconcile existing decline/Close, permission and repeated-completion evidence first; execute only genuinely uncovered conditions. Never reset or reopen completed radon/shared tasks merely to repeat a case.
+3. **Finish F3b acceptance without rebuilding it:** retain Android locked letter/pass and Real Rent evidence. Remaining exact consumer/role combinations include native neighbor-sender denial, retained ability to receive neighbor messages, pre-existing postcard/address compatibility and all three provenance values, plus populated-backfill acceptance. Start with existing SQL/service tests and accepted receipts; Root owns any authorized isolated database check. Never rewrite/reapply applied history or infer live legacy/postcard coverage from empty application/full-schema CI.
+4. **Next independent existing repair:** PR1500 Waiting Room dates. Reuse its valid/invalid date loader tests and real two-platform BEFORE; coordinate the bounded installed iOS/Android AFTER on current compatible source, then Root can queue it. No real address-provider dependency and no new date implementation is justified.
+5. **Continue all five inherited partial rows using the existing ledger:** H07/H08 remaining invitation/admission/process/storage/verification return combinations; R03 removal/re-entry/current occupancy, old reviewer-original and pending/waiting recovery; R04 ordinary ownership claim/invite/transfer/authentication/recovery; R05 tenant/landlord request/lease/end/move-out attachment account/lifetime/provider/rollout boundaries. Preserve the twelve accepted native landlord cases. Immediate scoped leads already recorded are pending-approval A1/A4 largest-text coverage and Android AddHome selected-role semantics through a normally validated address. No claim that those leads are reproduced defects yet.
+6. Complete only the uncovered U02 accessibility, U03 failure/recovery and U04 lifecycle cells for those actual screen/action families. Reuse a single self-leave/member-removal receipt in related3-2 cells; do not duplicate commands. Supply combined U05 source/product/config/evidence limits to Root with3-2's contribution. Hosted/signing/physical-device release proof remains Root/founder-owned.
 
-## Working directories and Git state
+H07/H08/R03/R04/R05 stay partial; no whole inherited row closed this session. WP6 remains unchecked overall with completed substeps in NEXT_STEPS. Do not reopen deferred roster/invitation redesigns, permission expansion to bills/pickup, renewal, hidden member-join policy, challenge/dispute, new public voting, or flagged launch-cut features. Physical device authentication, genuine address/postal/storage/SMTP delivery and release configuration cannot be declared successful from local tests.
 
-Fresh read-only checks before the stop found:
+## Resources, preserved data and evidence
 
-| Purpose | Path / ref | State |
-|---|---|---|
-| Own WP6 code | `/Users/yingpengwang/.codex/worktrees/s3-1-pilot-household/skinny-pantopus`, `claude/stream3-home-31-pilot-household` | Clean, pushed, head `7fd2e5b4d542b8c1afec9ca1d2cbff7a2244e6b1` |
-| Root's serving pilot union | `/Users/yingpengwang/.codex/worktrees/s1-pilot-contracts/skinny-pantopus`, `codex/s1-pilot-products-20261004-r2` | Clean, pushed, head `9e6bcbb22bd1ff0126a789f71889ddbd092b7f09`; Root-owned, read-only to you |
-| Coordination | `/Users/yingpengwang/pantopus-coordination`, `codex/workstream-coordination` | Shared, peers also commit; only own status and this prompt were changed for this handoff |
-| Outgoing chat cwd | `/Users/yingpengwang/.codex/worktrees/33ca/skinny-pantopus` | Clean detached HEAD; no application work was added there |
-| Remote master | `WangPantopus/skinny-pantopus` | `d8c9fb1c803e714a48b8745faa36951b8be10193`, batch359/PR1535 |
+This stream owns zero runtime/device/build leases or operators. Root reports all its local resources returned: iOS1C8 shutdown and slot released21:13:20Z; Android5584/isolatedADB16438 returned21:31Z; backend18142 stopped, runtime lease released LAST; all callers joined/heavy free. Preserve backend caller exit1 as recorded. Retained DB64554, installed products/account data, six normal created task rows and prior Auth history remain. This report is not a transferable runtime grant; refresh Root's current reservation before any action.
 
-Refresh Git/PR metadata once at successor start. Do not pull, switch or edit the serving union during Root's operation. Preserve unrelated work; no stash/reset/force push. Continue existing branches where suitable. New branches default to `codex/`.
+Root's private evidence root is `/Users/yingpengwang/.config/pantopus/stream1-mobile-delivery-20261005` (N):
 
-Own recent coordination commits, all pushed before this final handoff update: `0b0f5ec84` WP1 query reuse, `ca19a53ab08427e08ca0c774a02051c0c2350dc2` sixteenth iOS intake, and `f88bb43f7` fifth Android intake. Find this prompt's final publication commit with `git log -1 --format=%H -- docs/workstreams/NEXT-STREAM3-1-PROMPT-2026-10-02.md`. Do not assume shared HEAD still equals your own last commit.
+- `ios-combined/radon-task-done-private.json`: owner Done/API/persistence.
+- `ios-combined/native-create-shared-read-acceptance.json`: final native creation/Back acceptance; `native-create-shared-read-task-private.json` independently has rowCount1; `native-create-shared-read-after-private.json` retains bounded lifecycle trace.
+- `ios-combined/task-final-after-result.json`: exactcf039/exit0; Root reports45/45.
+- `android-native/owner-completion-notice-private.xml` and `owner-completion-notice-task-private.xml`: generic notice/exact Done destination.
+- `ci-743-final-private.json`, `runtime-return-private.json`: current CI/return receipts. CI is independently visible at the linked run.
 
-Commit explicit owned files, preserve automatic Git identity and the established footer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, push, and tell Root the exact commit. Root owns shared README/PROJECT_HANDOFF/queue changes. No new PR is needed for this coordination-only handoff.
+The detailed stream status links older accepted evidence and failed candidate results. Inspect private files only when necessary: first keys/types, then safe aggregate fields. Never print tokens, record IDs, raw operator logs, private database rows or images. Do not rerun fingerprint campaigns or create another controller. No database reset/dump/Auth cleanup. The retained synthetic Home is not genuine address proof. Google/Smarty credentials remain missing/expired by the human's prior answer; do not ask again or treat them as a blanket blocker to other work.
 
-## Existing PRs — reuse first
+Never read/hash/compare/rewrite/reapply the BODY of applied `20260926100000`, or run/import the full migration checker; filename/blob metadata only. No `/api/b/:username`, held LegalOwnerVM, real money, general parent-account deletion or unapproved design change.
 
-The latest remote inventory had 28 open PRs. The earlier branch audit covered 126 related refs/73 heads; 69 heads were already ancestors of master. Reuse that audit unless relevant heads or behavior changed. Old local Lockdown66e02's three changed files equal merged881; do not resurrect it.
+## Coordination and publication
 
-| PR | Existing work | Last disposition and remaining gate |
-|---|---|---|
-| [1516](https://github.com/WangPantopus/skinny-pantopus/pull/1516) | Household access versus address verification; head7fd2e5b4 | Draft, mergeable, 13 SUCCESS/3 configured skips. Already integrated in1533. WP6 actual native/API/persistence and populated-backfill limits remain. |
-| [1500](https://github.com/WangPantopus/skinny-pantopus/pull/1500) | Native ownership Waiting Room dates; headc3a90c5c94631ccf154ca66414d9fc6fef22f073 | Draft, mergeable, 11 SUCCESS/5 configured skips. Targeted iOS/Android AFTERs still pending; no address-provider dependency. |
-| [1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) | Integrated pilot source; head9e6bcbb2 | Draft, mergeable, 16 SUCCESS. Real native gates remain. Reuse this union; do not rebuild its source stack. |
-| [1496](https://github.com/WangPantopus/skinny-pantopus/pull/1496) | Sibling custom guest-pass date repair; head2892b78a | Draft, mergeable, native AFTERs pending; 3-2 owns it. |
-| [1518](https://github.com/WangPantopus/skinny-pantopus/pull/1518) | Sibling Emergency privacy; head1f598539 | Draft, mergeable, already in1533; native gate pending; 3-2 owns it. |
+Current identities (refresh if successors replace them): Root `01a10d30-e7f5-73c2-8bc1-415b67568ce1`;3-2 `01a10d31-a60d-74d3-a56d-53549f1fc7c2`;4-1 `01a10d31-852a-72c0-a72d-e115491bc169`;4-2 `01a10d32-2e86-7a30-8a87-76feed6ca2c6`. Human authorization for relevant owner coordination persists. Send concise actionable results, not repeated unchanged polls. Do not use an old issuer/grant/token.
 
-PR1509/1512 are already merged via batch359/1535; 1498/1499 were merged via358. No repeat implementation or intake. Latest sole next queue is360, owned by Root. No own feature PR was merged at this handoff because its actual gates were not met; the later human STOP also precludes another merge campaign now. Do not impose an unrelated full-pilot or missing-provider hold on a genuinely ready, independently scoped PR.
+Update this stream's live status and this prompt after meaningful milestones; Root owns NEXT_STEPS, shared README/PROJECT_HANDOFF and the queue. Commit only explicit owned files, preserve unrelated work, retain Git identity and `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, push and tell Root exact commits. No force push/stash/reset. Do not copy older topic files over the combined source. Report actual behavior, tested scope and remaining gates plainly; no stale estimate or invented overall percentage.
 
-## WP6 implementation already present
-
-- Existing HomeOccupancy provenance uses forward `20261004104000_home_verification_source.sql`, SHA `743a82c017d1f67b3725b1219cd524d9fc09fb1628d5c9151cb777b35cd0e600`. Eleven existing admission/review/legacy writers are extended. Address proof wins; accepted legacy compatibility remains; fresh/default legacy cannot bypass household stamping.
-- Sender helpers look up exact Home/user occupancy before verified-owner fallback, fixing the max_rows1000 lead. Household-only status cannot satisfy address-verification gates; malformed/foreign/inactive/error reads fail closed.
-- Existing task completion paths carry generic lock-screen-safe text and exact task_id, preserve can_complete and done-transition/repeat behavior, and include Home task PUT/mailbox PATCH callers.
-- Invitation copy distinguishes household access from address proof. Household-only remains T3/BandD locked; compatible address/legacy status remains T4; denied private_setup stays T1/publicBandA. Existing visuals are preserved.
-
-Source/CI receipts in the private3-1 directory: `wp6-current-source-checks-r4.json` (102e2278), `wp6-source-checks-r1.json` (7940cf1d), `wp6-mail-owner-pagination-source-checks-r1.json`, and `wp6-place-tier-source-checks-r1.json`. 3-2 source reviewae369f56 is accepted. Do not rerun these unchanged reviews. The historical broad Place suite did not cleanly finish; do not relabel it as a success or turn it into a testing backlog.
-
-Root/3-2 recorded all six authorized local forwards181/182/101/102/103/104 as applied. Occupancy was empty at104 application, so populated backfill is unverified. Remaining concrete WP6 flow: ordinary invitation→Close without acceptance→accept membership/provenance→Home/roster/T3 restrictions→address-only denial→allowed task completion/generic notice/task_id/repeat idempotence through both native callers. Existing WP4 observer and notification callers should be reused. Current due-day wire input must remain YYYY-MM-DD; any independently expected timestamp needs an actual API transaction timezone proof, not an assumed zone.
-
-The synthetic Home SQL is prepared, not evidence of genuine address proof: private3-1 `wp6-synthetic-home-inputs-r1/synthetic-home-three-rows-r3.sql`, SHA99d188fd4fafc225f4f7d1ea68e9a9245f262192f0cc8cc03beaad46c0842814. It creates three fresh Home/owner/legacy-owner occupancy rows only, through Root after both saved-only case returns. Both first-use rows precede Pickup/Radon writes. No second fixture or synthetic-auth/destructive wrapper.
-
-## Completed review work — reuse, do not repeat
-
-These records explain the stopping point; they are not new feature completion:
-
-- **Fifth Android:** private3-1 `root-fifth-android-failed-warm-external-return-intake-r1.json`, SHA `2b3921059d6a7a4b09df9f2ff763134ec09c855dd8a10370b440a092641c00b8`,17561 B/0600. Review complete and delivered to Root; separate Root acceptance was not received before the stop. All19877 events/12faults/3258 short returns and four original long returns join. Native profile200 is narrow evidence, not full restoration/warm/case acceptance. Root's bad providerc936 had null actor despite the current native profile; valid ACKf272 covers11 earlier faults, and return failure is fault12. Separate recovery2200 completed16:55:11.322139Z with seven waited children and D/H/runtime-last0. Original caller1/fullreturnfalse remains. All353 compared:346 business unchanged; FunnelEvent2→3, prior caches3/1 and all prior Auth PK histories retained. Fresh353 PID49765 is persisted; same finalf617 reused without another scan.
-- **Sixteenth iOS:** `root-sixteenth-ios-failed-navigation-original-full-return-intake-r1.json`, SHA `8b6207cb41b32c4b03c48832d05918e251adc975f8001308b2a800ddd18df5f9`,13998 B/0600; personally accepted by Root. Restored native profile, first navigation failure, original resource return16:37:37.001936Z. Caller1/five faults remain. Only344 business tables unchanged; three normal warm tables changed. First full353 query's positivePID receipt is missing; do not fabricate it. No case/native acceptance.
-- **WP1 query reuse:** `stream1-wp1-curator-seeder-20261004/wp1-current-baseline-proof-query-reuse-SOURCE-DATA-r1.json`, SHA13bd203ce66b51d273fb13d367b19329e17ddad0ca0560a89eb2f4ef5dcd4e83/24799 B, accepted source review. Existing17dec full353 SQL can supply four database proof facets from one actual matching current result. Nine actual bindings remained null. Do not add four queries or replay retained Post producers. Public identity/rendering/auth/permissions still need their own real evidence.
-
-Other accepted Android/iOS product, installation, map, actor, source and failed-return records remain linked in the child status. Reuse accepted Android APKb3b76188/92937012 B and iOS3149 product through conserved9e6 inputs. Do not rebuild or rehash unchanged products as a handoff ritual.
-
-## Resource and coordination boundary at stop
-
-This Stream3-1 owns **zero runtime/device/heavy resources, live controllers, active leases or unfinished operators**. It performed no runtime, SQL, application change or new test/build in the final review phase. Its finite fifth Android review is complete.
-
-Root had seventeenth iOS operation `0840559c-6b71-4c76-b5ee-b481776aa434`, setup3743f4ec, unchanged commonR20, controller57368, started16:59:45Z. Only redundant warm Place navigation was removed, leaving existing Hub→Explore. On the direct human STOP, Root explicitly said it was returning this active run and would make no further attempt. **Return completion is not yet confirmed by this handoff.** Read Root's final handoff/current state before any later execution; do not probe or stop historical PIDs yourself.
-
-AndroidR13/source94906651 already has Root605fc076 and 3-2/Root-intake553651f9 source PASS. It changes only registered direct ps/lsof wait polling with bounded1ms exponential backoff/cap50ms. Actual performance/native success is unverified. Do not reopen its source review or start a sixth Android attempt merely because this prompt mentions it.
-
-Current chats, subject to human-created successors:
-
-- Root: `01a10a5f-1817-7c93-8faa-f72c50c0b221`.
-- Outgoing3-1: `01a10a5f-4ab8-79b1-a779-e7b2a162fc95`.
-- 3-2: `01a10a5f-8244-7722-8727-e53f8d0301d6`.
-- 4-1: `01a10a5f-a40f-7141-bd95-25765c0e7b6b`.
-- 4-2: `01a10a5f-d2c2-7773-bdd6-6c79a59187dc`.
-- WP1: `01a10a5f-fdb8-7b43-a5c9-c4e579499336`.
-- WP3: `01a10a60-428a-7ce2-bc4c-d44d1522f539`.
-- WP8: `01a10a60-6c56-7661-b733-3a099ba07986`.
-
-Human-authorized relevant owner coordination persists. Do not send unrelated messages or open new chats/automations. On successor start, use current identities; do not impersonate an old issuer or reuse old runtime ACKs.
-
-## Progress, remaining scope and human dependencies
-
-The inherited acceptance denominator is **8/13 fully closed (about62%), five partial (about38%)**: H07 joining/onboarding/lifecycle; H08 applicant/private setup/verification returns; R03 re-entry/occupancy/reviewer recovery; R04 ownership/transfer/device-auth recovery; R05 attachment account/lifetime/provider/rollout boundaries. H01–H06/R01/R02 and U01 remain accepted. Parent8/20 is a broader two-child count, not this stream's completion percentage.
-
-This is **not** an overall completion percentage for the newer NEXT STEPS pilot. WP6 code exists, but its real two-platform flow and populated-backfill acceptance are unfinished. The final review session added no feature closures. Do not report the old16–32-hour estimate as a fresh forecast: repeated prerequisite/harness delays have made it unreliable. Build the active NEXT STEPS deliverables and report their concrete completion instead.
-
-Most coding, integration and local regression/flow work can be done by agents with Root coordinating existing resources. The human confirmed Google Address Validation/Smarty credentials are missing or expired and will supply them later. Do not ask again or make that a blanket blocker. Genuine address-provider validation remains unverified. Real external delivery/hosted deployment, physical-device/OS authentication and signing/distribution proofs may need human access/configuration. There is no measured percentage for those external dependencies; do not invent one.
-
-## Preservation and safety boundaries
-
-- Preserve working screen appearance/navigation and all accepted evidence. Historical source-only/build-only/failure evidence is not native success.
-- Never read/hash/compare/apply/unapply/rewrite the applied `20260926100000` migration BODY, or run/import the full migration checker. Filename/blob metadata only; no applied-history rewrite or parallel table for existing data.
-- Keep credentials, raw device tokens, database rows/archives/Auth history, operator logs and raw sensitive images out of Git/chat. No database reset/dump or Auth-history cleanup. Preserve all six Auth histories and normal warm changes.
-- No `/api/b/:username`, held LegalOwnerVM, real money, parent-account deletion or unapproved design change. Archived challenge/dispute/renewal/release proposals do not become active merely because they appear in old records; follow the actual current NEXT_STEPS scope and human direction.
-- Private evidence root: `/Users/yingpengwang/.config/pantopus/stream3-1-resume-mac-studio-20261004`; Root evidence root: `/Users/yingpengwang/.config/pantopus/stream1-studio-resume-20261004`. Older transferred evidence maps through `/Users/yingpengwang/.config/pantopus/stream3-1-mac-studio-handoff-20261004/reference/bundle-manifest.json`; do not rerun old-host operators.
-- If inspecting a genuinely necessary private record, inspect its type/keys first and output only safe aggregates. Never dump whole fingerprint lists or use rg to print an entire single-line SQL query. Distinguish canonical JSON hashes from whole-file hashes; concurrent child returns join by PID/status, not array position. These are narrow reading precautions, not another verification campaign.
-
-Resume with concrete NEXT_STEPS implementation and reused branch work. Keep the user informed of shipped behavior, remaining product gaps and real blockers, rather than amounts of evidence processed.
+Start by choosing the first concrete unfinished function/flow from the ordered list above, coordinating only its required dependency, and carrying it through implementation if needed, affected tests, actual caller/API/persistence acceptance and Root integration. If an external boundary is unavailable, record it and continue independent owned work rather than creating a verification backlog.
