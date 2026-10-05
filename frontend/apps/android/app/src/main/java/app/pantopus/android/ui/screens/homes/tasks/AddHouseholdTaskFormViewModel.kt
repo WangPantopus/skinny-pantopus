@@ -27,6 +27,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 import java.util.Locale
 import javax.inject.Inject
 
@@ -811,7 +816,7 @@ class AddHouseholdTaskFormViewModel
                 title = title,
                 description = notes.ifEmpty { null },
                 assignedTo = assignee.ifEmpty { null },
-                dueAt = due.ifEmpty { null },
+                dueAt = due.takeIf { it.isNotEmpty() }?.let(::dueTimestamp),
                 recurrenceRule = buildRecurrenceRule(),
             )
         }
@@ -831,14 +836,25 @@ class AddHouseholdTaskFormViewModel
             }
 
         companion object {
-            /** Drop the time-of-day portion of an ISO timestamp so the
-             *  date picker only edits the day. */
+            /** Edit the same local calendar day displayed for the saved instant. */
             fun isoDayOnly(iso: String?): String? {
                 if (iso.isNullOrEmpty()) return null
-                val tIndex = iso.indexOf('T')
-                if (tIndex > 0) return iso.substring(0, tIndex)
-                return iso.take(10).ifEmpty { null }
+                if (iso.length == 10) return iso
+                return try {
+                    OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate().toString()
+                } catch (_: DateTimeParseException) {
+                    null
+                }
             }
+
+            private fun dueTimestamp(day: String): String =
+                try {
+                    // A day-only edit uses the pilot's 9 a.m. local reminder convention.
+                    LocalDate.parse(day).atTime(9, 0).atZone(ZoneId.systemDefault())
+                        .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                } catch (_: DateTimeParseException) {
+                    day // Preserve server validation for manually entered invalid dates.
+                }
 
             data class ParsedRecurrence(
                 val recurrence: AddHouseholdTaskRecurrence,
