@@ -28,6 +28,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.SecureScreenEffect
+import app.pantopus.android.data.homes.HomeInvitationSenderOutcome
 import app.pantopus.android.data.homes.HomeInvitationSenderRecovery
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
@@ -112,7 +113,7 @@ private fun SenderSheetContent(
                     state.canPrepare && target.action == "create" -> SenderCreateForm(state, target, viewModel)
                     !state.working ->
                         TextButton(onClick = { viewModel.resume(target) }, modifier = Modifier.testTag("homeSenderReload")) {
-                            Text("Check invitation recovery")
+                            Text("Reload")
                         }
                 }
             }
@@ -130,14 +131,13 @@ private fun SenderConfirmDialog(
     selected?.let { selected ->
         AlertDialog(
             onDismissRequest = { onDismiss() },
-            title = { Text(if (selected.requestId == null) "Confirm invitation action?" else "Cancel original attempt?") },
+            title = { Text(if (selected.requestId == null) senderConfirmationTitle(action) else "Discard this attempt?") },
             text = {
                 Text(
                     if (selected.requestId == null) {
                         senderConfirmationText(action)
                     } else {
-                        "A saved result wins if this action already completed. This only cancels an unseen attempt; " +
-                            "it does not withdraw an existing invitation."
+                        "If it already went through, it stays. Discarding doesn't withdraw an invitation or remove anyone."
                     },
                 )
             },
@@ -152,9 +152,11 @@ private fun SenderConfirmDialog(
                         }
                     },
                     modifier = Modifier.testTag("homeSenderConfirm"),
-                ) { Text(if (selected.requestId == null) "Confirm action" else "Cancel original attempt") }
+                ) { Text(if (selected.requestId == null) senderConfirmLabel(action) else "Discard") }
             },
-            dismissButton = { TextButton(onClick = { onDismiss() }) { Text("Keep reviewing") } },
+            dismissButton = {
+                TextButton(onClick = { onDismiss() }) { Text(if (selected.requestId == null) "Keep reviewing" else "Keep it") }
+            },
         )
     }
 }
@@ -164,7 +166,7 @@ private fun senderHeading(
     target: HomeInvitationSenderTarget,
 ): String =
     when {
-        state.pending != null -> "Original invitation action"
+        state.pending != null -> senderResultHeading(checkNotNull(state.pending).request.intent.action, state.outcome)
         target.action == "withdraw" -> "Withdraw invitation"
         target.action == "resend" -> "Resend invitation"
         else -> "Invite household member"
@@ -172,9 +174,38 @@ private fun senderHeading(
 
 internal fun senderConfirmationText(action: String?): String =
     when (action) {
-        "withdraw" -> "Withdraw this pending invitation. This does not remove or change anyone’s existing membership."
-        "resend" -> "Request delivery again. Earlier invitation links remain valid; expiry and access dates stay the same."
-        else ->
-            "Save this personal invitation for the recipient to accept. " +
-                "Household membership is separate from residency or ownership verification."
+        "withdraw" -> "They won't be able to accept it anymore. Anyone already in the household stays."
+        "resend" -> "We'll send the same invitation again. Links already sent keep working, and the expiry date doesn't change."
+        else -> "We'll send them the invitation. They join the household only if they accept."
+    }
+
+internal fun senderConfirmationTitle(action: String?): String =
+    when (action) {
+        "withdraw" -> "Withdraw this invitation?"
+        "resend" -> "Resend this invitation?"
+        else -> "Send this invitation?"
+    }
+
+internal fun senderConfirmLabel(action: String?): String =
+    when (action) {
+        "withdraw" -> "Withdraw"
+        "resend" -> "Resend"
+        else -> "Send"
+    }
+
+/** The heading over a saved invitation action: what happened, never a delivery claim. */
+internal fun senderResultHeading(
+    action: String,
+    outcome: HomeInvitationSenderOutcome?,
+): String =
+    when (outcome?.state) {
+        "completed" ->
+            when (action) {
+                "withdraw" -> "Invitation withdrawn"
+                "resend" -> "Resend requested"
+                else -> "Invitation created"
+            }
+        "cancelled" -> "Attempt discarded"
+        "rejected" -> "Couldn't finish this"
+        else -> "Check your last invitation"
     }

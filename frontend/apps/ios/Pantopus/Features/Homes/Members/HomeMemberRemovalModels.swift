@@ -185,26 +185,26 @@ enum HomeMemberRemovalError: LocalizedError {
     case refusal(String?)
     var errorDescription: String? {
         switch self {
-        case .storage: "The protected original could not be read or saved. Reopen removal recovery before starting another action."
-        case .changed: "The original or reviewed details changed. Reopen removal recovery to check the saved action."
-        case .unknown: "The original removal result is not confirmed. Check its status, retry the original, or cancel its attempt."
-        case .unavailable: "Current removal details are unavailable. Reopen to check again."
-        case .sessionChanged: "Your session changed. Reopen removal recovery under the original account."
-        case .busy: "Removal recovery is already working in another screen. Reopen it when that action finishes."
+        case .storage: "This removal couldn't be read or saved on this device. Reload before starting another."
+        case .changed: "The member or Home changed. Reload to see the latest."
+        case .unknown: "We couldn't confirm the result. Check again, try again, or discard this attempt."
+        case .unavailable: "Couldn't load the removal details. Reload to try again."
+        case .sessionChanged: "Your sign-in changed. Reload in the account that started this."
+        case .busy: "This removal is already being checked on another screen. Try again when it finishes."
         case let .refusal(code): Self.message(code)
         }
     }
 
     static func message(_ code: String?) -> String {
         switch code {
-        case "MEMBER_REMOVAL_CHANGED": "The reviewed member or Home changed. This original removal did not proceed."
-        case "MEMBER_ALREADY_REMOVED": "This membership has no remaining removal action. Check the current member list."
-        case "MEMBERS_MANAGE_REQUIRED", "TARGET_RANK_FORBIDDEN": "Current permission does not allow this removal."
+        case "MEMBER_REMOVAL_CHANGED": "The member or Home changed, so nobody was removed. Check the details again."
+        case "MEMBER_ALREADY_REMOVED": "This person is no longer a member."
+        case "MEMBERS_MANAGE_REQUIRED", "TARGET_RANK_FORBIDDEN": "You don't have permission to remove this member."
         case "TRANSFER_REQUIRED": "Transfer this Home's ownership before leaving."
-        case "OWNERSHIP_FLOW_REQUIRED": "This owner's access requires the dedicated ownership flow."
-        case "MEMBER_ROLE_UNKNOWN": "The member's current role could not be verified."
-        case "MEMBER_NOT_FOUND", "HOME_NOT_FOUND": "The selected member or Home is no longer available for removal."
-        default: "This removal could not proceed. Check the current account and Home before starting another action."
+        case "OWNERSHIP_FLOW_REQUIRED": "Owners can't be removed here. Ownership changes go through Owners."
+        case "MEMBER_ROLE_UNKNOWN": "Couldn't check this member's role. Reload to try again."
+        case "MEMBER_NOT_FOUND", "HOME_NOT_FOUND": "This member or Home is no longer available."
+        default: "This couldn't be completed. Check the details and try again."
         }
     }
 }

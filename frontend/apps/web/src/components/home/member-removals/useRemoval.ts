@@ -19,7 +19,7 @@ export function useRemoval(selectionKey: string) {
     if (controller.current !== current) return;
     if (!current.current()) {
       readGeneration.current++; setRoster({ state: 'unchecked' });
-      setView({ ...empty, blocked: true, lifetime: generation.current, error: 'Your session changed. Reopen recovery to check the original removal.' });
+      setView({ ...empty, blocked: true, lifetime: generation.current, error: 'Your sign-in changed. Reload to check your last removal.' });
       return;
     }
     setView({ ready: current.opened, busy: false, error, pending: current.pending, canAcknowledge: current.canAcknowledge,
@@ -45,7 +45,7 @@ export function useRemoval(selectionKey: string) {
         if (disposed || revision !== generation.current) return;
         if (current?.opened) publish(current, error instanceof Error ? error.message : 'The original removal could not be checked.');
         else setView({ ...empty, blocked: true, lifetime: generation.current,
-          error: 'Protected removal recovery could not be opened. Your saved action is kept. Reopen recovery to try again.' });
+          error: 'Couldn’t open your removals. Anything unfinished is kept. Reload to try again.' });
       }
     };
     const visibility = () => { if (document.visibilityState === 'hidden') retire(); else void open(); };
@@ -68,7 +68,7 @@ export function useRemoval(selectionKey: string) {
     try {
       const result = await action(current);
       if (controller.current === current && current.current()) { publish(current); return result; }
-    } catch (error) { publish(current, error instanceof Error ? error.message : 'The removal result could not be confirmed. Reopen recovery.'); }
+    } catch (error) { publish(current, error instanceof Error ? error.message : 'We couldn’t confirm the result. Check again, try again, or discard this attempt.'); }
   };
   const checkRoster = async (input: RemovalInput) => {
     const current = controller.current, revision = generation.current, read = ++readGeneration.current;

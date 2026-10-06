@@ -51,11 +51,11 @@ struct InviteMemberWizardView: View {
                 }
                 if model.isWorking { ProgressView("Checking invitation…").accessibilityIdentifier("homeInvitationSenderLoading") }
                 if model.errorMessage != nil || !model.opened {
-                    control("Reopen invitation recovery", "homeInvitationSenderReopen") { await model.open() }
+                    control("Reload", "homeInvitationSenderReopen") { await model.open() }
                 }
                 Button("Close") { onClose(nil) }.frame(minHeight: 44).accessibilityIdentifier("homeInvitationSenderClose")
-                Text("An invitation offers household access under its role and dates. It does not verify residency or ownership. "
-                    + "Saved invitation actions and message delivery are separate.")
+                Text("An invitation gives someone household access for the role you choose. "
+                    + "It doesn't verify that they live here or own the Home.")
                     .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
             }.padding(Spacing.s5).frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -87,18 +87,18 @@ struct InviteMemberWizardView: View {
         .onChange(of: model.sharingChecked) { _, checked in if !checked { sharing = nil } }
         .sheet(item: $sharing) { item in HomeInvitationSenderActivity(url: item.url) }
         .confirmationDialog(
-            confirmation?.requestId == nil ? confirmationTitle : "Cancel the original attempt?",
+            confirmation?.requestId == nil ? confirmationTitle : "Discard this attempt?",
             isPresented: Binding(get: { confirmation != nil }, set: { if !$0 { confirmation = nil } }),
             titleVisibility: .visible,
             presenting: confirmation
         ) { selected in
             if let requestId = selected.requestId {
-                Button("Confirm cancellation", role: .destructive) {
+                Button("Discard", role: .destructive) {
                     Task { await model.recover(.cancel, requestId: requestId, lifetime: selected.lifetime) }
                 }.accessibilityIdentifier("homeInvitationSenderConfirmCancel")
             } else {
                 Button(
-                    "Confirm \(model.target.action == .withdraw ? "withdrawal" : model.target.action == .resend ? "resend" : "invitation")",
+                    model.target.action == .withdraw ? "Withdraw" : model.target.action == .resend ? "Resend" : "Send",
                     role: model.target.action == .withdraw ? .destructive : nil
                 ) {
                     Task { await model.submit(reviewedToken: selected.token, lifetime: selected.lifetime) }
@@ -115,12 +115,12 @@ struct InviteMemberWizardView: View {
             case "completed":
                 switch original.action {
                 case .withdraw: return "Invitation withdrawn"
-                case .resend: return "Resend saved"
-                default: return "Invitation saved"
+                case .resend: return "Resend requested"
+                default: return "Invitation created"
                 }
-            case "cancelled": return "Attempt cancelled"
-            case "rejected": return "Action did not proceed"
-            default: return "Recover original invitation action"
+            case "cancelled": return "Attempt discarded"
+            case "rejected": return "Couldn't finish this"
+            default: return "Check your last invitation"
             }
         }
         switch model.target.action {
@@ -134,16 +134,16 @@ struct InviteMemberWizardView: View {
         switch model.target.action {
         case .withdraw: "Withdraw this invitation?"
         case .resend: "Resend this invitation?"
-        case .create: "Create this invitation?"
+        case .create: "Send this invitation?"
         }
     }
 
     private var confirmationMessage: String {
         switch model.target.action {
-        case .create: "The recipient can accept the reviewed household access. Delivery will be reported separately."
-        case .resend: "This requests another delivery for the same invitation. "
-            + "Existing links and access dates remain valid; expiry is not extended."
-        case .withdraw: "This prevents future acceptance of this pending invitation. Existing membership is not removed."
+        case .create: "We'll send them the invitation. They join the household only if they accept."
+        case .resend: "We'll send the same invitation again. "
+            + "Links already sent keep working, and the expiry date doesn't change."
+        case .withdraw: "They won't be able to accept it anymore. Anyone already in the household stays."
         }
     }
 
@@ -163,7 +163,8 @@ struct InviteMemberWizardView: View {
                 Text("Member").tag("member")
                 Text("Guest").tag("guest")
             }.pickerStyle(.segmented).accessibilityIdentifier("homeInvitationSenderRole")
-            Text("Access depends on the household's current permissions. Guest passes are issued separately from the Guests tab.")
+            Text("Members can see and help with household tasks. Guests get limited, view-only access. "
+                + "For a short visit, send a guest pass from the Guests tab instead.")
                 .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
             Text("Personal note (optional)").pantopusTextStyle(.caption)
             TextEditor(text: $model.message).frame(minHeight: 80)
@@ -174,19 +175,19 @@ struct InviteMemberWizardView: View {
 
     private func review(_ context: HomeInvitationSenderContext) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Review current invitation details").pantopusTextStyle(.h3)
+            Text("Check the details").pantopusTextStyle(.h3)
             if model.target.action == .create, let payload = context.intent.dictValue?["payload"]?.dictValue {
                 Text(payload["email"]?.stringValue ?? "").accessibilityIdentifier("homeInvitationSenderRecipient")
-                Text("Role: \(payload["relationship"]?.stringValue ?? "")")
-                Text("Preset: \(HomeInvitationSenderValidation.presetLabel(payload["preset_key"]?.stringValue))")
+                Text("Role: \(TokenAcceptViewModel.humanRole(payload["relationship"]?.stringValue ?? ""))")
+                if let preset = presetLine(payload["preset_key"]?.stringValue) { Text(preset) }
                 if let note = payload["message"]?.stringValue { Text(note) }
             } else {
                 Text(context.invitation["invitee"]?.dictValue.map(HomeInvitationSenderValidation.profileLabel)
                     ?? context.invitation["invitee_email"]?.stringValue ?? "Selected account")
                     .accessibilityIdentifier("homeInvitationSenderRecipient")
-                let role = HomeInvitationSenderValidation.effectiveRole(context.invitation) ?? "Invitation access"
-                Text("Role: \(role)")
-                Text("Preset: \(HomeInvitationSenderValidation.presetLabel(context.invitation["proposed_preset_key"]?.stringValue))")
+                let role = HomeInvitationSenderValidation.effectiveRole(context.invitation).map(TokenAcceptViewModel.humanRole)
+                Text("Role: \(role ?? "As set in the invitation")")
+                if let preset = presetLine(context.invitation["proposed_preset_key"]?.stringValue) { Text(preset) }
                 ForEach(["expires_at", "access_start_at", "access_end_at"], id: \.self) { key in
                     if let raw = context.invitation[key]?.stringValue, let date = HomeInvitationValidation.date(raw) {
                         Text("\(dateLabel(key)): \(date.formatted(date: .abbreviated, time: .shortened))")
@@ -205,19 +206,18 @@ struct InviteMemberWizardView: View {
 
     private func recovery(_ original: PendingHomeInvitationSender) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Original action: \(original.action?.rawValue ?? "invitation")")
+            Text("Action: \(actionName(original.action))")
                 .accessibilityIdentifier("homeInvitationSenderOriginalAction")
             Text(original.recipient).accessibilityIdentifier("homeInvitationSenderOriginalRecipient")
             if original.homeId != model.homeId {
-                Text("This retained original belongs to another Home. It must be resolved before starting an action for this Home.")
+                Text("This is for another of your Homes. Finish it before inviting someone here.")
             }
             if let outcome = original.outcome, outcome.isTerminal {
                 if outcome.state == "completed" {
-                    Text(original.action == .withdraw ? "The invitation was withdrawn. Existing membership was not changed."
-                        : "The invitation action is saved. A member-list refresh cannot change that result.")
+                    Text(completedMessage(original.action))
                     if original.action != .withdraw {
                         Text(outcome.deliveryMessage).accessibilityIdentifier("homeInvitationSenderDelivery")
-                        control("Check link for sharing", "homeInvitationSenderCheckSharing") {
+                        control("Get invitation link", "homeInvitationSenderCheckSharing") {
                             await model.checkSharing(requestId: original.requestId)
                         }
                         if model.shareURL != nil {
@@ -233,21 +233,21 @@ struct InviteMemberWizardView: View {
                         outcome.state == "cancelled" ? cancelledMessage : HomeInvitationSenderError.message(outcome.code)
                     )
                 }
-                control("Acknowledge result", "homeInvitationSenderAcknowledge") {
+                control("Done", "homeInvitationSenderAcknowledge") {
                     if let acknowledged = await model.acknowledge(requestId: original.requestId) { onClose(acknowledged) }
                 }
             } else {
                 Text(
-                    "Keep this original until its saved result or cancellation is confirmed. "
-                        + "A retry uses the same request and cannot resend delivery."
+                    "We couldn't confirm whether this went through. Check again, or try again. "
+                        + "Trying again won't send a second email."
                 )
-                control("Check original result", "homeInvitationSenderCheck") {
+                control("Check again", "homeInvitationSenderCheck") {
                     await model.recover(.check, requestId: original.requestId, lifetime: model.generation)
                 }
-                control("Retry original action", "homeInvitationSenderRetry") {
+                control("Try again", "homeInvitationSenderRetry") {
                     await model.recover(.retry, requestId: original.requestId, lifetime: model.generation)
                 }
-                Button("Cancel original attempt", role: .destructive) {
+                Button("Discard attempt", role: .destructive) {
                     confirmation = Confirmation(token: "", requestId: original.requestId, lifetime: model.generation)
                 }.frame(minHeight: 44).disabled(model.isWorking).accessibilityIdentifier("homeInvitationSenderCancel")
             }
@@ -259,19 +259,19 @@ struct InviteMemberWizardView: View {
     }
 
     private var cancellationMessage: String {
-        "A saved result wins if this action already completed. "
-            + "Cancelling an attempt does not withdraw an invitation or change membership."
+        "If it already went through, it stays. "
+            + "Discarding doesn't withdraw an invitation or remove anyone."
     }
 
     private var cancelledMessage: String {
-        "The original attempt was cancelled. The invitation and existing membership were not changed."
+        "Nothing changed. This attempt was discarded before it took effect."
     }
 
     private var submitLabel: String {
         switch model.target.action {
         case .withdraw: "Withdraw invitation"
-        case .resend: "Request resend"
-        case .create: "Create invitation"
+        case .resend: "Resend invitation"
+        case .create: "Send invitation"
         }
     }
 
@@ -281,6 +281,32 @@ struct InviteMemberWizardView: View {
         case "access_start_at": "Access begins"
         default: "Access ends"
         }
+    }
+}
+
+private extension InviteMemberWizardView {
+    func completedMessage(_ action: HomeInvitationSenderAction?) -> String {
+        switch action {
+        case .withdraw: "They can no longer accept it. Anyone already in the household stays."
+        case .resend: "Links already sent keep working, and the expiry date hasn't changed."
+        default: "They join the household when they accept. Until then, it's listed under Pending in Members."
+        }
+    }
+
+    func actionName(_ action: HomeInvitationSenderAction?) -> String {
+        switch action {
+        case .withdraw: "Withdraw invitation"
+        case .resend: "Resend invitation"
+        case .create: "Send invitation"
+        case nil: "Invitation"
+        }
+    }
+
+    /// A preset names the relationship chosen on the web (e.g. "Tenant"); the role alone covers invitations without one.
+    func presetLine(_ key: String?) -> String? {
+        guard let key else { return nil }
+        if key.hasPrefix("access_request:") { return "Approved from a request to join" }
+        return "Relationship: " + HomeInvitationSenderValidation.presetLabel(key)
     }
 }
 

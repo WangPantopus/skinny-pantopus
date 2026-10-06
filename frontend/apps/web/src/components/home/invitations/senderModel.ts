@@ -72,22 +72,25 @@ export function validSenderDraft(value: unknown, origin: string, actor: string):
   } catch { return false; }
 }
 export const senderMessage = (code?: string) => ({
-  INVITE_SENDER_CHANGED: 'Invitation details or household authority changed. Acknowledge this result, then review again.',
-  INVITE_ALREADY_USED: 'This invitation has already been resolved. Existing household membership is preserved.',
-  INVITE_EXPIRED: 'This invitation expired. A new invitation needs a separate review.',
+  INVITE_SENDER_CHANGED: 'The invitation or your permissions changed. Select Done, then check the details again.',
+  INVITE_ALREADY_USED: 'This invitation was already answered. Nobody’s membership changed.',
+  INVITE_EXPIRED: 'This invitation has expired. Send a new invitation instead.',
   INVITE_NOT_FOUND: 'This invitation is no longer available.',
-  INVITE_FORBIDDEN: 'Current household authority does not allow this invitation action.',
-  HOME_FORBIDDEN: 'Current household authority does not allow this invitation action.',
+  INVITE_FORBIDDEN: 'You don’t have permission to do this for this household.',
+  HOME_FORBIDDEN: 'You don’t have permission to do this for this household.',
   MEMBERS_MANAGE_REQUIRED: 'You don’t have permission to send or manage invitations for this household.',
-  INVITE_ALREADY_PENDING: 'A pending invitation already exists for this recipient. Check the invitation list.',
-  MEMBER_ALREADY_EXISTS: 'This person is already a household member. Their existing membership is preserved.',
-  MEMBERSHIP_RENEWAL_REQUIRED: 'This person’s earlier household membership has ended. An invitation cannot restore it.',
-} as Record<string,string>)[code || ''] || 'This invitation action could not continue. Acknowledge the result, then review the current invitation and your household authority.';
+  INVITE_ALREADY_PENDING: 'This person already has a pending invitation. You can resend it from Current invitations.',
+  MEMBER_ALREADY_EXISTS: 'This person is already in the household.',
+  MEMBERSHIP_RENEWAL_REQUIRED: 'This person’s household access is under review, so an invitation can’t change it right now.',
+} as Record<string,string>)[code || ''] || 'This couldn’t be completed. Check the invitation and try again.';
+/** What happens next and what reached the invitee: "emailed" means the email service took the message, not that it arrived. */
 export function deliveryMessage(outcome: SenderOutcome): string {
-  if (outcome.action === 'withdraw') return 'The invitation was withdrawn. Existing household membership was preserved.';
-  const email = outcome.delivery.email === 'provider_accepted' ? 'The email provider accepted the message; inbox delivery is not confirmed.'
-    : outcome.delivery.email === 'unconfirmed' ? 'Email delivery is not confirmed.' : '';
-  const app = outcome.delivery.in_app === 'saved' ? 'An in-app invitation notice was saved; device delivery is not confirmed.'
-    : outcome.delivery.in_app === 'unconfirmed' ? 'The in-app invitation notice is not confirmed.' : '';
-  return [email,app].filter(Boolean).join(' ') || 'Share the invitation link with the intended recipient. No delivery was requested.';
+  if (outcome.action === 'withdraw') return 'They can no longer accept it. Anyone already in the household stays.';
+  const next = outcome.action === 'resend' ? 'Links already sent keep working, and the expiry date hasn’t changed.'
+    : 'They join the household when they accept. Until then, it’s listed under Current invitations.';
+  const email = outcome.delivery.email === 'provider_accepted' ? 'We emailed the invitation.'
+    : outcome.delivery.email === 'unconfirmed' ? 'We couldn’t confirm the invitation email went out. You can share the invitation link instead.' : '';
+  const app = outcome.delivery.in_app === 'saved' ? email ? 'It’s also in their Pantopus notifications.' : 'It’s in their Pantopus notifications.'
+    : outcome.delivery.in_app === 'unconfirmed' ? 'We couldn’t confirm their Pantopus notification.' : '';
+  return [next, [email,app].filter(Boolean).join(' ') || 'No email or notification was sent. Share the invitation link so they can accept.'].join(' ');
 }

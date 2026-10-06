@@ -187,13 +187,13 @@ enum HomeInvitationDecisionError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .storage: "The protected original could not be read or saved. It is kept. Reopen recovery before starting another decision."
-        case .changed: "The saved decision or invitation changed. Reopen recovery to review the original."
+        case .storage: "Your answer couldn't be read or saved on this device. Reload before answering again."
+        case .changed: "This invitation changed. Reload to see the latest."
         case .unknown:
-            "The result is not confirmed. Check the saved decision, retry that same decision, or confirm cancellation of the attempt."
-        case .unavailable: "The invitation could not be checked right now. Retry to review its current details."
-        case .sessionChanged: "Your session changed. Reopen the invitation to recover your original decision."
-        case .busy: "Wait for the original invitation decision to finish being checked."
+            "We couldn't confirm your answer. Check again, try again, or discard this attempt."
+        case .unavailable: "Couldn't check the invitation right now. Reload to try again."
+        case .sessionChanged: "Your sign-in changed. Reload the invitation to check your answer."
+        case .busy: "Wait for your last answer to finish checking."
         case let .refusal(code): Self.message(code)
         }
     }
@@ -202,7 +202,7 @@ enum HomeInvitationDecisionError: LocalizedError {
         switch code {
         case "INVITE_EMAIL_MISMATCH": "This invitation belongs to a different account. Sign in to the account the sender invited."
         case "INVITE_DECISION_CHANGED":
-            "The invitation details changed. Acknowledge this result, then review the current invitation before deciding again."
+            "The invitation details changed. Review it again before answering."
         case "INVITE_EXPIRED": "This invitation expired. Ask the household for a new invitation."
         case "INVITE_ALREADY_USED": "This invitation was already accepted, declined or withdrawn. My Homes shows your current access."
         case "INVITE_NOT_FOUND", "INVITE_INVALID": "This invitation is unavailable. Check the complete link with the sender."

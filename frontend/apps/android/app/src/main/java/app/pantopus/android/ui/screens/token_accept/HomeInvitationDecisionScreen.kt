@@ -121,15 +121,10 @@ fun HomeInvitationDecisionScreen(
         }
         if (state.working) CircularProgressIndicator(Modifier.testTag("homeInvitationLoading"))
         if (state.error != null || state.pending == null && state.context == null) {
-            InvitationButton("Reopen invitation", "homeInvitationReopen", !state.working, onReopen)
+            InvitationButton("Reload", "homeInvitationReopen", !state.working, onReopen)
         }
         InvitationButton("Use another account", "homeInvitationSwitchAccount", !state.working) { accountSwitch = state.generation }
         InvitationButton("Close", "homeInvitationClose", true, onDismiss)
-        Text(
-            "A saved decision proves what happened. Current household access and message delivery are checked separately.",
-            fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
-        )
     }
 
     confirmation?.let { selected ->
@@ -142,18 +137,31 @@ fun HomeInvitationDecisionScreen(
 
 private fun invitationHeading(state: HomeInvitationDecisionUiState): String =
     when (state.outcome?.state) {
-        "completed" -> if (state.pending?.request?.action == "accept") "Acceptance saved" else "Decline saved"
-        "cancelled" -> "Decision attempt cancelled"
-        "rejected" -> "Decision needs review"
+        "completed" -> if (state.pending?.request?.action == "accept") "Invitation accepted" else "Invitation declined"
+        "cancelled" -> "Attempt discarded"
+        "rejected" -> "Couldn't finish this"
         else ->
             if (state.pending != null) {
-                "Recover your invitation decision"
+                "Check your answer"
             } else if (state.context != null) {
                 "You're invited"
             } else {
                 "Invitation status"
             }
     }
+
+private fun invitationConfirmationText(
+    action: String?,
+    account: String,
+    homeLabel: String?,
+): String {
+    val home = homeLabel?.takeIf(String::isNotBlank) ?: "this Home"
+    return when (action) {
+        null -> "If your answer already went through, it stays. Discarding doesn't decline the invitation."
+        "decline" -> "$account won't join the household at $home. The sender can invite you again later."
+        else -> "$account will join the household at $home. What you can open depends on your role and the invitation's dates."
+    }
+}
 
 @Composable
 private fun InvitationDecisionDialog(
@@ -166,20 +174,14 @@ private fun InvitationDecisionDialog(
         when (selected.action) {
             "accept" -> "Accept this invitation?"
             "decline" -> "Decline this invitation?"
-            else -> "Cancel the original attempt?"
+            else -> "Discard this attempt?"
         }
     AlertDialog(
         onDismissRequest = { dismiss() },
         title = { Text(title) },
         text = {
             Text(
-                if (selected.action == null) {
-                    "If the decision is already saved, its original result is recovered. " +
-                        "Cancelling an attempt does not decline the invitation."
-                } else {
-                    "${state.accountLabel} will decide on the invitation to ${state.context?.homeLabel.orEmpty()}. " +
-                        "Household permissions and access dates still apply."
-                },
+                invitationConfirmationText(selected.action, state.accountLabel, state.context?.homeLabel),
             )
         },
         confirmButton = {
@@ -199,9 +201,9 @@ private fun InvitationDecisionDialog(
             ) {
                 Text(
                     when (selected.action) {
-                        "accept" -> "Confirm acceptance"
-                        "decline" -> "Confirm decline"
-                        else -> "Confirm cancellation"
+                        "accept" -> "Accept"
+                        "decline" -> "Decline"
+                        else -> "Discard"
                     },
                 )
             }
@@ -219,7 +221,7 @@ private fun InvitationAccountDialog(
     AlertDialog(
         onDismissRequest = { dismiss() },
         title = { Text("Use another account?") },
-        text = { Text("You will be signed out. Any saved invitation decision stays protected for this account.") },
+        text = { Text("You'll be signed out. Any answer you already gave stays with this account.") },
         confirmButton = {
             TextButton(modifier = Modifier.testTag("homeInvitationConfirmSwitchAccount"), onClick = {
                 dismiss()
@@ -240,26 +242,22 @@ private fun RecoveryContent(
     cancel: () -> Unit,
 ) {
     Text(draft.homeLabel, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.testTag("homeInvitationOriginalHome"))
-    Text("Original decision: ${if (draft.request.action == "accept") "Accept invitation" else "Decline invitation"}")
+    Text("Your answer: ${if (draft.request.action == "accept") "Accept" else "Decline"}")
     if (draft.request.token != state.token) {
-        Text(
-            "This is an earlier invitation. Finish its recovery before deciding on the link you just opened.",
-        )
+        Text("This is an earlier invitation. Finish it before answering the one you just opened.")
     }
     val explanation =
         when (state.outcome?.state) {
             "completed" ->
                 if (draft.request.action == "accept") {
-                    "Your acceptance is saved. Current household access is checked separately; " +
-                        "roles, permissions and access dates still apply."
+                    "You're part of this household now. What you can open depends on your role and the invitation's dates."
                 } else {
-                    "Your decline is saved for this account. An open invitation link may remain available to other people."
+                    "You won't join this household. If it was shared as an open link, other people with the link can still use it."
                 }
-            "cancelled" -> "The server confirmed that this attempt cannot accept or decline the invitation."
+            "cancelled" -> "Nothing changed. This attempt was discarded before it took effect."
             "rejected" -> invitationRefusalMessage(state.outcome.code)
             else ->
-                "Your original decision is stored securely on this device. Check its result or retry that same decision. " +
-                    "Confirm cancellation before starting a different attempt."
+                "We couldn't confirm your answer. It's saved on this device, so you can check again or try again without answering twice."
         }
     Text(explanation, modifier = Modifier.testTag("homeInvitationExplanation"))
     if (state.outcome?.isTerminal == true) {
@@ -276,13 +274,13 @@ private fun RecoveryContent(
             }
         }
     } else {
-        InvitationButton("Check saved decision", "homeInvitationCheck", !state.working) {
+        InvitationButton("Check again", "homeInvitationCheck", !state.working) {
             viewModel.recover(HomeInvitationRecoveryAction.Check, draft.request.requestId, state.generation)
         }
-        InvitationButton("Retry original decision", "homeInvitationRetry", !state.working) {
+        InvitationButton("Try again", "homeInvitationRetry", !state.working) {
             viewModel.recover(HomeInvitationRecoveryAction.Retry, draft.request.requestId, state.generation)
         }
-        InvitationButton("Cancel original attempt", "homeInvitationCancel", !state.working, cancel)
+        InvitationButton("Discard attempt", "homeInvitationCancel", !state.working, cancel)
     }
 }
 
@@ -299,13 +297,13 @@ private fun CurrentAccessContent(
             DeepLinkRouter.handle("/homes/${original.request.homeId}/dashboard")
         }
     }
-    InvitationButton("Check current Home access", "homeInvitationAccess", !state.working, viewModel::checkAccess)
+    InvitationButton("Check Home access", "homeInvitationAccess", !state.working, viewModel::checkAccess)
     state.access?.let { access ->
         Text(
             if (access.currentAccess == "shared") {
-                "Your current account can open this Home. Household permissions still apply."
+                "You can open this Home now."
             } else {
-                "Your saved acceptance does not provide current shared access. My Homes shows the available next steps."
+                "You can't open this Home yet. My Homes shows what's next."
             },
             modifier = Modifier.testTag("homeInvitationCurrentAccess"),
         )

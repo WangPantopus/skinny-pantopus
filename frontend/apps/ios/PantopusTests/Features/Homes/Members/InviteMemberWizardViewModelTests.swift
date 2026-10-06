@@ -148,8 +148,9 @@ final class InviteMemberWizardViewModelTests: XCTestCase {
         XCTAssertEqual(original.recipient, "recipient@example.invalid")
         XCTAssertEqual(commandPosts.count, 1)
         XCTAssertEqual(commandPosts.first?.authTestBodyData(), original.bodyData)
-        XCTAssertTrue(original.outcome?.deliveryMessage.contains("Email delivery is unconfirmed") == true)
-        XCTAssertTrue(original.outcome?.deliveryMessage.contains("push delivery is not confirmed") == true)
+        XCTAssertTrue(original.outcome?.deliveryMessage.contains("couldn't confirm the invitation email") == true)
+        XCTAssertFalse(original.outcome?.deliveryMessage.contains("We emailed") == true)
+        XCTAssertTrue(original.outcome?.deliveryMessage.contains("also in their Pantopus notifications") == true)
         XCTAssertFalse(model.canPrepare)
     }
 

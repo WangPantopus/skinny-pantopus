@@ -59,7 +59,7 @@ class HomeInvitationSenderCodec(moshi: Moshi) {
                 val payload = checkNotNull(intent.payload)
                 listOfNotNull(
                     payload["email"] ?: payload["username"] ?: payload["user_id"],
-                    payload["relationship"],
+                    payload["relationship"]?.let { "Role: ${invitationRoleLabel(it)}" },
                     payload["message"],
                 ).joinToString("\n")
             } else {

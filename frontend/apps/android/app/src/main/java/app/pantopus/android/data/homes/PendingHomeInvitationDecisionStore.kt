@@ -49,7 +49,7 @@ class PersistentPendingHomeInvitationDecisionStore
             next: PendingHomeInvitationDecision?,
         ) {
             locked { prefs ->
-                check(read(prefs, scope) == expected) { "Another invitation decision is saved. Reopen invitation recovery to recover it." }
+                check(read(prefs, scope) == expected) { "Another answer is still unfinished. Reload to finish it first." }
                 check(next == null || codec.valid(next, scope)) { "The original invitation decision could not be verified." }
                 val key = key(scope)
                 val edit = prefs.edit()
@@ -67,7 +67,7 @@ class PersistentPendingHomeInvitationDecisionStore
             prefs: SharedPreferences,
             scope: HomeCreationScope,
         ): PendingHomeInvitationDecision? {
-            check(scope.isValid()) { "Your session changed. Reopen invitation recovery to recover the original request." }
+            check(scope.isValid()) { "Your sign-in changed. Reload the invitation to check your answer." }
             val key = key(scope)
             val raw = (if (uncertainValues.containsKey(key)) uncertainValues[key] else prefs.getString(key, null)) ?: return null
             val value = adapter.fromJson(raw)

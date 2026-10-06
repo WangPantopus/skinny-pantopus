@@ -51,20 +51,18 @@ struct HomeMemberRemovalView: View {
                 } else if let context = model.context {
                     review(context)
                 } else if model.isCurrent && model.opened && model.errorMessage == nil {
-                    Text("No saved removal action for this account.").accessibilityIdentifier("homeMemberRemovalEmpty")
+                    Text("Nothing to finish here.").accessibilityIdentifier("homeMemberRemovalEmpty")
                 }
                 if model.isWorking {
                     ProgressView("Checking removal…").accessibilityIdentifier("homeMemberRemovalLoading")
                 }
                 if !model.isCurrent {
-                    Text("Close this screen, then open removal recovery again under the original account. Your saved action is kept.")
+                    Text("Close this screen and sign in to the account that started this. Nothing was lost.")
                         .accessibilityIdentifier("homeMemberRemovalSessionGuidance")
                 } else if !model.opened || model.errorMessage != nil {
-                    control("Reopen removal recovery", "homeMemberRemovalReopen") { await model.open() }
+                    control("Reload", "homeMemberRemovalReopen") { await model.open() }
                 }
                 Button("Close") { onClose(nil) }.frame(minHeight: 44).accessibilityIdentifier("homeMemberRemovalClose")
-                Text("Saved removal results describe an original action. The current member list and Home access are checked separately.")
-                    .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
             }.padding(Spacing.s5).frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Theme.Color.appBg)
@@ -88,41 +86,49 @@ struct HomeMemberRemovalView: View {
             }
         }
         .alert(
-            confirmation?.requestId != nil ? "Cancel the original attempt?"
-                : confirmation?.isSelf == true ? "Confirm leaving this Home?" : "Confirm the reviewed removal?",
+            confirmation?.requestId != nil ? "Discard this attempt?"
+                : confirmation?.isSelf == true ? "Leave this Home?" : "Remove this member?",
             isPresented: Binding(get: { confirmation != nil }, set: { if !$0 { confirmation = nil } }),
             presenting: confirmation
         ) { selected in
             if let requestId = selected.requestId {
-                Button("Confirm cancellation", role: .destructive) {
+                Button("Discard", role: .destructive) {
                     Task { await model.recover(.cancel, requestId: requestId, lifetime: selected.lifetime) }
                 }.accessibilityIdentifier("homeMemberRemovalConfirmCancel")
             } else {
-                Button(selected.isSelf ? "Confirm leave" : "Confirm removal", role: .destructive) {
+                Button(selected.isSelf ? "Leave" : "Remove", role: .destructive) {
                     Task { await model.submit(reviewedToken: selected.token, lifetime: selected.lifetime) }
                 }.accessibilityIdentifier("homeMemberRemovalConfirm")
             }
             Button("Cancel", role: .cancel) {}
         } message: { selected in
             if selected.requestId != nil {
-                Text("This cancels the saved attempt only if removal has not already completed. A completed removal cannot be undone here.")
+                Text("If it already went through, it stays. Discarding doesn't remove anyone.")
             } else if selected.isSelf {
-                Text("Leave \(HomeMemberRemovalValidation.homeLabel(selected.summary)) and end your reviewed household membership? "
-                    + "Current membership and ownership are checked again before leaving.")
+                Text("Leave \(HomeMemberRemovalValidation.homeLabel(selected.summary))? You'll lose access to this Home. "
+                    + "To come back later, someone in the household will need to invite you again.")
             } else {
                 Text("Remove \(HomeMemberRemovalValidation.targetLabel(selected.summary)) "
                     + "from \(HomeMemberRemovalValidation.homeLabel(selected.summary))? "
-                    + "Current permission and membership are checked again before removal.")
+                    + "They'll lose access to this Home. You can invite them again later.")
             }
         }
     }
 
+    /// Leaving is the reviewed member removing themselves; the reviewed summary says which.
+    private var isSelf: Bool {
+        (model.pending?.review ?? model.context?.summary)?.dictValue?["target"]?.dictValue?["is_self"] == .bool(true)
+    }
+
     private var title: String {
         switch model.pending?.outcome?.state {
-        case "completed": "Removal recorded"
-        case "rejected": "Removal did not proceed"
-        case "cancelled": "Attempt cancelled"
-        default: model.pending == nil ? "Review member removal" : "Recover original removal"
+        case "completed": isSelf ? "You left this Home" : "Member removed"
+        case "rejected": "Couldn't finish this"
+        case "cancelled": "Attempt discarded"
+        default:
+            if model.pending != nil { "Check your last removal" } else if model.context != nil {
+                isSelf ? "Leave this Home" : "Remove member"
+            } else { "Household membership" }
         }
     }
 
@@ -136,7 +142,7 @@ struct HomeMemberRemovalView: View {
                 .accessibilityIdentifier("homeMemberRemovalHome")
             let target = value.dictValue?["target"]?.dictValue ?? [:]
             if target["is_self"] == .bool(true) { Text("Your household membership") }
-            Text("Reviewed role: \(roleLabel(target["role_base"]?.stringValue))")
+            Text("Role: \(roleLabel(target["role_base"]?.stringValue))")
             ForEach(["start_at", "end_at", "access_start_at", "access_end_at"], id: \.self) { key in
                 if let raw = target[key]?.stringValue, let date = HomeInvitationValidation.date(raw) {
                     Text("\(dateLabel(key)): \(date.formatted(date: .abbreviated, time: .shortened))")
@@ -148,10 +154,9 @@ struct HomeMemberRemovalView: View {
     private func review(_ context: HomeMemberRemovalContext) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             identity(context.summary)
-            Text("This ends the reviewed household membership and retires access tied to it. Recorded claims and decisions are kept. "
-                + "Ownership changes require their own flow.")
+            Text(isSelf ? "You'll lose access to this Home." : "They'll lose access to this Home.")
             Button(
-                context.fields["target"]?.dictValue?["is_self"] == .bool(true) ? "Leave reviewed Home" : "Remove reviewed member",
+                isSelf ? "Leave Home" : "Remove member",
                 role: .destructive
             ) {
                 confirmation = Confirmation(token: context.token, requestId: nil, lifetime: model.generation, summary: context.summary)
@@ -162,33 +167,33 @@ struct HomeMemberRemovalView: View {
     private func recovery(_ original: PendingHomeMemberRemoval) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             if model.recoveringAnotherTarget {
-                Text("Recovering the saved original for the member and Home below. The newly selected member has not been removed.")
+                Text("You have an unfinished removal for the member below. Finish it before removing someone else.")
                     .accessibilityIdentifier("homeMemberRemovalDifferentTarget")
             }
             identity(original.review)
             if let outcome = original.outcome, outcome.isTerminal {
                 if outcome.state == "completed" {
-                    Text("This original removal completed. It does not establish the member's current access.")
+                    Text(isSelf ? "You left this Home." : "They no longer have access to this Home.")
                     if let raw = outcome.fields["completed_at"]?.stringValue, let date = HomeInvitationValidation.date(raw) {
                         Text("Recorded \(date.formatted(date: .abbreviated, time: .shortened))")
                     }
                 } else if outcome.state == "rejected" {
                     Text(HomeMemberRemovalError.message(outcome.code))
                 } else {
-                    Text("This original attempt was cancelled. No removal was performed by this attempt.")
+                    Text("Nothing changed. This attempt was discarded before it took effect.")
                 }
-                control("Acknowledge original result", "homeMemberRemovalAcknowledge") {
+                control("Done", "homeMemberRemovalAcknowledge") {
                     if let result = await model.acknowledge(requestId: original.requestId) { onClose(result) }
                 }
             } else {
-                Text("Keep this original until its result is confirmed. A retry uses the same reviewed action.")
-                control("Check original status", "homeMemberRemovalCheck") {
+                Text("We couldn't confirm whether this went through. Check again, or try again.")
+                control("Check again", "homeMemberRemovalCheck") {
                     await model.recover(.check, requestId: original.requestId, lifetime: model.generation)
                 }
-                control("Retry original removal", "homeMemberRemovalRetry") {
+                control("Try again", "homeMemberRemovalRetry") {
                     await model.recover(.retry, requestId: original.requestId, lifetime: model.generation)
                 }
-                Button("Cancel original attempt", role: .destructive) {
+                Button("Discard attempt", role: .destructive) {
                     confirmation = Confirmation(
                         token: original.token,
                         requestId: original.requestId,

@@ -7,7 +7,7 @@ import { invitationUUID as uuid } from '../../homes/invitations/invitationDecisi
 
 type Store = Pick<PendingRemovalStore, 'load' | 'save' | 'clear'>;
 export const removalBase = '/api/homes/member-removals';
-const UNKNOWN = 'The result is not confirmed. Your original removal is kept. Check its saved result, retry that same removal, or cancel the attempt.';
+const UNKNOWN = 'We couldn’t confirm the result. Your last removal is kept: check again, try again, or discard this attempt.';
 export class RemovalController {
   readonly origin = api.getApiBaseUrl();
   private readonly auth = api.getAuthToken();
@@ -35,7 +35,7 @@ export class RemovalController {
     } catch { return false; }
   }
   private requireCurrent() {
-    if (!this.current()) throw new Error('This removal page is no longer current. Reopen recovery to check your saved action.');
+    if (!this.current()) throw new Error('This page is out of date. Reload to check your last removal.');
   }
   private authenticationFailure(error: unknown) {
     const failure = error as { statusCode?: number; code?: string };
@@ -50,7 +50,7 @@ export class RemovalController {
     let profile: Awaited<ReturnType<typeof api.users.getMyProfile>> | null = null;
     try { profile = await api.users.getMyProfile(); } catch (error) { this.authenticationFailure(error); }
     this.requireCurrent();
-    if (profile && profile.id !== this.session.actor_id) { this.retire(); throw new Error('Your account changed. Reopen removal recovery.'); }
+    if (profile && profile.id !== this.session.actor_id) { this.retire(); throw new Error('Your account changed. Reload to continue.'); }
     this.accountLabel = profile?.name || profile?.username || 'Your current account';
     this.store = storeForActor(this.session.actor_id);
     const saved = await this.store.load();
@@ -94,16 +94,16 @@ export class RemovalController {
   }
   async recover(action: 'status' | 'retry' | 'cancel', expectedRequestId?: string) {
     return this.action(async () => {
-      if (expectedRequestId && this.snapshot?.draft.request_id !== expectedRequestId) throw new Error('The original removal changed. Reopen recovery.');
+      if (expectedRequestId && this.snapshot?.draft.request_id !== expectedRequestId) throw new Error('This removal changed. Reload to see the latest.');
       await this.resolve(action);
     });
   }
   private async resolve(action: 'status' | 'retry' | 'cancel') {
     const original = this.snapshot;
-    if (!original || !this.store) throw new Error('Reopen recovery to check the original removal.');
+    if (!original || !this.store) throw new Error('Reload to check your last removal.');
     const saved = await this.store.load(); this.requireCurrent();
     if (!saved || saved.revision !== original.revision || saved.draft.request_json !== original.draft.request_json)
-      throw new Error('Another tab changed the saved removal. Reopen recovery.');
+      throw new Error('Another tab changed this removal. Reload to see the latest.');
     const known = this.observed || original.draft.outcome;
     if (known && known.state !== 'pending') {
       if (!original.draft.outcome || original.draft.outcome.state === 'pending') await this.saveOutcome(known, original);
@@ -143,7 +143,7 @@ export class RemovalController {
     catch (error) { this.authenticationFailure(error); this.requireCurrent(); throw error; }
     this.requireCurrent(); const session = response.data?.session;
     if (!validInvitationSession(session) || session.actor_id !== this.session!.actor_id || session.session_scope !== this.session!.session_scope) {
-      this.retire(); throw new Error('Your session changed. Reopen removal recovery.');
+      this.retire(); throw new Error('Your sign-in changed. Reload to continue.');
     }
   }
   /** Fresh list evidence is independent of the historical receipt. It never mutates the saved original. */
@@ -178,7 +178,7 @@ export class RemovalController {
   private headers() { return { 'X-Pantopus-Session-Scope': this.session!.session_scope, 'Cache-Control': 'no-cache, no-store', 'Content-Type': 'application/json' }; }
   private async action<T>(run: () => Promise<T>): Promise<T> {
     this.requireCurrent();
-    if (!this.opened || this.busy) throw new Error('Wait for removal recovery to finish.');
+    if (!this.opened || this.busy) throw new Error('Wait for the removal check to finish.');
     this.busy = true;
     try { return await run(); } finally { this.busy = false; }
   }

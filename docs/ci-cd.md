@@ -122,6 +122,14 @@ If automatic recovery itself fails, the workflow reports a critical error.
 Inspect retained `*-previous` containers on the host and recover service before
 retrying. A failed first deployment has no prior service to restore.
 
+Rehearsed on October 6 with real Docker against a throwaway local Supabase stack
+(L4, `scripts/deploy/backend.sh --local-image` with two production images):
+deploy A, deploy B, then roll back to A each took 21–24 s and left the other
+release's containers stopped as `*-previous`; the API was unreachable for about
+2.6 s during a swap. A release whose candidate could not reach the database
+stopped after readiness timed out without touching the running API, and an image
+whose revision label didn't match the expected commit was refused at once.
+
 ## Required check and permissions
 
 Protect `master` with required check `CI OK`, strict up-to-date branches, and

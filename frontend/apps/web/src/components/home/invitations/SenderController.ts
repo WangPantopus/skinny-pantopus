@@ -4,7 +4,7 @@ import { validInvitationSession, validSenderInput, validateSenderContext, validS
   type SenderInput, type SenderSession, type SenderContext, type SenderDraft, type SenderOutcome } from './senderModel';
 type Store = Pick<PendingSenderStore, 'load' | 'save' | 'clear'>;
 const base = '/api/homes/invitations/sender';
-const UNKNOWN = 'The result is not confirmed. Your original invitation action is kept. Check its result, retry that same action, or cancel the attempt.';
+const UNKNOWN = 'We couldn’t confirm the result. Your last invitation is kept: check again, try again, or discard this attempt.';
 export class SenderController {
   readonly origin = api.getApiBaseUrl();
   private readonly auth = api.getAuthToken();
@@ -36,7 +36,7 @@ export class SenderController {
       && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker && document.visibilityState !== 'hidden'; }
     catch { return false; }
   }
-  private requireCurrent() { if (!this.current()) throw new Error('This invitation page is no longer current. Reopen recovery to check your saved action.'); }
+  private requireCurrent() { if (!this.current()) throw new Error('This page is out of date. Reload to check your last invitation.'); }
   async open(storeForActor: (actor: string) => Store = actor => new PendingSenderStore(this.origin,actor)) {
     this.requireCurrent();
     const response = await api.apiClient.get<{session:unknown}>(base+'/session'); this.requireCurrent();
@@ -46,7 +46,7 @@ export class SenderController {
     try { profile = await api.users.getMyProfile(); }
     catch (error) { if ((error as {statusCode?:number})?.statusCode === 401) this.retire(); }
     this.requireCurrent();
-    if (profile && profile.id !== this.session.actor_id) throw new Error('Your account changed. Reopen invitation recovery.');
+    if (profile && profile.id !== this.session.actor_id) throw new Error('Your account changed. Reload to continue.');
     this.accountLabel = profile?.name || profile?.username || profile?.email || 'Your current account';
     this.store = storeForActor(this.session.actor_id);
     const saved = await this.store.load(); this.requireCurrent();
@@ -55,7 +55,7 @@ export class SenderController {
   async prepare(input: SenderInput) {
     return this.action(async () => {
       this.context = null; this.reviewed = null;
-      if (this.snapshot || this.attempted) throw new Error('Recover and acknowledge your earlier invitation action first.');
+      if (this.snapshot || this.attempted) throw new Error('Finish your last invitation first.');
       await this.checkSession();
       const original: SenderInput = JSON.parse(JSON.stringify(input));
       if (!validSenderInput(original)) throw new Error('Review the invitation details before continuing.');
@@ -63,7 +63,7 @@ export class SenderController {
       try { body = (await api.apiClient.post(base+'/context',original,{headers:this.headers()})).data; }
       catch(error) {
         this.requireCurrent(); const code = (error as {code?:string})?.code;
-        if (code === 'SESSION_SCOPE_CHANGED') { this.retire(); throw new Error('Your session changed. Reopen recovery before deciding.'); }
+        if (code === 'SESSION_SCOPE_CHANGED') { this.retire(); throw new Error('Your sign-in changed. Reload before continuing.'); }
         throw new Error(senderMessage(code));
       }
       this.requireCurrent(); validateSenderContext(body,original,this.session!);
@@ -87,15 +87,15 @@ export class SenderController {
   }
   async recover(action:'status'|'retry'|'cancel',expectedRequestId?:string) {
     return this.action(async()=>{
-      if (expectedRequestId && this.snapshot?.draft.request_id !== expectedRequestId) throw new Error('The original action changed. Reopen recovery.');
+      if (expectedRequestId && this.snapshot?.draft.request_id !== expectedRequestId) throw new Error('This invitation changed. Reload to see the latest.');
       await this.resolve(action);
     });
   }
   private async resolve(action:'status'|'retry'|'cancel') {
     const original = this.snapshot;
-    if (!original || !this.store) throw new Error('Reopen recovery to check the original invitation action.');
+    if (!original || !this.store) throw new Error('Reload to check your last invitation.');
     const saved = await this.store.load(); this.requireCurrent();
-    if (!saved || saved.revision !== original.revision || saved.draft.request_json !== original.draft.request_json) throw new Error('Another tab changed the saved action. Reopen recovery.');
+    if (!saved || saved.revision !== original.revision || saved.draft.request_json !== original.draft.request_json) throw new Error('Another tab changed this invitation. Reload to see the latest.');
     const known = this.observed || original.draft.outcome;
     if (known && known.state !== 'pending') {
       if (!original.draft.outcome || original.draft.outcome.state === 'pending') await this.saveOutcome(known,original);
@@ -121,26 +121,26 @@ export class SenderController {
   private async saveOutcome(outcome:SenderOutcome,original:SenderSnapshot){this.snapshot=await this.store!.save({...original.draft,outcome},original,()=>this.current());this.requireCurrent();}
   private async checkSession(){
     const response=await api.apiClient.get<{session:unknown}>(base+'/session');this.requireCurrent();const s=response.data?.session;
-    if(!validInvitationSession(s)||s.actor_id!==this.session!.actor_id||s.session_scope!==this.session!.session_scope){this.retire();throw new Error('Your session changed. Reopen invitation recovery.');}
+    if(!validInvitationSession(s)||s.actor_id!==this.session!.actor_id||s.session_scope!==this.session!.session_scope){this.retire();throw new Error('Your sign-in changed. Reload to continue.');}
   }
   async checkShare(expectedRequestId: string) {
     return this.action(async () => {
       this.clearShare(); const sharingRevision = this.shareRevision;
       const original = this.snapshot;
       if (!original || original.draft.request_id !== expectedRequestId || original.draft.outcome?.state !== 'completed'
-        || original.draft.action === 'withdraw' || !original.draft.outcome.invitation_id) throw new Error('Recover the saved invitation first.');
+        || original.draft.action === 'withdraw' || !original.draft.outcome.invitation_id) throw new Error('Finish your last invitation first.');
       const retained = await this.store!.load(); this.requireCurrent();
-      if (retained?.revision !== original.revision) throw new Error('Another tab changed the original action. Reopen recovery.');
+      if (retained?.revision !== original.revision) throw new Error('Another tab changed this invitation. Reload to see the latest.');
       await this.checkSession();
       const input: SenderInput = {home_id:original.draft.home_id,invitation_id:original.draft.outcome.invitation_id,action:'resend'};
       let response: unknown;
       try { response = (await api.apiClient.post(base+'/context',input,{headers:this.headers()})).data; }
-      catch { this.requireCurrent(); throw new Error('This invitation link could not be confirmed for sharing. Check current household authority, invitation status and delivery options.'); }
+      catch { this.requireCurrent(); throw new Error('Couldn’t get a link for this invitation. It may have been answered or withdrawn, or you may no longer manage invitations.'); }
       this.requireCurrent(); validateSenderContext(response,input,this.session!);
       await this.checkSession();
       const latest = await this.store!.load(); this.requireCurrent();
-      if (latest?.revision !== original.revision) throw new Error('Another tab changed the original action. Reopen recovery.');
-      if (sharingRevision !== this.shareRevision) throw new Error('A newer refresh retired this sharing check. Check the link again.');
+      if (latest?.revision !== original.revision) throw new Error('Another tab changed this invitation. Reload to see the latest.');
+      if (sharingRevision !== this.shareRevision) throw new Error('The list refreshed. Get the invitation link again.');
       const expires = response.invitation?.expires_at;
       this.shareUntil = Math.min(Date.now() + 60_000, expires ? Date.parse(expires) : Infinity);
       this.sharedRequest = expectedRequestId;
@@ -155,5 +155,5 @@ export class SenderController {
     });
   }
   private headers(){return {'X-Pantopus-Session-Scope':this.session!.session_scope,'Cache-Control':'no-cache, no-store','Content-Type':'application/json'};}
-  private async action<T>(run:()=>Promise<T>):Promise<T>{this.requireCurrent();if(!this.opened||this.busy)throw new Error('Wait for invitation recovery to finish.');this.busy=true;try{return await run();}finally{this.busy=false;}}
+  private async action<T>(run:()=>Promise<T>):Promise<T>{this.requireCurrent();if(!this.opened||this.busy)throw new Error('Wait for the invitation check to finish.');this.busy=true;try{return await run();}finally{this.busy=false;}}
 }
