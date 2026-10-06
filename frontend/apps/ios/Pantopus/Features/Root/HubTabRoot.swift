@@ -693,7 +693,15 @@ public struct HubTabRoot: View {
         // In the Mail tab, the Mailbox/Messages switch hides below the root.
         .onChange(of: path.isEmpty, initial: true) { _, atRoot in
             if mode == .mailbox { MailTabStore.shared.mailboxAtRoot = atRoot }
+            if mode == .hub { rootTabs.placeAtRoot = atRoot }
             if atRoot, placeLandingNeedsHome { Task { await resolvePlaceLanding() } }
+        }
+        // Tapping Place again on the Hub root lands on Your Place again (a tap
+        // on Your Place still opens the Hub, which keeps its bell and tools).
+        .onChange(of: rootTabs.placeReselectedAtRoot) { _, token in
+            guard token != nil, mode == .hub, path.isEmpty, didAutoLandPlace || placeLandingNeedsHome else { return }
+            didAutoLandPlace = false
+            Task { await resolvePlaceLanding() }
         }
         .onChange(of: rootTabs.selected) { old, new in
             // Cross-tab dispatch may select this tab *after* the pending

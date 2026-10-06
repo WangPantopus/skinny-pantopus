@@ -87,6 +87,11 @@ public final class RootTabModel {
     public var selected: RootTab = .place
     /// Unread Messages count rendered as the Mail tab badge.
     public var messagesBadge: Int = 0
+    /// The Place stack is on its Hub root (kept current by `HubTabRoot`).
+    public var placeAtRoot = false
+    /// Changes each time the Place tab is tapped again while already on the
+    /// Hub root, so the Hub can land on Your Place again.
+    public var placeReselectedAtRoot: UUID?
     public init() {}
 }
 
@@ -302,7 +307,14 @@ public struct RootTabView: View {
     private var tabBinding: Binding<RootTab> {
         Binding(
             get: { model.selected },
-            set: { model.selected = $0 }
+            set: { tab in
+                // Read before UIKit pops a deeper stack: only a tap on the Hub
+                // root itself asks for Your Place again.
+                if tab == .place, model.selected == .place, model.placeAtRoot {
+                    model.placeReselectedAtRoot = UUID()
+                }
+                model.selected = tab
+            }
         )
     }
 
