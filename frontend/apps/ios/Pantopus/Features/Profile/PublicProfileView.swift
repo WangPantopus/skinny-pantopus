@@ -107,7 +107,7 @@ public struct PublicProfileView: View {
                 Task { await viewModel.block() }
             }
         } message: {
-            Text("\(blockName ?? "They") won't be able to message you, and new conversations with them are prevented.")
+            Text("You won't be able to message each other or see each other's posts.")
         }
         .sheet(isPresented: $showReportSheet) {
             reportSheet

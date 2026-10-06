@@ -662,7 +662,7 @@ fun ChatConversationScreen(
                 onDismissRequest = { showBlockConfirm = false },
                 containerColor = PantopusColors.appSurface,
                 title = { Text(text = "Block ${activeCounterparty.displayName}?") },
-                text = { Text(text = "They won't be able to message you anymore. You can unblock them later.") },
+                text = { Text(text = "You won't be able to message each other or see each other's posts. You can unblock them later.") },
                 confirmButton = {
                     TextButton(
                         onClick = {
