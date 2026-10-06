@@ -73,6 +73,7 @@ function PasswordContent() {
           <div className="relative">
             <input
               type={showCurrent ? 'text' : 'password'}
+              aria-label="Current password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               placeholder="Enter current password"
@@ -80,7 +81,8 @@ function PasswordContent() {
               className="w-full px-3 py-2.5 pr-10 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
             <button type="button" onClick={() => setShowCurrent(!showCurrent)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-app-text-muted hover:text-app-text">
+              aria-label={showCurrent ? 'Hide current password' : 'Show current password'}
+              className="absolute right-1 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-md text-app-text-muted hover:text-app-text">
               {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
@@ -92,6 +94,7 @@ function PasswordContent() {
           <div className="relative">
             <input
               type={showNew ? 'text' : 'password'}
+              aria-label="New password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="At least 8 characters"
@@ -99,7 +102,8 @@ function PasswordContent() {
               className="w-full px-3 py-2.5 pr-10 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
             <button type="button" onClick={() => setShowNew(!showNew)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-app-text-muted hover:text-app-text">
+              aria-label={showNew ? 'Hide new password' : 'Show new password'}
+              className="absolute right-1 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-md text-app-text-muted hover:text-app-text">
               {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>

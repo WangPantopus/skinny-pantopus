@@ -21,6 +21,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
+const notificationService = require('../services/notificationService');
 
 // All routes require auth + admin role
 router.use(verifyToken, requireAdmin);
@@ -254,7 +255,7 @@ router.post('/post/:reportId/remove', async (req, res) => {
     const now = new Date().toISOString();
     const { data: post, error: postError } = await supabaseAdmin
       .from('Post')
-      .select('id, archive_reason')
+      .select('id, user_id, archive_reason')
       .eq('id', report.post_id)
       .maybeSingle();
     if (postError) {
@@ -270,6 +271,21 @@ router.post('/post/:reportId/remove', async (req, res) => {
         logger.error('Admin post removal failed', { reportId, postId: post.id, error: removeError.message });
         return res.status(500).json({ error: 'Failed to remove the post' });
       }
+      // The author still sees the post, so without this they'd never learn neighbors can't.
+      // Neither the reporter nor the moderator is named. The apps sort notices by words in the
+      // type, and one with "post" in it would show as a Reply; this one lands under System.
+      notificationService.createNotification({
+        userId: post.user_id,
+        type: 'content_removed',
+        title: 'Your post was removed',
+        body: 'A Pantopus moderator removed it after a report. Neighbors can no longer see it.',
+        icon: '🛡️',
+        link: `/posts/${post.id}`,
+        metadata: { post_id: post.id },
+        idempotencyKey: `post-removed:${post.id}`,
+      }).catch((err) => {
+        logger.warn('Post removal notification failed (non-blocking)', { postId: post.id, error: err.message });
+      });
     }
 
     const { data: closed, error: closeError } = await supabaseAdmin
