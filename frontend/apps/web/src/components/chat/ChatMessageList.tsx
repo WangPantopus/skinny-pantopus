@@ -105,12 +105,11 @@ export default function ChatMessageList({
   }, []);
 
   return (
-    <main
+    <section
       ref={scrollRef}
       onScroll={handleScroll}
       className="flex-1 min-h-0 overflow-y-scroll overscroll-contain"
       tabIndex={0}
-      role="region"
       aria-label="Chat messages"
     >
       <div ref={contentRef} className="max-w-3xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -198,6 +197,6 @@ export default function ChatMessageList({
           </button>
         </div>
       )}
-    </main>
+    </section>
   );
 }
