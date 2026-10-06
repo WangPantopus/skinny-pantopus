@@ -3,7 +3,8 @@
 package app.pantopus.android.ui.screens.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -81,12 +82,13 @@ fun AuthNavHost() {
         }
     }
 
+    // The app draws edge to edge (MainActivity.enableEdgeToEdge). The signed-in
+    // tabs get their system-bar insets from the root Scaffold; the signed-out
+    // screens get them here, so no top bar or bottom button sits under a bar.
     NavHost(
         navController = navController,
         startDestination = AuthRoutes.LOGIN,
-        // The activity draws edge to edge. Keep the signed-out screens below the
-        // status bar, so their Close / Back buttons take taps instead of the system bar.
-        modifier = Modifier.background(PantopusColors.appSurface).statusBarsPadding(),
+        modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).systemBarsPadding(),
     ) {
         composable(
             route = AuthRoutes.LEGAL_PATTERN,

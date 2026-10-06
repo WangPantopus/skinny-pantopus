@@ -161,6 +161,8 @@ if (configuredTrustProxy && ['true', 'yes', 'on'].includes(configuredTrustProxy.
 }
 
 app.set('trust proxy', trustProxy);
+// Web requests arrive through Vercel; recover the visitor's address before logging and limits.
+app.use(require('./middleware/edgeClientIp'));
 
 // Initialize Socket.io
 const io = socketIo(server, {

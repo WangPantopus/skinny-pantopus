@@ -171,7 +171,6 @@ describe('Existing standalone upload types', () => {
     ['voice_postscript', 'other', 'voice_postscript', 'audio/m4a', 'voice.m4a'],
     ['gig_photo', 'gig_attachment', 'gig_photo', 'image/jpeg', 'gig.jpg'],
     ['mailbox_unboxing', 'mailbox_attachment', 'mailbox_unboxing', 'image/jpeg', 'mail.jpg'],
-    ['business_verification', 'other', 'business_verification', 'application/pdf', 'proof.pdf'],
     ['gig_attachment', 'gig_attachment', null, 'image/jpeg', 'existing.jpg'],
     ['other', 'other', null, 'application/msword', 'existing.doc'],
   ])('stores existing caller type %s within the existing File schema', async (requested, stored, context, mime, name) => {
@@ -184,6 +183,31 @@ describe('Existing standalone upload types', () => {
     });
     expect(s3.generateS3Key).toHaveBeenCalledWith(requested === 'voice_postscript' ? 'voice-postscripts' : 'uploads', name, userId);
     expect(response.body.file).toMatchObject({ id: expect.any(String), url: expect.any(String) });
+  });
+
+  test('stores verification documents in private storage with no public URL', async () => {
+    const previousBucket = process.env.HOME_DOCUMENTS_BUCKET;
+    process.env.HOME_DOCUMENTS_BUCKET = 'private-docs';
+    db.storage.getBucket = jest.fn().mockResolvedValue({ data: { public: false }, error: null });
+    try {
+      const response = await request(app).post('/api/files/upload')
+        .field('file_type', 'business_verification').field('visibility', 'private')
+        .attach('file', Buffer.from('%PDF-1.4 synthetic'), { filename: 'proof.pdf', contentType: 'application/pdf' });
+      expect(response.status).toBe(201);
+      expect(response.body.file).toEqual({ id: expect.any(String), url: '' });
+      expect(s3.uploadToS3).not.toHaveBeenCalled();
+      const saved = db.getTable('File').at(-1);
+      expect(saved).toMatchObject({
+        user_id: userId, file_type: 'other', file_context: 'business_verification', visibility: 'private', file_url: '',
+        metadata: { storage_contract: 'business_verification_v1', storage_bucket: 'private-docs' },
+      });
+      expect(saved.file_path).toMatch(new RegExp(`^business-verification/${userId}/[0-9a-f-]{36}\\.pdf$`));
+      expect(storageFrom).toHaveBeenCalledWith('private-docs');
+      expect(upload).toHaveBeenCalledWith(saved.file_path, expect.any(Buffer), expect.objectContaining({ upsert: false }));
+    } finally {
+      if (previousBucket === undefined) delete process.env.HOME_DOCUMENTS_BUCKET;
+      else process.env.HOME_DOCUMENTS_BUCKET = previousBucket;
+    }
   });
 
   test('routes completion proof through its gig-bound private contract without public S3 writes', async () => {
