@@ -136,10 +136,16 @@ Supabase dashboard → Authentication:
   and `pantopus://auth/callback`.
 - Email: confirm email **on**; minimum password length **12**; custom SMTP from
   D6 (sender `Pantopus Staging <staging@pantopus.com>`).
-- Providers (L3 verifies sign-in): Apple with client IDs
-  `app.pantopus.ios,<your Services ID>` and the generated secret (it expires
-  every six months); Google with the web client ID and secret, redirect URI
-  `https://<staging ref>.supabase.co/auth/v1/callback` in Google Cloud.
+- Providers (L3 verifies sign-in):
+  - Apple: a Services ID (for example `app.pantopus.web`) whose Return URL is
+    `https://<staging ref>.supabase.co/auth/v1/callback`, a Sign in with Apple
+    key (`.p8`) turned into the client secret (it expires after at most six
+    months: put the renewal in your calendar), and Supabase "Client IDs"
+    `app.pantopus.web,app.pantopus.ios` (the iOS app uses Apple's native sheet,
+    so the bundle ID must be listed).
+  - Google: a Web OAuth client in Google Cloud with the authorized redirect URI
+    `https://<staging ref>.supabase.co/auth/v1/callback`; its client ID and
+    secret go into the Supabase Google provider.
 
 **Check:** a new synthetic account receives the confirmation email and can sign
 in on the web and both apps.
@@ -240,7 +246,8 @@ reminders:
    `INTERNAL_API_KEY` (the value in `hosted-secrets/staging.env`),
    `CURATOR_EMAIL` and `CURATOR_PASSWORD` (a staging curator account),
    `OPENAI_API_KEY`, and optionally `WEATHERKIT_KEY_ID`, `WEATHERKIT_TEAM_ID`,
-   `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY`:
+   `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY` (and the air-quality key
+   once L1's seeder change says where `alert_checker` reads it):
    ```bash
    aws secretsmanager put-secret-value --secret-id pantopus/seeder/staging --secret-string file://<private json file>
    ```
@@ -399,8 +406,10 @@ and, once the new store listings exist, `NEXT_PUBLIC_IOS_APP_STORE_URL`,
 
 ### iOS (TestFlight, then App Store)
 
-- [ ] Founder: App Store Connect app record for `app.pantopus.ios` (name per
-  D2), an App Store Connect API key, a private `match` repository and password.
+- [ ] Founder: turn on the **Sign in with Apple** capability for the App ID
+  `app.pantopus.ios` (before `match` creates the App Store profile), then the
+  App Store Connect app record for `app.pantopus.ios` (name per D2), an App
+  Store Connect API key, a private `match` repository and password.
   Secrets in the GitHub `ios-release` environment: `STRIPE_PUBLISHABLE_KEY`,
   `MATCH_GIT_URL`, `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`,
   `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
