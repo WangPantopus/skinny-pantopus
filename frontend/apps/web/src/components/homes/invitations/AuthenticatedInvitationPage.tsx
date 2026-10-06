@@ -8,35 +8,37 @@ import { useInvitationDecision } from './useInvitationDecision';
 import { invitationDecisionMessage } from './invitationDecisionModel';
 
 const button = 'min-h-11 rounded-xl border border-app-border px-4 py-3 text-sm font-semibold disabled:opacity-50';
+/** "restricted_member" → "Restricted member". */
+const humanRole = (role?: string | null) => { const words = (role || 'member').replaceAll('_', ' ').trim(); return words.charAt(0).toUpperCase() + words.slice(1); };
 export default function AuthenticatedInvitationPage({ token }: { token: string }) {
   const recovery = useInvitationDecision(token), router = useRouter();
   const [switching, setSwitching] = useState(false), [switchError, setSwitchError] = useState('');
   const { pending, context, progress, error, busy, ready, canAcknowledge, canDecide, accountLabel } = recovery;
   const state = pending?.outcome?.state;
-  const title = pending ? state === 'completed' ? pending.action === 'accept' ? 'Acceptance saved' : 'Decline saved'
-    : state === 'cancelled' ? 'Decision attempt cancelled' : state === 'rejected' ? 'Decision needs review' : 'Recover your invitation decision'
+  const title = pending ? state === 'completed' ? pending.action === 'accept' ? 'Invitation accepted' : 'Invitation declined'
+    : state === 'cancelled' ? 'Attempt discarded' : state === 'rejected' ? 'Couldn’t finish this' : 'Check your answer'
     : context ? "You're invited" : error ? 'Invitation status' : 'Checking your invitation';
   const decide = async (action: 'accept' | 'decline') => {
     if (!context || !canDecide) return;
     const expected = context.decision_token;
     const yes = await confirmStore.open({ title: action === 'accept' ? 'Accept this invitation?' : 'Decline this invitation?',
       description: action === 'accept'
-        ? `${accountLabel} will accept the invitation to ${context.preview.home?.name || 'this Home'}. Household permissions and access dates still apply.`
-        : `${accountLabel} will decline the invitation to ${context.preview.home?.name || 'this Home'}. You won't join this household; the sender can invite you again.`,
-      confirmLabel: action === 'accept' ? 'Confirm acceptance' : 'Confirm decline', variant: action === 'accept' ? 'primary' : 'destructive' });
+        ? `${accountLabel} will join the household at ${context.preview.home?.name || 'this Home'}. What you can open depends on your role and the invitation’s dates.`
+        : `${accountLabel} won’t join the household at ${context.preview.home?.name || 'this Home'}. The sender can invite you again later.`,
+      confirmLabel: action === 'accept' ? 'Accept' : 'Decline', variant: action === 'accept' ? 'primary' : 'destructive' });
     if (yes) await recovery.decide(action, expected);
   };
   const cancel = async () => {
     if (!pending) return;
     const original = pending.request_id;
-    const yes = await confirmStore.open({ title: 'Cancel this attempt?',
-      description: 'Cancellation must be confirmed. If your decision was already saved, that original result will be recovered. Cancelling an attempt does not decline the invitation.',
-      confirmLabel: 'Confirm cancellation', variant: 'destructive' });
+    const yes = await confirmStore.open({ title: 'Discard this attempt?',
+      description: 'If your answer already went through, it stays. Discarding doesn’t decline the invitation.',
+      confirmLabel: 'Discard', variant: 'destructive' });
     if (yes) await recovery.recover('cancel', original);
   };
   const switchAccount = async () => {
     const lifetime = recovery.lifetime;
-    const yes = await confirmStore.open({ title: 'Use another account?', description: 'You will be signed out. Any saved invitation decision stays protected for this account.', confirmLabel: 'Sign out and continue' });
+    const yes = await confirmStore.open({ title: 'Use another account?', description: 'You’ll be signed out. Any answer you already gave stays with this account.', confirmLabel: 'Sign out and continue' });
     if (!yes || !recovery.isCurrent(lifetime)) return;
     setSwitching(true); setSwitchError('');
     try {
@@ -48,26 +50,26 @@ export default function AuthenticatedInvitationPage({ token }: { token: string }
     <Link href="/app/homes" className="inline-block py-2 text-sm font-semibold text-app-text-secondary">← My Homes</Link>
     <h1 className="text-2xl font-semibold text-app-text">{title}</h1>
     {accountLabel && <p className="text-sm text-app-text-secondary break-words">Signed in as {accountLabel}</p>}
-    {!ready && !error && <p role="status">Checking your account and protected recovery…</p>}
+    {!ready && !error && <p role="status">Checking your invitation…</p>}
     {error && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">{error}</p>}
-    {busy && <p role="status">Checking the original decision…</p>}
+    {busy && <p role="status">Checking…</p>}
     {pending ? <>
-      <section aria-label="Original invitation decision" className="rounded-xl border border-app-border bg-app-surface p-5 space-y-3 break-words">
+      <section aria-label="Your answer" className="rounded-xl border border-app-border bg-app-surface p-5 space-y-3 break-words">
         <h2 className="font-semibold text-lg">{pending.home_label}</h2>
-        <p>Original decision: {pending.action === 'accept' ? 'Accept invitation' : 'Decline invitation'}</p>
-        {pending.token !== token && <p className="text-sm text-app-text-secondary">This is an earlier invitation. Finish its recovery before deciding on the link you just opened.</p>}
+        <p>Your answer: {pending.action === 'accept' ? 'Accept' : 'Decline'}</p>
+        {pending.token !== token && <p className="text-sm text-app-text-secondary">This is an earlier invitation. Finish it before answering the one you just opened.</p>}
         <p className="text-app-text-secondary">{state === 'completed'
-          ? pending.action === 'accept' ? 'Your acceptance is saved. Current household access is checked separately; roles, permissions and access dates still apply.'
-            : 'Your decline is saved for this account. An open invitation link may remain available to other people.'
-          : state === 'cancelled' ? 'The server confirmed that this attempt cannot accept or decline the invitation.'
+          ? pending.action === 'accept' ? 'You’re part of this household now. What you can open depends on your role and the invitation’s dates.'
+            : 'You won’t join this household. If it was shared as an open link, other people with the link can still use it.'
+          : state === 'cancelled' ? 'Nothing changed. This attempt was discarded before it took effect.'
             : state === 'rejected' ? invitationDecisionMessage(pending.outcome?.code)
-              : 'Your original decision is stored securely in this browser. Check the result or retry the same decision. Confirm cancellation before starting a different attempt.'}</p>
+              : 'We couldn’t confirm your answer. It’s saved in this browser, so you can check again or try again without answering twice.'}</p>
       </section>
       {state === 'completed' && pending.action === 'accept' && <section className="space-y-3" aria-label="Current household access">
-        <button className={`${button} w-full`} disabled={busy} onClick={() => void recovery.checkAccess()}>Check current Home access</button>
+        <button className={`${button} w-full`} disabled={busy} onClick={() => void recovery.checkAccess()}>Check Home access</button>
         {progress && <>
-          <p role="status" className="text-app-text-secondary">{progress.current_access === 'shared' ? 'Your current account can open this Home. Household permissions still apply.'
-            : 'Your saved acceptance does not provide current shared access. My Homes shows the available next steps.'}</p>
+          <p role="status" className="text-app-text-secondary">{progress.current_access === 'shared' ? 'You can open this Home now.'
+            : 'You can’t open this Home yet. My Homes shows what’s next.'}</p>
           {progress.current_access === 'shared' && <button className={`${button} w-full bg-gray-900 text-white`} disabled={busy} onClick={async () => {
             const homeId = await recovery.openHome(pending.request_id); if (homeId) router.push(`/app/homes/${homeId}/dashboard`);
           }}>Open Home</button>}
@@ -78,15 +80,15 @@ export default function AuthenticatedInvitationPage({ token }: { token: string }
         if (result?.outcome?.state === 'completed' && result.token === token) router.push('/app/homes');
         else if (result) recovery.reopen();
       }}>{state === 'completed' ? 'Done' : 'Review invitation again'}</button> : <div className="grid gap-3">
-        <button className={button} disabled={busy} onClick={() => void recovery.recover('status')}>Check saved decision</button>
-        <button className={`${button} bg-gray-900 text-white`} disabled={busy} onClick={() => void recovery.recover('retry')}>Retry original decision</button>
-        <button className={button} disabled={busy} onClick={() => void cancel()}>Cancel original attempt</button>
+        <button className={button} disabled={busy} onClick={() => void recovery.recover('status')}>Check again</button>
+        <button className={`${button} bg-gray-900 text-white`} disabled={busy} onClick={() => void recovery.recover('retry')}>Try again</button>
+        <button className={button} disabled={busy} onClick={() => void cancel()}>Discard attempt</button>
       </div>}
     </> : context && <section className="rounded-2xl border border-app-border bg-app-surface p-5 space-y-4">
       <h2 className="text-xl font-semibold break-words">{context.preview.home?.name || 'This Home'}</h2>
       <p className="text-app-text-secondary">{context.preview.home?.city}</p>
       <p>Invited by {context.preview.inviter?.name || 'the household'}</p>
-      <p className="rounded-lg bg-blue-50 p-3 text-blue-950">Offered role: {context.preview.invitation.proposed_role?.replaceAll('_', ' ')}</p>
+      <p className="rounded-lg bg-blue-50 p-3 text-blue-950">Offered role: {humanRole(context.preview.invitation.proposed_role)}</p>
       <p className="text-sm text-app-text-secondary">Household permissions determine what you can open or manage. This invitation gives you household access. To send neighbor messages or get a residency letter, verify the address yourself.</p>
       {context.preview.invitation.access_start_at && <p className="text-sm">Access starts {new Date(context.preview.invitation.access_start_at).toLocaleString()}.</p>}
       {context.preview.invitation.access_end_at && <p className="text-sm">Access ends {new Date(context.preview.invitation.access_end_at).toLocaleString()}.</p>}
@@ -96,7 +98,7 @@ export default function AuthenticatedInvitationPage({ token }: { token: string }
         <button className={button} disabled={busy || !canDecide} onClick={() => void decide('decline')}>Decline invitation</button>
       </div>
     </section>}
-    {(error || !context && !pending) && <button className={`${button} w-full`} disabled={busy || switching} onClick={recovery.reopen}>{pending ? 'Reopen recovery' : 'Retry invitation'}</button>}
+    {(error || !context && !pending) && <button className={`${button} w-full`} disabled={busy || switching} onClick={recovery.reopen}>Reload</button>}
     <button className={`${button} w-full`} disabled={busy || switching} onClick={() => void switchAccount()}>Use another account</button>
     {switchError && <p role="alert">{switchError}</p>}
   </main>;

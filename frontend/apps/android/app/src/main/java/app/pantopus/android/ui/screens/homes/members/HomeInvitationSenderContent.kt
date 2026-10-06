@@ -41,7 +41,7 @@ internal fun SenderCreateForm(
     val username = form.username
     val role = form.role
     Text(
-        "Choose household access. This invitation does not verify an address or establish ownership.",
+        "An invitation gives someone household access for the role you choose. It doesn't verify that they live here or own the Home.",
         color = PantopusColors.appTextSecondary,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -60,7 +60,11 @@ internal fun SenderCreateForm(
             modifier = Modifier.testTag("inviteMember_role_guest"),
         )
     }
-    Text("The household’s role and permission rules determine access. Guests have limited access.", color = PantopusColors.appTextSecondary)
+    Text(
+        "Members can see and help with household tasks. Guests get limited, view-only access. " +
+            "For a short visit, send a guest pass from the Guests tab instead.",
+        color = PantopusColors.appTextSecondary,
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         FilterChip(
             selected = !username,
@@ -126,7 +130,7 @@ internal fun SenderPrepared(
     onConfirm: (String) -> Unit,
     onEdit: () -> Unit,
 ) {
-    Text("Review the current invitation", color = PantopusColors.appText)
+    Text("Check the details", color = PantopusColors.appText)
     Text(prepared.summary, color = PantopusColors.appText, modifier = Modifier.testTag("homeSenderPreparedSummary"))
     Text(senderConfirmationText(prepared.intent.action), color = PantopusColors.appTextSecondary)
     TextButton(
@@ -138,7 +142,7 @@ internal fun SenderPrepared(
             when (prepared.intent.action) {
                 "withdraw" -> "Withdraw invitation"
                 "resend" -> "Resend invitation"
-                else -> "Save invitation"
+                else -> "Send invitation"
             },
         )
     }
@@ -159,11 +163,10 @@ internal fun SenderOriginal(
     Text(senderOriginalActionText(original), color = PantopusColors.appText)
     if (original.request.intent.homeId != currentHomeId) {
         Text(
-            "This saved original belongs to another Home. Review its saved details before continuing.",
+            "This is for another of your Homes. Finish it before inviting someone here.",
             color = PantopusColors.appTextSecondary,
         )
     }
-    Text("Finish this saved original before starting another invitation action.", color = PantopusColors.appTextSecondary)
     Text(original.summary, color = PantopusColors.appText, modifier = Modifier.testTag("homeSenderOriginalSummary"))
     val outcome = state.outcome
     if (outcome?.isTerminal == true) {
@@ -172,33 +175,36 @@ internal fun SenderOriginal(
             onClick = { viewModel.acknowledge(original.request.requestId, onAcknowledged) },
             enabled = state.canAcknowledge,
             modifier = Modifier.testTag("homeSenderAcknowledge"),
-        ) { Text("Acknowledge result") }
+        ) { Text("Done") }
     } else {
-        Text("The original result is not confirmed. Keep this original until it is resolved.", color = PantopusColors.appText)
+        Text(
+            "We couldn't confirm whether this went through. Check again, or try again. Trying again won't send a second email.",
+            color = PantopusColors.appText,
+        )
         TextButton(
             onClick = { viewModel.recover(HomeInvitationSenderRecovery.Check, original.request.requestId, state.generation) },
             enabled = !state.working,
             modifier = Modifier.testTag("homeSenderCheck"),
-        ) { Text("Check original result") }
+        ) { Text("Check again") }
         TextButton(
             onClick = { viewModel.recover(HomeInvitationSenderRecovery.Retry, original.request.requestId, state.generation) },
             enabled = !state.working,
             modifier = Modifier.testTag("homeSenderRetry"),
-        ) { Text("Retry original action") }
+        ) { Text("Try again") }
         TextButton(
             onClick = { onCancel(original.request.requestId) },
             enabled = !state.working,
             modifier = Modifier.testTag("homeSenderCancelAttempt"),
-        ) { Text("Cancel original attempt") }
+        ) { Text("Discard attempt") }
     }
 }
 
 internal fun senderOriginalActionText(original: PendingHomeInvitationSender): String =
-    "Saved original action: " +
+    "Action: " +
         when (original.request.intent.action) {
             "withdraw" -> "Withdraw invitation"
             "resend" -> "Resend invitation"
-            else -> "Create invitation"
+            else -> "Send invitation"
         }
 
 @Composable
@@ -212,10 +218,6 @@ private fun SenderTerminal(
         Text(senderOutcomeText(original.request.intent.action, outcome), color = PantopusColors.appText)
         if (outcome.state == "completed" && original.request.intent.action != "withdraw") {
             Text(senderDeliveryText(outcome), color = PantopusColors.appTextSecondary, modifier = Modifier.testTag("homeSenderDelivery"))
-            Text(
-                "This receipt does not establish current invitation availability or household access.",
-                color = PantopusColors.appTextSecondary,
-            )
             SenderSharing(original, state, viewModel)
         }
     }
@@ -244,10 +246,10 @@ private fun SenderSharing(
             onClick = { viewModel.checkSharing(original.request.requestId, state.generation) },
             enabled = !state.working,
             modifier = Modifier.testTag("homeSenderCheckShare"),
-        ) { Text("Check link for sharing") }
+        ) { Text("Get invitation link") }
         if (current) {
             Text(
-                "Current invitation availability checked. Sharing checks it again before opening the share sheet.",
+                "The link is ready. Anyone with it can accept this invitation, so share it only with the person you're inviting.",
                 color = PantopusColors.appTextSecondary,
             )
             TextButton(onClick = {
@@ -272,28 +274,33 @@ internal fun senderOutcomeText(
     outcome: HomeInvitationSenderOutcome,
 ): String =
     when (outcome.state) {
-        "cancelled" -> "Original attempt cancelled. No invitation action was performed by this attempt."
+        "cancelled" -> "Nothing changed. This attempt was discarded before it took effect."
         "rejected" -> senderRefusalMessage(outcome.code)
         else ->
             when (action) {
-                "withdraw" -> "Invitation withdrawn. Existing household membership was preserved."
-                "resend" -> "Resend saved. Earlier links remain valid; expiry and access dates were not extended."
-                else -> "Invitation saved. The recipient must accept to join the household."
+                "withdraw" -> "They can no longer accept it. Anyone already in the household stays."
+                "resend" -> "Links already sent keep working, and the expiry date hasn't changed."
+                else -> "They join the household when they accept. Until then, it's listed under Pending in Members."
             }
     }
 
-internal fun senderDeliveryText(outcome: HomeInvitationSenderOutcome): String =
-    listOf(
+/** What reached the invitee: "emailed" means the email service took the message, not that it arrived. */
+internal fun senderDeliveryText(outcome: HomeInvitationSenderOutcome): String {
+    val email =
         when (outcome.email) {
-            "provider_accepted" -> "Email provider accepted the message. Inbox delivery is not confirmed."
-            "not_requested" -> "Email delivery was not requested."
-            else -> "Email delivery is unconfirmed."
-        },
+            "provider_accepted" -> "We emailed the invitation."
+            "not_requested" -> null
+            else -> "We couldn't confirm the invitation email went out. You can share the invitation link instead."
+        }
+    val notice =
         when (outcome.inApp) {
-            "saved" -> "In-app notification saved. Push or device delivery is not confirmed."
-            "not_requested" -> "An in-app notification was not requested."
-            else -> "In-app notification delivery is unconfirmed."
-        },
-    ).joinToString("\n")
+            "saved" -> if (email == null) "It's in their Pantopus notifications." else "It's also in their Pantopus notifications."
+            "not_requested" -> null
+            else -> "We couldn't confirm their Pantopus notification."
+        }
+    return listOfNotNull(email, notice).joinToString(" ").ifEmpty {
+        "No email or notification was sent. Share the invitation link so they can accept."
+    }
+}
 
 private const val MAX_RECIPIENT_LENGTH = 254

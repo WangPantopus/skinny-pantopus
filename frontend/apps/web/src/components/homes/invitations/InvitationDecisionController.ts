@@ -5,7 +5,7 @@ import { invitationUUID, validInvitationSession, validateInvitationContext, vali
   invitationDecisionMessage, type InvitationSession, type InvitationContext, type InvitationDraft, type InvitationOutcome } from './invitationDecisionModel';
 
 type Store = Pick<PendingInvitationStore, 'load' | 'save' | 'clear'>;
-const UNKNOWN = 'The result is not confirmed. Your original decision is kept. Check its result, retry that same decision, or confirm cancellation of the attempt.';
+const UNKNOWN = 'We couldn’t confirm your answer. It’s kept: check again, try again, or discard this attempt.';
 export class InvitationDecisionController {
   readonly origin = api.getApiBaseUrl();
   private readonly auth = api.getAuthToken();
@@ -35,14 +35,14 @@ export class InvitationDecisionController {
       && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker && document.visibilityState !== 'hidden'; }
     catch { return false; }
   }
-  private requireCurrent() { if (!this.current()) throw new Error('This invitation page is no longer current. Reopen it to recover your saved decision.'); }
+  private requireCurrent() { if (!this.current()) throw new Error('This page is out of date. Reload to check your answer.'); }
   async open(storeForActor: (actor: string) => Store = actor => new PendingInvitationStore(this.origin, actor)) {
     this.requireCurrent();
     const response = await api.apiClient.get<{ session: unknown }>('/api/homes/invitations/decisions/session'); this.requireCurrent();
     if (!validInvitationSession(response.data?.session)) throw new Error('Your signed-in session could not be checked.');
     this.session = response.data.session;
     const profile = await api.users.getMyProfile(); this.requireCurrent();
-    if (!invitationUUID(profile?.id) || profile.id !== this.session.actor_id) throw new Error('Your account changed. Reopen invitation recovery.');
+    if (!invitationUUID(profile?.id) || profile.id !== this.session.actor_id) throw new Error('Your account changed. Reload to continue.');
     this.accountLabel = profile.name || profile.username || profile.email || 'Your current account';
     this.store = storeForActor(this.session.actor_id);
     const saved = await this.store.load(); this.requireCurrent();
@@ -51,15 +51,15 @@ export class InvitationDecisionController {
   async refresh() {
     return this.action(async () => {
       this.context = null; this.progress = null;
-      if (this.snapshot) throw new Error('Recover and acknowledge your earlier decision first.');
+      if (this.snapshot) throw new Error('Finish your earlier answer first.');
       if (!this.token || this.token.length > 512) throw new Error('Check the complete invitation link with the sender.');
       let body: unknown;
       try { body = (await api.apiClient.get(`/api/homes/invitations/token/${encodeURIComponent(this.token)}/decision-context`, { headers: this.headers() })).data; }
       catch (error) {
         this.requireCurrent();
         const code = (error as { code?: string })?.code;
-        if (code === 'SESSION_SCOPE_CHANGED') { this.retire(); throw new Error('Your session changed. Reopen recovery before deciding.'); }
-        throw new Error(code === 'INVITE_UNAVAILABLE' ? 'The invitation could not be checked. Retry to review its current details.' : invitationDecisionMessage(code));
+        if (code === 'SESSION_SCOPE_CHANGED') { this.retire(); throw new Error('Your sign-in changed. Reload before answering.'); }
+        throw new Error(code === 'INVITE_UNAVAILABLE' ? 'Couldn’t check this invitation. Reload to try again.' : invitationDecisionMessage(code));
       }
       this.requireCurrent(); validateInvitationContext(body, this.session!); this.context = body;
     });
@@ -78,15 +78,15 @@ export class InvitationDecisionController {
   }
   async recover(action: 'status' | 'retry' | 'cancel', expectedRequestId?: string) {
     return this.action(async () => {
-      if (expectedRequestId && this.snapshot?.draft.request_id !== expectedRequestId) throw new Error('The original decision changed. Reopen recovery.');
+      if (expectedRequestId && this.snapshot?.draft.request_id !== expectedRequestId) throw new Error('Your answer changed. Reload to see the latest.');
       await this.resolve(action);
     });
   }
   private async resolve(action: 'status' | 'retry' | 'cancel') {
     const original = this.snapshot;
-    if (!original || !this.store) throw new Error('Reopen recovery to check the original decision.');
+    if (!original || !this.store) throw new Error('Reload to check your answer.');
     const saved = await this.store.load(); this.requireCurrent();
-    if (!saved || saved.revision !== original.revision || saved.draft.request_json !== original.draft.request_json) throw new Error('Another tab changed the saved decision. Reopen recovery.');
+    if (!saved || saved.revision !== original.revision || saved.draft.request_json !== original.draft.request_json) throw new Error('Another tab changed your answer. Reload to see the latest.');
     const known = this.observed || original.draft.outcome;
     if (known && known.state !== 'pending') {
       if (!original.draft.outcome || original.draft.outcome.state === 'pending') await this.saveOutcome(known, original);
@@ -136,7 +136,7 @@ export class InvitationDecisionController {
     const response = await api.apiClient.get<{ session: unknown }>('/api/homes/invitations/decisions/session'); this.requireCurrent();
     const s = response.data?.session;
     if (!validInvitationSession(s) || s.actor_id !== this.session!.actor_id || s.session_scope !== this.session!.session_scope) {
-      this.retire(); throw new Error('Your session changed. Reopen invitation recovery.');
+      this.retire(); throw new Error('Your sign-in changed. Reload to continue.');
     }
   }
   async acknowledge(expectedRequestId: string) {
@@ -155,7 +155,7 @@ export class InvitationDecisionController {
   }
   private headers() { return { 'X-Pantopus-Session-Scope': this.session!.session_scope, 'Cache-Control': 'no-cache, no-store', 'Content-Type': 'application/json' }; }
   private async action<T>(run: () => Promise<T>): Promise<T> {
-    this.requireCurrent(); if (!this.opened || this.busy) throw new Error('Wait for invitation recovery to finish.');
+    this.requireCurrent(); if (!this.opened || this.busy) throw new Error('Wait for the invitation check to finish.');
     this.busy = true; try { return await run(); } finally { this.busy = false; }
   }
 }
