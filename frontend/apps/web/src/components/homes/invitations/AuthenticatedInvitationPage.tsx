@@ -20,7 +20,9 @@ export default function AuthenticatedInvitationPage({ token }: { token: string }
     if (!context || !canDecide) return;
     const expected = context.decision_token;
     const yes = await confirmStore.open({ title: action === 'accept' ? 'Accept this invitation?' : 'Decline this invitation?',
-      description: `${accountLabel} will ${action} the invitation to ${context.preview.home?.name || 'this Home'}. Household permissions and access dates still apply.`,
+      description: action === 'accept'
+        ? `${accountLabel} will accept the invitation to ${context.preview.home?.name || 'this Home'}. Household permissions and access dates still apply.`
+        : `${accountLabel} will decline the invitation to ${context.preview.home?.name || 'this Home'}. You won't join this household; the sender can invite you again.`,
       confirmLabel: action === 'accept' ? 'Confirm acceptance' : 'Confirm decline', variant: action === 'accept' ? 'primary' : 'destructive' });
     if (yes) await recovery.decide(action, expected);
   };
