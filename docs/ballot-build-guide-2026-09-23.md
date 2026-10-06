@@ -1,8 +1,8 @@
 # Ballot: build guide
 
-> **October 3, 2026: shelved. Do not build anything from this guide.** The election feature waits for the 2027 Washington local elections ([NEXT_STEPS.md](../NEXT_STEPS.md), section 6). Before any revival, fold the review's Appendix D amendments into the sections below.
+> **October 6, 2026: revived for the November 3 general election (founder decision), on web, iOS and Android.** The October 3 shelving no longer applies to Ballot. The working document is the [implementation plan](ballot-implementation-plan-2026-09-24.md), which records what was built and every change since this guide; this guide stays as the design record. Before using it as a specification again, fold the review's Appendix D amendments into the sections below ([NEXT_STEPS.md](../NEXT_STEPS.md), Ballot).
 
-Status: build specification, September 23, 2026. Nothing in it is built yet.
+Status: build specification, September 23, 2026. P0 is built (see the plan); the rest of it is not.
 Review added September 23: [product, data and build-guide critique](ballot-product-review-2026-09-23.md). Appendix D records proposed amendments and unresolved contradictions; the research request does not authorize implementation, and the original specification below is preserved for comparison.
 Implementation plan added September 24: [corrected contracts, canvas-matching rules and build order](ballot-implementation-plan-2026-09-24.md). Where the plan and this guide disagree, the plan wins.
 Visual source of truth: the [Pantopus Ballot design canvas](https://claude.ai/artifact/KCuXBiAYYaX13gpoqUCdmq) (20 boards; board names are quoted in this guide as **[Board: Name]**).

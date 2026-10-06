@@ -41,7 +41,7 @@ Sources, in order of authority for this work:
 
 **Made by the founder on October 3.**
 
-- [x] New builds are mobile only: iOS and Android. Web waits. Backend, database and seeder changes the apps need are in scope and must not break the current web.
+- [x] New builds are mobile only: iOS and Android. Web waits. Backend, database and seeder changes the apps need are in scope and must not break the current web. **Exception, October 6 (founder): Ballot is built on the web as well; see the Ballot section.**
 - [x] F1 to F12 for the pilot: build F1, F4 and the rest of F9's truthfulness fixes; build small versions of F2, F3 and F5; ship F3b's server gate with F3; leave F7, F8, F10 and F12's appeal windows for later; drop F6 and F11; park the stylized home picture and the address QR inbox.
 
 **Made on October 3 under the founder's standing instruction to go with the recommended option. Change any of them here.**
@@ -52,7 +52,7 @@ Sources, in order of authority for this work:
 - [x] The night-before pickup push rides the existing evening briefing. No new schedule.
 - [x] Holiday moves come from city-level holiday rows that shift that week's pickups. No per-home edits and no new table.
 - [x] F3b's server gate ships with the household step. Everyone verified by postcard, document, landlord or admin stays verified; people who joined by invitation become household-verified.
-- [x] The election feature is shelved until the 2027 Washington local elections. Its canvas and guide stay as they are.
+- [x] The election feature is shelved until the 2027 Washington local elections. Its canvas and guide stay as they are. **Reversed October 6 (founder): Ballot ships for the November 3 general election, on web, iOS and Android, behind `ballot_p0`; see the Ballot section.**
 - [x] On a pickup evening the pickup leads the push; only a serious weather alert beats it. Nearby updates never lead an evening push.
 - [x] Task reminders arrive the morning of the due day in the household's time zone; Support Train reminders use the train's local time.
 - [x] The task-completed push doesn't name the task or the person on the lock screen.
@@ -249,14 +249,14 @@ Phases 0 and 1 of the [Street Organizer launch plan](docs/product/street-organiz
 - Dropped: F6 (just-moved ticks on the account and the voter step) and F11 (the keeper).
 - Parked: the stylized home picture; the address QR inbox; the Place tab rebuilt around a "place file" and "Your places"; the one-page notification settings redesign.
 - Parked: a feed of permits, land-use cases, sales and assessment changes near an address. It needs the per-city adapters listed under Not now; it can return as the Street Organizer's civic facts and as Pulse content.
-- Shelved: the election feature until the 2027 local elections ([build guide](docs/ballot-build-guide-2026-09-23.md), [review](docs/ballot-product-review-2026-09-23.md) and the design canvas kept).
+- Shelved until October 6, then revived by the founder for the November 3 general election: the election feature (see the Ballot section). The 2027 local-election work it was shelved for stays parked ([build guide](docs/ballot-build-guide-2026-09-23.md), [review](docs/ballot-product-review-2026-09-23.md) and the design canvas kept).
 - Creator network and Places: ten conversations first (five hobbyist photographers or hikers, five creators), then decide in late November.
 
 ## 7. Documentation
 
 - [ ] Wedge v2 page: add a v3 note; fix "Clark County sits in Zone 2", the "permanent 0% marketplace fee" line and "Android batches later"; record the decisions in section 13.
 - [ ] The five September source docs, per the design review: rewrite the nationwide doc's entry section as a change over `/start`; shrink P1 to the smaller first slice; fix appendix A.7's stale citations; mark the v1 brief's navigation retired in the design index; narrow the places doc to libraries and parks with two records; add a true cold-start example to the prototype.
-- [ ] Ballot guide: fold the reviewer's twelve amendments into the body; correct the canvas lines the code can't support. Only when the feature is revived.
+- [ ] Ballot guide: fold the reviewer's twelve amendments into the body; correct the canvas lines the code can't support. The feature was revived on October 6, so this is due before the guide is used as a specification again; the [implementation plan](docs/ballot-implementation-plan-2026-09-24.md) is the working document meanwhile.
 - [ ] Add Places and Creator sections to the idea ledger.
 - [ ] Claude Design pack: stop drawing and fixing cut features; finish fix passes only for the pilot screens listed in section 12 of the brief.
 - [ ] Decide whether strategy documents belong on a public repository.
@@ -270,16 +270,17 @@ Bill paying by an assistant · generic shopping and deals · any navigation rela
 
 ## Ballot (added September 24)
 
-> **Status after merging master (October 6):** [section 6](#6-dropped-parked-or-shelved) and the [build guide](docs/ballot-build-guide-2026-09-23.md) record the election feature as shelved until the 2027 local elections, and the [pilot brief](docs/mobile-pilot-build-brief-2026-10-03.md) makes new builds mobile only. The checklist below describes the P0 built before that decision. Its code stays behind `ballot_p0`, which is off, and merging the branch doesn't revive the feature. "Sections 2–3 above" below means the text before October 3. See [plan §10.5](docs/ballot-implementation-plan-2026-09-24.md#105-master-integration-and-review--october-6-2026).
+> **Status (October 6, founder decision):** Ballot is needed on the web app and on iOS and Android for the November 3 general election ("should have been built already"). For Ballot this supersedes the October 3 lines that shelve the election feature until 2027 ([section 6](#6-dropped-parked-or-shelved), the [build guide](docs/ballot-build-guide-2026-09-23.md)) and make new builds mobile only (the [pilot brief](docs/mobile-pilot-build-brief-2026-10-03.md)). Oregon's registration deadline is October 13, so it is urgent. The pre-launch review of PR #429 found defects on all three platforms and in the data; they are repaired on the branch ([plan §10.6](docs/ballot-implementation-plan-2026-09-24.md#106-pre-launch-repairs--october-6-2026)). The code stays behind `ballot_p0`, which is off: merging the branch does not turn it on, and the flag flip is a release step after the real-address check. "Sections 2–3 above" below means the text before October 3. Review findings and the master merge: [plan §10.5](docs/ballot-implementation-plan-2026-09-24.md#105-master-integration-and-review--october-6-2026).
 
 Plan: [docs/ballot-implementation-plan-2026-09-24.md](docs/ballot-implementation-plan-2026-09-24.md). Visual source: the [Ballot canvas](https://claude.ai/artifact/KCuXBiAYYaX13gpoqUCdmq). P0 is the October edition of sections 2–3 above (voter-registration headline, election dates, voter step), not a parallel track. Everything stays behind `ballot_p0`, which is off.
 
 - [ ] Founder approves the "Proposed, September 24" canvas boards and the pilot (plan §11).
 - [x] P0 backend: reference data, exact-point governments, `civic_election` extension, `/start` teaser, flag row. On branch `claude/blissful-dijkstra-n8r31h`, not merged. Supported states: Washington plus California, Colorado, Hawaii, Nevada, Oregon, Utah and Vermont (plan §5.1.1). Every other state is links-only.
 - [x] P0 web: Place "Your ballot" card, governments view with the peel story, deadline timeline, `/start` teaser, Today card, "Moved this year?" line. On the branch; screenshots checked against the boards.
-- [ ] P0 iOS and Android: the same card, view and Today card. On the branch; PR CI (run 1518) compiled both and passed their unit, snapshot, simulator and emulator tests. They still need a device pass.
+- [ ] P0 iOS and Android: the same card, view and Today card. On the branch; PR CI (run 1518) compiled both and passed their unit, snapshot, simulator and emulator tests. They still need a device pass, including the timeline on the Oregon, Hawaii and Utah days.
 - [x] After the election (plan §11 item 7, approved Sep 24): the card stays through certification with official results links, Washington's 2027 general is in the data, and the Civic page has the year-round "Your governments" row. Certification dates for six states need release check 1; Hawaii and Vermont keep the 7-day card.
-- [ ] Release checks: a person opens every source and link, now for eight states (plan §5.1.1 lists what to confirm first); real addresses in each supported state and one links-only state through the real API; device passes.
+- [x] Pre-launch repairs (October 6): the timeline labels, Vermont's mailing date, the last days' advice, the Civic row and its sources, dark-mode contrast, the governments sheet, the cache key and the (0,0) lookup, the flag cost, the validator, Mountain-time enclaves and the `ballot=1` client opt-in. Plan §10.6.
+- [ ] Release checks: a person opens every source and link, now for eight states (plan §5.1.1 lists what to confirm first, and §10.6 lists the two Mountain-time assumptions and Vermont's date); real addresses in each supported state and one links-only state through the real API; device passes.
 - [ ] Next states, if wanted: the largest in-person states (Texas, Florida, New York, Pennsylvania and others). They need one more wording pattern ("polls close at 7 p.m.") but no app changes.
 - [ ] P0.5: one reminder opt-in (at most three per election) and the share card, once the push copy is approved.
 - [ ] P1 only if Washington voterInfo coverage checks out against official sample ballots.

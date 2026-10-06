@@ -16,7 +16,7 @@ Each row is verified against code on master `6688fd84` (September 24), or agains
 
 | Guide or canvas said | What is true | What this plan does |
 |---|---|---|
-| District answers cached per geohash-7 (~150 m) | `composeCivicDistricts` keys `geo:<geohash-6>`, a cell of about 1.2 × 0.6 km, shared by every home and the anonymous preview for 90 days (`placeSectionAdapters.js:806-810`). It keeps display rows and three legislative codes, and no GEOIDs. | Ballot never reads that row. Saved homes: an exact-point geocoder call cached as `home:<homeId>:<geohash-9>` (30 days, 7-day stale limit), so an address change makes a new key. Anonymous: a live call that writes nothing. |
+| District answers cached per geohash-7 (~150 m) | `composeCivicDistricts` keys `geo:<geohash-6>`, a cell of about 1.2 × 0.6 km, shared by every home and the anonymous preview for 90 days (`placeSectionAdapters.js:806-810`). It keeps display rows and three legislative codes, and no GEOIDs. | Ballot never reads that row. Saved homes: an exact-point geocoder call cached as `geo9:<geohash-9>` (30 days, 7-day stale limit), so an address change makes a new key; the key names no home (it was `home:<homeId>:<geohash-9>` until the October 6 repairs, §10.6). Anonymous: a live call that writes nothing here; the route keeps the answer in its in-memory preview cache. |
 | `readThrough` serves stale data safely | It serves any expired row on fetch failure with no age limit, so in practice up to about 120 days (`placeSectionCache.js:124-131`). | Add an optional `maxStaleMs` to `readThrough`. Existing callers are unchanged. |
 | 119th Congress districts | November 2026 fills the 120th Congress, and several states redrew their maps. | P0 draws no real boundaries. P1 pins layer ids and vintage from the TIGERweb service directory at build time and records which election each vintage applies to. |
 | Google `district.id` is an OCD id; keep candidates in returned order | `district.id` is relative to its scope. Candidates carry `orderOnBallot`. | P1 keeps internal election ids separate from provider ids, uses `orderOnBallot`, and labels order "not verified" when the field is absent. |
@@ -76,6 +76,17 @@ A state block can also carry wording that a single template can't get right for 
 - `ballot_week.title_before` and `title_after` replace "Ballots go out by <date>" and "Ballots were mailed by <date>" for states that mail starting a date.
 - `no_registration_deadline: true` replaces the required `register_online_mail` in a state that registers people any day (Vermont).
 
+- `late_days` (0 to 14) with `how_it_works_late`, `ballot_week.body_late` and a deadline's `teaser_detail_late` replace the usual copy once that many days or fewer remain. Advice such as "mail it a week early" cannot be followed in the last days (the card, the Today card and the `/start` teaser all stop giving it), and Vermont's town-clerk route ends the day before Election Day.
+
+A supported state's entry in `states.json` also carries the rules the numbers and clocks follow, all validated (added October 6, §10.6):
+
+- `fips`: the state's FIPS code. A boundary lookup that lands in another state is dropped whole, with its county, so a pin dropped across the line never counts another state's governments or picks its county's links.
+- `dependent_schools` (required, true or false): where the state, county or city runs the public schools, the schools are not counted as a separate government (Hawaii). A new state must answer it.
+- `consolidated_counties`: a county that is one government with its city is counted once, under the given name (San Francisco, Broomfield, Denver, Honolulu, Carson City).
+- `timezone_overrides`: a county or place that keeps another clock reads its dates and cutoffs on it (Malheur County, Oregon; West Wendover, Nevada). Each carries a note saying why.
+
+The loader refuses a file that would silently change what a card says, and Ballot is then off: a supported state with no `timezone` or `fips`; a block with no `ballot_week` copy, no Election Day notice detail, no `return_by.time_local`, or (for an all-mail state) no mailing date; a supported state with no block for an election it takes part in; a state whose registration isn't "online or by mail" with no `far_note` or no `mover_text` (text or null); late copy with no `late_days` or nothing to replace.
+
 A state entry can carry `election_office_phrase` ("the Oregon Secretary of State") for the after-election sentence. A `polling_places` link shows on Election Day, after drop boxes.
 
 Verification limit: this build environment's egress policy blocks sos.wa.gov, vote.gov, clark.wa.gov and the Census geocoder. The dates above match the review's reading of the SOS page (September 23), the RCW text, and SOS pages found by search on September 24. Release check 1 is a person opening every source URL and link in both files.
@@ -92,7 +103,7 @@ The founder asked for the states that mail every active voter a ballot. They reu
 | Nevada | by Oct 14 (20 days before) | online by Oct 20; then in person when voting | drop box or polling place by 7 p.m.; mail postmarked Nov 3, received by Nov 7 | SOS 2026 election information and FAQ |
 | Oregon | starting Oct 14 | Oct 13, online or postmarked | drop box by 8 p.m.; mail postmarked Nov 3, received by Nov 10 | SOS pages; Linn, Josephine and Clackamas county 2026 pages |
 | Utah | Oct 13 | Oct 23; then register when voting in person | received by 8 p.m.; postmarks don't count (H.B. 300, 2025); last four ID digits on the envelope from 2026 | 2026 Utah election calendar, vote.utah.gov |
-| Vermont | starting Sep 25 | no deadline; register any day, even at the polls | town clerk by Nov 2, or the polling place by 7 p.m. Nov 3 | SOS pages and 2026 elections calendar |
+| Vermont | by Oct 1 (the Secretary of State's calendar: mailing starts no later than Sep 21 and is complete by Oct 1) | no deadline; register any day, even at the polls | town clerk by Nov 2, or the polling place by 7 p.m. Nov 3 | SOS pages and 2026 elections calendar |
 
 The same limit applies, more so: none of these states' sites opens from this container, and WebFetch is blocked too. Every date and link came from search results citing the official page, a county page or the state's news release. They are marked "pending release check 1". Points to confirm first: Hawaii's online registration after Oct 26, Nevada's results site (results.nv.gov), Colorado's results link (the Secretary of State's home page, where the press release says the link will be posted), and California's results link (the elections page, because the election-night results site changes host each election).
 
@@ -146,7 +157,8 @@ It uses coordinates only. The geocoder call is live and writes no cache row. The
 
 | Canvas | Web (Tailwind) | iOS | Android |
 |---|---|---|---|
-| `#0369a1` action and link | `primary-700` / `text-app-link` | `Color.primary700` | `PantopusColors.primary700` |
+| `#0369a1` action fill | `bg-primary-600 hover:bg-primary-700` | `Color.primarySolid` | `PantopusColors.primary600` |
+| `#0369a1` link text | `text-app-link` (hover `text-primary-800`) | `Color.primaryInk` | `PantopusColors.primary600` (Android renders light only) |
 | `#15803d` on `#dcfce7` home | `text-app-home` / `bg-app-home-bg` | `home` / `homeBg` | `home` / `homeBg` |
 | `#111827` text | `text-app-text` | `appText` | `appText` |
 | `#374151` body | `text-app-text-strong` | `appTextStrong` | `appTextStrong` |
@@ -290,9 +302,10 @@ The card fields decode tolerantly on every client. A malformed ballot field drop
 |---|---|
 | `backend/data/ballot/states.json`, `elections.json` | Reference data (section 5.1) |
 | `backend/services/ballot/referenceData.js` | Load, validate and look up; dates in the state's timezone |
-| `backend/services/ballot/governments.js` | Typed governments from geocoder geographies; exact-point fetch for homes (cached) and points (live) |
+| `backend/services/ballot/governments.js` | Typed governments from geocoder geographies; exact-point fetch for homes (cached per point as `geo9:`) and points (live); one geocoder call shared by the sections that ask for the same point while it runs; counting rules come from the state's reference data |
 | `backend/services/ballot/summary.js` | The P0 summary for a home or a point: election, phase, deadlines, links, governments |
-| `placeSectionAdapters.composeCivicElection` | Takes `{ userId }`; flag on → summary fields added; flag off → unchanged |
+| `placeSectionAdapters.composeCivicElection`, `composeCivicDistricts` | Take `{ ballot }`. The route decides once (`ballot=1` in the query and `ballot_p0` for the signed-in user, no User read); true → summary fields added and, in a supported state, the districts and the governments come from the same exact point; otherwise unchanged |
+| `routes/placeIntelligence.js` | `GET /api/homes/:id/intelligence[?ballot=1]`: only a client that sends `ballot=1` can receive Ballot fields |
 | `placeSectionCache.readThrough` | Optional `maxStaleMs` |
 | `routes/public.js` `/place` | `ballot_teaser` when the flag is global |
 | `supabase/migrations/<ts>_ballot_p0_flag.sql` | Inserts the flag row with every switch off |
@@ -301,9 +314,10 @@ The card fields decode tolerantly on every client. A malformed ballot field drop
 
 ## 8. Privacy and neutrality in P0
 
-- No new personal data is stored.
-- The anonymous teaser writes no cache row and logs no address.
-- Saved-home geography is stored as typed ids only, under a key that changes when the home's coordinates change.
+- No new personal data about a household is stored. A saved home's governments are a fact about a point of land, cached under `geo9:<geohash-9>` (about 5 m) with no home id in the key, shared by every home at that point.
+- The anonymous teaser writes no cache row and logs no address. Its boundary answer may sit in the route's in-memory preview cache for 24 hours, keyed by the point, never by the address typed.
+- The cache helper logs a `geo9:` key only to its first six characters (about 1 km).
+- Saved-home geography is stored as typed ids only, under a key that changes when the home's coordinates change. A home with no coordinates is never looked up.
 - External links use `rel="noopener noreferrer"` on web, and the system browser or Custom Tabs on native.
 - No party, candidate or contest appears in P0.
 - A government count is always labeled "at least".
@@ -474,7 +488,7 @@ The founder asked for a review of PR #429 and for its conflicts with master to b
 
 **Not verified.** The web production build and Playwright run, the fresh-database replay, the full iOS and Android unit, snapshot and instrumented suites (CI runs them), and any browser, simulator or emulator journey through the merged Today tab or "Open your ballot". The real-address, provider, device and push limits in §10.3 are unchanged.
 
-**Review of the PR.** Thirteen reviewers each took one angle, a gap sweep followed, and a second reader re-checked every candidate; many were run rather than read. The merge introduced none of the items below, and this pass changed none of them. Most important first:
+**Review of the PR.** *Every item below is repaired in §10.6; item 1 was decided by the founder on October 6 (Ballot ships on web, iOS and Android).* Thirteen reviewers each took one angle, a gap sweep followed, and a second reader re-checked every candidate; many were run rather than read. The merge introduced none of the items below, and this pass changed none of them. Most important first:
 1. **Direction.** Master's October 3 pilot brief shelves the election feature until 2027 and makes new builds mobile only (`NEXT_STEPS.md` §6, the pilot brief §0.2.1 and §13, the guide banner). This branch adds 17 web files and 3 shared-package files, including `/start`, the Today page and the Place dashboard. With the flag off, every signed-in web user's Today page still sends up to two extra requests (the primary home, then the civic election section), and once the flag row exists each Place load makes two extra `User` reads. The code stays off, but landing it is a founder decision.
 2. **Timeline labels collide** on all three platforms. In Oregon from Oct 9 to 13, "Register by Oct 13" and "Ballots mailed Oct 14" overprint, which hides the registration deadline in its last days. Hawaii's "Paper forms by 4:30 p.m." runs past the card. Android also collides at larger text sizes, and its button label clips at 2× text.
 3. **Vermont's mailing date.** `elections.json` says ballots go out "starting Sep 25". The Secretary of State's 2026 calendar and 17 V.S.A. § 2537a say mailing starts no later than Sep 21 and ends by Oct 1. Six of the other seven states' mailing dates match their official pages; Nevada's could not be checked against its Secretary of State (the site refused the request).
@@ -486,6 +500,53 @@ The founder asked for a review of PR #429 and for its conflicts with master to b
 9. **Copy that asserts more than is known.** After the certification date the card says the county "certified the results", for the five states where that date is a legal deadline (§10.4 item 4 already flags this). Reference-data validation accepts several mistakes that would silently change deadline copy (missing time zone, missing `return_by.time_local`, notice without `detail`).
 
 Smaller, also verified: the button fill is one shade darker than the app's primary button on all three platforms (the token row in §6.1 is wrong for the native ladders); the peel graphic overflows web viewports narrower than 390 px; Android's sheet can call `onDismiss` twice on a double tap; the web sheet's hover colour is 1.9:1 in dark mode; the "Moved this year?" well is a dead link if a state ever lacks a registration link; the teaser's Census call outlives its 3.5 s budget; three iOS spacing literals; the Android tests never reach the timeline's flip branch or the governments decode. Latent until a ninth state or a data edit: consolidated-county rules live in code, and Oregon's Malheur County and Nevada's West Wendover run on Mountain time.
+
+### 10.6 Pre-launch repairs — October 6, 2026
+
+The founder decided on October 6 that Ballot is needed on the web as well as on iOS and Android for the November 3 general election, and asked for every verified problem in §10.5 to be fixed. This pass does that, on the branch. It does not enable `ballot_p0`, merge the PR or change an acceptance count; the flag flip stays a release step (§11).
+
+**Decisions made under the founder's standing instruction** (change any of them here):
+
+1. **Vermont.** The data now says every active voter is mailed a ballot "by Oct 1". The Secretary of State's 2026 calendar (v1.2, p. 23) and 17 V.S.A. § 2537a start mailing no later than Sep 21 and end by Oct 1, so "by Oct 1" is the statement that is true for every voter. Vermont's Ballot-week card therefore starts Sep 30.
+2. **The last days.** Advice that can't be followed any more is replaced wherever the same words appeared, not only on the `/start` teaser: the card's "how it works", the Today ballot-week card and the teaser. From six days before the election, "mail it a week early" gives way to the drop-box line (Colorado, Hawaii and Utah, where postmarks don't count, say "don't rely on the mail now"). Vermont's "Town clerk by Nov 2" gives way to "Bring it to your polling place." on Election Day itself. Each state block carries `late_days` and the replacement text (§5.1).
+3. **Certification.** Where the certification date is a legal deadline ("by": California, Colorado, Nevada, Oregon, Utah) the card says "Your county had until Nov 30 to certify the results" once the date passes, not "certified": Pantopus has not seen the certification itself. Where the state fixes the date ("on": Washington) it still reads "certified the results on Nov 24". §10.4 item 4 proposed "scheduled for…"; this is the narrower change that stops the false claim.
+4. **Civic row.** "This address sits inside {n} governments." (n is "at least 5" while counts are minimums), on all three platforms.
+5. **Sources.** The native Civic page shows the election section's own source line (the state office), and "Official county elections" only when none is sent, as the web already did.
+6. **Colour.** Primary Ballot buttons use each platform's standard primary fill, not the pressed-state shade. Skip and Close use the design system's link ink: on iOS it passes contrast on the dark sheet, on the web the hover colour is now theme-aware (13.5:1 on the dark sheet; it was 1.9:1). Android renders light only, so there its change is token parity, not a contrast fix. The token rows in §6.1 are corrected.
+7. **Decorative drawing.** The government stack is hidden from assistive technology on all three platforms; the visible title already says "at least N governments".
+8. **"Moved this year?"** with no registration link is a plain well (no link role, no chevron, no tap).
+9. **Opt-in.** Every request Ballot makes to `GET /api/homes/:id/intelligence` carries `ballot=1`. The route reads the flag once from the signed-in user and passes the answer down, so only an app that asks, for a user the flag allows, gets Ballot fields. An older native build never asks, so it can no longer show the finished election as "In 0 days", and the flag no longer has to wait for the Ballot builds (§11 item 6). The Today page reads the primary home and the election section only for a user who has the flag, and starts with the briefing instead of after it; a user without the flag costs one small cached flag read.
+10. **Exact point, no home id.** A saved home's governments are cached under `geo9:<geohash-9>`; the key names no home, and the cache helper logs only its first six characters (about 1 km). For a user who opted in, in a supported state, the Civic districts now come from the same exact point and the same geocoder call, so the districts and the governments cannot disagree. The old key was never released (the flag has been off), so no rows need cleaning up. A home with no coordinates, at 0,0 or off the map is never looked up.
+11. **Reference-data rules move out of code.** Consolidated city-counties, state-run schools, the state's FIPS code and per-county or per-place time zones are data in `states.json` (§5.1), each validated. A ninth state must answer them to load. A boundary answer for another state than the home's is dropped whole.
+12. **Mountain-time enclaves.** Malheur County, Oregon (`America/Boise`) and West Wendover, Nevada (`America/Denver`) read their dates and cutoffs on the local clock. The Census county and place codes were checked against the live geocoder; that those clerks apply local time to the 8 p.m. and 7 p.m. cutoffs is an assumption, recorded in the data and listed under release check 1.
+13. **Timeline labels.** One layout rule shared by all three platforms: the canvas arrangement is kept, and only a label that would overprint another on its row, or leave the card, moves: to its other anchor, then the other row, then a slide along the row, which keeps 12 points from the label it moved past (so "Today / Oct 13" and "Oct 14 / Ballots mailed" never read as one phrase). Widths are estimated at 5.5 points a character; a layout with nothing colliding comes out exactly as the canvas draws it. Android draws the chart through a font scale of 1.15 and lists the deadlines above it.
+
+**What changed, by §10.5 item**
+
+| §10.5 | Repair | Where |
+|---|---|---|
+| 1 Direction; flag-off cost | Docs follow the founder's decision. A flag-off web user's Today no longer makes two reads after the briefing; Place loads make no extra `User` reads. | `NEXT_STEPS.md`, the guide banner, this plan, the handoff; `BallotTodaySection.tsx`, `useFeatureFlag.ts`; `routes/placeIntelligence.js`, `placeSectionAdapters.js` |
+| 2 Timeline labels | Decision 13. Washington, California, Nevada, Utah and Vermont come out exactly as before. | `DeadlineTimeline.tsx`; `BallotTimelineView.swift`; `BallotTimeline.kt` |
+| 3 Vermont | Decision 1. | `elections.json`, `states.json` |
+| 4 Teaser advice | Decision 2. | `elections.json`, `summary.js` |
+| 5 Civic page | Decisions 4, 5 and 10: the district card and the governments row share one point. | `CivicDetail.tsx`, `PlaceCivicDetailContent.swift`, `PlaceMoneyCivicDetailContent.kt`; `placeSectionAdapters.js` |
+| 6 Privacy; (0,0) | Decision 10. | `governments.js`, `placeSectionCache.js` |
+| 7 Contrast, focus | Decision 6. The web sheet uses the app's dialog focus trap: Tab and Shift+Tab stay inside even after a click on dead space, Escape closes, focus returns to the opener, and a parent re-render never moves it. | `GovernmentsSheet.tsx`, `BallotGovernmentsView.swift`, `BallotGovernmentsSheet.kt` |
+| 8 Copy that asserts too much; validator | Decision 3. The loader refuses what would silently change a card (§5.1). The native notice `detail` is optional, as on the web. | `referenceData.js`, `summary.js`; `BallotDTOs.swift`, `BallotDtos.kt` |
+| Smaller | The peel graphic on phones under 390 px (web); the Android sheet's double dismiss; the "Moved this year?" dead link; three iOS spacing literals; the Android button grows instead of clipping a wrapped label; the teaser's Census call ends with its 3.5-second budget and its answer is kept in memory by point for 24 hours with the time it was made; one geocoder call is shared by the sections that ask for the same point; the governments row is read at most twice per Place load (it was three or four times); consolidated-county and school rules are data; the web "as of" label reads in the viewer's day; the web deadline reader no longer needs the unread `date`. | the files above |
+
+**Verification** (commands from the repository root of the branch; the scratch renders and harness logs lived in a session directory and are not kept).
+- **Backend.** `npx jest --runInBand` over the 11 suites that touch the changed modules (the Ballot, public place, place intelligence, residency, scout, unlisted, funnel, saved-places, home-systems, fridge and block-founder suites): 300 passed (`ballotP0.test.js` is 53 of them). Run against the code before this pass, 21 cases in `ballotP0.test.js`, both new teaser cases in `publicPlace.test.js` and three of the four new route cases fail, so the tests check the repairs; the rest guard behaviour that must not change. The privacy gates pass. The real Census geocoder, asked about public landmarks (West Wendover and Elko, Ontario and Jordan Valley in Malheur County, Portland, Denver, Broomfield, San Francisco, Honolulu, Carson City, Burlington, Camas, Salt Lake City, and a Portland pin under a Washington home), returns the county and place codes the data names, the rules give the expected governments and clocks, and the cross-state pin is dropped.
+- **Web.** ESLint 0 errors (none in the changed files); the type gate 0 errors; Jest 123 suites, 2,388 tests. The real timeline component, rendered in Chromium for 8 states × 41 days × 7 card widths, had 41 layouts with an overlap or an escape before and has none now; the sheet's focus, Escape, scroll lock and return focus were driven in a real browser; the peel graphic fits from 414 down to 320 px.
+- **iOS.** SwiftLint strict (0 violations in 2,258 files), SwiftFormat lint, the icon, overline and raw-hex gates. `build-for-testing`, then 85 unit tests in `BallotP0Tests` (16), `ColorTokenTests` and the four Place decoding and presentation classes, on a fresh iPhone 17 simulator, all passing. The real timeline view was rendered on macOS before and after (Oregon Oct 10, 12 and 13, Hawaii Oct 25, Utah Oct 21).
+- **Android.** Offline Gradle: `compileDebugKotlin`, `compileDebugJavaWithJavac`, `ktlintCheck`, `detekt`, `compileDebugUnitTestKotlin` and `testDebugUnitTest` for nine classes (120 tests: `BallotP0Test` 16, `BallotTimelineRepairTest` 6, the Place decoding, presentation, arrival, real-rent and place-picker classes, the home dashboard model and the auth interceptors), all passing. Before and after renders with real Roboto text (Paparazzi) show Oregon's overprint and Hawaii's clipped label fixed, the list at 1.3× and 2×, the wrapped button and the lead-only notice; the Civic detail snapshot, whose fixture has no Ballot data, is byte-identical.
+- **The shared rule.** The reference implementation and the three ports agree on side, anchor and slide for every real case, and on the nine shared vectors: the web port on 19,520 layouts, the iOS port (compiled from the shipped source) on 64,320 layouts at text scale 1 and again at 1.15, and the Android port on 24,928 layouts at font scales 0.85 to 1.3. With widths measured in Chromium, the canvas arrangement leaves 44 of Oregon's 320 layouts and 4 of Hawaii's 320 (8 card widths × 41 days) overprinting or off the card; the repair leaves none, and of the 2,560 layouts only 2 that were already clean change (Colorado and Hawaii at the narrowest card).
+
+**Not verified.**
+- A journey through the repaired apps against the real backend: no disposable stack was running, so the web Today page, the iOS simulator and the Android emulator were not driven end to end, and no device was used. The timeline fixes were checked on rendered components and real deadline data, not on a phone.
+- CI on the new head; the web production build and Playwright; Android Lint and the repository's Paparazzi goldens for the other screens (CI runs them); VoiceOver and TalkBack output for the hidden stack and the plain well.
+- Release check 1 still needs a person: every source and link, Vermont's Oct 1 statement, the two Mountain-time assumptions and the late-week wording. The real-address check with the configured providers and the device pass (the timeline on the Oregon, Hawaii and Utah days) are unchanged from §10.3.
+- Two limits, accepted: the repair stops at the first label it cannot improve, so on charts crowded beyond anything a real state has (more labels than any state's seven) a few collisions remain; and if the exact-point lookup fails with nothing cached, the Civic page's districts show their normal error state, and the governments row, which rides with them, is missing there while the Place card (served from its own cache) still shows its count.
 
 ## 11. Founder approvals needed before release
 
@@ -501,7 +562,7 @@ Smaller, also verified: the button fill is one shade darker than the app's prima
 3. **The P0 stack drawing.** Every layer is solid until verified-empty data exists.
 4. **The P0 peel.** It keeps the board's motion, and each caption carries only "Government k of at least N" and the name. It plays once, holds the finished frame, and starts there under reduced motion.
 5. **Reminders.** None in P0. P0.5 adds one opt-in, off by default, at most three per election, with the copy on the proposed Pushes board.
-6. **Enabling.** `ballot_p0` goes straight to everyone (the founder dropped the internal-users step on September 25), after the real-address check. Enable it for native users only once the Ballot builds ship: older builds read `civic_election` as "the next election" and show the past election as "In 0 days" while the card is in `after`.
+6. **Enabling.** `ballot_p0` goes straight to everyone (the founder dropped the internal-users step on September 25), after the real-address check. Older builds read `civic_election` as "the next election" and show the past election as "In 0 days" while the card is in `after`; since October 6 they never receive the Ballot payload, because only a client that sends `ballot=1` does (§10.6), so the flag does not have to wait for the Ballot builds to ship.
 7. **After the election, and all year.** Approved by the founder on September 24 and built (boards: "Proposed, September 24: after the election, and all year").
    - **Counting, then certified.** Where a state's certification dates are checked, the `after` card stays through certification instead of 7 days. Counting (chip "Counting", results and ballot-tracking links) runs through the day local results are certified: "Ballots are still being counted. Results can change until Clark County Elections certifies them on Nov 24." Certified (results link only) runs from the next day until the card leaves: "Clark County Elections certified the results on Nov 24." Without a known county the sentence says "your county". Counts never appear. `phase` stays `after`; the server sends `after_stage` and every client renders the chip, note and links it already knows. Counting ends the day after certification, not on it, because boards certify during that day (the board's date labels now read "to Nov 24" and "Nov 25 to Dec 3").
    - **Dates per state** (`certification` in `elections.json`; the card leaves after `hide_after`):
