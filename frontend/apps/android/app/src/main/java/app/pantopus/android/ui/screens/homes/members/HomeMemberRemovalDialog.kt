@@ -81,7 +81,7 @@ fun HomeMemberRemovalDialog(
                         Text(
                             if (target.self) {
                                 "You'll lose access to this Home. " +
-                                    "To come back later, someone in the household will need to invite you again."
+                                    "To come back later, add this Home again or ask someone in the household to invite you."
                             } else {
                                 "They'll lose access to this Home. You can invite them again later."
                             },
@@ -137,7 +137,7 @@ private fun RemovalConfirmDialog(
                         selected.requestId != null -> "If it already went through, it stays. Discarding doesn't remove anyone."
                         leaving ->
                             "You'll lose access to this Home. " +
-                                "To come back later, someone in the household will need to invite you again."
+                                "To come back later, add this Home again or ask someone in the household to invite you."
                         else -> "They'll lose access to this Home. You can invite them again later."
                     },
                 )
