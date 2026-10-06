@@ -16,4 +16,8 @@ class AIConversationSession
         /** Last conversation id yielded by the AI chat stream, if any. */
         @Volatile
         var conversationId: String? = null
+
+        /** Set by "New chat": reopening the thread must not resume this person's previous conversation. */
+        @Volatile
+        var freshStartUserId: String? = null
     }

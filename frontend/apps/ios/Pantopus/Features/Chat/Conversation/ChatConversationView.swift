@@ -1697,16 +1697,18 @@ private struct ChatConversationHeader: View {
                 .accessibilityLabel("Conversation details")
             case .ai:
                 // A15.3 header actions: square-pen "New chat" then
-                // more-horizontal. The VM has no AI-thread reset API yet
-                // (history is session-scoped in AIConversationStore) — the
-                // button is a no-op until reset lands.
+                // more-horizontal (decorative until it has actions).
                 HStack(spacing: 2) {
-                    Button {} label: {
+                    Button {
+                        viewModel.startNewAIConversation()
+                    } label: {
                         Icon(.squarePen, size: 18, color: Theme.Color.appTextStrong)
                             .frame(width: 34, height: 34)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("New chat")
+                    .accessibilityIdentifier("chatAINewChat")
                     Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
                         .frame(width: 34, height: 34)
                         .accessibilityHidden(true)
