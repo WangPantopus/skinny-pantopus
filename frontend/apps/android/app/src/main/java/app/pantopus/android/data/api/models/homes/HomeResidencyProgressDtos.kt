@@ -24,7 +24,7 @@ data class PersonalHomeResidencyRequest(
     val label: String get() = submittedAddress?.trim()?.takeIf(String::isNotBlank) ?: "Residency request · ${id.takeLast(8)}"
     val reviewLabel: String get() =
         when (status) {
-            "verified" -> "Review recorded"
+            "verified" -> "Approved"
             "rejected" -> "Request not approved"
             else -> "Request pending"
         }
@@ -66,36 +66,32 @@ data class PersonalHomeResidencyProgress(
 
     val title: String get() =
         when (nextStep) {
-            "home" -> "Household access is available"
+            "home" -> "You're part of this household"
             "household_review" -> "Waiting for household review"
-            "address_verification" -> if (needsResidencyRequest) "Request residency review" else "Address verification is required"
-            "resubmit" -> "Review your request"
-            "access_review" -> "Household access needs review"
+            "address_verification" -> if (needsResidencyRequest) "Confirm your address" else "Your address isn't verified yet"
+            "resubmit" -> "Send your request again"
+            "access_review" -> "You don't have household access"
             "ownership_verification" -> "Continue ownership verification"
-            else -> "Verification is unavailable for this Home"
+            else -> "This Home can't be verified right now"
         }
 
     val explanation: String get() =
         when (nextStep) {
-            "home" -> "Your current access allows you to open this Home. Your role and permissions still apply."
+            "home" -> "Open the Home to see your household. What you can see and change depends on your role."
             "household_review" ->
-                "Your request is saved for a household reviewer. You do not need to upload an ownership document for this step. " +
-                    "Refresh to check for a decision."
+                "Someone in the household will review your request. You don't need to upload any documents. " +
+                    "Check back here for their answer."
             "address_verification" ->
                 if (needsResidencyRequest) {
-                    "Confirm this Home’s address, apartment and your relationship before submitting a residency request. " +
-                        "Checking an address does not grant household access or send mail."
+                    "Check this Home’s address, apartment and how you live here, then send your request. " +
+                        "We don't mail anything until you ask for a postcard."
                 } else {
-                    "Saving a request does not request a postcard or verify residency. " +
-                        "Review mail verification to check for an existing request and its delivery status."
+                    "Your request is saved. To finish, verify your address by mail: request a postcard, " +
+                        "then enter the code printed on it."
                 }
-            "resubmit" ->
-                "Check your street, apartment and relationship before submitting again. " +
-                    "A new request does not restore previous household access."
-            "access_review" ->
-                "A saved residency record does not grant current household access. " +
-                    "A household reviewer must resolve your access before it can be restored."
-            "ownership_verification" -> "Ownership has a separate review. Residency verification cannot grant or restore ownership."
-            else -> "Your personal request remains visible. This Home cannot continue the verification flow right now."
+            "resubmit" -> "Check the street, apartment and how you live here, then send your request again."
+            "access_review" -> "To get access, ask someone in the household to invite you."
+            "ownership_verification" -> "Ownership has its own review. Verifying your address by mail doesn't make you an owner."
+            else -> "This Home isn't accepting changes right now. Your request is still saved."
         }
 }

@@ -4,7 +4,7 @@ import { useHistory } from './useHistory';
 import { historyPath, historyRoles, type HistoryItem } from './historyModel';
 
 const formatDate = (value: string) => new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-const claimStatus = { pending: 'Waiting for household review', verified: 'Review recorded', rejected: 'Rejected' };
+const claimStatus = { pending: 'Waiting for household review', verified: 'Approved', rejected: 'Rejected' };
 function Decision({ item, detailed = false }: { item: HistoryItem; detailed?: boolean }) {
   const { decision, current } = item;
   return <article aria-label={`${decision.action === 'approve' ? 'Approved' : 'Rejected'} residency request`}

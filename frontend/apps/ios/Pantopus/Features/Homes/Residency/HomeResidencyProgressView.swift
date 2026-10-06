@@ -25,7 +25,7 @@ struct HomeResidencyProgressView: View {
                 } else if let progress = viewModel.progress {
                     if let request = progress.request {
                         VStack(alignment: .leading, spacing: Spacing.s2) {
-                            Text("Your submitted residency address").pantopusTextStyle(.caption)
+                            Text("Your request").pantopusTextStyle(.caption)
                             Text(request.label).pantopusTextStyle(.body)
                                 .accessibilityIdentifier("homeResidencyAddress")
                             Text(request.reviewLabel).pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
@@ -39,11 +39,11 @@ struct HomeResidencyProgressView: View {
                         .accessibilityIdentifier("homeResidencyHeading")
                     Text(progress.explanation).pantopusTextStyle(.body).foregroundStyle(Theme.Color.appTextSecondary)
                     if viewModel.permits(.home) { action("Open Home", .home) }
-                    if viewModel.permits(.mail) { action("Review mail verification", .mail) }
+                    if viewModel.permits(.mail) { action("Verify by mail", .mail) }
                     if viewModel.permits(.ownership) { action("Continue ownership verification", .ownership) }
                     if viewModel.permits(.addHome) {
                         action(
-                            progress.needsResidencyRequest ? "Check address and request residency" : "Check address and resubmit",
+                            progress.needsResidencyRequest ? "Check address" : "Check address and send again",
                             .addHome
                         )
                     }

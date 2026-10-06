@@ -6,13 +6,13 @@ import { useResidencyProgress } from '@/components/homes/useResidencyProgress';
 import { residencyRequestLabel, residencyReviewLabel } from '@/components/homes/residencyProgressModel';
 
 const guidance = {
-  home: { title: 'Household access is available', body: 'Your current access allows you to open this Home. Your role and permissions still apply.' },
-  household_review: { title: 'Waiting for household review', body: 'Your request is saved for a household reviewer. You do not need to upload an ownership document for this step. Refresh to check for a decision.' },
-  address_verification: { title: 'Address verification is required', body: 'Saving a request does not verify residency or request a postcard. Review mail verification to check for an existing code request and its delivery status.' },
-  resubmit: { title: 'Review your request', body: 'Check your address, apartment and relationship before submitting again. A new request does not restore previous household access.' },
-  access_review: { title: 'Household access needs review', body: 'The saved residency record does not grant current household access. A household reviewer must resolve your access before it can be restored.' },
-  ownership_verification: { title: 'Continue ownership verification', body: 'Your ownership request has a separate review. Residency verification cannot grant or restore ownership.' },
-  unavailable: { title: 'Verification is unavailable for this Home', body: 'Your personal request remains visible. This Home cannot continue the verification flow right now.' },
+  home: { title: 'You’re part of this household', body: 'Open the Home to see your household. What you can see and change depends on your role.' },
+  household_review: { title: 'Waiting for household review', body: 'Someone in the household will review your request. You don’t need to upload any documents. Check back here for their answer.' },
+  address_verification: { title: 'Your address isn’t verified yet', body: 'Your request is saved. To finish, verify your address by mail: request a postcard, then enter the code printed on it.' },
+  resubmit: { title: 'Send your request again', body: 'Check the street, apartment and how you live here, then send your request again.' },
+  access_review: { title: 'You don’t have household access', body: 'To get access, ask someone in the household to invite you.' },
+  ownership_verification: { title: 'Continue ownership verification', body: 'Ownership has its own review. Verifying your address by mail doesn’t make you an owner.' },
+  unavailable: { title: 'This Home can’t be verified right now', body: 'This Home isn’t accepting changes right now. Your request is still saved.' },
 };
 
 export default function ResidencyStatusPage() {
@@ -20,8 +20,8 @@ export default function ResidencyStatusPage() {
   const { progress, loading, error, refresh } = useResidencyProgress(homeId);
   const needsRequest = progress?.next_step === 'address_verification' && progress.request === null;
   const next = progress ? needsRequest ? {
-    title: 'Request residency review',
-    body: 'Confirm this Home’s address, apartment and your relationship before submitting a residency request. Checking an address does not grant household access or send mail.',
+    title: 'Confirm your address',
+    body: 'Check this Home’s address, apartment and how you live here, then send your request. We don’t mail anything until you ask for a postcard.',
   } : guidance[progress.next_step] : null;
   return <main className="mx-auto max-w-lg px-4 py-6 pb-28">
     <Link href="/app/homes" className="inline-block rounded-lg py-2 text-sm font-semibold text-app-text-secondary">← My Homes</Link>
@@ -32,21 +32,20 @@ export default function ResidencyStatusPage() {
         <button type="button" onClick={() => void refresh()} className="mt-4 rounded-lg border border-app-border px-4 py-2 font-semibold">Retry</button>
       </div> : progress && next && <div className="mt-6 space-y-5">
         {progress.request && <section className="rounded-xl border border-app-border bg-app-surface p-5" aria-label="Your saved request">
-          <p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Address from your request</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Your request</p>
           <p className="mt-2 break-words text-lg font-semibold text-app-text">{residencyRequestLabel(progress.request)}</p>
           <p className="mt-3 text-sm text-app-text-secondary">{residencyReviewLabel(progress.request.status)}</p>
           {progress.request.created_at && <p className="mt-1 text-sm text-app-text-secondary">Submitted {new Date(progress.request.created_at).toLocaleDateString()}</p>}
-          <p className="mt-3 text-sm text-app-text-secondary">A saved review and current household access are separate.</p>
         </section>}
         <section className="rounded-xl border border-app-border bg-app-surface p-5" aria-label="Current next step">
           <h2 className="text-lg font-semibold text-app-text">{next.title}</h2>
           <p className="mt-2 text-sm leading-6 text-app-text-secondary">{next.body}</p>
           <div className="mt-4 flex flex-wrap gap-3">
             {progress.next_step === 'home' && <Link href={`/app/homes/${homeId}/dashboard`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Open Home</Link>}
-            {progress.next_step === 'resubmit' && <Link href={`/app/homes/new?joinHome=${homeId}`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Check address and resubmit</Link>}
-            {needsRequest && <Link href={`/app/homes/new?joinHome=${homeId}`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Check address and request residency</Link>}
-            {progress.next_step === 'address_verification' && !needsRequest && <Link href={`/app/homes/${homeId}/verify-postcard`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Review mail verification</Link>}
-            {progress.next_step === 'ownership_verification' && <Link href={`/app/homes/${homeId}/claim-owner/evidence`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Ownership verification</Link>}
+            {progress.next_step === 'resubmit' && <Link href={`/app/homes/new?joinHome=${homeId}`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Check address and send again</Link>}
+            {needsRequest && <Link href={`/app/homes/new?joinHome=${homeId}`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Check address</Link>}
+            {progress.next_step === 'address_verification' && !needsRequest && <Link href={`/app/homes/${homeId}/verify-postcard`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Verify by mail</Link>}
+            {progress.next_step === 'ownership_verification' && <Link href={`/app/homes/${homeId}/claim-owner/evidence`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Continue ownership verification</Link>}
             <button type="button" onClick={() => void refresh()} className="rounded-lg border border-app-border px-4 py-2 font-semibold text-app-text">Refresh status</button>
           </div>
         </section>
