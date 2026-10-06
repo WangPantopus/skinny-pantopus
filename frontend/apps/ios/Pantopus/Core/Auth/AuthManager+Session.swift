@@ -82,6 +82,9 @@ extension AuthManager {
     ///   missing or within 120 s of expiry, then `GET /api/users/profile`.
     ///   A 401 whose refresh also failed ends the session with the server's
     ///   reason; a transient failure keeps the cached identity (offline-first).
+    ///   A slow or failing server never holds the launch screen past
+    ///   `launchRestoreCap`: with a cached identity the app opens on it and the
+    ///   restore finishes in the background.
     func restoreSession() async {
         let access = nonEmpty(store.get(SecureStoreKey.accessToken))
         let refresh = nonEmpty(store.get(SecureStoreKey.refreshToken))
@@ -106,7 +109,34 @@ extension AuthManager {
         }
 
         setAccessToken(access)
-        if access == nil || isAccessTokenExpiringSoon {
+        let restore = Task { await self.renewAndHydrate(hadAccessToken: access != nil) }
+        guard loadCachedUser() != nil else {
+            await restore.value
+            return
+        }
+        // Each call may wait 20 s and retry twice, so an outage once meant ~100 s on the splash.
+        await Self.waitAtMost(Self.launchRestoreCap, for: restore)
+        if state == .unknown, let cached = loadCachedUser() {
+            logger.info("Session restore still running — opening on the cached identity")
+            setState(.signedIn(cached))
+        }
+    }
+
+    /// How long launch waits for the restore before opening on the cached identity.
+    static let launchRestoreCap: Duration = .seconds(5)
+
+    private static func waitAtMost(_ limit: Duration, for task: Task<Void, Never>) async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await task.value }
+            group.addTask { try? await Task.sleep(for: limit) }
+            await group.next()
+            group.cancelAll()
+        }
+    }
+
+    /// L1: renew a missing or lapsing access token, then hydrate the profile.
+    private func renewAndHydrate(hadAccessToken: Bool) async {
+        if !hadAccessToken || isAccessTokenExpiringSoon {
             // Only a refresh token, or an access token about to lapse:
             // renew first so the profile fetch never pays the 401 tax.
             switch await refreshIfPossible() {
@@ -116,7 +146,7 @@ extension AuthManager {
                 await handleUnauthorized()
                 return
             case .transient:
-                if access == nil {
+                if !hadAccessToken {
                     // Nothing to hydrate with; keep the tokens for the next
                     // launch and show the cached shell if there is one.
                     if let cached = loadCachedUser() {
