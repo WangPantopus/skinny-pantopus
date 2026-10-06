@@ -3,7 +3,7 @@
 **Derived from:** `docs/compliance/privacy-data-inventory.md`
 **Mirrors:** `frontend/apps/ios/Pantopus/PrivacyInfo.xcprivacy`
 **Bundle:** `app.pantopus.ios`
-**Last reviewed:** 2026-08-18 (persistent login & trusted devices — Identifiers / Other Data rows updated; no new data *type*)
+**Last reviewed:** 2026-10-06 (launch review: Health added for emergency info; location provider is wired)
 
 These are the answers to enter in **App Store Connect → your app → App
 Privacy**. This is human/console work; this file is the script for it. Every
@@ -50,11 +50,7 @@ Apple groups by category → type. Enter each, then pick **purposes**,
 | Precise Location | Yes | App Functionality | Yes | No |
 | Coarse Location | Yes | App Functionality | Yes | No |
 
-> ⚠️ **Pre-submission gate.** iOS device-location collection is forward-declared
-> — the live `CLLocationManager` provider is not yet wired (see inventory
-> §2.4). Before you submit GA, **either** confirm the provider is wired **or**
-> remove these two rows *and* the location purpose strings from `project.yml`
-> so labels match the binary.
+> Device location is wired on iOS (when-in-use only) since the September build.
 
 ### User Content
 | Type | Collected | Purpose(s) | Linked | Tracking |
@@ -66,6 +62,15 @@ Apple groups by category → type. Enter each, then pick **purposes**,
 > Apple's label UI folds chat messages and other content under **User
 > Content**. (The bundled manifest splits them into `EmailsOrTextMessages` +
 > `OtherUserContent` for finer granularity — same underlying data.)
+
+### Health & Fitness
+| Type | Collected | Purpose(s) | Linked | Tracking |
+|------|-----------|------------|--------|----------|
+| Health | Yes | App Functionality | Yes | No |
+
+> Medical details a household can choose to enter in a home's emergency info
+> (inventory §2.10). Optional; visible only to people the owner granted
+> sensitive access; never shared or used for analytics.
 
 ### Identifiers
 | Type | Collected | Purpose(s) | Linked | Tracking |
@@ -113,8 +118,8 @@ Apple groups by category → type. Enter each, then pick **purposes**,
 Face ID / Touch ID / passcode are used to gate "Continue as X" after a
 reinstall and for the biometry-bound step-up key. The app receives only a
 yes/no from `LocalAuthentication` and a signature from the Secure Enclave;
-**no biometric data is collected**, so nothing is declared under Health &
-Fitness / Sensitive Info. `NSFaceIDUsageDescription` mentions both app-lock
+**no biometric data is collected**, so biometrics add nothing under Health &
+Fitness or Sensitive Info. `NSFaceIDUsageDescription` mentions both app-lock
 and "continue signed in".
 
 ---
@@ -122,7 +127,7 @@ and "continue signed in".
 ## Step 2 — Not collected (explicit "No")
 
 To avoid over-declaring, these App Store categories/types are **not**
-collected: Health & Fitness, Browsing History, Search History (search
+collected: Fitness, Browsing History, Search History (search
 *recents* are stored locally in UserDefaults and not sent to a server),
 Contacts (address book), Purchases (no IAP), Sensitive Info (race, religion,
 sexual orientation, etc.), Gameplay Content, Advertising Data.
@@ -140,6 +145,7 @@ sexual orientation, etc.), Gameplay Content, Advertising Data.
 | User Content | ✔ Photos/Audio/Other | PhotosorVideos, AudioData, EmailsOrTextMessages, OtherUserContent |
 | Identifiers (incl. 2026-08 device id / install id / device public key / session id) | ✔ User ID + Device ID | UserID, DeviceID |
 | Security & session records (§2.9: IP + UA, security events) | ✔ Other Data Types (note) | OtherDataTypes |
+| Health (§2.10, emergency info) | ✔ Health | Health |
 | Diagnostics | ✔ Crash + Performance | CrashData, PerformanceData |
 | Usage Data | ✔ Product Interaction | ProductInteraction |
 | Tracking | ✔ No (everywhere) | `NSPrivacyTracking = false` |

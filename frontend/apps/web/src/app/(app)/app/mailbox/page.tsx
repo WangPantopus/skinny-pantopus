@@ -92,6 +92,7 @@ function MailboxPageContent() {
         {mailScope !== 'home' && availableHomes.length > 0 && (
           <select
             value=""
+            aria-label="Jump to home mailbox"
             onChange={(e) => { if (!e.target.value) return; setMailScope('home'); setScopeHomeId(e.target.value); setSelectedMail(null); }}
             className="border border-app-border rounded-lg px-2.5 py-1.5 text-xs bg-app-surface"
           >

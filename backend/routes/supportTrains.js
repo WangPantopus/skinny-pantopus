@@ -28,6 +28,7 @@ const logger = require('../utils/logger');
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
 const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+const { isPublicStorageUrl } = require('../services/s3Service');
 const {
   countActiveReservationsForSlot,
   listEffectivelyOpenSlots,
@@ -1844,6 +1845,10 @@ router.post(
         error: 'FORBIDDEN',
         message: 'Only organizers or the recipient can post updates.',
       });
+    }
+    // Uploaded files only: an outside link would show its owner who read the update and when.
+    if ((req.body.media_urls || []).some((url) => !isPublicStorageUrl(url))) {
+      return res.status(400).json({ error: 'INVALID_MEDIA', message: 'Attach photos by uploading them.' });
     }
 
     const updateId = req.body.client_request_id ? createHash('sha256')

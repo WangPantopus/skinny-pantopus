@@ -15,6 +15,9 @@ public struct OwnersListView: View {
     @State private var viewModel: OwnersListViewModel
     @State private var invitingOwner = false
     @State private var removeConfirm: RemoveTarget?
+    /// Set when Transfer opens: after a transfer the roster and the viewer's
+    /// own access have changed, so the list reloads when it shows again.
+    @State private var refreshOnReturn = false
 
     private let homeId: String
     /// H6 — host-supplied push to the per-home claim-review surface.
@@ -48,7 +51,13 @@ public struct OwnersListView: View {
             .safeAreaInset(edge: .bottom) { transferBar }
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .accessibilityIdentifier("ownersList")
-            .onAppear { Analytics.track(.screenOwnersListViewed) }
+            .onAppear {
+                Analytics.track(.screenOwnersListViewed)
+                if refreshOnReturn {
+                    refreshOnReturn = false
+                    Task { await viewModel.refresh() }
+                }
+            }
             .onChange(of: viewModel.pendingEvent) { _, event in
                 handle(event)
             }
@@ -107,7 +116,10 @@ public struct OwnersListView: View {
     private var transferBar: some View {
         if viewModel.canTransferOwnership, let onOpenTransfer {
             VStack(spacing: Spacing.s0) {
-                Button(action: onOpenTransfer) {
+                Button {
+                    refreshOnReturn = true
+                    onOpenTransfer()
+                } label: {
                     HStack(spacing: Spacing.s2) {
                         Icon(.arrowRightLeft, size: 18, color: Theme.Color.warning)
                         Text("Transfer Ownership")

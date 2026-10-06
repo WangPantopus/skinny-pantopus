@@ -432,6 +432,14 @@ public extension StatusWaitingContent {
             icon: .externalLink,
             style: .primary
         )
+        // The screen can't see a link opened on another device or in a browser;
+        // this is the way on once the email is confirmed there.
+        let confirmed = StatusActionButton(
+            id: "confirmedLogIn",
+            label: "Already confirmed? Log in",
+            actionKey: "confirmed_log_in",
+            style: .underline
+        )
         let useDifferent = StatusActionButton(
             id: "changeEmail",
             label: "Use a different email",
@@ -462,7 +470,7 @@ public extension StatusWaitingContent {
             statusPill: resent
                 ? StatusWaitingPill(text: "Link requested · just now", icon: .checkCircle, tone: .success)
                 : StatusWaitingPill(text: "Waiting for link click…", icon: .hourglass, tone: .neutral, isSpinning: true),
-            actionStack: [openMail, resend, useDifferent],
+            actionStack: [openMail, resend, confirmed, useDifferent],
             footnote: resent
                 ? "Still nothing? Double-check the spelling, or use a different email."
                 : "Can't find it? Check spam or your \u{201C}Promotions\u{201D} tab."

@@ -85,11 +85,11 @@ export default function BusinessTeamPage() {
       <div className="bg-app-surface border border-app-border rounded-xl p-5 mb-5">
         <h2 className="text-sm font-semibold text-app-text mb-3">Quick Invite</h2>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-          <input value={invite.username} onChange={(e) => setInvite((v) => ({ ...v, username: e.target.value }))} placeholder="@username" className="rounded border border-app-border px-3 py-2 text-sm" />
-          <select value={invite.role_base} onChange={(e) => setInvite((v) => ({ ...v, role_base: e.target.value }))} className="rounded border border-app-border px-3 py-2 text-sm">
+          <input value={invite.username} onChange={(e) => setInvite((v) => ({ ...v, username: e.target.value }))} placeholder="@username" aria-label="Username" className="rounded border border-app-border px-3 py-2 text-sm" />
+          <select value={invite.role_base} onChange={(e) => setInvite((v) => ({ ...v, role_base: e.target.value }))} aria-label="Role" className="rounded border border-app-border px-3 py-2 text-sm">
             {['viewer', 'staff', 'editor', 'admin'].map((role) => <option key={role} value={role}>{role}</option>)}
           </select>
-          <input value={invite.title} onChange={(e) => setInvite((v) => ({ ...v, title: e.target.value }))} placeholder="Title" className="rounded border border-app-border px-3 py-2 text-sm" />
+          <input value={invite.title} onChange={(e) => setInvite((v) => ({ ...v, title: e.target.value }))} placeholder="Title" aria-label="Title" className="rounded border border-app-border px-3 py-2 text-sm" />
           <button onClick={addMember} disabled={saving} className="rounded bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 disabled:opacity-50">
             Invite
           </button>

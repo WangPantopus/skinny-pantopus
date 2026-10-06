@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -167,7 +169,11 @@ fun AuthNavHost() {
                         defaultValue = null
                     },
                 ),
-        ) {
+        ) { entry ->
+            // Login's view-model lives on its own back-stack entry; "Already confirmed?"
+            // hands it the email so the person only types their password.
+            val loginEntry = remember(entry) { navController.getBackStackEntry(AuthRoutes.LOGIN) }
+            val loginViewModel: LoginViewModel = hiltViewModel(loginEntry)
             VerifyEmailScreen(
                 onDone = {
                     navController.popBackStack(AuthRoutes.LOGIN, inclusive = false)
@@ -176,6 +182,10 @@ fun AuthNavHost() {
                     navController.navigate(AuthRoutes.signUp()) {
                         popUpTo(AuthRoutes.LOGIN)
                     }
+                },
+                onConfirmed = { email ->
+                    email?.let(loginViewModel::onEmailChange)
+                    navController.popBackStack(AuthRoutes.LOGIN, inclusive = false)
                 },
             )
         }

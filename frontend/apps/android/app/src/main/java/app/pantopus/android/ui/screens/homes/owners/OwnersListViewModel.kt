@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.OwnerDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
@@ -218,7 +219,18 @@ class OwnersListViewModel
                         }
                     }
                     is NetworkResult.Failure -> {
-                        _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                        _state.value =
+                            if (result.error is NetworkError.Forbidden) {
+                                // Not (or no longer) an owner, e.g. right after transferring
+                                // the Home: a retry can't change that, so say so plainly.
+                                ListOfRowsUiState.Empty(
+                                    icon = PantopusIcon.Shield,
+                                    headline = "You're not an owner of this Home",
+                                    subcopy = "Only the Home's owners can see its owners and transfers.",
+                                )
+                            } else {
+                                ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                            }
                     }
                 }
             }

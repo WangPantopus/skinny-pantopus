@@ -1,1 +1,1 @@
-neighbors,neighborhood,verified,mailbox,gigs,marketplace,local,address,community,private
+home,homeowner,reminders,trash day,recycling,pickup,radon,household,chores,tasks,weather,air quality
