@@ -46,7 +46,8 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
   onClose: () => void;
   onSaved: (task: HomeTask) => void;
   task?: { id: string } | null;
-  members: { id?: string; user_id?: string; name?: string; username?: string; user?: { name?: string; username?: string } }[];
+  members: { id?: string; user_id?: string; display_name?: string; name?: string; username?: string;
+    user?: { name?: string; username?: string; displayName?: string; handle?: string } }[];
   homeId?: string;
   openingScope: api.HomeTaskSessionScope | null;
 }) {
