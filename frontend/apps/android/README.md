@@ -7,7 +7,7 @@ Native Android app for Pantopus, built with Kotlin 2.0, Jetpack Compose, and Mat
 | Layer          | Choice                                                                    |
 |----------------|---------------------------------------------------------------------------|
 | Language       | Kotlin 2.0 (K2 compiler)                                                  |
-| Min / Target   | minSdk 26 (Android 8.0), compileSdk 34, targetSdk 34                      |
+| Min / Target   | minSdk 26 (Android 8.0), compileSdk 36, targetSdk 36 (Android 16)         |
 | UI             | Jetpack Compose + Material 3                                              |
 | Navigation     | Navigation Compose                                                        |
 | DI             | Hilt (Dagger 2)                                                           |
@@ -19,7 +19,7 @@ Native Android app for Pantopus, built with Kotlin 2.0, Jetpack Compose, and Mat
 | Maps           | Google Maps Compose                                                       |
 | Image loading  | Coil                                                                      |
 | Logging        | Timber                                                                    |
-| Build          | Gradle 8.9 + Kotlin DSL + version catalog (`libs.versions.toml`)          |
+| Build          | Gradle 8.11.1 + AGP 8.9.3 + Kotlin DSL + version catalog                   |
 | Lint / format  | detekt, ktlint                                                            |
 | Testing        | JUnit4, MockK, Turbine, Compose UI Test, Espresso, Paparazzi (snapshots)  |
 
@@ -148,7 +148,7 @@ brew install --cask temurin@17 android-studio
 ```bash
 cd frontend/apps/android
 cp .env.example .env                # Edit with your backend URL + Stripe key
-./gradlew --version                 # Downloads Gradle 8.9 wrapper
+./gradlew --version                 # Downloads Gradle 8.11.1 wrapper
 ./gradlew assembleDebug             # First build (~3-5 min on a clean machine)
 ```
 

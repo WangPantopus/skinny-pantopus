@@ -7,7 +7,9 @@ parts that are different — and easier to get subtly wrong — on a device.
 Every fact below was checked against a real machine on **4 September 2026**:
 Gradle 8.9, AGP 8.5.2, Kotlin 2.0.21, OpenJDK 21.0.10 (default) and Temurin
 17.0.19, adb 36.0.2, emulator `Pantopus_CI_API_34` on Android 14. Both of the
-cold-build failures below were reproduced there.
+cold-build failures below were reproduced there. On 6 October 2026 the app moved
+to Gradle 8.11.1, AGP 8.9.3 and compileSdk/targetSdk 36 (Google Play's current
+requirement) and was checked on an Android 16 emulator.
 
 **If you have done the [iOS equivalent](../../ios/docs/device-build-runbook.md):
 none of that applies here.** There is no team ID, no App ID registration, no
@@ -116,7 +118,7 @@ worktree. Expect to write it again in every fresh tree.
 ### Do not set `JAVA_HOME`
 
 `JAVA_HOME` being unset is fine. Gradle picks Homebrew **OpenJDK 21.0.10**, and
-AGP 8.5.2 builds on it — verified, repeatedly. Temurin 17 also works and is what
+AGP builds on it — verified, repeatedly. Temurin 17 also works and is what
 older revisions of this doc insisted on; switching costs you a second daemon
 pair (6 GB + 8 GB heaps) and a discarded configuration cache for no benefit.
 
@@ -311,7 +313,6 @@ README's "second build ~30s" is optimistic.
 | `Not enough memory to run compilation`, ~10 min in | Quit the emulator, `./gradlew --stop`, retry with `-Pkotlin.daemon.jvmargs="-Xmx12288m -Xss16m -XX:+UseParallelGC"` |
 | `mergeProjectDexDebug > Directory does not exist` | `mkdir -p app/build/intermediates/mixed_scope_dex_archive/debug/dexBuilderDebug/out` and rebuild |
 | `Cannot access output property` / `Unable to delete directory` | Leftover from an interrupted build: `rm -rf app/build/intermediates/incremental/debug-mergeJavaRes` |
-| A five-line warning about `compileSdk 35` | Ignore it. It prints on *every* build including successful ones, and is never the cause. (`compileSdk` was raised for an `androidx.core` requirement while `targetSdk` stays at 34.) |
 
 The APK lands at `app/build/outputs/apk/debug/app-debug.apk` and is about
 **87–91 MB** — it carries all four ABIs, so a phone will never run most of it.

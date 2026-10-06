@@ -1,6 +1,6 @@
 [versions]
 # Kotlin + Android toolchain
-agp = "8.5.2"
+agp = "8.9.3"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.25"
 

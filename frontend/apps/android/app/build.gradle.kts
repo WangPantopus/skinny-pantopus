@@ -50,14 +50,14 @@ val pantopusEnvRelease = envOr("PANTOPUS_ENV", "production")
 
 android {
     namespace = "app.pantopus.android"
-    // compileSdk bumped to 35 to satisfy transitive androidx.core 1.15 AAR
-    // metadata. targetSdk stays at 34 per the P1 platform spec.
-    compileSdk = 35
+    // Google Play requires new apps and updates to target Android 16 (API 36)
+    // since August 31, 2026; AGP 8.9.1 is the first to support it.
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.pantopus.android"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
 
