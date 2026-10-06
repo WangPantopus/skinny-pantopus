@@ -153,6 +153,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
             title="You haven't added a place yet"
             description="Claim your address to see flood risk, today's air, your home's value, and your verified neighbors."
             actionLabel="Add your place"
+            headingLevel={2}
             onAction={() => router.push('/app/homes')}
           />
         </div>
