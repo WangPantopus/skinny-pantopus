@@ -4894,7 +4894,49 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Invoice is not payable', code: 'NOT_PAYABLE' });
     }
 
-    // Create payment intent
+    // One payment per invoice. A repeated or retried Pay continues the invoice's payment instead of
+    // starting another, which could leave a second hold on the payer's card for days.
+    if (invoice.payment_id && invoice.stripe_payment_intent_id) {
+      let paymentStatus;
+      let intent;
+      try {
+        paymentStatus = await captureInvoicePayment(invoice.payment_id);
+        if (!INVOICE_PAID_PAYMENT_STATES.has(paymentStatus)) {
+          intent = await stripeService.retrievePaymentIntent(invoice.stripe_payment_intent_id);
+        }
+      } catch (err) {
+        logger.warn('Invoice pay: payment check failed', { invoiceId, error: err.message });
+        return res.status(503).json({
+          error: "We couldn't check this payment. Please try again in a moment.",
+          code: 'PAYMENT_CHECK_FAILED',
+        });
+      }
+      if (!intent) {
+        // The payer already paid, but the confirm never arrived (say, the app closed mid-payment).
+        await markInvoicePaid(invoiceId);
+        return res.status(409).json({ error: 'This invoice has already been paid', code: 'ALREADY_PAID' });
+      }
+      if (RESUMABLE_INTENT_STATUSES.has(intent.status)) {
+        if (intent.amount === invoice.total_cents && intent.client_secret) {
+          return res.json({
+            client_secret: intent.client_secret,
+            payment_intent_id: intent.id,
+            payment_id: invoice.payment_id,
+            amount_cents: invoice.total_cents,
+            fee_cents: invoice.fee_cents,
+          });
+        }
+      } else if (intent.status !== 'canceled') {
+        // Authorized, processing or taken: never start a second payment beside it.
+        return res.status(409).json({
+          error: 'This payment is still being processed. Check back in a moment.',
+          code: 'PAYMENT_IN_PROGRESS',
+        });
+      }
+      // Canceled, or the total changed since it started: a new payment below.
+    }
+
+    // Create payment intent. The key ties it to the payment it replaces, so a double tap makes one.
     const result = await stripeService.createPaymentIntentForGig({
       payerId: userId,
       payeeId: invoice.business_user_id,
@@ -4905,6 +4947,7 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
         type: 'invoice_payment',
         invoice_id: invoiceId,
       },
+      idempotencyKey: `invoice-pay:${invoiceId}:${invoice.stripe_payment_intent_id || 'first'}`,
     });
 
     if (!result.success) {
@@ -4948,6 +4991,42 @@ const INVOICE_PAID_PAYMENT_STATES = new Set([
   PAYMENT_STATES.TRANSFERRED,
 ]);
 
+// A PaymentIntent the payer hasn't completed yet; Pay hands the same one back.
+const RESUMABLE_INTENT_STATUSES = new Set(['requires_payment_method', 'requires_confirmation', 'requires_action']);
+
+/**
+ * Only Stripe can say an invoice payment went through. Syncs the payment with its intent, captures it
+ * if it's authorized (held), and returns its status.
+ */
+async function captureInvoicePayment(paymentId) {
+  const synced = await stripeService.syncPaymentAuthorizationStatus(paymentId);
+  if (synced?.payment_status === PAYMENT_STATES.AUTHORIZED) {
+    await stripeService.capturePayment(paymentId);
+  }
+  const { data: payment, error } = await supabaseAdmin
+    .from('Payment')
+    .select('payment_status')
+    .eq('id', paymentId)
+    .maybeSingle();
+  if (error) throw error;
+  return payment?.payment_status || null;
+}
+
+/** Marks the invoice paid (once) and returns it. */
+async function markInvoicePaid(invoiceId) {
+  const { data: updatedRows, error } = await supabaseAdmin
+    .from('BusinessInvoice')
+    .update({ status: 'paid', paid_at: new Date().toISOString() })
+    .eq('id', invoiceId)
+    .neq('status', 'paid')
+    .select();
+  if (error) throw error;
+  if (updatedRows?.[0]) return updatedRows[0];
+  // Another request marked it paid first.
+  const { data: invoice } = await supabaseAdmin.from('BusinessInvoice').select('*').eq('id', invoiceId).maybeSingle();
+  return invoice;
+}
+
 /**
  * POST /invoices/:invoiceId/confirm — Confirm invoice payment succeeded
  * Called by the client after Stripe PaymentIntent confirmation succeeds.
@@ -4984,17 +5063,7 @@ router.post('/invoices/:invoiceId/confirm', verifyToken, async (req, res) => {
     // an authorized one is captured, and the invoice is paid only once the money is captured.
     let paymentStatus;
     try {
-      const synced = await stripeService.syncPaymentAuthorizationStatus(invoice.payment_id);
-      if (synced?.payment_status === PAYMENT_STATES.AUTHORIZED) {
-        await stripeService.capturePayment(invoice.payment_id);
-      }
-      const { data: payment, error: paymentErr } = await supabaseAdmin
-        .from('Payment')
-        .select('payment_status')
-        .eq('id', invoice.payment_id)
-        .maybeSingle();
-      if (paymentErr) throw paymentErr;
-      paymentStatus = payment?.payment_status || null;
+      paymentStatus = await captureInvoicePayment(invoice.payment_id);
     } catch (err) {
       logger.warn('Invoice confirm: payment check failed', { invoiceId, error: err.message });
       return res.status(503).json({
@@ -5006,24 +5075,12 @@ router.post('/invoices/:invoiceId/confirm', verifyToken, async (req, res) => {
       return res.status(409).json({ error: "This payment hasn't gone through yet.", code: 'PAYMENT_NOT_COMPLETE' });
     }
 
-    const { data: updatedRows, error: updateErr } = await supabaseAdmin
-      .from('BusinessInvoice')
-      .update({
-        status: 'paid',
-        paid_at: new Date().toISOString(),
-      })
-      .eq('id', invoiceId)
-      .neq('status', 'paid')
-      .select();
-
-    if (updateErr) {
+    let updated;
+    try {
+      updated = await markInvoicePaid(invoiceId);
+    } catch (updateErr) {
       logger.error('Failed to confirm invoice payment', { invoiceId, error: updateErr.message });
       return res.status(500).json({ error: 'Failed to update invoice status' });
-    }
-    let updated = updatedRows?.[0];
-    if (!updated) {
-      // Another confirm marked it paid first.
-      ({ data: updated } = await supabaseAdmin.from('BusinessInvoice').select('*').eq('id', invoiceId).maybeSingle());
     }
 
     res.json({ invoice: updated });
