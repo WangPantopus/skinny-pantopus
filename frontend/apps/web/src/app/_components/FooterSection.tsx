@@ -68,7 +68,7 @@ function Wordmark() {
 function Column({ heading, items }: { heading: string; items: { label: string; href: string; internal?: boolean }[] }) {
   return (
     <div>
-      <h4
+      <h3
         className="m-0 uppercase"
         style={{
           fontFamily: 'ui-sans-serif, system-ui',
@@ -80,7 +80,7 @@ function Column({ heading, items }: { heading: string; items: { label: string; h
         }}
       >
         {heading}
-      </h4>
+      </h3>
       <ul className="list-none m-0 p-0">
         {items.map((it) => (
           <li key={`${heading}-${it.label}`} style={{ margin: '0 0 12px' }}>
