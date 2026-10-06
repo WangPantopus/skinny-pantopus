@@ -50,6 +50,15 @@ fun pendingVerificationFor(home: MyHome): PendingVerification? =
         PendingVerification.Residency
     }
 
+/**
+ * An ownership claim is already filed for this Home. Its status lives in the
+ * Waiting Room (which also offers "Update evidence"), not a blank upload.
+ */
+private fun showsClaimStatus(
+    home: MyHome,
+    openWaitingRoom: ((String) -> Unit)?,
+): Boolean = home.pendingClaimId != null && openWaitingRoom != null
+
 /** Status chips for one My Homes row (kept out of the row builder's complexity). */
 private fun myHomeChips(
     home: MyHome,
@@ -190,11 +199,6 @@ class MyHomesListViewModel
             this.onOpenWaitingRoom = onOpenWaitingRoom
         }
 
-        /**
-         * An ownership claim is already filed for this Home. Its status lives in
-         * the Waiting Room (which also offers "Update evidence"), not a blank upload.
-         */
-        private fun showsClaimStatus(home: MyHome): Boolean = home.pendingClaimId != null && onOpenWaitingRoom != null
 
         fun suspendContent() {
             generation++
@@ -430,7 +434,7 @@ class MyHomesListViewModel
                 "verification" ->
                     when {
                         pendingVerificationFor(home) != PendingVerification.Owner -> onVerifyResidency?.invoke(home.id)
-                        showsClaimStatus(home) -> onOpenWaitingRoom?.invoke(home.id)
+                        showsClaimStatus(home, onOpenWaitingRoom) -> onOpenWaitingRoom?.invoke(home.id)
                         else -> onUploadOwnershipEvidence?.invoke(home.id)
                     }
             }
@@ -465,7 +469,7 @@ class MyHomesListViewModel
             val footerTitle =
                 when {
                     home.accessKind == "private_setup" -> "My tasks"
-                    pending == PendingVerification.Owner && showsClaimStatus(home) -> "Check ownership claim"
+                    pending == PendingVerification.Owner && showsClaimStatus(home, onOpenWaitingRoom) -> "Check ownership claim"
                     pending == PendingVerification.Owner -> "Continue ownership verification"
                     pending == PendingVerification.Residency -> "Check residency status"
                     else -> null
@@ -491,7 +495,7 @@ class MyHomesListViewModel
                 // Status chips wrap instead of squeezing "Household access" into a sliver at large text.
                 wrapChips = true,
                 footer =
-                    if (home.accessKind == "shared" && showsClaimStatus(home)) {
+                    if (home.accessKind == "shared" && showsClaimStatus(home, onOpenWaitingRoom)) {
                         claimStatusFooter(home.id) { if (current(revision)) onOpenWaitingRoom?.invoke(home.id) }
                     } else {
                         footerTitle?.let { homeFooter(home, it, revision) }
@@ -524,8 +528,8 @@ class MyHomesListViewModel
                                 testTag = "myHomes.row_${home.id}.verification",
                                 onClick = {
                                     if (current(revision)) {
-                                        val destination = if (showsClaimStatus(home)) onOpenWaitingRoom else onVerifyResidency
-                                        destination?.invoke(home.id)
+                                        val claim = showsClaimStatus(home, onOpenWaitingRoom)
+                                        (if (claim) onOpenWaitingRoom else onVerifyResidency)?.invoke(home.id)
                                     }
                                 },
                             ),
