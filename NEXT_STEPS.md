@@ -270,6 +270,8 @@ Bill paying by an assistant · generic shopping and deals · any navigation rela
 
 ## Ballot (added September 24)
 
+> **Status after merging master (October 6):** [section 6](#6-dropped-parked-or-shelved) and the [build guide](docs/ballot-build-guide-2026-09-23.md) record the election feature as shelved until the 2027 local elections, and the [pilot brief](docs/mobile-pilot-build-brief-2026-10-03.md) makes new builds mobile only. The checklist below describes the P0 built before that decision. Its code stays behind `ballot_p0`, which is off, and merging the branch doesn't revive the feature. "Sections 2–3 above" below means the text before October 3. See [plan §10.5](docs/ballot-implementation-plan-2026-09-24.md#105-master-integration-and-review--october-6-2026).
+
 Plan: [docs/ballot-implementation-plan-2026-09-24.md](docs/ballot-implementation-plan-2026-09-24.md). Visual source: the [Ballot canvas](https://claude.ai/artifact/KCuXBiAYYaX13gpoqUCdmq). P0 is the October edition of sections 2–3 above (voter-registration headline, election dates, voter step), not a parallel track. Everything stays behind `ballot_p0`, which is off.
 
 - [ ] Founder approves the "Proposed, September 24" canvas boards and the pilot (plan §11).

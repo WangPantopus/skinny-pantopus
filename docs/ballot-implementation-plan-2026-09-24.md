@@ -440,6 +440,53 @@ The founder requested a second review building on this session and product-exper
 
 **Recommended order:** address scheduled-versus-confirmed wording before global enablement; then try the clearer practical action with a few users; then the returning-user reveal and optional reminder. Observe whether people can name their next step and reach the official resource, and whether the reveal helps them understand their place. Do not infer completion from a link click or introduce political-preference/participation tracking. Provider-backed real-address verification remains the release boundary recorded in §10.3.
 
+### 10.5 Master integration and review — October 6, 2026
+
+The founder asked for a review of PR #429 and for its conflicts with master to be resolved with all code from both sides kept and no regression. Master moved on after §10.4: 190 more commits landed, and the October 3 pilot brief shelved the election feature until 2027 and made new builds mobile only. This pass does not enable the flag, merge the PR or change an acceptance count.
+
+**Method.** Two merge commits, no rebase and no force-push, so the PR's 31 commits keep their SHAs: `b47d732c2` merges master `e75022494` (190 commits past the merge-base `2f7bea45f`), and `e20e586cd` merges master `9f8cf1a59` (batch 360, PRs #842, #1495, #1496 and #1500, no file in common with this PR).
+
+**Conflicts (6 files), each resolved by keeping both sides.**
+- `docs/PROJECT_HANDOFF.md`: the PR's two Ballot checkpoints and master's October 3 recovery block, newest first.
+- iOS `PlaceTodayDetailContent.swift` and `AddressTodayTabView.swift`: master split the Today view into sections and gave it an explicit `init` and saved-place parameters. Both are kept. The `init` also takes `onOpenBallot`, and the Ballot card keeps its place between Weather and "Good day to…" through a small `ballotWeek` subview.
+- Android `PlaceTodayDetailContent.kt`, `TodayTabScreen.kt` and `TodayTabViewModel.kt`: master's radon, pilot-event and saved-place wiring, plus the PR's `onOpenBallot`, imports, Ballot card (same position) and read-only `homeId`.
+
+**One break git did not report.** The PR's iOS `openBallot()` read a `@State homeId` that master had removed from `AddressTodayTabView`, so the auto-merged file did not compile. It reads `detail?.calendarHomeId` now. That is nil for a saved place, which falls back to selecting the Place tab. A saved place has no Ballot card: master's `composeSavedPlaceToday` composes only weather and daylight.
+
+**Migration.** `20261004031500_ballot_p0_flag.sql` is now `20261004105000_ballot_p0_flag.sql`, byte for byte the same file, so that it sorts after master's newest (`20261004104000`) as the policy requires. No pushed or local branch holds a migration above it. No master migration touches `FeatureFlag`.
+
+**Lint.** PR CI at `c3bee0066` failed iOS lint. `PlaceDashboardView.swift` was 531 lines (limit 500) with a 320-line struct body (limit 300), and that failure skipped the SwiftFormat, icon, overline and raw-hex steps. `8fa01c10d` adds the one-line local disable that 206 other files in this codebase use. Nothing moved and no layout changed.
+
+**Nothing dropped.** A script compared every line added by either side with the merged tree. All 8,245 lines the PR adds (77 files) and all 14,672 lines master added (248 files) are present, except 12 PR lines and 3 master lines at the three conflict spots above, which were extended or re-indented rather than removed. Against master the result removes exactly the 38 lines the PR already removed, plus those 3.
+
+**Verified on the merged tree** (`e20e586cd`):
+
+| Area | Check | Result |
+|---|---|---|
+| Backend | Privacy gates | Pass |
+| Backend | Jest, run serially: 342 suites | 6,599 passed, 16 skipped, 0 failed |
+| Backend | Jest in parallel, 8 runs | Random failures in unrelated suites (gig, auth, scheduling, post visibility), one run fully clean. Master at `9f8cf1a59` does the same: 2 of 4 runs red in other suites. Every failing file passes alone. |
+| Database | Migration policy against master; 75 deploy, db and staging script tests; 68 SQL contract wrappers | Pass (the fresh-database replay is CI's job) |
+| Web | ESLint (0 errors), type gate (0 errors), Jest (123 suites, 2,366 tests) | Pass |
+| iOS | SwiftLint strict over the whole project, SwiftFormat, icon, overline and raw-hex gates | Pass |
+| iOS | `build-for-testing` (app and test bundles); `BallotP0Tests` (9) and `ColorTokenTests` (10) on a fresh iPhone 17 simulator | Pass |
+| Android | Kotlin and Hilt/Java compile, ktlint, detekt, `BallotP0Test` (12 tests) | Pass |
+
+**Not verified.** The web production build and Playwright run, the fresh-database replay, the full iOS and Android unit, snapshot and instrumented suites (CI runs them), and any browser, simulator or emulator journey through the merged Today tab or "Open your ballot". The real-address, provider, device and push limits in §10.3 are unchanged.
+
+**Review of the PR.** Thirteen reviewers each took one angle, a gap sweep followed, and a second reader re-checked every candidate; many were run rather than read. The merge introduced none of the items below, and this pass changed none of them. Most important first:
+1. **Direction.** Master's October 3 pilot brief shelves the election feature until 2027 and makes new builds mobile only (`NEXT_STEPS.md` §6, the pilot brief §0.2.1 and §13, the guide banner). This branch adds 17 web files and 3 shared-package files, including `/start`, the Today page and the Place dashboard. With the flag off, every signed-in web user's Today page still sends up to two extra requests (the primary home, then the civic election section), and once the flag row exists each Place load makes two extra `User` reads. The code stays off, but landing it is a founder decision.
+2. **Timeline labels collide** on all three platforms. In Oregon from Oct 9 to 13, "Register by Oct 13" and "Ballots mailed Oct 14" overprint, which hides the registration deadline in its last days. Hawaii's "Paper forms by 4:30 p.m." runs past the card. Android also collides at larger text sizes, and its button label clips at 2× text.
+3. **Vermont's mailing date.** `elections.json` says ballots go out "starting Sep 25". The Secretary of State's 2026 calendar and 17 V.S.A. § 2537a say mailing starts no later than Sep 21 and ends by Oct 1. Six of the other seven states' mailing dates match their official pages; Nevada's could not be checked against its Secretary of State (the site refused the request).
+4. **Teaser advice.** From Oct 27 to Nov 3 the `/start` teaser still says "mail it a week early" (WA, CA, NV, OR), and Vermont's "Town clerk by Nov 2" shows on Nov 3.
+5. **Civic page.** The "Your governments" row reads "This address sits inside at least 5." on all three platforms (the noun is missing). The districts card, from the geohash-6 cache, can list another cell's districts and representatives beside this address's exact governments.
+6. **Privacy.** A saved home's governments are cached under `home:<id>:<geohash-9>` (about 5 m), the first per-home key in `PlaceSectionCache`. Nothing deletes it with a home or an account, and the cache helper logs the key. §8's "No new personal data is stored" is not true for saved homes.
+7. **A home without coordinates** is looked up at (0,0) on every Place load and never cached.
+8. **Native Civic page** credits "Official county elections" for dates that now come from the state office. iOS dark-mode Skip/Close text is 2.9:1. The web sheet's focus can jump or leave the dialog.
+9. **Copy that asserts more than is known.** After the certification date the card says the county "certified the results", for the five states where that date is a legal deadline (§10.4 item 4 already flags this). Reference-data validation accepts several mistakes that would silently change deadline copy (missing time zone, missing `return_by.time_local`, notice without `detail`).
+
+Smaller, also verified: the button fill is one shade darker than the app's primary button on all three platforms (the token row in §6.1 is wrong for the native ladders); the peel graphic overflows web viewports narrower than 390 px; Android's sheet can call `onDismiss` twice on a double tap; the web sheet's hover colour is 1.9:1 in dark mode; the "Moved this year?" well is a dead link if a state ever lacks a registration link; the teaser's Census call outlives its 3.5 s budget; three iOS spacing literals; the Android tests never reach the timeline's flip branch or the governments decode. Latent until a ninth state or a data edit: consolidated-county rules live in code, and Oregon's Malheur County and Nevada's West Wendover run on Mountain time.
+
 ## 11. Founder approvals needed before release
 
 **Items 1–6 approved by the founder on September 25, 2026.** Item 7 was approved on September 24. Item 8 records the government-counting decision made the same day.
