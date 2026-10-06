@@ -45,10 +45,18 @@ final class SequencedURLProtocol: URLProtocol {
     private nonisolated(unsafe) static var heldResponses: [String: [(SequencedURLProtocol, Response)]] = [:]
     private var stopped = false
     private static let sessionHeader = "X-Pantopus-Test-Session"
+    /// Each `reset()` starts a new generation; `makeSession()` stamps its requests with the
+    /// generation it was made in. Work an earlier test left in flight keeps calling through
+    /// its old session; without the stamp those late requests took the next test's stubs and
+    /// counted in its `capturedRequests` (flaky HomeTaskNotificationTapTests and
+    /// HomeTaskAccessTests on CI).
+    private nonisolated(unsafe) static var generation = 0
+    private static let generationHeader = "X-Pantopus-Test-Generation"
 
     static func reset() {
         lock.lock()
         defer { lock.unlock() }
+        generation += 1
         sequence = []
         routeResponses = [:]
         capturedRequests = []
@@ -59,6 +67,9 @@ final class SequencedURLProtocol: URLProtocol {
     static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [SequencedURLProtocol.self]
+        lock.lock()
+        config.httpAdditionalHeaders = [generationHeader: String(generation)]
+        lock.unlock()
         config.urlCache = nil
         return URLSession(configuration: config)
     }
@@ -153,6 +164,10 @@ final class SequencedURLProtocol: URLProtocol {
     private static func nextResponse(for request: URLRequest) -> Response {
         lock.lock()
         defer { lock.unlock() }
+        if let stamp = request.value(forHTTPHeaderField: generationHeader), stamp != String(generation) {
+            // From a session made before the last reset(): an earlier test's late request.
+            return Response.status(599, body: "{\"error\":\"request from an earlier test\"}")
+        }
         capturedRequests.append(request)
         if let response = nextSessionResponse(for: request) {
             return response
