@@ -63,7 +63,7 @@ struct AddressStep: View {
     private func manualField(_ label: String, _ field: AddressField, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             Text(label).pantopusTextStyle(.small)
-            TextField(label, text: Binding(get: { value }, set: { viewModel.update(field, to: $0) }))
+            TextField(label, text: Binding(get: { value }, set: { if $0 != value { viewModel.update(field, to: $0) } }))
                 .textFieldStyle(.roundedBorder)
                 .autocorrectionDisabled()
                 .focused($focusedField, equals: field)
@@ -80,10 +80,13 @@ struct AddressStep: View {
         }
     }
 
+    // A text field writes its unchanged text back when editing ends (Done, or
+    // a tap on Continue). Only a real edit may restart the search; otherwise
+    // the write would clear the address the person just picked.
     private var searchBinding: Binding<String> {
         Binding(
             get: { viewModel.homeSearchQuery },
-            set: { viewModel.updateSearchQuery($0) }
+            set: { if $0 != viewModel.homeSearchQuery { viewModel.updateSearchQuery($0) } }
         )
     }
 }
