@@ -48,11 +48,11 @@ export default function SenderInvitationManager({homeId,onAcknowledged}:{homeId:
     {vm.blocked?<button className={button} onClick={vm.reopen}>Reload</button>:!vm.ready?<p role="status">Loading invitations…</p>:draft?<section className="space-y-4 rounded-xl border border-app-border p-4" aria-label="Your last invitation">
       <h3 className="text-lg font-semibold">{terminal?outcome.state==='completed'?label:outcome.state==='cancelled'?'Attempt discarded':'Couldn’t finish this':'Check your last invitation'}</h3>
       {draft.home_id!==homeId&&<p role="note" className="text-sm">This is for another of your Homes. Finish it before inviting someone here.</p>}
-      <p className="text-sm">Action: {draft.action === 'create' ? 'Send invitation' : draft.action === 'resend' ? 'Resend invitation' : 'Withdraw invitation'}</p>
+      <p className="text-sm">Action: {draft.action === 'create' ? linkOnly(draft.payload) ? 'Create invitation link' : 'Send invitation' : draft.action === 'resend' ? 'Resend invitation' : 'Withdraw invitation'}</p>
       {draft.action==='create'?<PayloadSummary payload={draft.payload}/>:draft.reviewed_invitation&&terms(draft.reviewed_invitation)}
       {outcome?.state==='completed'?<><p role="status" className="text-sm">{deliveryMessage(outcome)}</p>
         {url&&<div className="space-y-3"><a href={url} className="block break-all text-sm text-blue-600">{url}</a><QRCode value={url} size={160} label="Household invitation QR code"/></div>}
-        {draft.action!=='withdraw'&&!url&&<div className="space-y-2"><p className="text-sm text-app-text-secondary">Want to send it yourself? Get a link to share.</p><button className={button} disabled={vm.busy} onClick={()=>void vm.checkShare(draft.request_id)}>Get invitation link</button></div>}</>
+        {draft.action!=='withdraw'&&!url&&<div className="space-y-2"><p className="text-sm text-app-text-secondary">{draft.action==='create'&&linkOnly(draft.payload)?'Get the link to share with the person you’re inviting.':'Want to send it yourself? Get a link to share.'}</p><button className={button} disabled={vm.busy} onClick={()=>void vm.checkShare(draft.request_id)}>Get invitation link</button></div>}</>
         :outcome?.state==='cancelled'?<p className="text-sm">Nothing changed. This attempt was discarded before it took effect.</p>
         :outcome?.state==='rejected'?<p className="text-sm">{senderMessage(outcome.code)}</p>
         :<p className="text-sm">We couldn’t confirm whether this went through. Check again, or try again. Trying again won’t send a second email.</p>}
