@@ -48,7 +48,7 @@ class WaitingRoomContentTest {
         assertEquals(PantopusIcon.Hourglass, content.halo.icon)
         assertTrue(content.halo.isPulsing)
         assertEquals("Under review", content.headline)
-        assertTrue(content.subcopy.contains("checking your documents against county records"))
+        assertTrue(content.subcopy.contains("reviewer is checking your documents"))
         assertEquals("418 Linden Ave · Apt 3B", content.address)
         assertEquals("CLM-4F2A", content.claimRef)
         assertNull(content.reviewerNote)

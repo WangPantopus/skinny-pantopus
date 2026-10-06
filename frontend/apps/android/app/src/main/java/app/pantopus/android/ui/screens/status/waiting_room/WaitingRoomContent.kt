@@ -172,8 +172,9 @@ data class WaitingRoomContent(
                 title = ROOM_TITLE,
                 halo = StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.Hourglass, isPulsing = true),
                 headline = "Under review",
+                // A person reviews ownership documents; no county-records check exists.
                 subcopy =
-                    "Pantopus is checking your documents against county records. " +
+                    "A Pantopus reviewer is checking your documents. " +
                         "You'll get a push the moment we decide.",
                 address = address,
                 claimRef = claimRef,

@@ -24,7 +24,7 @@ final class WaitingRoomContentTests: XCTestCase {
         XCTAssertEqual(content.halo.icon, .hourglass)
         XCTAssertTrue(content.halo.isPulsing)
         XCTAssertEqual(content.headline, "Under review")
-        XCTAssertTrue(content.subcopy.contains("checking your documents against county records"))
+        XCTAssertTrue(content.subcopy.contains("reviewer is checking your documents"))
         XCTAssertEqual(content.address, "418 Linden Ave · Apt 3B")
         XCTAssertEqual(content.claimRef, "CLM-4F2A")
         XCTAssertNil(content.reviewerNote)

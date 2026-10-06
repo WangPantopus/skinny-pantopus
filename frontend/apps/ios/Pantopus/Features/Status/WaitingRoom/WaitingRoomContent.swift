@@ -229,7 +229,8 @@ public extension WaitingRoomContent {
             title: roomTitle,
             halo: StatusHalo(tone: .info, icon: .hourglass, isPulsing: true),
             headline: "Under review",
-            subcopy: "Pantopus is checking your documents against county records. " +
+            // A person reviews ownership documents; no county-records check exists.
+            subcopy: "A Pantopus reviewer is checking your documents. " +
                 "You'll get a push the moment we decide.",
             address: address,
             claimRef: claimRef,
