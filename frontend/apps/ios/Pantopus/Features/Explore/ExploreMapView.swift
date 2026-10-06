@@ -675,54 +675,75 @@ public struct ExploreMapView: View {
                 .multilineTextAlignment(.center)
                 .padding(.bottom, 5)
 
-            Text("3 filters are narrowing this view. Try clearing them, or widen the area to surface neighbors a little further out.")
+            Text(Self.emptyHint(filterCount: narrowingFilterCount, distanceNarrowed: viewModel.filters.isDistanceActive))
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 264)
                 .padding(.bottom, 14)
 
-            HStack(spacing: Spacing.s2) {
-                Button {
-                    viewModel.clearFilters()
-                } label: {
-                    HStack(spacing: 6) {
-                        Icon(.x, size: 13, strokeWidth: 2.6, color: Theme.Color.appTextInverse)
-                        Text("Clear filters")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Theme.Color.appTextInverse)
+            // Clearing or widening is offered only when it would change the view.
+            if narrowingFilterCount > 0 {
+                HStack(spacing: Spacing.s2) {
+                    Button {
+                        viewModel.clearFilters()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Icon(.x, size: 13, strokeWidth: 2.6, color: Theme.Color.appTextInverse)
+                            Text("Clear filters")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(Theme.Color.appTextInverse)
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 44)
+                        .background(Theme.Color.primarySolid)
+                        .clipShape(Capsule())
                     }
-                    .padding(.horizontal, 14)
-                    .frame(height: 44)
-                    .background(Theme.Color.primarySolid)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("exploreClearFilters")
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("exploreClearFilters")
 
-                Button {
-                    viewModel.widenArea()
-                } label: {
-                    HStack(spacing: 6) {
-                        Icon(.globe, size: 13, strokeWidth: 2.2, color: Theme.Color.appTextStrong)
-                        Text("Widen area")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.Color.appTextStrong)
+                    if viewModel.filters.isDistanceActive {
+                        Button {
+                            viewModel.widenArea()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Icon(.globe, size: 13, strokeWidth: 2.2, color: Theme.Color.appTextStrong)
+                                Text("Widen area")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(Theme.Color.appTextStrong)
+                            }
+                            .padding(.horizontal, 14)
+                            .frame(height: 44)
+                            .background(Theme.Color.appSurface)
+                            .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: 1))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("exploreWidenArea")
                     }
-                    .padding(.horizontal, 14)
-                    .frame(height: 44)
-                    .background(Theme.Color.appSurface)
-                    .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: 1))
-                    .clipShape(Capsule())
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("exploreWidenArea")
             }
         }
         .padding(.horizontal, 28)
         .padding(.top, 10)
         .frame(maxWidth: .infinity, alignment: .top)
         .accessibilityIdentifier("exploreEmptyState")
+    }
+
+    /// Filters that really narrow the view: the sheet's dimensions plus the
+    /// All / Posts / Homes toggle. "Clear filters" resets all of them.
+    private var narrowingFilterCount: Int {
+        viewModel.filters.activeCount + (viewModel.activeKind == nil ? 0 : 1)
+    }
+
+    /// The empty-state hint names only the filters that are on (mirrors
+    /// Android `exploreEmptyHint`).
+    static func emptyHint(filterCount: Int, distanceNarrowed: Bool) -> String {
+        guard filterCount > 0 else { return "Try another area, or check back later." }
+        let lead = filterCount == 1
+            ? "1 filter is narrowing this view. Try clearing it"
+            : "\(filterCount) filters are narrowing this view. Try clearing them"
+        return distanceNarrowed ? lead + ", or widen the area to surface neighbors a little further out." : lead + "."
     }
 
     private func pendingPlace(for entity: ExploreEntity) -> PendingSavePlace {
