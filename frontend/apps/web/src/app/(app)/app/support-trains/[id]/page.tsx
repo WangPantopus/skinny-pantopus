@@ -8,6 +8,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { buildSupportTrainShareUrl } from '@pantopus/utils';
 import { toast } from '@/components/ui/toast-store';
+import { confirmStore } from '@/components/ui/confirm-store';
 import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
 import {
   Calendar,
@@ -191,6 +192,8 @@ export default function SupportTrainDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [reservationError, setReservationError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('needs');
+  // Reservation id of the helper action in flight (Mark delivered / Leave slot).
+  const [helperAction, setHelperAction] = useState<string | null>(null);
   const [reserveSlot, setReserveSlot] = useState<any>(null);
   const [reserveMode, setReserveMode] = useState('');
   const [dishTitle, setDishTitle] = useState('');
@@ -264,6 +267,8 @@ export default function SupportTrainDetailPage() {
       .map((reservation) => reservation?.slot_id || reservation?.slot?.id)
       .filter(Boolean)
   );
+  const myReservations = ((data.my_reservations || []) as any[]).filter((r) => r?.id && r?.slot_id);
+  const slotsById = new Map(slots.map((s: any) => [s.id, s]));
   const openSlots = slots.filter(
     (s: any) =>
       s.status === 'open' &&
@@ -386,6 +391,43 @@ export default function SupportTrainDetailPage() {
     }
   };
 
+  // The helper's own commitment, as on iOS and Android: mark it delivered, or
+  // leave the slot so it opens for someone else.
+  const handleMarkDelivered = async (reservationId: string) => {
+    if (helperAction) return;
+    setHelperAction(reservationId);
+    try {
+      await api.supportTrains.markDelivered(id, reservationId);
+      await fetchData();
+      toast.success('Marked delivered');
+    } catch {
+      toast.error('Failed to mark this as delivered.');
+    } finally {
+      setHelperAction(null);
+    }
+  };
+
+  const handleLeaveSlot = async (reservationId: string) => {
+    if (helperAction) return;
+    const confirmed = await confirmStore.open({
+      title: 'Leave this slot?',
+      description: 'It opens up again for other helpers, and the organizer is told.',
+      confirmLabel: 'Leave slot',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
+    setHelperAction(reservationId);
+    try {
+      await api.supportTrains.cancelReservation(id, reservationId, {});
+      await fetchData();
+      toast.success('Slot reopened');
+    } catch {
+      toast.error('Failed to leave this slot.');
+    } finally {
+      setHelperAction(null);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -485,6 +527,28 @@ export default function SupportTrainDetailPage() {
 
         {/* ── Center Column: Tabs ── */}
         <div ref={needsSectionRef} className="lg:col-span-6 scroll-mt-6">
+          {/* The viewer's own signups */}
+          {!isOrganizer && myReservations.length > 0 && (
+            <section
+              aria-labelledby="my-signups-title"
+              className="mb-6 rounded-xl border border-primary-200 dark:border-primary-800/50 bg-primary-50/60 dark:bg-primary-900/20 p-4 space-y-3"
+            >
+              <h2 id="my-signups-title" className="text-sm font-semibold text-app-text">
+                {myReservations.length > 1 ? 'Your signups' : 'Your signup'}
+              </h2>
+              {myReservations.map((reservation) => (
+                <MySignupRow
+                  key={reservation.id}
+                  reservation={reservation}
+                  slot={slotsById.get(reservation.slot_id)}
+                  busy={helperAction !== null}
+                  onDelivered={() => handleMarkDelivered(reservation.id)}
+                  onLeave={() => handleLeaveSlot(reservation.id)}
+                />
+              ))}
+            </section>
+          )}
+
           {/* Tab bar */}
           <div className="flex border-b border-app-border mb-6">
             {(['needs', 'details', 'updates'] as TabKey[]).map((tab) => (
@@ -719,6 +783,75 @@ export default function SupportTrainDetailPage() {
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────
+
+const CONTRIBUTION_LABELS: Record<string, string> = {
+  cook: 'Home-cooked meal',
+  takeout: 'Takeout / delivery',
+  groceries: 'Groceries',
+};
+
+const MY_SIGNUP_STATUS: Record<string, string> = {
+  reserved: "You're signed up",
+  delivered: 'Marked delivered',
+  confirmed: 'Delivery confirmed',
+};
+
+function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
+  reservation: any;
+  slot: any;
+  busy: boolean;
+  onDelivered: () => void;
+  onLeave: () => void;
+}) {
+  const dateStr = slot?.slot_date
+    ? new Date(slot.slot_date + 'T00:00:00Z').toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+      })
+    : '';
+  const contribution = [
+    CONTRIBUTION_LABELS[reservation.contribution_mode] || null,
+    reservation.dish_title || reservation.restaurant_name || null,
+  ].filter(Boolean).join(': ');
+  const isReserved = reservation.status === 'reserved';
+
+  return (
+    <div className="rounded-lg border border-app-border bg-app-surface p-3">
+      <p className="text-sm font-semibold text-app-text">
+        {slot?.slot_label || 'Your slot'}{dateStr ? ` — ${dateStr}` : ''}
+      </p>
+      {slot?.start_time && (
+        <p className="text-xs text-app-text-secondary mt-0.5">{formatSlotWindow(slot.start_time, slot.end_time)}</p>
+      )}
+      {contribution && <p className="text-xs text-app-text-secondary mt-0.5">{contribution}</p>}
+      <p className="text-xs font-medium text-primary-700 dark:text-primary-300 mt-1">
+        {MY_SIGNUP_STATUS[reservation.status] || "You're signed up"}
+      </p>
+      {isReserved && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button
+            type="button"
+            onClick={onDelivered}
+            disabled={busy}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-app-border bg-app-surface text-app-text hover:bg-app-surface-sunken disabled:opacity-50 transition"
+          >
+            Mark delivered
+          </button>
+          <button
+            type="button"
+            onClick={onLeave}
+            disabled={busy}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 transition"
+          >
+            Leave slot
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SlotCard({ slot, onSelect, disabled = false }: { slot: any; onSelect: () => void; disabled?: boolean }) {
   const date = new Date(slot.slot_date + 'T00:00:00Z');
