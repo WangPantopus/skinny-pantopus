@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -38,8 +40,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -47,6 +53,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -130,6 +137,10 @@ fun LoginScreen(
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showPassword by remember { mutableStateOf(false) }
+    // The keyboard's Next moves from the email to the password, and Go signs in.
+    val passwordFocus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val submit = { submitSignIn(state.canSubmit, focusManager, viewModel::signIn) }
     var accountToForget by remember { mutableStateOf<AccountHint?>(null) }
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -160,6 +171,8 @@ fun LoginScreen(
             Modifier
                 .fillMaxSize()
                 .background(PantopusColors.appSurface)
+                // Edge to edge, so the form makes room for the keyboard itself.
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.s5, vertical = Spacing.s10)
                 .testTag(LoginScreenTags.ROOT),
@@ -252,6 +265,7 @@ fun LoginScreen(
             value = state.email,
             onChange = viewModel::onEmailChange,
             isError = state.errorMessage != null,
+            onNext = { passwordFocus.requestFocus() },
         )
         Box(modifier = Modifier.height(Spacing.s3))
         PasswordFieldWithForgot(
@@ -261,6 +275,8 @@ fun LoginScreen(
             onChange = viewModel::onPasswordChange,
             onForgot = onNavigateToForgotPassword,
             isError = state.errorMessage != null,
+            focusRequester = passwordFocus,
+            onGo = submit,
         )
 
         Box(modifier = Modifier.height(Spacing.s5))
@@ -273,7 +289,7 @@ fun LoginScreen(
                     .clip(RoundedCornerShape(Radii.lg))
                     .background(
                         if (state.canSubmit) PantopusColors.primary600 else PantopusColors.appBorderStrong,
-                    ).clickable(enabled = state.canSubmit, onClick = viewModel::signIn)
+                    ).clickable(enabled = state.canSubmit, onClick = submit)
                     .testTag(LoginScreenTags.SUBMIT_BUTTON)
                     .semantics { contentDescription = if (state.isLoading) "Signing in" else "Log in" },
             contentAlignment = Alignment.Center,
@@ -643,6 +659,7 @@ private fun EmailField(
     value: String,
     onChange: (String) -> Unit,
     isError: Boolean,
+    onNext: () -> Unit,
 ) {
     val borderColor = if (isError) PantopusColors.error else PantopusColors.appBorder
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
@@ -675,7 +692,8 @@ private fun EmailField(
                 textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText),
                 cursorBrush = SolidColor(PantopusColors.primary600),
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { onNext() }),
                 modifier =
                     Modifier
                         .weight(1f)
@@ -697,6 +715,21 @@ private fun EmailField(
     }
 }
 
+/**
+ * Log in from the button or the keyboard's Go. The keyboard closes so the result (or the error banner above
+ * the fields) is in view; an incomplete form keeps it open.
+ */
+private fun submitSignIn(
+    canSubmit: Boolean,
+    focusManager: FocusManager,
+    signIn: () -> Unit,
+) {
+    if (!canSubmit) return
+    focusManager.clearFocus()
+    signIn()
+}
+
+@Suppress("LongParameterList")
 @Composable
 private fun PasswordFieldWithForgot(
     value: String,
@@ -705,6 +738,8 @@ private fun PasswordFieldWithForgot(
     onChange: (String) -> Unit,
     onForgot: () -> Unit,
     isError: Boolean,
+    focusRequester: FocusRequester,
+    onGo: () -> Unit,
 ) {
     val borderColor = if (isError) PantopusColors.error else PantopusColors.appBorder
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
@@ -754,10 +789,12 @@ private fun PasswordFieldWithForgot(
                 singleLine = true,
                 visualTransformation =
                     if (isVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = { onGo() }),
                 modifier =
                     Modifier
                         .weight(1f)
+                        .focusRequester(focusRequester)
                         .authAutofill(listOf(AuthAutofillKind.Password), onChange)
                         .testTag(LoginScreenTags.PASSWORD_FIELD)
                         .semantics { contentDescription = "Password" },

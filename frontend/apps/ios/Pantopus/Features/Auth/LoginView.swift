@@ -19,6 +19,11 @@
 
 import SwiftUI
 
+/// The login field the keyboard is in.
+private enum LoginField: Hashable {
+    case email, password
+}
+
 struct LoginView: View {
     @Environment(AuthManager.self) private var auth
     @State private var viewModel = LoginViewModel()
@@ -26,6 +31,7 @@ struct LoginView: View {
     @State private var showPassword: Bool = false
     @State private var showRemoveConfirmation = false
     @State private var deepLink = DeepLinkRouter.shared
+    @FocusState private var focusedField: LoginField?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -123,6 +129,10 @@ struct LoginView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onChange(of: viewModel.email) { _, _ in viewModel.clearError() }
+                        // Return moves on to the password, and the password's return signs in.
+                        .focused($focusedField, equals: .email)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .password }
 
                         PasswordField(
                             value: $viewModel.password,
@@ -132,6 +142,9 @@ struct LoginView: View {
                             onChange: { viewModel.clearError() },
                             trailingLink: ("Forgot password?", { path.append(.forgotPassword) })
                         )
+                        .focused($focusedField, equals: .password)
+                        .submitLabel(.go)
+                        .onSubmit(submitFromKeyboard)
                     }
                     .padding(.horizontal, Spacing.s5)
 
@@ -161,6 +174,7 @@ struct LoginView: View {
                     .disabled(!viewModel.canSubmit)
                     .accessibilityIdentifier("loginSubmitButton")
                     .accessibilityLabel(viewModel.isLoading ? "Signing in" : "Log in")
+                    .id(LoginKeyboardReveal.submitID)
 
                     // Unverified sign-in is a dead end without this: the
                     // backend 403s with "Please verify your email before
@@ -238,6 +252,7 @@ struct LoginView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
+            .modifier(LoginKeyboardReveal(isEditing: focusedField != nil))
             .background(Theme.Color.appSurface)
             .navigationBarHidden(true)
             .navigationDestination(for: AuthRoute.self) { route in
@@ -345,7 +360,20 @@ struct LoginView: View {
     }
 
     private func signIn() {
+        // Close the keyboard so the result (or the error banner above the fields) is in view.
+        focusedField = nil
         Task { await viewModel.signIn(using: auth) }
+    }
+
+    /// The password's return key: sign in when the form is complete, otherwise go to the field that needs fixing.
+    private func submitFromKeyboard() {
+        if viewModel.canSubmit {
+            signIn()
+        } else if AuthValidation.email(viewModel.email) != nil {
+            focusedField = .email
+        } else {
+            focusedField = .password
+        }
     }
 
     private func signIn(with provider: OAuthProvider) {
@@ -358,6 +386,24 @@ struct LoginView: View {
 }
 
 // MARK: - Login subcomponents
+
+/// Keeps "Log in" in view above the keyboard while a field is being edited; on a small phone the keyboard
+/// otherwise covers it.
+private struct LoginKeyboardReveal: ViewModifier {
+    static let submitID = "loginSubmit"
+    let isEditing: Bool
+
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            content.onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                guard isEditing else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(Self.submitID, anchor: .bottom)
+                }
+            }
+        }
+    }
+}
 
 /// Centered brand lockup — the horizontal `PantopusLockup` at 36pt with the
 /// tagline beneath. The canonical lockup owns the mark/wordmark gap and the
