@@ -24,6 +24,9 @@ from src.utils.supabase_errors import is_missing_table_error, log_missing_table_
 from src.utils.coordinates import parse_valid_coordinates
 
 logging.basicConfig(level=logging.INFO, force=True)
+# httpx logs every request URL at INFO. AirNow's key travels in the query
+# string and Supabase filters carry full user ids; keep both out of CloudWatch.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.alert_checker")
 
 FETCH_TIMEOUT_S = 10
@@ -83,10 +86,14 @@ def _geohash_encode(lat: float, lng: float, precision: int = 5) -> str:
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Alert checker Lambda entry point."""
     try:
-        return _run(event, context)
+        result = _run(event, context)
     except Exception:
         log.exception("Alert checker handler failed with unhandled exception")
-        return {"error": "unhandled_exception"}
+        raise
+    if result.get("error"):
+        # Fail the invocation so the Lambda Errors metric and its alarm see it.
+        raise RuntimeError(f"Alert checker run failed: {result}")
+    return result
 
 
 def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -182,7 +189,7 @@ def _get_user_geohashes(supabase) -> dict[str, dict]:
         rows = result.data or []
     except Exception:
         log.exception("Failed to query home occupancies for geohashes")
-        return {}
+        raise
 
     geohash_map: dict[str, dict] = {}
 
@@ -480,16 +487,8 @@ def _check_aqi_alerts(
     takes the same key and returns one NowCast reading per pollutant with
     camelCase fields (nowcastAQI, aqiCategoryName, parameterName).
     """
-    api_key = os.environ.get("AIRNOW_API_KEY") or os.environ.get("AIRNOW_KEY") or ""
-    # Try to get from secrets if not in env
-    if not api_key:
-        try:
-            from src.config.secrets import get_secrets
-            seeder_secrets = get_secrets()
-            api_key = getattr(seeder_secrets, "airnow_api_key", "")
-        except Exception:
-            pass
-
+    # AIRNOW_API_KEY in the Lambda secret (or the environment locally).
+    api_key = secrets.airnow_api_key
     if not api_key:
         return 0  # AQI checking requires API key
 
