@@ -27,7 +27,6 @@ settings:
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: "6UYZBA546R" # Set in Xcode or via xcconfig; do not commit a team ID
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
-    TARGETED_DEVICE_FAMILY: "1,2" # iPhone + iPad
     ENABLE_BITCODE: NO
     OTHER_SWIFT_FLAGS:
       - "-enable-upcoming-feature"
@@ -186,6 +185,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.pantopus.ios
         PRODUCT_NAME: Pantopus
+        # iPhone only: no screen has an iPad layout, and an iPad build needs its own
+        # App Store screenshots. iPads still run the app in iPhone compatibility mode.
+        # Set per target: XcodeGen's iOS preset sets "1,2" on every target.
+        TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         DEVELOPMENT_ASSET_PATHS: '"Pantopus/Preview Content"'
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -270,6 +273,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.pantopus.ios.widgets
         PRODUCT_NAME: PantopusWidgets
+        TARGETED_DEVICE_FAMILY: "1" # matches the app
         SKIP_INSTALL: YES
       configs:
         Debug:

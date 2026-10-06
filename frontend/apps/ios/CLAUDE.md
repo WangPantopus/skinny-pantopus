@@ -122,5 +122,5 @@ Android, then mirror the screen.
 ## Performance / build
 
 - `make bootstrap && make open` regenerates the project from `project.yml`.
-- `make test` runs the unit suite. CI also runs the SwiftLint hex-grep guard
-  and per-target coverage report.
+- `make test` runs the unit suite. CI also runs the SwiftLint hex-grep guard;
+  it builds without code coverage (see `docs/ci-cd.md`).

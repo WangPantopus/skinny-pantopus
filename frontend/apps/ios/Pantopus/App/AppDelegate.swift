@@ -35,6 +35,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         Self.bootstrapLogging()
+        // AsyncImage loads through URLSession.shared, whose default cache (512 KB in memory,
+        // 10 MB on disk) is too small to keep most photos and avatars, so lists downloaded
+        // them again whenever a row came back on screen.
+        URLCache.shared = URLCache(memoryCapacity: 32 * 1024 * 1024, diskCapacity: 256 * 1024 * 1024)
         try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
         MainActor.assumeIsolated {
             Observability.shared.start(environment: AppEnvironment.current)
