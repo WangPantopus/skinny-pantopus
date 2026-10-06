@@ -75,7 +75,7 @@ test('a held roster reply cannot survive account retirement', async () => {
 });
 test('a named review cancels without a removal request and a lost reply exposes explicit recovery', async () => {
   render(<MemberRemovalRecovery homeId={home} targetId={target}/>);
-  fireEvent.click(await screen.findByRole('button', { name: 'Review removal' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove this member' }));
   await screen.findByRole('alertdialog', { name: 'Review member removal' });
   expect(screen.getByRole('heading', { name: 'Remove member' })).toHaveFocus();
   expect(screen.getByText('@fixture_member')).toBeVisible(); expect(screen.getByText('Fixture household')).toBeVisible();
@@ -102,7 +102,7 @@ test('cold recovery without a Home selection keeps historical success separate f
     action: 'remove', decision_token: decision, completed_at: '2026-09-13T12:00:00Z', code: null, status: null,
     command: { actor_id: actor, request_id: original.request_id, created_at: '2026-09-13T12:00:00Z', updated_at: '2026-09-13T12:00:00Z' }, session } } as never);
   render(<MemberRemovalRecovery/>);
-  await screen.findByRole('heading', { name: 'Removal recorded' });
+  await screen.findByRole('heading', { name: 'Member removed' });
   expect(screen.getByText('Check the member list to see who’s in the household now.')).toBeVisible();
   jest.mocked(api.apiClient.get).mockImplementation(async url => {
     if (String(url).endsWith('/occupants')) throw Object.assign(Error('Denied'), { statusCode: 403 });
