@@ -24,15 +24,17 @@ export default function HomePage() {
       <MarketingReveal />
 
       <NavBar />
-      <HeroSection />
-      <ProblemSection />
-      <PrimitiveSection />
-      <UnlocksSection />
-      <CeremonialSection />
-      <PillarsSection />
-      <StripesSection />
-      <FrameSection />
-      <FinalCTASection />
+      <main>
+        <HeroSection />
+        <ProblemSection />
+        <PrimitiveSection />
+        <UnlocksSection />
+        <CeremonialSection />
+        <PillarsSection />
+        <StripesSection />
+        <FrameSection />
+        <FinalCTASection />
+      </main>
       <FooterSection />
     </div>
   );

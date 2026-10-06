@@ -730,7 +730,7 @@ export default function StartFunnel() {
   // Hero step.
   if (!submitted) {
     return (
-      <div className="min-h-screen bg-app-bg">
+      <main className="min-h-screen bg-app-bg">
         <div className="mx-auto w-full max-w-[480px] sm:max-w-[540px] lg:max-w-[1000px] px-5">
           <HeroStep
             onSelect={setSelected}
@@ -741,7 +741,7 @@ export default function StartFunnel() {
             fromCard={fromCard}
           />
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -752,7 +752,7 @@ export default function StartFunnel() {
     : selected?.label ?? 'Your address';
 
   return (
-    <div className="min-h-screen bg-app-bg">
+    <main className="min-h-screen bg-app-bg">
       <div className="mx-auto w-full max-w-[480px] sm:max-w-[540px] px-5 pt-3 flex flex-col min-h-screen">
         {continuationError ? <p role="alert" className="py-3 text-red-700 dark:text-red-300">{continuationError}</p> : null}
         {previewQuery.isPending ? (
@@ -804,6 +804,6 @@ export default function StartFunnel() {
           </>
         ) : null}
       </div>
-    </div>
+    </main>
   );
 }
