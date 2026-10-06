@@ -303,6 +303,8 @@ def _send_reminder(secrets: BriefingSecrets, user_id: str, title: str, body: str
 
 
 def _publish_metrics(stats: dict) -> None:
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return  # Local runs never write to CloudWatch.
     try:
         import boto3
         env = os.environ.get("ENVIRONMENT", "production")

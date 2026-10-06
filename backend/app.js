@@ -164,6 +164,11 @@ app.set('trust proxy', trustProxy);
 
 // Initialize Socket.io
 const io = socketIo(server, {
+  // Accept /socket.io as well as /socket.io/ (engine.io matches this path as
+  // a prefix). The web connects same-origin through the Next rewrite, and Next
+  // redirects /socket.io/ to /socket.io, which used to 404 here, so the web's
+  // realtime never connected off localhost. The apps keep the default path.
+  addTrailingSlash: false,
   cors: {
     origin: (origin, callback) => {
       if (isAllowedOrigin(origin)) return callback(null, true);

@@ -282,6 +282,8 @@ def _get_queue_depth(supabase) -> int:
 
 def _publish_metric(queue_depth: int) -> None:
     """Publish SeederQueueDepth to CloudWatch."""
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return  # Local runs never write to CloudWatch.
     try:
         import boto3
 
