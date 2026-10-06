@@ -26,8 +26,8 @@ test('saved username receipt survives failed refresh without claiming delivery',
   listError:'Current invitations could not be loaded. Your saved result is kept.'};
  jest.mocked(useSender).mockReturnValue(view as unknown as ReturnType<typeof useSender>);
  render(<InviteFlow open onClose={()=>{}} homeId={home}/>);
- expect(screen.getByRole('heading',{name:'Invitation saved'})).toBeInTheDocument();
- expect(screen.getByText(/Email delivery is not confirmed/)).toBeInTheDocument();
+ expect(screen.getByRole('heading',{name:'Invitation created'})).toBeInTheDocument();
+ expect(screen.getByText(/couldn’t confirm the invitation email/)).toBeInTheDocument();
  expect(screen.queryByText(/Invitation sent/)).not.toBeInTheDocument();
  expect(screen.getByRole('button',{name:'Done'})).toBeEnabled();
  expect(screen.queryByRole('link',{name:/capability/})).not.toBeInTheDocument();
@@ -40,7 +40,7 @@ test('sharing needs current pending proof and provider acceptance stays distinct
  render(<InviteFlow open onClose={()=>{}} homeId={home}/>);
  expect(screen.getByRole('link',{name:/capability/})).toHaveAttribute('href',`${window.location.origin}/invite/capability`);
  expect(screen.getByRole('img',{name:'Household invitation QR code'})).toBeInTheDocument();
- expect(screen.getByText(/inbox delivery is not confirmed/)).toBeInTheDocument();
+ expect(screen.getByText(/We emailed the invitation/)).toBeInTheDocument();
 });
 
 test('approved invitation review uses its effective role and a readable household label',()=>{

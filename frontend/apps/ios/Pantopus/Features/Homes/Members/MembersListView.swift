@@ -74,9 +74,12 @@ public struct MembersListView: View {
             InviteMemberWizardView(homeId: homeId, target: target) { original in
                 invitationTarget = nil
                 if let original {
-                    invitationResult = original.outcome?.state == "completed"
-                        ? "Your invitation action was saved. The member list shows the most recent successful refresh."
-                        : "Your original invitation result was acknowledged."
+                    invitationResult = switch (original.outcome?.state, original.action) {
+                    case ("completed", .withdraw): "Invitation withdrawn."
+                    case ("completed", .resend): "Resend requested."
+                    case ("completed", _): "Invitation created. It's under Pending until they answer."
+                    default: "Nothing changed. You can start a new invitation."
+                    }
                     Task { await viewModel.refresh() }
                 }
             }

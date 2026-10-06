@@ -299,10 +299,10 @@ async function main() {
     await page.getByLabel('Email address', { exact: true }).fill(recipient.email);
     await click('Review invitation'); await heading('Review new invitation');
     await expect(page.getByRole('alertdialog').getByText('Tenant / Roommate', { exact: true })).toBeVisible();
-    await click('Confirm invitation'); await heading('Invitation saved');
+    await click('Send invitation'); await heading('Invitation created');
     const created = (await state()).sender_commands;
     assert.equal(created.length, 1); assert.equal(created[0].state, 'completed'); assert.equal(created[0].action, 'create');
-    await click('Check link for sharing');
+    await click('Get invitation link');
     const sharedLink = page.locator('a[href*="/invite/"]');
     await expect(sharedLink).toHaveCount(1);
     invitationURL = await sharedLink.getAttribute('href');
@@ -319,9 +319,9 @@ async function main() {
     await signIn(recipient, new URL(invitationURL).pathname);
     await heading("You're invited");
     await click('Accept invitation');
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm acceptance', exact: true }).click();
-    await heading('Acceptance saved');
-    await click('Check current Home access');
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Accept', exact: true }).click();
+    await heading('Invitation accepted');
+    await click('Check Home access');
     await expect(page.getByRole('button', { name: 'Open Home', exact: true })).toBeVisible();
     await click('Done');
     await poll(() => new URL(page.url()).pathname).toBe('/app/homes');
