@@ -7,14 +7,19 @@ The founder's single checklist. Check items off as they ship. Started September 
 Sources, in order of authority for this work:
 
 1. [Mobile pilot build brief](docs/mobile-pilot-build-brief-2026-10-03.md): what to build now, on iOS and Android, plus the backend they need.
-2. The September 26 launch direction and its amendments, in `docs/launch-boundary-2026-09-26/` ([PR 1499](https://github.com/WangPantopus/skinny-pantopus/pull/1499) until merged). The brief carries every part this build needs.
+2. The September 26 launch direction and its amendments, in `docs/launch-boundary-2026-09-26/` (merged from [PR 1499](https://github.com/WangPantopus/skinny-pantopus/pull/1499) on October 5). The brief carries every part this build needs.
 3. [First-person loop design](docs/first-person-loop-design-2026-09-16.md): the full F1 to F12 designs. The brief says which parts are in.
 4. Claude Design exports in `docs/design/exports/`, checked in `docs/design/exports/VERIFICATION.md`: the look of the screens that have one.
 5. Background: the [design docs review](https://claude.ai/code/artifact/09276a14-1587-41be-86ef-54e95505d2d8), the [idea ledger](https://claude.ai/code/artifact/51f601e7-1e56-416e-b549-fbd036e421ba) and the [Wedge v2 strategy](https://claude.ai/artifact/GLUkeCRhnFZnsj7tRr1L4D).
 
 **Designed, outside the mobile build.** The [Street Organizer](docs/product/street-organizer-design-2026-09-27.md) (Crew Day first), [Pulse](https://github.com/WangPantopus/skinny-pantopus/pull/625) (local conversation; see its [review comment](https://github.com/WangPantopus/skinny-pantopus/pull/625#issuecomment-5974324844)) and [Porchlight](docs/product/porchlight-product-design-2026-09-26.md) (check-ins for someone living alone). The [Pantopus Agent](docs/product/pantopus-agent-product-design-2026-10-04.md) ([system design](docs/product/pantopus-agent-system-design-2026-10-04.md)) is the one box that ties them together. Crew Day's first two phases run by hand beside the pilot (section 4A). The rest waits for evidence (sections 5 and 7).
 
-Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`docs/workstreams/README.md` on the `codex/workstream-coordination` branch). Stream 1 runs the merge queue and assigns work.
+**Who works on what (from October 6).** Four launch streams work in parallel. Each merges its own PRs after green CI and a check in the real apps; ground rules are in [AGENTS.md](AGENTS.md).
+
+- **L1 Place, Today and reminders:** WP1 to WP5 and WP7 in section 3, the seeder, provider data and every reminder push.
+- **L2 Home and household:** WP6, Add Home and verification, members, tasks, documents, guests and home privacy.
+- **L3 Accounts, community, Mail, Support Trains and money:** WP8, sign-in, Nearby, chat, Mail, payments and the AI assistant.
+- **L4 Release, production and quality:** hosted staging and production, store builds and listings, CI, security, performance and the final release-candidate sweep. L4 keeps this checklist current from the streams' PRs and prepares every founder step in section 2.
 
 ## 0. Decisions
 
@@ -55,7 +60,7 @@ Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
-- [x] Assign package owners (October 5): Stream 1 coordinates/integrates; WP1 owns curator/seeder work; 4-1 owns Today/pickup/radon/first use; WP3 owns pickup backend; 3-1 owns household tasks/invitations; 3-2 owns privacy/F3b; 4-2 owns native actions/events; WP8 owns Trains and its assigned saved-place entry repair. Current owners and exact scope are in the [live successor prompt](https://github.com/WangPantopus/skinny-pantopus/blob/codex/workstream-coordination/docs/workstreams/NEXT-STREAM1-PROMPT-2026-10-02-clean-checkpoint.md).
+- [x] Assign package owners. On October 6 the four launch streams at the top of this file replaced the October 5 assignment.
 - [ ] Whether invited household members see pickup days and bills. Default: not in the pilot; they see shared tasks and complete the ones assigned to them.
 - [ ] Where the new promise appears. Default: the store listings and the app's first screen.
 - [ ] The pilot start date. Default: when section 2 below is done and one full journey works on the hosted backend.
@@ -92,7 +97,7 @@ Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`
 
 ## 3. Build now: the mobile pilot (instructions in the brief)
 
-**October 5 handoff:** checked subitems below mean that the named implementation or bounded local acceptance is complete. They do not mean the entire package is shipped. The eight package parents remain open until their remaining acceptance is complete. Application candidate [PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533), code commit `743279810`, passed [all 16 CI checks](https://github.com/WangPantopus/skinny-pantopus/actions/runs/37375810539). It remains draft and unmerged. Reuse that evidence where source/configuration/behavior is unchanged. Exact evidence, owner handoffs and the ordered continuation are in the [live Stream 1 successor prompt](https://github.com/WangPantopus/skinny-pantopus/blob/codex/workstream-coordination/docs/workstreams/NEXT-STREAM1-PROMPT-2026-10-02-clean-checkpoint.md).
+A checked subitem means the named implementation or local check is complete; a package stays open until its remaining items work in the real apps. [PR 1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) (mobile Today, pickup and task reminder flows) merged on October 6 together with PRs 1502, 1510, 1514, 1515, 1516, 1530 and 1532, so the work below is on master.
 
 - [ ] WP1 Truthfulness fixes: hide the Hub's "Earn today" offers line; label curator posts on iOS and Android; remove the seeder's engagement-question and neighbor-voice prompt lines and exclude curator posts from organic counts.
   - [x] Backend offers gate and pilot/organic reporting work merged in PR1509; existing curator-exclusion evidence retained.
@@ -204,6 +209,6 @@ Phases 0 and 1 of the [Street Organizer launch plan](docs/product/street-organiz
 
 Bill paying by an assistant · generic shopping and deals · any navigation relabel · the source-discovery engine and new owner-scoped tables · a news feed against Nextdoor · Recent conditions and Moment posts · photoreal 3D homes · per-city permit adapters · nationwide paid acquisition before the pilot.
 
-## Parallel, unchanged
+## Background backlog
 
-The acceptance backlog continues under the coordination guide. This checklist adds the packages in section 3, which Stream 1 assigns.
+The September acceptance backlog ([REMAINING_WORK](docs/REMAINING_WORK_2026-09-11.md)) is background; its row IDs are handy names, not a process. The launch streams verify their areas end to end, and L4 runs the final release-candidate sweep on iOS, Android and the web before the pilot.
