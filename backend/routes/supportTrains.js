@@ -2533,6 +2533,42 @@ router.post(
 
 // ─── Helper Reserve Flow ──────────────────────────────────────────────────
 
+// A helper may sign up only for a train they can open (the same rule as GET /:id). Link
+// trains take anyone with the link; a "My connections" train takes its organizers,
+// recipient and current helpers, the organizer's accepted connections, and invitees.
+// Without this, someone who kept a train's ids after losing access could still sign
+// up, which opens the train to them and adds them to its group chat.
+async function canJoinSupportTrain(st, userId) {
+  if (st.sharing_mode !== 'invited_only') return true;
+  if (st.organizer_user_id === userId || st.recipient_user_id === userId) return true;
+  const counts = await Promise.all([
+    supabaseAdmin
+      .from('SupportTrainOrganizer')
+      .select('id', { count: 'exact', head: true })
+      .eq('support_train_id', st.id)
+      .eq('user_id', userId),
+    supabaseAdmin
+      .from('SupportTrainReservation')
+      .select('id', { count: 'exact', head: true })
+      .eq('support_train_id', st.id)
+      .eq('user_id', userId)
+      .in('status', ['reserved', 'delivered', 'confirmed']),
+    supabaseAdmin
+      .from('SupportTrainInvite')
+      .select('id', { count: 'exact', head: true })
+      .eq('support_train_id', st.id)
+      .eq('invitee_user_id', userId),
+    supabaseAdmin
+      .from('Relationship')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'accepted')
+      .or(`and(requester_id.eq.${st.organizer_user_id},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${st.organizer_user_id})`),
+  ]);
+  const failed = counts.find((result) => result.error);
+  if (failed) throw failed.error;
+  return counts.some((result) => (result.count || 0) > 0);
+}
+
 const reserveSchema = Joi.object({
   contribution_mode: Joi.string().valid('cook', 'takeout', 'groceries').required(),
   dish_title: Joi.string().max(200).allow(null).optional(),
@@ -2566,6 +2602,19 @@ router.post(
         error: 'INVALID_STATE',
         message: 'This Support Train is not currently accepting reservations.',
       });
+    }
+
+    let canJoin;
+    try {
+      canJoin = await canJoinSupportTrain(st, userId);
+    } catch (error) {
+      logger.error('Reserve slot access check failed', { supportTrainId: st.id, error: error.message });
+      return res.status(500).json({ error: 'INTERNAL', message: 'Failed to reserve slot.' });
+    }
+    if (!canJoin) {
+      return res
+        .status(403)
+        .json({ error: 'FORBIDDEN', message: 'You do not have access to this Support Train.' });
     }
 
     // Validate contribution_mode is enabled on the Support Train
