@@ -199,7 +199,6 @@ class MyHomesListViewModel
             this.onOpenWaitingRoom = onOpenWaitingRoom
         }
 
-
         fun suspendContent() {
             generation++
             visible = false
