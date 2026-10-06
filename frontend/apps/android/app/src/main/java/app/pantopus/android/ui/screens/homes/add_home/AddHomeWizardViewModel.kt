@@ -846,6 +846,13 @@ open class AddHomeWizardViewModel
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (refused: NetworkError.ClientError) {
+                // A refused address (a PO box, a missing field) or a rate limit says
+                // why in the server's words; other failures may be temporary.
+                addressCheckFailed(
+                    revision,
+                    NetworkError.ClientError.friendlyClientMessage(refused.body).takeIf { refused.code in REFUSAL_CODES },
+                )
             } catch (_: NetworkError) {
                 addressCheckFailed(revision)
             } catch (_: IllegalStateException) {
@@ -855,13 +862,16 @@ open class AddHomeWizardViewModel
             }
         }
 
-        private fun addressCheckFailed(revision: Long) {
+        private fun addressCheckFailed(
+            revision: Long,
+            reason: String? = null,
+        ) {
             if (addressIsCurrent(revision)) {
                 _state.update {
                     it.copy(
                         validatedAddressId = null,
                         geocodedAddress = null,
-                        errorMessage = "Could not check this address. Try again.",
+                        errorMessage = reason ?: "Could not check this address. Try again.",
                     )
                 }
             }
@@ -1474,6 +1484,7 @@ open class AddHomeWizardViewModel
         companion object {
             const val PRIVATE_HOME_MESSAGE =
                 "This address has a private Home on Pantopus. Ask someone in that household to send you an invitation."
+            private val REFUSAL_CODES = setOf(400, 422, 429)
             private const val MIN_SEARCH_CHARACTERS = 3
             private const val SEARCH_DEBOUNCE_MILLIS = 300L
             private const val KEY_SCOPE = "addHome.sessionScope"
