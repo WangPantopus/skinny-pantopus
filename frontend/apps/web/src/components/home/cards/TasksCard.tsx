@@ -30,7 +30,8 @@ interface TaskItem {
   priority?: string;
   due_at?: string;
   assigned_to?: string;
-  recurring?: boolean;
+  is_recurring?: boolean;
+  recurrence_rule?: unknown;
   task_type?: string;
   converted_to_gig_id?: string;
   visibility?: 'public' | 'members' | 'managers' | 'sensitive';
@@ -41,8 +42,13 @@ interface MemberItem {
   user_id: string;
   display_name?: string;
   username?: string;
+  // The dashboard aggregate's members carry a public identity here.
+  user?: { displayName?: string; handle?: string };
   [key: string]: unknown;
 }
+
+// A one-time reminder (the radon test) isn't recurring; only a saved repeat is.
+const isRecurring = (t: TaskItem) => t.is_recurring === true || Boolean(t.recurrence_rule);
 
 // ---- Preview (dashboard grid) ----
 
@@ -63,7 +69,7 @@ export function TasksCardPreview({
 
   const getMemberName = (userId: string) => {
     const m = members.find((m) => m.user_id === userId);
-    return m?.display_name || m?.username || null;
+    return m?.display_name || m?.user?.displayName || m?.user?.handle || m?.username || null;
   };
 
   return (
@@ -99,7 +105,7 @@ export function TasksCardPreview({
       ) : (
         <div className="text-center py-2">
           <div className="mb-1"><ClipboardList className="w-5 h-5 mx-auto text-app-text-muted" /></div>
-          <p className="text-xs text-app-text-muted">No tasks yet</p>
+          <p className="text-xs text-app-text-muted">{tasks.length > 0 ? 'No open tasks' : 'No tasks yet'}</p>
         </div>
       )}
     </DashboardCard>
@@ -150,7 +156,7 @@ export default function TasksCard({
             (!t.due_at || new Date(t.due_at) > todayEnd)
         );
       case 'recurring':
-        return tasks.filter((t) => t.recurring || t.task_type === 'reminder');
+        return tasks.filter(isRecurring);
       case 'completed':
         return tasks.filter((t) => t.status === 'done');
       default:
@@ -160,13 +166,13 @@ export default function TasksCard({
 
   const getMemberName = (userId: string) => {
     const m = members.find((m) => m.user_id === userId);
-    return m?.display_name || m?.username || null;
+    return m?.display_name || m?.user?.displayName || m?.user?.handle || m?.username || null;
   };
 
   const SUB_TABS: { key: SubTab; label: string; count: number }[] = [
     { key: 'today', label: 'Today', count: tasks.filter((t) => (t.status === 'open' || t.status === 'in_progress') && t.due_at && new Date(t.due_at) <= todayEnd).length },
     { key: 'upcoming', label: 'Upcoming', count: tasks.filter((t) => (t.status === 'open' || t.status === 'in_progress') && (!t.due_at || new Date(t.due_at) > todayEnd)).length },
-    { key: 'recurring', label: 'Recurring', count: tasks.filter((t) => t.recurring || t.task_type === 'reminder').length },
+    { key: 'recurring', label: 'Recurring', count: tasks.filter(isRecurring).length },
     { key: 'completed', label: 'Completed', count: tasks.filter((t) => t.status === 'done').length },
   ];
 
