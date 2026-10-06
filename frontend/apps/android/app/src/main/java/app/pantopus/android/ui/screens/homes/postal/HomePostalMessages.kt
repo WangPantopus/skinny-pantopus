@@ -56,7 +56,7 @@ object HomePostalMessages {
     fun restriction(code: String): String =
         when (code) {
             "POSTCARD_WRONG_CODE" -> "That code did not match. Review the recorded attempt before entering a corrected code."
-            "POSTCARD_ADDRESS_CHANGED" -> "The Home address changed. Confirm the street and apartment before requesting another postcard."
+            "POSTCARD_ADDRESS_CHANGED" -> "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP."
             "POSTCARD_EXPIRED" -> "This postcard code expired. Confirm your mailing address before requesting another."
             "POSTCARD_LOCKED" -> "This postcard has no code attempts remaining. Confirm your address before requesting another."
             "POSTCARD_ACCESS_REVIEW_REQUIRED" -> "Household access needs review. A mail code cannot restore removed or expired access."

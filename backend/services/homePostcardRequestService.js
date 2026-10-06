@@ -46,6 +46,18 @@ async function cancel(input) {
   const args = identity(input);
   return projectCommand(await rpc('cancel_home_postcard_request', args), args);
 }
+// A request must repeat the Home's saved address exactly, so someone who may
+// request a postcard now gets it to confirm instead of retyping it.
+async function mailingAddress(homeId) {
+  let response;
+  try { response = await db.from('Home').select('address, address2, city, state, zipcode, country').eq('id', homeId).maybeSingle(); }
+  catch (_) { return null; }
+  const h = response?.data;
+  if (response?.error || !h) return null;
+  const address = { line1: h.address, line2: h.address2 || '', city: h.city, state: h.state,
+    postal_code: h.zipcode, country: h.country || 'US' };
+  return validAddress(address) ? address : null;
+}
 async function current(input) {
   const args = identity(input, false);
   const r = await rpc('get_home_postcard_current_status', args);
@@ -69,6 +81,7 @@ async function current(input) {
     request, postcard: p === null ? null : { id: p.id, requested_at: p.requested_at, expires_at: p.expires_at,
       status: p.status, delivery: p.delivery, attempts_remaining: p.attempts_remaining },
     current_access: 'not_checked',
+    mailing_address: r.can_request ? await mailingAddress(args.p_home_id) : null,
   };
 }
 async function submit(input) {

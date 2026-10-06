@@ -16,6 +16,10 @@ struct HomePostalAddressForm {
         ])
     }
 
+    var isBlank: Bool {
+        [line1, line2, city, state, postalCode].allSatisfy { $0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
     init() {}
     init(_ address: HomeResidencyAddressSnapshot) {
         line1 = address.line1
@@ -232,6 +236,7 @@ final class HomePostalViewModel {
         guard residency.matches(homeId) else { throw HomePostalError.unavailable }
         status = postal
         progress = residency
+        if address.isBlank, let saved = postal.mailingAddress { address = HomePostalAddressForm(saved) }
     }
 
     private func perform(_ action: (Int) async throws -> Void) async {

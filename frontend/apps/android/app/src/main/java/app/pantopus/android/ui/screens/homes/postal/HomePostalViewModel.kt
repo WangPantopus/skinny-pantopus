@@ -33,7 +33,12 @@ data class HomePostalAddressForm(
     val zip: String = "",
     val country: String = "US",
 ) {
+    constructor(address: HomeResidencyAddressSnapshot) :
+        this(address.line1, address.line2, address.city, address.state, address.postalCode, address.country)
+
     val snapshot: HomeResidencyAddressSnapshot get() = HomeResidencyAddressSnapshot(line1, line2, city, state, zip, country)
+
+    val isBlank: Boolean get() = listOf(line1, line2, city, state, zip).all(String::isBlank)
 
     fun changing(
         field: HomePostalAddressField,
@@ -249,7 +254,12 @@ class HomePostalViewModel
             val progress = residency.progress(homeId)
             session.requireCurrent()
             check(current(revision) && progress is NetworkResult.Success)
-            _state.update { it.copy(status = postal, progress = progress.data) }
+            // A request must repeat the Home's saved address, so an empty form starts from it.
+            val saved = postal.mailingAddress?.takeIf { postal.canRequest }
+            _state.update {
+                val address = if (saved != null && it.address.isBlank) HomePostalAddressForm(saved) else it.address
+                it.copy(status = postal, progress = progress.data, address = address)
+            }
         }
 
         private fun publishOriginal(revision: Long) {

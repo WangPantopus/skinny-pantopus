@@ -34,7 +34,7 @@ enum HomePostalMessages {
     static func restriction(_ code: String) -> String {
         switch code {
         case "POSTCARD_WRONG_CODE": "That code did not match. Review the recorded attempt before entering a corrected code."
-        case "POSTCARD_ADDRESS_CHANGED": "The Home address changed. Confirm the street and apartment before requesting another postcard."
+        case "POSTCARD_ADDRESS_CHANGED": "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP."
         case "POSTCARD_EXPIRED": "This postcard code expired. Confirm your mailing address before requesting another."
         case "POSTCARD_LOCKED": "This postcard has no code attempts remaining. Confirm your address before requesting another."
         case "POSTCARD_ACCESS_REVIEW_REQUIRED": "Household access needs review. A mail code cannot restore removed or expired access."

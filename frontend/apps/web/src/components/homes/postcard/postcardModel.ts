@@ -55,7 +55,8 @@ export function validatePostalStatus(value: unknown, actor: string, home: string
   if (!r || r.home_id !== home || r.actor_id !== actor || !date(r.checked_at) || r.current_access !== 'not_checked'
     || ![r.can_request, r.can_resume, r.can_verify].every(v => typeof v === 'boolean')
     || !(r.restriction === null || typeof r.restriction === 'string')
-    || !(r.restriction_message === null || typeof r.restriction_message === 'string')) return unavailable();
+    || !(r.restriction_message === null || typeof r.restriction_message === 'string')
+    || !(r.mailing_address == null || validMailingAddress(r.mailing_address))) return unavailable();
   const p = r.postcard;
   if (p !== null && (!p || !postalUUID(p.id) || !date(p.requested_at) || !date(p.expires_at)
     || !['pending', 'verified', 'expired', 'cancelled'].includes(p.status) || !['not_started', 'accepted', 'unknown', 'rejected'].includes(p.delivery)
@@ -69,7 +70,7 @@ export function validatePostalStatus(value: unknown, actor: string, home: string
 }
 export const postalMessage = (code?: string) => ({
   POSTCARD_WRONG_CODE: 'That code did not match this postcard. Review the recorded attempt before entering a corrected code.',
-  POSTCARD_ADDRESS_CHANGED: 'The Home address changed. Confirm the street and apartment again before requesting another postcard.',
+  POSTCARD_ADDRESS_CHANGED: "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP.",
   POSTCARD_EXPIRED: 'This postcard code has expired. Confirm your mailing address before requesting another.',
   POSTCARD_LOCKED: 'This postcard has no code attempts remaining. Confirm your address before requesting another.',
   POSTCARD_ACCESS_REVIEW_REQUIRED: 'Household access needs review. A mail code cannot restore removed or expired access.',
