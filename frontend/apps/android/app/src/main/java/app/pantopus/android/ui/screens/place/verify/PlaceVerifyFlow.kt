@@ -74,7 +74,7 @@ enum class PlaceVerifyMethod(val slug: String, val icon: PantopusIcon, val label
         "document",
         PantopusIcon.Upload,
         "Upload a document",
-        "A utility bill, lease, or ID with this address. A person reviews it, usually within hours.",
+        "A utility bill, lease, or ID with this address. A person reviews it.",
     ),
     MAIL("mail", PantopusIcon.Send, "Mail a code to my address", "A postcard with a code, usually within a week."),
     LANDLORD("landlord", PantopusIcon.Home, "Ask my landlord", "Your landlord or property manager confirms you live here."),
@@ -207,7 +207,7 @@ fun PlaceVerifySheet(
                     modifier = Modifier.padding(top = 1.dp),
                 )
                 Text(
-                    "Documents are reviewed by a person, usually within hours; postcards take about a week. " +
+                    "Documents are reviewed by a person; postcards take about a week. " +
                         "Everything you have now stays available while you wait.",
                     fontSize = 12.5.sp,
                     lineHeight = 18.sp,

@@ -1,7 +1,7 @@
 'use client';
 
 // Residency verification — submitted. The truthful waiting screen for the
-// instant door: a person reviews it, usually within hours.
+// instant door: a person reviews it.
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';

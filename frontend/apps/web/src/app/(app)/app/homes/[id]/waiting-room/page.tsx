@@ -130,7 +130,7 @@ function WaitingRoomContent() {
           )}
 
           {(status === 'provisional_bootstrap' || status === 'pending_doc' || status === 'provisional') && (
-            <ActionCard icon={Upload} label="Upload proof" desc="A utility bill, lease, or ID — reviewed by a person, usually within hours"
+            <ActionCard icon={Upload} label="Upload proof" desc="A utility bill, lease, or ID — reviewed by a person"
               onClick={() => router.push(`/app/homes/${homeId}/verify-residency${returnQuery}`)} />
           )}
 

@@ -179,8 +179,8 @@ export default function VerifyResidencyPage() {
 
         <h1 className="text-2xl font-bold text-app-text mb-2">Verify that you live here</h1>
         <p className="text-app-text-secondary text-[15px] leading-relaxed mb-6">
-          Upload one document with this address on it. A person reviews it, usually within hours. Nothing you have now
-          is taken away while you wait.
+          Upload one document with this address on it. A person reviews it. Nothing you have now is taken away while
+          you wait.
         </p>
 
         <div className="flex gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl mb-6">
@@ -302,8 +302,8 @@ export default function VerifyResidencyPage() {
         </button>
 
         <p className="text-center text-xs text-app-text-muted mt-6">
-          Reviewed by a person, usually within hours. Prefer not to upload anything? A postcard with a code takes 3–7
-          days and is yours to keep.
+          Reviewed by a person. Prefer not to upload anything? A postcard with a code takes 3–7 days and is yours to
+          keep.
         </p>
       </main>
     </div>
