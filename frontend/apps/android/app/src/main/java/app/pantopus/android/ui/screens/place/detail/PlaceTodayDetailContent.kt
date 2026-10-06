@@ -905,8 +905,19 @@ private fun RadonCardContent(
             )
             if (state.loaded) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GhostButton("Yes", onClick = { state.lifetime.launch { state.open("yes") } }, isEnabled = state.canCreate)
-                    GhostButton("No or not sure", onClick = { state.lifetime.launch { state.open("no") } }, isEnabled = state.canCreate)
+                    // GhostButton fills the width it is given; equal weights keep both answers on screen.
+                    GhostButton(
+                        "Yes",
+                        onClick = { state.lifetime.launch { state.open("yes") } },
+                        modifier = Modifier.weight(1f),
+                        isEnabled = state.canCreate,
+                    )
+                    GhostButton(
+                        "No or not sure",
+                        onClick = { state.lifetime.launch { state.open("no") } },
+                        modifier = Modifier.weight(1f),
+                        isEnabled = state.canCreate,
+                    )
                 }
                 GhostButton("Not now", onClick = { state.lifetime.launch { state.dismiss() } })
             }
