@@ -580,7 +580,8 @@ export async function updateCatalogItem(businessId: string, itemId: string, data
   category_id: string;
   description: string;
   kind: string;
-  price_cents: number;
+  /** null removes the price. */
+  price_cents: number | null;
   price_max_cents: number;
   price_unit: string;
   currency: string;

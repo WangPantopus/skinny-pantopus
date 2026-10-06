@@ -10,6 +10,8 @@ export default function BusinessCatalogEditPage() {
   const router = useRouter();
   const businessId = String(params.id || '');
   const itemId = String(params.itemId || '');
+  // Items are edited from the business dashboard's Catalog tab, so saving and Back return there.
+  const catalogHref = `/app/businesses/${businessId}/dashboard?tab=catalog`;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -55,10 +57,11 @@ export default function BusinessCatalogEditPage() {
       await api.businesses.updateCatalogItem(businessId, itemId, {
         name: form.name.trim(),
         kind: form.kind as 'service' | 'product',
-        price_cents: form.price_cents ? Number(form.price_cents) : undefined,
-        description: form.description.trim() || undefined,
+        // A cleared price or description is removed, not left as it was.
+        price_cents: form.price_cents ? Number(form.price_cents) : null,
+        description: form.description.trim(),
       });
-      router.push(`/app/business/${businessId}/catalog`);
+      router.push(catalogHref);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to update item');
     } finally {
@@ -72,7 +75,7 @@ export default function BusinessCatalogEditPage() {
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold text-app-text">Edit Catalog Item</h1>
-        <Link href={`/app/business/${businessId}/catalog`} className="px-3 py-1.5 rounded-lg border border-app-border text-sm text-app-text-strong hover:bg-app-hover">
+        <Link href={catalogHref} className="px-3 py-1.5 rounded-lg border border-app-border text-sm text-app-text-strong hover:bg-app-hover">
           Back
         </Link>
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -125,6 +126,13 @@ export default function CatalogTab({ catalog: initialCatalog, businessId, onUpda
                 {item.price_cents != null && (
                   <span className="text-sm font-semibold text-app-strong">${(item.price_cents / 100).toFixed(2)}</span>
                 )}
+                <Link
+                  href={`/app/business/${businessId}/catalog/${item.id}/edit`}
+                  className="text-xs text-violet-600 hover:text-violet-700"
+                  aria-label={`Edit ${item.name}`}
+                >
+                  Edit
+                </Link>
                 <button onClick={() => removeItem(item.id)} className="text-xs text-red-500 hover:text-red-700">
                   Archive
                 </button>
