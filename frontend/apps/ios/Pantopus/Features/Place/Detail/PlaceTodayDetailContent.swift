@@ -1433,7 +1433,9 @@ private struct HomeFirstUseCard: View {
         if !state.firstUseDismissed, needsPickup || needsRadon {
             PlaceDetailCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Two things for your home").font(.system(size: 16, weight: .semibold))
+                    // Rows drop out as they're handled; the heading counts what's left.
+                    Text(needsPickup && needsRadon ? "Two things for your home" : "One thing for your home")
+                        .font(.system(size: 16, weight: .semibold))
                     if needsPickup { GhostButton(title: "Set your pickup day") { onPickup() } }
                     if needsRadon { GhostButton(title: "Was radon tested?") { onRadon() } }
                     GhostButton(title: "Later") {
