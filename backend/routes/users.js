@@ -5201,6 +5201,19 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       }
     }
 
+    // ── 1d. Support Train signups ───────────────────────────────
+    // Open signups are cancelled as if the person left each slot, so the
+    // slots reopen and their organizers hear (reservations' user_id is SET
+    // NULL, which would leave them taken by nobody).
+    try {
+      const { cancelSignupsForDeletedAccount } = require('../services/supportTrainSlotAvailability');
+      const cancelled = await cancelSignupsForDeletedAccount(userId);
+      if (cancelled > 0) logger.info('Account deletion: Support Train signups cancelled', { userId, cancelled });
+    } catch (err) {
+      logger.warn('Account deletion refused: Support Train signups could not be cancelled', { userId, error: err.message });
+      return res.status(503).json({ error: 'Account deletion is temporarily unavailable. Please try again.', code: 'ACCOUNT_DELETE_UNAVAILABLE' });
+    }
+
     // ── 2. Nullify bare FK columns (NO ON DELETE clause) ─────────
     // These columns reference User(id) without an ON DELETE rule,
     // meaning PostgreSQL defaults to NO ACTION which blocks deletion.

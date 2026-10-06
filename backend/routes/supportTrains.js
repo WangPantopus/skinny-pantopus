@@ -17,7 +17,7 @@ const {
   requireSupportTrainRole,
   requireSupportTrainViewer,
 } = require('../middleware/supportTrainPermissions');
-const { emitSupportTrainEvent } = require('../services/supportTrainNotifications');
+const { emitSupportTrainEvent, formatSupportTrainSlotTime } = require('../services/supportTrainNotifications');
 const {
   sendGuestReservationAddressEmail,
   sendGuestReservationConfirmationEmail,
@@ -134,14 +134,6 @@ function formatSupportTrainSlotDate(raw) {
     day: 'numeric',
     timeZone: 'UTC',
   });
-}
-
-function formatSupportTrainSlotTime(slot) {
-  if (!slot) return null;
-  if (slot.start_time && slot.end_time) return `${slot.start_time} - ${slot.end_time}`;
-  if (slot.start_time) return `${slot.start_time}+`;
-  if (slot.end_time) return `Until ${slot.end_time}`;
-  return null;
 }
 
 function formatAddressLabel(address) {
@@ -2786,8 +2778,10 @@ router.post(
       });
     }
 
-    // Must be shareable via private_link (public page)
-    if (st.sharing_mode !== 'private_link') {
+    // Only trains anyone with the link can open take guest signups: Nearby
+    // neighbors and Link only (whose public page is how its link is shared).
+    // My connections has no public page.
+    if (st.sharing_mode !== 'private_link' && st.sharing_mode !== 'direct_share_only') {
       return res.status(403).json({
         error: 'FORBIDDEN',
         message: 'Guest signups are not available for this Support Train.',

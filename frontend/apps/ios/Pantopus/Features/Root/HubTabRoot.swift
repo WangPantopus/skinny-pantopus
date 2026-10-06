@@ -385,6 +385,9 @@ public enum HubRoute: Hashable {
     /// BLOCK 2E — "Saved places". Reached from the Explore map header's
     /// "Saved" affordance.
     case savedPlaces
+    /// Signed-in "Save a place": the address lookup and preview, whose
+    /// Continue hands the address to `placeArrival` for the private save.
+    case savePlace
     case placeArrival
     /// W3 — the Place Intelligence dashboard (address-led home
     /// intelligence). The Home tab auto-lands here when the user has a
@@ -808,7 +811,7 @@ public struct HubTabRoot: View {
     /// Back (lists, `.homeDashboard`, placeholders).
     static func drawsOwnHeader(_ route: HubRoute) -> Bool {
         switch route {
-        case .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
+        case .savePlace, .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
              .documentDetail, .packageDetail, .homePhotos, .trustedNeighbors, .propertyDetails,
              .helpCenter, .publicProfile, .homeSettings, .homeSecurity, .homeOwnershipSecurity,
              .homeNotifications, .privacySettings, .notificationSettings, .dataExport, .editProfile, .menu,
@@ -3150,14 +3153,26 @@ public struct HubTabRoot: View {
                     pop()
                     router.handle(path: "/app/today", expectedUserID: currentUserId)
                 },
-                onSavedPlaces: { push(.savedPlaces) },
+                // From the signed-in "Save a place" entry the list is already
+                // underneath; return to it rather than stacking a second one.
+                onSavedPlaces: { path.contains(.savedPlaces) ? pop() : push(.savedPlaces) },
                 onSetUpHome: { push(.addHome) }
+            )
+        case .savePlace:
+            PlaceLaunchView(
+                onSignIn: { pop() },
+                onCreateAccount: { pop() },
+                onSavePreview: {
+                    if path.last == .savePlace { path.removeLast() }
+                    path.append(.placeArrival)
+                }
             )
         case .savedPlaces:
             SavedPlacesView(
                 viewModel: SavedPlacesViewModel(
                     onBack: { Task { @MainActor in pop() } },
                     onExplore: { Task { @MainActor in pop() } },
+                    onSavePlace: { Task { @MainActor in push(.savePlace) } },
                     onOpenMap: { latitude, longitude, label in
                         Task { @MainActor in
                             savedPlaceMapFocus = ExploreMapFocus(latitude: latitude, longitude: longitude, label: label)

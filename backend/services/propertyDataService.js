@@ -18,6 +18,9 @@ const PROVIDER = (process.env.PROPERTY_DATA_PROVIDER || 'none').toLowerCase();
 
 // ── ATTOM Integration ──────────────────────────────────────
 
+// Paid property lookups fail fast instead of holding the request open.
+const PROVIDER_TIMEOUT_MS = 8000;
+
 async function lookupAttom(address, city, state, zip) {
   const apiKey = process.env.ATTOM_API_KEY;
   if (!apiKey) throw new Error('ATTOM_API_KEY not configured');
@@ -31,6 +34,7 @@ async function lookupAttom(address, city, state, zip) {
 
   const res = await fetch(url, {
     headers: { apikey: apiKey, Accept: 'application/json' },
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -93,6 +97,7 @@ async function lookupCoreLogic(address, city, state, zip) {
       'X-Client-Id': clientId,
       Accept: 'application/json',
     },
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
   });
 
   if (!res.ok) {

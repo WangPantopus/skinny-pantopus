@@ -22,12 +22,16 @@ const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.Console(),
-    new winston.transports.File({
-      filename: 'combined.log',
-      maxsize: 52428800,  // 50MB per file
-      maxFiles: 5,        // keep 5 rotated files
-      tailable: true,
-    }),
+    // Hosted containers log to stdout only: Docker keeps and rotates those
+    // logs, while a file inside the container would vanish on each release.
+    ...(process.env.NODE_ENV === 'production' ? [] : [
+      new winston.transports.File({
+        filename: 'combined.log',
+        maxsize: 52428800,  // 50MB per file
+        maxFiles: 5,        // keep 5 rotated files
+        tailable: true,
+      }),
+    ]),
   ],
 });
 

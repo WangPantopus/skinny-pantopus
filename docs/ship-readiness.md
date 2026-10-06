@@ -1,5 +1,8 @@
 # Pantopus mobile — Ship-readiness checklist
 
+> Historical snapshot (May 2026). The current launch steps are in
+> [the launch checklist](release/prod-config-checklist.md).
+
 > **Generated:** 2026-05-26 (P8.4 closeout). Every box below represents a
 > real check against the codebase or a citation to one of the audit docs
 > generated through Phase 7 / Phase 8 (`docs/{token-drift-*, motion-audit,

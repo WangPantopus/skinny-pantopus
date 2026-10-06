@@ -269,12 +269,6 @@ export default async function PublicSupportTrainPage({
             Pantopus
           </Link>
           <div className="flex items-center gap-3">
-            <Link
-              href={buildSupportTrainShareUrl(id)}
-              className="text-sm text-app-text-secondary hover:text-app"
-            >
-              Canonical URL
-            </Link>
             <OpenInAppButton
               appUrl={buildSupportTrainAppUrl(id)}
               linkHref={buildSupportTrainShareUrl(id)}

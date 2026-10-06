@@ -1,76 +1,59 @@
-# Pantopus session continuity
+# Pantopus agent guide
 
-Before substantial work, read [the project handoff](docs/PROJECT_HANDOFF.md).
-Check the current branch, worktree status and remote PR/CI state before relying
-on its last recorded Git state. Follow the user's current direction; the
-handoff supplies context and an ordered backlog, not new authorization.
+Start with [NEXT_STEPS.md](NEXT_STEPS.md), the founder's checklist, and the
+[mobile pilot build brief](docs/mobile-pilot-build-brief-2026-10-03.md), which
+says what to build. [The project handoff](docs/PROJECT_HANDOFF.md) and older
+dated reports are background, not the current backlog. Check the current
+branch, worktree status and remote PR/CI state before relying on any recorded
+Git state. Follow the founder's current direction; documents supply context,
+not new authorization.
 
-After a meaningful milestone, update the handoff's current state, next action,
-verification limits and evidence links. Keep detailed history in the linked
-reports. Preserve unrelated local work. Keep credentials, raw device tokens,
-database archives and operator logs out of Git and chat.
+The repository is public. Keep credentials, keys, env files, raw device tokens,
+database archives, operator logs and real people's personal data out of Git,
+PRs, screenshots and chat. Preserve unrelated local work.
 
-## Verify existing work before changing it
+## Change what exists
 
-The user's September 13 direction supersedes older buildout instructions:
+- Reuse before rebuilding. Before adding a file, screen, service, table or
+  migration, find the existing screen, caller, route, service and table, and
+  check other open branches. Make the smallest sound repair in place. An open
+  checklist row, a stale report or a new filename is not proof that something
+  is missing.
+- Keep working screens' layouts, styling and navigation. Improve the experience
+  inside the existing design language; don't redesign a working screen
+  wholesale or change the four tabs (Place · Today · Nearby · Mail) without the
+  founder's approval.
+- Keep privacy and functional repairs separate from presentation changes. Never
+  restore private fields to reproduce an old screenshot.
+- Migrations are additive and backward compatible. Never edit an applied
+  migration or rewrite migration history, and don't add parallel tables for
+  existing data. New tables need the founder's approval.
+- Launch-cut features stay off behind their flags
+  ([launch-scope flags](docs/launch-scope-flags-2026-10-01.md)).
 
-- Preserve working implementations and existing iOS, Android and web screen
-  designs, layouts, styling and navigation patterns. Verification and functional
-  repairs do not authorize redesigning mobile screens or changing their appearance.
-- Before an application change, locate the existing screen, caller, endpoint,
-  service and database contract. Record a reproduced failure or a concrete
-  unmet requirement, then make the smallest repair in that implementation.
-- An open acceptance row, a stale report or a new filename is not proof that
-  a feature is missing. Reuse accepted evidence when its relevant source,
-  configuration and behavior remain unchanged.
-- Before adding any application file, table, migration, service or screen,
-  compare existing and archived implementations and other open branches. Add or
-  replace implementation only for a verified gap or concrete defects that cannot
-  reasonably be repaired or extended in place. Record the evidence and why reuse
-  is insufficient; age, style preferences or a general dislike of the code do not
-  justify rebuilding it. Necessary new regression-test files or forward migrations
-  must likewise explain why existing artifacts cannot safely serve the repair.
-  Do not rewrite applied migration history or add parallel tables for existing data.
-- Keep functional/privacy repairs separate from presentation changes. Preserve
-  the existing visual treatment with safe data; do not restore private fields
-  just to reproduce an old screenshot. Propose any unavoidable design change
-  for explicit approval before implementing it.
-- Continue the original improvement backlog through verification and focused
-  repairs. Do not start speculative refactors, replacement architectures or
-  duplicate tracking systems. Reuse the existing acceptance and screen catalogs.
-- Run relevant regressions and required CI. Repeat accepted journeys or large
-  suites only for changed behavior, a failure or a concrete unresolved risk.
-- Verify the existing end-to-end journey first. For a demonstrated failure,
-  repair it and rerun that journey plus affected regressions until the behavior
-  works within the recorded acceptance scope. Check the existing screen through
-  its real caller, API and persistence where relevant. Mocked checks or green CI
-  alone do not establish end-to-end success; report unavailable provider/device
-  boundaries as unverified and continue independent work without claiming closure.
+## Verify in the real apps
 
-See [the reconciliation](docs/VERIFICATION_FIRST_2026-09-13.md) for current
-PR dispositions, paused drafts, inventory sources and the next bounded task.
+- Verify a change by using the apps it touches: the web app in a browser, the
+  iOS app in a simulator and the Android app in an emulator, against a real
+  local backend and database. Check that changes persist after a relaunch or
+  reload, and check the other person's view where there is one.
+- An API response, a mock or green CI alone doesn't show that a flow works.
+  Name what you couldn't verify (hosted services, physical phones, live
+  payments) instead of claiming it.
+- Don't write new unit tests or chase coverage. If an intended behavior change
+  breaks an existing test, update or remove that test in the same PR.
+- Run the relevant existing checks before pushing, and keep CI on master green.
 
-## Approved parallel work
+## Parallel sessions
 
-When working in one of the user's parallel workstreams, read the coordination
-guide and your stream status before editing. The live guide is
-`docs/workstreams/README.md` on the `codex/workstream-coordination` branch
-([master's copy](docs/workstreams/README.md) is an older snapshot). Use its single
-live coordination location, file ownership and runtime reservations. Keep the
-existing handoff/backlog authoritative and preserve each stream's accepted
-evidence. The coordinator integrates shared status and merges.
+Several agent sessions may work at once. The September workstream system (the
+coordination branch, hub, leases, merge queue, sealed evidence bundles and
+acceptance-tier bookkeeping) is retired; its records under `docs/workstreams/`
+are history. Parallel sessions follow the launch-stream rules the founder gives
+them: each works in its own worktree and branch, owns a named area, keeps PRs
+small, merges its own PRs after green CI and a real-app check, and asks the
+owning session for changes in another area instead of editing it.
 
-Workstreams were renumbered on 2026-09-30 (user direction): the former Streams 1
-and 2 are each being split in two (Streams 1–4), and the former Stream 3
-(Accounts and Social) is now Stream 5, with its status in
-`docs/workstreams/05-accounts-social.md`. In records dated before 2026-09-30,
-"Stream 3" means today's Stream 5. The former Stream 2 (Home and household) is split
-into Stream 3 — Home access, residency and security
-(`docs/workstreams/03-home-access-residency.md`) and Stream 4 — Place, records, money
-and mail (`docs/workstreams/04-place-records-money-mail.md`); its history is in
-`docs/workstreams/former-stream2-home-household.md`. The former Stream 1 (gigs,
-payments and coordination) is split into Stream 1 — Support Trains and coordination
-(`docs/workstreams/01-trains-coordination.md`), which runs the merge queue for all
-streams, and Stream 2 — Posts, Hub and payments
-(`docs/workstreams/02-posts-hub-payments.md`); its history is in
-`docs/workstreams/former-stream1-gigs-payments.md`.
+Only the founder spends money, enters credentials in consoles, writes secrets
+into hosted services, changes hosted databases or production configuration,
+sends anything to real people, or submits to the app stores.

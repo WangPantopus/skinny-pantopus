@@ -31,6 +31,11 @@ public struct SavedPlacesView: View {
         .navigationBarHidden(true)
         .accessibilityIdentifier("savedPlaces.screen")
         .task { await viewModel.load() }
+        // Popping back from "Save a place" doesn't re-run `.task`, so the list
+        // re-reads when a save is announced.
+        .onReceive(NotificationCenter.default.publisher(for: .savedPlacesDidChange)) { _ in
+            Task { await viewModel.refresh() }
+        }
         .sheet(item: $bindable.actionTarget) { target in
             SavedPlacesActionSheet(
                 target: target,
@@ -206,15 +211,15 @@ public struct SavedPlacesView: View {
                 .font(.system(size: 20, weight: .bold))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.Color.appText)
-            Text("Save spots you visit often from Explore \u{2014} your home, your go-to coffee shop, the park down the block.")
+            Text("Look up an address and save it privately. You can also save spots you visit often from Explore.")
                 .font(.system(size: 13.5))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .frame(maxWidth: 280)
-            Button { viewModel.explore() } label: {
+            Button { viewModel.savePlace() } label: {
                 HStack(spacing: Spacing.s2) {
-                    Icon(.compass, size: 16, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
-                    Text("Explore nearby")
+                    Icon(.bookmark, size: 16, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
+                    Text("Save a place")
                         .font(.system(size: 14.5, weight: .bold))
                         .foregroundStyle(Theme.Color.appTextInverse)
                 }
@@ -224,7 +229,12 @@ public struct SavedPlacesView: View {
             }
             .buttonStyle(.plain)
             .padding(.top, Spacing.s1)
-            .accessibilityIdentifier("savedPlaces.exploreNearbyBtn")
+            .accessibilityIdentifier("savedPlaces.savePlaceBtn")
+            Button("Explore nearby") { viewModel.explore() }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.Color.primaryInk)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("savedPlaces.exploreNearbyBtn")
         }
         .padding(.horizontal, Spacing.s6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

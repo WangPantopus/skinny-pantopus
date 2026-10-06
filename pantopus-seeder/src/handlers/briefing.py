@@ -316,6 +316,8 @@ def _process_user(user_id: str, secrets: BriefingSecrets, briefing_kind: str = "
 
 def _publish_metrics(stats: dict[str, int]) -> None:
     """Publish briefing metrics to CloudWatch."""
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return  # Local runs never write to CloudWatch.
     try:
         import boto3
 
