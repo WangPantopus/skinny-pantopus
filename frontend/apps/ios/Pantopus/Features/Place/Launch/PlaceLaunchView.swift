@@ -128,7 +128,7 @@ struct PlaceLaunchView: View {
                 Text(message).foregroundStyle(Theme.Color.appTextSecondary)
                     .accessibilityIdentifier("place.launch.error")
             }
-            Text("See what's true about your address.")
+            Text("Know what matters for your home, and stay on top of it.")
                 .font(.system(size: 31, weight: .bold))
                 .kerning(-0.87)
                 .lineSpacing(4)
