@@ -171,10 +171,8 @@ class BlockedUsersViewModel
                 if (!current() || loadRequest != request) return@launch
                 val profile = privacy.blocks()
                 if (!current() || loadRequest != request) return@launch
-                val muted = feedActions.mutedEntities()
-                if (!current() || loadRequest != request) return@launch
+                if (!readMutes(loadRequest)) return@launch
                 snapshot++
-                mutes = (muted as? NetworkResult.Success)?.data?.muted.orEmpty().toMutableList()
 
                 complete = personal is NetworkResult.Success && profile is NetworkResult.Success
                 if (personal is NetworkResult.Failure && profile is NetworkResult.Failure) {
@@ -218,6 +216,14 @@ class BlockedUsersViewModel
         }
 
         fun refresh() = load()
+
+        /** Reads the Muted section's rows; false when the screen moved on meanwhile. */
+        private suspend fun readMutes(loadRequest: Long): Boolean {
+            val muted = feedActions.mutedEntities()
+            if (!current() || loadRequest != request) return false
+            mutes = (muted as? NetworkResult.Success)?.data?.muted.orEmpty().toMutableList()
+            return true
+        }
 
         /** Optimistic unblock. Restores the row at its original index on
          *  failure so the user doesn't see a flicker on the wrong row. */
