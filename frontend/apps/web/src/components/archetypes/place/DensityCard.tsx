@@ -9,7 +9,7 @@
 
 import { Users } from 'lucide-react';
 import { PLACE_DENSITY_LABELS, type PlaceDensityBucket } from '@pantopus/types';
-import { Chevron, IconTile, TextButton } from './primitives';
+import { Chevron, IconTile, TextButton, cardButtonProps } from './primitives';
 
 // Filled dots per bucket — qualitative scale, not a count.
 const BUCKET_DOTS: Record<PlaceDensityBucket, number> = {
@@ -58,6 +58,7 @@ export default function DensityCard({
     <div
       className={`bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 ${onClick ? 'cursor-pointer' : ''} ${className}`}
       onClick={onClick}
+      {...cardButtonProps(showCta ? undefined : onClick)}
     >
       <div className={`flex items-center gap-3 ${showCta ? 'mb-2.5' : ''}`}>
         <IconTile icon={Users} tone={empty ? 'muted' : 'home'} />
