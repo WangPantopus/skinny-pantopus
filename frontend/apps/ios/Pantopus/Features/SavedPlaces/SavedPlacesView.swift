@@ -30,7 +30,9 @@ public struct SavedPlacesView: View {
         .background(Theme.Color.appSurfaceMuted)
         .navigationBarHidden(true)
         .accessibilityIdentifier("savedPlaces.screen")
-        .task { await viewModel.load() }
+        // Reload on every appearance, not once: returning from "Save a place"
+        // must show the place just saved.
+        .onAppear { Task { await viewModel.load() } }
         .sheet(item: $bindable.actionTarget) { target in
             SavedPlacesActionSheet(
                 target: target,
