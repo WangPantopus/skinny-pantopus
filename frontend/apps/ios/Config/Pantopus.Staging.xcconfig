@@ -4,9 +4,9 @@
 // `.staging` here via the STAGING compilation condition (see project.yml).
 #include "Pantopus.base.xcconfig"
 
-PANTOPUS_API_BASE_URL = https:/$()/staging.api.pantopus.app
+PANTOPUS_API_BASE_URL = https:/$()/staging-api.pantopus.com
 PANTOPUS_PUBLIC_WEB_URL = https:/$()/staging.pantopus.com
-PANTOPUS_SOCKET_URL = https:/$()/staging.api.pantopus.app
+PANTOPUS_SOCKET_URL = https:/$()/staging-api.pantopus.com
 STRIPE_PUBLISHABLE_KEY = pk_test_REPLACE_ME
 APS_ENVIRONMENT = production
 

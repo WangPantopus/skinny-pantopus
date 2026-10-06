@@ -128,6 +128,13 @@ class HomeSettingsViewModel
         private var frame: HomeSettingsSampleData.Frame = HomeSettingsSampleData.Frame.Populated
         private var subtexts = RowSubtexts()
         private var showsGuestPasses = true
+
+        /**
+         * The viewer's effective permissions from `GET /:id/me`, so rows the server
+         * would refuse (Privacy, Access codes, People…) aren't offered. Null when
+         * `/me` didn't load: every row shows, as before.
+         */
+        private var viewerAccess: HomeAccessDto? = null
         private var loadedOnce = false
 
         fun load() {
@@ -268,20 +275,7 @@ class HomeSettingsViewModel
                 detail.name?.takeIf { it.isNotBlank() }
                     ?: detail.address?.takeIf { it.isNotBlank() }
                     ?: "This home"
-            // The chip and footer describe this viewer's real standing: the detail
-            // payload carries their owner_status / occupancy verification and role.
-            val verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
-            _identity.value =
-                HomeSettingsSampleData.Identity(
-                    homeName = homeName,
-                    addressChipLabel =
-                        when {
-                            isPending -> "Verifying"
-                            verified -> "Verified"
-                            else -> "Unverified"
-                        },
-                    addressChipTone = if (isPending || !verified) RowControl.ChipTone.Warning else RowControl.ChipTone.Success,
-                )
+            _identity.value = identityFor(homeName, detail, isPending)
             _footerCaption.value = "$homeName · ${if (isPending) "Claim pending" else roleLabel(detail, access)}"
             subtexts =
                 RowSubtexts(
@@ -293,12 +287,37 @@ class HomeSettingsViewModel
             // members.manage may use (the server answers everyone else 403). Shown
             // when GET /:id/me didn't load, as before.
             showsGuestPasses = access?.canManageMembers ?: true
+            viewerAccess = access
             _rename.update { current ->
                 current.copy(
                     canEdit = canEdit(detail, access),
                     draft = if (current.isRenaming) current.draft else currentName,
                 )
             }
+        }
+
+        /**
+         * The chip describes this viewer's real standing: the detail payload carries
+         * their owner_status, occupancy verification and its source. An invitation or
+         * a manager's approval gives household access, not a verified address (F3b),
+         * so it doesn't read as "Verified".
+         */
+        private fun identityFor(
+            homeName: String,
+            detail: HomeDetail,
+            isPending: Boolean,
+        ): HomeSettingsSampleData.Identity {
+            val verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
+            val householdOnly =
+                verified && detail.ownershipStatus != "verified" && detail.residencySource == "household"
+            val (label, tone) =
+                when {
+                    isPending -> "Verifying" to RowControl.ChipTone.Warning
+                    householdOnly -> "Household access" to RowControl.ChipTone.Info
+                    verified -> "Verified" to RowControl.ChipTone.Success
+                    else -> "Unverified" to RowControl.ChipTone.Warning
+                }
+            return HomeSettingsSampleData.Identity(homeName = homeName, addressChipLabel = label, addressChipTone = tone)
         }
 
         /** Human label for the viewer's role in this home (owner, else their role_base). */
@@ -361,7 +380,13 @@ class HomeSettingsViewModel
                 membersGroup(),
                 notificationsGroup(),
                 windDownGroup(),
-            )
+            ).filter { it.rows.isNotEmpty() }
+
+        /** True when the viewer holds any of these permissions, or when their access couldn't be read. */
+        private fun allows(vararg permissions: String): Boolean {
+            val access = viewerAccess ?: return true
+            return permissions.any { access.can(it) }
+        }
 
         private fun homeIdentityGroup(): GroupedListGroup {
             val identity = _identity.value
@@ -375,7 +400,7 @@ class HomeSettingsViewModel
                 id = "homeIdentity",
                 overline = "Home identity",
                 rows =
-                    listOf(
+                    listOfNotNull(
                         GroupedListRow("address", "Address", subtext = subtexts.address, control = addressControl),
                         GroupedListRow(
                             "propertyDetails",
@@ -383,8 +408,11 @@ class HomeSettingsViewModel
                             subtext = subtexts.propertyDetails,
                             control = RowControl.Chevron,
                         ),
-                        GroupedListRow("photos", "Photos", subtext = subtexts.photos, control = RowControl.Chevron),
-                        GroupedListRow("documents", "Documents", subtext = subtexts.documents, control = RowControl.Chevron),
+                        // Photos only points to the documents vault, so it needs docs.view too.
+                        GroupedListRow("photos", "Photos", subtext = subtexts.photos, control = RowControl.Chevron)
+                            .takeIf { allows("docs.view") },
+                        GroupedListRow("documents", "Documents", subtext = subtexts.documents, control = RowControl.Chevron)
+                            .takeIf { allows("docs.view") },
                     ),
             )
         }
@@ -394,15 +422,18 @@ class HomeSettingsViewModel
                 id = "access",
                 overline = "Access",
                 rows =
-                    listOf(
-                        GroupedListRow("accessCodes", "Access codes", subtext = subtexts.accessCodes, control = RowControl.Chevron),
-                        GroupedListRow("privacy", "Privacy", subtext = subtexts.privacy, control = RowControl.Chevron),
+                    listOfNotNull(
+                        GroupedListRow("accessCodes", "Access codes", subtext = subtexts.accessCodes, control = RowControl.Chevron)
+                            .takeIf { allows("access.view_codes", "access.view_wifi", "access.manage") },
+                        // Both screens read routes gated on security.manage.
+                        GroupedListRow("privacy", "Privacy", subtext = subtexts.privacy, control = RowControl.Chevron)
+                            .takeIf { allows("security.manage") },
                         GroupedListRow(
                             "ownershipSecurity",
                             "Ownership & Security",
                             subtext = "Discoverability and owner claims",
                             control = RowControl.Chevron,
-                        ),
+                        ).takeIf { allows("security.manage") },
                     ),
             )
 
@@ -412,7 +443,8 @@ class HomeSettingsViewModel
                 overline = "Members",
                 rows =
                     listOfNotNull(
-                        GroupedListRow("people", "People", subtext = subtexts.people, control = RowControl.Chevron),
+                        GroupedListRow("people", "People", subtext = subtexts.people, control = RowControl.Chevron)
+                            .takeIf { allows("members.view") },
                         GroupedListRow("inviteLink", "Invite link", subtext = subtexts.inviteLink, control = RowControl.Chevron)
                             .takeIf { showsGuestPasses },
                     ),
