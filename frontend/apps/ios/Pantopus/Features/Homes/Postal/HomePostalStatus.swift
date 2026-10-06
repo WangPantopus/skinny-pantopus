@@ -32,13 +32,19 @@ struct HomePostalStatus: Equatable {
         fields["restriction"]?.stringValue
     }
 
+    /// The Home's saved address, sent only while a request is allowed. A
+    /// request must repeat it exactly, so the form starts from it.
+    var mailingAddress: HomeResidencyAddressSnapshot? {
+        canRequest ? HomePostalValidation.address(fields["mailing_address"]) : nil
+    }
+
     func matches(_ scope: HomePostalScope) -> Bool {
         let row = fields
         guard scope.isValid, row["home_id"]?.stringValue == scope.homeId, row["actor_id"]?.stringValue == scope.actorId,
               HomePostalValidation.date(row["checked_at"]), row["current_access"]?.stringValue == "not_checked",
               ["can_request", "can_resume", "can_verify"].allSatisfy({ row[$0]?.boolValue != nil }),
               ["restriction", "restriction_message"].allSatisfy({ row[$0] == .null || row[$0]?.stringValue != nil }),
-              validPostcard(), validOriginal(scope) else { return false }
+              validPostcard(), validOriginal(scope), validMailingAddress() else { return false }
         if canVerify {
             guard let postcard, postcard["status"]?.stringValue == "pending",
                   ["accepted", "unknown"].contains(postcard["delivery"]?.stringValue ?? ""),
@@ -49,6 +55,11 @@ struct HomePostalStatus: Equatable {
                   postcard["delivery"]?.stringValue == "not_started" else { return false }
         }
         return !canRequest || (!canVerify && !canResume)
+    }
+
+    private func validMailingAddress() -> Bool {
+        let value = fields["mailing_address"]
+        return value == nil || value == .null || HomePostalValidation.address(value) != nil
     }
 
     private func validPostcard() -> Bool {

@@ -502,6 +502,8 @@ export interface CurrentPostcardStatus {
     attempts_remaining: number;
   } | null;
   current_access: 'not_checked';
+  /** The Home's saved address, sent only while a request is allowed; a request must repeat it exactly. */
+  mailing_address?: PostcardMailingAddress | null;
 }
 export async function submitPostcardRequest(homeId: string, input: { request_id: string; address: PostcardMailingAddress }): Promise<PostcardRequestOutcome> {
   return post(`/api/homes/${homeId}/postcard-requests`, input);

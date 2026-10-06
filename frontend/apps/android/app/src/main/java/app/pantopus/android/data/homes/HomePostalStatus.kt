@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.homes
 
+import app.pantopus.android.data.api.models.homes.HomeResidencyAddressSnapshot
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -19,6 +20,8 @@ data class HomePostalStatus(
     @Json(name = "restriction_message") val restrictionMessage: String?,
     val postcard: Postcard?,
     val request: HomePostalOutcome?,
+    /** The Home's saved address, sent only while a request is allowed; a request must repeat it exactly. */
+    @Json(name = "mailing_address") val mailingAddress: HomeResidencyAddressSnapshot? = null,
 ) {
     @JsonClass(generateAdapter = true)
     data class Postcard(
@@ -40,7 +43,8 @@ data class HomePostalStatus(
         val identityMatches =
             scope.isValid() && homeId == scope.homeId && actorId == scope.actorId &&
                 postalDate(checkedAt) && currentAccess == "not_checked"
-        return identityMatches && postcard?.isValid() != false && requestMatches(scope) && actionsMatch()
+        return identityMatches && postcard?.isValid() != false && mailingAddress?.isValid() != false &&
+            requestMatches(scope) && actionsMatch()
     }
 
     private fun requestMatches(scope: HomePostalScope): Boolean {

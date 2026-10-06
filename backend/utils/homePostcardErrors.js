@@ -19,7 +19,7 @@ const MESSAGES = {
   POSTCARD_ACCESS_REVIEW_REQUIRED: 'Your access needs household review. A mail code cannot restore it.',
   POSTCARD_REVIEW_ALREADY_RECORDED: 'Your verification is already recorded. Check your current residency status.',
   OWNERSHIP_FLOW_REQUIRED: 'Use ownership verification to manage your ownership request.',
-  POSTCARD_ADDRESS_CHANGED: 'The Home address changed. Confirm the address and apartment again before making a new request.',
+  POSTCARD_ADDRESS_CHANGED: "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP.",
   POSTCARD_COUNTRY_UNAVAILABLE: 'Mail verification is not available for this country yet.',
   POSTCARD_ADDRESS_LIMIT: 'The mail request limit for this address has been reached. Try again later.',
   POSTCARD_USER_LIMIT: 'Your mail request limit has been reached. Try again later.',

@@ -9,6 +9,7 @@ import { postalMessage, validMailingAddress, type MailingAddress } from '@/compo
 import { residencyRequestLabel } from '@/components/homes/residencyProgressModel';
 
 const emptyAddress = (): MailingAddress => ({ line1: '', line2: '', city: '', state: '', postal_code: '', country: 'US' });
+const isBlank = (a: MailingAddress) => [a.line1, a.line2, a.city, a.state, a.postal_code].every(v => !v.trim());
 const button = 'min-h-11 rounded-xl border border-app-border px-4 py-3 text-sm font-semibold transition hover:bg-app-hover disabled:opacity-50';
 const primary = `${button} w-full bg-emerald-700 text-white hover:bg-emerald-800`;
 const panel = 'space-y-4 rounded-2xl border border-app-border bg-app-surface p-5';
@@ -27,6 +28,11 @@ function VerifyPostcardContent() {
   const [code, setCode] = useState(''), [cancel, setCancel] = useState(false);
   useEffect(() => { setAddress(emptyAddress()); setConfirmed(false); setCode(''); setCancel(false); }, [flow.lifetime]);
   const { pending, status, progress, busy } = flow;
+  // A request must repeat the Home's saved address, so an empty form starts from it.
+  const savedAddress = status?.can_request ? status.mailing_address : null;
+  useEffect(() => {
+    if (savedAddress) setAddress(previous => (isBlank(previous) ? { ...savedAddress } : previous));
+  }, [savedAddress, flow.lifetime]);
   const outcome = pending?.outcome;
   const retainedAddress = pending?.kind === 'mail' ? (JSON.parse(pending.request_json) as { address: MailingAddress }).address : null;
   const update = (key: keyof MailingAddress, value: string) => { setAddress(previous => ({ ...previous, [key]: value })); setConfirmed(false); };
