@@ -25,7 +25,7 @@ import Observation
 @MainActor
 public final class HomeSecurityViewModel: GroupedListDataSource {
     public var title: String {
-        "Security"
+        "Privacy"
     }
 
     /// No footer: it used to show a sample address ("14 Elm Park Lane") and a
