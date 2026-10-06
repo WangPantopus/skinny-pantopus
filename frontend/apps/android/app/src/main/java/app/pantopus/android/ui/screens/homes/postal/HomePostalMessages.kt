@@ -94,8 +94,8 @@ object HomePostalMessages {
     private fun availability(code: String): String =
         when (code) {
             "POSTCARD_COUNTRY_UNAVAILABLE" -> "Mail verification is currently available for US addresses."
-            "POSTCARD_ADDRESS_LIMIT" -> "The request limit for this address has been reached. Try again later."
-            "POSTCARD_USER_LIMIT" -> "Your mail request limit has been reached. Try again later."
+            "POSTCARD_ADDRESS_LIMIT" -> "Too many postcards have been requested for this address. Try again later."
+            "POSTCARD_USER_LIMIT" -> "You've asked for too many postcards in the last hour. Try again later."
             "POSTCARD_NOT_DISPATCHED" -> "Your postcard hasn't been sent yet. Send it first."
             "OWNERSHIP_FLOW_REQUIRED" -> "Continue ownership verification for this Home."
             "HOME_NOT_FOUND" -> "This Home is no longer available. Check your residency status."

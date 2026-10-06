@@ -74,8 +74,8 @@ enum HomePostalMessages {
     private static func availability(_ code: String) -> String {
         switch code {
         case "POSTCARD_COUNTRY_UNAVAILABLE": "Mail verification is currently available for US addresses."
-        case "POSTCARD_ADDRESS_LIMIT": "The request limit for this address has been reached. Try again later."
-        case "POSTCARD_USER_LIMIT": "Your mail request limit has been reached. Try again later."
+        case "POSTCARD_ADDRESS_LIMIT": "Too many postcards have been requested for this address. Try again later."
+        case "POSTCARD_USER_LIMIT": "You've asked for too many postcards in the last hour. Try again later."
         case "POSTCARD_NOT_DISPATCHED": "Your postcard hasn't been sent yet. Send it first."
         case "OWNERSHIP_FLOW_REQUIRED": "Continue ownership verification for this Home."
         case "HOME_NOT_FOUND": "This Home is no longer available. Check your residency status."
