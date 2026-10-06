@@ -176,7 +176,7 @@ describe('supportTrainSlotAvailability', () => {
       expect(sendGuestReservationReminderEmail).toHaveBeenCalledWith(expect.objectContaining({
         guestAddressSharedAt: '2026-10-03T20:00:00Z',
         addressLabel: fromHome ? '456 Home St Unit 2\nCamas, WA, 98607' : '123 Shared St\nCamas, WA, 98607',
-        slotTime: '18:00 - 19:00',
+        slotTime: '6:00 pm – 7:00 pm',
       }));
     });
 
