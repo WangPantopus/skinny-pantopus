@@ -77,7 +77,8 @@ export default function AdminReviewClaimsPage() {
     } catch (err: any) {
       if (err?.statusCode === 403 || err?.status === 403) {
         toast.error('You do not have admin access.');
-        router.back();
+        // Not back(): opened directly (a link or a new tab) there is nothing to go back to.
+        router.replace('/app');
       }
     }
   }, [router]);
@@ -459,7 +460,7 @@ export default function AdminReviewClaimsPage() {
     <div className="min-h-screen bg-app-surface">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-app-border bg-app-surface">
-        <button aria-label="Back" onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
+        <button aria-label="Back" onClick={() => (window.history.length > 1 ? router.back() : router.replace('/app'))} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
         <h1 className="text-xl font-bold text-app-text flex-1">Review Claims</h1>
         <span className="bg-violet-600 text-white text-xs font-bold px-2.5 py-1 rounded-full min-w-[24px] text-center">{claims.length}</span>
         <button aria-label="Refresh" onClick={() => { setLoading(true); fetchClaims().finally(() => setLoading(false)); }} className="p-1.5 hover:bg-app-hover rounded-lg transition">

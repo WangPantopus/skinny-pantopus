@@ -471,7 +471,7 @@ export default function MyProfilePage() {
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-app-text mb-2">Complete Your Profile</h3>
                     <p className="text-sm text-app-text-secondary mb-4">
-                      A complete profile helps you get more gigs and build trust with clients.
+                      A complete profile helps neighbors recognize and trust you.
                     </p>
                     <ul className="space-y-2 text-sm">
                       {completionItems.map((item) => (
@@ -546,17 +546,20 @@ function ActivityItem({ icon, text, time }: { icon: string; text: string; time: 
 
 function CompletionItem({ completed, text }: { completed: boolean; text: string }) {
   return (
-    <div className="flex items-center gap-2">
+    <li className="flex items-center gap-2">
       {completed ? (
-        <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+        <svg aria-hidden="true" className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
         </svg>
       ) : (
-        <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg aria-hidden="true" className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10" strokeWidth="2" />
         </svg>
       )}
-      <span className={completed ? 'text-app-muted line-through' : 'text-app'}>{text}</span>
-    </div>
+      <span className={completed ? 'text-app-muted line-through' : 'text-app'}>
+        {completed && <span className="sr-only">Done: </span>}
+        {text}
+      </span>
+    </li>
   );
 }

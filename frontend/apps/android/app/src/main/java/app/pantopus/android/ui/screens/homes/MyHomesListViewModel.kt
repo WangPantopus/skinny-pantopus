@@ -51,6 +51,73 @@ fun pendingVerificationFor(home: MyHome): PendingVerification? =
     }
 
 /**
+ * An ownership claim is already filed for this Home. Its status lives in the
+ * Waiting Room (which also offers "Update evidence"), not a blank upload.
+ */
+private fun showsClaimStatus(
+    home: MyHome,
+    openWaitingRoom: ((String) -> Unit)?,
+): Boolean = home.pendingClaimId != null && openWaitingRoom != null
+
+/** Status chips for one My Homes row (kept out of the row builder's complexity). */
+private fun myHomeChips(
+    home: MyHome,
+    personal: PersonalHomeResidencyRequest?,
+    pending: PendingVerification?,
+): List<RowChip> =
+    buildList {
+        if (home.accessKind == "private_setup") {
+            add(
+                RowChip("Private setup", PantopusIcon.Home, RowChip.Tint.Status(StatusChipVariant.Warning)),
+            )
+        }
+        // Ownership requests already say "Verification in progress".
+        if (home.accessKind != "verification" && home.pendingClaimId != null) {
+            add(
+                RowChip("Ownership in review", PantopusIcon.Clock, RowChip.Tint.Status(StatusChipVariant.Warning)),
+            )
+        }
+        if (home.hasSharedAccess && home.ownershipStatus == "verified") {
+            add(
+                RowChip("Ownership verified", PantopusIcon.ShieldCheck, RowChip.Tint.Status(StatusChipVariant.Success)),
+            )
+        }
+        if (home.hasSharedAccess && home.occupancy?.verificationStatus == "verified") {
+            // Verified occupancy confirms household admission. The
+            // list contract carries no independent residency proof.
+            add(
+                RowChip("Household access", PantopusIcon.Home, RowChip.Tint.Status(StatusChipVariant.Success)),
+            )
+        }
+        if (pending != null) {
+            add(
+                RowChip(
+                    personal?.reviewLabel ?: "Verification in progress",
+                    PantopusIcon.Clock,
+                    RowChip.Tint.Status(StatusChipVariant.Warning),
+                ),
+            )
+        }
+    }
+
+/** A resident (e.g. address-verified by mail) whose ownership claim still waits. */
+private fun claimStatusFooter(
+    homeId: String,
+    onClick: () -> Unit,
+): RowFooter =
+    RowFooter(
+        listOf(
+            RowFooterAction(
+                title = "Check ownership claim",
+                icon = PantopusIcon.ArrowRight,
+                variant = CompactButtonVariant.Ghost,
+                testTag = "myHomes.row_$homeId.claim",
+                onClick = onClick,
+            ),
+        ),
+    )
+
+/**
  * "301" reads "Unit 301"; a unit stored with its own designator ("Apt 4B",
  * "Unit 12", "#3") stays as it is instead of "Unit Apt 4B".
  */
@@ -103,6 +170,7 @@ class MyHomesListViewModel
         private var onAddHome: () -> Unit = {}
         private var onUploadOwnershipEvidence: ((String) -> Unit)? = null
         private var onVerifyResidency: ((String) -> Unit)? = null
+        private var onOpenWaitingRoom: ((String) -> Unit)? = null
 
         init {
             viewModelScope.launch {
@@ -121,12 +189,14 @@ class MyHomesListViewModel
             onUploadOwnershipEvidence: ((String) -> Unit)? = null,
             onVerifyResidency: ((String) -> Unit)? = null,
             onOpenTasks: ((String) -> Unit)? = null,
+            onOpenWaitingRoom: ((String) -> Unit)? = null,
         ) {
             this.onOpenHome = onOpenHome
             this.onAddHome = onAddHome
             this.onOpenTasks = onOpenTasks
             this.onUploadOwnershipEvidence = onUploadOwnershipEvidence
             this.onVerifyResidency = onVerifyResidency
+            this.onOpenWaitingRoom = onOpenWaitingRoom
         }
 
         fun suspendContent() {
@@ -361,12 +431,10 @@ class MyHomesListViewModel
                 "shared" -> onOpenHome(home.id)
                 "private_setup" -> onOpenTasks?.invoke(home.id)
                 "verification" ->
-                    if (pendingVerificationFor(home) == PendingVerification.Owner) {
-                        onUploadOwnershipEvidence?.invoke(
-                            home.id,
-                        )
-                    } else {
-                        onVerifyResidency?.invoke(home.id)
+                    when {
+                        pendingVerificationFor(home) != PendingVerification.Owner -> onVerifyResidency?.invoke(home.id)
+                        showsClaimStatus(home, onOpenWaitingRoom) -> onOpenWaitingRoom?.invoke(home.id)
+                        else -> onUploadOwnershipEvidence?.invoke(home.id)
                     }
             }
         }
@@ -395,39 +463,12 @@ class MyHomesListViewModel
             val title = homeRowTitle(home, personal)
             val locality = listOfNotNull(home.city, home.state).filter { it.isNotBlank() }.joinToString(", ").takeIf { it.isNotBlank() }
             val pending = pendingVerificationFor(home)
-            val chips =
-                buildList {
-                    if (home.accessKind == "private_setup") {
-                        add(
-                            RowChip("Private setup", PantopusIcon.Home, RowChip.Tint.Status(StatusChipVariant.Warning)),
-                        )
-                    }
-                    if (home.hasSharedAccess && home.ownershipStatus == "verified") {
-                        add(
-                            RowChip("Ownership verified", PantopusIcon.ShieldCheck, RowChip.Tint.Status(StatusChipVariant.Success)),
-                        )
-                    }
-                    if (home.hasSharedAccess && home.occupancy?.verificationStatus == "verified") {
-                        // Verified occupancy confirms household admission. The
-                        // list contract carries no independent residency proof.
-                        add(
-                            RowChip("Household access", PantopusIcon.Home, RowChip.Tint.Status(StatusChipVariant.Success)),
-                        )
-                    }
-                    if (pending != null) {
-                        add(
-                            RowChip(
-                                personal?.reviewLabel ?: "Verification in progress",
-                                PantopusIcon.Clock,
-                                RowChip.Tint.Status(StatusChipVariant.Warning),
-                            ),
-                        )
-                    }
-                }
+            val chips = myHomeChips(home, personal, pending)
             val canDelete = home.canDeleteHome == true
             val footerTitle =
                 when {
                     home.accessKind == "private_setup" -> "My tasks"
+                    pending == PendingVerification.Owner && showsClaimStatus(home, onOpenWaitingRoom) -> "Check ownership claim"
                     pending == PendingVerification.Owner -> "Continue ownership verification"
                     pending == PendingVerification.Residency -> "Check residency status"
                     else -> null
@@ -452,7 +493,12 @@ class MyHomesListViewModel
                 chips = chips.takeIf { it.isNotEmpty() },
                 // Status chips wrap instead of squeezing "Household access" into a sliver at large text.
                 wrapChips = true,
-                footer = footerTitle?.let { homeFooter(home, it, revision) },
+                footer =
+                    if (home.accessKind == "shared" && showsClaimStatus(home, onOpenWaitingRoom)) {
+                        claimStatusFooter(home.id) { if (current(revision)) onOpenWaitingRoom?.invoke(home.id) }
+                    } else {
+                        footerTitle?.let { homeFooter(home, it, revision) }
+                    },
             )
         }
 
@@ -479,7 +525,12 @@ class MyHomesListViewModel
                                 icon = PantopusIcon.ShieldCheck,
                                 variant = CompactButtonVariant.Ghost,
                                 testTag = "myHomes.row_${home.id}.verification",
-                                onClick = { if (current(revision)) onVerifyResidency?.invoke(home.id) },
+                                onClick = {
+                                    if (current(revision)) {
+                                        val claim = showsClaimStatus(home, onOpenWaitingRoom)
+                                        (if (claim) onOpenWaitingRoom else onVerifyResidency)?.invoke(home.id)
+                                    }
+                                },
                             ),
                         )
                     }

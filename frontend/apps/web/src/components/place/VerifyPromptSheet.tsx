@@ -60,7 +60,7 @@ const METHODS: Method[] = [
     id: 'document',
     icon: Upload,
     label: 'Upload a document',
-    sub: 'A utility bill, lease, or ID. A person reviews it, usually within hours.',
+    sub: 'A utility bill, lease, or ID. A person reviews it.',
     href: (h) => `/app/homes/${h}/verify-residency?return=place`,
   },
   {
@@ -222,7 +222,7 @@ export default function VerifyPromptSheet({ open, onClose, homeId, address }: Ve
       <div className="flex items-start gap-2 px-0.5">
         <Clock size={15} strokeWidth={2} className="shrink-0 mt-0.5 text-app-text-muted" />
         <span className="text-[12.5px] text-app-text-secondary leading-[18px]">
-          Documents are reviewed by a person, usually within hours; a postcard takes 3–7 days. Everything you have now stays available while you wait.
+          Documents are reviewed by a person; a postcard takes 3–7 days. Everything you have now stays available while you wait.
         </span>
       </div>
     </BottomSheet>
