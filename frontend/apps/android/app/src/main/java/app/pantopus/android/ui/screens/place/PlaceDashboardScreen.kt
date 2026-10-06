@@ -141,6 +141,7 @@ fun PlaceDashboardScreen(
     if (showVerify) {
         PlaceVerifySheet(
             address = verifyAddress,
+            homeId = homeId,
             onStart = { method ->
                 showVerify = false
                 viewModel.reloadOnReturn()

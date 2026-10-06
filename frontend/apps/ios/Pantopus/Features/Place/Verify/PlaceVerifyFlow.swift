@@ -79,10 +79,15 @@ let placeVerifyBenefits: [PlaceVerifyBenefit] = [
 
 struct PlaceVerifySheet: View {
     let address: String
+    /// The Home being verified; it decides whether the landlord door is offered.
+    var homeId: String?
     var onStart: (PlaceVerifyMethod) -> Void
     var onClose: () -> Void
 
     @State private var selected: PlaceVerifyMethod = .document
+    /// A landlord request can only be answered by a verified landlord, so that
+    /// door joins once the Home has one (or the person already has a request).
+    @State private var doors: [PlaceVerifyMethod] = [.document, .mail]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -102,6 +107,16 @@ struct PlaceVerifySheet: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 30)
         .background(Theme.Color.appSurface)
+        .task(id: homeId) { await loadLandlordDoor() }
+    }
+
+    private func loadLandlordDoor() async {
+        guard let homeId else { return }
+        // An unreadable status keeps the two doors that work without a landlord.
+        guard let status: TenantHomeStatusResponse = try? await APIClient.shared.request(
+            TenantEndpoints.homeStatus(homeId: homeId)
+        ), status.matches(homeId: homeId), status.offersLandlordConfirmation else { return }
+        doors = PlaceVerifyMethod.allCases
     }
 
     private var header: some View {
@@ -150,7 +165,7 @@ struct PlaceVerifySheet: View {
         VStack(alignment: .leading, spacing: 9) {
             overline("Choose how")
             VStack(spacing: 0) {
-                ForEach(Array(PlaceVerifyMethod.allCases.enumerated()), id: \.offset) { index, m in
+                ForEach(Array(doors.enumerated()), id: \.offset) { index, m in
                     Button { selected = m } label: {
                         row(
                             icon: m.icon,
@@ -161,7 +176,7 @@ struct PlaceVerifySheet: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    if index < PlaceVerifyMethod.allCases.count - 1 { divider }
+                    if index < doors.count - 1 { divider }
                 }
             }
             .placeCard()

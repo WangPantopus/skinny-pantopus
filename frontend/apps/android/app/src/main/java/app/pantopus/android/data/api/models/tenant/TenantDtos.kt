@@ -16,10 +16,22 @@ data class TenantRequestContextDto(
 data class TenantHomeStatusResponse(
     @Json(name = "home_id") val homeId: String,
     @Json(name = "request_context") val requestContext: TenantRequestContextDto,
+    val landlord: Landlord? = null,
     val lease: LeaseStatus? = null,
 ) {
+    /** Whether the Home has a verified landlord who can answer a request. */
+    @JsonClass(generateAdapter = true)
+    data class Landlord(@Json(name = "has_landlord") val hasLandlord: Boolean = false)
+
     @JsonClass(generateAdapter = true)
     data class LeaseStatus(val state: String, val lease: TenantLeaseDto? = null)
+
+    /**
+     * The landlord door helps only when a verified landlord can answer, or when
+     * the person already has a request or lease to follow (web rule).
+     */
+    val offersLandlordConfirmation: Boolean
+        get() = landlord?.hasLandlord == true || (lease != null && lease.state != "none")
 
     fun matches(homeId: String): Boolean {
         val context = requestContext
