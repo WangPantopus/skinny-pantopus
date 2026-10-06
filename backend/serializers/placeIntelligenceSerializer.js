@@ -207,6 +207,7 @@ function serializePlaceIntelligence(options = {}) {
     regionSupported = true,
     generatedAt,
     sections = [],
+    verifyAvailable = false,
   } = options;
 
   assertOneOf(tier, ['T0', 'T1', 'T2', 'T3', 'T4'], 'tier');
@@ -241,6 +242,9 @@ function serializePlaceIntelligence(options = {}) {
   return {
     place: serializePlaceAddressRef(place),
     tier,
+    // Whether this viewer can start residency verification here. Guests and
+    // service providers are not residents, so they get no verify prompts.
+    verify_available: Boolean(verifyAvailable),
     region_supported: regionSupported,
     generated_at: generatedAt || new Date().toISOString(),
     groups,

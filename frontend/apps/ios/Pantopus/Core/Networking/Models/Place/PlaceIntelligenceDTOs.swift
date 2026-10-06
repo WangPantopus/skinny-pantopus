@@ -1586,6 +1586,9 @@ public struct PlaceGroupBlock: Decodable, Sendable, Hashable {
 public struct PlaceIntelligence: Decodable, Sendable, Hashable {
     public let place: PlaceAddressRef
     public let tier: PlaceTier
+    /// Whether this viewer can start residency verification here; false for
+    /// guests and service providers. Nil from older servers.
+    public var verifyAvailable: Bool?
     public let regionSupported: Bool
     /// ISO 8601.
     public let generatedAt: String
@@ -1593,6 +1596,7 @@ public struct PlaceIntelligence: Decodable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case place, tier, groups
+        case verifyAvailable = "verify_available"
         case regionSupported = "region_supported"
         case generatedAt = "generated_at"
     }

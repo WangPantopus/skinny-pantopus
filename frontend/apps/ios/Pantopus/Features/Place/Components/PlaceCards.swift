@@ -35,8 +35,11 @@ struct PlaceLockedCard: View {
             Text(reason)
                 .pantopusTextStyle(.small)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-                .padding(.bottom, 10)
-            PlaceTextButton(title: cta) { onTap?() }
+                .padding(.bottom, onTap == nil ? 0 : 10)
+            // No action means no button, never a dead control.
+            if let onTap {
+                PlaceTextButton(title: cta) { onTap() }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -247,7 +250,7 @@ extension PlaceHeroCard {
                 title: "Daily conditions",
                 reason: "Create a free account to see weather, air quality, and alerts for this address every day.",
                 cta: "Create account"
-            )
+            ) {}
             PlaceDensityCard(bucket: .few)
             PlaceDensityCard(bucket: .none)
         }

@@ -24,6 +24,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { encodeGeohash } = require('../utils/geohash');
+const { NON_RESIDENT_ROLES, resolveHomeRole } = require('../utils/homeAccessPolicy');
 const {
   PLACE_SECTION_IDS,
   PLACE_SECTION_META,
@@ -64,6 +65,12 @@ function resolveTier(access) {
   const vs = access.occupancy && access.occupancy.verification_status;
   if (vs === 'verified' && access.occupancy.verification_source !== 'household') return 'T4';
   return 'T3';
+}
+
+// Guests and service providers can't verify residency (postcard, letters), so
+// they get no verify prompts or verify-only locked reasons.
+function nonResidentViewer(access) {
+  return NON_RESIDENT_ROLES.has(resolveHomeRole(access && access.occupancy));
 }
 
 // ── Band × tier → section access (§9.2) ──────────────────────
@@ -836,12 +843,14 @@ const EXEMPTION_UNAVAILABLE_COPY = {
 //              what the Block Founders meter and its invite CTA read;
 //   ready    — the quartile band, plus the viewer's own standing when
 //              they have contributed.
-async function composeRealRent(home, tier, userId) {
+async function composeRealRent(home, tier, userId, canVerify = true) {
   const access = bandAccess('D', tier);
   if (access === 'locked') {
     return [serializePlaceSection('real_rent', {
       access: 'locked',
-      unavailableReason: 'Verify your address to see what your block actually pays.',
+      unavailableReason: canVerify
+        ? 'Verify your address to see what your block actually pays.'
+        : 'Shared with the verified residents of this block.',
     })];
   }
   try {
@@ -961,7 +970,7 @@ const COMPOSER_SECTIONS = [
   { ids: ['bill_benchmark'], run: ({ home, access, userId }) => composeBillBenchmark(home, access, userId) },
   { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
   { ids: ['rent_band'], run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
-  { ids: ['real_rent'], run: ({ home, tier, userId }) => composeRealRent(home, tier, userId) },
+  { ids: ['real_rent'], run: ({ home, tier, userId, access }) => composeRealRent(home, tier, userId, !nonResidentViewer(access)) },
   { ids: ['civic_districts'], run: ({ home }) => placeSectionAdapters.composeCivicDistricts(home) },
   { ids: ['civic_election'], run: ({ home }) => placeSectionAdapters.composeCivicElection(home) },
 ];
@@ -1075,6 +1084,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
   return serializePlaceIntelligence({
     place: buildPlaceRef(home, privacy),
     tier,
+    verifyAvailable: tier === 'T3' && !nonResidentViewer(access),
     regionSupported: true,
     sections,
   });

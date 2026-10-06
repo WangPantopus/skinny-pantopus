@@ -184,6 +184,8 @@ private fun CompositeCardsGallery() {
             reason = "Create a free account to see weather, air quality, and alerts for this address every day.",
             cta = "Create account",
             icon = PantopusIcon.Sun,
+            // The button only renders with an action behind it.
+            onTap = {},
         )
         PlaceDensityCard(bucket = PlaceDensityBucket.FEW)
         PlaceDensityCard(bucket = PlaceDensityBucket.NONE)

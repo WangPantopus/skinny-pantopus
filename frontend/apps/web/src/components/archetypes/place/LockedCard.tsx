@@ -34,7 +34,8 @@ export default function LockedCard({ icon, title, reason, cta, onCta, className 
         <Lock size={16} strokeWidth={2} className="shrink-0 text-app-text-muted" />
       </div>
       <p className="text-sm text-app-text-secondary leading-5 mb-2.5">{reason}</p>
-      <TextButton onClick={onCta}>{cta}</TextButton>
+      {/* No action means no button, never a dead control. */}
+      {onCta ? <TextButton onClick={onCta}>{cta}</TextButton> : null}
     </div>
   );
 }

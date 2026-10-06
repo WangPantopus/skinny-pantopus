@@ -187,7 +187,8 @@ internal fun PlaceDashboardContent(
     onRetry: (() -> Unit)? = null,
 ) {
     val isVerified = intel.tier == PlaceTier.T4
-    val isClaimed = intel.tier == PlaceTier.T3
+    // Guests and service providers aren't residents, so they get no verify prompts.
+    val isClaimed = intel.tier == PlaceTier.T3 && intel.verifyAvailable != false
     val pulse = PlacePresentation.derivePulse(intel)
 
     LazyColumn(modifier = modifier.fillMaxSize()) {
@@ -266,7 +267,7 @@ internal fun PlaceDashboardContent(
             PlaceGroupBlockView(
                 group = group,
                 onOpenDetail = onOpenDetail,
-                onVerify = onVerify,
+                onVerify = onVerify.takeUnless { intel.tier == PlaceTier.T3 && intel.verifyAvailable == false },
                 modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
                 onRetry = onRetry,
             )
@@ -321,7 +322,7 @@ private fun PrivacyMirrorRow(onOpen: () -> Unit) {
 private fun PlaceGroupBlockView(
     group: PlaceGroupBlock,
     onOpenDetail: (PlaceDetailGroup) -> Unit,
-    onVerify: () -> Unit,
+    onVerify: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null,
 ) {

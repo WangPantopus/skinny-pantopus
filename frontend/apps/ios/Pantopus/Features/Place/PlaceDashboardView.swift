@@ -112,7 +112,8 @@ struct PlaceDashboardView: View {
 
     private func loaded(_ intel: PlaceIntelligence) -> some View {
         let isVerified = intel.tier == .t4
-        let isClaimed = intel.tier == .t3
+        // Guests and service providers aren't residents, so they get no verify prompts.
+        let isClaimed = intel.tier == .t3 && intel.verifyAvailable != false
         let pulse = PlacePresentation.derivePulse(intel)
         return ScrollView {
             VStack(spacing: 0) {
@@ -171,7 +172,7 @@ struct PlaceDashboardView: View {
                         messagesEntry(address: intel.place.label)
                     }
                     ForEach(intel.groups, id: \.group) { group in
-                        groupBlock(group)
+                        groupBlock(group, canVerify: !(intel.tier == .t3 && intel.verifyAvailable == false))
                     }
                     identityEntry
                     if isClaimed {
@@ -227,7 +228,7 @@ struct PlaceDashboardView: View {
 
     // MARK: - Group block
 
-    private func groupBlock(_ group: PlaceGroupBlock) -> some View {
+    private func groupBlock(_ group: PlaceGroupBlock, canVerify: Bool) -> some View {
         let detail = PlaceDetailGroup.forGroup(group.group)
         return VStack(alignment: .leading, spacing: 9) {
             PlaceGroupLabel(text: group.label)
@@ -236,8 +237,8 @@ struct PlaceDashboardView: View {
                     PlaceSectionView(
                         env: section,
                         onOpen: detail.map { d in { viewModel.onOpenDetail(d) } },
-                        onVerify: { showVerify = true },
-                        onClaim: { showVerify = true },
+                        onVerify: canVerify ? { showVerify = true } : nil,
+                        onClaim: canVerify ? { showVerify = true } : nil,
                         onRetry: { Task { await viewModel.refresh() } },
                         retrying: viewModel.isRefreshing
                     )
