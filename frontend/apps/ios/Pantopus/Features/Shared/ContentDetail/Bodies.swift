@@ -100,6 +100,7 @@ public struct GridTabsTab: Hashable, Sendable, Identifiable {
 /// 4-across quick-action grid + scrollable tab strip. Only the Overview
 /// tab has content; the rest render an EmptyState.
 public struct GridTabsBody<Overview: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private let quickActions: [QuickActionTile]
     private let onQuickAction: @MainActor (String) -> Void
     private let tabs: [GridTabsTab]
@@ -122,7 +123,10 @@ public struct GridTabsBody<Overview: View>: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s3), count: 4), spacing: Spacing.s3) {
+            // At accessibility text sizes three tiles share a row (as on Android),
+            // so one-word labels stay whole.
+            let perRow = dynamicTypeSize.isAccessibilitySize ? 3 : 4
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s3), count: perRow), spacing: Spacing.s3) {
                 ForEach(quickActions) { action in
                     Button { onQuickAction(action.id) } label: {
                         ZStack(alignment: .topTrailing) {
@@ -142,7 +146,10 @@ public struct GridTabsBody<Overview: View>: View {
                                     .fontWeight(.semibold)
                                     .foregroundStyle(action.isMuted ? Theme.Color.appTextSecondary : Theme.Color.appText)
                                     .multilineTextAlignment(.center)
-                                    .lineLimit(2)
+                                    // A one-word label ("Maintenance") shrinks a little
+                                    // instead of breaking mid-word across two lines.
+                                    .lineLimit(action.label.contains(" ") ? 2 : 1)
+                                    .minimumScaleFactor(0.75)
                             }
                             .padding(.horizontal, Spacing.s1)
                             .padding(.vertical, Spacing.s2)

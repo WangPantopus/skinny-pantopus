@@ -14,13 +14,14 @@ import Image from 'next/image';
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { BusinessUser, BusinessProfile, BusinessLocation, BusinessHours, BusinessPage, CatalogItem, BusinessReview, PageBlock } from '@pantopus/types';
 import { PublicBlock } from './PublicBlockRenderer';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { EndorsementSummary, EndorsementButton } from '@/components/endorsement';
 import { toast } from '@/components/ui/toast-store';
+import { authPageHref } from '@/lib/auth-utils';
 import ErrorState from '@/components/ui/ErrorState';
 
 interface BusinessPublicProfileProps {
@@ -31,6 +32,8 @@ interface BusinessPublicProfileProps {
 
 export default function BusinessPublicProfile({ username, currentUser, initialSlug }: BusinessPublicProfileProps) {
   const router = useRouter();
+  // Signed-out visitors come back to this page after signing in.
+  const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   // A failed read that is not a 404 must not claim the business doesn't exist.
@@ -120,7 +123,7 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
 
   const handleFollow = async () => {
     if (!currentUser) {
-      router.push('/login');
+      router.push(authPageHref('/login', pathname));
       return;
     }
     if (!business?.id || currentUser.id === business.id) return;
@@ -182,7 +185,7 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
   const displayRating = business.average_rating || 0;
   const displayReviewCount = business.review_count || 0;
   const handleOpenInquiry = async () => {
-    if (!currentUser) { router.push('/login'); return; }
+    if (!currentUser) { router.push(authPageHref('/login', pathname)); return; }
     if (!business?.id) return;
     setOpeningChat(true);
     try {
@@ -197,7 +200,7 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
   };
   // The page's contact form: the typed message is sent into the same inquiry chat, which then opens.
   const handleSendContactMessage = async (text: string): Promise<boolean> => {
-    if (!currentUser) { router.push('/login'); return false; }
+    if (!currentUser) { router.push(authPageHref('/login', pathname)); return false; }
     if (!business?.id) return false;
     try {
       const resp = await api.businesses.startBusinessInquiry(String(business.id), `Inquiry for @${username}`) as Record<string, any>;
