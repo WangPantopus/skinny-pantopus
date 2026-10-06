@@ -109,7 +109,9 @@ export default function NeighborMessageReceived({ messageId }: { messageId: stri
     );
   }
 
-  const status = (messageQuery.error as { response?: { status?: number } })?.response?.status;
+  // The shared API client rejects with `statusCode`; a raw axios error has `response.status`.
+  const failure = messageQuery.error as { statusCode?: number; response?: { status?: number } } | null;
+  const status = failure?.statusCode ?? failure?.response?.status;
   if (messageQuery.isError && status === 404) {
     return (
       <Shell>
