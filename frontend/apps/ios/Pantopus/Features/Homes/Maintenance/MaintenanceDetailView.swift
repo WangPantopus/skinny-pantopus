@@ -325,7 +325,7 @@ private struct DetailGrid: View {
             row(label: "Status", value: task.status.capitalized.replacingOccurrences(of: "_", with: " "))
             divider
             row(label: "Performed by", value: performedByValue)
-            if let contact = draft?.performerContact, !contact.isEmpty {
+            if let contact = task.performerContact, !contact.isEmpty {
                 divider
                 row(label: "Contact", value: contact)
             }

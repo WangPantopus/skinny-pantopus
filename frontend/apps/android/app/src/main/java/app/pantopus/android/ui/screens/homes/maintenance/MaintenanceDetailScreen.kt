@@ -328,7 +328,7 @@ private fun DetailGrid(
         GridRow(label = "Status", value = task.status.replaceFirstChar { it.titlecase() }.replace('_', ' '))
         Divider()
         GridRow(label = "Performed by", value = performedByValue(task, draft))
-        val contact = draft?.performerContact.orEmpty()
+        val contact = task.performerContact.orEmpty()
         if (contact.isNotEmpty()) {
             Divider()
             GridRow(label = "Contact", value = contact)

@@ -25,6 +25,8 @@ data class MaintenanceTaskDto(
     @Json(name = "home_id") val homeId: String,
     val task: String = "",
     val notes: String? = null,
+    val category: String? = null,
+    @Json(name = "performer_contact") val performerContact: String? = null,
     val vendor: String? = null,
     @MaintenanceCost val cost: BigDecimal? = null,
     val recurrence: String = "one_time",
@@ -74,6 +76,8 @@ data class HomeMaintenanceResponse(
 data class CreateMaintenanceRequest(
     val task: String,
     val notes: String? = null,
+    val category: String? = null,
+    @Json(name = "performer_contact") val performerContact: String? = null,
     val vendor: String? = null,
     val cost: BigDecimal? = null,
     val recurrence: String? = null,
@@ -87,6 +91,8 @@ data class CreateMaintenanceRequest(
 data class UpdateMaintenanceRequest(
     val task: String? = null,
     val notes: String? = null,
+    val category: String? = null,
+    @Json(name = "performer_contact") val performerContact: String? = null,
     val vendor: String? = null,
     val cost: BigDecimal? = null,
     val recurrence: String? = null,
@@ -110,6 +116,8 @@ class UpdateMaintenanceRequestJsonAdapter {
             writer.beginObject()
             value.task?.let { writer.name("task").value(it) }
             value.notes?.let { writer.name("notes").value(it) }
+            value.category?.let { writer.name("category").value(it) }
+            value.performerContact?.let { writer.name("performer_contact").value(it) }
             if (value.vendor != null || value.clearVendor) writer.name("vendor").value(value.vendor)
             if (value.cost != null || value.clearCost) writer.name("cost").value(value.cost)
             value.recurrence?.let { writer.name("recurrence").value(it) }

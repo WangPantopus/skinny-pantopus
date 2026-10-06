@@ -12,6 +12,8 @@ import app.cash.paparazzi.Paparazzi
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -36,6 +38,19 @@ class AddGuestFormSnapshotTest {
 
     @Test
     fun add_guest_filled() {
+        val customState =
+            filledState().copy(
+                duration = AddGuestSampleData.DURATION_CUSTOM_ID,
+                customStartLabel = "Oct 10",
+                customEndLabel = "Oct 11",
+                customStartEpochDay = 20736,
+                customEndEpochDay = 20737,
+            )
+        assertTrue(customState.canSubmit)
+        assertTrue(customState.copy(customEndEpochDay = customState.customStartEpochDay).canSubmit)
+        assertFalse(customState.copy(customEndEpochDay = 20735).canSubmit)
+        assertFalse(customState.copy(didCreate = true).canSubmit)
+
         paparazzi.snapshot {
             Frame {
                 AddGuestFormLoaded(
@@ -54,6 +69,12 @@ class AddGuestFormSnapshotTest {
 
     @Test
     fun add_guest_initial() {
+        val customState = filledState().copy(duration = AddGuestSampleData.DURATION_CUSTOM_ID)
+        assertFalse("Custom without committed dates must keep Send pass disabled", customState.canSubmit)
+        assertFalse(customState.copy(customStartLabel = "Oct 10", customStartEpochDay = 20736).canSubmit)
+        assertFalse(customState.copy(customEndLabel = "Oct 11", customEndEpochDay = 20737).canSubmit)
+        assertTrue(customState.copy(duration = "2h").canSubmit)
+
         paparazzi.snapshot {
             Frame {
                 AddGuestFormLoaded(
