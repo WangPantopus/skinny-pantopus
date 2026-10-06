@@ -178,7 +178,8 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] October 6: every reachable web page on the production build opened as a homeowner, a new user and a non-member (198 pages; three old /app addresses crashed and are fixed in PR 1655); every route opened as an app link on Android and, signed out, on iOS with no crashes; signed-in Lighthouse: performance 72–77, accessibility 93–100.
   - [x] October 6, iOS signed in as a homeowner: VoiceOver names every control on the four tabs, dark mode reads correctly, and the tabs fit an iPhone SE. Two Place-tab issues went to L1: its section rows aren't announced as buttons, and tapping the Place tab icon strands people on the older hub screen until the app restarts (Android too).
   - [ ] Known gap, after the pilot: the iOS app doesn't follow the system text size. Its type styles are fixed sizes, so text never grows at larger settings (nothing breaks).
-  - [ ] Native Release builds (Android with R8 shrinking) on the pilot journeys, TalkBack and large fonts on Android; store screenshots with test data.
+  - [x] October 6, Android Release build (R8-shrunk, Android 16 emulator, homeowner): Place, Today, Pulse, a post, chat with sending, Home dashboard, creating and deleting a task, the menu and the wallet all work with no crash; TalkBack names the controls; text holds at the largest font (2×); cold start 1.3 s. Found: Pulse shows an empty feed until location or an area is chosen (L3), and the first-use card says "Two things" over one row (L1, iOS too).
+  - [ ] The iOS Release build on the pilot journeys; store screenshots with test data.
 
 ## 4. The pilot
 
