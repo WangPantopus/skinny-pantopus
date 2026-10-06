@@ -88,8 +88,12 @@ fun HomeMemberRemovalDialog(
                     state.context != null -> {
                         Text(checkNotNull(state.context).summary, modifier = Modifier.testTag("homeMemberRemovalPreparedSummary"))
                         Text(
-                            "End this member’s current household access. Their historical residency decisions remain saved. " +
-                                "Ownership rules are checked again before removal.",
+                            if (target.self) {
+                                "You'll lose access to this Home. " +
+                                    "To come back later, someone in the household will need to invite you again."
+                            } else {
+                                "They'll lose access to this Home. You can invite them again later."
+                            },
                         )
                         TextButton(
                             onClick = { confirmation = RemovalConfirmation(state.context?.decisionToken, null, state.generation) },
