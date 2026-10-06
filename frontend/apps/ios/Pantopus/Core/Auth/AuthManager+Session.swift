@@ -12,6 +12,7 @@
 
 import Foundation
 import Logging
+import UserNotifications
 
 // MARK: - Presence gate
 
@@ -523,6 +524,9 @@ extension AuthManager {
         // Cached reads belong to the account that made them.
         apiClient.purgeCache()
         guard hadSession else { return false }
+        // The next person on this device must not read the last account's
+        // notifications on the lock screen or in Notification Center.
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         SocketClient.shared.disconnect()
         Observability.shared.identify(userId: nil)
         Analytics.identify(userId: nil)
