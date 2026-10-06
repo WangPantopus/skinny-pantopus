@@ -1,5 +1,6 @@
 'use client';
 
+import { parseDisplayDate } from '@pantopus/ui-utils';
 import type { UrgencyLevel } from '@/types/mailbox';
 
 type UrgencyIndicatorProps = {
@@ -9,10 +10,12 @@ type UrgencyIndicatorProps = {
 };
 
 function formatDueDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = d.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  // Whole calendar days from today to the due day, so a bill due today reads "Due today" all day.
+  const due = parseDisplayDate(iso);
+  due.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) return 'Overdue';
   if (diffDays === 0) return 'Due today';

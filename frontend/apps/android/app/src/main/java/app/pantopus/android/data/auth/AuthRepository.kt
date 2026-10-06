@@ -41,9 +41,12 @@ import app.pantopus.android.push.FcmTokenProvider
 import app.pantopus.android.push.NotificationDispatcher
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -336,6 +339,27 @@ class AuthRepository
                 return
             }
             val cached = loadCachedUser()
+            coroutineScope {
+                // Each call can wait out its timeouts and retries, so a slow or failing server once held the
+                // launch screen for a minute or more. With a cached identity the app opens on it after
+                // LAUNCH_RESTORE_CAP_MILLIS, and the restore below finishes in the background.
+                val opener =
+                    cached?.let { user ->
+                        launch {
+                            delay(LAUNCH_RESTORE_CAP_MILLIS)
+                            if (_state.value == State.Unknown) finishSignedIn(user, token)
+                        }
+                    }
+                restoreSignedIn(token, cached)
+                opener?.cancel()
+            }
+        }
+
+        /** L1: renew a lapsing access token, then hydrate the profile; the cached identity covers outages. */
+        private suspend fun restoreSignedIn(
+            token: String,
+            cached: UserDto?,
+        ) {
             // L1 proactive refresh: no 401 tax on cold start when the access
             // token is about to expire (CONTRACT §"Client behaviour").
             when (val proactive = refreshIfExpiringSoon()) {
@@ -1311,6 +1335,9 @@ class AuthRepository
 
         private companion object {
             const val PROACTIVE_REFRESH_WINDOW_SECONDS = 120L
+
+            /** How long launch waits for the restore before opening on the cached identity. */
+            const val LAUNCH_RESTORE_CAP_MILLIS = 5_000L
             const val MILLIS_PER_SECOND = 1000L
             const val FCM_TOKEN_TIMEOUT_MS = 5_000L
             const val LOGOUT_TIMEOUT_MS = 5_000L

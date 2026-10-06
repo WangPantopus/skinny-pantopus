@@ -1,6 +1,7 @@
 'use client';
 
 import { Paperclip } from 'lucide-react';
+import { parseDisplayDate } from '@pantopus/ui-utils';
 import { renderSanitizedHtml, renderMarkdownSafe } from '../_components/MailContentRenderer';
 import type { MailItem, DeliverableType } from './legacy-detail-types';
 import { asNumber, asString, humanFileName } from './legacy-detail-utils';
@@ -76,7 +77,7 @@ function BillDetail({ item }: { item: MailItem }) {
         <div className="rounded-lg border border-red-100 bg-app-surface p-3">
           <div className="text-[11px] uppercase tracking-wide text-app-text-secondary">Due Date</div>
           <div className="text-lg font-semibold text-app-text">
-            {dueDate ? new Date(dueDate).toLocaleDateString() : '\u2014'}
+            {dueDate ? parseDisplayDate(dueDate).toLocaleDateString() : '\u2014'}
           </div>
         </div>
         <div className="rounded-lg border border-red-100 bg-app-surface p-3">
