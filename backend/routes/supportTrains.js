@@ -1739,10 +1739,13 @@ router.post(
       });
     }
 
-    const { error: stErr } = await supabaseAdmin
+    // Only the request that makes the change tells helpers, so a repeated close sends nothing twice.
+    const { data: closed, error: stErr } = await supabaseAdmin
       .from('SupportTrain')
       .update({ status: 'completed' })
-      .eq('id', st.id);
+      .eq('id', st.id)
+      .in('status', ['published', 'active', 'paused'])
+      .select('id');
 
     if (stErr) {
       logger.error('Complete SupportTrain failed', { supportTrainId: st.id, error: stErr.message });
@@ -1750,6 +1753,15 @@ router.post(
     }
 
     await supabaseAdmin.from('Activity').update({ status: 'completed' }).eq('id', st.activity_id);
+
+    // Reminders stop with the Train, so helpers with a date still ahead are told they're released.
+    if (closed?.length) {
+      emitSupportTrainEvent({
+        event: 'support_train.closed',
+        supportTrainId: st.id,
+        actorUserId: req.user.id,
+      });
+    }
 
     res.json({ id: st.id, status: 'completed' });
   })
