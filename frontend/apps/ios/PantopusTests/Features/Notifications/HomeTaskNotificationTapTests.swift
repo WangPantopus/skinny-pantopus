@@ -32,7 +32,6 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         isRead: Bool = true,
         onSelect: @escaping @MainActor () -> Void = {}
     ) -> NotificationsViewModel {
-        let api = APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none)
         let notification: [String: Any] = [
             "id": "synthetic-note",
             "type": "task_assigned",
@@ -48,7 +47,14 @@ final class HomeTaskNotificationTapTests: XCTestCase {
             "hasMore": false
         ]
         let json = try? JSONSerialization.data(withJSONObject: data)
-        SequencedURLProtocol.sequence = [.status(200, body: json.flatMap { String(data: $0, encoding: .utf8) } ?? "{}")]
+        let list = json.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        // Bound to this model's session: a request still in flight from an earlier test (seen in
+        // CI: a household-tasks read) used to take the list reply, and the list never loaded.
+        let api = APIClient(
+            environment: .current,
+            session: SequencedURLProtocol.makeSession(routeResponses: ["/api/notifications": [.status(200, body: list)]]),
+            retryPolicy: .none
+        )
         return NotificationsViewModel(
             api: api,
             onSelect: { [weak self] _ in
@@ -60,6 +66,11 @@ final class HomeTaskNotificationTapTests: XCTestCase {
             taskScope: HomeClaimSessionScope(api: api, identity: identity),
             taskActorId: actor
         )
+    }
+
+    /// Requests this test's model made; a stray one from another test doesn't count.
+    private var notificationRequests: Int {
+        SequencedURLProtocol.capturedRequests.filter { $0.url?.path.hasPrefix("/api/notifications") == true }.count
     }
 
     private func tap(_ model: NotificationsViewModel, allowed: Bool = true) async throws {
@@ -87,7 +98,7 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         identity = "replacement"
         try await tap(model, allowed: false)
         XCTAssertNil(DeepLinkRouter.shared.pending)
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 1)
+        XCTAssertEqual(notificationRequests, 1)
     }
 
     func testWrongRecipientOrAudienceContextCannotUsePersonalTaskRoute() async throws {
@@ -107,7 +118,7 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         try await tap(model)
         await Task.yield()
         XCTAssertEqual(selectedDestination, .homeTask(homeId: home, taskId: task))
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 1)
+        XCTAssertEqual(notificationRequests, 1)
     }
 
     func testMarkReadPreservesExactTaskMetadataForLaterTap() async throws {
@@ -117,6 +128,6 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         await model.markRead(id: "synthetic-note")
         try await tap(model)
         XCTAssertEqual(selectedDestination, .homeTask(homeId: home, taskId: task))
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 2)
+        XCTAssertEqual(notificationRequests, 2)
     }
 }
