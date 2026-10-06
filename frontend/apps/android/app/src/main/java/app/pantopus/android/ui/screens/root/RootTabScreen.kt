@@ -2551,8 +2551,26 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val placeLanding by placeHostVm.landing.collectAsStateWithLifecycle()
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
                     // Back on the Hub root (a child screen popped or the tab reselected):
-                    // a home joined or added since the last check lands Place now.
-                    LaunchedEffect(Unit) { placeHostVm.refreshIfNoHome() }
+                    // a home joined or added since the last check lands Place now. Coming
+                    // back from another tab after leaving the Hub root lands on Your Place
+                    // again; Back itself still shows the Hub.
+                    LaunchedEffect(Unit) {
+                        placeHostVm.refreshIfNoHome()
+                        val homeId = placeHostVm.consumeReland()
+                        val linkPending =
+                            DeepLinkRouter.pending.value != null ||
+                                app.pantopus.android.core.routing.PendingDeepLinkStore.peek() != null
+                        if (homeId != null && !linkPending && navController.currentDestination?.route == PantopusRoute.Place.path) {
+                            navController.navigate(ChildRoutes.placeDashboard(homeId))
+                        }
+                    }
+                    DisposableEffect(Unit) {
+                        onDispose {
+                            val route = navController.currentDestination?.route
+                            val otherTab = setOf(PantopusRoute.Today.path, PantopusRoute.Nearby.path, PantopusRoute.Mail.path)
+                            if (route in otherTab) placeHostVm.markLeftFromHubRoot()
+                        }
+                    }
                     LaunchedEffect(placeLanding) {
                         val landing = placeLanding
                         val canRestoreLanding =

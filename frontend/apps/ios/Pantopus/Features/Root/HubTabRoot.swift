@@ -695,10 +695,17 @@ public struct HubTabRoot: View {
             if mode == .mailbox { MailTabStore.shared.mailboxAtRoot = atRoot }
             if atRoot, placeLandingNeedsHome { Task { await resolvePlaceLanding() } }
         }
-        .onChange(of: rootTabs.selected) { _, _ in
+        .onChange(of: rootTabs.selected) { old, new in
             // Cross-tab dispatch may select this tab *after* the pending
             // destination landed — re-attempt once ownership arrives.
             consumeDeepLinkIfNeeded(pending: router.pending)
+            // Leaving Place from the Hub root (after Back from Your Place): the
+            // next visit to the tab lands on Your Place again, quietly. Back
+            // itself still shows the Hub.
+            if mode == .hub, old == owningTab, new != owningTab, path.isEmpty, didAutoLandPlace {
+                didAutoLandPlace = false
+                placeLandingNeedsHome = true
+            }
         }
         .task(id: rootTabs.selected) {
             // Let the NavigationStack install its initial binding before
