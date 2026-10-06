@@ -1175,47 +1175,24 @@ describe('Provider Orchestrator', () => {
     const { resolveLocation } = require('../services/context/locationResolver');
     resolveLocation.mockReturnValue({ latitude: 45.5, longitude: -122.6, label: 'Saved address', source: 'saved_place',
       timezone: 'America/Los_Angeles', geohash: 'c20g8', confidence: 0.95, homeId: null, savedPlaceId: 'saved-1' });
-    const own = { select: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn().mockResolvedValue({ data: { city: 'Portland', state: 'OR' }, error: null }) };
-    require('../config/supabaseAdmin').from.mockReturnValue(own);
     calendarService.composeForHome.mockResolvedValue({ upcoming: [{ kind: 'property_tax', title: 'Public tax date',
       days_until: 1, lead_days: 3, confidence: 'verified' }] });
     const orchestrator = require('../services/context/providerOrchestrator');
     orchestrator.clearHubTodayCache(MOCK_USER_ID);
     const savedToday = await getHubToday(MOCK_USER_ID);
     expect(savedToday.location.source).toBe('saved_place');
-    expect(savedToday.signals.some((signal) => signal.kind === 'address_calendar')).toBe(true);
-    expect(own.eq).toHaveBeenCalledWith('id', 'saved-1');
-    expect(own.eq).toHaveBeenCalledWith('user_id', MOCK_USER_ID);
-    expect(calendarService.composeForHome).toHaveBeenCalledWith({ city: 'Portland', state: 'OR', timezone: 'America/Los_Angeles' });
-    expect(calendarService.composeForHomeId).not.toHaveBeenCalled();
+    // A saved place is a private bookmark, not a home: weather, air and alerts
+    // only, never public pickup, tax or council dates (brief WP2, section 13).
+    expect(savedToday.signals.some((signal) => signal.kind === 'address_calendar')).toBe(false);
     require('../services/context/weatherProvider').fetchWeather.mockReturnValue(null);
     const morning = await composeDailyBriefing(MOCK_USER_ID);
     const evening = await composeScheduledBriefing(MOCK_USER_ID, { kind: 'evening' });
     expect(morning.home_id).toBeNull();
     expect(evening.home_id).toBeNull();
-    expect(morning.signals_snapshot.some((signal) => signal.kind === 'address_calendar')).toBe(true);
-    expect(calendarService.composeForHome).toHaveBeenCalledTimes(3);
-    expect(calendarService.composeForHomeId).not.toHaveBeenCalled();
-    for (const kind of ['property_tax', 'council', 'garbage']) {
-      calendarService.composeForHome.mockResolvedValue({ upcoming: [{ kind, title: 'Public date',
-        days_until: 1, lead_days: 3, confidence: 'unverified' }] });
-      orchestrator.clearHubTodayCache(MOCK_USER_ID);
-      const unverified = await getHubToday(MOCK_USER_ID);
-      const signal = unverified.signals.find((item) => item.kind === 'address_calendar');
-      if (kind === 'garbage') {
-        expect(signal).toBeUndefined(); // Saved public context cannot imply a household pickup schedule.
-      } else {
-        expect(signal.detail).toContain('Unconfirmed');
-        expect(signal.detail).not.toContain('set your pickup day');
-      }
-    }
-    calendarService.composeForHome.mockClear();
-    own.maybeSingle.mockResolvedValue({ data: null, error: null });
-    orchestrator.clearHubTodayCache(MOCK_USER_ID);
-    const removed = await getHubToday(MOCK_USER_ID);
+    expect((morning.signals_snapshot || []).some((signal) => signal.kind === 'address_calendar')).toBe(false);
+    expect((evening.signals_snapshot || []).some((signal) => signal.kind === 'address_calendar')).toBe(false);
     expect(calendarService.composeForHome).not.toHaveBeenCalled();
-    expect(removed.signals.some((signal) => signal.kind === 'address_calendar')).toBe(false);
+    expect(calendarService.composeForHomeId).not.toHaveBeenCalled();
   });
 
   test('getHubToday returns hidden when no location', async () => {

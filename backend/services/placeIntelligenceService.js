@@ -1065,10 +1065,12 @@ async function composeSavedPlaceToday(place) {
     state: place.state,
     timezone: anchor.timezone,
   };
+  // Weather, air, alerts and daylight only. A saved place has no household, so
+  // it shows no address calendar: no city pickup days and no tax or council
+  // dates (pilot brief WP2 and section 13).
   const sections = await Promise.all([
     composeTodayForPoint(anchor.latitude, anchor.longitude),
     placeSectionAdapters.composeSunriseSunset(address),
-    composeAddressCalendar(address),
   ]);
   return serializePlaceIntelligence({
     place: { label: place.label, line1: place.label, city: place.city, state: place.state },

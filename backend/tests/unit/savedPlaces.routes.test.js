@@ -44,14 +44,14 @@ it('upserts once per account and never creates a household, claim, or membership
     expect(today.headers['cache-control']).toBe('private, no-store');
     expect(today.body.tier).toBe('T1');
     expect(today.body.groups.map((group) => group.group)).toEqual(['today']);
-    const calendar = today.body.groups[0].sections.find((section) => section.id === 'address_calendar');
-    expect(calendar.data.upcoming.length).toBeGreaterThan(0);
-    expect(calendar.data.upcoming.every((event) => event.rule_id === 'public-rule')).toBe(true);
-    expect(calendar.data.pickup_schedule).toBeNull();
+    // A saved place shows weather, air, alerts and daylight only: no address
+    // calendar, so no city pickup, tax or council dates (brief WP2, section 13).
+    expect(today.body.groups[0].sections.find((section) => section.id === 'address_calendar')).toBeUndefined();
     expect(JSON.stringify(today.body)).not.toContain('private-rule');
+    expect(JSON.stringify(today.body)).not.toContain('public-rule');
     expect(today.body.groups[0].sections.find((section) => section.id === 'alerts').status).toBe('unavailable');
   }
-  expect(queries.mock.calls.every(([table]) => ['SavedPlace', 'AddressCalendarRule'].includes(table))).toBe(true);
+  expect(queries.mock.calls.every(([table]) => table === 'SavedPlace')).toBe(true);
   queries.mockRestore();
   expect(JSON.stringify(getTable('SavedPlace'))).toBe(stored);
   expect(getTable('UserNotificationPreferences')[0]).toEqual({ user_id: 'u1', daily_briefing_enabled: false, evening_briefing_enabled: false });

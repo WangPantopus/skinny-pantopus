@@ -186,22 +186,13 @@ function clearHubTodayCache(userId) {
  * @returns {Promise<Object>} HubTodayResult
  */
 // The address calendar for the location's home (Wedge Phase 2, D6) — null
-// when there is no home or the lookup fails; never throws.
+// when there is no home or the lookup fails; never throws. A saved place is a
+// private bookmark, not a home: it gets weather, air and alerts only (pilot
+// brief WP2 and section 13), so it never loads public pickup or tax dates.
 async function fetchAddressCalendar(location, userId) {
   const homeId = location.homeId;
-  if (!homeId && !location.savedPlaceId) return null;
+  if (!homeId) return null;
   try {
-    if (!homeId) {
-      const { data: saved, error } = await require('../../config/supabaseAdmin')
-        .from('SavedPlace')
-        .select('city, state')
-        .eq('id', location.savedPlaceId)
-        .eq('user_id', userId)
-        .maybeSingle();
-      if (error) throw error;
-      if (!saved) return null;
-      return await addressCalendarService.composeForHome({ city: saved.city, state: saved.state, timezone: location.timezone });
-    }
     return await addressCalendarService.composeForHomeId(homeId, { userId });
   } catch (err) {
     logger.warn('orchestrator: address calendar unavailable', { homeId, error: err.message });
