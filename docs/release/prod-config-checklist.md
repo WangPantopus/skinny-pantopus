@@ -227,7 +227,12 @@ Vercel → the Pantopus project:
 
 **Check:** `https://staging.pantopus.com` loads, sign-in works, and the browser's
 network panel shows API calls going to `/api/...` on the same origin (Next.js
-forwards them to the staging API).
+forwards them to the staging API). Then send the signed-in account a chat
+message from another account: it must appear without a reload. The web's
+realtime connects to `/socket.io` on its own origin; Vercel doesn't proxy
+WebSockets, so Socket.IO stays on HTTP long-polling through that rewrite (its
+25-second polls fit Vercel's 120-second origin timeout). A failed WebSocket
+upgrade in the network panel is expected; chat that only updates on reload is not.
 
 ### S8. Staging scheduled jobs (founder runs, L4 prepared)
 
