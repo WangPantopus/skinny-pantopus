@@ -2,7 +2,7 @@
 
 **Derived from:** `docs/compliance/privacy-data-inventory.md`
 **Package:** `app.pantopus.android`
-**Last reviewed:** 2026-08-18 (persistent login & trusted devices — *Device or other IDs* row updated, security purpose added; no new data type)
+**Last reviewed:** 2026-10-06 (launch review: *Health info* added for emergency info; photo rows no longer mention listings)
 
 Answers to enter in **Play Console → App content → Data safety**. Play's
 taxonomy differs from Apple's, so the same inventory is re-expressed in
@@ -57,8 +57,13 @@ purpose is **App functionality / Account management**; analytics where noted.
 ### Photos and videos
 | Play data type | Collected | Shared | Purpose | Notes |
 |----------------|-----------|--------|---------|-------|
-| Photos | Yes | No | App functionality | Profile, listings, mail capture |
-| Videos | Yes | No | App functionality | Listing media where applicable |
+| Photos | Yes | No | App functionality | Profile, posts, home records, mail capture |
+| Videos | Yes | No | App functionality | Posts where applicable |
+
+### Health and fitness
+| Play data type | Collected | Shared | Purpose | Notes |
+|----------------|-----------|--------|---------|-------|
+| Health info | Yes (optional) | No | App functionality | Medical details a household chooses to enter in a home's emergency info (inventory §2.10); visible only to people the owner granted sensitive access. |
 
 ### Audio files
 | Play data type | Collected | Shared | Purpose | Notes |
@@ -110,7 +115,7 @@ purpose is **App functionality / Account management**; analytics where noted.
   `BIOMETRIC_STRONG or DEVICE_CREDENTIAL`) gate "Continue as X" after a
   reinstall and unlock the biometry-bound step-up key. The app receives only
   the prompt result and a Keystore signature — **no biometric data is
-  collected or leaves the OS**, so *Health & fitness* stays unticked (§4).
+  collected or leaves the OS**, so biometrics add nothing under *Health & fitness*.
 - **Google Play services Block Store** (`play-services-auth-blockstore`)
   keeps the account hint (display name, avatar URL, masked email) and a
   single-use resume grant **on the device only** (`setShouldBackupToCloud
@@ -141,7 +146,7 @@ purpose is **App functionality / Account management**; analytics where noted.
 
 ## Section 4 — Not collected (do **not** tick)
 
-Health & fitness, Web browsing history, Search history (search *recents* are
+Fitness info, Web browsing history, Search history (search *recents* are
 stored locally only, not uploaded), Contacts (address book), Calendar,
 Installed apps, SMS/Call logs, Purchase history (no IAP), Advertising ID
 (not used). **No data shared for advertising; no data sold; no data brokers.**
