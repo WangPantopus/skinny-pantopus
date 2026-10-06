@@ -23,26 +23,26 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
        github.event.workflow_run.head_repository.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       sha: ${{ steps.ci.outputs.sha }}
       target: ${{ steps.ci.outputs.target }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
       - name: Require CI on the current branch head
         id: ci
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: await require('./scripts/deploy/require-ci.cjs')({github, context, core})
 
   release:
     name: Release backend
     needs: preflight
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     environment: ${{ needs.preflight.outputs.target }}
     steps:
@@ -66,27 +66,27 @@ jobs:
             [[ -n "${!name}" ]] || { echo "::error::Missing environment secret: $name"; exit 1; }
           done
           echo 'enabled=true' >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: steps.configuration.outputs.enabled == 'true'
         with:
           ref: ${{ needs.preflight.outputs.sha }}
           persist-credentials: false
       - name: Recheck CI after environment approval
         if: steps.configuration.outputs.enabled == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: await require('./scripts/deploy/require-ci.cjs')({github, context, core})
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         if: steps.configuration.outputs.enabled == 'true'
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
         if: steps.configuration.outputs.enabled == 'true'
       - name: Build immutable release image
         id: image
         if: steps.configuration.outputs.enabled == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: backend/Dockerfile
@@ -121,7 +121,7 @@ jobs:
           supabase db push --linked --yes
       - name: Reject a superseded release before cutover
         if: steps.configuration.outputs.enabled == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: await require('./scripts/deploy/require-ci.cjs')({github, context, core})
       - name: Deploy API and worker

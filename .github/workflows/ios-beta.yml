@@ -25,7 +25,7 @@ jobs:
     environment: ios-release
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode_26.2.app
@@ -40,17 +40,23 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      # Secrets reach the shell through env, never through template
+      # interpolation inside a script.
       - name: Write .env from secrets
+        env:
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          cat > .env <<'ENV'
-          STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
-          MATCH_GIT_URL=${{ secrets.MATCH_GIT_URL }}
-          MATCH_PASSWORD=${{ secrets.MATCH_PASSWORD }}
-          APP_STORE_CONNECT_KEY_ID=${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID=${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY_CONTENT=${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
-          APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}
-          ENV
+          for name in STRIPE_PUBLISHABLE_KEY MATCH_GIT_URL MATCH_PASSWORD APP_STORE_CONNECT_KEY_ID \
+                      APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_CONTENT APPLE_TEAM_ID; do
+            [[ -n "${!name}" ]] || { echo "::error::Missing secret $name"; exit 1; }
+            printf '%s=%s\n' "$name" "${!name}"
+          done > .env
 
       - name: Fastlane beta
         env:
