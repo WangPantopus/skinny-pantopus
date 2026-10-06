@@ -22,6 +22,8 @@ export default function MemberRemovalRecovery({ homeId, targetId, self = false }
   const terminal = !!outcome && outcome.state !== 'pending';
   const selected = { home_id: homeId, target_user_id: self ? vm.actorId : targetId };
   const input = validRemovalInput(selected) ? { home_id: selected.home_id.toLowerCase(), target_user_id: selected.target_user_id.toLowerCase() } : null;
+  // Someone who has left can no longer read that Home's member list, so there is nothing to check.
+  const leftHome = draft?.reviewed.target.is_self === true && outcome?.state === 'completed';
   const currentInput = draft ? { home_id: draft.home_id, target_user_id: draft.target_user_id } : context ? { home_id: context.home_id, target_user_id: context.target_user_id } : input;
   return <div className="space-y-5">
     {vm.accountLabel && <p className="text-sm text-app-text-secondary">Signed in as {vm.accountLabel}</p>}
@@ -62,7 +64,7 @@ export default function MemberRemovalRecovery({ homeId, targetId, self = false }
               {input ? <><p className="text-sm">Check the details before you confirm.</p><button ref={reviewStart} className={button} disabled={vm.busy} onClick={() => void vm.prepare(input)}>{self ? 'Leave this Home' : 'Remove this member'}</button></>
                 : <><h2 className="font-semibold">Nothing to finish here</h2><p className="text-sm">To remove someone, choose them in Members. To leave a Home, choose Leave in My Homes.</p></>}
             </section>}
-    {vm.ready && !vm.blocked && currentInput && <section aria-label="Member list" className="space-y-3 rounded-xl border border-app-border p-4">
+    {vm.ready && !vm.blocked && currentInput && !leftHome && <section aria-label="Member list" className="space-y-3 rounded-xl border border-app-border p-4">
       <h2 className="font-semibold">Member list now</h2>
       {vm.roster.state === 'checked' ? <p role="status" className="text-sm">{vm.roster.listed ? 'This member is still in the member list.' : 'This member is no longer in the member list.'}</p>
         : vm.roster.state === 'unavailable' ? <p role="alert" className="text-sm text-amber-800">Couldn’t check the member list. Try again.</p>

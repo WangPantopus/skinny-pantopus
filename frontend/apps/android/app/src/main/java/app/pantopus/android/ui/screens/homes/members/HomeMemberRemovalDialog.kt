@@ -215,6 +215,8 @@ private fun RemovalOriginal(
             modifier = Modifier.testTag("homeMemberRemovalCancel"),
         ) { Text("Discard attempt") }
     }
+    // Someone who has left can no longer read that Home's member list, so there is nothing to check.
+    if (target.self && outcome?.state == "completed") return
     Text(
         when (state.currentRoster) {
             HomeMemberRemovalCurrent.Unchecked -> "Check the member list to see who's in the household now."
