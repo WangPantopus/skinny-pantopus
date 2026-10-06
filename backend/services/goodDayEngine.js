@@ -34,6 +34,10 @@ const AQI_SENSITIVE = 100;
 // A run is pleasant between these, °F (apparent temperature where known).
 const RUN_MIN_F = 35;
 const RUN_MAX_F = 78;
+// A run is a daytime thing: only 5am–9pm local counts, so an overnight
+// stretch of mild hours never reads as "Run 5pm–5am".
+const RUN_FIRST_HOUR = 5;
+const RUN_LAST_HOUR = 21;
 // Precip probability at which we call it "likely", %.
 const PRECIP_LIKELY = 50;
 const PRECIP_POSSIBLE = 30;
@@ -57,6 +61,19 @@ function upcomingHours(hourly, now) {
   return hourly
     .filter((h) => h && h.time && isNum(h.temp_f) && new Date(h.time).getTime() >= nowMs)
     .sort((a, b) => new Date(a.time) - new Date(b.time));
+}
+
+/** Local hour (0–23) and date of an instant in the place's timezone. */
+function localHourAndDate(iso, timezone) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', hourCycle: 'h23',
+    }).formatToParts(new Date(iso));
+    const get = (type) => parts.find((p) => p.type === type)?.value;
+    return { hour: Number(get('hour')) % 24, date: `${get('year')}-${get('month')}-${get('day')}` };
+  } catch {
+    return null;
+  }
 }
 
 /** "3pm" / "midnight" in the place's timezone. */
@@ -164,15 +181,20 @@ function openWindowsTile({ aqi, hours, timezone }) {
   };
 }
 
-function runTile({ hours, timezone }) {
+function runTile({ hours, timezone, now }) {
   if (hours.length === 0) return null;
 
   const comfortable = (h) => {
     const feels = isNum(h.feels_like_f) ? h.feels_like_f : h.temp_f;
-    return feels >= RUN_MIN_F && feels <= RUN_MAX_F && (h.precip_chance ?? 0) < PRECIP_LIKELY;
+    const local = localHourAndDate(h.time, timezone);
+    const daytime = local && local.hour >= RUN_FIRST_HOUR && local.hour <= RUN_LAST_HOUR;
+    return daytime && feels >= RUN_MIN_F && feels <= RUN_MAX_F && (h.precip_chance ?? 0) < PRECIP_LIKELY;
   };
 
-  const window = longestWindow(hours, comfortable);
+  // Today's best window first; tomorrow's only when none is left today.
+  const todayDate = now ? localHourAndDate(now.toISOString(), timezone)?.date : null;
+  const todayHours = todayDate ? hours.filter((h) => localHourAndDate(h.time, timezone)?.date === todayDate) : hours;
+  const window = longestWindow(todayHours, comfortable) || longestWindow(hours, comfortable);
   if (!window) {
     const wettest = Math.max(...hours.map((h) => h.precip_chance ?? 0));
     return {
@@ -190,13 +212,16 @@ function runTile({ hours, timezone }) {
   const from = hourLabel(window.from.time, timezone);
   const to = hourLabel(window.to.time, timezone);
   const temp = Math.round(window.from.feels_like_f ?? window.from.temp_f);
+  // Late in the evening the best window can be tomorrow morning; say so.
+  const startDay = localHourAndDate(window.from.time, timezone);
+  const day = startDay && todayDate && startDay.date !== todayDate ? 'Tomorrow ' : '';
 
   return {
     id: 'run',
     label: 'Run',
     glyph: '🏃',
     verdict: 'yes',
-    answer: from && to && from !== to ? `${from}–${to}` : `Around ${from || to}`,
+    answer: from && to && from !== to ? `${day}${from}–${to}` : `${day ? 'Tomorrow around' : 'Around'} ${from || to}`,
     because: `${temp}°F and under ${PRECIP_LIKELY}% rain in that window.`,
   };
 }
@@ -319,7 +344,7 @@ function buildGoodDayTiles({ weather, aqi, timezone, homeType, now = new Date() 
 
   const tiles = [
     openWindowsTile({ aqi, hours, timezone }),
-    runTile({ hours, timezone }),
+    runTile({ hours, timezone, now }),
     washCarTile({ days, todayStr }),
     waterLawnTile({ days, todayStr, homeType }),
     grillTile({ hours, timezone }),
