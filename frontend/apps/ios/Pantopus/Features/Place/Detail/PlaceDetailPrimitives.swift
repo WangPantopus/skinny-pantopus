@@ -88,10 +88,11 @@ struct PlaceSourceNote: View {
             Text(name)
                 .fontWeight(.medium)
             if let asOf {
-                Text("·").opacity(0.5)
+                Text("·").opacity(0.5).accessibilityHidden(true)
                 Text(asOf)
             }
         }
+        .accessibilityElement(children: .combine)
         .font(Theme.Font.caption)
         .foregroundStyle(Theme.Color.appTextMuted)
         .padding(.top, 10)
