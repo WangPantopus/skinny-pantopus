@@ -67,6 +67,7 @@ export default function BusinessReviewsPage() {
       <div className="flex items-center gap-2 mb-4">
         <select
           value={filterRating}
+          aria-label="Filter by rating"
           onChange={(e) => setFilterRating(e.target.value ? Number(e.target.value) : '')}
           className="rounded-lg border border-app-border px-2 py-1.5 text-sm"
         >
