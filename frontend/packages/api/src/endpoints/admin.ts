@@ -134,3 +134,32 @@ export async function removeReportedPost(reportId: string): Promise<{
 }> {
   return post(`/api/admin/reports/post/${reportId}/remove`, {});
 }
+
+// ── Business verification documents (platform admins) ───────
+
+export interface VerificationQueueItem {
+  id: string;
+  business_user_id: string;
+  business: { id: string; username: string | null; name: string | null; profile_picture_url: string | null } | null;
+  evidence_type: string;
+  file_id: string | null;
+  /** A link to the document that works for about ten minutes; null when the file is gone. */
+  document_url: string | null;
+  document_mime_type: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+/** Documents businesses submitted for verification, oldest first. */
+export async function getVerificationQueue(): Promise<{ items: VerificationQueueItem[]; total: number }> {
+  return get('/api/admin/verification/queue');
+}
+
+/** Approve (business becomes document verified) or reject a submitted document. */
+export async function reviewVerificationEvidence(
+  evidenceId: string,
+  decision: 'approve' | 'reject',
+  notes?: string,
+): Promise<Record<string, unknown>> {
+  return post(`/api/admin/verification/${evidenceId}/${decision}`, notes ? { notes } : {});
+}
