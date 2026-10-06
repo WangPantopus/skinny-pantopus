@@ -61,6 +61,7 @@ export default function FeedPage() {
   }, []);
 
   const area = useAreaPicker(showToast);
+  const hasViewingArea = area.viewingLat != null && area.viewingLng != null;
 
   const surfaceParam = searchParams?.get('surface');
   const feed = useFeedData({
@@ -486,7 +487,8 @@ export default function FeedPage() {
               </div>
             ) : (feed.error && feed.posts.length === 0) || areaFailed ? null : feed.posts.length === 0 ? (
               <>
-                {feed.surface === 'place' && (
+                {/* "Discover <area> / be the first" only once an area was searched, never over "Set an area". */}
+                {feed.surface === 'place' && hasViewingArea && (
                   <SparseFeedSummary
                     locationLabel={area.viewingLabel}
                     onFilterChange={(f) => feed.setFilter(f as FilterType)}
@@ -510,7 +512,7 @@ export default function FeedPage() {
               </>
             ) : (
               <>
-                {feed.surface === 'place' && feed.posts.length < 3 && (
+                {feed.surface === 'place' && hasViewingArea && feed.posts.length < 3 && (
                   <SparseFeedSummary
                     locationLabel={area.viewingLabel}
                     onFilterChange={(f) => feed.setFilter(f as FilterType)}
