@@ -18,7 +18,7 @@ import WalletBalanceCard from "../../../../../components/wallet/WalletBalanceCar
 import WithdrawModal from "../../../../../components/wallet/WithdrawModal";
 import WalletTransactionList from "../../../../../components/wallet/WalletTransactionList";
 import SchedulingConnectPanel from "@/components/scheduling/payments/SchedulingConnectPanel";
-import { webFeatureFlags } from "@/lib/featureFlags";
+import { launchFeatures, webFeatureFlags } from "@/lib/featureFlags";
 
 function PaymentSettingsPageContent() {
   const router = useRouter();
@@ -170,37 +170,57 @@ function PaymentSettingsPageContent() {
             <div className="bg-app-surface rounded-xl border border-app-border p-5">
               <h3 className="font-semibold text-app-text mb-3">How it works</h3>
               <div className="space-y-3">
+                {/* Launch cut #4 (Open Gigs): no task income to describe, so the steps stay general. */}
+                {launchFeatures.openGigs ? (
+                  <>
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-sm flex-shrink-0">
+                      1
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-app-text">
+                        Complete tasks
+                      </p>
+                      <p className="text-xs text-app-text-secondary">
+                        When you finish a task, funds are released to your wallet
+                        after a review period (typically up to 48 hours).
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-sm flex-shrink-0">
+                      2
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-app-text">
+                        Receive tips
+                      </p>
+                      <p className="text-xs text-app-text-secondary">
+                        Tips are processed through the same review period before
+                        they become withdrawable.
+                      </p>
+                    </div>
+                  </div>
+                  </>
+                ) : (
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-sm flex-shrink-0">
+                      1
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-app-text">
+                        Get paid
+                      </p>
+                      <p className="text-xs text-app-text-secondary">
+                        Payments you receive are released to your wallet after a
+                        review period (typically up to 48 hours).
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-sm flex-shrink-0">
-                    1
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-app-text">
-                      Complete tasks
-                    </p>
-                    <p className="text-xs text-app-text-secondary">
-                      When you finish a task, funds are released to your wallet
-                      after a review period (typically up to 48 hours).
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-sm flex-shrink-0">
-                    2
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-app-text">
-                      Receive tips
-                    </p>
-                    <p className="text-xs text-app-text-secondary">
-                      Tips are processed through the same review period before
-                      they become withdrawable.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-sm flex-shrink-0">
-                    3
+                    {launchFeatures.openGigs ? 3 : 2}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-app-text">
