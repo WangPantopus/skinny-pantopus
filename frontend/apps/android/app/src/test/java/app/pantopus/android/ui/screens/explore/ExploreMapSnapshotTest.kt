@@ -107,7 +107,7 @@ class ExploreMapSnapshotTest {
     fun empty_sheet_state() {
         paparazzi.snapshot {
             Frame {
-                ExploreEmptyBody(onClearFilters = {}, onWidenArea = {})
+                ExploreEmptyBody(filterCount = 3, distanceNarrowed = true, onClearFilters = {}, onWidenArea = {})
             }
         }
     }
