@@ -6,6 +6,13 @@ import type { HomeMember } from '@pantopus/types';
 import SlidePanel from '../SlidePanel';
 import { launchFeatures } from '@/lib/featureFlags';
 
+/** Members from the dashboard aggregate carry a public identity (user.displayName / user.handle). */
+function nameOf(member: HomeMember): string {
+  const m = member as HomeMember & { display_name?: string | null; user?: { displayName?: string; handle?: string } };
+  return m.display_name || m.user?.displayName || member.user?.name || member.name || m.user?.handle
+    || member.user?.username || member.username || 'Unknown';
+}
+
 // ============================================================
 // TransferAdminWizard — 3-step ownership transfer flow
 // Step 1: Choose new primary admin from member list
@@ -68,7 +75,7 @@ export default function TransferAdminWizard({
     }
   };
 
-  const memberName = selectedMember?.user?.name || selectedMember?.name || selectedMember?.user?.username || selectedMember?.username || 'Unknown';
+  const memberName = selectedMember ? nameOf(selectedMember) : 'Unknown';
   const memberRole = selectedMember?.role_base || selectedMember?.role || 'member';
 
   const stepTitle =
@@ -116,7 +123,7 @@ export default function TransferAdminWizard({
               <div className="space-y-2">
                 {eligibleMembers.map((member) => {
                   const mId = member.user_id || member.id;
-                  const mName = member.user?.name || member.name || member.user?.username || member.username || 'Unknown';
+                  const mName = nameOf(member);
                   const mRole = member.role_base || member.role || 'member';
                   const mEmail = member.user?.email || member.email || '';
                   const isSelected = selectedMember && (selectedMember.user_id || selectedMember.id) === mId;

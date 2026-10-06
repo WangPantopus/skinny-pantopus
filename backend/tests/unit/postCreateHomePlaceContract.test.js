@@ -88,6 +88,8 @@ describe('Post creation home-place contract', () => {
     expect(res.body.post.latitude).toBeCloseTo(47.6062);
     expect(res.body.post.longitude).toBeCloseTo(-122.3321);
     expect(res.body.post.location_address).toContain('123 Main St');
+    // The label every viewer reads is the city, not the home's name or address.
+    expect(res.body.post.location_name).toBe('Seattle');
   });
 
   it('still blocks ordinary nearby posts without fresh GPS or local verification', async () => {

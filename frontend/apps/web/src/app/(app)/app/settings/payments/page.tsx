@@ -29,6 +29,8 @@ function PaymentSettingsPageContent() {
     null,
   );
   const [showAddCard, setShowAddCard] = useState(false);
+  // Bumped when a card is added so the saved-cards list loads again and shows it.
+  const [savedCardsVersion, setSavedCardsVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
     "wallet" | "methods" | "payouts" | "history" | "scheduling"
   >("wallet");
@@ -262,13 +264,14 @@ function PaymentSettingsPageContent() {
                     <PaymentMethodForm
                       onSuccess={() => {
                         setShowAddCard(false);
+                        setSavedCardsVersion((v) => v + 1);
                       }}
                       onCancel={() => setShowAddCard(false)}
                     />
                   </div>
                 )}
 
-                <PaymentMethodList />
+                <PaymentMethodList key={savedCardsVersion} />
               </StripeProvider>
             </div>
           </div>

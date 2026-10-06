@@ -40,7 +40,8 @@ export default function TaskList({
 
   const memberName = (uid: string) => {
     const m = members.find((mb: Record<string, any>) => mb.user_id === uid || mb.id === uid);
-    return m?.user?.name || m?.user?.username || m?.name || m?.username || 'Unassigned';
+    if (!m) return 'Former member';
+    return m.display_name || m.user?.displayName || m.user?.name || m.user?.handle || m.user?.username || m.name || m.username || 'Member';
   };
 
   return (

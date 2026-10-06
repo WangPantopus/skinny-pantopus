@@ -197,11 +197,14 @@ function ListingDraftCard({ draft }: { draft: ListingDraft }) {
 // ─── Post Draft Card ─────────────────────────────────────────
 
 function PostDraftCard({ draft }: { draft: PostDraft }) {
+  const router = useRouter();
+  // The feed's composer reads the stored draft when it opens; nothing listened
+  // for the old in-page event, so the button did nothing.
   const handleUse = () => {
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('ai_post_draft', JSON.stringify(draft));
-      window.dispatchEvent(new CustomEvent('ai:open-post-composer', { detail: draft }));
     }
+    router.push('/app/feed?compose=1');
   };
 
   return (

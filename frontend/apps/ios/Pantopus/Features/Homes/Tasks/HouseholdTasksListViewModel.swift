@@ -789,7 +789,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     static func formatDateShort(date: Date) -> String? {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.timeZone = TimeZone.current
         formatter.dateFormat = "MMM d"
         return formatter.string(from: date)
     }
@@ -812,7 +812,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
         if let d = isoShort.date(from: iso) { return d }
         let day = DateFormatter()
         day.locale = Locale(identifier: "en_US_POSIX")
-        day.timeZone = TimeZone(secondsFromGMT: 0)
+        day.timeZone = TimeZone.current
         day.dateFormat = "yyyy-MM-dd"
         return day.date(from: iso)
     }

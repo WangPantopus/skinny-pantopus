@@ -1131,7 +1131,9 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       if (effectiveLatitude == null) effectiveLatitude = coords.latitude;
       if (effectiveLongitude == null) effectiveLongitude = coords.longitude;
       if (!effectiveLocationName) {
-        effectiveLocationName = homeContext.home.name || homeContext.home.city || homeContext.home.address || 'Home';
+        // Everyone who can see the post reads its place label. A home's name is often its
+        // street address, so a home post is labelled with its city, never the home itself.
+        effectiveLocationName = homeContext.home.city || 'Home';
       }
       if (!effectiveLocationAddress) {
         effectiveLocationAddress = [homeContext.home.address, homeContext.home.city, homeContext.home.state]

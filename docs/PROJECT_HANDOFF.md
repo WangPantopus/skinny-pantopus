@@ -1,5 +1,13 @@
 # Pantopus project handoff
 
+**Current state (October 6, 2026).** The September workstream system (Streams 1–5, the
+`codex/workstream-coordination` branch, its hub, leases, merge queue and sealed bundles) is
+retired. Four launch streams (L1–L4) work from [NEXT_STEPS.md](../NEXT_STEPS.md) and the
+[mobile pilot build brief](mobile-pilot-build-brief-2026-10-03.md); the production steps are in
+the [launch checklist](release/prod-config-checklist.md), and [AGENTS.md](../AGENTS.md) has the
+ground rules. Everything below is history: notes that point to the coordination branch or a
+"live hub" are out of date.
+
 **October 3 owner-checkout recovery:** local `master` contained nine migration-test
 fixture commits and tracked only four files. The disk matched the last real
 checkout `ed5ea9ec5`, apart from five local documents. The original head is retained

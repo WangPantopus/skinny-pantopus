@@ -204,7 +204,7 @@ Staging and Release go through `secureBundleURL`, which **hard-rejects any
 non-`https://` URL** and silently falls back to the hosted backend. A Release
 build *cannot* talk to your Mac — that is deliberate, so a stray localhost value
 can never ship. If you build Staging by accident the app looks fine and quietly
-talks to `staging.api.pantopus.app` instead of you.
+talks to `staging-api.pantopus.com` instead of you.
 
 ---
 

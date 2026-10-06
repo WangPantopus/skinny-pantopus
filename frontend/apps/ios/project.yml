@@ -127,10 +127,10 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         ITSAppUsesNonExemptEncryption: false
         NSLocationWhenInUseUsageDescription: "Pantopus uses your location to help find your address and show nearby activity."
-        NSLocationAlwaysAndWhenInUseUsageDescription: "Pantopus uses your location to show gigs and neighbors near you, and for location-based notifications."
-        NSCameraUsageDescription: "Pantopus uses the camera for profile photos, listing images, mail capture, and taking photos to send in chat."
-        NSPhotoLibraryUsageDescription: "Pantopus uses your photo library to upload profile photos, listing images, and mail."
-        NSPhotoLibraryAddUsageDescription: "Pantopus saves images you export, like your booking QR code, to your photo library."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Pantopus uses your location to help find your address and show nearby activity."
+        NSCameraUsageDescription: "Pantopus uses the camera for profile photos, photos of your mail and home, and photos you send in chat."
+        NSPhotoLibraryUsageDescription: "Pantopus uses photos you choose for your profile, posts, home records and mail."
+        NSPhotoLibraryAddUsageDescription: "Pantopus saves images you choose to export, like a QR code, to your photo library."
         NSMicrophoneUsageDescription: "Pantopus uses the microphone for voice messages in chat."
         NSFaceIDUsageDescription: "Pantopus uses Face ID to continue signed in after a reinstall, to unlock the app, and to confirm sensitive actions like payments and removing devices."
         UIBackgroundModes:
@@ -231,6 +231,11 @@ targets:
     platform: iOS
     sources:
       - path: PantopusWidgets
+        excludes:
+          # Bundled explicitly below, like the app's manifest.
+          - "PrivacyInfo.xcprivacy"
+      - path: PantopusWidgets/PrivacyInfo.xcprivacy
+        buildPhase: resources
       # Shared contracts — compiled into BOTH the app target (whose
       # sources glob already includes them) and this extension, which
       # cannot import the app module.
