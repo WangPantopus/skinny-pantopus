@@ -879,18 +879,8 @@ class PulseFeedViewModel
                             applyPagination(response.pagination)
                             recomputeRadiusSuggestion()
                             _state.value =
-                                if (response.requiresViewingLocation == true) {
-                                    // Nothing was searched, so "be the first to share" or "no posts within
-                                    // 100 mi" would mislead.
-                                    _radiusSuggestion.value = null
-                                    PulseFeedUiState.Empty(content = FeedSurface.noAreaContent(), needsArea = true)
-                                } else if (response.posts.isEmpty()) {
-                                    PulseFeedUiState.Empty(
-                                        content =
-                                            _surface.value.emptyContent(
-                                                scopeLabel = scopeLabel,
-                                            ),
-                                    )
+                                if (response.posts.isEmpty()) {
+                                    emptyState(noAreaSearched = response.requiresViewingLocation == true)
                                 } else {
                                     PulseFeedUiState.Loaded(rows = emptyList())
                                 }
@@ -912,6 +902,18 @@ class PulseFeedViewModel
                     }
                 }
             }
+        }
+
+        /**
+         * A load with no posts. With no area searched, "be the first to share" or
+         * "no posts within 100 mi" would mislead, so it asks for an area instead.
+         */
+        private fun emptyState(noAreaSearched: Boolean): PulseFeedUiState.Empty {
+            if (!noAreaSearched) {
+                return PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
+            }
+            _radiusSuggestion.value = null
+            return PulseFeedUiState.Empty(content = FeedSurface.noAreaContent(), needsArea = true)
         }
 
         /**
