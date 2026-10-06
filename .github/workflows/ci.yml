@@ -9,9 +9,12 @@ on:
     branches: [master, dev]
   workflow_dispatch:
 
+# A PR run cancels its superseded predecessor. Each push to master or dev gets its
+# own group, so the next merge no longer cancels it: every merged commit reports a
+# finished result, which master health and Deploy Backend both need.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -20,13 +23,16 @@ env:
   NODE_VERSION: "22"
 
 jobs:
-  # ─── Which surfaces did this PR touch? ─────────────────────────────────────
+  # ─── Which surfaces did this PR or push touch? ─────────────────────────────
+  # Pushes compare with the branch's previous commit, so a merge runs only the
+  # surfaces it changed. A manual run checks everything.
   changes:
     name: Detect changes
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
+      contents: read
       pull-requests: read
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
@@ -35,9 +41,12 @@ jobs:
       ios: ${{ steps.filter.outputs.ios }}
       android: ${{ steps.filter.outputs.android }}
     steps:
+      - uses: actions/checkout@v5
+        if: github.event_name == 'push'
       - uses: dorny/paths-filter@v4
         id: filter
         with:
+          base: ${{ github.event_name == 'push' && github.ref || '' }}
           filters: |
             backend:
               - 'scripts/deploy/**'
@@ -71,7 +80,7 @@ jobs:
   backend:
     name: Backend (privacy gates + Jest)
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true') }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -110,7 +119,7 @@ jobs:
   backend-image:
     name: Backend Docker image
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true') }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -159,7 +168,7 @@ jobs:
   web:
     name: Web (lint, typecheck gate, Jest)
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.web == 'true') }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -201,7 +210,7 @@ jobs:
   web-e2e:
     name: Web E2E (Identity Firewall)
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.web == 'true') }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -247,7 +256,7 @@ jobs:
   seeder:
     name: Seeder (pytest)
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.seeder == 'true') }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.seeder == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -271,12 +280,12 @@ jobs:
 
   ios:
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.ios == 'true') }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.ios == 'true') }}
     uses: ./.github/workflows/ios-ci.yml
 
   android:
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.android == 'true') }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.android == 'true') }}
     uses: ./.github/workflows/android-ci.yml
 
   infrastructure:

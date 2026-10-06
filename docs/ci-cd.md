@@ -4,9 +4,12 @@
 backend image, web lint/type checks/Jest/**production build**, the Identity
 Firewall Playwright test, seeder tests, Android, iOS and infrastructure checks.
 Mobile workflows are reusable children of CI, so a mobile failure or cancellation
-fails the aggregate. PR path filtering happens at the job level. Pushes to
-`master` and `dev` validate every surface. Database replay joins the aggregate
-only after the verified baseline is adopted.
+fails the aggregate. Path filtering happens at the job level: a PR runs the
+surfaces it changes, and a push to `master` or `dev` runs the surfaces changed
+since that branch's previous commit. A manual run validates every surface. Each
+pushed commit gets its own run, so the next merge doesn't cancel it; a PR's newer
+push cancels its older run. Database replay joins the aggregate only after the
+verified baseline is adopted.
 
 The backend job also checks Following activity against disposable PostgreSQL
 and PostgREST containers with synthetic fixtures. This tests real filtering,
