@@ -29,6 +29,30 @@ public struct UpdateHomeRequest: Encodable, Sendable, Hashable {
     }
 }
 
+/// Body for `PATCH /api/homes/:id/settings` (route `backend/routes/homeIam.js`,
+/// needs `home.edit`): turns the anonymous bill comparison on or off.
+public struct BillBenchmarkPreferenceRequest: Encodable, Sendable, Hashable {
+    public let optedIn: Bool
+
+    public init(optedIn: Bool) {
+        self.optedIn = optedIn
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        var preferences = container.nestedContainer(keyedBy: PreferenceKeys.self, forKey: .preferences)
+        try preferences.encode(optedIn, forKey: .billBenchmarkOptIn)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case preferences
+    }
+
+    private enum PreferenceKeys: String, CodingKey {
+        case billBenchmarkOptIn = "bill_benchmark_opt_in"
+    }
+}
+
 /// `{ message, home }` envelope returned by `PATCH /api/homes/:id`
 /// (route `backend/routes/home.js:3178`). The `home` payload is the raw
 /// updated `Home` row.

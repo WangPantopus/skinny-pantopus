@@ -32,9 +32,22 @@ enum HomeBillPresentation {
         return formatter.string(from: NSNumber(value: value)) ?? "\(value) \(currency)"
     }
 
+    /// "2026-09" reads "Sep 2026" (or "September 2026" for VoiceOver).
+    static func month(_ value: String, spoken: Bool = false) -> String {
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.timeZone = TimeZone(identifier: "UTC")
+        parser.dateFormat = "yyyy-MM"
+        guard let date = parser.date(from: value) else { return value }
+        let formatter = DateFormatter()
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.setLocalizedDateFormatFromTemplate(spoken ? "MMMMyyyy" : "MMMyyyy")
+        return formatter.string(from: date)
+    }
+
     static func note(series: HomeBillTrendSeriesDTO, benchmark: HomeBillBenchmarkDTO?, currency: String) -> String? {
         guard let month = series.months.last, let mine = series.amounts.last else { return nil }
-        let period = "\(month) · \(currency)"
+        let period = "\(Self.month(month)) · \(currency)"
         guard let benchmark, !benchmark.insufficientData, (benchmark.householdCount ?? 0) >= 10,
               let index = benchmark.months.firstIndex(of: month), benchmark.avgAmounts.indices.contains(index) else {
             return "\(period) · No comparison for this month"

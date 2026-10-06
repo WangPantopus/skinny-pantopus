@@ -264,6 +264,10 @@ class HomeDashboardViewModel
         private val _billCurrencies = MutableStateFlow(listOf("USD"))
         val billCurrencies: StateFlow<List<String>> = _billCurrencies.asStateFlow()
         private var billReadId = 0L
+        private val _billSharing = MutableStateFlow(BillSharingState())
+
+        /** The bill-sharing save in flight or its failure; the screen adds who may change it. */
+        val billSharing: StateFlow<BillSharingState> = _billSharing.asStateFlow()
 
         private val _pendingChecklistItemIds = MutableStateFlow<Set<String>>(emptySet())
 
@@ -647,6 +651,31 @@ class HomeDashboardViewModel
         fun retryBillTrends() {
             _billTrends.value = HomeIntelligenceCardState.Loading
             viewModelScope.launch { loadBillTrends() }
+        }
+
+        /** The anonymous neighborhood comparison is opt-in per Home (as on the web). */
+        fun setBillBenchmarkOptIn(optedIn: Boolean) {
+            if (!can("home.edit") || _billSharing.value.isSaving) return
+            val revision = generation
+            _billSharing.value = BillSharingState(isSaving = true)
+            viewModelScope.launch {
+                try {
+                    authorize(revision)
+                    intelligenceRepo.setBillBenchmarkOptIn(homeId, optedIn).homeValue()
+                    authorize(revision)
+                    // Show what the server saved.
+                    loadBillTrends()
+                    if (revision == generation) _billSharing.value = BillSharingState()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: NetworkError.Forbidden) {
+                    retireAccess(revision)
+                } catch (_: Throwable) {
+                    if (current(revision)) _billSharing.value = BillSharingState(failed = true)
+                } finally {
+                    if (revision == generation && _billSharing.value.isSaving) _billSharing.value = BillSharingState()
+                }
+            }
         }
 
         fun selectBillCurrency(currency: String) {

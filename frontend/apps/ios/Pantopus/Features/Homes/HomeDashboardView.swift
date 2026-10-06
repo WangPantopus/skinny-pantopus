@@ -379,7 +379,13 @@ struct HomeDashboardView: View {
             state: viewModel.billTrends,
             currency: viewModel.billCurrency,
             currencies: viewModel.billCurrencies,
+            sharing: BillSharingState(
+                canChange: viewModel.canChangeBillSharing,
+                isSaving: viewModel.isSavingBillSharing,
+                failed: viewModel.billSharingFailed
+            ),
             onCurrencyChange: { currency in Task { await viewModel.selectBillCurrency(currency) } },
+            onSharingChange: { optedIn in Task { await viewModel.setBillBenchmarkOptIn(optedIn) } },
             onRetry: { Task { await viewModel.retryBillTrends() } }
         )
     }

@@ -268,6 +268,23 @@ data class HomePropertyValueDto(
 
 // ── Bill trends ─────────────────────────────────────────────────────
 
+/** `PATCH /api/homes/:id/settings` body that turns the anonymous bill comparison on or off. */
+@JsonClass(generateAdapter = true)
+data class BillBenchmarkPreferenceRequest(
+    val preferences: Preferences,
+) {
+    @JsonClass(generateAdapter = true)
+    data class Preferences(
+        @Json(name = "bill_benchmark_opt_in") val billBenchmarkOptIn: Boolean,
+    )
+}
+
+/** `{ message }` returned by `PATCH /api/homes/:id/settings`. */
+@JsonClass(generateAdapter = true)
+data class HomeSettingsUpdateResponse(
+    val message: String? = null,
+)
+
 /** Response of `GET /api/homes/:id/bill-trends`. */
 @JsonClass(generateAdapter = true)
 data class HomeBillTrendsDto(

@@ -122,6 +122,7 @@ fun HomeDashboardScreen(
     val billTrends by viewModel.billTrends.collectAsStateWithLifecycle()
     val billCurrency by viewModel.billCurrency.collectAsStateWithLifecycle()
     val billCurrencies by viewModel.billCurrencies.collectAsStateWithLifecycle()
+    val billSharing by viewModel.billSharing.collectAsStateWithLifecycle()
     val pendingChecklistItemIds by viewModel.pendingChecklistItemIds.collectAsStateWithLifecycle()
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -347,7 +348,9 @@ fun HomeDashboardScreen(
             state = billTrends,
             currency = billCurrency,
             currencies = billCurrencies,
+            sharing = billSharing.copy(canChange = viewModel.can("home.edit")),
             onCurrencyChange = viewModel::selectBillCurrency,
+            onSharingChange = viewModel::setBillBenchmarkOptIn,
             onRetry = viewModel::retryBillTrends,
         )
     }
