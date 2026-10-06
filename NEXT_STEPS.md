@@ -100,6 +100,8 @@ The ordered steps, with exact values and checks, are in the [launch checklist](d
   - [x] Android targets API 36 as Google Play requires (PR 1601, merged October 6; the main screens checked on an Android 16 emulator), and API dates now parse on Android 8–13 (PR 1650).
   - [ ] Store listing drafts, privacy answers and the Play account-deletion page draft wait for your approval (PR 1635).
 - [ ] Confirm the Camas, Vancouver and Washougal pickup schedules and their holiday rules by hand for Thanksgiving (November 26), Christmas (December 25) and New Year's Day (January 1). Mark each official or unconfirmed. PR 1552 added draft holiday rows for the three cities; all stay unconfirmed and never push until you confirm them (FOUNDER.md).
+  - [x] October 6: the founder confirmed the Vancouver, Washougal and Camas rules from the official sources; PR 1693 marks those rows official (Veterans Day moves Camas city garbage only).
+  - [ ] Camas garbage on New Year's Day 2027: waiting on the founder's call to Camas Sanitation.
 - [ ] Talk to ten first-time homeowners and ten meal-train organizers before and during the build. Ask the homeowners whether they would add their home to a Crew Day on their street, and what they would type into a box that answers questions about their home. Their questions become the agent's first test set.
 - [ ] Five strangers, ten seconds on the app's first screen: "What does this do, and why would you type your address?"
 - [x] Review and merge PR 1499 (the September 26 drafts and marketing draft): merged October 5 in batch 358, commit `f391ac5ee`.
@@ -134,6 +136,7 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] The same stored schedule produced the correct combined evening pickup preview and morning pickup exclusion through the whole producer. These were two previews with no delivery or notification writes.
   - [x] Both apps: pickup push with the holiday "Moved a day" line, OS Bins out → reminder action, tap → Today, iOS cold start from the push; editor auto-open and primer; Android permission denied then granted; unconfirmed city defaults never push (L1, October 6).
   - [x] The scheduled evening delivery fired on its own (seeder scheduler + jobs backend) on Android and iOS; private-setup push and Bins out; severe alerts lead the composer, moderate ones don't (injected alerts) (L1, October 6).
+  - [x] Holiday moves for the pilot cities are confirmed (PR 1693): the evening reminder follows a moved day, checked on real rows (L1, October 6).
   - [ ] A live severe-weather night, and delivery to a physical phone from the hosted backend.
 
 - [ ] WP4 Radon, from fact to reminder (F5, small): "Was it tested?", a home task with a date, a reminder with "Done" and "Not now". Includes two fixes to the task reminder job: finished tasks still get pushes, and pushes ignore a task's visibility.
@@ -172,14 +175,17 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] PR1512 backend is merged: Train-local evening and independent day-of reminders, guest email, privacy, repeat/retry and no-start-time behavior passed normal API → DB → whole jobs → local SMTP acceptance (seven simulated clock phases; ten accepted messages and one deliberate refusal). The 15 captured temporary rows were already cleaned in that accepted run.
   - [x] Existing accepted normal mobile Train/create/publish/signup/cancel/organizer/lifecycle journeys remain reusable because their relevant source is unchanged; no duplicate replay was needed.
   - [x] Day-of reminder at its natural time on local jobs: iOS and Android pushes to signed-in helpers, the email to a guest helper, a cancelled signup skipped, no duplicates (L3, October 6).
-  - [ ] The evening-before reminder at its natural time (L3 runs it on October 6 at 21:00Z), and delivery to a physical phone and a real inbox from the hosted backend. Concurrent exactly-once delivery and atomic cancellation-versus-send are still not established.
+  - [x] Evening-before reminder at its natural time on local jobs (21:09Z): the push to a signed-in helper and the email to a guest helper on running Trains, nothing for a closed Train's helper, and nothing again at the 21:39Z tick (L3, October 6). Each reservation is claimed before sending (PR 1611), and reminders go only to running Trains (PR 1648). Closing a Train or removing a guest tells the helpers (PRs 1661, 1673).
+  - [ ] Delivery to a physical phone and a real inbox from the hosted backend.
 
 - [ ] Release-candidate sweep (L4) before the pilot.
   - [x] October 6: every reachable web page on the production build opened as a homeowner, a new user and a non-member (198 pages; three old /app addresses crashed and are fixed in PR 1655); every route opened as an app link on Android and, signed out, on iOS with no crashes; signed-in Lighthouse: performance 72–77, accessibility 93–100.
+  - [x] October 6 evening, web on that day's master: the 198 pages again with no crash; accessibility median 100 with fewer failing checks than the morning (the rest went to L3); every click target reachable with the keyboard once PR 1707 made the Place cards focusable.
   - [x] October 6, iOS signed in as a homeowner: VoiceOver names every control on the four tabs, dark mode reads correctly, the tabs fit an iPhone SE, and with the server unreachable each tab says so, offers a retry and recovers when it's back. Two Place-tab issues went to L1: its section rows aren't announced as buttons, and re-tapping the Place tab icon shows the older hub screen (switching tabs brings Your Place back since PR 1678).
   - [ ] Known gap, after the pilot: the iOS app doesn't follow the system text size. Its type styles are fixed sizes, so text never grows at larger settings (nothing breaks).
   - [x] October 6, Android Release build (R8-shrunk, Android 16 emulator, homeowner): Place, Today, Pulse, a post, chat with sending, Home dashboard, creating and deleting a task, the menu and the wallet all work with no crash; TalkBack names the controls; text holds at the largest font (2×); cold start 1.3 s. Found: Pulse shows an empty feed until location or an area is chosen (L3), and the first-use card says "Two things" over one row (L1, iOS too).
-  - [ ] The iOS Release build on the pilot journeys; store screenshots with test data.
+  - [x] October 6, iOS Release build (simulator, homeowner): cold start to a loaded Place in about 5 s; Today, Pulse, a post, chat with sending, Home tools, a task created and marked done, the menu, and the wallet behind the device passcode, with no crash. Release builds refuse a non-https API address and fall back to the production host, as intended. Found: with the server slow or failing, a signed-in launch waits about 100 s on the splash (L3).
+  - [ ] Store screenshots with test data.
 
 ## 4. The pilot
 
