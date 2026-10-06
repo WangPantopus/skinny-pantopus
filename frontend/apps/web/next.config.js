@@ -91,6 +91,12 @@ const createNextConfig = (phase) => ({
       // Resolve the app entry before React renders its server redirect. Keep
       // the destination relative so local and deployed hosts retain cookies.
       { source: '/app', destination: '/app/place', permanent: false },
+      // Old /app addresses also redirect here: their redirect() pages render inside the
+      // app shell's Suspense, so Next redirects on the client, which crashed with
+      // "Rendered more hooks than during the previous render" (Next's Router).
+      { source: '/app/control-center', destination: '/app/hub', permanent: false },
+      { source: '/app/neighborhood', destination: '/app/nearby', permanent: false },
+      { source: '/app/businesses/new', destination: '/app/business/new', permanent: false },
       { source: '/invite/lease/:token', destination: '/app/homes/invite?type=lease&code=:token', permanent: false },
     ];
   },
