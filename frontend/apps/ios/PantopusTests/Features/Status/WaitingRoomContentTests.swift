@@ -45,12 +45,12 @@ final class WaitingRoomContentTests: XCTestCase {
 
     func testActiveInlineActionsAreStandardUpdateAndDangerCancel() {
         let actions = WaitingRoomContent.active().inlineActions
-        XCTAssertEqual(actions.map(\.id), ["updateEvidence", "cancelClaim"])
-        XCTAssertEqual(actions.map(\.label), ["Update evidence", "Cancel claim"])
-        XCTAssertEqual(actions.map(\.icon), [.filePlus2, .xCircle])
+        XCTAssertEqual(actions.map(\.id), ["updateEvidence", "cancelClaim", "verifyByMail"])
+        XCTAssertEqual(actions.map(\.label), ["Update evidence", "Cancel claim", "Verify address by mail"])
+        XCTAssertEqual(actions.map(\.icon), [.filePlus2, .xCircle, .mail])
         // Active wait keeps Update evidence neutral (standard); Cancel is danger.
-        XCTAssertEqual(actions.map(\.tone), [.standard, .danger])
-        XCTAssertEqual(actions.map(\.actionKey), ["update_evidence", "cancel_claim"])
+        XCTAssertEqual(actions.map(\.tone), [.standard, .danger, .standard])
+        XCTAssertEqual(actions.map(\.actionKey), ["update_evidence", "cancel_claim", "verify_postcard"])
     }
 
     // MARK: - More info requested · review paused

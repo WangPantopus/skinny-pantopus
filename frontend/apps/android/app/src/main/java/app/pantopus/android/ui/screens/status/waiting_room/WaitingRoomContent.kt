@@ -158,6 +158,19 @@ data class WaitingRoomContent(
             )
 
         /**
+         * While an ownership claim waits, the claimant can still prove they live
+         * here by mail (founder decision, 2026-10-06); ownership stays in review.
+         */
+        private fun verifyByMailAction() =
+            WaitingRoomInlineAction(
+                id = "verifyByMail",
+                label = "Verify address by mail",
+                icon = PantopusIcon.Mail,
+                tone = WaitingRoomActionTone.Standard,
+                actionKey = "verify_postcard",
+            )
+
+        /**
          * Active wait — `Under review`, info-toned pulsing halo, the Submitted
          * → Under review → Approved timeline with "Under review" current, and
          * the "within 24–48 hours" ETA pill.
@@ -203,6 +216,7 @@ data class WaitingRoomContent(
                             actionKey = "update_evidence",
                         ),
                         cancelClaimAction(),
+                        verifyByMailAction(),
                     ),
                 primaryCta = viewClaim,
                 secondaryCta = backToHome,

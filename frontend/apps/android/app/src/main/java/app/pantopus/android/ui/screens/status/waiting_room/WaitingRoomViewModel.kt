@@ -252,6 +252,7 @@ class WaitingRoomViewModel
             when (action.actionKey) {
                 "update_evidence" -> claimId?.let { _navEvent.value = WaitingRoomNav.UpdateEvidence(homeId, it) }
                 "cancel_claim" -> _navEvent.value = WaitingRoomNav.CancelClaim(homeId)
+                "verify_postcard" -> _navEvent.value = WaitingRoomNav.VerifyPostcard(homeId)
                 else -> log("inline.${action.actionKey}")
             }
         }

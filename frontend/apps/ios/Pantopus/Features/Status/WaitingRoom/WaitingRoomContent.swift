@@ -216,6 +216,18 @@ public extension WaitingRoomContent {
         )
     }
 
+    /// While an ownership claim waits, the claimant can still prove they live
+    /// here by mail (founder decision, 2026-10-06); ownership stays in review.
+    private static func verifyByMailAction() -> WaitingRoomInlineAction {
+        WaitingRoomInlineAction(
+            id: "verifyByMail",
+            label: "Verify address by mail",
+            icon: .mail,
+            tone: .standard,
+            actionKey: "verify_postcard"
+        )
+    }
+
     /// Active wait — `Under review`, info-toned pulsing halo, the Submitted →
     /// Under review → Approved timeline with "Under review" current, and the
     /// "within 24–48 hours" ETA pill.
@@ -255,7 +267,8 @@ public extension WaitingRoomContent {
                     tone: .standard,
                     actionKey: "update_evidence"
                 ),
-                cancelClaimAction()
+                cancelClaimAction(),
+                verifyByMailAction()
             ],
             primaryCta: viewClaim,
             secondaryCta: backToHome

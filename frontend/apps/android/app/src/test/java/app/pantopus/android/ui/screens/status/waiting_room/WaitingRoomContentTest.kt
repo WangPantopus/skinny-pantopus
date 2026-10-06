@@ -71,14 +71,14 @@ class WaitingRoomContentTest {
     @Test
     fun active_inline_actions_are_standard_update_and_danger_cancel() {
         val actions = WaitingRoomContent.active().inlineActions
-        assertEquals(listOf("updateEvidence", "cancelClaim"), actions.map { it.id })
-        assertEquals(listOf("Update evidence", "Cancel claim"), actions.map { it.label })
-        assertEquals(listOf(PantopusIcon.FilePlus2, PantopusIcon.XCircle), actions.map { it.icon })
+        assertEquals(listOf("updateEvidence", "cancelClaim", "verifyByMail"), actions.map { it.id })
+        assertEquals(listOf("Update evidence", "Cancel claim", "Verify address by mail"), actions.map { it.label })
+        assertEquals(listOf(PantopusIcon.FilePlus2, PantopusIcon.XCircle, PantopusIcon.Mail), actions.map { it.icon })
         assertEquals(
-            listOf(WaitingRoomActionTone.Standard, WaitingRoomActionTone.Danger),
+            listOf(WaitingRoomActionTone.Standard, WaitingRoomActionTone.Danger, WaitingRoomActionTone.Standard),
             actions.map { it.tone },
         )
-        assertEquals(listOf("update_evidence", "cancel_claim"), actions.map { it.actionKey })
+        assertEquals(listOf("update_evidence", "cancel_claim", "verify_postcard"), actions.map { it.actionKey })
     }
 
     // ── More info requested · review paused ───────────────────────────────
