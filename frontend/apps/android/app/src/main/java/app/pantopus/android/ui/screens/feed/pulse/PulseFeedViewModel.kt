@@ -54,6 +54,8 @@ sealed interface PulseFeedUiState {
 
     data class Empty(
         val content: FeedEmptyContent,
+        /** No area was searched: the call to action opens the area switcher instead of the composer. */
+        val needsArea: Boolean = false,
     ) : PulseFeedUiState
 
     data class Loaded(
@@ -877,7 +879,12 @@ class PulseFeedViewModel
                             applyPagination(response.pagination)
                             recomputeRadiusSuggestion()
                             _state.value =
-                                if (response.posts.isEmpty()) {
+                                if (response.requiresViewingLocation == true) {
+                                    // Nothing was searched, so "be the first to share" or "no posts within
+                                    // 100 mi" would mislead.
+                                    _radiusSuggestion.value = null
+                                    PulseFeedUiState.Empty(content = FeedSurface.noAreaContent(), needsArea = true)
+                                } else if (response.posts.isEmpty()) {
                                     PulseFeedUiState.Empty(
                                         content =
                                             _surface.value.emptyContent(

@@ -100,6 +100,20 @@ public enum FeedSurface: String, Sendable, Hashable, CaseIterable {
     ///   - scopeLabel: Active neighborhood (Pulse footer). `nil` hides the
     ///     Pulse footer chip.
     ///   - followCount: Beacons followed (Beacons footer).
+    /// Pulse with no area chosen, no device location and no home or saved place to fall back on:
+    /// "be the first to share" would mislead, since nothing was searched.
+    public static let noAreaContent = FeedEmptyContent(
+        icon: .mapPin,
+        headline: "Set an area to see local posts",
+        body: "Choose an area, or turn on location, to see what neighbors near you are posting.",
+        ctaLabel: "Choose an area",
+        ctaIcon: .mapPin,
+        footerIcon: .mapPin,
+        footerLead: "",
+        footerEmphasis: nil,
+        footerTrail: ""
+    )
+
     public func emptyContent(scopeLabel: String?, followCount _: Int) -> FeedEmptyContent {
         switch self {
         case .pulse:

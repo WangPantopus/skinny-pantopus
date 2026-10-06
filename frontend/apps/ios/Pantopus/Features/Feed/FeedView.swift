@@ -491,7 +491,13 @@ public struct FeedView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 268)
             Button {
-                if let onEmptyCTA { onEmptyCTA() } else { onCompose(viewModel.activeIntent) }
+                if viewModel.needsArea {
+                    Task { await contextBarViewModel.openSwitcher() }
+                } else if let onEmptyCTA {
+                    onEmptyCTA()
+                } else {
+                    onCompose(viewModel.activeIntent)
+                }
             } label: {
                 HStack(spacing: Spacing.s2) {
                     Icon(content.ctaIcon, size: 15, strokeWidth: 2.4, color: Theme.Color.appTextInverse)

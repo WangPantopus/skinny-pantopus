@@ -131,6 +131,8 @@ public final class PulseFeedViewModel {
     /// Locality name surfaced on the empty state. Set from the loaded
     /// first post or a backend hint.
     public private(set) var scopeLabel: String?
+    /// No area was searched (none chosen, no location, no home or saved place): the empty state asks for one.
+    public private(set) var needsArea = false
 
     /// True while a next-page fetch is in flight (footer spinner).
     public private(set) var isLoadingMore = false
@@ -631,9 +633,12 @@ public final class PulseFeedViewModel {
             lastQuery = query
             loadedItems = response.posts
             postsLoaded = true
+            needsArea = response.requiresViewingLocation == true
             applyPagination(response.pagination)
             scopeLabel = response.posts.first?.locationName ?? scopeLabel
             recomputeRadiusSuggestion()
+            // Nothing was searched, so "no posts within 100 mi" would mislead.
+            if needsArea { radiusSuggestion = nil }
             rebuildLoadedState()
         } catch {
             guard generation == fetchGeneration else { return }
@@ -719,7 +724,7 @@ public final class PulseFeedViewModel {
         let visible = loadedItems.filter { isVisible($0) }
         if visible.isEmpty {
             if case .error = state { return }
-            state = .empty(surface.emptyContent(scopeLabel: scopeLabel, followCount: 0))
+            state = .empty(needsArea ? FeedSurface.noAreaContent : surface.emptyContent(scopeLabel: scopeLabel, followCount: 0))
             return
         }
         var rows = visible.map { project($0) }

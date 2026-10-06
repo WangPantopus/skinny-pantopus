@@ -31,6 +31,7 @@ const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
 const { generateNeighborhoodFacts } = require('../services/ai/neighborhoodFactService');
 const { encodeGeohash6: _encodeGeohash6 } = require('../utils/geohash');
+const { resolveLocation } = require('../services/context/locationResolver');
 
 // ── Cold-start seeding helpers ──────────────────────────────────────────
 
@@ -1623,11 +1624,13 @@ router.get('/feed', verifyToken, async (req, res) => {
 
     const radiusMeters = radiusMiles ? Math.round(parseFloat(radiusMiles) * 1609.34) : 160934;
 
-    // Place requires location
-    if (surface === 'place') {
-      const hasLocation = latitude != null && longitude != null
-        && Number.isFinite(parseFloat(latitude)) && Number.isFinite(parseFloat(longitude));
-      if (!hasLocation) {
+    let feedLatitude = Number.isFinite(parseFloat(latitude)) ? parseFloat(latitude) : null;
+    let feedLongitude = Number.isFinite(parseFloat(longitude)) ? parseFloat(longitude) : null;
+    // Place needs a location. With no area chosen and no device location, it looks around the
+    // person's own place, as Today does: their home first, then a saved place.
+    if (surface === 'place' && (feedLatitude == null || feedLongitude == null)) {
+      const ownPlace = await resolveLocation(userId);
+      if (ownPlace.latitude == null || ownPlace.longitude == null) {
         return res.json({
           posts: [],
           pagination: { nextCursor: null, hasMore: false },
@@ -1635,13 +1638,15 @@ router.get('/feed', verifyToken, async (req, res) => {
           message: 'Set an area to see local posts.',
         });
       }
+      feedLatitude = ownPlace.latitude;
+      feedLongitude = ownPlace.longitude;
     }
 
     const result = await feedService.getListFeed({
       userId,
       surface,
-      latitude: latitude ? parseFloat(latitude) : null,
-      longitude: longitude ? parseFloat(longitude) : null,
+      latitude: feedLatitude,
+      longitude: feedLongitude,
       radiusMeters,
       postType: postType || null,
       cursorCreatedAt: cursorCreatedAt || null,
@@ -1657,11 +1662,12 @@ router.get('/feed', verifyToken, async (req, res) => {
     // Cold-start seeding: inject neighborhood facts when real posts are sparse
     // Only on first page of the place surface, when fewer than 5 real posts
     const realPostCount = result.posts.length;
-    const isColdStart = surface === 'place' && !topic && !cursorCreatedAt && !cursorId && !postType && latitude && longitude;
+    const isColdStart = surface === 'place' && !topic && !cursorCreatedAt && !cursorId && !postType
+      && feedLatitude != null && feedLongitude != null;
 
     if (isColdStart && realPostCount < 5) {
       try {
-        const geohash = _encodeGeohash6(parseFloat(latitude), parseFloat(longitude));
+        const geohash = _encodeGeohash6(feedLatitude, feedLongitude);
         const facts = await generateNeighborhoodFacts(geohash);
 
         // Load user's dismissed fact IDs
@@ -1723,7 +1729,7 @@ router.get('/feed', verifyToken, async (req, res) => {
     // (< 5 posts) to active (5+ posts), inject a one-time congratulatory card
     if (isColdStart && realPostCount >= 5 && realPostCount <= 8) {
       try {
-        const geohash = _encodeGeohash6(parseFloat(latitude), parseFloat(longitude));
+        const geohash = _encodeGeohash6(feedLatitude, feedLongitude);
         const transitionId = `transition_${geohash}`;
 
         // Load user's dismissed list (reuse from cold-start path if available)
