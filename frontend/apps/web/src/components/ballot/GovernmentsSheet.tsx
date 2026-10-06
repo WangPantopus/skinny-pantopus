@@ -16,9 +16,10 @@
 
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useFocusTrap, useReducedMotion, useReturnFocus } from '@/components/scheduling/polish/a11y';
+import { useReducedMotion } from '@/components/scheduling/polish/a11y';
+import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
 import GovernmentStack, { STACK_POLYGONS, STORY_STEP_MS } from './GovernmentStack';
 
 export interface GovernmentsSheetData {
@@ -41,14 +42,12 @@ export function GovernmentsView({
   address,
   onClose,
   titleId,
-  closeRef,
   animate = true,
 }: {
   governments: GovernmentsSheetData;
   address: string;
   onClose: () => void;
   titleId?: string;
-  closeRef?: React.Ref<HTMLButtonElement>;
   /** False renders the finished frame (the still board). */
   animate?: boolean;
 }) {
@@ -72,23 +71,16 @@ export function GovernmentsView({
         <div className="flex items-center justify-between">
           <span className="text-[13px] font-semibold leading-[normal] text-app-text-secondary">{address}</span>
           <button
-            ref={closeRef}
             type="button"
             onClick={playing ? () => setFinished(true) : onClose}
-            className="py-[10px] pl-3 text-[14px] font-semibold leading-[normal] text-app-link hover:text-primary-900"
+            className="py-[10px] pl-3 text-[14px] font-semibold leading-[normal] text-app-link hover:text-primary-800"
           >
             {playing ? 'Skip' : 'Close'}
           </button>
         </div>
       </div>
       <div className="flex justify-center">
-        <GovernmentStack
-          count={governments.count}
-          size="peel"
-          story={playing}
-          label={`${governments.count} government boundary layers stacked above the address`}
-          homeTitle={address}
-        />
+        <GovernmentStack count={governments.count} size="peel" story={playing} homeTitle={address} />
       </div>
       <div className="relative mx-4">
         {playing
@@ -127,7 +119,7 @@ export function GovernmentsView({
         <button
           type="button"
           onClick={onClose}
-          className="flex h-[50px] items-center justify-center rounded-lg bg-primary-700 text-[16px] font-semibold leading-[normal] text-white hover:bg-primary-800"
+          className="flex h-[50px] items-center justify-center rounded-lg bg-primary-600 text-[16px] font-semibold leading-[normal] text-white hover:bg-primary-700"
         >
           Done
         </button>
@@ -149,30 +141,25 @@ export default function GovernmentsSheet({
   address: string;
 }) {
   const titleId = useId();
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  // A modal keeps Tab inside it and hands focus back to what opened it.
-  useReturnFocus(open);
-  useFocusTrap(dialogRef, open && mounted);
+  const shown = open && mounted && governments !== null;
+  // The app's dialog trap: Tab and Shift+Tab stay inside (even after a click
+  // on dead space leaves focus on the page), Escape closes, focus enters on
+  // Skip / Close when the sheet opens and goes back to what opened it. It
+  // keeps `onClose` in a ref, so a parent re-render never moves focus.
+  const dialogRef = useDialogFocusTrap<HTMLDivElement>(onClose, undefined, shown);
 
   useEffect(() => {
-    if (!open || !mounted) return undefined;
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
+    if (!shown) return undefined;
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener('keydown', onKey);
       document.body.style.overflow = overflow;
     };
-  }, [open, onClose, mounted]);
+  }, [shown]);
 
-  if (!mounted || !open || !governments) return null;
+  if (!shown) return null;
   // The app shell creates a stacking context below its fixed header (see
   // SlidePanel), so the sheet goes to the body; z-[70] then clears the
   // header, tab bar and buttons, as AppShell's own composer does.
@@ -189,7 +176,7 @@ export default function GovernmentsSheet({
     >
       {/* Shorter windows scroll the 844-tall panel, so Done stays reachable. */}
       <div className="h-full w-full overflow-y-auto sm:h-[844px] sm:max-h-[calc(100dvh-32px)] sm:w-[390px] sm:rounded-2xl">
-        <GovernmentsView governments={governments} address={address} onClose={onClose} titleId={titleId} closeRef={closeRef} />
+        <GovernmentsView governments={governments} address={address} onClose={onClose} titleId={titleId} />
       </div>
     </div>,
     document.body,

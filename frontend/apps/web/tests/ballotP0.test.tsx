@@ -5,24 +5,40 @@
 // /start teaser and its governments view, the Today card, and their
 // placement on the dashboard and the funnel. Visual parity with the
 // canvas is checked separately by screenshot (plan §10).
+//
+// Also here, from the pre-launch review: the timeline's label repair (the
+// shared spec's vectors), the governments sheet as a modal dialog, the
+// Today reads (none without ballot_p0), tolerant payload reading, and the
+// primary-fill and link-ink tokens.
 // ============================================================
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { useState, type ReactElement } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as api from '@pantopus/api';
 import type { BallotDeadline, BallotTeaser as BallotTeaserData, PlaceBallotElectionData, PlaceIntelligence, PlaceSection } from '@pantopus/types';
+import { get } from '../../../packages/api/src/client';
+import { getPlaceIntelligence } from '../../../packages/api/src/endpoints/place';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), prefetch: jest.fn() }),
   usePathname: () => '/app/place',
   useParams: () => ({}),
 }));
+// getPlaceIntelligence itself (not the app-wide mock) is exercised below.
+jest.mock('../../../packages/api/src/client', () => ({ get: jest.fn(), put: jest.fn() }));
 
-import BallotCard from '@/components/ballot/BallotCard';
+import BallotCard, { ballotCardData } from '@/components/ballot/BallotCard';
 import BallotTeaser from '@/components/ballot/BallotTeaser';
 import BallotTodayCard, { hasBallotToday } from '@/components/ballot/BallotTodayCard';
-import { GovernmentsView, storyOverline } from '@/components/ballot/GovernmentsSheet';
-import { timelineLayout } from '@/components/ballot/DeadlineTimeline';
+import BallotTodaySection, { useBallotToday } from '@/components/ballot/BallotTodaySection';
+import DeadlineTimeline, { timelineLayout } from '@/components/ballot/DeadlineTimeline';
+import GovernmentsSheet, { GovernmentsView, storyOverline } from '@/components/ballot/GovernmentsSheet';
 import { asOfLabel, daysLeft, monthDay } from '@/components/ballot/format';
+import CivicDetail from '@/components/place/detail/CivicDetail';
 import PlaceDashboardView from '@/components/place/PlaceDashboardView';
+import HubTodayPage from '@/app/(app)/app/hub/today/page';
 import { PreviewBody } from '@/components/place/StartFunnel';
 
 function deadline(key: string, label: string, date: string, days: number, extra: Partial<BallotDeadline> = {}): BallotDeadline {
@@ -85,6 +101,25 @@ describe('format helpers', () => {
     expect(asOfLabel('2026-09-24T00:00:00.000Z', new Date('2026-09-24T18:00:00Z'))).toBe('Sep 24');
     expect(asOfLabel(null)).toBeNull();
   });
+
+  it('reads a real timestamp in the viewer\'s own day, the one its same-day test uses', () => {
+    // Expectations are built from local dates, so they hold in any timezone;
+    // west of UTC an evening lookup has the next day's UTC date, east of it a
+    // morning one has the day before's.
+    const monthDayOf = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const clock = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const evening = new Date(2026, 8, 24, 20, 30);
+    const earlyMorning = new Date(2026, 8, 24, 0, 30);
+    const tomorrow = new Date(2026, 8, 25, 9, 0);
+    expect(asOfLabel(evening.toISOString(), tomorrow)).toBe(monthDayOf(evening));
+    expect(asOfLabel(earlyMorning.toISOString(), tomorrow)).toBe(monthDayOf(earlyMorning));
+    expect(monthDayOf(evening)).toBe('Sep 24');
+    // The same day still reads as a clock time.
+    expect(asOfLabel(evening.toISOString(), new Date(2026, 8, 24, 21, 0))).toBe(clock(evening));
+    // A calendar date keeps its date everywhere, whatever the viewer's day.
+    expect(asOfLabel('2026-09-24T00:00:00.000Z', tomorrow)).toBe('Sep 24');
+    expect(asOfLabel('2026-09-24', tomorrow)).toBe('Sep 24');
+  });
 });
 
 describe('deadline timeline geometry', () => {
@@ -115,6 +150,96 @@ describe('deadline timeline geometry', () => {
   it('draws nothing on Election Day or with nothing ahead', () => {
     expect(timelineLayout([deadline('return_by', 'By 8 p.m.', '2026-11-03', 0)], '2026-11-03', 326)).toBeNull();
     expect(timelineLayout([], '2026-09-24', 326)).toBeNull();
+  });
+});
+
+// The shared timeline spec's vectors (real deadlines on the days that collided
+// on the canvas arrangement), at the canvas card's 326 width. The same four run
+// on iOS and Android. `legacy` is the canvas arrangement of side and anchor, as
+// it was before the repair pass.
+type VectorRow = [key: string, label: string, date: string, days: number, needsAction: boolean, timeline: boolean];
+type Side = 'above' | 'below';
+type Anchor = 'start' | 'middle' | 'end';
+type VectorMarker = [key: string, x: number, side: Side, anchor: Anchor, dx: number];
+const WA_ROWS: VectorRow[] = [
+  ['ballots_mailed', 'Ballots mailed', '2026-10-16', 22, false, true],
+  ['register_online_mail', 'Register by', '2026-10-26', 32, true, true],
+  ['return_by', 'By 8 p.m.', '2026-11-03', 40, true, true],
+  ['register_in_person', 'Register in person', '2026-11-03', 40, true, false],
+];
+const OR_ROWS = (registerDays: number): VectorRow[] => [
+  ['register_online_mail', 'Register by', '2026-10-13', registerDays, true, true],
+  ['ballots_mailed', 'Ballots mailed', '2026-10-14', registerDays + 1, false, true],
+  ['return_by', 'By 8 p.m.', '2026-11-03', registerDays + 21, true, true],
+];
+const TIMELINE_VECTORS: { name: string; today: string; rows: VectorRow[]; legacy: [Side, Anchor][]; expected: VectorMarker[] }[] = [
+  {
+    // Nothing collides: the canvas arrangement, exactly as it was.
+    name: 'WA 2026-09-24 width 326',
+    today: '2026-09-24',
+    rows: WA_ROWS,
+    legacy: [['below', 'start'], ['above', 'middle'], ['below', 'middle'], ['above', 'end']],
+    expected: [['today', 8, 'below', 'start', 0], ['ballots_mailed', 178.5, 'above', 'middle', 0], ['register_online_mail', 256, 'below', 'middle', 0], ['return_by', 318, 'above', 'end', 0]],
+  },
+  {
+    // Register (Oct 13) and ballots mailed (Oct 14) one day apart: both used to sit above and overprint.
+    name: 'OR 2026-10-10 width 326',
+    today: '2026-10-10',
+    rows: OR_ROWS(3),
+    legacy: [['below', 'start'], ['above', 'middle'], ['above', 'middle'], ['above', 'end']],
+    expected: [['today', 8, 'below', 'start', 0], ['register_online_mail', 46.75, 'above', 'middle', 0], ['ballots_mailed', 59.67, 'below', 'start', 0], ['return_by', 318, 'above', 'end', 0]],
+  },
+  {
+    // Today is the registration deadline: the second label has to slide along its row.
+    name: 'OR 2026-10-13 width 326',
+    today: '2026-10-13',
+    rows: OR_ROWS(0),
+    legacy: [['below', 'start'], ['above', 'start'], ['above', 'start'], ['above', 'end']],
+    expected: [['today', 8, 'below', 'start', 0], ['register_online_mail', 8, 'above', 'start', 0], ['ballots_mailed', 22.76, 'below', 'start', 30.24], ['return_by', 318, 'above', 'end', 0]],
+  },
+  {
+    // A 24-character label near the left edge used to run off the card.
+    name: 'HI 2026-10-25 width 326',
+    today: '2026-10-25',
+    rows: [
+      ['register_online_mail', 'Paper forms by 4:30 p.m.', '2026-10-26', 1, true, true],
+      ['return_by', 'By 7 p.m.', '2026-11-03', 9, true, true],
+    ],
+    legacy: [['below', 'start'], ['above', 'middle'], ['above', 'end']],
+    expected: [['today', 8, 'below', 'start', 0], ['register_online_mail', 42.44, 'above', 'start', 0], ['return_by', 318, 'above', 'end', 0]],
+  },
+];
+const vectorDeadlines = (rows: VectorRow[]) =>
+  rows.map(([key, label, date, days, needsAction, timeline]) => deadline(key, label, date, days, { needs_action: needsAction, timeline }));
+
+describe('deadline timeline label repair (shared spec vectors)', () => {
+  it.each(TIMELINE_VECTORS)('$name', ({ today, rows, legacy, expected }) => {
+    const layout = timelineLayout(vectorDeadlines(rows), today, 326)!;
+    expect(layout.markers.map((m) => [m.key, m.side, m.anchor])).toEqual(expected.map(([key, , side, anchor]) => [key, side, anchor]));
+    layout.markers.forEach((m, i) => {
+      expect(Math.abs(m.x - expected[i][1])).toBeLessThanOrEqual(0.01);
+      expect(Math.abs(m.dx - expected[i][4])).toBeLessThanOrEqual(0.01);
+    });
+    // A layout with nothing colliding comes out exactly as the canvas arrangement; the others are repaired.
+    const arrangement = layout.markers.map((m) => [m.side, m.anchor]);
+    if (today === '2026-09-24') expect(arrangement).toEqual(legacy);
+    else expect(arrangement).not.toEqual(legacy);
+  });
+
+  it('draws a slid label at its anchor plus the slide', () => {
+    // The card's 324-wide content box gives the 326-wide chart of the vectors.
+    const { container } = render(<DeadlineTimeline deadlines={vectorDeadlines(OR_ROWS(0))} today="2026-10-13" />);
+    const texts = Array.from(container.querySelectorAll('text'));
+    const mailed = texts.filter((t) => t.textContent === 'Oct 14' || t.textContent === 'Ballots mailed');
+    expect(mailed).toHaveLength(2);
+    // Anchored start at x 22.76: text at x − 4 + dx.
+    for (const t of mailed) {
+      expect(t.getAttribute('text-anchor')).toBe('start');
+      expect(Math.abs(Number(t.getAttribute('x')) - (22.76 - 4 + 30.24))).toBeLessThanOrEqual(0.01);
+    }
+    // A label that was not moved keeps the canvas x.
+    const register = texts.find((t) => t.textContent === 'Register by')!;
+    expect(Number(register.getAttribute('x'))).toBeCloseTo(8 - 4);
   });
 });
 
@@ -191,7 +316,7 @@ describe('the /start teaser', () => {
     const dialog = screen.getByRole('dialog', { name: 'You are standing in at least 5 governments.' });
     expect(within(dialog).getByText('415 NE Everett St', { selector: 'span' })).toBeInTheDocument();
     expect(within(dialog).getByText(/The United States, the state, Clark County/)).toBeInTheDocument();
-    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -220,7 +345,7 @@ describe('the governments view (the peel)', () => {
   it('plays the story: one caption per government, overline and name only, then Skip', () => {
     const { container } = view();
     expect(screen.getByRole('button', { name: 'Skip' })).toBeInTheDocument();
-    const captions = container.querySelectorAll('[aria-hidden="true"]');
+    const captions = container.querySelectorAll('div[aria-hidden="true"]');
     expect(Array.from(captions).map((c) => c.textContent)).toEqual(
       GOVERNMENTS.items.map((g, i) => `${storyOverline(i + 1, 5, true)}${g.name}`),
     );
@@ -236,7 +361,7 @@ describe('the governments view (the peel)', () => {
     const { container } = view({ onClose });
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     expect(onClose).not.toHaveBeenCalled();
-    expect(container.querySelectorAll('[aria-hidden="true"]')).toHaveLength(0);
+    expect(container.querySelectorAll('div[aria-hidden="true"]')).toHaveLength(0);
     expect(container.querySelectorAll('polygon')).toHaveLength(5);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -256,7 +381,7 @@ describe('the governments view (the peel)', () => {
     try {
       const { container } = view();
       expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
-      expect(container.querySelectorAll('[aria-hidden="true"]')).toHaveLength(0);
+      expect(container.querySelectorAll('div[aria-hidden="true"]')).toHaveLength(0);
     } finally {
       window.matchMedia = matchMedia;
     }
@@ -265,6 +390,110 @@ describe('the governments view (the peel)', () => {
   it('a P0 count is a minimum, so the overline says so', () => {
     expect(storyOverline(2, 5, true)).toBe('Government 2 of at least 5');
     expect(storyOverline(2, 5, false)).toBe('Government 2 of 5');
+  });
+
+  it('the drawing is decorative, and scales down on phones narrower than its 390', () => {
+    const { container } = view({ animate: false });
+    const svg = container.querySelector('svg')!;
+    // The visible title already says "at least 5 governments".
+    expect(svg).toHaveAttribute('aria-hidden', 'true');
+    expect(svg).not.toHaveAttribute('role');
+    expect(svg).not.toHaveAttribute('aria-label');
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    // 390 × 420 where the screen has room; its viewBox keeps the proportions where it has not.
+    expect(svg).toHaveAttribute('width', '390');
+    expect(svg).toHaveAttribute('height', '420');
+    expect(svg).toHaveAttribute('viewBox', '0 0 390 420');
+    expect(svg).toHaveClass('max-w-full', 'h-auto');
+  });
+});
+
+describe('the governments sheet (a modal dialog)', () => {
+  const sheet = (onClose: () => void) => <GovernmentsSheet open onClose={onClose} governments={GOVERNMENTS} address="415 NE Everett St" />;
+
+  it('opens on Skip, and a parent re-render with a fresh onClose does not move focus', () => {
+    const { rerender } = render(sheet(() => undefined));
+    expect(screen.getByRole('button', { name: 'Skip' })).toHaveFocus();
+    const done = screen.getByRole('button', { name: 'Done' });
+    done.focus();
+    // Every caller passes an inline arrow, so any re-render hands the sheet a new onClose.
+    rerender(sheet(() => undefined));
+    rerender(sheet(() => undefined));
+    expect(done).toHaveFocus();
+  });
+
+  it('keeps Tab and Shift+Tab inside after a click on dead space, and Escape closes', async () => {
+    const user = userEvent.setup();
+    const onClose = jest.fn();
+    render(<><button type="button">Behind the sheet</button>{sheet(onClose)}</>);
+    // A tabbable element after the sheet in document order, for Shift+Tab to run into.
+    const after = document.body.appendChild(document.createElement('button'));
+    try {
+      const dialog = screen.getByRole('dialog');
+      for (const shift of [false, true]) {
+        // The source line under Done is not focusable: the click leaves focus on the page.
+        await user.click(screen.getByText(GOVERNMENTS.source_line));
+        expect(document.body).toHaveFocus();
+        await user.tab({ shift });
+        expect(dialog).toContainElement(document.activeElement as HTMLElement);
+      }
+      expect(onClose).not.toHaveBeenCalled();
+      await user.keyboard('{Escape}');
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      after.remove();
+    }
+  });
+
+  it('locks page scroll while open and gives focus back to what opened it', () => {
+    function Opener() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>Open it</button>
+          <GovernmentsSheet open={open} onClose={() => setOpen(false)} governments={GOVERNMENTS} address="415 NE Everett St" />
+        </>
+      );
+    }
+    render(<Opener />);
+    const opener = screen.getByRole('button', { name: 'Open it' });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('hidden');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('');
+    expect(opener).toHaveFocus();
+  });
+});
+
+describe('primary buttons and links', () => {
+  // Each render gets its own queries, bound to its own container.
+  const inside = (ui: ReactElement) => within(render(ui).container);
+  const still = (props: Partial<Parameters<typeof GovernmentsView>[0]> = {}) => (
+    <GovernmentsView governments={GOVERNMENTS} address="415 NE Everett St" onClose={() => undefined} animate={false} {...props} />
+  );
+
+  it('use the app\'s standard primary fill and its hover, not the pressed shade at rest', () => {
+    const week = { ...IN_SEASON, ballot_week: { show: true, overline: 'Ballot week', title: 'Ballots were mailed' } };
+    const fills = [
+      inside(<BallotCard data={IN_SEASON} onOpenGovernments={() => undefined} />).getByRole('button', { name: 'See your governments' }),
+      inside(<BallotTeaser teaser={TEASER} address="415 NE Everett St" />).getByRole('button', { name: 'See your governments' }),
+      inside(<BallotTodayCard data={week} ballotHref="/app/place" />).getByRole('link', { name: 'Open your ballot' }),
+      inside(still()).getByRole('button', { name: 'Done' }),
+    ];
+    for (const el of fills) {
+      expect(el).toHaveClass('bg-primary-600', 'hover:bg-primary-700');
+      expect(el).not.toHaveClass('bg-primary-700');
+    }
+  });
+
+  it('keep Skip and Close in link ink, with a hover that follows the theme', () => {
+    const close = inside(still()).getByRole('button', { name: 'Close' });
+    expect(close).toHaveClass('text-app-link', 'hover:text-primary-800');
+    // primary-900 has no dark-mode variant: it was 1.9:1 on the dark sheet.
+    expect(close).not.toHaveClass('hover:text-primary-900');
   });
 });
 
@@ -282,6 +511,116 @@ describe('Today', () => {
     expect(screen.getByText(/Moved this year\? Update your registration online by Oct 26\. 9 days left\./)).toBeInTheDocument();
     expect(screen.queryByText(/Mail Day/)).not.toBeInTheDocument();
     expect(hasBallotToday(IN_SEASON)).toBe(false);
+  });
+
+  it('"Moved this year?" with no URL is a plain well; with one it opens the official page', () => {
+    const mover = { text: 'Moved this year? Update your registration online by Oct 26.', days_left: 9 };
+    const { rerender } = render(<BallotTodayCard data={{ ...WEEK, mover_prompt: { ...mover, url: null } }} ballotHref="/app/place" />);
+    expect(screen.getByText(/Moved this year\?/).closest('a')).toBeNull();
+    // Ballot week keeps its own link; the well adds none.
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    rerender(<BallotTodayCard data={{ ...WEEK, mover_prompt: { ...mover, url: 'https://www.sos.wa.gov/register' } }} ballotHref="/app/place" />);
+    const link = screen.getByText(/Moved this year\?/).closest('a');
+    expect(link).toHaveAttribute('href', 'https://www.sos.wa.gov/register');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link!.getAttribute('rel')).toContain('noopener');
+  });
+
+  describe('the reads behind it', () => {
+    const flag = api.featureFlags.getFeatureFlag as jest.Mock;
+    const primaryHome = api.homes.getPrimaryHome as jest.Mock;
+    const intel = api.place.getPlaceIntelligence as jest.Mock;
+    // Lets the reads that would have been sent settle, inside act like the rest.
+    const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
+    const renderWithClient = (ui: ReactElement) =>
+      render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
+    function TodayProbe({ enabled = true }: { enabled?: boolean }) {
+      return <BallotTodaySection data={useBallotToday(enabled)} />;
+    }
+
+    beforeEach(() => {
+      flag.mockReset();
+      primaryHome.mockReset();
+      intel.mockReset();
+    });
+
+    it('send no home or election request for a viewer without ballot_p0', async () => {
+      flag.mockResolvedValue({ flagName: 'ballot_p0', enabled: false });
+      renderWithClient(<TodayProbe />);
+      await waitFor(() => expect(flag).toHaveBeenCalledWith('ballot_p0'));
+      await settle();
+      expect(primaryHome).not.toHaveBeenCalled();
+      expect(intel).not.toHaveBeenCalled();
+      expect(screen.queryByText('Ballots were mailed by Oct 16')).not.toBeInTheDocument();
+    });
+
+    it('with ballot_p0 read the primary home, then only the civic_election section, and show the card', async () => {
+      flag.mockResolvedValue({ flagName: 'ballot_p0', enabled: true });
+      primaryHome.mockResolvedValue({ home: { id: 'home-1' } });
+      intel.mockResolvedValue(intelligence(WEEK));
+      renderWithClient(<TodayProbe />);
+      expect(await screen.findByText('Ballots were mailed by Oct 16')).toBeInTheDocument();
+      expect(intel).toHaveBeenCalledTimes(1);
+      expect(intel).toHaveBeenCalledWith('home-1', ['civic_election']);
+    });
+
+    it('send nothing, not even the flag read, until the page has a session', async () => {
+      renderWithClient(<TodayProbe enabled={false} />);
+      await settle();
+      expect(flag).not.toHaveBeenCalled();
+      expect(primaryHome).not.toHaveBeenCalled();
+      expect(intel).not.toHaveBeenCalled();
+    });
+
+    describe('on the Today page', () => {
+      // The briefing never arrives here, so anything the Ballot reads send is
+      // sent without waiting behind it.
+      const briefing = jest.fn(() => new Promise<never>(() => undefined));
+      beforeEach(() => {
+        briefing.mockClear();
+        Object.assign(api.hub, { getHubToday: briefing });
+        (api.getAuthToken as jest.Mock).mockReturnValue('token');
+      });
+
+      it('a viewer without ballot_p0 costs one cached flag read, started with the briefing, and nothing else', async () => {
+        flag.mockResolvedValue({ flagName: 'ballot_p0', enabled: false });
+        renderWithClient(<HubTodayPage />);
+        await waitFor(() => expect(flag).toHaveBeenCalledWith('ballot_p0'));
+        expect(briefing).toHaveBeenCalledTimes(1);
+        await settle();
+        expect(flag).toHaveBeenCalledTimes(1);
+        expect(primaryHome).not.toHaveBeenCalled();
+        expect(intel).not.toHaveBeenCalled();
+      });
+
+      it('a viewer with ballot_p0 has the home and election reads under way before the briefing arrives', async () => {
+        flag.mockResolvedValue({ flagName: 'ballot_p0', enabled: true });
+        primaryHome.mockResolvedValue({ home: { id: 'home-1' } });
+        intel.mockResolvedValue(intelligence(WEEK));
+        renderWithClient(<HubTodayPage />);
+        await waitFor(() => expect(intel).toHaveBeenCalledWith('home-1', ['civic_election']));
+        expect(briefing).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+});
+
+describe('reading the card payload', () => {
+  it('does not need the day a deadline falls on: it is never drawn, month_day carries it', () => {
+    const { date: _date, ...withoutDate } = DEADLINES[0];
+    const data = ballotCardData({ ...IN_SEASON, deadlines: [withoutDate, DEADLINES[1], DEADLINES[2]] });
+    expect(data?.deadlines?.map((d) => d.key)).toEqual(['ballots_mailed', 'register_online_mail', 'return_by']);
+  });
+
+  it('reads a list whole or not at all, as a native decode does, and keeps the card around it', () => {
+    const data = ballotCardData({
+      ...IN_SEASON,
+      deadlines: [DEADLINES[0], { key: 'broken' }, DEADLINES[1]],
+      official_links: [LINKS[0], { key: 'x', label: 'No URL', owner: 'Y' }, LINKS[2]],
+    });
+    expect(data?.deadlines).toEqual([]);
+    expect(data?.official_links).toEqual([]);
+    expect(data?.title).toBe('Your ballot');
   });
 });
 
@@ -320,11 +659,45 @@ describe('placement', () => {
     expect(screen.getByText('Next election')).toBeInTheDocument();
   });
 
+  it('the Civic page row for the governments view reads as a whole sentence', () => {
+    const civic = (minimum: boolean) => ({
+      ...intelligence(IN_SEASON),
+      groups: [{
+        group: 'civic' as const,
+        label: 'Civic',
+        sections: [section('civic_districts', 'civic', {
+          districts: [{ level: 'federal', office_label: 'U.S. House', name: "Washington's 3rd District" }],
+          representatives: [],
+          governments: { ...GOVERNMENTS, count_is_minimum: minimum },
+        })],
+      }],
+    }) as PlaceIntelligence;
+    const { unmount } = render(<CivicDetail intelligence={civic(true)} />);
+    expect(screen.getByTestId('place.civic.governments')).toHaveTextContent('Your governmentsThis address sits inside at least 5 governments.');
+    unmount();
+    render(<CivicDetail intelligence={civic(false)} />);
+    expect(screen.getByTestId('place.civic.governments')).toHaveTextContent('This address sits inside 5 governments.');
+  });
+
   it('puts the teaser under the aha card on /start, and nothing without it', () => {
     const base = { status: 'ready' as const, tier: 'preview' as const, region: 'US' as const, place: { address: '415 NE Everett St', city: 'Camas', state: 'WA', zipcode: '98607' }, sections: [], locked: [] };
     const { rerender } = render(<PreviewBody preview={{ ...base, ballot_teaser: TEASER }} onWall={() => undefined} />);
     expect(screen.getByRole('region', { name: 'Election information for this address' })).toBeInTheDocument();
     rerender(<PreviewBody preview={base} onWall={() => undefined} />);
     expect(screen.queryByRole('region', { name: 'Election information for this address' })).not.toBeInTheDocument();
+  });
+});
+
+describe('the intelligence request', () => {
+  it('opts in to the Ballot payload on every call, whatever sections it asks for', async () => {
+    const getMock = get as jest.Mock;
+    getMock.mockReset();
+    getMock.mockResolvedValue({ groups: [] });
+    await getPlaceIntelligence('home-1');
+    await getPlaceIntelligence('home-1', ['civic_election']);
+    expect(getMock.mock.calls).toEqual([
+      ['/api/homes/home-1/intelligence', { ballot: 1 }],
+      ['/api/homes/home-1/intelligence', { ballot: 1, sections: 'civic_election' }],
+    ]);
   });
 });

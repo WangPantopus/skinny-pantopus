@@ -30,7 +30,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
 import type { HubToday } from '@pantopus/types';
-import BallotTodaySection from '@/components/ballot/BallotTodaySection';
+import BallotTodaySection, { useBallotToday } from '@/components/ballot/BallotTodaySection';
 
 // ── Icon helpers ─────────────────────────────────────────────────
 
@@ -121,6 +121,10 @@ export default function HubTodayPage() {
     enabled: hasToken,
   });
 
+  // Ballot P0 (ballot_p0): read alongside the briefing, not after it; sends
+  // nothing for a viewer who does not have the flag.
+  const ballot = useBallotToday(hasToken);
+
   const today = query.data ?? null;
   const loading = !mounted || (query.isPending && hasToken);
   const error = query.error instanceof Error ? query.error.message : '';
@@ -189,7 +193,7 @@ export default function HubTodayPage() {
             <div className="rounded-xl border border-app bg-surface dark:bg-surface-dark p-8 text-center">
               <p className="text-sm text-app-text-secondary">No briefing available right now.</p>
             </div>
-            <BallotTodaySection enabled={hasToken} />
+            <BallotTodaySection data={ballot} />
           </div>
         )}
 
@@ -289,7 +293,7 @@ export default function HubTodayPage() {
             </div>
 
             {/* Ballot P0 (ballot_p0): ballot week and "Moved this year?" */}
-            <BallotTodaySection enabled={hasToken} />
+            <BallotTodaySection data={ballot} />
 
             {/* Alerts */}
             {today.alerts.length > 0 && (

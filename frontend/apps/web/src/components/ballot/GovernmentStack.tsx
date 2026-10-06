@@ -43,7 +43,6 @@ export interface GovernmentStackProps {
   /** Governments counted for this address (drawn up to nine). */
   count: number;
   size: StackSize;
-  label: string;
   homeTitle?: string;
   /** The canvas lets the teaser's drawing shrink beside a long legend. */
   shrink?: boolean;
@@ -51,13 +50,23 @@ export interface GovernmentStackProps {
   story?: boolean;
 }
 
-export default function GovernmentStack({ count, size, label, homeTitle, shrink = false, story = false }: GovernmentStackProps) {
+export default function GovernmentStack({ count, size, homeTitle, shrink = false, story = false }: GovernmentStackProps) {
   const s = SIZES[size];
   const layers = Math.max(1, Math.min(count, STACK_POLYGONS.length));
   const topY = s.base - (layers - 1) * s.gap;
 
+  // Decorative: the visible title already says "at least N governments", so
+  // assistive tech skips the drawing. It keeps its size where the screen has
+  // room and scales down (its viewBox keeps the proportions) on phones
+  // narrower than the board's 390.
   return (
-    <svg width={s.width} height={s.height} viewBox={`0 0 ${s.width} ${s.height}`} role="img" aria-label={label} className={`block ${shrink ? 'min-w-0' : 'shrink-0'}`}>
+    <svg
+      width={s.width}
+      height={s.height}
+      viewBox={`0 0 ${s.width} ${s.height}`}
+      aria-hidden="true"
+      className={`block ${shrink ? 'min-w-0' : 'h-auto max-w-full shrink-0'}`}
+    >
       {STACK_POLYGONS.slice(0, layers).map((points, i) => {
         const delay = story ? { animationDelay: `${i * STORY_STEP_MS}ms` } : undefined;
         return (

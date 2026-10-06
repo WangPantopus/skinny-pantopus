@@ -46,9 +46,11 @@ function listOf<T>(v: unknown, read: (item: unknown) => T | null): T[] {
   return items.every((item): item is T => item !== null) ? items : [];
 }
 
+// Only what the card draws is required: `date` (the ISO day) is never read
+// here, since every label comes from `month_day`.
 function readDeadline(v: unknown): BallotDeadline | null {
   const o = record(v);
-  if (!o || !text(o.key) || !text(o.label) || !text(o.date) || !text(o.month_day) || num(o.days_until) === null) return null;
+  if (!o || !text(o.key) || !text(o.label) || !text(o.month_day) || num(o.days_until) === null) return null;
   if (typeof o.needs_action !== 'boolean' || typeof o.timeline !== 'boolean') return null;
   return o as unknown as BallotDeadline;
 }
@@ -233,7 +235,7 @@ export default function BallotCard({ data, asOf = null, onOpenGovernments, class
         <button
           type="button"
           onClick={onOpenGovernments}
-          className="flex h-11 items-center justify-center rounded-lg bg-primary-700 text-[15px] font-semibold leading-[normal] text-white hover:bg-primary-800"
+          className="flex h-11 items-center justify-center rounded-lg bg-primary-600 text-[15px] font-semibold leading-[normal] text-white hover:bg-primary-700"
         >
           {data.primary_action.label}
         </button>

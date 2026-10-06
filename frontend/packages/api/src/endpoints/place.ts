@@ -159,13 +159,18 @@ export interface PlacePreview {
  * only its own group): the response then carries just those envelopes,
  * in canonical order. Omitted ⇒ the full launch set.
  *
- * GET /api/homes/:id/intelligence[?sections=a,b,c]
+ * Every request carries `ballot=1`: the client's opt-in to the Ballot
+ * fields (and the finished-election payload), so a build without Ballot
+ * never receives them. Every web caller goes through this function.
+ *
+ * GET /api/homes/:id/intelligence?ballot=1[&sections=a,b,c]
  */
 export async function getPlaceIntelligence(
   homeId: string,
   sections?: PlaceSectionId[],
 ): Promise<PlaceIntelligence> {
-  const params = sections && sections.length ? { sections: sections.join(',') } : undefined;
+  const params: { ballot: 1; sections?: string } = { ballot: 1 };
+  if (sections && sections.length) params.sections = sections.join(',');
   return get<PlaceIntelligence>(`/api/homes/${homeId}/intelligence`, params);
 }
 

@@ -23,7 +23,7 @@ import { asOfLabel, daysLeft } from './format';
 const FRAME =
   'rounded-2xl border border-app-border bg-app-surface px-4 py-[18px] shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col gap-[14px]';
 const PRIMARY =
-  'flex h-[46px] items-center justify-center gap-2 rounded-lg bg-primary-700 text-[15px] font-semibold leading-[normal] text-white no-underline hover:bg-primary-800 hover:text-white';
+  'flex h-[46px] items-center justify-center gap-2 rounded-lg bg-primary-600 text-[15px] font-semibold leading-[normal] text-white no-underline hover:bg-primary-700 hover:text-white';
 
 export interface BallotTeaserProps {
   teaser: BallotTeaserData;
@@ -47,7 +47,7 @@ export default function BallotTeaser({ teaser, address, className = '', now }: B
 
       {gov ? (
         <div className="flex items-center gap-3">
-          <GovernmentStack count={gov.count} size="teaser" shrink label={`${gov.count} stacked boundary shapes over the address`} />
+          <GovernmentStack count={gov.count} size="teaser" shrink />
           <div className="flex flex-col gap-3 text-[13px] leading-[18px] text-app-text-strong">
             {gov.items.map((item) => (
               <div key={`${item.level}-${item.name}`} className="flex items-start gap-2">

@@ -327,7 +327,7 @@ function GovernmentsRow({ governments, onOpen }: { governments: BallotGovernment
       </span>
       <div className="flex-1 min-w-0">
         <div className="text-[15px] font-semibold text-app-text">Your governments</div>
-        <div className="text-[12.5px] text-app-text-muted mt-0.5">This address sits inside {n}.</div>
+        <div className="text-[12.5px] text-app-text-muted mt-0.5">This address sits inside {n} governments.</div>
       </div>
       <ChevronRight size={18} strokeWidth={2.25} className="shrink-0 text-app-text-muted" />
     </button>

@@ -19,6 +19,19 @@ export interface BallotTodayCardProps {
   ballotHref: string;
 }
 
+const MOVER_WELL = 'flex items-center gap-[10px] rounded-xl bg-app-warning-bg px-[14px] py-3 text-app-warning';
+
+function MoverLine({ text, days }: { text: string; days: number }) {
+  return (
+    <>
+      <Calendar size={18} strokeWidth={2} className="shrink-0" aria-hidden="true" />
+      <span className="text-[13.5px] leading-[19px]">
+        {text} {daysLeft(days)}
+      </span>
+    </>
+  );
+}
+
 export function hasBallotToday(data: PlaceBallotElectionData | null | undefined): boolean {
   return Boolean(data && ((data.ballot_week && data.ballot_week.show) || data.mover_prompt));
 }
@@ -42,24 +55,23 @@ export default function BallotTodayCard({ data, ballotHref }: BallotTodayCardPro
           {week.body ? <div className="text-[13.5px] leading-[19px] text-app-text-strong">{week.body}</div> : null}
           <Link
             href={ballotHref}
-            className="flex h-11 items-center justify-center rounded-lg bg-primary-700 text-[14.5px] font-semibold leading-[normal] text-white no-underline hover:bg-primary-800 hover:text-white"
+            className="flex h-11 items-center justify-center rounded-lg bg-primary-600 text-[14.5px] font-semibold leading-[normal] text-white no-underline hover:bg-primary-700 hover:text-white"
           >
             Open your ballot
           </Link>
         </section>
       ) : null}
       {mover ? (
-        <a
-          href={mover.url ?? undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-[10px] rounded-xl bg-app-warning-bg px-[14px] py-3 text-app-warning no-underline hover:text-app-warning"
-        >
-          <Calendar size={18} strokeWidth={2} className="shrink-0" aria-hidden="true" />
-          <span className="text-[13.5px] leading-[19px]">
-            {mover.text} {daysLeft(mover.days_left)}
-          </span>
-        </a>
+        mover.url ? (
+          <a href={mover.url} target="_blank" rel="noopener noreferrer" className={`${MOVER_WELL} no-underline hover:text-app-warning`}>
+            <MoverLine text={mover.text} days={mover.days_left} />
+          </a>
+        ) : (
+          // No official page to send them to: a plain well, not a dead link.
+          <div className={MOVER_WELL}>
+            <MoverLine text={mover.text} days={mover.days_left} />
+          </div>
+        )
       ) : null}
     </div>
   );

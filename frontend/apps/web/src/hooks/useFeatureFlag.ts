@@ -26,10 +26,12 @@ export interface FeatureFlagState {
   error: unknown;
 }
 
-export function useFeatureFlagState(flagName: string): FeatureFlagState {
+export function useFeatureFlagState(flagName: string, options: { enabled?: boolean } = {}): FeatureFlagState {
   const query = useQuery({
     queryKey: ['featureFlag', flagName],
     queryFn: () => api.featureFlags.getFeatureFlag(flagName),
+    // A caller that is not signed in yet (or has no use for the flag) sends nothing.
+    enabled: options.enabled ?? true,
     staleTime: FLAG_STALE_MS,
     refetchOnWindowFocus: false,
     retry: false,
@@ -43,6 +45,6 @@ export function useFeatureFlagState(flagName: string): FeatureFlagState {
   };
 }
 
-export function useFeatureFlag(flagName: string): boolean {
-  return useFeatureFlagState(flagName).enabled;
+export function useFeatureFlag(flagName: string, options: { enabled?: boolean } = {}): boolean {
+  return useFeatureFlagState(flagName, options).enabled;
 }

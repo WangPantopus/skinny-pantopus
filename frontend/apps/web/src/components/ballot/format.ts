@@ -19,18 +19,24 @@ export function daysLeft(n: number): string {
   return `${n} ${n === 1 ? 'day' : 'days'} left.`;
 }
 
+// A value with no time of day: a bare date, or the midnight-UTC form the
+// reference data's `as_of` carries ("2026-09-24T00:00:00.000Z").
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$|T00:00:00(\.000)?Z$/;
+
 /**
  * The source line's "as of": a clock time when the data is from today,
  * else the date ("Sep 24") — reference data checked on a date never
- * pretends to be a live fetch.
+ * pretends to be a live fetch. A calendar date reads the same everywhere;
+ * a real timestamp reads in the viewer's own day, the same one its
+ * same-day test uses, so a lookup at 8:30 pm never turns into tomorrow.
  */
 export function asOfLabel(asOf: string | null | undefined, now: Date = new Date()): string | null {
   if (!asOf) return null;
   const at = new Date(asOf);
   if (!Number.isFinite(at.getTime())) return null;
-  const sameDay = at.toDateString() === now.toDateString();
-  if (sameDay && !/T00:00:00(\.000)?Z$/.test(asOf)) {
+  if (CALENDAR_DATE.test(asOf)) return monthDay(asOf.slice(0, 10));
+  if (at.toDateString() === now.toDateString()) {
     return at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
-  return monthDay(asOf.slice(0, 10));
+  return `${MONTHS[at.getMonth()]} ${at.getDate()}`;
 }
