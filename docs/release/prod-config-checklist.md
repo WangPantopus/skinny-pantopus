@@ -234,20 +234,24 @@ forwards them to the staging API).
 The worker container already runs cron and pg-boss. The Lambda stack sends the
 reminders:
 
-1. Deploy from the Mac with AWS SAM (it shows the change set and asks before
-   creating anything):
+1. Deploy from the Mac with AWS SAM (needs Docker running; `sam deploy` shows
+   the change set and asks before creating anything):
    ```bash
-   cd pantopus-seeder && ./deploy/build.sh && cd deploy
-   sam deploy --config-env staging
+   cd pantopus-seeder
+   python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once
+   PATH="$PWD/.venv/bin:$PATH" ./deploy/build.sh   # copies the code, runs the tests
+   cd deploy && sam build --use-container && sam deploy --config-env staging
    ```
+   Don't skip `sam build`: without it the functions deploy without their
+   Python packages and fail on import.
 2. The stack creates the secret `pantopus/seeder/staging` with placeholders. Fill
    it from a private JSON file with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
    (staging), `PANTOPUS_API_BASE_URL=https://staging-api.pantopus.com`,
    `INTERNAL_API_KEY` (the value in `hosted-secrets/staging.env`),
    `CURATOR_EMAIL` and `CURATOR_PASSWORD` (a staging curator account),
-   `OPENAI_API_KEY`, and optionally `WEATHERKIT_KEY_ID`, `WEATHERKIT_TEAM_ID`,
-   `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY` (and the air-quality key
-   once L1's seeder change says where `alert_checker` reads it):
+   `OPENAI_API_KEY`, `AIRNOW_API_KEY` (air-quality alerts; the backend's
+   `AIRNOW_KEY` value), and optionally `WEATHERKIT_KEY_ID`, `WEATHERKIT_TEAM_ID`,
+   `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY`:
    ```bash
    aws secretsmanager put-secret-value --secret-id pantopus/seeder/staging --secret-string file://<private json file>
    ```
@@ -256,10 +260,23 @@ reminders:
    therefore sets `LAMBDA_BACKED_CRON_ENABLED=false`, so the worker doesn't run
    the same ten jobs at the same minute. The open-gigs nudge in the stack finds
    nothing while open gigs stay off.
+4. Job-failure alarms: the stack creates CloudWatch alarms on the briefing,
+   home-reminder, mail, weather-alert, briefing-cleanup and job-trigger
+   functions (about $0.60 a month) and the SNS topic `pantopus-job-alarms-staging`.
+   Subscribe your inbox once and click the confirmation link AWS emails you:
+   ```bash
+   aws sns subscribe --topic-arn "$(aws cloudformation describe-stacks --stack-name pantopus-seeder-staging \
+     --query "Stacks[0].Outputs[?OutputKey=='JobAlarmTopicArn'].OutputValue" --output text)" \
+     --protocol email --notification-endpoint <your email>
+   ```
+
+Task reminders go out at 7:00 and the evening run at 18:00 Pacific, through
+daylight saving (EventBridge Scheduler); briefings follow each person's own time.
 
 **Check:** CloudWatch logs for `pantopus-briefing-scheduler-staging` show runs
 every 15 minutes with no errors; `select job_name, last_success, last_failure
 from job_locks` in the staging SQL editor shows the job-trigger runs; the
+CloudWatch alarms list shows six `pantopus-*-errors-staging` alarms in OK; the
 founder's staging phone gets one scheduled reminder (section 5).
 
 ### S9. Staging apps (founder, L4 builds)
@@ -309,6 +326,8 @@ Same shape as staging, with live vendors where D4 and D5 say so.
    ```
 3. Storage buckets and the S3 access key as in S2.
 4. Keep the April project as it is (pause it; don't delete it).
+5. Supabase's daily backups cover the database only, not uploaded files. Set
+   up the file backup in Appendix C before the first household signs up.
 
 **Check:** as in S2: `supabase db push --linked --dry-run` reports nothing to
 push, and the three buckets exist with the right privacy.
@@ -379,7 +398,8 @@ containers are healthy on the server.
 
 As S8 with `pantopus/seeder/production`, `PANTOPUS_API_BASE_URL=https://api.pantopus.com`,
 the production `INTERNAL_API_KEY` and a production curator account:
-`sam deploy --config-env prod`.
+`sam build --use-container && sam deploy --config-env prod`, then subscribe your
+inbox to `pantopus-job-alarms-production` (stack `pantopus-seeder-production`).
 
 ### P9. Production web (founder)
 
@@ -446,9 +466,9 @@ account for each store. Nothing is submitted without your approval.
   (S10's list), on iOS, Android and the web.
 - [ ] One scheduled reminder reaches the founder's iPhone (TestFlight build) and
   an Android phone from production, and tapping it opens the right screen.
-- [ ] Backups: Supabase daily backup visible in the dashboard; a restore of the
-  latest backup into a scratch project works once (L4 rehearses the local
-  version first).
+- [ ] Backups: Supabase daily backup visible in the dashboard, and a first
+  `scripts/db/backup-project.sh` run of production finishes with "0 missing"
+  (Appendix C). L4 rehearsed the backup and restore locally on October 6.
 - [ ] Monitoring: an uptime check on `https://api.pantopus.com/health` every
   minute (for example UptimeRobot or Better Stack, free tiers) alerting the
   founder's email; optional Slack alerts via `SLACK_ALERTS_WEBHOOK_URL`.
@@ -514,3 +534,50 @@ paid), Lob postcards (from $0.905 each), Stripe fees on live payments (2.9% +
 $0.30 per card charge; Connect payouts $2 per active account a month plus 0.25%
 + $0.25), Google and Mapbox usage beyond their free tiers, and OpenAI usage.
 Check current prices before buying; these are not approvals to spend.
+
+## Appendix C. Backups and restore (O02)
+
+Supabase's daily backups restore the database, including the list of stored
+files, but not the files' bytes (photos, documents, task media). Back up both
+with `scripts/db/backup-project.sh` weekly and before any risky change. It needs
+Docker (for the Supabase CLI), `psql` and the AWS CLI, which talks only to
+Supabase's S3 endpoint. Keep the values in a private file, never in the shell
+history, for example `~/.config/pantopus/hosted-secrets/backup-production.env`
+(mode 600):
+
+```bash
+DB_URL=<Connect → Session pooler connection string, with the database password>
+S3_ENDPOINT=https://<project ref>.supabase.co/storage/v1/s3
+AWS_ACCESS_KEY_ID=<Storage → S3 Connection: access key id>
+AWS_SECRET_ACCESS_KEY=<its secret>
+AWS_REGION=us-west-2
+```
+
+```bash
+set -a; source ~/.config/pantopus/hosted-secrets/backup-production.env; set +a
+scripts/db/backup-project.sh ~/PantopusBackups/production-$(date -u +%Y%m%d)
+```
+
+**Check:** it ends with `Backed up the database and N Storage files … (0 missing)`.
+The folder holds real user data: keep it outside the repository on an encrypted
+disk (FileVault), keep the last four, and never upload it anywhere public.
+
+To recover after losing the project, create a new empty Supabase project (P2A
+steps 1 and 3: buckets and S3 key, but not `db push`), point the same variables
+at it, and run:
+
+```bash
+scripts/db/restore-project.sh ~/PantopusBackups/production-<date>
+```
+
+It restores roles, schema, data and the migration ledger in one transaction,
+then uploads every file with its original content type. It refuses a project
+that already has tables. Then repeat P3–P5 (Auth settings, push, server env with
+the new project's URL and keys) and run a release. `supabase db push --dry-run`
+afterwards should list only migrations added since the backup.
+
+What the script handles (found in the October 6 rehearsal): the postgres role
+can't write Supabase's two (empty) vector-bucket tables, so they're excluded; the
+migration ledger isn't part of a normal dump, so it's dumped separately; and
+`aws s3 sync` would skip the files because the restored rows make them look
+present, so the restore uploads each file explicitly.

@@ -8,6 +8,7 @@ export {
   default as apiClient,
   getAuthToken,
   getApiBaseUrl,
+  fetchAuthHeaders,
   hasActiveSession,
   setAuthToken,
   setRefreshToken,

@@ -9,7 +9,7 @@
 import type { Metadata, Viewport } from 'next';
 import StartFunnel from '@/components/place/StartFunnel';
 
-const TITLE = "See what's true about your address";
+const TITLE = "Know what matters for your home, and stay on top of it";
 const DESCRIPTION =
   "Public records, local risks, and who's verified nearby — free, no account. Look up any U.S. address, then save your place to get daily updates.";
 

@@ -106,7 +106,7 @@ beforeEach(() => {
 describe('StartFunnel — hero', () => {
   it('renders the hero with the CTA disabled until an address is selected', () => {
     renderFunnel();
-    expect(screen.getByText(/see what's true about your address/i)).toBeInTheDocument();
+    expect(screen.getByText(/know what matters for your home, and stay on top of it/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /see your place/i })).toBeDisabled();
   });
 
