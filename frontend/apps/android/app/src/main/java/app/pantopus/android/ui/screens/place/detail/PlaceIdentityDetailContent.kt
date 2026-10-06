@@ -264,8 +264,12 @@ private fun VerifiedStatusCard(
     roleBase: String?,
     address: String,
 ) {
+    // Joined by invitation: household access only (F3b). Nothing is pending,
+    // so the card doesn't call it a claim. Owners get here by a claim.
+    val hasHouseholdAccess = !isVerified && roleBase != null && roleBase != "owner"
     val title =
         when {
+            hasHouseholdAccess -> "Household access"
             !isVerified -> "Claimed — not yet verified"
             roleBase == "guest" -> "Verified guest"
             roleBase == "service_provider" -> "Verified service provider"
@@ -304,7 +308,7 @@ private fun VerifiedStatusCard(
                                 PantopusIcon.Check,
                             )
                         } else {
-                            PlaceChipModel(PlaceChipTone.WARNING, "Pending")
+                            PlaceChipModel(PlaceChipTone.WARNING, if (hasHouseholdAccess) "Not verified" else "Pending")
                         },
                     )
                 }
