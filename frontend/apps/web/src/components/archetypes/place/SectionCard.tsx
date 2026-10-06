@@ -17,7 +17,7 @@ import type { ReactNode } from 'react';
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
 import Chip, { type ChipVariant } from '../primitives/Chip';
-import { Chevron, IconTile, StatusDot, Sparkline, TextButton, type StatusDotTone } from './primitives';
+import { Chevron, IconTile, StatusDot, Sparkline, TextButton, cardButtonProps, type StatusDotTone } from './primitives';
 
 export type PlaceSectionState = 'loaded' | 'stale' | 'empty' | 'unavailable' | 'error' | 'loading';
 
@@ -87,6 +87,7 @@ export default function SectionCard({
     return (
       <div
         onClick={onClick}
+        {...cardButtonProps(onClick)}
         className={`bg-app-surface border border-app-border rounded-2xl shadow-sm px-3.5 py-3 flex items-center gap-3 ${onClick ? 'cursor-pointer' : ''} ${className}`}
       >
         <IconTile icon={icon} tone={tone} size={32} />
@@ -175,6 +176,8 @@ export default function SectionCard({
   return (
     <div
       onClick={onClick}
+      // With its own Try again or action button, the card stays a plain container.
+      {...cardButtonProps(state === 'error' || action ? undefined : onClick)}
       className={`bg-app-surface border border-app-border rounded-2xl shadow-sm ${compact ? 'p-3.5' : 'p-4'} ${onClick ? 'cursor-pointer' : ''} ${className}`}
     >
       <div className={`flex items-center gap-3 ${headerGap}`}>

@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useId } from 'react';
+import { useId, type KeyboardEvent } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { ArrowRight, Check, ChevronRight, Home, User } from 'lucide-react';
@@ -193,6 +193,23 @@ export interface PlaceCardProps {
   children: ReactNode;
   onClick?: () => void;
   className?: string;
+}
+
+/**
+ * Keyboard and screen-reader access for a clickable card that has no controls
+ * of its own: it acts as one button (Tab reaches it; Enter or Space opens it).
+ */
+export function cardButtonProps(onClick?: () => void) {
+  if (!onClick) return {};
+  return {
+    role: 'button' as const,
+    tabIndex: 0,
+    onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+      if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+      e.preventDefault();
+      onClick();
+    },
+  };
 }
 
 export function PlaceCard({ children, onClick, className = '' }: PlaceCardProps) {
