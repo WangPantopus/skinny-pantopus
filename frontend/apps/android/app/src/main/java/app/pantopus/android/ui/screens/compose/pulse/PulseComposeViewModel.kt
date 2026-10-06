@@ -1091,8 +1091,8 @@ class PulseComposeViewModel
         }
 
         /**
-         * Reverse of `composeRecommendBody`: splits "★★★☆☆\n\n<body>"
-         * back into a star count + body. Returns (null, raw) when the
+         * Reverse of `composeRecommendBody`: splits "★★★☆☆ · <place>\n\n<body>"
+         * back into a star count + body (the place comes back from `dealBusinessName`). Returns (null, raw) when the
          * row is missing so the saved text is preserved verbatim.
          */
         private fun unwrapRecommendBody(raw: String): Pair<Int?, String> {
@@ -1165,7 +1165,7 @@ class PulseComposeViewModel
                 PulseComposeIntent.Recommend -> {
                     val business = trimmedValue(PulseComposeField.RecommendBusiness)
                     PostUpdateRequest(
-                        content = composeRecommendBody(_recommendRating.value, bodyValue),
+                        content = composeRecommendBody(_recommendRating.value, business, bodyValue),
                         dealBusinessName = business.ifEmpty { null },
                     )
                 }
@@ -1224,7 +1224,7 @@ class PulseComposeViewModel
                     PulseComposeIntent.Recommend -> {
                         val business = trimmedValue(PulseComposeField.RecommendBusiness)
                         PostCreateRequest(
-                            content = composeRecommendBody(_recommendRating.value, bodyValue),
+                            content = composeRecommendBody(_recommendRating.value, business, bodyValue),
                             postType = postType,
                             visibility = vis,
                             postAs = postAs,
@@ -1381,10 +1381,14 @@ class PulseComposeViewModel
 
         private fun composeRecommendBody(
             stars: Int,
+            business: String,
             body: String,
         ): String {
             val clamped = stars.coerceIn(1, 5)
-            val row = "★".repeat(clamped) + "☆".repeat(5 - clamped)
+            // The place is what a recommendation is about, and no card shows the separate
+            // business field, so its name rides on the rating line.
+            val stars = "★".repeat(clamped) + "☆".repeat(5 - clamped)
+            val row = if (business.isEmpty()) stars else "$stars · $business"
             return if (body.isEmpty()) row else "$row\n\n$body"
         }
 

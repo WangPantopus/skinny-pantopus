@@ -893,8 +893,8 @@ public final class PulseComposeViewModel {
         fields[field] = FormFieldState(id: field.rawValue, originalValue: value)
     }
 
-    /// Reverse of `composeRecommendBody`: splits "★★★☆☆\n\n<body>" back
-    /// into a star count + body. Falls back to (nil, raw) when the row
+    /// Reverse of `composeRecommendBody`: splits "★★★☆☆ · <place>\n\n<body>" back
+    /// into a star count + body (the place comes back from `dealBusinessName`). Falls back to (nil, raw) when the row
     /// is missing — preserves the saved text verbatim.
     private func unwrapRecommendBody(_ raw: String) -> (Int?, String) {
         let firstLine = raw.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? raw
@@ -975,7 +975,7 @@ public final class PulseComposeViewModel {
         case .recommend:
             let business = trimmedValue(.recommendBusiness)
             base = PostCreateRequest(
-                content: composeRecommendBody(stars: recommendRating, body: bodyValue),
+                content: composeRecommendBody(stars: recommendRating, business: business, body: bodyValue),
                 postType: postType,
                 visibility: vis,
                 postAs: postAs,
@@ -1268,7 +1268,7 @@ public final class PulseComposeViewModel {
         case .recommend:
             let business = trimmedValue(.recommendBusiness)
             return PostUpdateRequest(
-                content: composeRecommendBody(stars: recommendRating, body: bodyValue),
+                content: composeRecommendBody(stars: recommendRating, business: business, body: bodyValue),
                 dealBusinessName: business.isEmpty ? nil : business
             )
         case .event:
@@ -1298,9 +1298,12 @@ public final class PulseComposeViewModel {
         (fields[field]?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func composeRecommendBody(stars: Int, body: String) -> String {
+    private func composeRecommendBody(stars: Int, business: String, body: String) -> String {
         let clamped = max(1, min(5, stars))
-        let row = String(repeating: "★", count: clamped) + String(repeating: "☆", count: 5 - clamped)
+        var row = String(repeating: "★", count: clamped) + String(repeating: "☆", count: 5 - clamped)
+        // The place is what a recommendation is about, and no card shows the separate
+        // business field, so its name rides on the rating line.
+        if !business.isEmpty { row += " · \(business)" }
         return body.isEmpty ? row : "\(row)\n\n\(body)"
     }
 
