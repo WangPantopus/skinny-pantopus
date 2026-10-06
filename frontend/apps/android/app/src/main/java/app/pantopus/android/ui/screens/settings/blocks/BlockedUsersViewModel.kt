@@ -170,7 +170,6 @@ class BlockedUsersViewModel
                 val personal = blocks.blocked()
                 if (!current() || loadRequest != request) return@launch
                 val profile = privacy.blocks()
-                if (!current() || loadRequest != request) return@launch
                 if (!readMutes(loadRequest)) return@launch
                 snapshot++
 
@@ -217,8 +216,10 @@ class BlockedUsersViewModel
 
         fun refresh() = load()
 
-        /** Reads the Muted section's rows; false when the screen moved on meanwhile. */
+        /** Reads the Muted section's rows, checking before and after the request that the screen
+         *  is still on this load; false when it moved on. */
         private suspend fun readMutes(loadRequest: Long): Boolean {
+            if (!current() || loadRequest != request) return false
             val muted = feedActions.mutedEntities()
             if (!current() || loadRequest != request) return false
             mutes = (muted as? NetworkResult.Success)?.data?.muted.orEmpty().toMutableList()
