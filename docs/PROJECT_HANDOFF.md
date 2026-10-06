@@ -8,12 +8,17 @@ the [launch checklist](release/prod-config-checklist.md), and [AGENTS.md](../AGE
 ground rules. Everything below is history: notes that point to the coordination branch or a
 "live hub" are out of date.
 
-**Release status, October 6 evening (L4).** Next for the founder: the decisions and the staging
-and production steps in the launch checklist, and approving the store listing drafts (PR 1635).
-Merged today on the release side: Android targets API 36 (PR 1601) and parses API dates on Android
-8–13 (PR 1650); web visitors keep their own address behind Vercel (PR 1645); a Support Train
-privacy fix (PR 1637); CI capacity work. Not verifiable here: anything hosted, physical phones,
-Android 8–13 devices. NEXT_STEPS section 2 and its release-candidate row track the rest.
+**Release status, October 6 evening (L4).** The founder chose launch-checklist decisions D1, D2,
+D4, D5, D7 and D8 as recommended; D3 (new production database or the April one) and D6 (email
+service) are open, and the store listing, privacy answers and account-deletion page drafts on
+master (PR 1635) wait for the founder to read them. Next for the founder: those, then the staging
+and production steps in the launch checklist. Merged today on the release side: Android targets
+API 36 (PR 1601) and parses API dates on Android 8–13 (PR 1650); the iOS app is iPhone-only with a
+larger image cache (PR 1683); web visitors keep their own address behind Vercel (PR 1645); post and
+Support Train media must be uploads (PR 1682); a Support Train privacy fix (PR 1637); CI capacity
+work. The Android Release build (R8) and the iOS Debug build passed the release-candidate checks
+listed in NEXT_STEPS; the iOS Release build and store screenshots are next. Not verifiable here:
+anything hosted, physical phones, Android 8–13 devices.
 
 **October 3 owner-checkout recovery:** local `master` contained nine migration-test
 fixture commits and tracked only four files. The disk matched the last real
