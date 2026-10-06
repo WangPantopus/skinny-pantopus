@@ -1,6 +1,6 @@
 {
   "version": "2026-09-24",
-  "notes": "Ballot reference data (docs/ballot-implementation-plan-2026-09-24.md §5.1). 'supported' states carry person-checked dates and links; every other state is 'links_only' and shows the election date plus Vote.gov. Territories are absent on purpose: Ballot hides there. Release check 1: a person opens every url below before ballot_p0 is enabled.",
+  "notes": "Ballot reference data (docs/ballot-implementation-plan-2026-09-24.md §5.1). 'supported' states carry person-checked dates and links; every other state is 'links_only' and shows the election date plus Vote.gov. Territories are absent on purpose: Ballot hides there. Release check 1: a person opens every url below before ballot_p0 is enabled. Per supported state: fips (the state's FIPS code, so a boundary lookup that lands in another state is refused); timezone_overrides (a county or place that keeps another clock than the state: dates and cutoffs are read on the voter's local clock); consolidated_counties (a county that is one government with its city: counted once, under the given name); dependent_schools (the state or a county runs the schools, so they are not counted as a separate government).",
   "links_only": {
     "official_links": [
       { "key": "registration", "label": "Registration and deadlines", "owner": "Vote.gov", "url": "https://vote.gov/", "phases": ["far", "in_season", "election_day"] }
@@ -18,6 +18,9 @@
       "timezone": "America/Los_Angeles",
       "coverage": "supported",
       "voting_method": "all_mail",
+      "fips": "06",
+      "dependent_schools": false,
+      "consolidated_counties": { "06075": "City of San Francisco" },
       "election_office": "California Secretary of State",
       "election_office_phrase": "the California Secretary of State",
       "official_links": [
@@ -38,6 +41,9 @@
       "timezone": "America/Denver",
       "coverage": "supported",
       "voting_method": "all_mail",
+      "fips": "08",
+      "dependent_schools": false,
+      "consolidated_counties": { "08014": "City of Broomfield", "08031": "City of Denver" },
       "election_office": "Colorado Secretary of State",
       "election_office_phrase": "the Colorado Secretary of State",
       "official_links": [
@@ -63,6 +69,9 @@
       "timezone": "Pacific/Honolulu",
       "coverage": "supported",
       "voting_method": "all_mail",
+      "fips": "15",
+      "consolidated_counties": { "15003": "City and County of Honolulu" },
+      "dependent_schools": true,
       "election_office": "Hawaii Office of Elections",
       "election_office_phrase": "the Hawaii Office of Elections",
       "official_links": [
@@ -98,6 +107,12 @@
       "timezone": "America/Los_Angeles",
       "coverage": "supported",
       "voting_method": "all_mail",
+      "fips": "32",
+      "dependent_schools": false,
+      "consolidated_counties": { "32510": "Carson City" },
+      "timezone_overrides": [
+        { "place_geoid": "3283730", "timezone": "America/Denver", "note": "West Wendover keeps Mountain time, unlike the rest of Elko County. Its cutoffs are read on the local clock (assumption: confirm with the Elko County Clerk before release check 1)." }
+      ],
       "election_office": "Nevada Secretary of State",
       "election_office_phrase": "the Nevada Secretary of State",
       "official_links": [
@@ -125,6 +140,11 @@
       "timezone": "America/Los_Angeles",
       "coverage": "supported",
       "voting_method": "all_mail",
+      "fips": "41",
+      "dependent_schools": false,
+      "timezone_overrides": [
+        { "county_geoid": "41045", "timezone": "America/Boise", "note": "Malheur County keeps Mountain time. Its cutoffs are read on the local clock (assumption: ORS 254.470 states 8 p.m. without a zone; confirm with the Malheur County Clerk before release check 1)." }
+      ],
       "election_office": "Oregon Secretary of State",
       "election_office_phrase": "the Oregon Secretary of State",
       "official_links": [
@@ -151,6 +171,8 @@
       "timezone": "America/Denver",
       "coverage": "supported",
       "voting_method": "all_mail",
+      "fips": "49",
+      "dependent_schools": false,
       "election_office": "Utah Lieutenant Governor",
       "election_office_phrase": "the Utah Lieutenant Governor’s office",
       "official_links": [
@@ -170,6 +192,8 @@
       "timezone": "America/New_York",
       "coverage": "supported",
       "voting_method": "all_mail",
+      "fips": "50",
+      "dependent_schools": false,
       "election_office": "Vermont Secretary of State",
       "election_office_phrase": "the Vermont Secretary of State",
       "official_links": [
@@ -182,7 +206,7 @@
       "checked": {
         "at": "2026-09-24",
         "by": "Ballot build, pending release check 1",
-        "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open sos.vermont.gov or mvp.vermont.gov directly."
+        "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open sos.vermont.gov or mvp.vermont.gov directly. Re-read on 2026-10-06 against the Secretary of State's 2026 Elections Calendar v1.2 (p. 23) and 17 V.S.A. § 2537a: mailing starts no later than 43 days before the election (Sep 21) and is completed by Oct 1, so the data says ballots are mailed by Oct 1."
       }
     },
     "VA": { "name": "Virginia", "timezone": "America/New_York", "coverage": "links_only" },
@@ -191,6 +215,8 @@
       "timezone": "America/Los_Angeles",
       "coverage": "supported",
       "voting_method": "all_mail",
+      "fips": "53",
+      "dependent_schools": false,
       "election_office": "Washington Secretary of State",
       "election_office_phrase": "the Washington Secretary of State",
       "official_links": [

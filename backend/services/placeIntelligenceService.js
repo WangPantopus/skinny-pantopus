@@ -1043,8 +1043,8 @@ const COMPOSER_SECTIONS = [
   { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
   { ids: ['rent_band'], run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId, access }) => composeRealRent(home, tier, userId, !nonResidentViewer(access)) },
-  { ids: ['civic_districts'], run: ({ home, userId }) => placeSectionAdapters.composeCivicDistricts(home, { userId }) },
-  { ids: ['civic_election'], run: ({ home, userId }) => placeSectionAdapters.composeCivicElection(home, { userId }) },
+  { ids: ['civic_districts'], run: ({ home, ballot }) => placeSectionAdapters.composeCivicDistricts(home, { ballot }) },
+  { ids: ['civic_election'], run: ({ home, ballot }) => placeSectionAdapters.composeCivicElection(home, { ballot }) },
 ];
 
 // ── Per-home privacy → the place address ref (§ homePrivacy) ──
@@ -1080,9 +1080,12 @@ function buildPlaceRef(home, privacy) {
  * @param {object} params.access  Result of checkHomePermission (hasAccess, isOwner, occupancy).
  * @param {string[]} [params.sectionIds]  Optional subset of PLACE_SECTION_IDS to compose
  *                                        (already validated by the route); omitted ⇒ all.
+ * @param {boolean} [params.ballot]  The request opted in to Ballot (`ballot=1`) AND `ballot_p0`
+ *                                   is on for the user — decided once by the route, so the
+ *                                   composers never read the flag (or the User row) themselves.
  * @returns {Promise<object|null>} The PlaceIntelligence response, or null if the home is missing.
  */
-async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
+async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false }) {
   // Owner-only sections depend on whether the viewer's ownership is still
   // pending; read it alongside the Home.
   const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
@@ -1148,7 +1151,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
   // honors: the unit stays hidden, and the rest of Place still loads.
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
-    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access })),
+    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access, ballot })),
   ]);
 
   const composed = {};

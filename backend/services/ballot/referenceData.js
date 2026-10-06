@@ -7,9 +7,11 @@
 // files instead of a table. Display labels are never identifiers: every
 // deadline carries a stable `key`.
 //
-// Dates are CALENDAR days in the state's timezone. A file that fails
+// Dates are CALENDAR days in the state's timezone (a county or place that
+// keeps another clock says so in `timezone_overrides`). A file that fails
 // validation disables Ballot (every lookup returns null) rather than
-// showing an unchecked date; tests assert the shipped files are valid.
+// showing an unchecked date or silently changing what a card says; tests
+// assert the shipped files are valid.
 // ============================================================
 
 const logger = require('../../utils/logger');
@@ -38,6 +40,8 @@ function isHttps(value) {
 }
 
 function isTimezone(tz) {
+  // Intl falls back to the server's own zone for undefined, so check first.
+  if (typeof tz !== 'string' || !tz) return false;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: tz });
     return true;
@@ -65,6 +69,94 @@ function validateLinks(links, where, errors) {
     if (keys.has(id)) errors.push(`${at}: duplicate link ${link.key}`);
     keys.add(id);
   });
+}
+
+// The per-state rules the clients never see but the numbers and clocks follow.
+function validateStateRules(entry, at, errors) {
+  // The boundary lookup is trusted only inside the state it was asked about.
+  if (typeof entry.fips !== 'string' || !/^\d{2}$/.test(entry.fips)) errors.push(`${at}: fips must be the two-digit state FIPS code`);
+  // Whether schools are separate governments must be answered, not defaulted:
+  // a new state that skips it would silently double-count (or drop) one.
+  if (typeof entry.dependent_schools !== 'boolean') errors.push(`${at}: dependent_schools must be true or false`);
+  const fips = typeof entry.fips === 'string' ? entry.fips : null;
+  const merged = entry.consolidated_counties;
+  if (merged != null && (typeof merged !== 'object' || Array.isArray(merged))) errors.push(`${at}: consolidated_counties must be an object`);
+  else {
+    for (const [geoid, name] of Object.entries(merged || {})) {
+      if (!/^\d{5}$/.test(geoid) || (fips && !geoid.startsWith(fips))) errors.push(`${at}.consolidated_counties.${geoid}: key must be a 5-digit county GEOID in this state`);
+      if (typeof name !== 'string' || !name.trim()) errors.push(`${at}.consolidated_counties.${geoid}: name is required`);
+    }
+  }
+  const overrides = entry.timezone_overrides;
+  if (overrides != null && !Array.isArray(overrides)) errors.push(`${at}: timezone_overrides must be a list`);
+  else {
+    (overrides || []).forEach((o, i) => {
+      const oat = `${at}.timezone_overrides[${i}]`;
+      const hasCounty = o && o.county_geoid != null;
+      const hasPlace = o && o.place_geoid != null;
+      if (hasCounty === hasPlace) errors.push(`${oat}: give exactly one of county_geoid or place_geoid`);
+      if (hasCounty && !(/^\d{5}$/.test(o.county_geoid) && (!fips || o.county_geoid.startsWith(fips)))) errors.push(`${oat}: county_geoid must be a 5-digit county GEOID in this state`);
+      if (hasPlace && !(/^\d{7}$/.test(o.place_geoid) && (!fips || o.place_geoid.startsWith(fips)))) errors.push(`${oat}: place_geoid must be a 7-digit place GEOID in this state`);
+      if (!o || !isTimezone(o.timezone)) errors.push(`${oat}: timezone is not valid`);
+      if (!o || typeof o.note !== 'string' || !o.note) errors.push(`${oat}: note is required (say why this place keeps another clock)`);
+    });
+  }
+}
+
+function nonEmptyText(value) {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+// What one election block must say. Every field the cards read is required
+// here, so a data edit can never drop a sentence, a time or a title without
+// failing the load (and disabling Ballot) instead of changing the card.
+function validateBlock(block, bat, state, errors) {
+  const deadlines = block.deadlines || [];
+  const byKey = Object.fromEntries(deadlines.map((d) => [d.key, d]));
+  const returnBy = byKey.return_by;
+  if (returnBy && !HHMM.test(returnBy.time_local || '')) {
+    errors.push(`${bat}.deadlines.return_by: time_local is required (the card changes at the cutoff)`);
+  }
+  if (state && state.voting_method === 'all_mail' && !byKey.ballots_mailed) errors.push(`${bat}: ballots_mailed is required for an all-mail state`);
+
+  const notice = block.election_day_notice;
+  if (!notice || !nonEmptyText(notice.lead)) errors.push(`${bat}: election_day_notice.lead is required`);
+  else if (!nonEmptyText(notice.detail)) errors.push(`${bat}: election_day_notice.detail is required`);
+
+  const week = block.ballot_week;
+  for (const field of ['body', 'election_day_title', 'election_day_body']) {
+    if (!week || !nonEmptyText(week[field])) errors.push(`${bat}: ballot_week.${field} is required`);
+  }
+  for (const field of ['title_before', 'title_after']) {
+    if (week && week[field] != null && !nonEmptyText(week[field])) errors.push(`${bat}: ballot_week.${field} must be text`);
+  }
+
+  // The default registration sentence ("online or by mail") and the mover
+  // prompt ("update your registration online") are only true where both
+  // routes exist; any other state words its own, or says nothing.
+  const registration = byKey.register_online_mail;
+  if (registration && !['online', 'mail'].every((m) => (registration.methods || []).includes(m))) {
+    if (!nonEmptyText(block.far_note)) errors.push(`${bat}: far_note is required (registration here is not "online or by mail")`);
+    if (block.mover_text === undefined) errors.push(`${bat}: mover_text is required, as text or null (registration here is not online)`);
+  }
+  if (block.far_note != null && !nonEmptyText(block.far_note)) errors.push(`${bat}: far_note must be text`);
+  if (block.mover_text != null && !nonEmptyText(block.mover_text)) errors.push(`${bat}: mover_text must be text or null`);
+
+  // Copy for the last days (advice such as "mail it a week early" cannot be
+  // followed any more). It replaces the usual copy once `late_days` or fewer
+  // days are left, so it needs the cut-over day and the usual copy to replace.
+  const lateTeasers = deadlines.filter((d) => d.teaser_detail_late != null);
+  const hasLate = block.how_it_works_late != null || (week && week.body_late != null) || lateTeasers.length > 0;
+  if (block.late_days != null && !(Number.isInteger(block.late_days) && block.late_days >= 0 && block.late_days <= 14)) {
+    errors.push(`${bat}: late_days must be a whole number from 0 to 14`);
+  }
+  if (hasLate && block.late_days == null) errors.push(`${bat}: late copy needs late_days`);
+  if (block.how_it_works_late != null && !nonEmptyText(block.how_it_works_late)) errors.push(`${bat}: how_it_works_late must be text`);
+  if (week && week.body_late != null && !nonEmptyText(week.body_late)) errors.push(`${bat}: ballot_week.body_late must be text`);
+  for (const d of lateTeasers) {
+    if (!nonEmptyText(d.teaser_detail_late)) errors.push(`${bat}.deadlines.${d.key}: teaser_detail_late must be text`);
+    if (!nonEmptyText(d.teaser_detail)) errors.push(`${bat}.deadlines.${d.key}: teaser_detail_late needs teaser_detail to replace`);
+  }
 }
 
 /**
@@ -99,6 +191,7 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
         errors.push(`${at}: election_office_phrase must be text`);
       }
       validateLinks(entry.official_links, at, errors);
+      validateStateRules(entry, at, errors);
       for (const [geoid, county] of Object.entries(entry.counties || {})) {
         if (!/^\d{5}$/.test(geoid)) errors.push(`${at}.counties.${geoid}: key must be a 5-digit county GEOID`);
         if (typeof county.name !== 'string' || !county.name) errors.push(`${at}.counties.${geoid}: name is required`);
@@ -157,17 +250,7 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
         errors.push(`${bat}: register_online_mail is required`);
       }
       if (!keys.has('return_by')) errors.push(`${bat}: return_by is required`);
-      if (!block.election_day_notice || typeof block.election_day_notice.lead !== 'string' || !block.election_day_notice.lead) {
-        errors.push(`${bat}: election_day_notice.lead is required`);
-      }
-      if (block.far_note != null && (typeof block.far_note !== 'string' || !block.far_note)) errors.push(`${bat}: far_note must be text`);
-      if (block.mover_text !== undefined && block.mover_text !== null && (typeof block.mover_text !== 'string' || !block.mover_text)) {
-        errors.push(`${bat}: mover_text must be text or null`);
-      }
-      for (const field of ['title_before', 'title_after']) {
-        const value = block.ballot_week && block.ballot_week[field];
-        if (value != null && (typeof value !== 'string' || !value)) errors.push(`${bat}: ballot_week.${field} must be text`);
-      }
+      validateBlock(block, bat, states[abbr], errors);
       // Certification keeps the card through the count (plan §11 item 7).
       const cert = block.certification;
       if (cert != null) {
@@ -179,6 +262,13 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
         if (!['on', 'by'].includes(cert.local_date_is)) errors.push(`${cat}: local_date_is must be on|by`);
         if (typeof cert.certifier !== 'string' || !cert.certifier) errors.push(`${cat}: certifier is required`);
         if (!isHttps(cert.source_url)) errors.push(`${cat}: source_url must be https`);
+      }
+    }
+    // A supported state with no block for an election it takes part in would
+    // quietly fall back to links only; make the gap a load error instead.
+    for (const [abbr, entry] of Object.entries(states)) {
+      if (entry.coverage === 'supported' && electionAppliesTo(election, abbr) && !(election.states && election.states[abbr])) {
+        errors.push(`${at}: supported state ${abbr} has no block for this election`);
       }
     }
   }
@@ -207,6 +297,25 @@ function stateCode(value) {
 function stateEntry(value) {
   const code = stateCode(value);
   return code ? { code, ...STATES_DOC.states[code] } : null;
+}
+
+/**
+ * The clock a voter's dates and cutoffs are read on: the state's, unless the
+ * county or the place keeps another (Malheur County, Oregon, and West
+ * Wendover, Nevada, are on Mountain time). With no boundary answer the
+ * state's clock stands.
+ */
+function timezoneFor(state, { countyGeoid = null, placeGeoid = null } = {}) {
+  const found = ((state && state.timezone_overrides) || []).find((o) =>
+    (o.county_geoid && o.county_geoid === countyGeoid) || (o.place_geoid && o.place_geoid === placeGeoid));
+  return found ? found.timezone : state.timezone;
+}
+
+// True where Ballot carries checked dates for the state (the governments view
+// and the exact-point lookup only exist there).
+function isSupportedState(value) {
+  const state = isAvailable() ? stateEntry(value) : null;
+  return Boolean(state && state.coverage === 'supported');
 }
 
 function linksOnlyDefaults() {
@@ -272,12 +381,16 @@ function afterDaysFor(election, state) {
  * after-election window (seven days, or through certification) to 120
  * days ahead. Returns null outside that window — the caller then keeps
  * its pre-Ballot behavior rather than claiming "no election".
+ *
+ * `timezone` is the voter's own clock when it differs from the state's
+ * (see timezoneFor); `today` and every cutoff are read on it.
  */
-function currentElection(value, { now = new Date() } = {}) {
+function currentElection(value, { now = new Date(), timezone = null } = {}) {
   if (!isAvailable()) return null;
   const state = stateEntry(value);
   if (!state) return null;
-  const today = localDate(state.timezone, now);
+  const zone = timezone || state.timezone;
+  const today = localDate(zone, now);
   const candidates = ELECTIONS_DOC.elections
     .filter((e) => electionAppliesTo(e, state.code))
     .map((e) => ({ election: e, daysUntil: daysBetween(today, e.date), afterDays: afterDaysFor(e, state) }))
@@ -291,6 +404,7 @@ function currentElection(value, { now = new Date() } = {}) {
     election,
     block: state.coverage === 'supported' ? block : null,
     today,
+    timezone: zone,
     daysUntil,
     phase: phaseFor(daysUntil, afterDays),
   };
@@ -301,6 +415,8 @@ module.exports = {
   isAvailable,
   stateCode,
   stateEntry,
+  isSupportedState,
+  timezoneFor,
   linksOnlyDefaults,
   localDate,
   localTime,

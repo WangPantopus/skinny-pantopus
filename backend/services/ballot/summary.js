@@ -11,7 +11,12 @@
 //     `on_ballot` is true only where it is certain (every U.S. House seat
 //     is on the 2026 general ballot) and null everywhere else;
 //   • copy that would need data P0 does not have (decision counts,
-//     "nothing this year", a personal delivery date) is never produced.
+//     "nothing this year", a personal delivery date) is never produced;
+//   • a boundary answer is used only for the state it was asked about, and
+//     dates and cutoffs are read on the voter's own clock (a county or place
+//     that keeps another time zone is named in states.json);
+//   • a certification "by" date is a legal deadline: once it passes the card
+//     says so, and never claims the certification happened.
 // ============================================================
 
 const referenceData = require('./referenceData');
@@ -56,7 +61,7 @@ function pickLinks(phase, stateLinks, countyLinks, orderKey = phase) {
   return picked;
 }
 
-function deadlinesFor(block, today, timezone, now = new Date()) {
+function deadlinesFor(block, today, timezone, now = new Date(), late = false) {
   return (block.deadlines || [])
     .map((d) => ({
       key: d.key,
@@ -73,7 +78,7 @@ function deadlinesFor(block, today, timezone, now = new Date()) {
       source: d.source,
       source_url: d.source_url,
       teaser_lead: d.teaser_lead || null,
-      teaser_detail: d.teaser_detail || null,
+      teaser_detail: (late && d.teaser_detail_late) || d.teaser_detail || null,
     }))
     .filter((d) => d.days_until > 0 || (d.days_until === 0
       && (!d.time_local || referenceData.localTime(timezone, now) < d.time_local)))
@@ -95,10 +100,24 @@ function governmentsSentence(items) {
   return `${list.charAt(0).toUpperCase()}${list.slice(1)}.`;
 }
 
+// A boundary answer is trusted only inside the state it was asked about: a
+// pin dropped across the line (or a geocoder that disagrees with the address)
+// must not count another state's governments or pick its county's links.
+function lookupFor(state, result) {
+  return state && state.fips && result && result.state_geoid === state.fips ? result : null;
+}
+
+function rulesFor(state) {
+  return {
+    consolidatedCounties: (state && state.consolidated_counties) || {},
+    dependentSchools: Boolean(state && state.dependent_schools),
+  };
+}
+
 // `federalOnBallot`: a federal general election puts every U.S. House seat
 // on the ballot; any other election (or none) leaves every item unknown.
-function governmentsBlock(result, { federalOnBallot = false } = {}) {
-  const counted = governments.countedGovernments(result && result.items);
+function governmentsBlock(result, { federalOnBallot = false, state = null } = {}) {
+  const counted = governments.countedGovernments(result && result.items, rulesFor(state));
   if (counted.length < 3) return null;
   const items = counted.map((item) => ({
     level: item.level,
@@ -137,11 +156,15 @@ function capitalize(text) {
 
 // "Results can change until Clark County Elections certifies them on Nov 24."
 // A known county office names itself; otherwise the state's certifier
-// ("your county").
+// ("your county"). A date the state fixes ("on") reads as an event once it
+// has passed; a date that is a legal deadline ("by") reads as the deadline,
+// because Pantopus has not seen the certification itself.
 function afterNote(stage, cert, county) {
   const who = (county && county.election_office) || cert.certifier;
-  const when = `${cert.local_date_is} ${referenceData.monthDay(cert.local_date)}`;
+  const md = referenceData.monthDay(cert.local_date);
+  const when = `${cert.local_date_is} ${md}`;
   if (stage === 'counting') return `Ballots are still being counted. Results can change until ${who} certifies them ${when}.`;
+  if (cert.local_date_is === 'by') return `${capitalize(who)} had until ${md} to certify the results.`;
   return `${capitalize(who)} certified the results ${when}.`;
 }
 
@@ -151,7 +174,15 @@ function afterNote(stage, cert, county) {
  * `moveInDate` is Home.move_in_date (or null).
  */
 function composeSummary({ stateValue, countyGeoid = null, governmentsResult = null, moveInDate = null, now = new Date() }) {
-  const current = referenceData.currentElection(stateValue, { now });
+  const stateInfo = referenceData.stateEntry(stateValue);
+  if (!stateInfo) return null;
+  // An answer for another state is dropped whole (its county goes with it).
+  const lookup = lookupFor(stateInfo, governmentsResult);
+  const countyId = governmentsResult && !lookup ? null : countyGeoid;
+  const place = lookup && lookup.items.find((item) => item.level === 'city');
+  // Dates and cutoffs are read on the voter's own clock.
+  const zone = referenceData.timezoneFor(stateInfo, { countyGeoid: countyId, placeGeoid: place && place.geoid });
+  const current = referenceData.currentElection(stateValue, { now, timezone: zone });
   if (!current) return null;
   const { state, election, block, today, daysUntil } = current;
   const supported = state.coverage === 'supported' && Boolean(block);
@@ -160,7 +191,7 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
   // stops saying "return by 8 p.m. today" and points at the results.
   if (phase === 'election_day' && supported) {
     const returnBy = (block.deadlines || []).find((d) => d.key === 'return_by');
-    if (returnBy && returnBy.time_local && referenceData.localTime(state.timezone, now) >= returnBy.time_local) phase = 'after';
+    if (returnBy && returnBy.time_local && referenceData.localTime(zone, now) >= returnBy.time_local) phase = 'after';
   }
 
   const base = {
@@ -205,9 +236,12 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
     };
   }
 
-  const county = countyGeoid && state.counties ? state.counties[countyGeoid] : null;
-  const deadlines = deadlinesFor(block, today, state.timezone, now);
-  const govBlock = governmentsBlock(governmentsResult, { federalOnBallot: election.applies_to === 'all_states' });
+  const county = countyId && state.counties ? state.counties[countyId] : null;
+  // The last days: advice that can no longer be followed ("mail it a week
+  // early") gives way to the copy the state wrote for them.
+  const late = block.late_days != null && daysUntil <= block.late_days;
+  const deadlines = deadlinesFor(block, today, zone, now, late);
+  const govBlock = governmentsBlock(lookup, { federalOnBallot: election.applies_to === 'all_states', state });
   const registration = deadlines.find((d) => d.key === 'register_online_mail') || null;
   const cert = block.certification || null;
   const afterStage = phase === 'after' ? afterStageFor(cert, today) : null;
@@ -233,14 +267,14 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
     after_stage: afterStage,
     line: phase === 'in_season' ? countLine(govBlock, 'This address') : null,
     note,
-    how_it_works: phase === 'in_season' ? block.how_it_works : null,
+    how_it_works: phase === 'in_season' ? (late && block.how_it_works_late) || block.how_it_works : null,
     voting_method: state.voting_method,
     deadlines: phase === 'after' ? [] : deadlines,
     election_day_notice: phase === 'election_day' ? block.election_day_notice : null,
     primary_action: phase === 'in_season' && govBlock ? { kind: 'governments', label: 'See your governments' } : null,
     official_links: pickLinks(phase, state.official_links, county && county.official_links, afterStage === 'counting' ? 'after_counting' : phase),
     governments: govBlock,
-    ballot_week: ballotWeekFor(block, deadlines, phase, today),
+    ballot_week: ballotWeekFor(block, deadlines, phase, today, late),
     mover_prompt: moverPrompt({ moveInDate, registration, today, links: state.official_links, text: block.mover_text }),
     source_line: state.election_office,
     checked_at: (block.checked && block.checked.at) || (state.checked && state.checked.at) || null,
@@ -257,7 +291,7 @@ function pickLinksOnly(phase, links) {
 // Today's "Ballot week" card: from the day before ballots are mailed
 // through Election Day. Never a personal delivery claim — only the
 // county's legal mailing date.
-function ballotWeekFor(block, deadlines, phase, today) {
+function ballotWeekFor(block, deadlines, phase, today, late = false) {
   const week = block.ballot_week || {};
   if (phase === 'election_day') {
     return { show: true, overline: 'Ballot week', title: week.election_day_title, body: week.election_day_body };
@@ -273,7 +307,7 @@ function ballotWeekFor(block, deadlines, phase, today) {
     show: true,
     overline: 'Ballot week',
     title: untilMailed >= 0 ? week.title_before || `Ballots go out by ${md}` : week.title_after || `Ballots were mailed by ${md}`,
-    body: week.body,
+    body: (late && week.body_late) || week.body,
   };
 }
 
@@ -314,11 +348,20 @@ async function summaryForHome(home, { now = new Date() } = {}) {
   });
 }
 
+// A live boundary lookup stamped with the moment it was made.
+async function lookupPoint(lat, lng, options) {
+  const result = await governments.governmentsForPoint(lat, lng, options);
+  return { result, lookedUpAt: result ? new Date().toISOString() : null };
+}
+
 /**
- * The anonymous /start teaser for a point. Coordinates only; the
- * geocoder call is live and nothing is written.
+ * The anonymous /start teaser for a point. Coordinates only; nothing is
+ * written here. `timeoutMs` ends the geocoder call when the caller's budget
+ * does (so it never runs on after the response), and `lookup` lets the route
+ * keep an answer in its own preview cache: it resolves to
+ * `{ result, lookedUpAt }`, where `lookedUpAt` is when the answer was made.
  */
-async function teaserForPoint({ lat, lng, state }, { now = new Date() } = {}) {
+async function teaserForPoint({ lat, lng, state }, { now = new Date(), timeoutMs, lookup = lookupPoint } = {}) {
   const current = referenceData.currentElection(state, { now });
   if (!current || current.phase === 'after') return null;
   const supported = current.state.coverage === 'supported' && Boolean(current.block);
@@ -339,10 +382,9 @@ async function teaserForPoint({ lat, lng, state }, { now = new Date() } = {}) {
     };
   }
 
-  const govResult = await governments.governmentsForPoint(lat, lng);
-  // A successful live boundary lookup owns its timestamp. Client rerenders
-  // and restored previews must not make the same answer appear refreshed.
-  const lookedUpAt = govResult ? new Date().toISOString() : null;
+  const { result: govResult, lookedUpAt } = await lookup(lat, lng, { timeoutMs });
+  // A successful boundary lookup owns its timestamp. Client rerenders and
+  // restored previews must not make the same answer appear refreshed.
   const summary = composeSummary({
     stateValue: state,
     countyGeoid: govResult ? govResult.county_geoid : null,
@@ -353,7 +395,7 @@ async function teaserForPoint({ lat, lng, state }, { now = new Date() } = {}) {
   const next = summary.deadlines.find((d) => d.needs_action && d.teaser_lead) || null;
   return {
     coverage: 'supported',
-    looked_up_at: lookedUpAt,
+    looked_up_at: summary.governments ? lookedUpAt : null,
     state: summary.state,
     election: { id: summary.election_id, name: summary.name, date: summary.date, days_until: summary.days_until },
     headline: summary.governments
@@ -390,10 +432,9 @@ function longMonthDay(iso) {
  * in view, nothing is marked as on the ballot.
  */
 async function civicGovernmentsForHome(home) {
-  if (!home || !referenceData.isAvailable()) return null;
+  if (!home || !referenceData.isSupportedState(home.state)) return null;
   const state = referenceData.stateEntry(home.state);
-  if (!state || state.coverage !== 'supported') return null;
-  return governmentsBlock(await governments.governmentsForHome(home));
+  return governmentsBlock(lookupFor(state, await governments.governmentsForHome(home)), { state });
 }
 
 module.exports = {

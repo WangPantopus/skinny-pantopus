@@ -6,10 +6,14 @@
 // one cell can get each other's districts. Ballot never reads that row.
 // It asks the geocoder about the exact point and keeps typed identities:
 //
-//   • a saved home → cached per home AND point (`home:<id>:<geohash-9>`),
-//     30 days, never served more than 7 days stale; a moved pin is a new
-//     key, so an address change never reuses the old answer;
-//   • an anonymous /start lookup → a live call that writes nothing.
+//   • a saved home → cached per exact point (`geo9:<geohash-9>`, ~5 m),
+//     30 days, never served more than 7 days stale. The key names no home
+//     and no household: it is a fact about the land, like the flood zone,
+//     and a moved pin is a new key, so an address change never reuses the
+//     old answer. Building-level keys are cut to ~1 km in log lines
+//     (placeSectionCache);
+//   • an anonymous /start lookup → a live call that writes nothing here
+//     (the route may keep the answer in its in-memory preview cache).
 //
 // P0 counts governments, not election districts: the United States, the
 // state, the county, an incorporated place and the school district(s).
@@ -35,6 +39,11 @@ function geocoderUrl(lat, lng) {
     + `?x=${lng}&y=${lat}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`;
 }
 
+// The cache key for an exact point: ~5 m, no home id.
+function pointCacheKey(lat, lng) {
+  return `geo9:${encodeGeohash(lat, lng, 9)}`;
+}
+
 async function fetchGeographies(lat, lng, { timeoutMs = FETCH_TIMEOUT_MS } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -46,6 +55,21 @@ async function fetchGeographies(lat, lng, { timeoutMs = FETCH_TIMEOUT_MS } = {})
   } finally {
     clearTimeout(timer);
   }
+}
+
+// A Place load asks the geocoder about one point from two sections (the
+// Ballot card and the Civic districts). While that call is running they
+// share it, so a cold cache costs one request, not two.
+const inFlightGeographies = new Map();
+
+function sharedGeographies(lat, lng) {
+  const url = geocoderUrl(lat, lng);
+  let call = inFlightGeographies.get(url);
+  if (!call) {
+    call = fetchGeographies(lat, lng).finally(() => inFlightGeographies.delete(url));
+    inFlightGeographies.set(url, call);
+  }
+  return call;
 }
 
 // Layer keys vary by vintage ("2024 State Legislative Districts - Upper"),
@@ -119,67 +143,68 @@ function governmentsFromGeographies(geo) {
 }
 
 // What counts as a government follows the Census of Governments, so the
-// count never names one government twice or an agency as its own.
+// count never names one government twice or an agency as its own. The two
+// rules that depend on the state live in states.json, per supported state
+// (adding a state means answering both there, not editing this file):
 //
-// Consolidated city-counties in the covered states: the city and the county
-// are one government, counted once under one name. Honolulu has no
-// incorporated place, and Carson City's place carries no type ("Carson
-// City", not "City of Carson"), so the reviewed name comes from here.
-const CONSOLIDATED_COUNTIES = {
-  '06075': 'City of San Francisco',
-  '08014': 'City of Broomfield',
-  '08031': 'City of Denver',
-  '15003': 'City and County of Honolulu',
-  '32510': 'Carson City',
-};
-
-// Where the state, county, city or borough runs the public schools (no
-// independent school districts: Alaska, D.C., Hawaii, Maryland, North
-// Carolina, Virginia), the school system is part of a government already
-// counted, such as Hawaii's statewide Department of Education.
-const DEPENDENT_SCHOOL_STATES = new Set(['02', '11', '15', '24', '37', '51']);
+//   • consolidated_counties: a county that is one government with its city
+//     is counted once, under the reviewed name (Honolulu has no incorporated
+//     place, and Carson City's place carries no type, so the Census name
+//     would read wrongly);
+//   • dependent_schools: where the state, county, city or borough runs the
+//     public schools (no independent school districts), the school system is
+//     part of a government already counted, such as Hawaii's statewide
+//     Department of Education.
 
 /**
  * The governments to count and show, each independent government once.
  * Applied when the card is composed, so cached lookups follow it too.
+ *
+ * @param {object[]} items  Typed governments from `governmentsFromGeographies`.
+ * @param {{consolidatedCounties?: Object<string,string>, dependentSchools?: boolean}} [rules]
  */
-function countedGovernments(items) {
+function countedGovernments(items, { consolidatedCounties = {}, dependentSchools = false } = {}) {
   const list = Array.isArray(items) ? items : [];
-  const state = list.find((item) => item.level === 'state');
   const county = list.find((item) => item.level === 'county');
-  const merged = county ? CONSOLIDATED_COUNTIES[county.geoid] : null;
-  const schoolsCounted = !(state && DEPENDENT_SCHOOL_STATES.has(state.geoid));
+  const merged = county ? consolidatedCounties[county.geoid] : null;
   return list.flatMap((item) => {
     if (merged && item.level === 'county') return [{ ...item, level: 'city', name: merged }];
     if (merged && item.level === 'city') return [];
-    if (!schoolsCounted && item.level === 'school') return [];
+    if (dependentSchools && item.level === 'school') return [];
     return [item];
   });
 }
 
+// Number(null) is 0 and Number('') is 0, so a home with no coordinates would
+// otherwise be looked up at 0,0 (the Gulf of Guinea) and cached there.
 function pointOf(home) {
-  const lat = Number(home && home.map_center_lat);
-  const lng = Number(home && home.map_center_lng);
-  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  const raw = [home && home.map_center_lat, home && home.map_center_lng];
+  if (raw.some((v) => v == null || String(v).trim() === '')) return null;
+  const [lat, lng] = raw.map(Number);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat, lng };
 }
 
 // One Place load composes civic_election and civic_districts together, and
-// both ask for the same home's governments: share a lookup while it runs
-// so a cold cache calls the geocoder once.
+// both ask for the same home's governments: share a lookup (and its cache
+// read) while it runs so a cold cache calls the geocoder once and a warm one
+// reads the row once.
 const inFlight = new Map();
 
 /**
- * A saved home's governments, cached per home and exact point. Past the
- * budget the caller gets an eligible cached answer, or null when there
- * is none. The lookup keeps running to refresh the next load.
+ * A saved home's governments, cached per exact point. Past the budget the
+ * caller gets an eligible cached answer, or null when there is none. The
+ * lookup keeps running to refresh the next load.
  */
 async function governmentsForHome(home, { budgetMs = HOME_BUDGET_MS } = {}) {
   const point = pointOf(home);
-  if (!point || !home.id) return null;
-  const cacheKey = `home:${home.id}:${encodeGeohash(point.lat, point.lng, 9)}`;
-  let lookup = inFlight.get(cacheKey);
-  if (!lookup) {
-    lookup = readThrough({
+  if (!point) return null;
+  const cacheKey = pointCacheKey(point.lat, point.lng);
+  let shared = inFlight.get(cacheKey);
+  if (!shared) {
+    const row = readRow(cacheKey, SECTION_ID).catch(() => null);
+    const lookup = readThrough({
       cacheKey,
       sectionId: SECTION_ID,
       ttlMs: CACHE_TTL_MS,
@@ -187,8 +212,12 @@ async function governmentsForHome(home, { budgetMs = HOME_BUDGET_MS } = {}) {
       // stale after the TTL: this serves it up to 7 days past expiry.
       maxStaleMs: CACHE_TTL_MS + MAX_STALE_MS,
       fetch: async () => {
-        const geo = await fetchGeographies(point.lat, point.lng);
-        return geo ? governmentsFromGeographies(geo) : null;
+        const geo = await sharedGeographies(point.lat, point.lng);
+        const found = geo ? governmentsFromGeographies(geo) : null;
+        // A thrown error (not a null) is what lets readThrough serve an
+        // eligible stale row when the geocoder answers without a state/county.
+        if (!found) throw new Error('the boundary lookup placed no state and county');
+        return found;
       },
     })
       .then(({ payload, stale }) => (payload ? { ...payload, stale: Boolean(stale) } : null))
@@ -197,12 +226,13 @@ async function governmentsForHome(home, { budgetMs = HOME_BUDGET_MS } = {}) {
         return null;
       })
       .finally(() => inFlight.delete(cacheKey));
-    inFlight.set(cacheKey, lookup);
+    shared = { lookup, row };
+    inFlight.set(cacheKey, shared);
   }
   // Read alongside the refresh so a slow provider (or cache read) cannot
   // extend the page budget. An expired answer is usable for seven days.
   let cachedRow = null;
-  readRow(cacheKey, SECTION_ID).then((row) => { cachedRow = row; }).catch(() => {});
+  shared.row.then((row) => { cachedRow = row; });
   let timer = null;
   const budget = new Promise((resolve) => {
     timer = setTimeout(() => {
@@ -216,7 +246,7 @@ async function governmentsForHome(home, { budgetMs = HOME_BUDGET_MS } = {}) {
     if (typeof timer.unref === 'function') timer.unref();
   });
   try {
-    return await Promise.race([lookup, budget]);
+    return await Promise.race([shared.lookup, budget]);
   } finally {
     clearTimeout(timer);
   }
@@ -224,7 +254,7 @@ async function governmentsForHome(home, { budgetMs = HOME_BUDGET_MS } = {}) {
 
 /** An anonymous point's governments: a live call, nothing written. */
 async function governmentsForPoint(lat, lng, options = {}) {
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
   try {
     const geo = await fetchGeographies(lat, lng, options);
     return geo ? governmentsFromGeographies(geo) : null;
@@ -239,6 +269,8 @@ module.exports = {
   countedGovernments,
   governmentsForHome,
   governmentsForPoint,
+  sharedGeographies,
+  pointCacheKey,
   placeName,
   geocoderUrl,
   SECTION_ID,

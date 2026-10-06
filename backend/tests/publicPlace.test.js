@@ -853,6 +853,56 @@ describe('the Ballot P0 teaser', () => {
     }
   });
 
+  it('keeps the answer for the same point in memory only, with the time it was made', async () => {
+    enableGlobally();
+    geo.forwardGeocode.mockResolvedValue({ ...CAMAS, latitude: 45.6301, longitude: -122.4301 });
+    const base = global.fetch;
+    global.fetch = jest.fn((url) => (String(url).includes('geocoding.geo.census.gov')
+      ? Promise.resolve(mockResp(WA_GEOGRAPHIES))
+      : base(url)));
+    const ask = () => request(buildApp()).get('/api/public/place').query({ address: '17 NE Cache Way, Camas' });
+    const boundaryLookups = () => global.fetch.mock.calls.filter(([url]) => String(url).includes('layers=all')).length;
+
+    const first = await ask();
+    expect(first.body.ballot_teaser.looked_up_at).toEqual(expect.any(String));
+    const before = boundaryLookups();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const second = await ask();
+    // No second trip to the geocoder, and the card does not look fresher than it is.
+    expect(boundaryLookups()).toBe(before);
+    expect(second.body.ballot_teaser.looked_up_at).toBe(first.body.ballot_teaser.looked_up_at);
+    expect(second.body.ballot_teaser.governments.count).toBe(5);
+    for (const row of getTable('PlaceSectionCache')) expect(row.section_id).not.toBe('_ballot_governments');
+  });
+
+  it('ends its boundary lookup with the preview budget instead of leaving it running', async () => {
+    enableGlobally();
+    const savedBudget = process.env.PLACE_PREVIEW_SECTION_BUDGET_MS;
+    process.env.PLACE_PREVIEW_SECTION_BUDGET_MS = '60';
+    geo.forwardGeocode.mockResolvedValue({ ...CAMAS, latitude: 45.6501, longitude: -122.4501 });
+    const base = global.fetch;
+    const signals = [];
+    global.fetch = jest.fn((url, init) => {
+      if (!String(url).includes('layers=all')) return base(url, init);
+      signals.push(init.signal);
+      // Never answers; ends on abort, or on its own after 300 ms so nothing lingers.
+      return new Promise((resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        setTimeout(() => reject(new Error('gave up')), 300);
+      });
+    });
+    try {
+      const res = await request(buildApp()).get('/api/public/place').query({ address: '9 NE Budget Way, Camas' });
+      expect(res.status).toBe(200);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(signals.length).toBeGreaterThan(0);
+      expect(signals.some((signal) => signal.aborted)).toBe(true);
+    } finally {
+      if (savedBudget === undefined) delete process.env.PLACE_PREVIEW_SECTION_BUDGET_MS;
+      else process.env.PLACE_PREVIEW_SECTION_BUDGET_MS = savedBudget;
+    }
+  });
+
   it('outside the pilot: the election date and Vote.gov, never a count', async () => {
     enableGlobally();
     geo.forwardGeocode.mockResolvedValue({

@@ -1,6 +1,6 @@
 {
   "version": "2026-09-24",
-  "notes": "One entry per election (docs/ballot-implementation-plan-2026-09-24.md §5.1). Display labels are never identifiers: every deadline has a stable key. Dates are calendar dates in the state's timezone; time_local is wall-clock time there.",
+  "notes": "One entry per election (docs/ballot-implementation-plan-2026-09-24.md §5.1). Display labels are never identifiers: every deadline has a stable key. Dates are calendar dates in the state's timezone; time_local is wall-clock time there. late_days (per state block) is how many days before the election the *_late copy takes over (how_it_works_late, ballot_week.body_late, a deadline's teaser_detail_late): advice such as \"mail it a week early\" stops being possible in the last days, so the card and the teaser stop giving it.",
   "elections": [
     {
       "id": "2026-11-03-general",
@@ -13,8 +13,11 @@
       "states": {
         "WA": {
           "how_it_works": "Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+          "how_it_works_late": "Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it in a drop box by 8 p.m. Nov 3.",
+          "late_days": 6,
           "ballot_week": {
             "body": "Return yours in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+            "body_late": "Return yours in a drop box by 8 p.m. Nov 3.",
             "election_day_title": "Election Day. Return by 8 p.m. today.",
             "election_day_body": "Use a drop box, or get it postmarked at a post office counter today."
           },
@@ -88,6 +91,7 @@
               "detail": "Drop box by 8 p.m. A mailed ballot needs a Nov 3 postmark.",
               "teaser_lead": "Return by 8 p.m. Nov 3.",
               "teaser_detail": "Use a drop box, or mail it a week early.",
+              "teaser_detail_late": "Use a drop box.",
               "source": "Washington Secretary of State",
               "source_url": "https://www.sos.wa.gov/elections/elections-calendar/dates-and-deadlines",
               "law": "RCW 29A.40.091",
@@ -102,12 +106,15 @@
         },
         "CA": {
           "how_it_works": "Every active voter gets a ballot by mail, starting Oct 5. Return it to a drop box or vote center by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+          "how_it_works_late": "Every active voter gets a ballot by mail, starting Oct 5. Return it to a drop box or vote center by 8 p.m. Nov 3.",
+          "late_days": 6,
           "far_note": "To get a ballot by mail, register by Oct 19. After that, you can register and vote in person through Election Day.",
           "mover_text": "Moved this year? Update your registration by Oct 19 to get your ballot by mail.",
           "ballot_week": {
             "title_before": "Ballots go out starting Oct 5",
             "title_after": "Ballots went out starting Oct 5",
             "body": "Return yours to a drop box or vote center by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+            "body_late": "Return yours to a drop box or vote center by 8 p.m. Nov 3.",
             "election_day_title": "Election Day. Return by 8 p.m. today.",
             "election_day_body": "Use a drop box or vote center, or get it postmarked at a post office counter today."
           },
@@ -162,6 +169,7 @@
               "detail": "Drop box or vote center by 8 p.m. A mailed ballot needs a Nov 3 postmark and must arrive by Nov 10.",
               "teaser_lead": "Return by 8 p.m. Nov 3.",
               "teaser_detail": "Use a drop box, or mail it a week early.",
+              "teaser_detail_late": "Use a drop box.",
               "source": "California Secretary of State",
               "source_url": "https://www.sos.ca.gov/elections/upcoming-elections/general-election-november-3-2026/key-dates-deadlines"
             }
@@ -174,10 +182,13 @@
         },
         "CO": {
           "how_it_works": "Every active voter gets a ballot by mail, sent Oct 2 to 9. Return it to a drop box or voting center by 7 p.m. Nov 3. Postmarks don’t count, so mail it at least a week early.",
+          "how_it_works_late": "Every active voter gets a ballot by mail, sent Oct 2 to 9. Return it to a drop box or voting center by 7 p.m. Nov 3. Postmarks don’t count, so don’t rely on the mail now.",
+          "late_days": 6,
           "far_note": "To get a ballot by mail, register by Oct 26. You can register and vote in person through Election Day.",
           "mover_text": "Moved this year? Update your registration by Oct 26 to get your ballot by mail.",
           "ballot_week": {
             "body": "Return yours to a drop box or voting center by 7 p.m. Nov 3. Postmarks don’t count, so mail it a week early.",
+            "body_late": "Return yours to a drop box or voting center by 7 p.m. Nov 3. Postmarks don’t count, so don’t rely on the mail now.",
             "election_day_title": "Election Day. Return by 7 p.m. today.",
             "election_day_body": "Use a drop box or voting center. A ballot mailed today won’t arrive in time."
           },
@@ -244,12 +255,15 @@
         },
         "HI": {
           "how_it_works": "Everyone here votes by mail. Ballots arrive by Oct 16. Return yours to a drop box or voter service center by 7 p.m. Nov 3. Postmarks don’t count, so mail it a week early.",
+          "how_it_works_late": "Everyone here votes by mail. Ballots arrive by Oct 16. Return yours to a drop box or voter service center by 7 p.m. Nov 3. Postmarks don’t count, so don’t rely on the mail now.",
+          "late_days": 6,
           "far_note": "Paper registration forms are due by 4:30 p.m. Oct 26. You can register online, or in person at a voter service center, through Election Day.",
           "mover_text": null,
           "ballot_week": {
             "title_before": "Ballots arrive by Oct 16",
             "title_after": "Ballots arrived by Oct 16",
             "body": "Return yours to a drop box or voter service center by 7 p.m. Nov 3. Postmarks don’t count, so mail it a week early.",
+            "body_late": "Return yours to a drop box or voter service center by 7 p.m. Nov 3. Postmarks don’t count, so don’t rely on the mail now.",
             "election_day_title": "Election Day. Return by 7 p.m. today.",
             "election_day_body": "Use a drop box or voter service center. A ballot mailed today won’t arrive in time."
           },
@@ -307,10 +321,13 @@
         },
         "NV": {
           "how_it_works": "Every active voter gets a ballot by mail. Return it to a drop box by 7 p.m. Nov 3, or mail it a week early so the postmark is on time. Early voting runs Oct 17 to 30.",
+          "how_it_works_late": "Every active voter gets a ballot by mail. Return it to a drop box by 7 p.m. Nov 3. Early voting runs Oct 17 to 30.",
+          "late_days": 6,
           "far_note": "To get a ballot by mail, register online by Oct 20. You can also register in person when you vote.",
           "mover_text": "Moved this year? Update your registration online by Oct 20 to get your ballot by mail.",
           "ballot_week": {
             "body": "Return yours to a drop box by 7 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+            "body_late": "Return yours to a drop box by 7 p.m. Nov 3.",
             "election_day_title": "Election Day. Return by 7 p.m. today.",
             "election_day_body": "Use a drop box or polling place, or get it postmarked at a post office counter today."
           },
@@ -365,6 +382,7 @@
               "detail": "Drop box or polling place by 7 p.m. A mailed ballot needs a Nov 3 postmark and must arrive by Nov 7.",
               "teaser_lead": "Return by 7 p.m. Nov 3.",
               "teaser_detail": "Use a drop box, or mail it a week early.",
+              "teaser_detail_late": "Use a drop box.",
               "source": "Nevada Secretary of State",
               "source_url": "https://www.nvsos.gov/elections/election-information/2026-election-information"
             }
@@ -377,11 +395,14 @@
         },
         "OR": {
           "how_it_works": "Everyone here votes by mail. Ballots go out starting Oct 14. Return yours in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+          "how_it_works_late": "Everyone here votes by mail. Ballots go out starting Oct 14. Return yours in a drop box by 8 p.m. Nov 3.",
+          "late_days": 6,
           "mover_text": "Moved this year? Update your registration by Oct 13 to get your ballot at your new address.",
           "ballot_week": {
             "title_before": "Ballots go out starting Oct 14",
             "title_after": "Ballots went out starting Oct 14",
             "body": "Return yours in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+            "body_late": "Return yours in a drop box by 8 p.m. Nov 3.",
             "election_day_title": "Election Day. Return by 8 p.m. today.",
             "election_day_body": "Use a drop box, or get it postmarked at a post office counter today."
           },
@@ -436,6 +457,7 @@
               "detail": "Drop box by 8 p.m. A mailed ballot needs a Nov 3 postmark and must arrive by Nov 10.",
               "teaser_lead": "Return by 8 p.m. Nov 3.",
               "teaser_detail": "Use a drop box, or mail it a week early.",
+              "teaser_detail_late": "Use a drop box.",
               "source": "Oregon Secretary of State",
               "source_url": "https://sos.oregon.gov/elections/pages/current-election.aspx"
             }
@@ -448,10 +470,13 @@
         },
         "UT": {
           "how_it_works": "Every active voter gets a ballot by mail on Oct 13. Return it in a drop box by 8 p.m. Nov 3, or mail it a week early: postmarks don’t count. On the envelope, add the last four digits of your ID or Social Security number.",
+          "how_it_works_late": "Every active voter gets a ballot by mail on Oct 13. Return it in a drop box by 8 p.m. Nov 3. Postmarks don’t count, so don’t rely on the mail now. On the envelope, add the last four digits of your ID or Social Security number.",
+          "late_days": 6,
           "far_note": "To get a ballot by mail, register by 5 p.m. Oct 23. After that, you can register when you vote in person.",
           "mover_text": "Moved this year? Update your registration by 5 p.m. Oct 23 to get your ballot by mail.",
           "ballot_week": {
             "body": "Return yours in a drop box by 8 p.m. Nov 3, or mail it a week early. Postmarks don’t count.",
+            "body_late": "Return yours in a drop box by 8 p.m. Nov 3. Postmarks don’t count, so don’t rely on the mail now.",
             "election_day_title": "Election Day. Return by 8 p.m. today.",
             "election_day_body": "Use a drop box or vote center. A ballot mailed today won’t arrive in time."
           },
@@ -520,11 +545,10 @@
         },
         "VT": {
           "no_registration_deadline": true,
-          "how_it_works": "Every active voter gets a ballot by mail, starting Sep 25. Return it to your town clerk by Nov 2, or to your polling place by 7 p.m. Nov 3. You can register any day, even at the polls.",
+          "how_it_works": "Every active voter is mailed a ballot by Oct 1. Return it to your town clerk by Nov 2, or to your polling place by 7 p.m. Nov 3. You can register any day, even at the polls.",
+          "late_days": 0,
           "far_note": "Ballots are mailed to every active voter. You can register any day, even at the polls.",
           "ballot_week": {
-            "title_before": "Ballots go out starting Sep 25",
-            "title_after": "Ballots went out starting Sep 25",
             "body": "Return yours to your town clerk by Nov 2, or to your polling place by 7 p.m. Nov 3.",
             "election_day_title": "Election Day. Return by 7 p.m. today.",
             "election_day_body": "Bring it to your polling place. A ballot mailed today won’t arrive in time."
@@ -534,13 +558,13 @@
             {
               "key": "ballots_mailed",
               "label": "Ballots mailed",
-              "date": "2026-09-25",
+              "date": "2026-10-01",
               "time_local": null,
-              "cutoff": "mailed_starting",
+              "cutoff": "mailed_by",
               "methods": ["mail"],
               "needs_action": false,
               "timeline": true,
-              "detail": "The Secretary of State mails ballots to active voters starting Sep 25.",
+              "detail": "The Secretary of State mails ballots to active voters by Oct 1.",
               "source": "Vermont Secretary of State",
               "source_url": "https://outside.vermont.gov/dept/sos/Elections_Division/town_clerks_local_elections/election_procedure/elections_calendar.pdf"
             },
@@ -556,6 +580,7 @@
               "detail": "At your polling place by 7 p.m., or to your town clerk by the day before.",
               "teaser_lead": "Return by 7 p.m. Nov 3.",
               "teaser_detail": "Town clerk by Nov 2, or your polling place.",
+              "teaser_detail_late": "Bring it to your polling place.",
               "source": "Vermont Secretary of State",
               "source_url": "https://sos.vermont.gov/elections/voters/early-absentee-voting"
             }
@@ -579,8 +604,11 @@
       "states": {
         "WA": {
           "how_it_works": "Everyone here votes by mail. Your ballot is mailed by Oct 15. Return it in a drop box by 8 p.m. Nov 2, or mail it a week early so the postmark is on time.",
+          "how_it_works_late": "Everyone here votes by mail. Your ballot is mailed by Oct 15. Return it in a drop box by 8 p.m. Nov 2.",
+          "late_days": 6,
           "ballot_week": {
             "body": "Return yours in a drop box by 8 p.m. Nov 2, or mail it a week early so the postmark is on time.",
+            "body_late": "Return yours in a drop box by 8 p.m. Nov 2.",
             "election_day_title": "Election Day. Return by 8 p.m. today.",
             "election_day_body": "Use a drop box, or get it postmarked at a post office counter today."
           },
@@ -654,6 +682,7 @@
               "detail": "Drop box by 8 p.m. A mailed ballot needs a Nov 2 postmark.",
               "teaser_lead": "Return by 8 p.m. Nov 2.",
               "teaser_detail": "Use a drop box, or mail it a week early.",
+              "teaser_detail_late": "Use a drop box.",
               "source": "Washington Secretary of State",
               "source_url": "https://www.sos.wa.gov/elections/calendar",
               "law": "RCW 29A.40.091",

@@ -7,7 +7,7 @@
  * `readThrough` and get the Step-1 freshness model for free:
  *
  *   const { payload, fetchedAt, stale } = await readThrough({
- *     cacheKey: `geo:${geohash6}`,        // 'home:…' | 'geo:…' | 'zip:…' | 'county:…'
+ *     cacheKey: `geo:${geohash6}`,        // 'home:…' | 'geo:…' | 'geo9:…' | 'zip:…' | 'county:…'
  *     sectionId: 'civic_districts',
  *     ttlMs: 90 * 24 * 60 * 60 * 1000,
  *     fetch: () => civicProvider.fetchDistricts(latLng),
@@ -71,6 +71,13 @@ function warnMissingTableOnce(where, error) {
   });
 }
 
+// A building-level location cell (`geo9:`, ~5 m) never goes into a log line
+// whole: its ~1 km prefix is enough to debug a cache problem.
+function logKey(cacheKey) {
+  const key = String(cacheKey || '');
+  return key.startsWith('geo9:') ? `${key.slice(0, 11)}…` : key;
+}
+
 async function readRow(cacheKey, sectionId) {
   const { data, error } = await supabaseAdmin
     .from(TABLE)
@@ -80,7 +87,7 @@ async function readRow(cacheKey, sectionId) {
     .maybeSingle();
   if (error) {
     if (isMissingTableError(error)) warnMissingTableOnce('read', error);
-    else logger.warn('placeSectionCache: read failed', { cacheKey, sectionId, error: error.message });
+    else logger.warn('placeSectionCache: read failed', { cacheKey: logKey(cacheKey), sectionId, error: error.message });
     return null;
   }
   return data || null;
@@ -99,7 +106,7 @@ async function writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso) {
   );
   if (error) {
     if (isMissingTableError(error)) warnMissingTableOnce('write', error);
-    else logger.warn('placeSectionCache: write failed', { cacheKey, sectionId, error: error.message });
+    else logger.warn('placeSectionCache: write failed', { cacheKey: logKey(cacheKey), sectionId, error: error.message });
   }
 }
 
@@ -159,7 +166,7 @@ async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = tru
       || (row && now - Date.parse(row.fetched_at) <= maxStaleMs);
     if (row && allowStale && staleAgeOk) {
       logger.warn('placeSectionCache: fetch failed — serving stale', {
-        cacheKey,
+        cacheKey: logKey(cacheKey),
         sectionId,
         error: err.message,
       });
