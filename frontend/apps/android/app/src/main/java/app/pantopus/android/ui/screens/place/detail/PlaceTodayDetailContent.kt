@@ -73,6 +73,7 @@ import app.pantopus.android.data.api.models.place.PlaceWeatherAlert
 import app.pantopus.android.data.api.models.place.PlaceWeatherData
 import app.pantopus.android.data.api.models.place.WeatherAlertSeverity
 import app.pantopus.android.data.api.models.place.WeatherConditionCode
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskCreationFactory
@@ -695,7 +696,10 @@ private class RadonTodayState(
     var hasDate by mutableStateOf(false)
     var result by mutableStateOf("")
     var retained by mutableStateOf<CreateHomeTaskRequest?>(null)
-    val hidden get() = task == null && dismissedUntil > Instant.now().toEpochMilli()
+
+    /** The viewer can't read the household's tasks (e.g. a guest): the card isn't theirs to answer. */
+    var noTaskAccess by mutableStateOf(false)
+    val hidden get() = noTaskAccess || (task == null && dismissedUntil > Instant.now().toEpochMilli())
 
     private suspend fun requireCurrent() {
         lifetime.coroutineContext.ensureActive()
@@ -727,6 +731,14 @@ private class RadonTodayState(
             error = null
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (failure: NetworkError) {
+            // API failures are Throwables, not Exceptions: unhandled, a 403 or an
+            // outage here crashed the whole app on Today.
+            if (runCatching { requireCurrent() }.isFailure) return
+            loaded = false
+            canCreate = false
+            noTaskAccess = failure.code == 403
+            error = if (noTaskAccess) null else "Couldn't check your home's radon tasks. Try again."
         } catch (_: Exception) {
             if (runCatching { requireCurrent() }.isFailure) return
             loaded = false
@@ -758,12 +770,23 @@ private class RadonTodayState(
             sheet = retained?.let { if (it.status == "done") "yes" else "no" } ?: kind
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (_: NetworkError) {
+            if (runCatching { requireCurrent() }.isSuccess) {
+                error = "Couldn't open this task action. Reopen Tasks to recover any saved request."
+            }
         } catch (_: Exception) {
             if (runCatching { requireCurrent() }.isSuccess) {
                 error = "Couldn't open this task action. Reopen Tasks to recover any saved request."
             }
         }
     }
+
+    private fun saveFailureMessage() =
+        if (retained == null) {
+            "Couldn't save this task. Check the date and result, then try again."
+        } else {
+            "Couldn't confirm your task. Your saved request is retained; try again."
+        }
 
     suspend fun save() {
         val kind = sheet ?: return
@@ -791,15 +814,14 @@ private class RadonTodayState(
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (_: NetworkError) {
+            if (runCatching { requireCurrent() }.isFailure) return
+            retained = coordinator.pending?.request
+            error = saveFailureMessage()
         } catch (_: Exception) {
             if (runCatching { requireCurrent() }.isFailure) return
             retained = coordinator.pending?.request
-            error =
-                if (retained == null) {
-                    "Couldn't save this task. Check the date and result, then try again."
-                } else {
-                    "Couldn't confirm your task. Your saved request is retained; try again."
-                }
+            error = saveFailureMessage()
         } finally {
             if (runCatching { requireCurrent() }.isSuccess) busy = false
         }
