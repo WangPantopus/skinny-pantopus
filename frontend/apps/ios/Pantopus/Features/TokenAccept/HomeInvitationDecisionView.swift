@@ -115,6 +115,7 @@ struct HomeInvitationDecisionView: View {
             Text("Offered role: \(TokenAcceptViewModel.humanRole(context.role))")
             Text(
                 """
+                Household permissions determine what you can open or manage. \
                 This invitation gives you household access. To send neighbor messages \
                 or get a residency letter, verify the address yourself.
                 """
