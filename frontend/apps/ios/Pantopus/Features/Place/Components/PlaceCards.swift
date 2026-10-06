@@ -107,7 +107,11 @@ struct PlaceDensityCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .placeCard()
+        // The whole card taps through (the chevron says so), as on Android.
+        .contentShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
+        .onTapGesture { onTap?() }
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(onTap == nil ? [] : .isButton)
         .accessibilityIdentifier("place.density")
     }
 }
