@@ -2501,6 +2501,26 @@ router.get('/:id/nearby-gigs', verifyToken, async (req, res) => {
 
 // ============ HOME TASKS ============
 
+// Open tasks read by due date (soonest first, undated last, then newest);
+// done and canceled tasks newest-finished first. Clients show this order.
+const FINISHED_TASK_STATUSES = new Set(['done', 'canceled']);
+const taskTime = (value) => {
+  const time = Date.parse(value || '');
+  return Number.isFinite(time) ? time : null;
+};
+function compareHomeTasks(a, b) {
+  const aFinished = FINISHED_TASK_STATUSES.has(a.status);
+  const bFinished = FINISHED_TASK_STATUSES.has(b.status);
+  if (aFinished !== bFinished) return aFinished ? 1 : -1;
+  if (aFinished) {
+    return (taskTime(b.completed_at) ?? taskTime(b.updated_at) ?? 0) - (taskTime(a.completed_at) ?? taskTime(a.updated_at) ?? 0);
+  }
+  const aDue = taskTime(a.due_at) ?? Infinity;
+  const bDue = taskTime(b.due_at) ?? Infinity;
+  if (aDue !== bDue) return aDue - bDue;
+  return (taskTime(b.created_at) ?? 0) - (taskTime(a.created_at) ?? 0);
+}
+
 // Every task/calendar gateway uses the same locked database authorization.
 function registerHomeRecordRoutes(path, kind) {
   router.get(`/:id/${path}`, verifyToken, async (req, res) => {
@@ -2514,7 +2534,8 @@ function registerHomeRecordRoutes(path, kind) {
         startAfter: kind === 'event' ? req.query.start_after || null : null,
         startBefore: kind === 'event' ? req.query.start_before || null : null });
       const records = kind === 'event'
-        ? result.records.sort((a, b) => new Date(a.start_at) - new Date(b.start_at)) : result.records;
+        ? result.records.sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
+        : kind === 'task' ? [...result.records].sort(compareHomeTasks) : result.records;
       res.json({ [path]: records, ...(kind === 'task' ? {
         collection_capabilities: { can_create: result.can_create },
         task_session: { ...getRequestSessionScope(req), home_id: req.params.id },
