@@ -298,6 +298,8 @@ async function getHubToday(userId, options = {}) {
     if (aqi.source === 'cache') cacheHits++;
     if (aqi.source === 'error' || aqi.source === 'unavailable') partialFailures.push('aqi');
     else providersUsed.push('AIRNOW');
+  } else {
+    partialFailures.push('aqi');
   }
 
   if (alerts) {
@@ -360,7 +362,7 @@ async function getHubToday(userId, options = {}) {
     index: aqi.aqi,
     category: aqi.category,
     is_noteworthy: aqi.is_noteworthy,
-    ...(detail ? { dominant_pollutant: aqi.pollutant ?? null } : {}),
+    ...(detail ? { dominant_pollutant: aqi.pollutant ?? null, observed_at: aqi.observed_at ?? null } : {}),
   } : null;
 
   // 8. Build alerts list

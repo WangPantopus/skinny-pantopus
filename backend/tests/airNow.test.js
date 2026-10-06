@@ -34,43 +34,46 @@ const LNG = -122.6615;
 
 const MOCK_AIRNOW_RESPONSE = [
   {
-    DateObserved: '2026-03-07',
-    HourObserved: 14,
-    LocalTimeZone: 'PST',
-    ReportingArea: 'Vancouver',
-    StateCode: 'WA',
-    Latitude: 45.6387,
-    Longitude: -122.6615,
-    ParameterName: 'PM2.5',
-    AQI: 42,
-    Category: { Number: 1, Name: 'Good' },
+    dateObserved: '2026-03-07',
+    hourObserved: '14:00',
+    localTimeZone: 'PST',
+    reportingAreaName: 'Vancouver',
+    siteID: '530110024',
+    siteName: 'Vancouver-NE 84th Ave',
+    parameterName: 'PM2.5',
+    nowcastAQI: 42,
+    aqiCategoryName: 'Good',
+    reportingAgency: 'Washington Department of Ecology',
+    lookupBehavior: 'Closest Reading By Pollutant',
+    consideredMonitors: 'All',
+    lookupBoundary: '50 Miles',
   },
   {
-    DateObserved: '2026-03-07',
-    HourObserved: 14,
-    LocalTimeZone: 'PST',
-    ReportingArea: 'Vancouver',
-    StateCode: 'WA',
-    Latitude: 45.6387,
-    Longitude: -122.6615,
-    ParameterName: 'O3',
-    AQI: 28,
-    Category: { Number: 1, Name: 'Good' },
+    dateObserved: '2026-03-07',
+    hourObserved: '14:00',
+    localTimeZone: 'PST',
+    reportingAreaName: 'Vancouver',
+    siteID: '530110011',
+    siteName: 'Vancouver-Blairmont Dr (SO)',
+    parameterName: 'OZONE',
+    nowcastAQI: 28,
+    aqiCategoryName: 'Good',
+    reportingAgency: 'Washington Department of Ecology',
+    lookupBehavior: 'Closest Reading By Pollutant',
+    consideredMonitors: 'All',
+    lookupBoundary: '50 Miles',
   },
 ];
 
 const MOCK_SMOKE_RESPONSE = [
   {
-    DateObserved: '2026-08-15',
-    HourObserved: 10,
-    LocalTimeZone: 'PST',
-    ReportingArea: 'Portland',
-    StateCode: 'OR',
-    Latitude: 45.5231,
-    Longitude: -122.6765,
-    ParameterName: 'PM2.5',
-    AQI: 158,
-    Category: { Number: 4, Name: 'Unhealthy' },
+    dateObserved: '2026-08-15',
+    hourObserved: '10:00',
+    localTimeZone: 'PDT',
+    reportingAreaName: 'Portland',
+    parameterName: 'PM2.5',
+    nowcastAQI: 158,
+    aqiCategoryName: 'Unhealthy',
   },
 ];
 
@@ -82,6 +85,7 @@ function resetMocks() {
   mockSetCache.mockReset();
   global.fetch.mockReset();
   delete process.env.AIRNOW_API_KEY;
+  delete process.env.AIRNOW_KEY;
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -133,7 +137,7 @@ describe('AirNow Connector', () => {
       expect(result.aqi).toEqual(cachedAqi);
       expect(result.fetchedAt).toBe('2026-03-07T14:00:00Z');
       expect(global.fetch).not.toHaveBeenCalled();
-      expect(mockGetCache).toHaveBeenCalledWith('AIRNOW_AQI', `${LAT.toFixed(4)},${LNG.toFixed(4)}`);
+      expect(mockGetCache).toHaveBeenCalledWith('AIRNOW_AQI', `${LAT.toFixed(2)},${LNG.toFixed(2)}`);
     });
   });
 
@@ -226,6 +230,7 @@ describe('AirNow Connector', () => {
         pollutant: 'PM2.5',
         reporting_area: 'Vancouver',
         color: '#00E400',
+        observed_at: '2026-03-07T22:00:00.000Z',
       });
     });
 
@@ -237,13 +242,15 @@ describe('AirNow Connector', () => {
         pollutant: 'PM2.5',
         reporting_area: 'Portland',
         color: '#FF0000',
+        observed_at: '2026-08-15T17:00:00.000Z',
       });
     });
 
-    it('handles missing category gracefully', () => {
-      const result = normaliseObservation({ AQI: 50, ParameterName: 'O3' });
-      expect(result.aqi).toBe(50);
+    it('handles a missing reading gracefully', () => {
+      const result = normaliseObservation({ parameterName: 'OZONE' });
+      expect(result.aqi).toBeNull();
       expect(result.category).toBe('Unknown');
+      expect(result.pollutant).toBe('O3');
       expect(result.color).toBe('#999999');
     });
   });
