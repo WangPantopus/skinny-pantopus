@@ -101,8 +101,9 @@ jobs:
       - name: Generate project
         run: xcodegen generate
 
-      - name: Cache SPM
-        uses: actions/cache@v5
+      - name: Restore SPM packages
+        id: spm-cache
+        uses: actions/cache/restore@v5
         with:
           path: frontend/apps/ios/SourcePackages
           # v3 — workspace-local package clones avoid the wildcard
@@ -123,6 +124,16 @@ jobs:
             ARCHS="$(uname -m)" \
             CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" \
             build-for-testing 2>&1 | tee xcodebuild-build.log | xcbeautify
+      - name: Save SPM packages (master only)
+        # One entry is about 3.7 GB. A pull request's copy is visible only to that
+        # pull request, and each one pushed the repository past its 10 GB cache
+        # limit, evicting master's Gradle, pnpm and Playwright caches. Pull
+        # requests restore master's copy instead.
+        if: github.ref == 'refs/heads/master' && steps.spm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: frontend/apps/ios/SourcePackages
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
       - name: Verify simulator host Keychain entitlement
         # Protected recovery uses the real Keychain in the hosted unit tests.
         # Ad-hoc simulator signing needs no certificate or provisioning profile.
