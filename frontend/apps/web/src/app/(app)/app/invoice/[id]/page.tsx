@@ -1,11 +1,13 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect, useRef } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import StripeProvider from '@/components/payments/StripeProvider';
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -27,8 +29,23 @@ function InvoiceContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+  // Set once POST /pay has created the Stripe payment: the card is entered and confirmed with
+  // Stripe below, and only then does /confirm mark the invoice paid (as the apps' PaymentSheet does).
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const finishingReturn = useRef(false);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
+
+  // Back from a bank's 3D Secure page: Stripe returns here, and the same confirm step finishes it.
+  useEffect(() => {
+    if (!invoiceId || finishingReturn.current || searchParams.get('payment') !== 'complete') return;
+    finishingReturn.current = true;
+    api.businesses.confirmInvoicePayment(invoiceId)
+      .then((res) => { setInvoice(res.invoice); toast.success('Payment received'); })
+      .catch((e: unknown) => toast.error(e instanceof Error && e.message ? e.message : "This payment hasn't gone through yet."))
+      .finally(() => router.replace(`/app/invoice/${invoiceId}`));
+  }, [invoiceId, searchParams, router]);
 
   useEffect(() => {
     if (!invoiceId) return;
@@ -45,11 +62,10 @@ function InvoiceContent() {
     setPaying(true);
     try {
       const result = await api.businesses.payInvoice(invoice.id);
-      await api.businesses.confirmInvoicePayment(invoice.id);
-      setInvoice({ ...invoice, status: 'paid', paid_at: new Date().toISOString() });
-      toast.success(`Payment of ${formatCents(result.amount_cents)} processed`);
-    } catch (e: any) {
-      toast.error(e?.message || 'Payment failed. Please try again.');
+      if (!result.client_secret) throw new Error('Payment could not be started. Please try again.');
+      setClientSecret(result.client_secret);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error && e.message ? e.message : 'Payment failed. Please try again.');
     } finally {
       setPaying(false);
     }
@@ -130,12 +146,28 @@ function InvoiceContent() {
         </div>
       )}
 
-      {/* Pay button */}
-      {canPay && (
+      {/* Pay button, then the card form */}
+      {canPay && !clientSecret && (
         <button onClick={handlePay} disabled={paying}
           className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg hover:bg-emerald-700 disabled:opacity-50 transition mb-4">
           {paying ? 'Processing...' : `Pay ${formatCents(invoice.total_cents)}`}
         </button>
+      )}
+      {canPay && clientSecret && (
+        <div className="bg-app-surface border border-app-border rounded-xl p-5 mb-4">
+          <StripeProvider clientSecret={clientSecret}>
+            <InvoicePaymentForm
+              invoiceId={invoice.id}
+              amountLabel={formatCents(invoice.total_cents)}
+              onPaid={(paid) => {
+                setInvoice(paid);
+                setClientSecret(null);
+                toast.success(`Payment of ${formatCents(paid.total_cents)} received`);
+              }}
+              onCancel={() => setClientSecret(null)}
+            />
+          </StripeProvider>
+        </div>
       )}
 
       {/* Paid banner */}
@@ -157,6 +189,63 @@ function InvoiceContent() {
         </div>
       )}
     </div>
+  );
+}
+
+function InvoicePaymentForm({ invoiceId, amountLabel, onPaid, onCancel }: {
+  invoiceId: string;
+  amountLabel: string;
+  onPaid: (invoice: Awaited<ReturnType<typeof api.businesses.confirmInvoicePayment>>['invoice']) => void;
+  onCancel: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processing, setProcessing] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (processing) return;
+    if (!stripe || !elements) {
+      setMessage('Payment is still loading. Please wait a moment.');
+      return;
+    }
+    setProcessing(true);
+    setMessage(null);
+    try {
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: { return_url: `${window.location.origin}/app/invoice/${encodeURIComponent(invoiceId)}?payment=complete` },
+        redirect: 'if_required',
+      });
+      if (error) {
+        setMessage(error.message || 'Your card was not charged. Please try again.');
+        return;
+      }
+      const res = await api.businesses.confirmInvoicePayment(invoiceId);
+      onPaid(res.invoice);
+    } catch (err: unknown) {
+      setMessage(err instanceof Error && err.message ? err.message : 'Payment failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit}>
+      <PaymentElement />
+      {message && <p role="alert" className="text-sm text-red-600 mt-3">{message}</p>}
+      <div className="flex gap-3 mt-4">
+        <button type="button" onClick={onCancel} disabled={processing}
+          className="flex-1 py-3 border border-app-border rounded-xl font-semibold text-app-text hover:bg-app-hover disabled:opacity-50 transition">
+          Cancel
+        </button>
+        <button type="submit" disabled={processing || !stripe}
+          className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50 transition">
+          {processing ? 'Processing…' : `Pay ${amountLabel}`}
+        </button>
+      </div>
+    </form>
   );
 }
 
