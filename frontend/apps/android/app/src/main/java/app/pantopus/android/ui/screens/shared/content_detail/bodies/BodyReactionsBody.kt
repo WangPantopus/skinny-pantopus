@@ -2,7 +2,7 @@
     androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
     androidx.compose.foundation.ExperimentalFoundationApi::class,
 )
-@file:Suppress("MagicNumber", "PackageNaming", "LongParameterList", "LongMethod", "TooManyFunctions")
+@file:Suppress("MagicNumber", "PackageNaming", "LongParameterList", "LongMethod", "TooManyFunctions", "CyclomaticComplexMethod")
 
 package app.pantopus.android.ui.screens.shared.content_detail.bodies
 
