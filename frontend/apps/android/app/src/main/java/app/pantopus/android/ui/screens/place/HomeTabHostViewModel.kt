@@ -81,6 +81,20 @@ class HomeTabHostViewModel
                 }
         }
 
+        private var relandOnReturn = false
+
+        /** The user left Place for another tab from the Hub root; the next visit lands on Your Place again. */
+        fun markLeftFromHubRoot() {
+            if (_landing.value is HomeLanding.PlaceDashboard) relandOnReturn = true
+        }
+
+        /** The home to land on now that the user is back on the tab, once. */
+        fun consumeReland(): String? {
+            if (!relandOnReturn) return null
+            relandOnReturn = false
+            return (_landing.value as? HomeLanding.PlaceDashboard)?.homeId
+        }
+
         fun loadPreview() {
             if (previewJob?.isActive == true) return
             val draft = _arrival.value.draft ?: return
