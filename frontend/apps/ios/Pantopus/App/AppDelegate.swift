@@ -48,7 +48,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         }
         registerReminderCategories()
         UNUserNotificationCenter.current().delegate = self
-        registerAuthorizedPushNotifications()
+        requestNotificationPermission()
         return true
     }
 
@@ -79,14 +79,22 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         UNUserNotificationCenter.current().setNotificationCategories([pickup, task, taskDoneOnly])
     }
 
-    private func registerAuthorizedPushNotifications() {
+    private func requestNotificationPermission() {
         if ProcessInfo.processInfo.environment["UI_TESTS_DISABLE_NOTIFICATIONS"] == "1" {
             return
         }
 
-        // The existing primer and Settings choices own first-time permission prompts.
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else { return }
+        // Ask at launch so radon, task, briefing and Support Train reminders can
+        // arrive even when the person never opens the pickup primer.
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] granted, error in
+            if let error {
+                self?.logger.error("Push permission error", metadata: ["error": .string(error.localizedDescription)])
+                return
+            }
+            guard granted else {
+                self?.logger.info("Push permission denied by user")
+                return
+            }
             DispatchQueue.main.async {
                 UIApplication.shared.registerForRemoteNotifications()
             }
