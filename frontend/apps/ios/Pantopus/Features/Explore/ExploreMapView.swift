@@ -52,10 +52,12 @@ public struct ExploreMapView: View {
             let sheetHeight = max(120, totalHeight * viewModel.sheetStop.heightFraction + dragTranslation) + bottomInset
             ZStack(alignment: .top) {
                 mapLayer
+                // The stack already starts below the status bar; adding the inset again put these
+                // controls a status bar's height lower than designed, over more of the map.
                 floatingPill
-                    .padding(.top, geo.safeAreaInsets.top + 4)
+                    .padding(.top, 4)
                 typeToggle
-                    .padding(.top, geo.safeAreaInsets.top + 50)
+                    .padding(.top, 50)
                 mapControls(bottomInset: sheetHeight + 14)
                 bottomSheet(height: sheetHeight, screenHeight: totalHeight, contentBottomInset: bottomInset)
             }
