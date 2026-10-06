@@ -20,6 +20,7 @@ const { writeAuditLog } = require('../utils/businessPermissions');
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
 const { setEntityFeeOverride } = require('../services/businessEntityService');
 const s3 = require('../services/s3Service');
+const businessVerificationStorage = require('../services/businessVerificationStorage');
 
 // A reviewer opens each document through a short-lived link instead of a stored URL.
 const DOCUMENT_LINK_SECONDS = 10 * 60;
@@ -81,7 +82,7 @@ router.get('/queue', async (req, res) => {
     if (fileIds.length > 0) {
       const { data: files, error: filesErr } = await supabaseAdmin
         .from('File')
-        .select('id, file_path, mime_type, file_context, is_deleted')
+        .select('id, file_path, mime_type, file_context, is_deleted, metadata')
         .in('id', fileIds);
       if (filesErr) {
         logger.error('Admin verification queue file lookup failed', { error: filesErr.message });
@@ -90,7 +91,10 @@ router.get('/queue', async (req, res) => {
         if (f.is_deleted || f.file_context !== 'business_verification' || !f.file_path) continue;
         try {
           documentLinks[f.id] = {
-            url: await s3.getPresignedDownloadUrl(f.file_path, DOCUMENT_LINK_SECONDS),
+            // New uploads sit in private storage; earlier ones are in the uploads bucket.
+            url: businessVerificationStorage.isStored(f)
+              ? await businessVerificationStorage.signedUrl(f, DOCUMENT_LINK_SECONDS)
+              : await s3.getPresignedDownloadUrl(f.file_path, DOCUMENT_LINK_SECONDS),
             mime_type: f.mime_type || null,
           };
         } catch (linkErr) {
@@ -226,6 +230,8 @@ async function reviewEvidence(evidenceId, decision, adminUserId, notes) {
       .update({
         verification_status: 'document_verified',
         verification_tier: 'document_verified',
+        // The apps' verified mark reads the identity tier; a document approval is bi3.
+        identity_verification_tier: 'bi3_documented',
         verified_at: now,
         verified_by: adminUserId,
         updated_at: now,

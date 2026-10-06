@@ -8,6 +8,12 @@ final class HomeTaskNotificationTapTests: XCTestCase {
     private let actor = "51000000-0000-4000-8000-000000000003"
     private var selection: XCTestExpectation?
     private var selectedDestination: DeepLinkRouter.Destination?
+    /// Session-scoped stubs: a FIFO stub could be taken by another test's late
+    /// background request, which made this suite flaky on slower simulators.
+    private var session: URLSession?
+    private var ownRequests: [URLRequest] {
+        session.map(SequencedURLProtocol.capturedRequests(for:)) ?? []
+    }
 
     override func setUp() {
         super.setUp()
@@ -32,7 +38,6 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         isRead: Bool = true,
         onSelect: @escaping @MainActor () -> Void = {}
     ) -> NotificationsViewModel {
-        let api = APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none)
         let notification: [String: Any] = [
             "id": "synthetic-note",
             "type": "task_assigned",
@@ -48,7 +53,12 @@ final class HomeTaskNotificationTapTests: XCTestCase {
             "hasMore": false
         ]
         let json = try? JSONSerialization.data(withJSONObject: data)
-        SequencedURLProtocol.sequence = [.status(200, body: json.flatMap { String(data: $0, encoding: .utf8) } ?? "{}")]
+        let session = SequencedURLProtocol.makeSession(routeResponses: [
+            "/api/notifications": [.status(200, body: json.flatMap { String(data: $0, encoding: .utf8) } ?? "{}")],
+            "/api/notifications/synthetic-note/read": [.status(200, body: "{\"success\":true}")]
+        ])
+        self.session = session
+        let api = APIClient(environment: .current, session: session, retryPolicy: .none)
         return NotificationsViewModel(
             api: api,
             onSelect: { [weak self] _ in
@@ -87,7 +97,7 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         identity = "replacement"
         try await tap(model, allowed: false)
         XCTAssertNil(DeepLinkRouter.shared.pending)
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 1)
+        XCTAssertEqual(ownRequests.count, 1)
     }
 
     func testWrongRecipientOrAudienceContextCannotUsePersonalTaskRoute() async throws {
@@ -107,16 +117,15 @@ final class HomeTaskNotificationTapTests: XCTestCase {
         try await tap(model)
         await Task.yield()
         XCTAssertEqual(selectedDestination, .homeTask(homeId: home, taskId: task))
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 1)
+        XCTAssertEqual(ownRequests.count, 1)
     }
 
     func testMarkReadPreservesExactTaskMetadataForLaterTap() async throws {
         let model = model(identity: { "opening" }, isRead: false)
         await model.load()
-        SequencedURLProtocol.sequence = [.status(200, body: "{\"success\":true}")]
         await model.markRead(id: "synthetic-note")
         try await tap(model)
         XCTAssertEqual(selectedDestination, .homeTask(homeId: home, taskId: task))
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 2)
+        XCTAssertEqual(ownRequests.count, 2)
     }
 }

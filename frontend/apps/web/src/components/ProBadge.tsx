@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import * as api from '@pantopus/api';
 import { IdentityIcons } from '@/lib/icons';
+import { launchFeatures } from '@/lib/featureFlags';
 
 /**
  * Inline "Pro" pill shown in Personal-zone gig surfaces when the user has
@@ -12,8 +13,11 @@ import { IdentityIcons } from '@/lib/icons';
  */
 export function ProBadge({ compact = false }: { compact?: boolean }) {
   const [active, setActive] = useState(false);
+  // Professional mode is a launch cut (#2 + #4): no badge and no profile read while it's off.
+  const enabled = launchFeatures.personas && launchFeatures.openGigs;
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     (async () => {
       try {
@@ -26,9 +30,9 @@ export function ProBadge({ compact = false }: { compact?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
-  if (!active) return null;
+  if (!enabled || !active) return null;
 
   if (compact) {
     return (

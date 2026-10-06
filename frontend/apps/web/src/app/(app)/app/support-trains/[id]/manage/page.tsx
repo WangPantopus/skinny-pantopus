@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
+import { launchFeatures } from '@/lib/featureFlags';
 import { getAuthToken } from '@pantopus/api';
 import { buildSupportTrainShareUrl } from '@pantopus/utils';
 import ErrorState from '@/components/ui/ErrorState';
@@ -46,8 +47,9 @@ export default function ManageSupportTrainPage() {
   const [deleting, setDeleting] = useState(false);
 
   // Sort
-  const [sortField, setSortField] = useState<'created_at' | 'status'>('created_at');
-  const [sortAsc, setSortAsc] = useState(false);
+  // By the slot each helper took (soonest first), not when they signed up.
+  const [sortField, setSortField] = useState<'slot_date' | 'status'>('slot_date');
+  const [sortAsc, setSortAsc] = useState(true);
 
   const fetchReservations = useCallback(async () => {
     setReservationsLoading(true);
@@ -109,7 +111,9 @@ export default function ManageSupportTrainPage() {
     if (deleting) return;
 
     const confirmed = window.confirm(
-      'Delete this Support Train permanently? This removes its schedule, updates, and invites. Trains with active helpers or gift fund contributions cannot be deleted.'
+      launchFeatures.giftFunds
+        ? 'Delete this Support Train permanently? This removes its schedule, updates, and invites. Trains with active helpers or gift fund contributions cannot be deleted.'
+        : 'Delete this Support Train permanently? This removes its schedule, updates, and invites. Trains with active helpers cannot be deleted.'
     );
 
     if (!confirmed) return;
@@ -252,7 +256,8 @@ export default function ManageSupportTrainPage() {
           )}
         </section>
 
-        {/* ── Donation Summary ── */}
+        {/* ── Donation Summary ── (launch cut #9: shown only once gift funds are on) */}
+        {launchFeatures.giftFunds && (
         <section className="bg-app-surface border border-app-border rounded-xl p-6">
           <h2 className="text-lg font-semibold text-app-text mb-4 flex items-center gap-2">
             <Heart className="w-5 h-5 text-app-text-muted" />
@@ -317,6 +322,7 @@ export default function ManageSupportTrainPage() {
             </>
           )}
         </section>
+        )}
       </div>
 
       {/* ── Reservation Table ── */}
@@ -356,10 +362,10 @@ export default function ManageSupportTrainPage() {
                   </th>
                   <th
                     className="text-left px-4 py-3 cursor-pointer select-none"
-                    onClick={() => toggleSort('created_at')}
+                    onClick={() => toggleSort('slot_date')}
                   >
                     <span className="flex items-center gap-1">
-                      Date <ArrowUpDown className="w-3 h-3" />
+                      Slot <ArrowUpDown className="w-3 h-3" />
                     </span>
                   </th>
                 </tr>
@@ -387,7 +393,14 @@ export default function ManageSupportTrainPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-app-text-muted text-xs">
-                      {new Date(r.created_at).toLocaleDateString()}
+                      {r.slot_date
+                        ? new Date(r.slot_date + 'T00:00:00Z').toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            timeZone: 'UTC',
+                          })
+                        : '—'}
                     </td>
                   </tr>
                 ))}
@@ -409,8 +422,9 @@ export default function ManageSupportTrainPage() {
                   Danger zone
                 </h2>
                 <p className="mt-1 text-sm text-red-700/90 dark:text-red-200/90">
-                  Delete is for trains created by mistake. Once helpers commit or gift funds arrive,
-                  the backend blocks deletion so the campaign history stays intact.
+                  Delete is for trains created by mistake. Once helpers commit
+                  {launchFeatures.giftFunds ? ' or gift funds arrive' : ''}, the train can&apos;t be
+                  deleted, so its history stays intact.
                 </p>
               </div>
             </div>
@@ -429,7 +443,9 @@ export default function ManageSupportTrainPage() {
             </button>
             <p className="mt-3 text-sm text-red-700/90 dark:text-red-200/90">
               {deleteDisabledReason ||
-                'Permanent. This stays available only until the train has active helpers or gift fund contributions.'}
+                (launchFeatures.giftFunds
+                  ? 'Permanent. This stays available only until the train has active helpers or gift fund contributions.'
+                  : 'Permanent. This stays available only until the train has active helpers.')}
             </p>
           </div>
         </section>

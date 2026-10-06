@@ -848,6 +848,27 @@ router.get('/my-businesses', verifyToken, async (req, res) => {
       profileMap[p.business_user_id] = p;
     }
 
+    // A business's address lives on its locations, not its account row, so a card with
+    // no city/state there read "Online only". Fill them from the primary location.
+    const missingPlace = (memberships || [])
+      .filter((m) => m.business && !m.business.city && !m.business.state)
+      .map((m) => m.business_user_id);
+    if (missingPlace.length > 0) {
+      const { data: primaryLocations } = await supabaseAdmin
+        .from('BusinessLocation')
+        .select('business_user_id, city, state')
+        .in('business_user_id', missingPlace)
+        .eq('is_primary', true)
+        .eq('is_active', true);
+      const locationMap = new Map((primaryLocations || []).map((l) => [l.business_user_id, l]));
+      for (const m of memberships) {
+        const loc = locationMap.get(m.business_user_id);
+        if (loc && m.business && !m.business.city && !m.business.state) {
+          m.business = { ...m.business, city: loc.city || null, state: loc.state || null };
+        }
+      }
+    }
+
     // ── Per-business signals for the My businesses cards ────────────────
     //   team             → active seat count + up to 3 member chips
     //   stats.open_chats → the business's own unread, active conversations

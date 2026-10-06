@@ -313,6 +313,20 @@ export async function muteEntity(data: {
   return post('/api/posts/mute', data);
 }
 
+/** People and businesses this person muted (GET /api/posts/mute), for Settings to list and undo. */
+export async function getMutedEntities(): Promise<{
+  muted: Array<{
+    entity_type: 'user' | 'business';
+    entity_id: string;
+    name: string;
+    username: string | null;
+    avatar_url: string | null;
+    muted_at: string;
+  }>;
+}> {
+  return get('/api/posts/mute');
+}
+
 export async function unmuteEntity(params: {
   entityType: 'user' | 'business' | 'persona';
   entityId: string;

@@ -49,6 +49,17 @@ function buildRefreshRedirect(req: NextRequest, redirectTo: string, onFail?: str
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
+  // Requests next.config.js rewrites to the API carry the edge secret, so the API trusts
+  // the visitor's address that Vercel wrote into X-Forwarded-For instead of treating every
+  // web visitor as Vercel's address (backend/middleware/edgeClientIp.js).
+  if (pathname.startsWith('/api/') || pathname.startsWith('/socket.io')) {
+    const edgeSecret = process.env.EDGE_PROXY_SECRET;
+    if (!edgeSecret) return NextResponse.next();
+    const headers = new Headers(req.headers);
+    headers.set('x-pantopus-edge', edgeSecret);
+    return NextResponse.next({ request: { headers } });
+  }
+
   // Launch cut (src/lib/featureFlags.ts): public pages of a hidden feature
   // (persona pages and /@handle, listings, task browse, booking pages) land
   // on the home page.
@@ -161,5 +172,7 @@ export function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     '/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)',
+    '/api/:path*',
+    '/socket.io/:path*',
   ],
 };

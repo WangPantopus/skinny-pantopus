@@ -49,7 +49,7 @@ class HomeSecurityViewModel
     ) : ViewModel() {
         enum class Variant { Balanced, Strict }
 
-        val title: String = "Security"
+        val title: String = "Privacy"
 
         val homeId: String =
             requireNotNull(savedStateHandle[HOME_SECURITY_HOME_ID_KEY]) {

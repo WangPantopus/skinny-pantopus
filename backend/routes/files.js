@@ -10,6 +10,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
 const s3 = require('../services/s3Service');
+const businessVerificationStorage = require('../services/businessVerificationStorage');
 
 // Try to load sharp for image processing
 let sharp;
@@ -884,11 +885,16 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const folder = purpose === 'voice_postscript' ? 'voice-postscripts' : 'uploads';
 
-    const { url: fileUrl, key: s3Key } = await s3.uploadToS3(
-      file.buffer,
-      s3.generateS3Key(folder, file.originalname, userId),
-      file.mimetype
-    );
+    // Verification documents (licenses, EIN letters, utility bills) go to private storage with no
+    // public URL; admins review them through short-lived links.
+    const verificationDoc = purpose === 'business_verification';
+    const { url: fileUrl, key: s3Key, metadata } = verificationDoc
+      ? await businessVerificationStorage.store(userId, file)
+      : await s3.uploadToS3(
+        file.buffer,
+        s3.generateS3Key(folder, file.originalname, userId),
+        file.mimetype
+      );
 
     const { data: savedFile, error: dbError } = await supabaseAdmin
       .from('File')
@@ -903,14 +909,16 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
         file_extension: ext,
         file_type: fileType,
         ...(purpose ? { file_context: purpose } : {}),
-        visibility: visibility,
+        ...(metadata ? { metadata } : {}),
+        visibility: verificationDoc ? 'private' : visibility,
         processing_status: 'completed',
       })
       .select()
       .single();
 
     if (dbError) {
-      await s3.deleteFromS3(s3Key);
+      if (verificationDoc) await businessVerificationStorage.remove(metadata.storage_bucket, s3Key);
+      else await s3.deleteFromS3(s3Key);
       logger.error('Database insert error (upload)', { error: dbError.message, userId });
       return res.status(500).json({ error: 'Failed to save file record' });
     }

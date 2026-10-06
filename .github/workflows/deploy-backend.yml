@@ -15,6 +15,7 @@ concurrency:
 permissions:
   contents: read
   actions: read
+  deployments: read
 
 jobs:
   preflight:
@@ -28,6 +29,7 @@ jobs:
     outputs:
       sha: ${{ steps.ci.outputs.sha }}
       target: ${{ steps.ci.outputs.target }}
+      deploy: ${{ steps.ci.outputs.deploy }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -42,6 +44,7 @@ jobs:
   release:
     name: Release backend
     needs: preflight
+    if: needs.preflight.outputs.deploy == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     environment: ${{ needs.preflight.outputs.target }}

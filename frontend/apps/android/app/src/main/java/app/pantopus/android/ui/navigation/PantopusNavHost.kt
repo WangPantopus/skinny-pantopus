@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -141,7 +142,9 @@ fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
  */
 @Composable
 private fun PlaceLaunchHost(openAuth: Boolean = false) {
-    var showAuth by remember { mutableStateOf(openAuth) }
+    // Saveable: rotating or switching dark mode recreates the activity, and the
+    // person stays on the sign-in or sign-up screen they were using.
+    var showAuth by rememberSaveable { mutableStateOf(openAuth) }
     val prefersLogin by DeepLinkRouter.prefersLoginPresentation.collectAsStateWithLifecycle()
 
     // Persistent login: a session-end banner is pending → show the login

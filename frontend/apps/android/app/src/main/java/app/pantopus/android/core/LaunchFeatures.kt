@@ -33,6 +33,9 @@ enum class LaunchFeature(
 
     /** 8. Mail extras: personal and ceremonial letters, e-signing, the community mail stream and event invitations by mail. */
     MAIL_EXTRAS("mail_extras"),
+
+    /** 9. Support Train gift funds: no app can take a contribution yet. */
+    GIFT_FUNDS("gift_funds"),
 }
 
 /**
@@ -60,6 +63,7 @@ object LaunchFeatures {
     val businessDirectory: Boolean get() = isEnabled(LaunchFeature.BUSINESS_DIRECTORY)
     val householdExtras: Boolean get() = isEnabled(LaunchFeature.HOUSEHOLD_EXTRAS)
     val mailExtras: Boolean get() = isEnabled(LaunchFeature.MAIL_EXTRAS)
+    val giftFunds: Boolean get() = isEnabled(LaunchFeature.GIFT_FUNDS)
 
     /** Parses a comma-separated key list ("all" enables every feature). */
     fun parse(raw: String?): Set<LaunchFeature> {

@@ -173,7 +173,9 @@ export function useHomeIntelligence(homeId: string | undefined, can: (permission
     errors: { health: health.error, checklist: checklist.error, bills: bills.error, property: property.error, timeline: timeline.error },
     canReadHealth, canReadBills, canReadTimeline, reloadSummary,
     seasonTransition, clearSeasonTransition, refreshAll,
-    refreshHealthScore: () => reloadSummary('health'), generateChecklist: () => reloadSummary('checklist'),
+    refreshHealthScore: () => reloadSummary('health'),
+    // The score counts the checklist, so it reloads once the items exist.
+    generateChecklist: async () => { await reloadSummary('checklist'); await reloadSummary('health'); },
     setBillBenchmarkOptIn, completeChecklistItem: (id: string) => changeChecklist(id, 'completed'),
     skipChecklistItem: (id: string) => changeChecklist(id, 'skipped'), loadMoreTimeline,
     ensureBillTrends, ensurePropertyValue, ensureTimeline,

@@ -695,6 +695,66 @@ async function sendGuestReservationReminderEmail(options) {
   return sendGuestReservationConfirmationEmail({ ...options, isReminder: true });
 }
 
+/**
+ * Tell an email-only Support Train guest that the organizer closed the Train, so the signups
+ * listed (label and display date, e.g. "Fri, Oct 9") are no longer needed.
+ */
+async function sendGuestTrainClosedEmail({ toEmail, guestName, trainTitle, slots }) {
+  const subject = `No longer needed: ${trainTitle}`;
+  const slotRows = (slots || []).map((s) => `${s.slotLabel} · ${s.slotDate}`);
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0; padding:0; background-color:#f9fafb; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:480px; margin:40px auto; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+
+    <div style="background:#111827; padding:32px 32px 24px; text-align:center;">
+      <div style="font-size:32px; margin-bottom:8px;">🚂</div>
+      <h1 style="color:#ffffff; font-size:20px; font-weight:600; margin:0;">This Support Train has closed</h1>
+    </div>
+
+    <div style="padding:32px;">
+      <p style="color:#374151; font-size:15px; line-height:1.6; margin:0 0 16px;">
+        Hi <strong>${escapeHtml(guestName)}</strong>, the organizer closed <strong>${escapeHtml(trainTitle)}</strong>. You don't need to bring anything for:
+      </p>
+
+      <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin:0 0 20px;">
+        ${slotRows.map((row) => `<div style="font-size:15px; font-weight:600; color:#111827;">📅 ${escapeHtml(row)}</div>`).join('\n        ')}
+      </div>
+
+      <p style="color:#374151; font-size:14px; line-height:1.6; margin:0;">
+        Thank you for offering to help.
+      </p>
+    </div>
+
+    <div style="background:#f9fafb; border-top:1px solid #e5e7eb; padding:16px 32px; text-align:center;">
+      <p style="color:#9ca3af; font-size:11px; margin:0;">Pantopus — Your household, organized.</p>
+      <p style="color:#d1d5db; font-size:10px; margin:8px 0 0;">
+        If you didn't sign up for this, you can safely ignore this email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `
+${subject}
+
+Hi ${guestName}, the organizer closed ${trainTitle}. You don't need to bring anything for:
+
+${slotRows.join('\n')}
+
+Thank you for offering to help.
+`;
+
+  return sendEmail({ to: toEmail, subject, html, text });
+}
+
 // ============================================================
 //  GUEST RESERVATION ADDRESS EMAIL
 // ============================================================
@@ -1076,6 +1136,7 @@ module.exports = {
   sendMonthlyReceipt,
   sendGuestReservationConfirmationEmail,
   sendGuestReservationReminderEmail,
+  sendGuestTrainClosedEmail,
   sendGuestReservationAddressEmail,
   sendDisplayNameMigrationEmail,
   buildDisplayNameMigrationEmailContent,

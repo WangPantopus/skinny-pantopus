@@ -70,6 +70,8 @@ export function useHomeAccess(homeId: string | undefined) {
   const [access, setAccess] = useState<HomeAccessData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // A 403 is the viewer's permission, not a failed read: no retry can change it.
+  const [denied, setDenied] = useState(false);
 
   const load = useCallback(async () => {
     if (!homeId) {
@@ -78,6 +80,7 @@ export function useHomeAccess(homeId: string | undefined) {
     }
     setLoading(true);
     setError(null);
+    setDenied(false);
     try {
       const token = getAuthToken();
       if (!token) {
@@ -89,6 +92,7 @@ export function useHomeAccess(homeId: string | undefined) {
       setAccess({ ...EMPTY_ACCESS, ...data } as HomeAccessData);
     } catch (err: any) {
       setError(err?.message || 'Failed to load access info');
+      setDenied(err?.statusCode === 403);
       setAccess(EMPTY_ACCESS);
     } finally {
       setLoading(false);
@@ -117,6 +121,7 @@ export function useHomeAccess(homeId: string | undefined) {
     access,
     loading,
     error,
+    denied,
     canSeeTab,
     needsVerification,
     isProvisional,

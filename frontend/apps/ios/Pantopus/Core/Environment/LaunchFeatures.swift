@@ -41,6 +41,8 @@ public enum LaunchFeature: String, CaseIterable, Sendable {
     /// 8. Mail extras: personal and ceremonial letters, e-signing, the
     /// community mail stream and event invitations by mail.
     case mailExtras = "mail_extras"
+    /// 9. Support Train gift funds: no app can take a contribution yet.
+    case giftFunds = "gift_funds"
 }
 
 /// Read-only switches for the features cut from the first launch.
@@ -90,6 +92,10 @@ public enum LaunchFeatures {
 
     public static var mailExtras: Bool {
         isEnabled(.mailExtras)
+    }
+
+    public static var giftFunds: Bool {
+        isEnabled(.giftFunds)
     }
 
     /// Parses a comma-separated key list ("all" enables every feature).

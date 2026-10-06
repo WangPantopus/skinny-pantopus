@@ -25,6 +25,7 @@ const {
 const stripeService = require('../stripe/stripeService');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
 const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
 const {
@@ -707,7 +708,8 @@ router.post(
       enable_home_cooked_meals,
       enable_takeout,
       enable_groceries,
-      enable_gift_funds,
+      // Launch cut #9: no app takes a contribution yet, so a fund stays off.
+      enable_gift_funds: Boolean(enable_gift_funds) && isLaunchFeatureEnabled('gift_funds'),
       ai_draft_payload: draft_payload,
     };
     const readRequestTrain = async () => {
@@ -1739,10 +1741,13 @@ router.post(
       });
     }
 
-    const { error: stErr } = await supabaseAdmin
+    // Only the request that makes the change tells helpers, so a repeated close sends nothing twice.
+    const { data: closed, error: stErr } = await supabaseAdmin
       .from('SupportTrain')
       .update({ status: 'completed' })
-      .eq('id', st.id);
+      .eq('id', st.id)
+      .in('status', ['published', 'active', 'paused'])
+      .select('id');
 
     if (stErr) {
       logger.error('Complete SupportTrain failed', { supportTrainId: st.id, error: stErr.message });
@@ -1750,6 +1755,15 @@ router.post(
     }
 
     await supabaseAdmin.from('Activity').update({ status: 'completed' }).eq('id', st.activity_id);
+
+    // Reminders stop with the Train, so helpers with a date still ahead are told they're released.
+    if (closed?.length) {
+      emitSupportTrainEvent({
+        event: 'support_train.closed',
+        supportTrainId: st.id,
+        actorUserId: req.user.id,
+      });
+    }
 
     res.json({ id: st.id, status: 'completed' });
   })
@@ -1938,10 +1952,17 @@ const enableFundSchema = Joi.object({
   goal_amount: Joi.number().integer().min(1).max(100000).optional(), // cents, $0.01–$1000
 });
 
+// Launch cut #9: until contributions can be taken, a fund can't be opened or paid into.
+function requireGiftFunds(req, res, next) {
+  if (isLaunchFeatureEnabled('gift_funds')) return next();
+  return res.status(403).json({ error: 'GIFT_FUNDS_UNAVAILABLE', message: "Gift funds aren't available yet." });
+}
+
 // Enable gift fund (idempotent)
 router.post(
   '/:id/fund/enable',
   verifyToken,
+  requireGiftFunds,
   supportTrainWriteLimiter,
   loadSupportTrain,
   requireSupportTrainRole(['primary', 'co_organizer']),
@@ -2081,6 +2102,7 @@ const contributeFundSchema = Joi.object({
 router.post(
   '/:id/fund/contributions',
   verifyToken,
+  requireGiftFunds,
   supportTrainWriteLimiter,
   loadSupportTrain,
   validate(contributeFundSchema),
@@ -2533,6 +2555,42 @@ router.post(
 
 // ─── Helper Reserve Flow ──────────────────────────────────────────────────
 
+// A helper may sign up only for a train they can open (the same rule as GET /:id). Link
+// trains take anyone with the link; a "My connections" train takes its organizers,
+// recipient and current helpers, the organizer's accepted connections, and invitees.
+// Without this, someone who kept a train's ids after losing access could still sign
+// up, which opens the train to them and adds them to its group chat.
+async function canJoinSupportTrain(st, userId) {
+  if (st.sharing_mode !== 'invited_only') return true;
+  if (st.organizer_user_id === userId || st.recipient_user_id === userId) return true;
+  const counts = await Promise.all([
+    supabaseAdmin
+      .from('SupportTrainOrganizer')
+      .select('id', { count: 'exact', head: true })
+      .eq('support_train_id', st.id)
+      .eq('user_id', userId),
+    supabaseAdmin
+      .from('SupportTrainReservation')
+      .select('id', { count: 'exact', head: true })
+      .eq('support_train_id', st.id)
+      .eq('user_id', userId)
+      .in('status', ['reserved', 'delivered', 'confirmed']),
+    supabaseAdmin
+      .from('SupportTrainInvite')
+      .select('id', { count: 'exact', head: true })
+      .eq('support_train_id', st.id)
+      .eq('invitee_user_id', userId),
+    supabaseAdmin
+      .from('Relationship')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'accepted')
+      .or(`and(requester_id.eq.${st.organizer_user_id},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${st.organizer_user_id})`),
+  ]);
+  const failed = counts.find((result) => result.error);
+  if (failed) throw failed.error;
+  return counts.some((result) => (result.count || 0) > 0);
+}
+
 const reserveSchema = Joi.object({
   contribution_mode: Joi.string().valid('cook', 'takeout', 'groceries').required(),
   dish_title: Joi.string().max(200).allow(null).optional(),
@@ -2566,6 +2624,19 @@ router.post(
         error: 'INVALID_STATE',
         message: 'This Support Train is not currently accepting reservations.',
       });
+    }
+
+    let canJoin;
+    try {
+      canJoin = await canJoinSupportTrain(st, userId);
+    } catch (error) {
+      logger.error('Reserve slot access check failed', { supportTrainId: st.id, error: error.message });
+      return res.status(500).json({ error: 'INTERNAL', message: 'Failed to reserve slot.' });
+    }
+    if (!canJoin) {
+      return res
+        .status(403)
+        .json({ error: 'FORBIDDEN', message: 'You do not have access to this Support Train.' });
     }
 
     // Validate contribution_mode is enabled on the Support Train
@@ -4080,7 +4151,7 @@ router.get(
         home_cooked_meals: st.enable_home_cooked_meals,
         takeout: st.enable_takeout,
         groceries: st.enable_groceries,
-        gift_funds: st.enable_gift_funds,
+        gift_funds: Boolean(st.enable_gift_funds) && isLaunchFeatureEnabled('gift_funds'),
       },
 
       // Recipient info (always public). No summary until the household size is known:
@@ -4249,7 +4320,7 @@ router.patch(
     if (body.enable_groceries !== undefined)
       supportTrainPatch.enable_groceries = body.enable_groceries;
     if (body.enable_gift_funds !== undefined)
-      supportTrainPatch.enable_gift_funds = body.enable_gift_funds;
+      supportTrainPatch.enable_gift_funds = Boolean(body.enable_gift_funds) && isLaunchFeatureEnabled('gift_funds');
     if (body.show_exact_address_after_signup !== undefined)
       supportTrainPatch.show_exact_address_after_signup = body.show_exact_address_after_signup;
 

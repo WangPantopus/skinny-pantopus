@@ -127,7 +127,7 @@ function ResetPasswordPageContent() {
                   type="button"
                   onClick={() => setShowPw((v) => !v)}
                   aria-label={showPw ? 'Hide password' : 'Show password'}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-sm font-medium text-primary-700 dark:text-primary-300 hover:opacity-90 select-none"
+                  className="absolute inset-y-0 right-0 px-2 text-sm font-medium text-primary-700 dark:text-primary-300 hover:opacity-90 select-none"
                 >
                   {showPw ? 'Hide' : 'Show'}
                 </button>
@@ -153,7 +153,7 @@ function ResetPasswordPageContent() {
                   type="button"
                   onClick={() => setShowConfirmPw((v) => !v)}
                   aria-label={showConfirmPw ? 'Hide confirm password' : 'Show confirm password'}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-sm font-medium text-primary-700 dark:text-primary-300 hover:opacity-90 select-none"
+                  className="absolute inset-y-0 right-0 px-2 text-sm font-medium text-primary-700 dark:text-primary-300 hover:opacity-90 select-none"
                 >
                   {showConfirmPw ? 'Hide' : 'Show'}
                 </button>

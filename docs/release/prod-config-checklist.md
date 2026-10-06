@@ -136,6 +136,15 @@ Supabase dashboard → Authentication:
   and `pantopus://auth/callback`.
 - Email: confirm email **on**; minimum password length **12**; custom SMTP from
   D6 (sender `Pantopus Staging <staging@pantopus.com>`).
+- Rate limits: every sign-in, sign-up, token refresh, password reset and email
+  confirmation reaches Supabase from the API server's one address, so
+  Supabase's per-address defaults would cap the whole app (30 sign-ups, resets
+  and resends, and 150 sign-ins and refreshes, per 5 minutes; a launch-day
+  burst of sign-ups would fail). The API already limits each visitor (20
+  sign-ins or sign-ups a minute per address; resets and resends have their
+  own limits). Under Rate Limits set, per 5 minutes: sign-ups and sign-ins
+  **300**, token refreshes **1500**, verifications **300**. Email sending
+  follows your SMTP plan.
 - Providers (L3 verifies sign-in):
   - Apple: a Services ID (for example `app.pantopus.web`) whose Return URL is
     `https://<staging ref>.supabase.co/auth/v1/callback`, a Sign in with Apple
@@ -219,7 +228,11 @@ Vercel → the Pantopus project:
   `NEXT_PUBLIC_APP_URL=https://staging.pantopus.com`,
   `NEXT_PUBLIC_APP_ENV=staging`,
   `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=<pk_test_…>`,
-  `NEXT_PUBLIC_MAPBOX_TOKEN=<public pk.… token>`.
+  `NEXT_PUBLIC_MAPBOX_TOKEN=<public pk.… token>`, and
+  `EDGE_PROXY_SECRET` (a plain variable, never `NEXT_PUBLIC_`; the value in
+  `hosted-secrets/staging.env`, which the server's env file also gets in S4).
+  It lets the API see each web visitor's own address instead of Vercel's, so
+  web sign-ins and sign-ups are limited per visitor, not shared by everyone.
   Leave `NEXT_PUBLIC_LAUNCH_FEATURES` empty: cut features stay hidden.
 - Domains: assign `staging.pantopus.com` to the `dev` branch, then change its
   Cloudflare record to Vercel's CNAME (DNS only). The September staging site on
@@ -227,7 +240,12 @@ Vercel → the Pantopus project:
 
 **Check:** `https://staging.pantopus.com` loads, sign-in works, and the browser's
 network panel shows API calls going to `/api/...` on the same origin (Next.js
-forwards them to the staging API).
+forwards them to the staging API). Then send the signed-in account a chat
+message from another account: it must appear without a reload. The web's
+realtime connects to `/socket.io` on its own origin; Vercel doesn't proxy
+WebSockets, so Socket.IO stays on HTTP long-polling through that rewrite (its
+25-second polls fit Vercel's 120-second origin timeout). A failed WebSocket
+upgrade in the network panel is expected; chat that only updates on reload is not.
 
 ### S8. Staging scheduled jobs (founder runs, L4 prepared)
 
@@ -353,7 +371,8 @@ Don't run any of this until L4 has rehearsed it on a copy:
 As in S3, with Site URL `https://pantopus.com`, redirect URLs
 `https://pantopus.com/auth/callback`, `https://www.pantopus.com/auth/callback`,
 `https://pantopus.com/**` and `pantopus://auth/callback`, production SMTP sender
-`Pantopus <hello@pantopus.com>`, and the production Apple and Google settings.
+`Pantopus <hello@pantopus.com>`, the same rate limits, and the production Apple
+and Google settings.
 
 ### P4. Production Firebase and APNs (founder)
 
@@ -406,12 +425,16 @@ inbox to `pantopus-job-alarms-production` (stack `pantopus-seeder-production`).
 Vercel Production environment variables: `NEXT_PUBLIC_API_URL=https://api.pantopus.com`,
 `NEXT_PUBLIC_APP_URL=https://pantopus.com`, `NEXT_PUBLIC_APP_ENV=production`,
 `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (matching D4), `NEXT_PUBLIC_MAPBOX_TOKEN`,
+`EDGE_PROXY_SECRET` (the value in `hosted-secrets/production.env`, as in S7),
 and, once the new store listings exist, `NEXT_PUBLIC_IOS_APP_STORE_URL`,
 `NEXT_PUBLIC_IOS_APP_STORE_APP_ID` and `NEXT_PUBLIC_ANDROID_PLAY_STORE_URL`
 (today's defaults point at the April apps). Production branch `master`.
 
 **Check:** `https://pantopus.com` shows the new home page; sign-in works;
-`https://pantopus.com/.well-known/apple-app-site-association` returns JSON.
+`https://pantopus.com/.well-known/apple-app-site-association` returns JSON;
+the web's Settings → Security page (`/app/settings/security`) shows this
+browser's last address as your own network's, not a Vercel or Amazon one (if it
+doesn't, `EDGE_PROXY_SECRET` differs between Vercel and the server).
 
 ### P10. Domains and app links (founder, L4 regenerates the files)
 
@@ -506,12 +529,15 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `APP_URLS` (allowed web origins) | `https://staging.pantopus.com` | `https://pantopus.com,https://www.pantopus.com` | |
 | `TRUST_PROXY` | `1` | `1` (or `2` behind Cloudflare's proxy, P1) | |
 | `INTERNAL_API_KEY`, `CSRF_SECRET`, `STEP_UP_SECRET`, `LOCATION_JITTER_SECRET`, `EMAIL_INBOUND_HMAC_SECRET`, `HOME_POSTCARD_CODE_KEYS_JSON`, `HOME_POSTCARD_CODE_ACTIVE_KEY` | gen | gen | `hosted-secrets/` |
+| `EDGE_PROXY_SECRET` | gen | gen | `hosted-secrets/`; the same value goes into Vercel (S7, P9) |
 | `GOOGLE_ADDRESS_VALIDATION_API_KEY`, `GOOGLE_PLACES_API_KEY` | required | required | Google Cloud (restrict to the server's IP) |
 | `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active) |
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
-| `AIRNOW_API_KEY` | optional | optional | (L1 is replacing AirNow) |
+| `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
 | `OPENAI_API_KEY` | required for AI features | required for AI features | OpenAI project with a budget cap |
+| `OPENAI_CHAT_MODEL`, `OPENAI_DRAFT_MODEL` | `gpt-6-luna` | `gpt-6-luna` | the model the streams verify against locally (a reasoning model: code paths pass `max_completion_tokens`, no custom `temperature`) |
+| `PROPERTY_SUGGESTIONS_LLM_MODEL`, `MAGIC_TASK_AI_MODEL` | unset | unset | their defaults (`gpt-4o-mini`, `gpt-4o`) match how those calls are written; a reasoning model there rejects `max_tokens`/`temperature` |
 | `LOB_ENV` | `test` | `live` | D5 |
 | `LOB_API_KEY` | `test_…` | `live_…` | Lob |
 | `LOB_WEBHOOK_SECRET` | Lob test webhook | Lob live webhook | Lob → Webhooks |
