@@ -95,7 +95,7 @@ class HomeInvitationSenderCodecTest {
         assertFalse(selected.summary.contains("access_request:"))
         val legacy = context.replace("\"proposed_role_base\":\"guest\"", "\"proposed_role_base\":null")
         assertTrue(
-            fixture.codec.context(legacy, fixture.scope, fixture.serverSession, fixture.intent("resend")).summary.contains("Role: member"),
+            fixture.codec.context(legacy, fixture.scope, fixture.serverSession, fixture.intent("resend")).summary.contains("Role: Member"),
         )
     }
 
@@ -162,9 +162,10 @@ class HomeInvitationSenderCodecTest {
         assertTrue(senderRecipientValid("@synthetic_person", true))
         assertFalse(senderRecipientValid("@", true))
         val receipt = fixture.codec.outcome(fixture.resultJson(original), original)
-        assertTrue(senderDeliveryText(receipt).contains("Email delivery is unconfirmed"))
-        assertTrue(senderDeliveryText(receipt).contains("Push or device delivery is not confirmed"))
-        assertTrue(senderConfirmationText("create").contains("separate from residency or ownership"))
+        assertTrue(senderDeliveryText(receipt).contains("couldn't confirm the invitation email"))
+        assertFalse(senderDeliveryText(receipt).contains("We emailed"))
+        assertTrue(senderDeliveryText(receipt).contains("also in their Pantopus notifications"))
+        assertTrue(senderConfirmationText("create").contains("only if they accept"))
         assertEquals("Action: Send invitation", senderOriginalActionText(original))
     }
 }
