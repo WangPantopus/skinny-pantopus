@@ -136,6 +136,15 @@ Supabase dashboard → Authentication:
   and `pantopus://auth/callback`.
 - Email: confirm email **on**; minimum password length **12**; custom SMTP from
   D6 (sender `Pantopus Staging <staging@pantopus.com>`).
+- Rate limits: every sign-in, sign-up, token refresh, password reset and email
+  confirmation reaches Supabase from the API server's one address, so
+  Supabase's per-address defaults would cap the whole app (30 sign-ups, resets
+  and resends, and 150 sign-ins and refreshes, per 5 minutes; a launch-day
+  burst of sign-ups would fail). The API already limits each visitor (20
+  sign-ins or sign-ups a minute per address; resets and resends have their
+  own limits). Under Rate Limits set, per 5 minutes: sign-ups and sign-ins
+  **300**, token refreshes **1500**, verifications **300**. Email sending
+  follows your SMTP plan.
 - Providers (L3 verifies sign-in):
   - Apple: a Services ID (for example `app.pantopus.web`) whose Return URL is
     `https://<staging ref>.supabase.co/auth/v1/callback`, a Sign in with Apple
@@ -358,7 +367,8 @@ Don't run any of this until L4 has rehearsed it on a copy:
 As in S3, with Site URL `https://pantopus.com`, redirect URLs
 `https://pantopus.com/auth/callback`, `https://www.pantopus.com/auth/callback`,
 `https://pantopus.com/**` and `pantopus://auth/callback`, production SMTP sender
-`Pantopus <hello@pantopus.com>`, and the production Apple and Google settings.
+`Pantopus <hello@pantopus.com>`, the same rate limits, and the production Apple
+and Google settings.
 
 ### P4. Production Firebase and APNs (founder)
 
