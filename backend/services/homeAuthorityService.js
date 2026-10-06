@@ -30,9 +30,16 @@ function fail(code = 'HOME_AUTHORITY_UNAVAILABLE', status = 503) {
 
 async function rpc(name, args) {
   let result;
-  try { result = await db.rpc(name, args); } catch (_) { throw fail(); }
+  try { result = await db.rpc(name, args); } catch (err) {
+    // Fails closed (503); log the cause so an unavailable answer can be diagnosed.
+    logger.error('Home authority call failed', { rpc: name, errorCode: err?.code || null, error: err?.message || null });
+    throw fail();
+  }
   if (!result || result.error || !result.data) {
     if (result?.error?.code?.startsWith('22')) throw fail('INVALID_AUTHORITY_REQUEST', 400);
+    logger.error('Home authority call returned no answer', {
+      rpc: name, errorCode: result?.error?.code || null, error: result?.error?.message || null,
+    });
     throw fail();
   }
   return result.data;
@@ -129,7 +136,10 @@ async function closeStrandedApplications(homeId, userId) {
       db.from('HomeHouseholdAccessRequest').update({ status: 'rejected', resolved_by: null, resolved_at: at, updated_at: at })
         .eq('home_id', homeId).eq('status', 'pending').neq('requester_user_id', userId).select('id, requester_user_id'),
     ]);
-  } catch (_) { throw fail(); }
+  } catch (err) {
+    logger.error('Closing pending household requests failed', { errorCode: err?.code || null, error: err?.message || null });
+    throw fail();
+  }
   if (claims?.error || requests?.error || !Array.isArray(claims?.data) || !Array.isArray(requests?.data)) throw fail();
   await notifyApplicants({ claims: claims.data, requests: requests.data }, 'home-reviewers-gone', {
     residency: 'No one at this home can review your request anymore. You can verify by mail instead.',
@@ -190,7 +200,10 @@ async function othersKeepHome(homeId, userId) {
       db.from('HomeOwner').select('subject_type, subject_id').eq('home_id', homeId).eq('owner_status', 'verified'),
       db.from('Home').select('owner_id').eq('id', homeId).maybeSingle(),
     ]);
-  } catch (_) { throw fail(); }
+  } catch (err) {
+    logger.error('Home keeper read failed', { errorCode: err?.code || null, error: err?.message || null });
+    throw fail();
+  }
   if (occupancies?.error || owners?.error || home?.error || !Array.isArray(occupancies?.data) || !Array.isArray(owners?.data)) throw fail();
   if (owners.data.some(row => row.subject_type !== 'user' || row.subject_id !== userId)) return true;
   const others = new Set(occupancies.data.map(row => row.user_id).filter(Boolean));

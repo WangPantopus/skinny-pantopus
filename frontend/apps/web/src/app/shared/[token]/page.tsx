@@ -34,6 +34,9 @@ const FAILURE_SCREENS: Record<string, { state: PageState; title: string; body: s
     body: 'This shared link is no longer active. It was revoked by the owner.' },
   SHARE_REISSUE_REQUIRED: { state: 'revoked', title: 'Link Needs Replacing',
     body: 'This older shared link is inactive. Ask the sender for a new link.' },
+  // A malformed or unknown code: nothing to retry, so say what to do instead.
+  SHARE_INVALID: { state: 'error', title: 'Link Not Valid',
+    body: 'This link isn\'t valid or has expired. Ask the person who shared it for a new one.' },
   SHARE_NOT_FOUND: { state: 'error', title: 'Link Not Found',
     body: 'We couldn\'t find this shared link. Check that you opened the complete link the sender shared.' },
   SHARE_DENIED: { state: 'revoked', title: 'Access Unavailable',
