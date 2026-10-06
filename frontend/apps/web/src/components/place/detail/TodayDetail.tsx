@@ -123,7 +123,8 @@ function HourlyStrip({ data }: { data: PlaceWeatherData }) {
   if (hours.length === 0) return null;
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm py-3.5 px-1">
-      <div className="flex overflow-x-auto gap-0.5 pb-0.5">
+      {/* Focusable so a keyboard can scroll the hours. */}
+      <div className="flex overflow-x-auto gap-0.5 pb-0.5 rounded-lg" tabIndex={0} role="region" aria-label="Hourly forecast">
         {hours.map((h, i) => (
           <div key={h.time + i} className="flex-none w-14 flex flex-col items-center gap-2 py-0.5">
             <span className={`text-[13px] font-semibold ${i === 0 ? 'text-app-text' : 'text-app-text-secondary'}`}>{fmtHour(h.time, i === 0)}</span>
@@ -176,6 +177,16 @@ function ForecastList({ data }: { data: PlaceWeatherData }) {
 // The six band colors are the standardized US EPA AQI category colors;
 // they're a data-viz scale with no design-token equivalent.
 const AQI_BANDS = ['#16A34A', '#EAB308', '#F97316', '#DC2626', '#7C3AED', '#7F1D1D'];
+// The category word in the band's hue, at a shade that reads (AA) on each theme's card;
+// the bar and marker keep the EPA hues above.
+const AQI_LABEL_CLASSES = [
+  'text-green-700 dark:text-green-400',
+  'text-yellow-700 dark:text-yellow-400',
+  'text-orange-700 dark:text-orange-400',
+  'text-red-700 dark:text-red-400',
+  'text-violet-700 dark:text-violet-400',
+  'text-red-900 dark:text-red-300',
+];
 const AQI_BAND_LABELS = ['Good', 'Mod', 'USG', 'Unhlthy', 'V.Unhl', 'Hazard'];
 const AQI_BREAKS = [0, 50, 100, 150, 200, 300, 500];
 
@@ -215,7 +226,7 @@ function AqiCard({ data }: { data: PlaceAirQualityData }) {
         <div>
           <div className="flex items-baseline gap-2">
             <span className="text-[38px] leading-10 font-semibold -tracking-[0.02em] text-app-text">{data.index}</span>
-            <span className="text-base font-semibold" style={{ color: labelColor }}>{data.category_label}</span>
+            <span className={`text-base font-semibold ${AQI_LABEL_CLASSES[band]}`}>{data.category_label}</span>
           </div>
           <div className="text-[13px] text-app-text-secondary mt-0.5">
             US Air Quality Index{data.dominant_pollutant ? ` (${pollutantLabel(data.dominant_pollutant)})` : ''}
