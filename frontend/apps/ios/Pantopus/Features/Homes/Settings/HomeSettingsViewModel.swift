@@ -268,10 +268,13 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         // The chip and footer describe this viewer's real standing: the detail
         // payload carries their owner_status / occupancy verification and role.
         let verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
+        // An invitation or a manager's approval gives household access, not a
+        // verified address (F3b), so it doesn't read as "Verified".
+        let householdOnly = verified && detail.ownershipStatus != "verified" && detail.residencySource == "household"
         identity = HomeSettingsSampleData.Identity(
             homeName: homeName,
-            addressChipLabel: isPending ? "Verifying" : (verified ? "Verified" : "Unverified"),
-            addressChipTone: (isPending || !verified) ? .warning : .success
+            addressChipLabel: isPending ? "Verifying" : householdOnly ? "Household access" : (verified ? "Verified" : "Unverified"),
+            addressChipTone: (isPending || !verified) ? .warning : householdOnly ? .info : .success
         )
         footerCaption = "\(homeName) · \(isPending ? "Claim pending" : Self.roleLabel(detail: detail, access: access))"
 

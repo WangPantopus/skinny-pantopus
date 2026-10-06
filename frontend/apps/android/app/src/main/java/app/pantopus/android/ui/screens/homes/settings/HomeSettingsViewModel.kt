@@ -271,16 +271,26 @@ class HomeSettingsViewModel
             // The chip and footer describe this viewer's real standing: the detail
             // payload carries their owner_status / occupancy verification and role.
             val verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
+            // An invitation or a manager's approval gives household access, not a
+            // verified address (F3b), so it doesn't read as "Verified".
+            val householdOnly =
+                verified && detail.ownershipStatus != "verified" && detail.residencySource == "household"
             _identity.value =
                 HomeSettingsSampleData.Identity(
                     homeName = homeName,
                     addressChipLabel =
                         when {
                             isPending -> "Verifying"
+                            householdOnly -> "Household access"
                             verified -> "Verified"
                             else -> "Unverified"
                         },
-                    addressChipTone = if (isPending || !verified) RowControl.ChipTone.Warning else RowControl.ChipTone.Success,
+                    addressChipTone =
+                        when {
+                            isPending || !verified -> RowControl.ChipTone.Warning
+                            householdOnly -> RowControl.ChipTone.Info
+                            else -> RowControl.ChipTone.Success
+                        },
                 )
             _footerCaption.value = "$homeName · ${if (isPending) "Claim pending" else roleLabel(detail, access)}"
             subtexts =
