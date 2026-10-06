@@ -2,7 +2,12 @@
 
 package app.pantopus.android.ui.screens.feed
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,6 +62,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
@@ -131,6 +137,13 @@ fun FeedScreen(
     val contextRadius by contextBarViewModel.radiusMiles.collectAsStateWithLifecycle()
     val switcherState by contextBarViewModel.sheetState.collectAsStateWithLifecycle()
     val switcherOpen by contextBarViewModel.isSheetOpen.collectAsStateWithLifecycle()
+    val switcherNotice by contextBarViewModel.sheetNotice.collectAsStateWithLifecycle()
+    val switcherLocating by contextBarViewModel.isLocating.collectAsStateWithLifecycle()
+    // "Use my location" asks for the permission first, as the place pickers do.
+    val locationPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+            if (results.values.any { it }) contextBarViewModel.useMyLocation() else contextBarViewModel.locationPermissionDenied()
+        }
     var showsSearch by remember { mutableStateOf(false) }
     var showsIntentPicker by remember { mutableStateOf(false) }
     // List / Map segment — mirrors RN `FeedHeader.tsx:35-52`.
@@ -383,6 +396,15 @@ fun FeedScreen(
                 onSelect = { contextBarViewModel.select(it) },
                 onRetry = { contextBarViewModel.openSwitcher() },
                 onDismiss = { contextBarViewModel.closeSwitcher() },
+                onUseMyLocation = {
+                    if (hasLocationPermission(context)) {
+                        contextBarViewModel.useMyLocation()
+                    } else {
+                        locationPermissionLauncher.launch(LOCATION_PERMISSIONS)
+                    }
+                },
+                notice = switcherNotice,
+                isLocating = switcherLocating,
             )
         }
         if (surface != FeedSurface.Beacons) {
@@ -1169,3 +1191,13 @@ private fun ErrorFrame(
         }
     }
 }
+
+private val LOCATION_PERMISSIONS =
+    arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
+
+private fun hasLocationPermission(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
