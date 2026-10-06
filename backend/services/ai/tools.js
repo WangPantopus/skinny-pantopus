@@ -12,6 +12,8 @@ const noaa = require('../external/noaa');
 const logger = require('../../utils/logger');
 const { getAuthorizedMail } = require('./mailAccess');
 const { listEffectivelyOpenSlots } = require('../supportTrainSlotAvailability');
+const { resolveLocation } = require('../context/locationResolver');
+const { escapeIlike } = require('../../utils/escapeIlike');
 
 const {
   validateGigDraft,
@@ -26,7 +28,7 @@ const toolDefinitions = [
   {
     type: 'function',
     name: 'get_user_context',
-    description: 'Get the current user\'s saved places, recent activity counts, and coarse location context. Never returns exact addresses.',
+    description: 'Get the current user\'s homes and saved places (label, city and state only), and recent activity counts. Never returns exact addresses.',
     parameters: {
       type: 'object',
       properties: {},
@@ -38,7 +40,7 @@ const toolDefinitions = [
   {
     type: 'function',
     name: 'get_place_alerts',
-    description: 'Get active weather alerts (NOAA) near a saved place. Provide the place label or saved place ID.',
+    description: 'Get active weather alerts (NOAA) near the user\'s home or a saved place. Provide the saved place label, or "primary" for their home or main place.',
     parameters: {
       type: 'object',
       properties: {
@@ -482,12 +484,22 @@ async function _executeToolImpl(name, args, userId, _signal) {
 
 async function _getUserContext(userId) {
   try {
-    // Fetch saved places (coarse info only — no exact addresses)
-    const { data: places } = await supabaseAdmin
-      .from('SavedPlace')
-      .select('id, label, place_type, city, state')
-      .eq('user_id', userId)
-      .limit(10);
+    // Saved places and homes, coarse only (no exact addresses). Most homeowners never save a separate
+    // place, so their homes count too, as "Home" plus city and state: a home's name is often its address.
+    const [{ data: places }, { data: occupancies }] = await Promise.all([
+      supabaseAdmin
+        .from('SavedPlace')
+        .select('id, label, place_type, city, state')
+        .eq('user_id', userId)
+        .limit(10),
+      supabaseAdmin
+        .from('HomeOccupancy')
+        .select('home:home_id(city, state)')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .limit(5),
+    ]);
+    const homes = (occupancies || []).map((occupancy) => occupancy.home).filter(Boolean);
 
     // Fetch recent counts (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -504,6 +516,11 @@ async function _getUserContext(userId) {
     ]);
 
     return {
+      homes: homes.map((home, index) => ({
+        label: homes.length > 1 ? `Home ${index + 1}` : 'Home',
+        city: home.city || null,
+        state: home.state || null,
+      })),
       saved_places: (places || []).map(p => ({
         label: p.label,
         type: p.place_type,
@@ -518,30 +535,29 @@ async function _getUserContext(userId) {
     };
   } catch (err) {
     logger.error('get_user_context error', { userId, error: err.message });
-    return { saved_places: [], recent_activity: {} };
+    return { homes: [], saved_places: [], recent_activity: {} };
   }
 }
 
 async function _getPlaceAlerts(userId, placeLabel) {
   try {
-    // Find the saved place
-    const query = supabaseAdmin
-      .from('SavedPlace')
-      .select('id, label, latitude, longitude, city, state')
-      .eq('user_id', userId);
-
-    if (placeLabel === 'primary') {
-      query.limit(1);
-    } else {
-      query.ilike('label', `%${placeLabel}%`).limit(1);
+    // A saved place the question names
+    let place = null;
+    if (placeLabel && placeLabel !== 'primary') {
+      const { data: places } = await supabaseAdmin
+        .from('SavedPlace')
+        .select('id, label, latitude, longitude, city, state')
+        .eq('user_id', userId)
+        .ilike('label', `%${escapeIlike(placeLabel)}%`)
+        .limit(1);
+      place = places?.[0] || null;
+    }
+    // Otherwise the person's own place, as Today and the briefing choose it: their home first.
+    if (!place) place = await _primaryPlace(userId);
+    if (!place) {
+      return { error: 'No home or saved place yet. Suggest adding their home or saving a place in Pantopus.' };
     }
 
-    const { data: places } = await query;
-    if (!places || places.length === 0) {
-      return { error: 'No saved place found matching that label. Ask the user for a place name.' };
-    }
-
-    const place = places[0];
     const result = await noaa.fetchAlerts(place.latitude, place.longitude);
 
     return {
@@ -554,6 +570,27 @@ async function _getPlaceAlerts(userId, placeLabel) {
     logger.error('get_place_alerts error', { userId, placeLabel, error: err.message });
     return { alerts: [], error: err.message };
   }
+}
+
+/** The person's main place for location answers; a home is labelled "Home" with its city and state. */
+async function _primaryPlace(userId) {
+  const location = await resolveLocation(userId);
+  if (location.latitude == null || location.longitude == null) return null;
+  let home = null;
+  if (location.homeId) {
+    const { data } = await supabaseAdmin.from('Home').select('city, state').eq('id', location.homeId).maybeSingle();
+    home = data;
+  }
+  let label = 'Your area';
+  if (location.homeId) label = 'Home';
+  else if (location.source === 'saved_place') label = location.label;
+  return {
+    label,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    city: home?.city || null,
+    state: home?.state || null,
+  };
 }
 
 async function _getMailItem(userId, mailItemId) {
