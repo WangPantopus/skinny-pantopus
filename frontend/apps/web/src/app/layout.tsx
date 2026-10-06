@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   // Mirrors the wedge copy on /start, which is the canonical promise. This
   // is only the inherited default — /start and the other routes that carry
   // their own generateMetadata still win.
-  title: "Pantopus - See what's true about your address",
+  title: "Pantopus - Know what matters for your home",
   description:
     "Public records, local risks, and who's verified nearby - free, no account. Look up any U.S. address, then save your place to get daily updates.",
   // public/favicon.ico is the fallback for clients that probe the document
