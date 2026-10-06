@@ -395,6 +395,16 @@ export default function FeedPage() {
               />
             )}
 
+            {/* Where the composer would be, say why posting is off here (iOS shows the same reason). */}
+            {!showComposer && feed.surface === 'place' && feed.eligibilityReason && (
+              <p
+                role="note"
+                className="rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text-secondary"
+              >
+                {feed.eligibilityReason}
+              </p>
+            )}
+
             {feed.surface === 'place' && (
               <TopicChipRow
                 topics={PLACE_TOPICS.map((t) => ({ key: t.key, label: t.label, icon: <Trophy className="w-4 h-4" /> }))}
