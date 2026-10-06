@@ -36,7 +36,7 @@ Sources, in order of authority for this work:
 
 **Made September 27.**
 
-- [x] Eight features leave the first launch behind launch flags, with their code kept ([launch-scope-flags-2026-10-01.md](docs/launch-scope-flags-2026-10-01.md)).
+- [x] Nine features leave the first launch behind launch flags, with their code kept ([launch-scope-flags-2026-10-01.md](docs/launch-scope-flags-2026-10-01.md)); Support Train gift funds became the ninth on October 6 (PR 1624).
 - [x] Rebooking a known crew, the repeat Crew Day of the Street Organizer design, replaces the open gigs marketplace. Payments, tips, invoices and the scheduling engine stay.
 
 **Made by the founder on October 3.**
@@ -77,7 +77,7 @@ Sources, in order of authority for this work:
 - [x] Founding label fails closed when its lookup fails.
 - [x] The radon follow-up no longer promises a reminder that didn't exist.
 - [x] Hub mail counts read the real `Mail` columns.
-- [x] The eight first-launch cuts sit behind launch flags (`docs/launch-scope-flags-2026-10-01.md`).
+- [x] The nine first-launch cuts sit behind launch flags (`docs/launch-scope-flags-2026-10-01.md`).
 - [x] The loop design and this checklist were written and committed.
 - [x] The Porchlight, Street Organizer and Pulse designs were written on September 26 and 27, and Pulse was reviewed on PR 625 on October 3.
 - [x] The Pantopus Agent product and system designs were written on October 4.
@@ -112,14 +112,14 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] Six genuine non-sports curator posts from real providers (L1, PR 1557, October 6).
   - [x] The "Pantopus curator" chip shows on curator posts in Pulse on both apps, readable; ordinary neighbor posts stay unlabeled (L1, October 6). Sports-lane questions are kept, as recorded.
 
-- [ ] WP2 Today works for a saved place and for a newly added home in private setup (F1).
+- [x] WP2 Today works for a saved place and for a newly added home in private setup (F1).
   - [x] Actual iOS retained Save → Today content/chip → persisted prompt stamp with both briefings off → Not now → reentry → remove/no-place → resave → cold restoration passed at the retained baseline.
   - [x] Both native save confirmations now implement See Today. Android signed-in first-save entry, honest provider error, fresh Retry and Cancel passed; no redundant login or saved row was introduced.
   - [x] Failed-stamp Not now recovery implemented on both apps; five focused Android recovery tests and integrated CI passed. Actual native fault-path acceptance remains open.
   - [x] Actual iOS synthetic Home takes priority over the retained Saved Place.
   - [x] iOS: real sign-up → address → Save → See Today → morning card, re-entry, remove, cold relaunch and the daylight-saving end window (L1, October 6).
   - [x] Android: real sign-up → verify → save the previewed address → saved-place Today and morning card; failed-stamp Not now recovery; cold start; Add Home → private setup in the same session. The native fault path passed on both apps (L1, October 6).
-  - [ ] iOS Add Home → private setup (waits on PR 1585).
+  - [x] iOS Add Home → private setup in the same session: Today switches to the home, the first-use card shows both rows, the pickup editor opens, no household section (L1, October 6, with PR 1585).
 
 - [ ] WP3 Night-before pickup reminders people can act on (F4): an evening push for confirmed pickup days, nothing on quiet days, holiday moves, a "Bins out" button, and the pickup editor opening on its own in cities with no pickup rows yet (today, everywhere but Camas).
   - [x] Existing calendar/briefing implementation and holiday recurrence-preservation repair integrated (PR1540); service round-trip regressions passed.
@@ -137,11 +137,11 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] OS Not now, card Not now, Change date and member Done-only on both apps, plus the overdue "was due" copy, member visibility, a completion push naming nobody and a private-setup home on Android (L1, October 6).
   - [ ] Delivery to a physical phone.
 
-- [ ] WP5 One first-use prompt (F2, small).
+- [x] WP5 One first-use prompt (F2, small).
   - [x] On the synthetic iOS Home, the initial two rows were observed; Set pickup focused the editor; saving pickup removed its row.
   - [x] The first-use card disappears once its items are handled (L1, October 6).
   - [x] Later, re-entry and cold start on both apps; private setup on Android (L1, October 6).
-  - [ ] iOS private setup (waits on PR 1585).
+  - [x] iOS private setup: saving a pickup day removes its first-use row (L1, October 6).
 
 - [ ] WP6 The smallest household journey and the invite verification fix (F3 small, F3b gate).
   - [x] Household provenance/F3b server gates, invitation copy and private completion-notice source integrated.
