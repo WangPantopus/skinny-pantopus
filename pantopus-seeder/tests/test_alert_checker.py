@@ -143,19 +143,18 @@ class TestGetUserGeohashes:
             all_users.extend(gh_data["user_ids"])
         assert all_users == ["u3"]
 
-    def test_returns_empty_on_error(self):
+    def test_raises_on_error(self):
         sb = _mock_supabase()
         sb.table.side_effect = Exception("DB error")
-        result = _get_user_geohashes(sb)
-        assert result == {}
+        with pytest.raises(Exception, match="DB error"):
+            _get_user_geohashes(sb)
 
 
 class TestEndToEnd:
-    def test_returns_config_error_when_secrets_are_invalid(self):
+    def test_fails_when_secrets_are_invalid(self):
         with patch(f"{_HANDLER}.get_briefing_secrets", side_effect=RuntimeError("bad secrets")):
-            result = handler({}, None)
-
-        assert result["error"] == "secrets_load_failed"
+            with pytest.raises(RuntimeError, match="secrets_load_failed"):
+                handler({}, None)
 
     def test_no_users_returns_zero(self):
         with (

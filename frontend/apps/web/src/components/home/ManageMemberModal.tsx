@@ -95,7 +95,8 @@ export default function ManageMemberModal({
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const memberName = member?.user?.name || member?.user?.username || member?.name || 'Member';
+  const memberName = member?.display_name || member?.user?.displayName || member?.user?.name || member?.user?.handle
+    || member?.user?.username || member?.name || 'Member';
   const isTargetOwner = member?.role === 'owner' || member?.role_base === 'owner';
 
   // Load member's permissions + presets

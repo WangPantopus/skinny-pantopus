@@ -234,20 +234,24 @@ forwards them to the staging API).
 The worker container already runs cron and pg-boss. The Lambda stack sends the
 reminders:
 
-1. Deploy from the Mac with AWS SAM (it shows the change set and asks before
-   creating anything):
+1. Deploy from the Mac with AWS SAM (needs Docker running; `sam deploy` shows
+   the change set and asks before creating anything):
    ```bash
-   cd pantopus-seeder && ./deploy/build.sh && cd deploy
-   sam deploy --config-env staging
+   cd pantopus-seeder
+   python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once
+   PATH="$PWD/.venv/bin:$PATH" ./deploy/build.sh   # copies the code, runs the tests
+   cd deploy && sam build --use-container && sam deploy --config-env staging
    ```
+   Don't skip `sam build`: without it the functions deploy without their
+   Python packages and fail on import.
 2. The stack creates the secret `pantopus/seeder/staging` with placeholders. Fill
    it from a private JSON file with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
    (staging), `PANTOPUS_API_BASE_URL=https://staging-api.pantopus.com`,
    `INTERNAL_API_KEY` (the value in `hosted-secrets/staging.env`),
    `CURATOR_EMAIL` and `CURATOR_PASSWORD` (a staging curator account),
-   `OPENAI_API_KEY`, and optionally `WEATHERKIT_KEY_ID`, `WEATHERKIT_TEAM_ID`,
-   `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY` (and the air-quality key
-   once L1's seeder change says where `alert_checker` reads it):
+   `OPENAI_API_KEY`, `AIRNOW_API_KEY` (air-quality alerts; the backend's
+   `AIRNOW_KEY` value), and optionally `WEATHERKIT_KEY_ID`, `WEATHERKIT_TEAM_ID`,
+   `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY`:
    ```bash
    aws secretsmanager put-secret-value --secret-id pantopus/seeder/staging --secret-string file://<private json file>
    ```
@@ -256,10 +260,23 @@ reminders:
    therefore sets `LAMBDA_BACKED_CRON_ENABLED=false`, so the worker doesn't run
    the same ten jobs at the same minute. The open-gigs nudge in the stack finds
    nothing while open gigs stay off.
+4. Job-failure alarms: the stack creates CloudWatch alarms on the briefing,
+   home-reminder, mail, weather-alert, briefing-cleanup and job-trigger
+   functions (about $0.60 a month) and the SNS topic `pantopus-job-alarms-staging`.
+   Subscribe your inbox once and click the confirmation link AWS emails you:
+   ```bash
+   aws sns subscribe --topic-arn "$(aws cloudformation describe-stacks --stack-name pantopus-seeder-staging \
+     --query "Stacks[0].Outputs[?OutputKey=='JobAlarmTopicArn'].OutputValue" --output text)" \
+     --protocol email --notification-endpoint <your email>
+   ```
+
+Task reminders go out at 7:00 and the evening run at 18:00 Pacific, through
+daylight saving (EventBridge Scheduler); briefings follow each person's own time.
 
 **Check:** CloudWatch logs for `pantopus-briefing-scheduler-staging` show runs
 every 15 minutes with no errors; `select job_name, last_success, last_failure
 from job_locks` in the staging SQL editor shows the job-trigger runs; the
+CloudWatch alarms list shows six `pantopus-*-errors-staging` alarms in OK; the
 founder's staging phone gets one scheduled reminder (section 5).
 
 ### S9. Staging apps (founder, L4 builds)
@@ -381,7 +398,8 @@ containers are healthy on the server.
 
 As S8 with `pantopus/seeder/production`, `PANTOPUS_API_BASE_URL=https://api.pantopus.com`,
 the production `INTERNAL_API_KEY` and a production curator account:
-`sam deploy --config-env prod`.
+`sam build --use-container && sam deploy --config-env prod`, then subscribe your
+inbox to `pantopus-job-alarms-production` (stack `pantopus-seeder-production`).
 
 ### P9. Production web (founder)
 

@@ -18,7 +18,7 @@ if(a[0]==='image'&&a[1]==='inspect'){out=process.env.LOCAL_IMAGE_REVISION||'';}
 else if(a[0]==='pull'){if(fail==='pull')code=1;}
 else if(a[0]==='container'&&a[1]==='inspect'){if(!lookup(a[2]))code=1;}
 else if(a[0]==='inspect'){
- const c=lookup(a.at(-1));if(!c)code=1;else out=c.status+' '+c.health;
+ const c=lookup(a.at(-1));if(!c)code=1;else out=c.status+' '+c.health+' '+(c.restarts||0);
 }else if(a[0]==='run'){
  const name=a[a.indexOf('--name')+1];
  if(lookup(name))code=1;else {

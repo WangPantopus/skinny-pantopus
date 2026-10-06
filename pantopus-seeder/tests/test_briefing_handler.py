@@ -14,6 +14,7 @@ _supabase_mock = MagicMock()
 sys.modules.setdefault("supabase", _supabase_mock)
 
 from src.handlers.briefing import (
+    _run,
     handler,
     _find_eligible_users,
     _is_within_window,
@@ -396,7 +397,8 @@ class TestEndToEnd:
             patch(f"{_HANDLER}.httpx.post", side_effect=mock_post_side_effect),
             patch(f"{_HANDLER}._publish_metrics") as mock_metrics,
         ):
-            result = handler({}, None)
+            # handler() raises on a failed delivery; the accounting is _run's.
+            result = _run({}, None)
 
         assert result["sent"] == 1
         assert result["skipped"] == 1
@@ -512,7 +514,11 @@ class TestEndToEnd:
             home_reminders._process_tasks_due(reminder_db, secrets, task_stats)
             send.assert_not_called()
 
-        for schedule_time, expected_calls in [("2026-04-07T01:00:00Z", 0), ("2026-04-07T14:00:00Z", 1)]:
+        for schedule_time, expected_calls in [
+            ("2026-04-07T01:00:00Z", 0), ("2026-04-07T14:00:00Z", 1),
+            # Standard time: 07:00 Pacific is 15:00 UTC.
+            ("2026-12-07T14:00:00Z", 0), ("2026-12-07T15:00:00Z", 1),
+        ]:
             with (
                 patch(f"{reminder_module}.get_briefing_secrets", return_value=secrets),
                 patch("supabase.create_client", return_value=reminder_db),
