@@ -39,6 +39,11 @@ not enforced yet. SwiftLint, SwiftFormat and the icon guard are enforced.
 1. CI succeeds on the current `master` (production) or `dev` (staging) commit.
 2. Deploy Backend verifies the exact commit against the latest CI run and branch
    head. A manual dispatch has the same requirement; PR/fork runs cannot deploy.
+   An automatic run skips quietly (no failure, no notification) when a newer merge
+   has superseded its commit, or when nothing in `backend/`, `scripts/deploy/`, the
+   root package files or this workflow changed since the environment's last
+   successful deployment: each rollout restarts the API for about half a minute. A
+   manual dispatch always deploys the head.
 3. The environment must explicitly enable deployment and provide all secrets.
 4. Build a frozen-lockfile image, push a commit tag, and use its immutable digest
    for the API and worker. No `prod`, `staging`, or `latest` tag is used at runtime.
