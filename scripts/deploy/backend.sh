@@ -56,10 +56,13 @@ exists() { docker container inspect "$1" >/dev/null 2>&1; }
 healthy() {
   local name=$1 status attempt
   for ((attempt=1; attempt<=health_attempts; attempt++)); do
-    status=$(docker inspect --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' "$name") || return 1
+    # A restart during readiness means the process exited; the restart policy
+    # would otherwise hide a crash loop until the readiness timeout.
+    status=$(docker inspect --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}} {{.RestartCount}}' "$name") || return 1
     case "$status" in
-      'running healthy') return 0 ;;
-      'exited '*|'dead '*|'running unhealthy') echo "$name failed readiness" >&2; return 1 ;;
+      *' '[1-9]*) echo "$name restarted during readiness" >&2; return 1 ;;
+      'running healthy '*) return 0 ;;
+      'exited '*|'dead '*|'restarting '*|'running unhealthy '*) echo "$name failed readiness" >&2; return 1 ;;
     esac
     sleep "$health_interval"
   done
