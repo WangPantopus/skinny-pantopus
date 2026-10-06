@@ -18,9 +18,12 @@
   - NSPrivacyTracking: false. The app uses no IDFA/ATT, no advertising or
     cross-app tracking SDKs, and shares no data with data brokers, so no
     data is used to "track" the user as Apple defines it.
-  - NSPrivacyAccessedAPITypes: the only first-party required-reason API is
-    UserDefaults (Hub banner-dismissed flag + per-surface search recents),
-    reason CA92.1 (read/write info accessible only to the app itself).
+  - NSPrivacyAccessedAPITypes: first-party required-reason APIs:
+    UserDefaults (Hub banner-dismissed flag, per-surface search recents)
+    with CA92.1, plus the widget snapshot suite shared through the
+    group.app.pantopus.ios App Group with 1C8F.1; and system boot time
+    (ProcessInfo.systemUptime, pilot session timing in PilotEvents) with
+    35F9.1, which measures time elapsed between in-app events.
 -->
 <plist version="1.0">
 <dict>
@@ -257,6 +260,15 @@
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>CA92.1</string>
+				<string>1C8F.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>35F9.1</string>
 			</array>
 		</dict>
 	</array>
