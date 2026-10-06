@@ -146,7 +146,7 @@ export default function LeaveReviewModal({
                     </span>
                   </div>
                 )}
-                <button
+                <button aria-label="Remove photo"
                   type="button"
                   onClick={() => onRemoveMedia(idx)}
                   className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full p-0.5 hover:bg-red-700 transition"

@@ -63,7 +63,7 @@ function DisambiguateContent() {
   if (!current) return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
+        <button aria-label="Back" onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
         <h1 className="text-xl font-bold text-app-text">Disambiguate</h1>
       </div>
       <div className="text-center py-16">
@@ -78,7 +78,7 @@ function DisambiguateContent() {
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
+          <button aria-label="Back" onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
           <h1 className="text-xl font-bold text-app-text">Disambiguate</h1>
         </div>
         <span className="text-sm text-app-text-secondary font-semibold">{currentIndex + 1} of {pending.length}</span>

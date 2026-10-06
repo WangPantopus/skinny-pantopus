@@ -325,9 +325,9 @@ export default function AdminReviewClaimsPage() {
       <div className={`${selectedClaim ? 'fixed inset-0 z-50 bg-app-surface lg:static lg:z-auto' : 'hidden lg:block'} flex flex-col flex-1 overflow-hidden`}>
         {/* Detail header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-app-border flex-shrink-0">
-          <button onClick={closeDetail} className="lg:hidden p-1.5 hover:bg-app-hover rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
+          <button aria-label="Back" onClick={closeDetail} className="lg:hidden p-1.5 hover:bg-app-hover rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
           <h2 className="text-base font-semibold text-app-text">Review Claim</h2>
-          <button onClick={closeDetail} className="hidden lg:block p-1.5 hover:bg-app-hover rounded-lg"><X className="w-5 h-5 text-app-text-muted" /></button>
+          <button aria-label="Close" onClick={closeDetail} className="hidden lg:block p-1.5 hover:bg-app-hover rounded-lg"><X className="w-5 h-5 text-app-text-muted" /></button>
         </div>
 
         {detailLoading ? (
@@ -459,10 +459,10 @@ export default function AdminReviewClaimsPage() {
     <div className="min-h-screen bg-app-surface">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-app-border bg-app-surface">
-        <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
+        <button aria-label="Back" onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
         <h1 className="text-xl font-bold text-app-text flex-1">Review Claims</h1>
         <span className="bg-violet-600 text-white text-xs font-bold px-2.5 py-1 rounded-full min-w-[24px] text-center">{claims.length}</span>
-        <button onClick={() => { setLoading(true); fetchClaims().finally(() => setLoading(false)); }} className="p-1.5 hover:bg-app-hover rounded-lg transition">
+        <button aria-label="Refresh" onClick={() => { setLoading(true); fetchClaims().finally(() => setLoading(false)); }} className="p-1.5 hover:bg-app-hover rounded-lg transition">
           <RefreshCw className={`w-4.5 h-4.5 text-app-text-secondary ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>

@@ -64,7 +64,7 @@ export default function ExploreMapPage() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 3.5rem)' }}>
       {/* Header bar */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-app-border bg-app-surface flex-shrink-0">
-        <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition">
+        <button aria-label="Back" onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition">
           <ArrowLeft className="w-5 h-5 text-app-text" />
         </button>
         <h1 className="text-lg font-semibold text-app-text flex-1">Explore Map</h1>

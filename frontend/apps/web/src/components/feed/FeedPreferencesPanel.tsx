@@ -29,7 +29,7 @@ export default function FeedPreferencesPanel({ open, onClose, prefs, updatePref 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-app-border-subtle">
           <h3 className="text-base font-semibold text-app-text">Pulse Preferences</h3>
-          <button onClick={onClose} className="p-1 text-app-text-muted hover:text-app-text transition">
+          <button aria-label="Close" onClick={onClose} className="p-1 text-app-text-muted hover:text-app-text transition">
             <X className="w-5 h-5" />
           </button>
         </div>

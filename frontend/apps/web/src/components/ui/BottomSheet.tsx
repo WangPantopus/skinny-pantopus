@@ -72,7 +72,7 @@ export default function BottomSheet({
                 {title && <h3 className="text-sm font-bold text-app">{title}</h3>}
                 {subhead && <p className="mt-0.5 text-xs text-app-muted">{subhead}</p>}
               </div>
-              <button
+              <button aria-label="Close"
                 onClick={onClose}
                 className="p-1.5 text-app-muted hover:text-app hover-bg-app rounded-lg transition flex-shrink-0"
               >

@@ -425,7 +425,7 @@ function AccessCodeForm({
             <h3 className="text-sm font-semibold text-app-text">
               {isEdit ? 'Edit Access Code' : 'Add Access Code'}
             </h3>
-            <button type="button" onClick={onCancel} className="text-app-text-muted hover:text-app-text-secondary">
+            <button aria-label="Cancel" type="button" onClick={onCancel} className="text-app-text-muted hover:text-app-text-secondary">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
