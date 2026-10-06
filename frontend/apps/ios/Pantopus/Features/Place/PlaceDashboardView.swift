@@ -13,6 +13,8 @@
 
 import SwiftUI
 
+// swiftlint:disable file_length type_body_length
+
 struct PlaceDashboardView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: PlaceDashboardViewModel
