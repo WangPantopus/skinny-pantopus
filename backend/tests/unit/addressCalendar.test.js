@@ -339,7 +339,7 @@ describe('briefing signals (the push)', () => {
     expect(sig).toEqual([]);
     const [sweeping] = generateAddressCalendarSignals({ upcoming: [ev({ kind: 'street_sweeping', scope: 'city', confidence: 'unverified' })] });
     expect(sweeping.score).toBe(0.62);
-    expect(sweeping.detail).toContain(' (Unconfirmed — check the source before relying on this date.)');
+    expect(sweeping.detail).toContain(' (Unconfirmed.)');
   });
 
   it('ranks with the rest of the briefing and carries a cost of inaction above the push bar', () => {
