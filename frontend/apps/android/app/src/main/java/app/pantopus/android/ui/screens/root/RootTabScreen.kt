@@ -2869,6 +2869,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onVerifyResidency = { homeId ->
                             navController.navigate(ChildRoutes.homeResidency(homeId))
                         },
+                        onOpenWaitingRoom = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
                     )
                 }
                 composable(ChildRoutes.MY_LISTINGS) {

@@ -63,6 +63,8 @@ fun MyHomesListScreen(
     onUploadOwnershipEvidence: ((String) -> Unit)? = null,
     /** Row CTA for a home whose occupancy is not verified yet. */
     onVerifyResidency: ((String) -> Unit)? = null,
+    /** Status of an ownership claim already filed for the Home. */
+    onOpenWaitingRoom: ((String) -> Unit)? = null,
     viewModel: MyHomesListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -80,6 +82,7 @@ fun MyHomesListScreen(
             onAddHome = onAddHome,
             onUploadOwnershipEvidence = onUploadOwnershipEvidence,
             onVerifyResidency = onVerifyResidency,
+            onOpenWaitingRoom = onOpenWaitingRoom,
         )
         viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenMyHomesViewed)

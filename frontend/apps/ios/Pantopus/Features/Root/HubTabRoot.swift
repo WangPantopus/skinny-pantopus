@@ -1510,6 +1510,9 @@ public struct HubTabRoot: View {
                     },
                     onVerifyResidency: { homeId in
                         Task { @MainActor in push(.residencyStatus(homeId: homeId)) }
+                    },
+                    onOpenWaitingRoom: { homeId in
+                        Task { @MainActor in push(.waitingRoom(homeId: homeId)) }
                     }
                 )
             )

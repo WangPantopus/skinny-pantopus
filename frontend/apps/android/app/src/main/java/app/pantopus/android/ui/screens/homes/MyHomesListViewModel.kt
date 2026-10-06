@@ -103,6 +103,7 @@ class MyHomesListViewModel
         private var onAddHome: () -> Unit = {}
         private var onUploadOwnershipEvidence: ((String) -> Unit)? = null
         private var onVerifyResidency: ((String) -> Unit)? = null
+        private var onOpenWaitingRoom: ((String) -> Unit)? = null
 
         init {
             viewModelScope.launch {
@@ -121,13 +122,21 @@ class MyHomesListViewModel
             onUploadOwnershipEvidence: ((String) -> Unit)? = null,
             onVerifyResidency: ((String) -> Unit)? = null,
             onOpenTasks: ((String) -> Unit)? = null,
+            onOpenWaitingRoom: ((String) -> Unit)? = null,
         ) {
             this.onOpenHome = onOpenHome
             this.onAddHome = onAddHome
             this.onOpenTasks = onOpenTasks
             this.onUploadOwnershipEvidence = onUploadOwnershipEvidence
             this.onVerifyResidency = onVerifyResidency
+            this.onOpenWaitingRoom = onOpenWaitingRoom
         }
+
+        /**
+         * An ownership claim is already filed for this Home. Its status lives in
+         * the Waiting Room (which also offers "Update evidence"), not a blank upload.
+         */
+        private fun showsClaimStatus(home: MyHome): Boolean = home.pendingClaimId != null && onOpenWaitingRoom != null
 
         fun suspendContent() {
             generation++
@@ -361,12 +370,10 @@ class MyHomesListViewModel
                 "shared" -> onOpenHome(home.id)
                 "private_setup" -> onOpenTasks?.invoke(home.id)
                 "verification" ->
-                    if (pendingVerificationFor(home) == PendingVerification.Owner) {
-                        onUploadOwnershipEvidence?.invoke(
-                            home.id,
-                        )
-                    } else {
-                        onVerifyResidency?.invoke(home.id)
+                    when {
+                        pendingVerificationFor(home) != PendingVerification.Owner -> onVerifyResidency?.invoke(home.id)
+                        showsClaimStatus(home) -> onOpenWaitingRoom?.invoke(home.id)
+                        else -> onUploadOwnershipEvidence?.invoke(home.id)
                     }
             }
         }
@@ -402,6 +409,11 @@ class MyHomesListViewModel
                             RowChip("Private setup", PantopusIcon.Home, RowChip.Tint.Status(StatusChipVariant.Warning)),
                         )
                     }
+                    if (home.accessKind == "private_setup" && home.pendingClaimId != null) {
+                        add(
+                            RowChip("Ownership in review", PantopusIcon.Clock, RowChip.Tint.Status(StatusChipVariant.Warning)),
+                        )
+                    }
                     if (home.hasSharedAccess && home.ownershipStatus == "verified") {
                         add(
                             RowChip("Ownership verified", PantopusIcon.ShieldCheck, RowChip.Tint.Status(StatusChipVariant.Success)),
@@ -428,6 +440,7 @@ class MyHomesListViewModel
             val footerTitle =
                 when {
                     home.accessKind == "private_setup" -> "My tasks"
+                    pending == PendingVerification.Owner && showsClaimStatus(home) -> "Check ownership claim"
                     pending == PendingVerification.Owner -> "Continue ownership verification"
                     pending == PendingVerification.Residency -> "Check residency status"
                     else -> null
@@ -479,7 +492,12 @@ class MyHomesListViewModel
                                 icon = PantopusIcon.ShieldCheck,
                                 variant = CompactButtonVariant.Ghost,
                                 testTag = "myHomes.row_${home.id}.verification",
-                                onClick = { if (current(revision)) onVerifyResidency?.invoke(home.id) },
+                                onClick = {
+                                    if (current(revision)) {
+                                        val destination = if (showsClaimStatus(home)) onOpenWaitingRoom else onVerifyResidency
+                                        destination?.invoke(home.id)
+                                    }
+                                },
                             ),
                         )
                     }
