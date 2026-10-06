@@ -420,6 +420,7 @@ fun FeedContextBar(
  * Home / saved-place / recent picker. Four render states per the
  * project's state rule.
  */
+@Suppress("LongParameterList")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedLocationSwitcherSheet(
