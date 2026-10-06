@@ -216,9 +216,21 @@ public extension WaitingRoomContent {
         )
     }
 
+    /// While an ownership claim waits, the claimant can still prove they live
+    /// here by mail (founder decision, 2026-10-06); ownership stays in review.
+    private static func verifyByMailAction() -> WaitingRoomInlineAction {
+        WaitingRoomInlineAction(
+            id: "verifyByMail",
+            label: "Verify address by mail",
+            icon: .mail,
+            tone: .standard,
+            actionKey: "verify_postcard"
+        )
+    }
+
     /// Active wait — `Under review`, info-toned pulsing halo, the Submitted →
     /// Under review → Approved timeline with "Under review" current, and the
-    /// "within 24–48 hours" ETA pill.
+    /// "We'll notify you when it's decided" pill (no review time is promised).
     static func active(
         address: String = sampleAddress,
         claimRef: String = sampleClaimRef,
@@ -229,8 +241,10 @@ public extension WaitingRoomContent {
             title: roomTitle,
             halo: StatusHalo(tone: .info, icon: .hourglass, isPulsing: true),
             headline: "Under review",
-            subcopy: "Pantopus is checking your documents against county records. " +
-                "You'll get a push the moment we decide.",
+            // A person reviews ownership documents (no county-records check), and no
+            // review time is promised while identity confirmation is undecided.
+            subcopy: "Your documents are waiting for a Pantopus reviewer. " +
+                "Meanwhile, you can verify your address by mail.",
             address: address,
             claimRef: claimRef,
             reviewerNote: nil,
@@ -241,8 +255,8 @@ public extension WaitingRoomContent {
             ],
             timelinePaused: false,
             etaPill: StatusWaitingPill(
-                text: "Decision usually within 24–48 hours",
-                icon: .calendarClock,
+                text: "We'll notify you when it's decided",
+                icon: .bell,
                 tone: .primary
             ),
             manageSectionTitle: manageTitle,
@@ -254,7 +268,8 @@ public extension WaitingRoomContent {
                     tone: .standard,
                     actionKey: "update_evidence"
                 ),
-                cancelClaimAction()
+                cancelClaimAction(),
+                verifyByMailAction()
             ],
             primaryCta: viewClaim,
             secondaryCta: backToHome

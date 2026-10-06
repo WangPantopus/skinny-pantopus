@@ -39,7 +39,7 @@ public enum PlaceVerifyMethod: String, CaseIterable, Hashable, Sendable {
 
     var sub: String {
         switch self {
-        case .document: "A utility bill, lease, or ID. A person reviews it, usually within hours."
+        case .document: "A utility bill, lease, or ID. A person reviews it."
         case .mail: "A postcard with a code, 3–7 days. Yours to keep."
         case .landlord: "Your landlord confirms that you live here."
         }
@@ -186,7 +186,7 @@ struct PlaceVerifySheet: View {
     private var calmNote: some View {
         HStack(alignment: .top, spacing: 9) {
             Icon(.clock, size: 15, strokeWidth: 2, color: Theme.Color.appTextMuted).padding(.top, 1)
-            Text("Documents are reviewed by a person, usually within hours; a postcard takes 3–7 days. "
+            Text("Documents are reviewed by a person; a postcard takes 3–7 days. "
                 + "Everything you have now stays available while you wait.")
                 .font(.system(size: 12.5))
                 .lineSpacing(2)
@@ -408,7 +408,7 @@ struct PlaceVerifyStatusView: View {
 
     private var pendingCopy: String {
         switch method {
-        case .document: "A person is reviewing your document — usually within hours, always within a business day."
+        case .document: "A person will review your document. You'll get a notification the moment it's decided."
         case .mail: "We've mailed a postcard to your address. Enter the code when it arrives — 3–7 days. Keep the card."
         case .landlord: "We've asked your landlord to confirm that you live here. This usually takes 1–3 business days."
         }

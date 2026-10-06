@@ -231,6 +231,8 @@ public final class WaitingRoomViewModel {
             }
         case "cancel_claim":
             pendingNav = .cancelClaim(homeId: homeId)
+        case "verify_postcard":
+            pendingNav = .verifyPostcard(homeId: homeId)
         default:
             log("inline.\(action.actionKey)")
         }

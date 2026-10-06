@@ -45,6 +45,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
     private let onFindHome: @Sendable () -> Void
     private let onUploadOwnershipEvidence: (@Sendable (String) -> Void)?
     private let onVerifyResidency: (@Sendable (String) -> Void)?
+    private let onOpenWaitingRoom: (@Sendable (String) -> Void)?
     private var generation = 0
     private var visible = false
     private var entries: [MyHome] = []
@@ -62,7 +63,8 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         onAddHome: @escaping @Sendable () -> Void = {},
         onFindHome: @escaping @Sendable () -> Void = {},
         onUploadOwnershipEvidence: (@Sendable (String) -> Void)? = nil,
-        onVerifyResidency: (@Sendable (String) -> Void)? = nil
+        onVerifyResidency: (@Sendable (String) -> Void)? = nil,
+        onOpenWaitingRoom: (@Sendable (String) -> Void)? = nil
     ) {
         self.api = api
         scope = HomeClaimSessionScope(api: api, identity: identity)
@@ -72,6 +74,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         self.onFindHome = onFindHome
         self.onUploadOwnershipEvidence = onUploadOwnershipEvidence
         self.onVerifyResidency = onVerifyResidency
+        self.onOpenWaitingRoom = onOpenWaitingRoom
     }
 
     var isCurrent: Bool {
@@ -191,7 +194,9 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         case "shared": onOpenHome(entry.id)
         case "private_setup": onOpenTasks?(entry.id)
         case "verification":
-            if Self.pendingVerification(for: entry) == .owner {
+            if Self.pendingVerification(for: entry) == .owner, showsClaimStatus(entry) {
+                onOpenWaitingRoom?(entry.id)
+            } else if Self.pendingVerification(for: entry) == .owner {
                 onUploadOwnershipEvidence?(entry.id)
             } else {
                 onVerifyResidency?(entry.id)
@@ -210,6 +215,10 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         let subtitle = [unit, roleLabel(for: entry), locality].compactMap { $0 }.joined(separator: " · ")
         var chips: [RowChip] = []
         if entry.accessKind == "private_setup" { chips.append(.init(text: "Private setup", icon: .home, tint: .status(.warning))) }
+        // Ownership requests already say "Verification in progress".
+        if entry.accessKind != "verification", entry.pendingClaimId != nil {
+            chips.append(.init(text: "Ownership in review", icon: .clock, tint: .status(.warning)))
+        }
         if entry.hasSharedAccess, entry.ownershipStatus == "verified" { chips.append(.init(
             text: "Ownership verified",
             icon: .shieldCheck,
@@ -229,34 +238,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             tint: .status(.warning)
         )) }
         let canDelete = entry.canDeleteHome == true
-        let footerTitle = entry
-            .accessKind == "private_setup" ? "My tasks" : pending == .owner ? "Continue ownership verification" : pending == .residency ?
-            "Check residency status" : nil
-        let footer = footerTitle.map { text in
-            let action = RowFooterAction(
-                title: text,
-                icon: .arrowRight,
-                variant: .primary,
-                identifier: "myHomes.row_\(entry.id).continue"
-            ) { [weak self] in
-                Task<Void, Never> { @MainActor in self?.open(entry, revision: revision) }
-            }
-            var actions = [action]
-            if entry.accessKind == "private_setup", onVerifyResidency != nil {
-                actions.append(RowFooterAction(
-                    title: "Check status",
-                    icon: .shieldCheck,
-                    variant: .ghost,
-                    identifier: "myHomes.row_\(entry.id).verification"
-                ) { [weak self] in
-                    Task<Void, Never> { @MainActor in
-                        guard let self, self.current(revision) else { return }
-                        self.onVerifyResidency?(entry.id)
-                    }
-                })
-            }
-            return RowFooter(actions: actions)
-        }
+        let rowFooter = footer(for: entry, pending: pending, revision: revision)
         let secondary: (@Sendable () -> Void)? = if canDelete {
             { [weak self] in
                 Task<Void, Never> { @MainActor in
@@ -280,7 +262,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             // Status chips wrap instead of cutting "Ownership verified" to
             // "Ownership ver…", which reads the same as a pending one.
             wrapChips: true,
-            footer: footer
+            footer: rowFooter
         )
     }
 
@@ -313,6 +295,67 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         case "guest": return "Guest"
         case "service_provider": return "Service provider"
         default: return nil
+        }
+    }
+}
+
+// MARK: - Row footers
+
+extension MyHomesListViewModel {
+    /// An ownership claim is already filed for this Home. Its status lives in
+    /// the Waiting Room (which also offers "Update evidence"), not a blank upload.
+    private func showsClaimStatus(_ entry: MyHome) -> Bool {
+        entry.pendingClaimId != nil && onOpenWaitingRoom != nil
+    }
+
+    private func footer(for entry: MyHome, pending: PendingVerification?, revision: Int) -> RowFooter? {
+        // A resident (e.g. address-verified by mail) whose ownership claim still waits.
+        if entry.accessKind == "shared", showsClaimStatus(entry) {
+            let action = RowFooterAction(
+                title: "Check ownership claim",
+                icon: .arrowRight,
+                variant: .ghost,
+                identifier: "myHomes.row_\(entry.id).claim"
+            ) { [weak self] in
+                Task<Void, Never> { @MainActor in
+                    guard let self, self.current(revision) else { return }
+                    self.onOpenWaitingRoom?(entry.id)
+                }
+            }
+            return RowFooter(actions: [action])
+        }
+        let ownerAction = showsClaimStatus(entry) ? "Check ownership claim" : "Continue ownership verification"
+        let footerTitle = entry
+            .accessKind == "private_setup" ? "My tasks" : pending == .owner ? ownerAction : pending == .residency ?
+            "Check residency status" : nil
+        return footerTitle.map { text in
+            let action = RowFooterAction(
+                title: text,
+                icon: .arrowRight,
+                variant: .primary,
+                identifier: "myHomes.row_\(entry.id).continue"
+            ) { [weak self] in
+                Task<Void, Never> { @MainActor in self?.open(entry, revision: revision) }
+            }
+            var actions = [action]
+            if entry.accessKind == "private_setup", onVerifyResidency != nil {
+                actions.append(RowFooterAction(
+                    title: "Check status",
+                    icon: .shieldCheck,
+                    variant: .ghost,
+                    identifier: "myHomes.row_\(entry.id).verification"
+                ) { [weak self] in
+                    Task<Void, Never> { @MainActor in
+                        guard let self, self.current(revision) else { return }
+                        if self.showsClaimStatus(entry) {
+                            self.onOpenWaitingRoom?(entry.id)
+                        } else {
+                            self.onVerifyResidency?(entry.id)
+                        }
+                    }
+                })
+            }
+            return RowFooter(actions: actions)
         }
     }
 }

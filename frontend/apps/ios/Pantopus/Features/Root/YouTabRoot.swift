@@ -2415,6 +2415,9 @@ public struct YouTabRoot: View {
                     },
                     onVerifyResidency: { homeId in
                         Task { @MainActor in path.append(.residencyStatus(homeId: homeId)) }
+                    },
+                    onOpenWaitingRoom: { homeId in
+                        Task { @MainActor in path.append(.waitingRoom(homeId: homeId)) }
                     }
                 )
             )

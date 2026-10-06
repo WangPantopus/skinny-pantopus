@@ -48,7 +48,7 @@ class WaitingRoomContentTest {
         assertEquals(PantopusIcon.Hourglass, content.halo.icon)
         assertTrue(content.halo.isPulsing)
         assertEquals("Under review", content.headline)
-        assertTrue(content.subcopy.contains("checking your documents against county records"))
+        assertTrue(content.subcopy.contains("waiting for a Pantopus reviewer"))
         assertEquals("418 Linden Ave · Apt 3B", content.address)
         assertEquals("CLM-4F2A", content.claimRef)
         assertNull(content.reviewerNote)
@@ -60,8 +60,8 @@ class WaitingRoomContentTest {
         assertEquals("Started 9h ago", content.timeline[1].sub)
         assertFalse(content.timelinePaused)
         assertEquals(StatusPillTone.Primary, content.etaPill.tone)
-        assertEquals("Decision usually within 24–48 hours", content.etaPill.text)
-        assertEquals(PantopusIcon.CalendarClock, content.etaPill.icon)
+        assertEquals("We'll notify you when it's decided", content.etaPill.text)
+        assertEquals(PantopusIcon.Bell, content.etaPill.icon)
         assertEquals("Manage this claim", content.manageSectionTitle)
         assertEquals("View claim", content.primaryCta.label)
         assertEquals(PantopusIcon.FileText, content.primaryCta.icon)
@@ -71,14 +71,14 @@ class WaitingRoomContentTest {
     @Test
     fun active_inline_actions_are_standard_update_and_danger_cancel() {
         val actions = WaitingRoomContent.active().inlineActions
-        assertEquals(listOf("updateEvidence", "cancelClaim"), actions.map { it.id })
-        assertEquals(listOf("Update evidence", "Cancel claim"), actions.map { it.label })
-        assertEquals(listOf(PantopusIcon.FilePlus2, PantopusIcon.XCircle), actions.map { it.icon })
+        assertEquals(listOf("updateEvidence", "cancelClaim", "verifyByMail"), actions.map { it.id })
+        assertEquals(listOf("Update evidence", "Cancel claim", "Verify address by mail"), actions.map { it.label })
+        assertEquals(listOf(PantopusIcon.FilePlus2, PantopusIcon.XCircle, PantopusIcon.Mail), actions.map { it.icon })
         assertEquals(
-            listOf(WaitingRoomActionTone.Standard, WaitingRoomActionTone.Danger),
+            listOf(WaitingRoomActionTone.Standard, WaitingRoomActionTone.Danger, WaitingRoomActionTone.Standard),
             actions.map { it.tone },
         )
-        assertEquals(listOf("update_evidence", "cancel_claim"), actions.map { it.actionKey })
+        assertEquals(listOf("update_evidence", "cancel_claim", "verify_postcard"), actions.map { it.actionKey })
     }
 
     // ── More info requested · review paused ───────────────────────────────

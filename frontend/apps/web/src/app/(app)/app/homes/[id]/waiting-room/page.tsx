@@ -28,7 +28,7 @@ function getStatusConfig(status: string, access: any): StatusConfig {
     case 'pending_approval':
       return { icon: Hourglass, iconColor: '#0284c7', iconBg: 'bg-blue-100', title: 'Waiting for approval', body: 'A household member needs to approve your request. Refresh to check for updates.' };
     case 'pending_doc':
-      return { icon: FileText, iconColor: '#f59e0b', iconBg: 'bg-amber-100', title: 'Document under review', body: 'A person is reviewing your document — usually within hours, always within a business day. You\'ll get a notification the moment it\'s decided.' };
+      return { icon: FileText, iconColor: '#f59e0b', iconBg: 'bg-amber-100', title: 'Document under review', body: 'A person will review your document. You\'ll get a notification the moment it\'s decided.' };
     case 'provisional':
       if (access?.is_in_challenge_window) {
         return { icon: Clock, iconColor: '#0284c7', iconBg: 'bg-blue-100', title: 'Challenge window active', body: 'Your access is provisional while existing members can review. Full access will be granted once the window closes.' };
@@ -130,7 +130,7 @@ function WaitingRoomContent() {
           )}
 
           {(status === 'provisional_bootstrap' || status === 'pending_doc' || status === 'provisional') && (
-            <ActionCard icon={Upload} label="Upload proof" desc="A utility bill, lease, or ID — reviewed by a person, usually within hours"
+            <ActionCard icon={Upload} label="Upload proof" desc="A utility bill, lease, or ID — reviewed by a person"
               onClick={() => router.push(`/app/homes/${homeId}/verify-residency${returnQuery}`)} />
           )}
 
