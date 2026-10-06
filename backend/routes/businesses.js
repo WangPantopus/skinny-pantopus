@@ -66,6 +66,7 @@ const { escapeIlike } = require('../utils/escapeIlike');
 const { geocodeAddress } = require('../utils/geocoding');
 const { validateBusinessAddress, PUBLIC_LOCATION_COLUMNS, toPublicBusinessLocation } = require('../services/businessAddressService');
 const { computeAddressHash } = require('../utils/normalizeAddress');
+const { isPublicStorageUrl } = require('../services/s3Service');
 const rateLimit = require('express-rate-limit');
 const {
   checkBusinessPermission,
@@ -4415,6 +4416,11 @@ router.post('/:businessId/posts', verifyToken, async (req, res) => {
 
     if (!content || content.trim().length === 0) {
       return res.status(400).json({ error: 'Content is required' });
+    }
+    // Uploaded files only: an outside link would show its owner who viewed the post and when.
+    if (mediaUrls != null && (!Array.isArray(mediaUrls)
+      || mediaUrls.some((url) => typeof url !== 'string' || !isPublicStorageUrl(url)))) {
+      return res.status(400).json({ error: 'Attach photos and videos by uploading them.' });
     }
 
     // Get business location for post coordinates if not provided
