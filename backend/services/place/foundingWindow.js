@@ -24,12 +24,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * @returns {Promise<{opened_at: string|null, ends_at: string|null, open: boolean, taken: number, slots_total: number, slots_open: number}>}
  */
 async function cellFoundingWindow(geohash6, now = new Date()) {
-  const { data: first } = await supabaseAdmin
+  // A failed read must not look like an empty cell ("every slot open"): callers fail closed.
+  const { data: first, error: firstError } = await supabaseAdmin
     .from('BlockFounder')
     .select('established_at')
     .eq('geohash6', geohash6)
     .eq('rank', 1)
     .maybeSingle();
+  if (firstError) throw new Error(`Founding window lookup failed: ${firstError.message}`);
 
   if (!first) {
     // No founder yet: the window opens with the first one, so every slot is open.
@@ -38,11 +40,12 @@ async function cellFoundingWindow(geohash6, now = new Date()) {
 
   const openedAt = new Date(first.established_at);
   const endsAt = new Date(openedAt.getTime() + FOUNDING_WINDOW_DAYS * DAY_MS);
-  const { data: rows } = await supabaseAdmin
+  const { data: rows, error: rowsError } = await supabaseAdmin
     .from('BlockFounder')
     .select('rank, established_at')
     .eq('geohash6', geohash6)
     .lte('rank', FOUNDING_SLOTS);
+  if (rowsError) throw new Error(`Founding window lookup failed: ${rowsError.message}`);
   const taken = (rows || []).filter((r) => new Date(r.established_at).getTime() <= endsAt.getTime()).length;
   const withinWindow = now.getTime() <= endsAt.getTime();
   const slotsOpen = withinWindow ? Math.max(0, FOUNDING_SLOTS - taken) : 0;
