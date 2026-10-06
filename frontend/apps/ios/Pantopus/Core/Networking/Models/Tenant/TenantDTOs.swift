@@ -27,11 +27,27 @@ public struct TenantRequestContext: Codable, Sendable {
 public struct TenantHomeStatusResponse: Decodable, Sendable {
     public let homeId: String
     public let requestContext: TenantRequestContext
+    public let landlord: Landlord?
     public let lease: LeaseStatus?
+
+    /// Whether the Home has a verified landlord who can answer a request.
+    public struct Landlord: Decodable, Sendable {
+        public let hasLandlord: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case hasLandlord = "has_landlord"
+        }
+    }
 
     public struct LeaseStatus: Decodable, Sendable {
         public let state: TenantLeaseState
         public let lease: TenantLeaseDTO?
+    }
+
+    /// The landlord door helps only when a verified landlord can answer, or
+    /// when the person already has a request or lease to follow (web rule).
+    var offersLandlordConfirmation: Bool {
+        landlord?.hasLandlord == true || lease.map { $0.state != TenantLeaseState.none } == true
     }
 
     func matches(homeId: String) -> Bool {
@@ -45,6 +61,7 @@ public struct TenantHomeStatusResponse: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case homeId = "home_id"
         case requestContext = "request_context"
+        case landlord
         case lease
     }
 }

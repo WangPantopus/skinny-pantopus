@@ -9,7 +9,9 @@
 //  N04: the screen reads BOTH existing block contracts in a fixed order
 //  — `GET /api/users/blocked` (UserBlock) first, then
 //  `GET /api/privacy/blocks` (UserProfileBlock) — so every sequence below
-//  supplies two load responses. The added cases pin the personal-block
+//  supplies two load responses. A third read, `GET /api/posts/mute` (the
+//  Muted section), follows; sequences that send more after loading answer
+//  it with an empty list. The added cases pin the personal-block
 //  path: that a profile block is visible here at all, that Unblock sends
 //  `DELETE /api/users/:userId/block` for it, and that one list failing
 //  does not hide the other.
@@ -79,7 +81,7 @@ final class BlockedUsersViewModelTests: XCTestCase {
     func testPartialRowsReportIncompleteAndLastRemovalStaysUnavailable() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.twoPersonalJSON), .status(500, body: "{}"),
-            .status(200, body: "{}"), .status(200, body: "{}")
+            .status(200, body: "{\"muted\":[]}"), .status(200, body: "{}"), .status(200, body: "{}")
         ]
         let vm = BlockedUsersViewModel(api: makeAPI()) { "fixture-session" }
         await vm.load()
@@ -144,6 +146,7 @@ final class BlockedUsersViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.noPersonalJSON),
             .status(200, body: Self.twoBlocksJSON),
+            .status(200, body: "{\"muted\":[]}"),
             .status(200, body: "{\"message\":\"Block removed\"}")
         ]
         let vm = BlockedUsersViewModel(api: makeAPI()) { "fixture-session" }
@@ -160,6 +163,7 @@ final class BlockedUsersViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.noPersonalJSON),
             .status(200, body: Self.twoBlocksJSON),
+            .status(200, body: "{\"muted\":[]}"),
             .status(500, body: "{}")
         ]
         let vm = BlockedUsersViewModel(api: makeAPI()) { "fixture-session" }
@@ -220,6 +224,7 @@ final class BlockedUsersViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.twoPersonalJSON),
             .status(200, body: "{\"blocks\":[]}"),
+            .status(200, body: "{\"muted\":[]}"),
             .status(200, body: "{\"success\":true}")
         ]
         let vm = BlockedUsersViewModel(api: makeAPI()) { "fixture-session" }
@@ -245,6 +250,7 @@ final class BlockedUsersViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.twoPersonalJSON),
             .status(200, body: "{\"blocks\":[]}"),
+            .status(200, body: "{\"muted\":[]}"),
             .status(500, body: "{}")
         ]
         let vm = BlockedUsersViewModel(api: makeAPI()) { "fixture-session" }

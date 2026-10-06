@@ -334,6 +334,10 @@ class SignUpViewModel
                             update {
                                 it.copy(topLevelError = AuthError.ServerError(OAuthSessionStore.REJECTED_MESSAGE))
                             }
+                        is OAuthSessionStore.Callback.ProviderFailed ->
+                            update {
+                                it.copy(topLevelError = AuthError.ServerError(OAuthSessionStore.PROVIDER_FAILED_MESSAGE))
+                            }
                         is OAuthSessionStore.Callback.Code ->
                             authRepository.exchangeOAuthCode(callback.value)
                         is OAuthSessionStore.Callback.Tokens ->

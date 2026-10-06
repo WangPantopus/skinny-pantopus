@@ -78,7 +78,8 @@ export default function ProfileToggle({
         const [homesRes, bizRes, proRes, seatsRes] = await Promise.allSettled([
           api.homes.getMyHomes(),
           api.businesses.getMyBusinesses(),
-          api.professional.getMyProfile(),
+          // Professional mode is a launch cut (#2 + #4): no profile to read while it's off.
+          launchFeatures.personas && launchFeatures.openGigs ? api.professional.getMyProfile() : Promise.resolve(null),
           api.businessSeats.getMySeats(),
         ]);
 

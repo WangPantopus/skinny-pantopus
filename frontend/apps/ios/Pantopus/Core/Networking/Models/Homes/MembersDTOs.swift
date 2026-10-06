@@ -45,6 +45,9 @@ public struct OccupantDTO: Decodable, Sendable, Hashable, Identifiable {
     public let canManageAccess: Bool?
     public let canManageTasks: Bool?
     public let canViewSensitive: Bool?
+    /// `address` (postcard, document, landlord, admin), `household` (joined by
+    /// invitation or household review) or `legacy`; nil from older servers.
+    public let verificationSource: String?
 
     public init(
         id: String,
@@ -61,7 +64,8 @@ public struct OccupantDTO: Decodable, Sendable, Hashable, Identifiable {
         canManageFinance: Bool? = nil,
         canManageAccess: Bool? = nil,
         canManageTasks: Bool? = nil,
-        canViewSensitive: Bool? = nil
+        canViewSensitive: Bool? = nil,
+        verificationSource: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -78,6 +82,13 @@ public struct OccupantDTO: Decodable, Sendable, Hashable, Identifiable {
         self.canManageAccess = canManageAccess
         self.canManageTasks = canManageTasks
         self.canViewSensitive = canViewSensitive
+        self.verificationSource = verificationSource
+    }
+
+    /// Household members joined by invitation haven't proved the address (F3b),
+    /// so only address-verified (or pre-F3b) members carry the verified badge.
+    var hasAddressVerification: Bool {
+        verificationSource != "household"
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -96,6 +107,7 @@ public struct OccupantDTO: Decodable, Sendable, Hashable, Identifiable {
         case canManageAccess = "can_manage_access"
         case canManageTasks = "can_manage_tasks"
         case canViewSensitive = "can_view_sensitive"
+        case verificationSource = "verification_source"
     }
 }
 

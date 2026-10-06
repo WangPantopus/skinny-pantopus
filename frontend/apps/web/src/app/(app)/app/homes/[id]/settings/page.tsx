@@ -121,10 +121,10 @@ function SettingsContent() {
               <div className="flex items-center gap-2">
                 <input type="text" value={nickname} onChange={(e) => setNickname(e.target.value)} autoFocus
                   className="flex-1 px-3 py-1.5 border border-app-border rounded-lg text-sm text-app-text bg-app-surface focus:outline-none focus:ring-2 focus:ring-emerald-400" />
-                <button onClick={saveNickname} disabled={saving} className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white disabled:opacity-50">
+                <button aria-label="Save nickname" onClick={saveNickname} disabled={saving} className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white disabled:opacity-50">
                   <Check className="w-4 h-4" />
                 </button>
-                <button onClick={() => { setEditing(false); setNickname(home?.nickname || home?.name || ''); }} className="w-8 h-8 rounded-lg bg-app-surface-sunken flex items-center justify-center">
+                <button aria-label="Cancel" onClick={() => { setEditing(false); setNickname(home?.nickname || home?.name || ''); }} className="w-8 h-8 rounded-lg bg-app-surface-sunken flex items-center justify-center">
                   <X className="w-4 h-4 text-app-text-secondary" />
                 </button>
               </div>

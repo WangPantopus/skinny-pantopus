@@ -262,7 +262,7 @@ export default function MailMapPage() {
               <h3 className="text-sm font-semibold text-app-text flex-1 truncate">
                 {selectedPin.title}
               </h3>
-              <button
+              <button aria-label="Close"
                 type="button"
                 onClick={() => setSelectedPin(null)}
                 className="p-1 text-app-text-muted hover:text-app-text-secondary dark:hover:text-gray-300"

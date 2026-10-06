@@ -221,6 +221,15 @@ class NotificationDispatcher
             }
         }
 
+        /**
+         * Drops everything this app has in the shade. Called on sign-out, so the
+         * next person on the device never reads the last account's notifications.
+         */
+        fun clearDelivered() {
+            runCatching { NotificationManagerCompat.from(appContext).cancelAll() }
+                .onFailure { Timber.w(it, "Failed to clear delivered notifications") }
+        }
+
         private fun postNotification(routing: Routing) {
             ensureChannel(routing.channel)
             val notificationId = Random.nextInt()

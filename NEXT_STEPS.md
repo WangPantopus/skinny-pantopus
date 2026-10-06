@@ -36,7 +36,7 @@ Sources, in order of authority for this work:
 
 **Made September 27.**
 
-- [x] Eight features leave the first launch behind launch flags, with their code kept ([launch-scope-flags-2026-10-01.md](docs/launch-scope-flags-2026-10-01.md)).
+- [x] Nine features leave the first launch behind launch flags, with their code kept ([launch-scope-flags-2026-10-01.md](docs/launch-scope-flags-2026-10-01.md)); Support Train gift funds became the ninth on October 6 (PR 1624).
 - [x] Rebooking a known crew, the repeat Crew Day of the Street Organizer design, replaces the open gigs marketplace. Payments, tips, invoices and the scheduling engine stay.
 
 **Made by the founder on October 3.**
@@ -77,7 +77,7 @@ Sources, in order of authority for this work:
 - [x] Founding label fails closed when its lookup fails.
 - [x] The radon follow-up no longer promises a reminder that didn't exist.
 - [x] Hub mail counts read the real `Mail` columns.
-- [x] The eight first-launch cuts sit behind launch flags (`docs/launch-scope-flags-2026-10-01.md`).
+- [x] The nine first-launch cuts sit behind launch flags (`docs/launch-scope-flags-2026-10-01.md`).
 - [x] The loop design and this checklist were written and committed.
 - [x] The Porchlight, Street Organizer and Pulse designs were written on September 26 and 27, and Pulse was reviewed on PR 625 on October 3.
 - [x] The Pantopus Agent product and system designs were written on October 4.
@@ -87,10 +87,11 @@ Sources, in order of authority for this work:
 The ordered steps, with exact values and checks, are in the [launch checklist](docs/release/prod-config-checklist.md); its section 1 lists the decisions it needs from you.
 
 - [ ] Turn the hosted backend on. One scheduled reminder reaches a physical iPhone and a physical Android phone.
-  - [x] Prepared by L4 on October 6: every step with values and checks in the launch checklist (PR 1556); deploys stop a crash-looping release within seconds (PR 1576); the reminder Lambdas are ready for hosted runs, with 7 AM Pacific task reminders through daylight saving and failure alarms (PR 1584); backup and restore including uploaded files, rehearsed end to end (PR 1586). Your steps are listed in order in `launch-streams/status/FOUNDER.md`.
+  - [x] Prepared by L4 on October 6: every step with values and checks in the launch checklist (PR 1556); deploys stop a crash-looping release within seconds (PR 1576); the reminder Lambdas are ready for hosted runs, with 7 AM Pacific task reminders through daylight saving and failure alarms (PR 1584); backup and restore including uploaded files, rehearsed end to end (PR 1586). Your steps are listed in order in `launch-streams/status/FOUNDER.md`; Supabase Auth's limits for the API server's single address and the web's `EDGE_PROXY_SECRET` (so each web visitor keeps their own sign-in limit) are steps in the checklist (PRs 1631, 1645).
 - [ ] Production keys the backend reads; the database baseline adopted in production; TestFlight; a Play internal testing track.
   - [x] iOS release settings, privacy manifests and the production API host are on master (PR 1567).
-  - [ ] Android targets API 36 as Google Play requires (PR 1601; the main screens checked on an Android 16 emulator); store listing drafts, privacy answers and the Play account-deletion page draft wait for your approval (PR 1635).
+  - [x] Android targets API 36 as Google Play requires (PR 1601, merged October 6; the main screens checked on an Android 16 emulator), and API dates now parse on Android 8–13 (PR 1650).
+  - [ ] Store listing drafts, privacy answers and the Play account-deletion page draft wait for your approval (PR 1635).
 - [ ] Confirm the Camas, Vancouver and Washougal pickup schedules and their holiday rules by hand for Thanksgiving (November 26), Christmas (December 25) and New Year's Day (January 1). Mark each official or unconfirmed. PR 1552 added draft holiday rows for the three cities; all stay unconfirmed and never push until you confirm them (FOUNDER.md).
 - [ ] Talk to ten first-time homeowners and ten meal-train organizers before and during the build. Ask the homeowners whether they would add their home to a Crew Day on their street, and what they would type into a box that answers questions about their home. Their questions become the agent's first test set.
 - [ ] Five strangers, ten seconds on the app's first screen: "What does this do, and why would you type your address?"
@@ -111,14 +112,14 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] Six genuine non-sports curator posts from real providers (L1, PR 1557, October 6).
   - [x] The "Pantopus curator" chip shows on curator posts in Pulse on both apps, readable; ordinary neighbor posts stay unlabeled (L1, October 6). Sports-lane questions are kept, as recorded.
 
-- [ ] WP2 Today works for a saved place and for a newly added home in private setup (F1).
+- [x] WP2 Today works for a saved place and for a newly added home in private setup (F1).
   - [x] Actual iOS retained Save → Today content/chip → persisted prompt stamp with both briefings off → Not now → reentry → remove/no-place → resave → cold restoration passed at the retained baseline.
   - [x] Both native save confirmations now implement See Today. Android signed-in first-save entry, honest provider error, fresh Retry and Cancel passed; no redundant login or saved row was introduced.
   - [x] Failed-stamp Not now recovery implemented on both apps; five focused Android recovery tests and integrated CI passed. Actual native fault-path acceptance remains open.
   - [x] Actual iOS synthetic Home takes priority over the retained Saved Place.
   - [x] iOS: real sign-up → address → Save → See Today → morning card, re-entry, remove, cold relaunch and the daylight-saving end window (L1, October 6).
   - [x] Android: real sign-up → verify → save the previewed address → saved-place Today and morning card; failed-stamp Not now recovery; cold start; Add Home → private setup in the same session. The native fault path passed on both apps (L1, October 6).
-  - [ ] iOS Add Home → private setup (waits on PR 1585).
+  - [x] iOS Add Home → private setup in the same session: Today switches to the home, the first-use card shows both rows, the pickup editor opens, no household section (L1, October 6, with PR 1585).
 
 - [ ] WP3 Night-before pickup reminders people can act on (F4): an evening push for confirmed pickup days, nothing on quiet days, holiday moves, a "Bins out" button, and the pickup editor opening on its own in cities with no pickup rows yet (today, everywhere but Camas).
   - [x] Existing calendar/briefing implementation and holiday recurrence-preservation repair integrated (PR1540); service round-trip regressions passed.
@@ -136,11 +137,11 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] OS Not now, card Not now, Change date and member Done-only on both apps, plus the overdue "was due" copy, member visibility, a completion push naming nobody and a private-setup home on Android (L1, October 6).
   - [ ] Delivery to a physical phone.
 
-- [ ] WP5 One first-use prompt (F2, small).
+- [x] WP5 One first-use prompt (F2, small).
   - [x] On the synthetic iOS Home, the initial two rows were observed; Set pickup focused the editor; saving pickup removed its row.
   - [x] The first-use card disappears once its items are handled (L1, October 6).
   - [x] Later, re-entry and cold start on both apps; private setup on Android (L1, October 6).
-  - [ ] iOS private setup (waits on PR 1585).
+  - [x] iOS private setup: saving a pickup day removes its first-use row (L1, October 6).
 
 - [ ] WP6 The smallest household journey and the invite verification fix (F3 small, F3b gate).
   - [x] Household provenance/F3b server gates, invitation copy and private completion-notice source integrated.
@@ -165,6 +166,10 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] Existing accepted normal mobile Train/create/publish/signup/cancel/organizer/lifecycle journeys remain reusable because their relevant source is unchanged; no duplicate replay was needed.
   - [x] Day-of reminder at its natural time on local jobs: iOS and Android pushes to signed-in helpers, the email to a guest helper, a cancelled signup skipped, no duplicates (L3, October 6).
   - [ ] The evening-before reminder at its natural time (L3 runs it on October 6 at 21:00Z), and delivery to a physical phone and a real inbox from the hosted backend. Concurrent exactly-once delivery and atomic cancellation-versus-send are still not established.
+
+- [ ] Release-candidate sweep (L4) before the pilot.
+  - [x] October 6: every reachable web page on the production build opened as a homeowner, a new user and a non-member (198 pages; three old /app addresses crashed and are fixed in PR 1655); every route opened as an app link on Android and, signed out, on iOS with no crashes; signed-in Lighthouse: performance 72–77, accessibility 93–100.
+  - [ ] Native Release builds with the largest text, dark mode, VoiceOver and TalkBack and a small screen on the pilot journeys; a signed-in iOS pass; store screenshots with test data.
 
 ## 4. The pilot
 

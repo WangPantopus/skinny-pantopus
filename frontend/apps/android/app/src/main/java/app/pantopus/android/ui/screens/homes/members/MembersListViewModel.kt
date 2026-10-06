@@ -690,7 +690,7 @@ class MembersListViewModel
                         imageUrl = occ.avatarUrl,
                         background = AvatarBackground.Gradient(MemberAvatarTone.toneFor(occ.userId).gradient),
                         size = AvatarBadgeSize.Medium,
-                        verified = true,
+                        verified = occ.hasAddressVerification,
                     ),
                 trailing = if (hasActions) RowTrailing.Kebab else RowTrailing.None,
                 onSecondary =

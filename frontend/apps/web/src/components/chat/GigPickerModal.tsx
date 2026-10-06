@@ -105,7 +105,7 @@ export default function GigPickerModal({ open, onClose, onSelectGig }: GigPicker
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-app">
           <h2 className="text-lg font-semibold text-app">Share a Task</h2>
-          <button onClick={onClose} className="text-app-muted hover:text-app-text-strong p-1">
+          <button aria-label="Close" onClick={onClose} className="text-app-muted hover:text-app-text-strong p-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -126,7 +126,7 @@ export default function GigPickerModal({ open, onClose, onSelectGig }: GigPicker
               className="w-full pl-10 pr-4 py-2.5 bg-surface-muted border-0 rounded-xl text-sm text-app focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
             {query && (
-              <button onClick={() => { setQuery(''); setSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-app-muted hover:text-app-text-secondary">
+              <button aria-label="Clear search" onClick={() => { setQuery(''); setSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-app-muted hover:text-app-text-secondary">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>

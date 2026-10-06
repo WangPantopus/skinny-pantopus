@@ -513,6 +513,9 @@ public struct HubTabRoot: View {
     @State private var router = DeepLinkRouter.shared
     /// W3 — guards the one-shot Place auto-land so it fires at most once.
     @State private var didAutoLandPlace = false
+    /// The landing found no home yet (or Add Home opened first). A home joined
+    /// or added later in this session lands Place when the Hub root reappears.
+    @State private var placeLandingNeedsHome = false
     @State private var placeResolutionError: String?
     @State private var isResolvingPlace = false
     @State private var placeResolutionGeneration = 0
@@ -690,6 +693,7 @@ public struct HubTabRoot: View {
         // In the Mail tab, the Mailbox/Messages switch hides below the root.
         .onChange(of: path.isEmpty, initial: true) { _, atRoot in
             if mode == .mailbox { MailTabStore.shared.mailboxAtRoot = atRoot }
+            if atRoot, placeLandingNeedsHome { Task { await resolvePlaceLanding() } }
         }
         .onChange(of: rootTabs.selected) { _, _ in
             // Cross-tab dispatch may select this tab *after* the pending
@@ -856,7 +860,7 @@ public struct HubTabRoot: View {
         switch mode {
         case .hub:
             Group {
-                if !didAutoLandPlace, path.isEmpty, isResolvingPlace || placeResolutionError != nil {
+                if !didAutoLandPlace, !placeLandingNeedsHome, path.isEmpty, isResolvingPlace || placeResolutionError != nil {
                     if let placeResolutionError {
                         ErrorState(headline: "Couldn't load your place", message: placeResolutionError) {
                             await resolvePlaceLanding()
@@ -994,7 +998,7 @@ public struct HubTabRoot: View {
     private func consumeAddHomeRequestIfNeeded() {
         guard mode == .hub, navigationReady, rootTabs.selected == .place, addHomeRequest != nil else { return }
         addHomeRequest = nil
-        didAutoLandPlace = true
+        placeLandingNeedsHome = true
         path.append(.addHome)
     }
 
@@ -3540,11 +3544,15 @@ public struct HubTabRoot: View {
             let homeId = try await Self.primaryHomeId()
             // A tab change, link, or newer retry must win over this response.
             guard !Task.isCancelled, generation == placeResolutionGeneration, canResolvePlaceLanding else { return }
-            didAutoLandPlace = true
             if PlacePendingStore.bind(to: currentUserId) != nil {
+                didAutoLandPlace = true
                 path.append(.placeArrival)
             } else if let homeId {
+                didAutoLandPlace = true
                 path.append(.placeDashboard(homeId: homeId))
+            } else {
+                // No home yet: the Hub stays the landing, checked again quietly.
+                placeLandingNeedsHome = true
             }
         } catch {
             guard !Task.isCancelled, generation == placeResolutionGeneration, canResolvePlaceLanding else { return }

@@ -49,7 +49,7 @@ struct ChatConversationDetailsSheet: View {
                 }
             }
         } message: {
-            Text("\(firstName) won't be able to message you, and new conversations with them are prevented.")
+            Text("You won't be able to message each other or see each other's posts.")
         }
         .alert("Couldn't block \(firstName)", isPresented: $blockFailedPresented) {
             Button("OK", role: .cancel) {}

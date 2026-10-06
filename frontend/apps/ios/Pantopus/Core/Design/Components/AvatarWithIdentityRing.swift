@@ -74,7 +74,12 @@ public struct AvatarWithIdentityRing: View {
         }
         .frame(width: size, height: size)
         .accessibilityElement()
-        .accessibilityLabel("\(name), \(Int(ringProgress * 100))% profile complete")
+        // A new account has no name yet; don't read a stray comma.
+        .accessibilityLabel(
+            [name.isEmpty ? nil : name, "\(Int(ringProgress * 100))% profile complete"]
+                .compactMap { $0 }
+                .joined(separator: ", ")
+        )
     }
 
     @ViewBuilder private var avatarBody: some View {

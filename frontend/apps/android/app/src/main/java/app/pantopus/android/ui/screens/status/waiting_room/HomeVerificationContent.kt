@@ -115,6 +115,9 @@ data class HomeVerificationContent(
             isInChallengeWindow: Boolean = false,
             challengeWindowEndsAt: String? = null,
             postcardExpiresAt: String? = null,
+            // Adds the landlord card; only a verified landlord can answer that
+            // request, so callers pass the tenant status they read.
+            offersLandlord: Boolean = false,
         ): HomeVerificationContent =
             HomeVerificationContent(
                 status = status,
@@ -123,7 +126,7 @@ data class HomeVerificationContent(
                 body = body(status, isInChallengeWindow),
                 countdown =
                     countdown(status, isInChallengeWindow, challengeWindowEndsAt, postcardExpiresAt),
-                actions = actions(status),
+                actions = actions(status, offersLandlord),
             )
 
         private fun halo(
@@ -242,7 +245,18 @@ data class HomeVerificationContent(
                 .withLocale(Locale.getDefault())
                 .withZone(ZoneId.systemDefault())
 
-        private fun actions(status: HomeVerificationStatus): List<HomeVerificationAction> {
+        /** Statuses where a landlord request can still help. */
+        private val LANDLORD_STATUSES =
+            setOf(
+                HomeVerificationStatus.PendingApproval,
+                HomeVerificationStatus.Unverified,
+                HomeVerificationStatus.Provisional,
+            )
+
+        private fun actions(
+            status: HomeVerificationStatus,
+            offersLandlord: Boolean,
+        ): List<HomeVerificationAction> {
             val actions = mutableListOf<HomeVerificationAction>()
             if (status == HomeVerificationStatus.PendingPostcard) {
                 actions +=
@@ -267,10 +281,7 @@ data class HomeVerificationContent(
                         actionKey = ActionKey.UPLOAD_PROOF,
                     )
             }
-            if (status == HomeVerificationStatus.PendingApproval ||
-                status == HomeVerificationStatus.Unverified ||
-                status == HomeVerificationStatus.Provisional
-            ) {
+            if (offersLandlord && status in LANDLORD_STATUSES) {
                 actions +=
                     HomeVerificationAction(
                         id = "landlordVerification",

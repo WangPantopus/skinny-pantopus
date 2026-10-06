@@ -90,7 +90,7 @@ export default function VaultFolderPage() {
         {/* Header */}
         <div className="px-4 py-3 border-b border-app-border-subtle flex-shrink-0">
           <div className="flex items-center gap-2">
-            <button
+            <button aria-label="Back"
               type="button"
               onClick={() => router.push('/app/mailbox/vault')}
               className="p-1 text-app-text-secondary hover:text-app-text-strong dark:hover:text-gray-300"
@@ -195,7 +195,7 @@ export default function VaultFolderPage() {
           <div className="h-full flex flex-col">
             {/* Mobile back */}
             <div className="md:hidden flex items-center gap-2 px-4 py-2 border-b border-app-border-subtle flex-shrink-0">
-              <button
+              <button aria-label="Back"
                 type="button"
                 onClick={() => setSelectedItemId(null)}
                 className="p-1 text-app-text-secondary hover:text-app-text-strong"

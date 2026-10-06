@@ -123,7 +123,7 @@ export default function ConversationView({
     const current = captureSafetyScope();
     const confirmation = confirmStore.open({
       title: 'Block User',
-      description: `Block ${chatTitle}? You will not be able to send each other direct messages. You can unblock them in Settings.`,
+      description: `Block ${chatTitle}? You won't be able to message each other or see each other's posts. You can unblock them in Settings.`,
       confirmLabel: 'Block',
       variant: 'destructive',
     });

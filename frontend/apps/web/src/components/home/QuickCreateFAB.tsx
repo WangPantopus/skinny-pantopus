@@ -60,7 +60,7 @@ export default function QuickCreateFAB(props: QuickCreateFABProps) {
       )}
 
       {/* FAB button */}
-      <button
+      <button aria-label="Create" aria-expanded={open}
         onClick={() => setOpen(!open)}
         className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white text-2xl transition-all ${
           open

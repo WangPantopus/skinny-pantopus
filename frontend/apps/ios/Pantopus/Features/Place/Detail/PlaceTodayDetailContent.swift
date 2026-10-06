@@ -688,6 +688,8 @@ struct AddressCalendarCard: View {
             }
             .font(.system(size: 14))
             .frame(minHeight: 44)
+            // A menu picker's label can't wrap; at accessibility sizes it was clipped.
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             Text("Recycling")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -700,6 +702,7 @@ struct AddressCalendarCard: View {
             }
             .font(.system(size: 14))
             .frame(minHeight: 44)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             if frequency != "not_set" {
                 Text("Next recycling pickup")
                     .font(.system(size: 13))
@@ -710,6 +713,7 @@ struct AddressCalendarCard: View {
                 }
                 .font(.system(size: 14))
                 .frame(minHeight: 44)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             }
             Text(
                 "Use your collection day, not the night you put bins out. Dates follow your home’s calendar. "

@@ -662,7 +662,7 @@ fun ChatConversationScreen(
                 onDismissRequest = { showBlockConfirm = false },
                 containerColor = PantopusColors.appSurface,
                 title = { Text(text = "Block ${activeCounterparty.displayName}?") },
-                text = { Text(text = "They won't be able to message you anymore. You can unblock them later.") },
+                text = { Text(text = "You won't be able to message each other or see each other's posts. You can unblock them later.") },
                 confirmButton = {
                     TextButton(
                         onClick = {
@@ -2305,21 +2305,24 @@ private val AI_PROMPT_CARDS =
     listOf(
         AiPromptCardFixture("tasks", "Tasks", "What's a fair price to mount a 55\" TV?", PantopusIcon.Hammer),
         AiPromptCardFixture("pulse", "Pulse", "Draft a post asking for a dog-sitter this weekend.", PantopusIcon.Pencil),
-        AiPromptCardFixture("mailbox", "Mailbox", "Summarize today's mail and packages.", PantopusIcon.Mailbox),
+        // It summarizes a letter you give it; it can't read the inbox.
+        AiPromptCardFixture("mailbox", "Mailbox", "Help me understand a letter I got.", PantopusIcon.Mailbox),
         AiPromptCardFixture("marketplace", "Marketplace", "Price my mid-century sofa for a quick sale.", PantopusIcon.ShoppingBag),
     )
 
 /**
- * Launch cut #3 (Marketplace): the Marketplace prompt gives way to a Home one
- * (the seasonal checklist stays), keeping the 2×2 grid whole. Mirrors iOS
- * `launchPromptCards`.
+ * Launch cuts #3 (Marketplace) and #4 (Open Gigs): those prompts give way to
+ * Home and Nearby ones (the seasonal checklist stays), keeping the 2×2 grid
+ * whole. Mirrors iOS `launchPromptCards`.
  */
 private fun launchPromptCards(): List<AiPromptCardFixture> =
     AI_PROMPT_CARDS.map { card ->
-        if (card.id != "marketplace" || LaunchFeatures.marketplace) {
-            card
-        } else {
-            AiPromptCardFixture("home", "Home", "What should I check around my home before winter?", PantopusIcon.Home)
+        when {
+            card.id == "marketplace" && !LaunchFeatures.marketplace ->
+                AiPromptCardFixture("home", "Home", "What should I check around my home before winter?", PantopusIcon.Home)
+            card.id == "tasks" && !LaunchFeatures.openGigs ->
+                AiPromptCardFixture("nearby", "Nearby", "What's happening near my home?", PantopusIcon.MapPin)
+            else -> card
         }
     }
 

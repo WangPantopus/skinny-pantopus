@@ -315,6 +315,8 @@ struct PlaceFridgeCardSection: View {
 private struct PlaceFridgeCardRow: View {
     let card: FridgeCard
     let vm: PlaceFridgeCardViewModel
+    /// Revoking can't be undone: anyone holding the card's link loses it right away.
+    @State private var confirmingRevoke = false
 
     private var opensLine: String {
         card.viewCount == 0
@@ -349,7 +351,7 @@ private struct PlaceFridgeCardRow: View {
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.Color.primarySolid)
                         Button(role: .destructive) {
-                            Task { await vm.revoke(card.id) }
+                            confirmingRevoke = true
                         } label: {
                             Text("Revoke")
                                 .font(.system(size: 13, weight: .semibold))
@@ -358,6 +360,12 @@ private struct PlaceFridgeCardRow: View {
                     }
                 }
             }
+        }
+        .alert("Revoke this card?", isPresented: $confirmingRevoke) {
+            Button("Revoke card", role: .destructive) { Task { await vm.revoke(card.id) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Its link stops opening right away for anyone you gave it to. You can make a new card any time.")
         }
     }
 }

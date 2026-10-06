@@ -109,9 +109,8 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-app">
       {/* ── Left Nav ─────────────────────────────────────── */}
-      <aside
+      <nav
         className="hidden md:flex flex-col flex-shrink-0 w-[52px] lg:w-[220px] border-r border-app bg-surface-muted overflow-y-auto"
-        role="navigation"
         aria-label="Mailbox navigation"
       >
         {/* Skeleton while drawer meta is loading */}
@@ -165,7 +164,7 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         )}
-      </aside>
+      </nav>
 
       {/* ── Content area ─────────────────────────────────── */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden" role="main">

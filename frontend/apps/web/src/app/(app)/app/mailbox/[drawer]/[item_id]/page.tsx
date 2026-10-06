@@ -299,7 +299,7 @@ export default function ItemDetailPage() {
     <div className="h-full flex flex-col overflow-hidden">
       {/* ── Mobile back button + toolbar ──────────────────── */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-app-border-subtle flex-shrink-0">
-        <button
+        <button aria-label="Back"
           type="button"
           onClick={() => router.push(`/app/mailbox/${drawer}`)}
           className="md:hidden p-1 text-app-text-secondary hover:text-app-text-strong dark:hover:text-gray-300"

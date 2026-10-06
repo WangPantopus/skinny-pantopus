@@ -66,6 +66,21 @@ class HomeTabHostViewModel
                 }
         }
 
+        /**
+         * Re-checks quietly while the landing is the no-home Hub, so a home joined or added
+         * later in this session lands Place the next time the Hub root shows. No skeleton
+         * or error replaces the Hub on this check.
+         */
+        fun refreshIfNoHome() {
+            if (_landing.value != HomeLanding.Hub || resolveJob?.isActive == true) return
+            resolveJob =
+                viewModelScope.launch {
+                    val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.sharedHomes ?: return@launch
+                    val primary = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull() ?: return@launch
+                    if (_landing.value == HomeLanding.Hub) _landing.value = HomeLanding.PlaceDashboard(primary.id)
+                }
+        }
+
         fun loadPreview() {
             if (previewJob?.isActive == true) return
             val draft = _arrival.value.draft ?: return

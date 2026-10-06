@@ -251,6 +251,7 @@ private fun ResidencyClaimRow(
     val clipboard = LocalClipboardManager.current
     val expiresAt = remember(claim.expiresAt) { runCatching { Instant.parse(claim.expiresAt).toEpochMilli() }.getOrNull() }
     var now by remember(claim.id, claim.expiresAt) { mutableStateOf(System.currentTimeMillis()) }
+    var confirmingRevoke by remember { mutableStateOf(false) }
     LaunchedEffect(claim.id, claim.status, expiresAt) {
         now = System.currentTimeMillis()
         if (claim.status == ResidencyClaimStatus.ACTIVE && expiresAt != null) {
@@ -313,10 +314,32 @@ private fun ResidencyClaimRow(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = PantopusColors.error,
-                        modifier = Modifier.clickable { viewModel.revokeClaim(claim.id) },
+                        modifier = Modifier.clickable { confirmingRevoke = true },
                     )
                 }
             }
         }
     }
+    RevokePassConfirmation(visible = confirmingRevoke, onDismiss = { confirmingRevoke = false }) {
+        confirmingRevoke = false
+        viewModel.revokeClaim(claim.id)
+    }
+}
+
+@Composable
+private fun RevokePassConfirmation(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    if (!visible) return
+    ConfirmRevokeDialog(
+        title = "Revoke this pass?",
+        text =
+            "Its link and code stop checking out right away for anyone you shared them with. " +
+                "You can create a new pass any time.",
+        confirmLabel = "Revoke pass",
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+    )
 }

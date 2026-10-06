@@ -221,7 +221,7 @@ export default function CouponPipeline({
             {offer.offer_title} — {offer.business_name}
           </span>
           {stage !== 'confirm' && (
-            <button
+            <button aria-label="Close"
               type="button"
               onClick={onClose}
               className="p-1 text-amber-600 hover:text-amber-800 flex-shrink-0"
@@ -567,7 +567,7 @@ function CartStage({
               </button>
             </div>
 
-            <button
+            <button aria-label="Remove"
               type="button"
               onClick={() => onRemove(item.id)}
               className="p-1 text-app-text-muted hover:text-red-500 flex-shrink-0"

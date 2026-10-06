@@ -30,7 +30,7 @@ export default function SavedPlaceContext({ previewId, savedPlaceId }: { preview
   const active = savedPlaceId && savedPlaceId !== 'all' ? places.find((p) => p.id === savedPlaceId) : places[0];
   const preview = useQuery({
     queryKey: ['place-entry', userId, 'preview', active?.id],
-    queryFn: () => api.place.getPublicPlacePreview(active!.label),
+    queryFn: () => api.savedPlaces.getPreview(active!.id),
     enabled: !!active && !previewId && !viewer.isFetching, staleTime: 60_000, retry: false,
   });
 

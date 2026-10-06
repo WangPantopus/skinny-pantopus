@@ -127,7 +127,7 @@ export default function ScopedShareModal({
                 <p className="text-xs text-app-text-secondary mt-0.5 truncate">{resourceLabel}</p>
               )}
             </div>
-            <button
+            <button aria-label="Close"
               onClick={onClose}
               className="p-2 hover:bg-app-hover rounded-lg transition text-app-text-secondary hover:text-app-text-strong"
             >

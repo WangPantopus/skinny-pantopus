@@ -13,7 +13,9 @@
  */
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { createNotification, createBulkNotifications } = require('./notificationService');
-const { sendGuestReservationReminderEmail } = require('./emailService');
+const { sendGuestReservationReminderEmail, sendGuestSignupReleasedEmail } = require('./emailService');
+const { inferTimezone } = require('./context/locationResolver');
+const { DateTime } = require('luxon');
 const logger = require('../utils/logger');
 
 const DEEP_LINK_PREFIX = '/app/support-trains';
@@ -176,7 +178,17 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
       }
 
       case 'support_train.slot_canceled_by_organizer': {
-        // Notify the helper whose reservation was canceled
+        // Notify the helper whose reservation was canceled; an email-only guest gets an email.
+        if (!payload.helper_user_id && payload.helper_guest_email) {
+          await sendGuestSignupReleasedEmail({
+            toEmail: payload.helper_guest_email,
+            guestName: payload.helper_guest_name || 'helper',
+            trainTitle: title,
+            slots: [{ slotLabel: payload.slot_label || 'Your signup', slotDate: formatSlotDate(payload.slot_date) }],
+            removed: true,
+            reason: payload.organizer_reason,
+          });
+        }
         if (payload.helper_user_id) {
           const slotLabel = payload.slot_label || 'your slot';
           const slotDate = formatSlotDate(payload.slot_date);
@@ -384,6 +396,66 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
               metadata: { support_train_id: supportTrainId },
             }))
           );
+        }
+        break;
+      }
+
+      case 'support_train.closed': {
+        // Closing ends the Train's reminders, so helpers still signed up for a date from today
+        // on (in the Train's time zone) are told they are no longer needed. Their reservations
+        // stay as they are.
+        const [{ data: train }, { data: reservations, error }] = await Promise.all([
+          supabaseAdmin.from('SupportTrain').select('delivery_lat, delivery_lng').eq('id', supportTrainId).single(),
+          supabaseAdmin
+            .from('SupportTrainReservation')
+            .select('user_id, guest_name, guest_email, SupportTrainSlot:slot_id ( slot_date, slot_label )')
+            .eq('support_train_id', supportTrainId)
+            .eq('status', 'reserved'),
+        ]);
+        if (error) throw error;
+        const today = DateTime.now()
+          .setZone(inferTimezone(train?.delivery_lat, train?.delivery_lng))
+          .toISODate();
+        const byHelper = new Map();
+        for (const r of reservations || []) {
+          const slot = r.SupportTrainSlot;
+          if (!slot?.slot_date || slot.slot_date < today) continue;
+          const key = r.user_id || (r.guest_email ? `guest:${r.guest_email.toLowerCase()}` : null);
+          if (!key || r.user_id === actorUserId) continue;
+          if (!byHelper.has(key)) byHelper.set(key, { userId: r.user_id, guestEmail: r.guest_email, guestName: r.guest_name, slots: [] });
+          byHelper.get(key).slots.push(slot);
+        }
+
+        const released = (slots) => {
+          const sorted = [...slots].sort((a, b) => a.slot_date.localeCompare(b.slot_date));
+          return sorted.length === 1
+            ? `Your ${sorted[0].slot_label || 'signup'} on ${formatSlotDate(sorted[0].slot_date)} is no longer needed.`
+            : `Your ${sorted.length} upcoming signups are no longer needed.`;
+        };
+        const helpers = [...byHelper.values()];
+        const members = helpers.filter((h) => h.userId);
+        if (members.length > 0) {
+          await createBulkNotifications(
+            members.map((h) => ({
+              userId: h.userId,
+              type: 'support_train_slot_changes',
+              title: 'Support Train Closed',
+              body: `The organizer closed ${supportTrainReference(title)}. ${released(h.slots)} Thank you for offering to help.`,
+              icon: '🚂',
+              link,
+              metadata: { support_train_id: supportTrainId },
+            }))
+          );
+        }
+        for (const h of helpers.filter((x) => !x.userId)) {
+          await sendGuestSignupReleasedEmail({
+            toEmail: h.guestEmail,
+            guestName: h.guestName || 'helper',
+            trainTitle: title,
+            slots: [...h.slots]
+              .sort((a, b) => a.slot_date.localeCompare(b.slot_date))
+              .map((s) => ({ slotLabel: s.slot_label || 'Your signup', slotDate: formatSlotDate(s.slot_date) })),
+          });
         }
         break;
       }

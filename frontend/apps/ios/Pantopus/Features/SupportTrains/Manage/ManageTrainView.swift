@@ -419,25 +419,28 @@ public struct ManageTrainView: View {
             onDiscard: { viewModel.discardNudge() }
         )
 
-        ManageFundSection(
-            fund: viewModel.fund,
-            canDisable: content.viewerRole == .primaryOrganizer,
-            isBusy: viewModel.isSubmitting,
-            goalDollars: $fundGoalDollars,
-            onEnable: {
-                Task { await viewModel.enableFund(goalDollars: Int(fundGoalDollars)) }
-            },
-            onDisable: {
-                viewModel.requestConfirm(
-                    ManageDestructiveConfirm(
-                        kind: .disableFund,
-                        title: "Disable the gift fund?",
-                        message: "Neighbors won't be able to chip in money any more.",
-                        confirmLabel: "Disable"
+        // Launch cut #9: no app takes a contribution yet.
+        if LaunchFeatures.giftFunds {
+            ManageFundSection(
+                fund: viewModel.fund,
+                canDisable: content.viewerRole == .primaryOrganizer,
+                isBusy: viewModel.isSubmitting,
+                goalDollars: $fundGoalDollars,
+                onEnable: {
+                    Task { await viewModel.enableFund(goalDollars: Int(fundGoalDollars)) }
+                },
+                onDisable: {
+                    viewModel.requestConfirm(
+                        ManageDestructiveConfirm(
+                            kind: .disableFund,
+                            title: "Disable the gift fund?",
+                            message: "Neighbors won't be able to chip in money any more.",
+                            confirmLabel: "Disable"
+                        )
                     )
-                )
-            }
-        )
+                }
+            )
+        }
     }
 
     /// The host's handler for an Organize row, or nil when it isn't wired.

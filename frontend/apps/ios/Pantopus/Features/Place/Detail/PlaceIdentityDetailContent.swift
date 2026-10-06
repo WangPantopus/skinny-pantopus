@@ -399,8 +399,14 @@ private struct VerifiedStatusCard: View {
     let roleBase: String?
     let address: String
 
+    /// Joined by invitation: household access only (F3b). Nothing is
+    /// pending, so the card doesn't call it a claim. Owners get here by a claim.
+    private var hasHouseholdAccess: Bool {
+        !isVerified && roleBase != nil && roleBase != "owner"
+    }
+
     private var title: String {
-        guard isVerified else { return "Claimed — not yet verified" }
+        guard isVerified else { return hasHouseholdAccess ? "Household access" : "Claimed — not yet verified" }
         switch roleBase {
         case "guest": return "Verified guest"
         case "service_provider": return "Verified service provider"
@@ -429,7 +435,7 @@ private struct VerifiedStatusCard: View {
                             .foregroundStyle(Theme.Color.appText)
                         PlaceChip(model: isVerified
                             ? PlaceChipModel(tone: .success, text: "Active", icon: .check)
-                            : PlaceChipModel(tone: .warning, text: "Pending"))
+                            : PlaceChipModel(tone: .warning, text: hasHouseholdAccess ? "Not verified" : "Pending"))
                     }
                     Text(address)
                         .font(.system(size: 13))
@@ -526,6 +532,8 @@ private struct ResidencyLetterSection: View {
 private struct LetterRow: View {
     let letter: ResidencyLetter
     let vm: PlaceResidencyLetterViewModel
+    /// Revoking can't be undone: whoever holds the letter sees it as no longer active.
+    @State private var confirmingRevoke = false
 
     var body: some View {
         PlaceDetailCard(padding: 14) {
@@ -547,7 +555,7 @@ private struct LetterRow: View {
                     .disabled(vm.openingLetterId != nil)
                     .accessibilityIdentifier("place.letter.pdf")
                 if letter.status == .issued {
-                    Button("Revoke") { Task { await vm.revoke(letter.id) } }
+                    Button("Revoke") { confirmingRevoke = true }
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.Color.error)
                 } else {
@@ -555,6 +563,13 @@ private struct LetterRow: View {
                     PlaceChip(model: PlaceChipModel(tone: .neutral, text: label))
                 }
             }
+        }
+        .alert("Revoke this letter?", isPresented: $confirmingRevoke) {
+            Button("Revoke letter", role: .destructive) { Task { await vm.revoke(letter.id) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Anyone who checks code \(letter.letterCode) will see that it is no longer active. "
+                + "You can generate a new letter any time.")
         }
     }
 }

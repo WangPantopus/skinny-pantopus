@@ -571,9 +571,11 @@ final class HomeDashboardViewModel {
 
     /// The GET is idempotent-generate: it creates the current season's
     /// items when the home has none, so "Generate checklist" is a re-read.
+    /// The score counts the checklist, so it reloads once the items exist.
     func generateChecklist() async {
         checklist = .loading
         await loadChecklist()
+        await loadHealthScore()
     }
 
     /// Re-reads only the health score (used after a checklist mutation and

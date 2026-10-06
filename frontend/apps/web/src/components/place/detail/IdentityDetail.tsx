@@ -24,6 +24,7 @@ import Chip from '@/components/archetypes/primitives/Chip';
 import ErrorState from '@/components/ui/ErrorState';
 import { LockedCard, DetailHeader, DetailSectionLabel, SourceNote, InfoNote } from '@/components/archetypes/place';
 import { toast } from '@/components/ui/toast-store';
+import { confirmStore } from '@/components/ui/confirm-store';
 import { failureMessage } from '@/components/home/share/shareFailure';
 import { queryKeys } from '@/lib/query-keys';
 import { detailAddress } from './sections';
@@ -184,6 +185,16 @@ function IssuedLetterCard({ letter, homeId }: { letter: ResidencyLetter; homeId:
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not revoke the letter.'),
   });
+  // Revoking can't be undone: whoever holds this letter sees it as no longer active.
+  const onRevoke = async () => {
+    const yes = await confirmStore.open({
+      title: 'Revoke this letter?',
+      description: `Anyone who checks code ${letter.letter_code} will see that it is no longer active. You can generate a new letter any time.`,
+      confirmLabel: 'Revoke letter',
+      variant: 'destructive',
+    });
+    if (yes) revokeMutation.mutate();
+  };
 
   const onDownload = async () => {
     setDownloading(true);
@@ -255,7 +266,7 @@ function IssuedLetterCard({ letter, homeId }: { letter: ResidencyLetter; homeId:
         {!inactive && (
           <button
             type="button"
-            onClick={() => revokeMutation.mutate()}
+            onClick={onRevoke}
             disabled={revokeMutation.isPending}
             className="h-10 px-3.5 rounded-[10px] border-[1.5px] border-app-border bg-app-surface text-app-error text-[13.5px] font-semibold flex items-center justify-center gap-1.5 hover:bg-app-error-light/40 transition disabled:opacity-50"
           >
@@ -499,6 +510,16 @@ function IssuedClaimCard({ claim, homeId }: { claim: ResidencyClaim; homeId: str
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not revoke the claim.'),
   });
+  // Revoking can't be undone: the shared link stops verifying for everyone who has it.
+  const onRevoke = async () => {
+    const yes = await confirmStore.open({
+      title: 'Revoke this pass?',
+      description: 'Its link and code stop checking out right away for anyone you shared them with. You can create a new pass any time.',
+      confirmLabel: 'Revoke pass',
+      variant: 'destructive',
+    });
+    if (yes) revokeMutation.mutate();
+  };
 
   const onCopy = async () => {
     if (claim.status !== 'active' || expiresAt <= Date.now()) {
@@ -539,7 +560,7 @@ function IssuedClaimCard({ claim, homeId }: { claim: ResidencyClaim; homeId: str
         {status === 'active' && (
           <button
             type="button"
-            onClick={() => revokeMutation.mutate()}
+            onClick={onRevoke}
             disabled={revokeMutation.isPending}
             className="h-10 px-3.5 rounded-[10px] border-[1.5px] border-app-border bg-app-surface text-app-error text-[13.5px] font-semibold flex items-center justify-center gap-1.5 hover:bg-app-error-light/40 transition disabled:opacity-50"
           >

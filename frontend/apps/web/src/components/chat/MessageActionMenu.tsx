@@ -78,7 +78,7 @@ export default function MessageActionMenu({
               {emoji}
             </button>
           ))}
-          <button type="button" onClick={() => { onAction('emoji_picker'); onClose(); }}
+          <button aria-label="Add reaction" type="button" onClick={() => { onAction('emoji_picker'); onClose(); }}
             className="w-9 h-9 rounded-full bg-app-surface-sunken hover:bg-app-hover flex items-center justify-center transition">
             <Smile className="w-4 h-4 text-app-text-secondary" />
           </button>

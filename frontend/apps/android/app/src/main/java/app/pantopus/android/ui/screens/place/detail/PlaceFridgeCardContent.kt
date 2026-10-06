@@ -240,6 +240,7 @@ private fun FridgeCardRow(
     viewModel: PlaceDetailViewModel,
 ) {
     val clipboard = LocalClipboardManager.current
+    var confirmingRevoke by remember { mutableStateOf(false) }
     val opens =
         when {
             card.viewCount == 0 -> "Not opened yet"
@@ -283,10 +284,22 @@ private fun FridgeCardRow(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = PantopusColors.error,
-                        modifier = Modifier.clickable { viewModel.revokeFridgeCard(card.id) },
+                        modifier = Modifier.clickable { confirmingRevoke = true },
                     )
                 }
             }
         }
+    }
+    if (confirmingRevoke) {
+        ConfirmRevokeDialog(
+            title = "Revoke this card?",
+            text = "Its link stops opening right away for anyone you gave it to. You can make a new card any time.",
+            confirmLabel = "Revoke card",
+            onConfirm = {
+                confirmingRevoke = false
+                viewModel.revokeFridgeCard(card.id)
+            },
+            onDismiss = { confirmingRevoke = false },
+        )
     }
 }

@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.settings.blocks
 
+import app.pantopus.android.data.api.models.feed.MutedEntitiesResponse
 import app.pantopus.android.data.api.models.settings.BlockedUserSummaryDto
 import app.pantopus.android.data.api.models.settings.PrivacyBlockDto
 import app.pantopus.android.data.api.models.settings.PrivacyBlocksResponse
@@ -11,6 +12,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
+import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
@@ -39,6 +41,7 @@ import org.junit.Test
 class BlockedUsersViewModelTest {
     private val privacy: PrivacyRepository = mockk()
     private val blocks: BlocksRepository = mockk()
+    private val feedActions: FeedActionsRepository = mockk()
     private val auth: AuthRepository = mockk(relaxed = true)
 
     @Before fun setUp() {
@@ -46,6 +49,8 @@ class BlockedUsersViewModelTest {
         // Default: no personal blocks. Cases that exercise the UserBlock half
         // override this.
         coEvery { blocks.blocked() } returns NetworkResult.Success(noPersonal)
+        // The Muted section's read; these cases are about blocks, so nobody is muted.
+        coEvery { feedActions.mutedEntities() } returns NetworkResult.Success(MutedEntitiesResponse())
     }
 
     @After fun tearDown() {
@@ -53,7 +58,7 @@ class BlockedUsersViewModelTest {
     }
 
     private fun viewModel(session: HomeClaimScopeTestFixture = HomeClaimScopeTestFixture()): BlockedUsersViewModel =
-        BlockedUsersViewModel(privacy, blocks, auth, claimScopeFactory(session))
+        BlockedUsersViewModel(privacy, blocks, feedActions, auth, claimScopeFactory(session))
 
     /** `GET /api/users/blocked` — flattened UserBlock rows (blocks.js:145). */
     private val twoPersonal =

@@ -258,7 +258,7 @@ fun PublicProfileScreen(
             AlertDialog(
                 onDismissRequest = { showBlockConfirm = false },
                 title = { Text(if (name.isEmpty()) "Block this user?" else "Block $name?") },
-                text = { Text("They won't be able to message you anymore. You can unblock them later.") },
+                text = { Text("You won't be able to message each other or see each other's posts. You can unblock them later.") },
                 confirmButton = {
                     TextButton(
                         onClick = {

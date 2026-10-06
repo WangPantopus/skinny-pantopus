@@ -227,6 +227,9 @@ fun ExploreMapScreen(
                 viewModel.selectEntity(entity.id)
                 onOpenEntity(entity)
             },
+            // The empty state names only the filters that are on: the sheet's plus the type toggle.
+            narrowingFilterCount = filters.activeCount + (if (activeKind != null) 1 else 0),
+            distanceNarrowed = filters.isDistanceActive,
             onClearFilters = viewModel::clearFilters,
             onWidenArea = viewModel::widenArea,
             onRefresh = viewModel::refresh,
@@ -851,6 +854,8 @@ private fun ExploreBottomSheet(
     onSelectSort: (ExploreSort) -> Unit,
     onSelectStop: (ExploreSheetStop) -> Unit,
     onTapEntity: (ExploreEntity) -> Unit,
+    narrowingFilterCount: Int,
+    distanceNarrowed: Boolean,
     onClearFilters: () -> Unit,
     onWidenArea: () -> Unit,
     onRefresh: () -> Unit,
@@ -903,7 +908,12 @@ private fun ExploreBottomSheet(
             is ExploreMapUiState.Error -> ExploreSheetError(state.message, onRetry = onRefresh)
             is ExploreMapUiState.Loaded ->
                 if (state.isEmpty) {
-                    ExploreEmptyBody(onClearFilters = onClearFilters, onWidenArea = onWidenArea)
+                    ExploreEmptyBody(
+                        filterCount = narrowingFilterCount,
+                        distanceNarrowed = distanceNarrowed,
+                        onClearFilters = onClearFilters,
+                        onWidenArea = onWidenArea,
+                    )
                 } else {
                     when (sheetStop) {
                         ExploreSheetStop.Collapsed -> ExploreCollapsedBody(onExpand = { onSelectStop(ExploreSheetStop.Standard) })
@@ -1418,6 +1428,8 @@ private fun exploreBadgeColors(tone: ExploreBadgeTone): Pair<Color, Color> =
 
 @Composable
 internal fun ExploreEmptyBody(
+    filterCount: Int,
+    distanceNarrowed: Boolean,
     onClearFilters: () -> Unit,
     onWidenArea: () -> Unit,
 ) {
@@ -1454,35 +1466,53 @@ internal fun ExploreEmptyBody(
             modifier = Modifier.padding(top = Spacing.s3),
         )
         Text(
-            text =
-                "3 filters are narrowing this view. Try clearing them, or widen the area to surface " +
-                    "neighbors a little further out.",
+            text = exploreEmptyHint(filterCount, distanceNarrowed),
             fontSize = 12.5.sp,
             color = PantopusColors.appTextSecondary,
             lineHeight = 18.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 5.dp).width(264.dp),
         )
-        Row(
-            modifier = Modifier.padding(top = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-        ) {
-            ExploreActionPill(
-                title = "Clear filters",
-                icon = PantopusIcon.X,
-                primary = true,
-                onClick = onClearFilters,
-                testTag = "exploreClearFilters",
-            )
-            ExploreActionPill(
-                title = "Widen area",
-                icon = PantopusIcon.Globe,
-                primary = false,
-                onClick = onWidenArea,
-                testTag = "exploreWidenArea",
-            )
+        // Clearing or widening is offered only when it would change the view.
+        if (filterCount > 0) {
+            Row(
+                modifier = Modifier.padding(top = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            ) {
+                ExploreActionPill(
+                    title = "Clear filters",
+                    icon = PantopusIcon.X,
+                    primary = true,
+                    onClick = onClearFilters,
+                    testTag = "exploreClearFilters",
+                )
+                if (distanceNarrowed) {
+                    ExploreActionPill(
+                        title = "Widen area",
+                        icon = PantopusIcon.Globe,
+                        primary = false,
+                        onClick = onWidenArea,
+                        testTag = "exploreWidenArea",
+                    )
+                }
+            }
         }
     }
+}
+
+/** The empty-state hint names only the filters that are on (mirrors iOS `ExploreMapView.emptyHint`). */
+internal fun exploreEmptyHint(
+    filterCount: Int,
+    distanceNarrowed: Boolean,
+): String {
+    if (filterCount <= 0) return "Try another area, or check back later."
+    val lead =
+        if (filterCount == 1) {
+            "1 filter is narrowing this view. Try clearing it"
+        } else {
+            "$filterCount filters are narrowing this view. Try clearing them"
+        }
+    return if (distanceNarrowed) "$lead, or widen the area to surface neighbors a little further out." else "$lead."
 }
 
 @Composable

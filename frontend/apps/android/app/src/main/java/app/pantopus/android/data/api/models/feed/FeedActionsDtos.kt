@@ -17,6 +17,22 @@ enum class FeedMuteEntityType(
     Business("business"),
 }
 
+/** `GET /api/posts/mute` — one muted person or business. */
+@JsonClass(generateAdapter = true)
+data class MutedEntityDto(
+    @Json(name = "entity_type") val entityType: String,
+    @Json(name = "entity_id") val entityId: String,
+    val name: String,
+    val username: String? = null,
+    @Json(name = "avatar_url") val avatarUrl: String? = null,
+)
+
+/** `GET /api/posts/mute` reply. */
+@JsonClass(generateAdapter = true)
+data class MutedEntitiesResponse(
+    val muted: List<MutedEntityDto> = emptyList(),
+)
+
 /** Body for `POST` + `DELETE /api/posts/mute`. */
 @JsonClass(generateAdapter = true)
 data class FeedMuteRequest(
