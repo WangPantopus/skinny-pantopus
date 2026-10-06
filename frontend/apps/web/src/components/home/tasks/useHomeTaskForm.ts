@@ -11,14 +11,28 @@ export type TaskFormValues = { taskType: string; title: string; description: str
 const isHidden = () => document.visibilityState === 'hidden';
 const isReadDenied = (failure: unknown) => [403, 404].includes((failure as { statusCode?: number })?.statusCode || 0);
 const empty: TaskFormValues = { taskType: 'chore', title: '', description: '', assignedTo: '', priority: 'medium', status: 'open', dueAt: '', budget: '' };
+// A due day is saved as 9 a.m. in this browser's time zone, as the iOS and
+// Android apps save it, and editing shows the local day of the saved time.
+// Midnight UTC was the evening before for the whole pilot.
+function localDay(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso.slice(0, 10);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+function dueTimestamp(day: string) {
+  const [year, month, date] = day.split('-').map(Number);
+  const due = new Date(year, month - 1, date, 9);
+  return Number.isNaN(due.getTime()) ? day : due.toISOString();
+}
 function values(task: HomeTaskFields & { status?: string }): TaskFormValues {
   return { taskType: task.task_type, title: task.title, description: task.description || '', assignedTo: task.assigned_to || '',
-    priority: task.priority, status: task.status || 'open', dueAt: task.due_at?.slice(0, 10) || '', budget: task.budget == null ? '' : String(task.budget) };
+    priority: task.priority, status: task.status || 'open', dueAt: task.due_at ? localDay(task.due_at) : '', budget: task.budget == null ? '' : String(task.budget) };
 }
 function payload(form: TaskFormValues): HomeTaskFields {
   return { task_type: form.taskType as HomeTask['task_type'], title: form.title.trim(), description: form.description.trim() || null,
     assigned_to: form.assignedTo || null, priority: form.priority as HomeTask['priority'],
-    due_at: form.dueAt ? new Date(`${form.dueAt}T00:00:00.000Z`).toISOString() : null, budget: form.budget === '' ? null : Number(form.budget) };
+    due_at: form.dueAt ? dueTimestamp(form.dueAt) : null, budget: form.budget === '' ? null : Number(form.budget) };
 }
 function patch(form: TaskFormValues, initial: TaskFormValues): HomeTaskPatch {
   const next = { ...payload(form), status: form.status as HomeTask['status'] };
