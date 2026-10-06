@@ -32,6 +32,7 @@ struct PlaceDetailView: View {
         .sheet(isPresented: $viewModel.showVerify) {
             PlaceVerifySheet(
                 address: verifyAddress,
+                homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil,
                 onStart: { method in
                     viewModel.showVerify = false
                     viewModel.onStartVerify?(method)

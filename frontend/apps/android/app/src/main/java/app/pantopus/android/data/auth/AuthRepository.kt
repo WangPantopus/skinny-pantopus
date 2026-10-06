@@ -38,6 +38,7 @@ import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.observability.Observability
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.push.FcmTokenProvider
+import app.pantopus.android.push.NotificationDispatcher
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -199,6 +200,7 @@ class AuthRepository
         private val accountHints: AccountHintStore,
         private val presenceVerifier: PresenceVerifier,
         private val fcmTokenProvider: FcmTokenProvider,
+        private val notifications: NotificationDispatcher,
     ) {
         /**
          * Outcome of a token refresh. The distinction matters: only
@@ -1218,6 +1220,8 @@ class AuthRepository
                     val userId = (_state.value as? State.SignedIn)?.user?.id ?: tokenStorage.userId()
                     socketManager.disconnect()
                     tokenStorage.clear()
+                    // The next person on this device must not read the last account's notifications.
+                    notifications.clearDelivered()
                     deviceIdentity.clearRegistration()
                     observability.identify(userId = null)
                     Analytics.identify(userId = null)

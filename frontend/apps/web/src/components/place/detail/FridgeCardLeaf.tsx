@@ -21,6 +21,7 @@ import { Users, Cross, PawPrint, Wrench, Phone, StickyNote, Plus, X, Loader2, Co
 import Chip from '@/components/archetypes/primitives/Chip';
 import { DetailHeader, DetailSectionLabel, InfoNote } from '@/components/archetypes/place';
 import { toast } from '@/components/ui/toast-store';
+import { confirmStore } from '@/components/ui/confirm-store';
 import { queryKeys } from '@/lib/query-keys';
 import ErrorState from '@/components/ui/ErrorState';
 
@@ -54,6 +55,16 @@ function IssuedCardRow({ card, homeId }: { card: FridgeCard; homeId: string }) {
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not revoke the card.'),
   });
+  // Revoking can't be undone: anyone holding the card's link loses it right away.
+  const onRevoke = async () => {
+    const yes = await confirmStore.open({
+      title: 'Revoke this card?',
+      description: 'Its link stops opening right away for anyone you gave it to. You can make a new card any time.',
+      confirmLabel: 'Revoke card',
+      variant: 'destructive',
+    });
+    if (yes) revokeMutation.mutate();
+  };
 
   const onCopy = async () => {
     try {
@@ -96,7 +107,7 @@ function IssuedCardRow({ card, homeId }: { card: FridgeCard; homeId: string }) {
           </a>
           <button
             type="button"
-            onClick={() => revokeMutation.mutate()}
+            onClick={onRevoke}
             disabled={revokeMutation.isPending}
             className="h-10 px-3.5 rounded-[10px] border-[1.5px] border-app-border bg-app-surface text-app-error text-[13.5px] font-semibold flex items-center justify-center gap-1.5 hover:bg-app-error-light/40 transition disabled:opacity-50"
           >

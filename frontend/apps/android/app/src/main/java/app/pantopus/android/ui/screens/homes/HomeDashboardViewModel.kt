@@ -621,10 +621,14 @@ class HomeDashboardViewModel
         /**
          * The GET is idempotent-generate: it creates the current season's
          * items when the home has none, so "Generate checklist" is a re-read.
+         * The score counts the checklist, so it reloads once the items exist.
          */
         fun generateChecklist() {
             _checklist.value = HomeIntelligenceCardState.Loading
-            viewModelScope.launch { loadChecklist() }
+            viewModelScope.launch {
+                loadChecklist()
+                loadHealthScore()
+            }
         }
 
         /** Card-level retry for the health-score ring. */

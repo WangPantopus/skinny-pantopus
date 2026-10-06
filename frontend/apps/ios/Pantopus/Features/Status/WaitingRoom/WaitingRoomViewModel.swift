@@ -150,11 +150,22 @@ public final class WaitingRoomViewModel {
             phase = .notice(.noClaim)
             return
         }
+        let offersLandlord = await offersLandlordConfirmation()
         phase = .verification(
             HomeVerificationContent.make(
-                status: HomeVerificationStatus.from(raw: access.verificationStatus)
+                status: HomeVerificationStatus.from(raw: access.verificationStatus),
+                offersLandlord: offersLandlord
             )
         )
+    }
+
+    /// The landlord card helps only when a verified landlord can answer, or
+    /// the person already has a request there. An unreadable status hides it.
+    private func offersLandlordConfirmation() async -> Bool {
+        guard let status: TenantHomeStatusResponse = try? await api.request(
+            TenantEndpoints.homeStatus(homeId: homeId)
+        ) else { return false }
+        return status.matches(homeId: homeId) && status.offersLandlordConfirmation
     }
 
     /// Route one Verification Center action card. Keys are declared on

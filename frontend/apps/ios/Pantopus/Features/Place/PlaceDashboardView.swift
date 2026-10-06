@@ -96,6 +96,7 @@ struct PlaceDashboardView: View {
         .sheet(isPresented: $showVerify) {
             PlaceVerifySheet(
                 address: verifyAddress,
+                homeId: viewModel.homeId,
                 onStart: { method in
                     showVerify = false
                     viewModel.onStartVerify(method, verifyAddress)

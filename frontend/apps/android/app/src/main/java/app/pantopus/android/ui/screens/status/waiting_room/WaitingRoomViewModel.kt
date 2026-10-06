@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.tenant.TenantRepository
 import app.pantopus.android.ui.screens.homes.HomeDashboardAccessFactory
 import app.pantopus.android.ui.screens.homes.currentVerificationKind
 import app.pantopus.android.ui.screens.status.StatusCta
@@ -76,6 +77,7 @@ class WaitingRoomViewModel
         private val homesRepo: HomesRepository,
         accessFactory: HomeDashboardAccessFactory,
         savedStateHandle: SavedStateHandle,
+        private val tenantRepo: TenantRepository,
     ) : ViewModel() {
         val homeId: String =
             requireNotNull(savedStateHandle[WAITING_ROOM_HOME_ID_KEY]) {
@@ -178,12 +180,23 @@ class WaitingRoomViewModel
                 _phase.value = WaitingRoomPhase.Notice(WaitingRoomNotice.NoClaim)
                 return
             }
+            val offersLandlord = offersLandlordConfirmation()
             _phase.value =
                 WaitingRoomPhase.Verification(
                     HomeVerificationContent.make(
                         status = HomeVerificationStatus.from(access.verificationStatus),
+                        offersLandlord = offersLandlord,
                     ),
                 )
+        }
+
+        /**
+         * The landlord card helps only when a verified landlord can answer, or
+         * the person already has a request there. An unreadable status hides it.
+         */
+        private suspend fun offersLandlordConfirmation(): Boolean {
+            val status = (tenantRepo.homeStatus(homeId) as? NetworkResult.Success)?.data ?: return false
+            return status.matches(homeId) && status.offersLandlordConfirmation
         }
 
         /**

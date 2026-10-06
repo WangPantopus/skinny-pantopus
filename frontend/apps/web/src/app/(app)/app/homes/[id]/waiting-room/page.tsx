@@ -45,7 +45,7 @@ function WaitingRoomContent() {
   const router = useRouter();
   const { id: homeId } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const { access, loading, error, needsVerification, reload } = useHomeAccess(homeId);
+  const { access, loading, error, denied, needsVerification, reload } = useHomeAccess(homeId);
 
   // The Place verify flow routes here with ?return=place; the param is
   // preserved across the method pages so the verified resident lands back
@@ -68,7 +68,15 @@ function WaitingRoomContent() {
   }, [homeId, router]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
-  if (error) return <div className="max-w-lg mx-auto px-4 py-6"><ErrorState message={error} onRetry={reload} /></div>;
+  if (error) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-6">
+        {denied
+          ? <ErrorState title="No access" message="You don't have access to this home's verification status." />
+          : <ErrorState message={error} onRetry={reload} />}
+      </div>
+    );
+  }
 
   const status = (access as any)?.verification_status || 'unverified';
   const config = getStatusConfig(status, access);

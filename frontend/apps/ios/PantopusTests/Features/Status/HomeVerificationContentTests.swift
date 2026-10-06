@@ -121,14 +121,14 @@ final class HomeVerificationContentTests: XCTestCase {
     }
 
     func testPendingApprovalOffersLandlordStatusAndNoMailedCode() {
-        let actions = HomeVerificationContent.make(status: .pendingApproval).actions
+        let actions = HomeVerificationContent.make(status: .pendingApproval, offersLandlord: true).actions
         let landlord = actions.first { $0.actionKey == HomeVerificationContent.ActionKey.landlordVerification }
         XCTAssertEqual(landlord?.subtitle, "Check your approval status")
         XCTAssertFalse(actions.map(\.actionKey).contains(HomeVerificationContent.ActionKey.requestMailedCode))
     }
 
     func testProvisionalOffersUploadLandlordAndMailedCode() {
-        let keys = HomeVerificationContent.make(status: .provisional).actions.map(\.actionKey)
+        let keys = HomeVerificationContent.make(status: .provisional, offersLandlord: true).actions.map(\.actionKey)
         XCTAssertTrue(keys.contains(HomeVerificationContent.ActionKey.uploadProof))
         XCTAssertTrue(keys.contains(HomeVerificationContent.ActionKey.landlordVerification))
         XCTAssertTrue(keys.contains(HomeVerificationContent.ActionKey.requestMailedCode))

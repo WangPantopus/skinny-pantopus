@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
+import { launchFeatures } from '@/lib/featureFlags';
 import { getAuthToken } from '@pantopus/api';
 import {
   AlertCircle, ArrowLeft, ArrowRight, Calendar, ChefHat, ChevronDown, ChevronUp,
@@ -35,7 +36,8 @@ const SUPPORT_MODES = [
   { key: 'meal', label: 'Meals', icon: ChefHat },
   { key: 'groceries', label: 'Groceries', icon: ShoppingCart },
   { key: 'takeout', label: 'Takeout', icon: Truck },
-  { key: 'gift_funds', label: 'Gift Funds', icon: Heart },
+  // Launch cut #9: gift funds stay hidden until contributions can be taken.
+  ...(launchFeatures.giftFunds ? [{ key: 'gift_funds', label: 'Gift Funds', icon: Heart }] as const : []),
 ] as const;
 
 const SHARING_MODES = [
@@ -486,7 +488,9 @@ export default function NewSupportTrainPage() {
           <ToggleRow label="Home-cooked meals" checked={enableMeals} onChange={setEnableMeals} />
           <ToggleRow label="Takeout / delivery" checked={enableTakeout} onChange={setEnableTakeout} />
           <ToggleRow label="Groceries" checked={enableGroceries} onChange={setEnableGroceries} />
-          <ToggleRow label="Gift funds" checked={enableGiftFunds} onChange={setEnableGiftFunds} />
+          {launchFeatures.giftFunds && (
+            <ToggleRow label="Gift funds" checked={enableGiftFunds} onChange={setEnableGiftFunds} />
+          )}
         </Card>
 
         <Card title="Schedule *" icon={Calendar} expanded={expandedCard === 'schedule'} onToggle={() => toggleCard('schedule')}>

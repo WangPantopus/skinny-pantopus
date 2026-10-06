@@ -138,11 +138,14 @@ public extension HomeVerificationContent {
     ///
     /// `HaloCircle` has no destructive tone, so `suspended_challenged`
     /// renders `.warning` + `alert-circle` rather than RN's red disc.
+    /// `offersLandlord` adds the landlord card; only a verified landlord can
+    /// answer that request, so callers pass the tenant status they read.
     static func make(
         status: HomeVerificationStatus,
         isInChallengeWindow: Bool = false,
         challengeWindowEndsAt: String? = nil,
-        postcardExpiresAt: String? = nil
+        postcardExpiresAt: String? = nil,
+        offersLandlord: Bool = false
     ) -> HomeVerificationContent {
         HomeVerificationContent(
             status: status,
@@ -155,7 +158,7 @@ public extension HomeVerificationContent {
                 challengeWindowEndsAt: challengeWindowEndsAt,
                 postcardExpiresAt: postcardExpiresAt
             ),
-            actions: actions(for: status)
+            actions: actions(for: status, offersLandlord: offersLandlord)
         )
     }
 
@@ -274,7 +277,7 @@ public extension HomeVerificationContent {
 
     // MARK: Actions
 
-    private static func actions(for status: HomeVerificationStatus) -> [HomeVerificationAction] {
+    private static func actions(for status: HomeVerificationStatus, offersLandlord: Bool) -> [HomeVerificationAction] {
         var actions: [HomeVerificationAction] = []
         if status == .pendingPostcard {
             actions.append(
@@ -298,7 +301,7 @@ public extension HomeVerificationContent {
                 )
             )
         }
-        if status == .pendingApproval || status == .unverified || status == .provisional {
+        if offersLandlord, status == .pendingApproval || status == .unverified || status == .provisional {
             actions.append(
                 HomeVerificationAction(
                     id: "landlordVerification",

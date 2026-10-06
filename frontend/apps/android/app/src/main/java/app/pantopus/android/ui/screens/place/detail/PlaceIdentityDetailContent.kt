@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -381,6 +383,7 @@ private fun LetterRow(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val openingLetterId by viewModel.openingLetterId.collectAsStateWithLifecycle()
+    var confirmingRevoke by remember { mutableStateOf(false) }
     PlaceDetailCard(padding = 14.dp) {
         Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
             PlaceIconTile(
@@ -417,10 +420,7 @@ private fun LetterRow(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.error,
-                    modifier =
-                        Modifier.clickable {
-                            viewModel.revokeLetter(letter.id)
-                        },
+                    modifier = Modifier.clickable { confirmingRevoke = true },
                 )
             } else {
                 val label =
@@ -433,6 +433,40 @@ private fun LetterRow(
             }
         }
     }
+    if (confirmingRevoke) {
+        ConfirmRevokeDialog(
+            title = "Revoke this letter?",
+            text =
+                "Anyone who checks code ${letter.letterCode} will see that it is no longer active. " +
+                    "You can generate a new letter any time.",
+            confirmLabel = "Revoke letter",
+            onConfirm = {
+                confirmingRevoke = false
+                viewModel.revokeLetter(letter.id)
+            },
+            onDismiss = { confirmingRevoke = false },
+        )
+    }
+}
+
+/** Revoking a letter or pass can't be undone, so it asks first. */
+@Composable
+internal fun ConfirmRevokeDialog(
+    title: String,
+    text: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(text) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(confirmLabel, color = PantopusColors.error) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 // The file name matches the web download and the server's Content-Disposition.

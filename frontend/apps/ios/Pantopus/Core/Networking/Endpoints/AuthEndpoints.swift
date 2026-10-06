@@ -54,12 +54,8 @@ public enum AuthEndpoints {
     }
 
     /// `POST /api/users/oauth/native` — native id-token sign-in (Sign in
-    /// with Apple / Google). Route `backend/routes/users.js:4274`.
-    ///
-    /// Declared now because the route and the wire shape are pinned by the
-    /// contract; the app still signs in through the browser flow, so nothing
-    /// calls this yet (native SIWA / Credential Manager is explicitly out of
-    /// this implementation pass — see WORKLOG "NOT in this pass").
+    /// with Apple). Route `backend/routes/users.js` `/oauth/native`. Google
+    /// still signs in through the browser flow.
     public static func oauthNative(_ body: OAuthNativeRequest) -> Endpoint {
         Endpoint(
             method: .post,
