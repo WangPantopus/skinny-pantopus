@@ -4790,7 +4790,10 @@ internal fun Composer(
                         cursorBrush = SolidColor(PantopusColors.primary600),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .semantics { contentDescription = "Message" },
                     )
                 }
                 PantopusIconImage(
