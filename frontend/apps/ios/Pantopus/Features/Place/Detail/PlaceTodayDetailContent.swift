@@ -214,6 +214,21 @@ struct PlaceTodayDetailContent: View {
 private struct NowCard: View {
     let data: PlaceWeatherData
 
+    /// "Now, 60°, Overcast": one spoken reading instead of "60", "°" apart.
+    private var nowLabel: String {
+        let reading = "Now, \(Int(data.currentTempF.rounded()))°"
+        return data.conditionLabel.isEmpty ? reading : "\(reading), \(data.conditionLabel)"
+    }
+
+    private var rangeLabel: String {
+        var parts: [String] = []
+        if let hi = data.highF, let lo = data.lowF {
+            parts.append("High \(Int(hi.rounded()))°, low \(Int(lo.rounded()))°")
+        }
+        if let feels = data.feelsLikeF { parts.append("feels like \(Int(feels.rounded()))°") }
+        return parts.joined(separator: ", ")
+    }
+
     var body: some View {
         PlaceDetailCard {
             HStack(alignment: .top) {
@@ -237,6 +252,8 @@ private struct NowCard: View {
                             .foregroundStyle(Theme.Color.appTextStrong)
                     }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(nowLabel)
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 10) {
                     ZStack {
@@ -255,6 +272,9 @@ private struct NowCard: View {
                     }
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(rangeLabel)
+                    .accessibilityHidden(rangeLabel.isEmpty)
                 }
             }
         }

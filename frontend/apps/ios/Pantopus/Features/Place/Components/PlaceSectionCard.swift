@@ -61,6 +61,8 @@ struct PlaceSectionCard: View {
         .contentShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
         .onTapGesture { onTap?() }
         .accessibilityElement(children: .combine)
+        // Tappable rows open their detail; VoiceOver should say so.
+        .accessibilityAddTraits(onTap == nil ? [] : .isButton)
         .accessibilityIdentifier("place.section.\(title)")
     }
 

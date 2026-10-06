@@ -135,33 +135,39 @@ struct PlaceHeroCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("TODAY'S PULSE")
-                    .font(.system(size: 11, weight: .bold))
-                    .kerning(0.77)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                Spacer()
-                PlaceChip(model: chip)
-            }
-            .padding(.bottom, 13)
-
-            HStack(alignment: .top, spacing: 13) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isAlert ? Theme.Color.warningBg : Theme.Color.homeBg)
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(isAlert ? Theme.Color.warningLight : Theme.Color.successLight, lineWidth: 1)
-                    Icon(heroIcon, size: 22, strokeWidth: 2, color: isAlert ? Theme.Color.warning : Theme.Color.home)
+            // Overline + headline read as one button (the card opens Today);
+            // the nudge below stays its own button.
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("TODAY'S PULSE")
+                        .font(.system(size: 11, weight: .bold))
+                        .kerning(0.77)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    Spacer()
+                    PlaceChip(model: chip)
                 }
-                .frame(width: 42, height: 42)
-                Text(headline)
-                    .font(.system(size: 17, weight: .semibold))
-                    .kerning(-0.2)
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.Color.appText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 13)
+
+                HStack(alignment: .top, spacing: 13) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(isAlert ? Theme.Color.warningBg : Theme.Color.homeBg)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(isAlert ? Theme.Color.warningLight : Theme.Color.successLight, lineWidth: 1)
+                        Icon(heroIcon, size: 22, strokeWidth: 2, color: isAlert ? Theme.Color.warning : Theme.Color.home)
+                    }
+                    .frame(width: 42, height: 42)
+                    Text(headline)
+                        .font(.system(size: 17, weight: .semibold))
+                        .kerning(-0.2)
+                        .lineSpacing(3)
+                        .foregroundStyle(Theme.Color.appText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.bottom, nudgeText.isEmpty ? 0 : 14)
             }
-            .padding(.bottom, nudgeText.isEmpty ? 0 : 14)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(onTap == nil ? [] : .isButton)
 
             // The inset nudge is optional — all-clear with nothing to flag
             // renders just the overline + headline (parity with the web hero).
