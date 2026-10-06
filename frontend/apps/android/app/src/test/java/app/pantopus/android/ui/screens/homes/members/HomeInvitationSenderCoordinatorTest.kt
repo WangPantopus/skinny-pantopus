@@ -38,7 +38,7 @@ class HomeInvitationSenderCoordinatorTest {
             assertEquals(original.requestJson, fixture.calls.single().second.requestJson)
             assertTrue(coordinator.canAcknowledge)
             assertEquals("unconfirmed", coordinator.outcome?.email)
-            assertTrue(senderDeliveryText(requireNotNull(coordinator.outcome)).contains("unconfirmed"))
+            assertTrue(senderDeliveryText(requireNotNull(coordinator.outcome)).contains("couldn't confirm"))
         }
 
     @Test fun storage_failure_prevents_post_and_requires_reopening_before_another_attempt() =
@@ -167,7 +167,7 @@ class HomeInvitationSenderCoordinatorTest {
             assertFalse(original.requestJson.contains("payload"))
             assertEquals(fixture.invitation, original.request.intent.invitationId)
             assertEquals("not_requested", coordinator.outcome?.email)
-            assertTrue(senderOutcomeText("withdraw", requireNotNull(coordinator.outcome)).contains("membership was preserved"))
+            assertTrue(senderOutcomeText("withdraw", requireNotNull(coordinator.outcome)).contains("Anyone already in the household stays"))
         }
 
     @Test fun stale_session_before_dispatch_keeps_original_and_sends_nothing() =
