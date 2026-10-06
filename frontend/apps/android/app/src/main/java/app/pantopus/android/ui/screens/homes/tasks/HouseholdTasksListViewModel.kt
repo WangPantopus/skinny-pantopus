@@ -839,7 +839,7 @@ class HouseholdTasksListViewModel
                 runCatching {
                     DateTimeFormatter
                         .ofPattern("MMM d", Locale.US)
-                        .withZone(ZoneId.of("UTC"))
+                        .withZone(ZoneId.systemDefault())
                         .format(date)
                 }.getOrNull()
 
@@ -858,7 +858,7 @@ class HouseholdTasksListViewModel
                         DateTimeFormatter
                             .ofPattern("yyyy-MM-dd")
                             .parse(iso, LocalDate::from)
-                            .atStartOfDay(ZoneId.of("UTC"))
+                            .atStartOfDay(ZoneId.systemDefault())
                             .toInstant()
                     }.getOrNull()
         }

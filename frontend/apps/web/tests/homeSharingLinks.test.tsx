@@ -304,7 +304,7 @@ function cleanupRender() { document.body.innerHTML = ''; }
 test('the Settings entry copies the public guest route, never the bare token', async () => {
   listed([]);
   jest.mocked(api.homeIam.createGuestPass).mockResolvedValue({ token, pass: {
-    id: 'pass', home_id: 'home', label: 'Ana (guest)', kind: 'guest', end_at: '2099-01-01T00:00:00Z',
+    id: 'pass', home_id: 'home', label: 'Ana', kind: 'guest', end_at: '2099-01-01T00:00:00Z',
     included_sections: ['wifi'], view_count: 0, status: 'active',
   } } as Awaited<ReturnType<typeof api.homeIam.createGuestPass>>);
   render(<SharePage />);
@@ -314,7 +314,7 @@ test('the Settings entry copies the public guest route, never the bare token', a
   fireEvent.click(screen.getByRole('button', { name: /Create & Share/ }));
   await waitFor(() => expect(clipboard).toHaveBeenCalledWith(`${window.location.origin}/guest/${token}`));
   expect(clipboard).not.toHaveBeenCalledWith(token);
-  expect(api.homeIam.createGuestPass).toHaveBeenCalledWith('home', { label: 'Ana (guest)', kind: 'guest', request_id: expect.any(String) });
+  expect(api.homeIam.createGuestPass).toHaveBeenCalledWith('home', { label: 'Ana', kind: 'guest', request_id: expect.any(String) });
 });
 
 test('the Settings entry lists scheduled links as current and revocable, and dead links as past', async () => {

@@ -120,12 +120,12 @@ final class MyClaimsListViewModel: ListOfRowsDataSource {
         return [method, relative].compactMap { $0 }.joined(separator: " · ")
     }
 
-    private func friendlyMethod(_ method: String) -> String? {
+    private func friendlyMethod(_ method: String?) -> String? {
         switch method {
         case "doc_upload": "Document upload"
         case "fast_track": "Fast-track invite"
         case "id_verification": "ID verification"
-        default: method.isEmpty ? nil : method
+        default: method?.isEmpty == false ? method : nil
         }
     }
 
