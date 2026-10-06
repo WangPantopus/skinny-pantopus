@@ -20,6 +20,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -1138,13 +1139,18 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
     if (attentionErr) throw attentionErr;
 
     // Earn count: the same active, unexpired offers the Earn list shows
-    // (EarnOffer has no is_published column).
-    const { count: earnCount, error: earnErr } = await supabaseAdmin
-      .from('EarnOffer')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
-    if (earnErr) throw earnErr;
+    // (EarnOffer has no is_published column). Earn is launch-cut with
+    // mail_extras, so it isn't counted while that is off.
+    let earnCount = 0;
+    if (isLaunchFeatureEnabled('mail_extras')) {
+      const { count, error: earnErr } = await supabaseAdmin
+        .from('EarnOffer')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active')
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+      if (earnErr) throw earnErr;
+      earnCount = count || 0;
+    }
 
     // Community count (today)
     let communityCount = 0;
@@ -1543,7 +1549,7 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     // Top senders
     const { data: senders, error: sendersErr } = await supabaseAdmin
       .from('Mail')
-      .select('sender_name:sender_display, sender_trust, category')
+      .select('sender_name:sender_display, sender_business_name, sender_trust, category')
       .eq('recipient_user_id', userId)
       .is('deleted_at', null)
       .gte('created_at', yearStart)
@@ -1552,7 +1558,7 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
 
     const senderMap = {};
     (senders || []).forEach(m => {
-      const key = m.sender_name || 'Unknown';
+      const key = m.sender_name || m.sender_business_name || 'Unknown';
       if (!senderMap[key]) senderMap[key] = { count: 0, trust: m.sender_trust, category: m.category };
       senderMap[key].count++;
     });

@@ -110,6 +110,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     }
 
     const nextSocket = io(getSocketBaseUrl(), {
+      // Next redirects /socket.io/ to /socket.io before its rewrite runs, so
+      // ask for /socket.io directly (the server accepts both).
+      addTrailingSlash: false,
       auth: { token: authToken },
       transports: ['websocket', 'polling'],
       tryAllTransports: true,

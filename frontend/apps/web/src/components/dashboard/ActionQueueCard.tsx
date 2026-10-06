@@ -101,7 +101,8 @@ export default function ActionQueueCard() {
         failures.bids = true;
         setMyBidsByGigId({});
       }),
-      api.payments.getStripeAccount().then((result: Record<string, any>) => {
+      // Only the payout prompt uses this, and it is shown only with Open Gigs.
+      (launchFeatures.openGigs ? api.payments.getStripeAccount() : Promise.resolve({ account: null })).then((result: Record<string, any>) => {
         const account = result?.account as Record<string, any> | undefined;
         setStripeReady(Boolean(account?.payouts_enabled && account?.charges_enabled));
       }).catch((err) => {
@@ -152,7 +153,9 @@ export default function ActionQueueCard() {
         onClick: () => router.push('/app/profile/edit'),
       });
     }
-    if (!loadingStripeStatus && !failed.stripe && !stripeReady) {
+    // Launch cut #4 (Open Gigs): with no way to take on paid tasks, nobody has
+    // gig earnings to receive, so a high-priority payout prompt only misleads.
+    if (launchFeatures.openGigs && !loadingStripeStatus && !failed.stripe && !stripeReady) {
       items.push({
         id: 'payout',
         icon: '💳',
@@ -163,7 +166,7 @@ export default function ActionQueueCard() {
         onClick: () => router.push('/app/settings/payments'),
       });
     }
-    if (myPendingOffers > 0) {
+    if (launchFeatures.openGigs && myPendingOffers > 0) {
       items.push({
         id: 'offers',
         icon: '⏳',

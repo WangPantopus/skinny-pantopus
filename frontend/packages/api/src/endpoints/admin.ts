@@ -125,3 +125,12 @@ export async function resolveReport(
 ): Promise<{ report: AdminReport }> {
   return post(`/api/admin/reports/${kind}/${reportId}/resolve`, { outcome });
 }
+
+/** Take a reported post down (moderation) and close every open report on it. */
+export async function removeReportedPost(reportId: string): Promise<{
+  removed: boolean;
+  post_id: string;
+  reports_closed: number;
+}> {
+  return post(`/api/admin/reports/post/${reportId}/remove`, {});
+}
