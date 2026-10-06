@@ -12,7 +12,7 @@ import CryptoKit
 import UIKit
 
 /// What the Apple sheet hands back for `POST /api/users/oauth/native`.
-struct AppleSignInCredential: Sendable {
+struct AppleSignInCredential {
     let identityToken: String
     /// The unhashed nonce. Apple signs its SHA-256 into the token and the
     /// Auth server compares the two.
@@ -95,7 +95,7 @@ final class AppleSignInCoordinator: NSObject {
 }
 
 extension AppleSignInCoordinator: ASAuthorizationControllerDelegate {
-    // AuthenticationServices calls both on the main thread.
+    /// AuthenticationServices calls both on the main thread.
     nonisolated func authorizationController(
         controller _: ASAuthorizationController,
         didCompleteWithAuthorization authorization: ASAuthorization
