@@ -40,14 +40,14 @@ The pilot can't start until the Lambda stack runs against the hosted backend
 
 Each has a default that the steps below follow until you change it here.
 
-- [ ] **D1 API hosts.** Default: production `https://api.pantopus.com`, staging
+- [x] **D1 API hosts.** Decided October 6, as recommended. Default: production `https://api.pantopus.com`, staging
   `https://staging-api.pantopus.com`, for the website and both apps. Both names
   already exist in your Cloudflare zone, staging already has a certificate, and
   the website calls `api.pantopus.com` today. (The native apps defaulted to
   `api.pantopus.app`, which has no DNS; L4 switches them.) Also point
   `pantopus.app` and `www.pantopus.app` at the website (step P10): the apps share
   `https://pantopus.app` links.
-- [ ] **D2 Store listings.** Default: new listings for `app.pantopus.ios` and
+- [x] **D2 Store listings.** Decided October 6, as recommended. Default: new listings for `app.pantopus.ios` and
   `app.pantopus.android`; take the April apps off sale once the new ones are
   live. The App Store won't accept a second app named exactly "Pantopus" while
   the April app holds that name, so either give the new listing a longer name
@@ -55,27 +55,27 @@ Each has a default that the steps below follow until you change it here.
   The alternative, shipping the native apps as updates to `com.pantopus.app`,
   means changing the native app IDs, push setup and signing; L4 doesn't
   recommend it this close to the pilot.
-- [ ] **D3 Production database.** Default (L4's recommendation): **a new
+- [ ] **D3 Production database.** Open (October 6): the founder asked whether April users must sign up again. With a new project they do, or L4 can prepare a rehearsed script that copies only their logins (email and password hash) into it, without the old Trains; the founder runs it, since it touches real people's data. Default (L4's recommendation): **a new
   production Supabase project** built from the canonical migrations, exactly as
   staging is. Keep the April project untouched and paused as an archive; the
   April users (friends) sign up again in the new app. The alternative is to
   adopt the April project (keeps their accounts and meal trains, but needs a
   backup, a local rehearsal of the September forward-upgrade SQL on a copy of
   real data, and a maintenance window; section P2B).
-- [ ] **D4 Payments during the pilot.** Default: production uses Stripe **test**
+- [x] **D4 Payments during the pilot.** Decided October 6, as recommended. Default: production uses Stripe **test**
   keys until you activate live payments; no pilot journey takes money. Pilot
   store builds then carry the matching `pk_test_` key (L4 adjusts the Android
   release guard, which demands `pk_live_`). A real card fails in test mode
   instead of being charged.
-- [ ] **D5 Postcards.** Production won't start without Lob live settings:
+- [x] **D5 Postcards.** Decided October 6, as recommended. Production won't start without Lob live settings:
   `LOB_ENV=live`, a live key, the webhook secret and a real return address
   (`LOB_FROM_*`; the defaults are a placeholder San Francisco address). Default:
   provide them before production (step P5). Staging uses Lob test mode.
-- [ ] **D6 Email.** Default: Postmark SMTP for backend email and for Supabase
+- [ ] **D6 Email.** Open (October 6): the founder is checking which email service is already paid for; use that one if it does SMTP. Default: Postmark SMTP for backend email and for Supabase
   Auth email, sending from `pantopus.com` with SPF, DKIM and DMARC.
-- [ ] **D7 Error monitoring.** Default: off. Sentry and PostHog keys are optional
+- [x] **D7 Error monitoring.** Decided October 6, as recommended. Default: off. Sentry and PostHog keys are optional
   (backend `SLACK_ALERTS_WEBHOOK_URL`, app `SENTRY_DSN`).
-- [ ] **D8 Hosting.** Default: the September server carries both staging
+- [x] **D8 Hosting.** Decided October 6, as recommended. Default: the September server carries both staging
   (`127.0.0.1:18001`) and production (`127.0.0.1:8000`) behind nginx, as designed
   in September. It's enough for 5 to 50 households; give production its own
   instance before a wider launch.
