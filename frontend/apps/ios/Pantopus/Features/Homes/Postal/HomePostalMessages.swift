@@ -3,42 +3,54 @@ import Foundation
 enum HomePostalMessages {
     static func headline(kind: PendingHomePostalCommand.Kind, outcome: HomePostalOutcome?) -> String {
         switch outcome?.state {
-        case "completed": kind == .code ? "Address proof recorded" : "Mailing request recorded"
-        case "cancelled": "Original request cancelled"
-        case "rejected": "Review the recorded result"
-        default: "Recover your original request"
+        case "completed": kind == .code ? "Code accepted" : "Postcard requested"
+        case "cancelled": "Attempt discarded"
+        case "rejected": "Couldn't finish this"
+        default: "Check your last attempt"
         }
     }
 
     static func explanation(kind: PendingHomePostalCommand.Kind, outcome: HomePostalOutcome?) -> String {
         switch outcome?.state {
         case "completed":
-            kind == .code ? "Check residency status for household review and access. This result does not change current permissions."
-                : "Check current mailing status for delivery and any remaining steps. A saved request alone does not confirm mailing."
-        case "cancelled": "This original request can no longer submit a new result. Review your details before starting another."
+            kind == .code ? "Your code was accepted. Residency status shows your access and anything still waiting on the household."
+                : "We'll mail it to this address. When it arrives, enter the code here."
+        case "cancelled": "Nothing changed. This attempt was discarded before it took effect."
         case "rejected": restriction(outcome?.code ?? "")
-        default: "Your details are saved securely. Check the result, retry the same request, or confirm cancellation before editing."
+        default: "We couldn't confirm whether this went through. Check again, or try again."
+        }
+    }
+
+    static func postcardStatus(_ raw: String?) -> String {
+        switch raw {
+        case "pending": "Waiting for your code"
+        case "verified": "Verified"
+        case "expired": "Code expired"
+        case "cancelled": "No longer active"
+        case "locked": "No tries left"
+        default: "Status unavailable"
         }
     }
 
     static func delivery(_ state: String?) -> String {
         switch state {
-        case "not_started": "Mailing has not started"
-        case "accepted": "Mail provider accepted the postcard"
-        case "unknown": "Mailing outcome is unknown"
-        case "rejected": "Mail provider did not accept the postcard"
-        default: "Mailing status is unavailable"
+        case "not_started": "Your postcard hasn't been sent yet"
+        case "accepted": "Your postcard is on its way"
+        case "unknown": "We couldn't confirm your postcard was sent"
+        case "rejected": "The mail service couldn't send your postcard"
+        default: "Postcard status unavailable"
         }
     }
 
     static func restriction(_ code: String) -> String {
         switch code {
-        case "POSTCARD_WRONG_CODE": "That code did not match. Review the recorded attempt before entering a corrected code."
+        case "POSTCARD_WRONG_CODE": "That code didn't match this postcard. Check it and try again."
         case "POSTCARD_ADDRESS_CHANGED": "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP."
-        case "POSTCARD_EXPIRED": "This postcard code expired. Confirm your mailing address before requesting another."
-        case "POSTCARD_LOCKED": "This postcard has no code attempts remaining. Confirm your address before requesting another."
-        case "POSTCARD_ACCESS_REVIEW_REQUIRED": "Household access needs review. A mail code cannot restore removed or expired access."
-        case "POSTCARD_REVIEW_ALREADY_RECORDED": "Your verification is already recorded. Check residency status for current access."
+        case "POSTCARD_EXPIRED": "This postcard's code has expired. Request a new postcard."
+        case "POSTCARD_LOCKED": "No tries left for this postcard. Request a new one."
+        case "POSTCARD_ACCESS_REVIEW_REQUIRED":
+            "A mail code can't restore access that was removed or has ended. Ask someone in the household to invite you again."
+        case "POSTCARD_REVIEW_ALREADY_RECORDED": "You're already verified. Residency status shows your access."
         case "POSTCARD_HOME_UNAVAILABLE": "Mail verification is unavailable for this Home right now."
         case "POSTCARD_RESIDENCY_REQUEST_REQUIRED": "Submit your residency request before requesting a postcard."
         default: availability(code)
@@ -50,10 +62,10 @@ enum HomePostalMessages {
         case "POSTCARD_COUNTRY_UNAVAILABLE": "Mail verification is currently available for US addresses."
         case "POSTCARD_ADDRESS_LIMIT": "The request limit for this address has been reached. Try again later."
         case "POSTCARD_USER_LIMIT": "Your mail request limit has been reached. Try again later."
-        case "POSTCARD_NOT_DISPATCHED": "Mailing has not started. Continue the original request first."
+        case "POSTCARD_NOT_DISPATCHED": "Your postcard hasn't been sent yet. Send it first."
         case "OWNERSHIP_FLOW_REQUIRED": "Continue ownership verification for this Home."
         case "HOME_NOT_FOUND": "This Home is no longer available. Check your residency status."
-        default: "Mail verification cannot continue right now. Refresh to check your current status before trying again."
+        default: "This couldn't be completed. Check your status and try again."
         }
     }
 }

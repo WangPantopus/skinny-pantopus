@@ -21,19 +21,22 @@ struct HomePostalVerificationView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s5) {
                 Text("Verify your address by mail").pantopusTextStyle(.h2)
-                Text("A saved mailing request or code result is separate from your current household access.")
-                    .pantopusTextStyle(.body).foregroundStyle(Theme.Color.appTextSecondary)
+                Text(
+                    "We'll mail a postcard with a code to this Home's address. "
+                        + "Enter the code when it arrives to verify that you live here."
+                )
+                .pantopusTextStyle(.body).foregroundStyle(Theme.Color.appTextSecondary)
                 if let error = viewModel.error {
                     Text(error).pantopusTextStyle(.body).accessibilityIdentifier("homePostalError")
                 }
                 if let draft = viewModel.pending {
                     recovery(draft)
                 } else if viewModel.isWorking {
-                    ProgressView("Checking mail verification…").accessibilityIdentifier("homePostalLoading")
+                    ProgressView("Checking…").accessibilityIdentifier("homePostalLoading")
                 } else if let status = viewModel.status {
                     currentStatus(status)
                 } else {
-                    Button("Retry mail status") { Task { await viewModel.open() } }
+                    Button("Try again") { Task { await viewModel.open() } }
                         .frame(minHeight: 44)
                         .accessibilityIdentifier("homePostalRetry")
                 }
@@ -75,11 +78,11 @@ struct HomePostalVerificationView: View {
         } message: {
             Text(addressLabel(viewModel.address.body))
         }
-        .confirmationDialog("Cancel the original request?", isPresented: $confirmsCancellation, titleVisibility: .visible) {
-            Button("Confirm cancellation", role: .destructive) { Task { await viewModel.recover(.cancel) } }
+        .confirmationDialog("Discard this attempt?", isPresented: $confirmsCancellation, titleVisibility: .visible) {
+            Button("Discard", role: .destructive) { Task { await viewModel.recover(.cancel) } }
                 .accessibilityIdentifier("homePostalConfirmCancel")
         } message: {
-            Text("We will check the original result. Cancellation cannot undo a recorded verification or an already admitted mailing.")
+            Text("If it already went through, it stays. Discarding can't recall a postcard that's already been mailed.")
         }
     }
 
@@ -99,24 +102,24 @@ struct HomePostalVerificationView: View {
             if draft.kind == .mail, let address = draft.body.dictValue?["address"] {
                 Text(addressLabel(address)).pantopusTextStyle(.body).accessibilityIdentifier("homePostalSavedAddress")
             } else {
-                Text("Your original code attempt is saved securely. Its code is hidden here.").pantopusTextStyle(.body)
+                Text("For your security, the code you entered isn't shown.").pantopusTextStyle(.body)
             }
             Text(HomePostalMessages.explanation(kind: draft.kind, outcome: result)).pantopusTextStyle(.body)
-            if viewModel.isWorking { ProgressView("Checking the original request…") }
+            if viewModel.isWorking { ProgressView("Checking…") }
             if viewModel.canAcknowledge {
-                Button(result?.state == "completed" ? "Check current status" : "Edit after recorded result") {
+                Button(result?.state == "completed" ? "Done" : "Start over") {
                     Task { await viewModel.acknowledge() }
                 }
                 .frame(minHeight: 44).accessibilityIdentifier("homePostalAcknowledge")
             } else if result?.isTerminal == true {
-                Button("Retry saving the result") { Task { await viewModel.recover(.check) } }
+                Button("Try again") { Task { await viewModel.recover(.check) } }
                     .frame(minHeight: 44).disabled(viewModel.isWorking).accessibilityIdentifier("homePostalSaveProof")
             } else {
-                Button("Check original result") { Task { await viewModel.recover(.check) } }
+                Button("Check again") { Task { await viewModel.recover(.check) } }
                     .frame(minHeight: 44).disabled(viewModel.isWorking).accessibilityIdentifier("homePostalCheckOriginal")
-                Button("Retry the same request") { Task { await viewModel.recover(.submit) } }
+                Button("Try again") { Task { await viewModel.recover(.submit) } }
                     .frame(minHeight: 44).disabled(viewModel.isWorking).accessibilityIdentifier("homePostalRetryOriginal")
-                Button("Cancel request") { confirmsCancellation = true }
+                Button("Discard attempt") { confirmsCancellation = true }
                     .frame(minHeight: 44).disabled(viewModel.isWorking).accessibilityIdentifier("homePostalCancel")
             }
         }
@@ -131,22 +134,22 @@ struct HomePostalVerificationView: View {
         if let postcard = status.postcard {
             Text(HomePostalMessages.delivery(postcard["delivery"]?.stringValue)).pantopusTextStyle(.h3)
                 .accessibilityIdentifier("homePostalDelivery")
-            Text("Postcard status: \(postcard["status"]?.stringValue ?? "unavailable")").pantopusTextStyle(.body)
+            Text(HomePostalMessages.postcardStatus(postcard["status"]?.stringValue)).pantopusTextStyle(.body)
             if postcard["status"]?.stringValue == "pending", let count = postcard["attempts_remaining"]?.numberValue {
-                Text("\(Int(count)) code attempts remaining").pantopusTextStyle(.caption)
+                Text("\(Int(count)) tries left").pantopusTextStyle(.caption)
                     .accessibilityIdentifier("homePostalAttemptsRemaining")
             }
         } else {
-            Text("No postcard request is recorded.").pantopusTextStyle(.body)
+            Text("You haven't requested a postcard yet.").pantopusTextStyle(.body)
         }
         if let restriction = status.restriction {
             Text(HomePostalMessages.restriction(restriction)).pantopusTextStyle(.body)
                 .accessibilityIdentifier("homePostalRestriction")
         }
         if status.canResume, let original = status.originalRequest, let address = original["address"] {
-            Text("Continue the original mailing request").pantopusTextStyle(.h3)
+            Text("Your postcard isn't sent yet").pantopusTextStyle(.h3)
             Text(addressLabel(address)).pantopusTextStyle(.body).accessibilityIdentifier("homePostalResumeAddress")
-            Button("Continue this original request") { Task { await viewModel.resumeMail() } }
+            Button("Send the postcard") { Task { await viewModel.resumeMail() } }
                 .frame(minHeight: 44).disabled(!viewModel.canResumeMail).accessibilityIdentifier("homePostalResume")
         }
         if status.canRequest { mailingForm }
@@ -159,7 +162,7 @@ struct HomePostalVerificationView: View {
             if viewModel.permits(.addHome) { navigation("Review address in Add Home", .addHome) }
             if viewModel.permits(.residency) { navigation("Check residency status", .residency) }
         }
-        Button("Refresh mail status") { Task { await viewModel.refresh() } }
+        Button("Refresh") { Task { await viewModel.refresh() } }
             .frame(minHeight: 44)
             .accessibilityIdentifier("homePostalRefresh")
     }
