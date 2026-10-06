@@ -138,7 +138,7 @@ function SettingsContent() {
           {home?.address && (
             <div className="px-4 py-3">
               <p className="text-[11px] font-semibold text-app-text-muted uppercase tracking-wide mb-1">Address</p>
-              <p className="text-sm text-app-text">{home.address}</p>
+              <p className="text-sm text-app-text">{[home.address, home.address2].filter(Boolean).join(' ')}</p>
             </div>
           )}
           {home?.home_type && (

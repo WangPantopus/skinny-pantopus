@@ -17,7 +17,7 @@ export function HomeTaskRecurrenceCard({ task, scope, busy, hasUnsavedChanges, o
   const [controller, setController] = useState<HomeTaskRecurrenceController | null>(null);
   const [frequency, setFrequency] = useState<RecurrenceFrequency>('WEEKLY');
   const [interval, setInterval] = useState('1');
-  const [timezone, setTimezone] = useState('UTC');
+  const [timezone, setTimezone] = useState(detectTimezone);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -32,7 +32,7 @@ export function HomeTaskRecurrenceCard({ task, scope, busy, hasUnsavedChanges, o
     const ctx = { active: true, busy: false, client: new HomeTaskClient(task.home_id, opening.current) };
     lifecycle.current = ctx;
     setController(null); setError(''); setLoading(true); setWorking(false);
-    setFrequency('WEEKLY'); setInterval('1'); setTimezone('UTC');
+    setFrequency('WEEKLY'); setInterval('1'); setTimezone(detectTimezone());
     void HomeTaskRecurrenceController.open(ctx.client, task.id).then(value => {
       if (!ctx.active) return;
       ctx.client.requireCurrent();

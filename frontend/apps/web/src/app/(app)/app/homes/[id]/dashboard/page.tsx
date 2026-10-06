@@ -498,7 +498,7 @@ function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft, guestPass
       {/* Header with High-Level Tabs */}
       <HomeHeader
         homeName={home?.name || home?.address || home?.address_line1 || 'Home Dashboard'}
-        homeAddress={home?.name ? (home.address || home.address_line1) : undefined}
+        homeAddress={home?.name ? [home.address || home.address_line1, home.address2].filter(Boolean).join(' ') : undefined}
         roleBadge={myAccess.role_base}
         isOwner={myAccess.isOwner}
         homeId={homeId}
