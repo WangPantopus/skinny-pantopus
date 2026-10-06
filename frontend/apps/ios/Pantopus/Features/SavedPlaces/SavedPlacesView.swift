@@ -30,9 +30,12 @@ public struct SavedPlacesView: View {
         .background(Theme.Color.appSurfaceMuted)
         .navigationBarHidden(true)
         .accessibilityIdentifier("savedPlaces.screen")
-        // Reload on every appearance, not once: returning from "Save a place"
-        // must show the place just saved.
-        .onAppear { Task { await viewModel.load() } }
+        .task { await viewModel.load() }
+        // Popping back from "Save a place" doesn't re-run `.task`, so the list
+        // re-reads when a save is announced.
+        .onReceive(NotificationCenter.default.publisher(for: .savedPlacesDidChange)) { _ in
+            Task { await viewModel.refresh() }
+        }
         .sheet(item: $bindable.actionTarget) { target in
             SavedPlacesActionSheet(
                 target: target,

@@ -11,6 +11,12 @@
 
 import SwiftUI
 
+public extension Notification.Name {
+    /// Posted after a place is saved from the address lookup, so a Saved
+    /// places list still on the stack re-reads.
+    static let savedPlacesDidChange = Notification.Name("savedPlacesDidChange")
+}
+
 @Observable
 @MainActor
 public final class SavedPlacesViewModel {
