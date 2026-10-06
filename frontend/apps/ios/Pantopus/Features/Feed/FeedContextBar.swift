@@ -25,6 +25,8 @@ public struct FeedLocationOption: Identifiable, Sendable, Hashable {
     /// sent on `PUT /api/location`.
     public enum Kind: String, Sendable, Hashable {
         case home, savedPlace, recent
+        /// The device's own position ("Use my location").
+        case current
 
         /// `type` value accepted by `setLocationSchema`.
         var backendType: String {
@@ -32,6 +34,7 @@ public struct FeedLocationOption: Identifiable, Sendable, Hashable {
             case .home: "home"
             case .savedPlace: "searched"
             case .recent: "recent"
+            case .current: "gps"
             }
         }
 
@@ -40,6 +43,7 @@ public struct FeedLocationOption: Identifiable, Sendable, Hashable {
             case .home: .home
             case .savedPlace: .bookmark
             case .recent: .history
+            case .current: .navigation
             }
         }
 
@@ -48,6 +52,7 @@ public struct FeedLocationOption: Identifiable, Sendable, Hashable {
             case .home: "Your homes"
             case .savedPlace: "Saved places"
             case .recent: "Recent"
+            case .current: "Where you are"
             }
         }
     }
@@ -87,13 +92,23 @@ public final class FeedContextBarViewModel {
     public var isSheetPresented = false
     /// Transient error surfaced by a failed write.
     public var toastMessage: String?
+    /// Shown inside the switcher: why "Use my location" or a switch didn't work.
+    public private(set) var sheetNotice: String?
+    /// True while "Use my location" waits for permission and a position.
+    public private(set) var isLocating = false
 
     private let api: APIClient
+    private let locationProvider: any LocationProviding
     /// Raised after a successful switch so the feed refetches.
     private let onChange: @MainActor () -> Void
 
-    init(api: APIClient = .shared, onChange: @escaping @MainActor () -> Void = {}) {
+    init(
+        api: APIClient = .shared,
+        locationProvider: any LocationProviding = DeviceLocationProvider.shared,
+        onChange: @escaping @MainActor () -> Void = {}
+    ) {
         self.api = api
+        self.locationProvider = locationProvider
         self.onChange = onChange
     }
 
@@ -108,6 +123,7 @@ public final class FeedContextBarViewModel {
     /// Open the switcher and (re)load its three source lists.
     public func openSwitcher() async {
         isSheetPresented = true
+        sheetNotice = nil
         sheetState = .loading
         do {
             let payload: ViewingLocationPayload = try await api.request(
@@ -152,7 +168,32 @@ public final class FeedContextBarViewModel {
         } catch {
             toastMessage = (error as? APIError)?.errorDescription
                 ?? "Couldn't switch your area."
+            sheetNotice = toastMessage
         }
+    }
+
+    /// "Use my location": the device's position becomes the viewing area. iOS asks for permission
+    /// the first time; with location off, the sheet says how to turn it on.
+    public func useCurrentLocation() async {
+        guard !isLocating else { return }
+        isLocating = true
+        sheetNotice = nil
+        defer { isLocating = false }
+        guard let coordinate = await locationProvider.requestCurrent(timeoutSeconds: 8) else {
+            sheetNotice = "Location is off for Pantopus. Turn it on in Settings, or add a home or save a place."
+            return
+        }
+        await select(FeedLocationOption(
+            id: "current",
+            kind: .current,
+            label: "Current location",
+            subtitle: nil,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            sourceId: nil,
+            city: nil,
+            state: nil
+        ))
     }
 
     /// Apply a radius the suggestion banner proposed.
@@ -307,6 +348,7 @@ struct FeedLocationSwitcherSheet: View {
                     .accessibilityIdentifier("pulseLocationSwitcherSkeleton")
                 case let .loaded(options):
                     List {
+                        Section(FeedLocationOption.Kind.current.sectionTitle) { useMyLocationRow }
                         ForEach(FeedLocationOption.Kind.allSections, id: \.rawValue) { kind in
                             let rows = options.filter { $0.kind == kind }
                             if !rows.isEmpty {
@@ -322,8 +364,10 @@ struct FeedLocationSwitcherSheet: View {
                     EmptyState(
                         icon: .mapPinOff,
                         headline: "No places to switch to",
-                        subcopy: "Add a home or save a place and it will show up here.",
-                        cta: nil
+                        subcopy: "Use where you are, or add a home or save a place and it will show up here.",
+                        cta: EmptyState.CTA(title: "Use my location") {
+                            await viewModel.useCurrentLocation()
+                        }
                     )
                     .accessibilityIdentifier("pulseLocationSwitcherEmpty")
                 case let .error(message):
@@ -338,6 +382,20 @@ struct FeedLocationSwitcherSheet: View {
                     .accessibilityIdentifier("pulseLocationSwitcherError")
                 }
             }
+            .safeAreaInset(edge: .top) {
+                if let notice = viewModel.sheetNotice {
+                    Text(notice)
+                        .pantopusTextStyle(.small)
+                        .foregroundStyle(Theme.Color.appText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Spacing.s3)
+                        .background(Theme.Color.warningBg)
+                        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, Spacing.s2)
+                        .accessibilityIdentifier("pulseLocationSwitcherNotice")
+                }
+            }
             .background(Theme.Color.appBg)
             .navigationTitle("Viewing area")
             .navigationBarTitleDisplayMode(.inline)
@@ -348,6 +406,27 @@ struct FeedLocationSwitcherSheet: View {
                 }
             }
         }
+    }
+
+    private var useMyLocationRow: some View {
+        Button {
+            Task { await viewModel.useCurrentLocation() }
+        } label: {
+            HStack(spacing: Spacing.s3) {
+                Icon(.navigation, size: 18, color: Theme.Color.primaryInk)
+                Text("Use my location")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                Spacer(minLength: Spacing.s2)
+                if viewModel.isLocating {
+                    ProgressView()
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.isLocating)
+        .accessibilityIdentifier("pulseLocationUseMine")
     }
 
     private func row(_ option: FeedLocationOption) -> some View {
