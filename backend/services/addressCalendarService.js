@@ -111,8 +111,13 @@ function expandRule(rule, fromDay, toDay, { holidays = [], moved = new Map() } =
       if (!Number.isFinite(lookback.getTime())) continue;
       for (const holidayDay of expandRule(holiday, isoDate(lookback), toDay)) {
         const start = noonUtc(holidayDay);
-        const saturday = new Date(start.getTime() + (6 - start.getUTCDay()) * 86400000);
-        for (const original of rr.between(start, saturday, true)) {
+        // Most providers run every pickup from the holiday through Saturday
+        // late; some (the City of Camas) move only the holiday's own pickups
+        // (`params.through = 'holiday'`).
+        const last = params.through === 'holiday'
+          ? start
+          : new Date(start.getTime() + (6 - start.getUTCDay()) * 86400000);
+        for (const original of rr.between(start, last, true)) {
           const shifted = new Date(original.getTime() + params.shift_days * 86400000);
           if (!Number.isFinite(shifted.getTime())) continue;
           removed.set(isoDate(original), original);
