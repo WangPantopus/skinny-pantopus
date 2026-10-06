@@ -99,16 +99,16 @@ export function validRemovalDraft(value: unknown, origin: string, actor: string)
 }
 export function removalMessage(code?: string | null) {
   return ({
-    MEMBER_REMOVAL_CHANGED: 'Membership, reviewed details or household authority changed. Acknowledge this result, then review the current member again.',
-    MEMBER_ALREADY_REMOVED: 'This membership is already ended. Check the current household list.',
-    MEMBERS_MANAGE_REQUIRED: 'Your current household permissions do not allow removing this member.',
-    TARGET_RANK_FORBIDDEN: 'Your current household role does not allow removing this member.',
-    TRANSFER_REQUIRED: 'The primary owner must transfer ownership before leaving.',
-    OWNERSHIP_FLOW_REQUIRED: 'Use the separate ownership process for this owner.',
-    MEMBER_ROLE_UNKNOWN: 'This member’s current role could not be verified.',
+    MEMBER_REMOVAL_CHANGED: 'The member or Home changed, so nobody was removed. Check the details again.',
+    MEMBER_ALREADY_REMOVED: 'This person is no longer a member.',
+    MEMBERS_MANAGE_REQUIRED: 'You don’t have permission to remove this member.',
+    TARGET_RANK_FORBIDDEN: 'You don’t have permission to remove this member.',
+    TRANSFER_REQUIRED: 'Transfer this Home’s ownership before leaving.',
+    OWNERSHIP_FLOW_REQUIRED: 'Owners can’t be removed here. Ownership changes go through Owners.',
+    MEMBER_ROLE_UNKNOWN: 'Couldn’t check this member’s role. Reload to try again.',
     MEMBER_NOT_FOUND: 'This membership is no longer available.',
     HOME_NOT_FOUND: 'This Home is no longer available.',
-  } as Record<string, string>)[code || ''] || 'This removal could not continue. Review the current member and your household authority.';
+  } as Record<string, string>)[code || ''] || 'This couldn’t be completed. Check the details and try again.';
 }
 export function removalLink(homeId: string, target: string | 'self') {
   return `/app/homes/member-removals?home=${encodeURIComponent(homeId)}&${target === 'self' ? 'self=1' : `target=${encodeURIComponent(target)}`}`;
