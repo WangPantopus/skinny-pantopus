@@ -1062,7 +1062,13 @@ private fun HomeFirstUseCard(
         modifier = Modifier.padding(bottom = 12.dp).fillMaxWidth().placeCard().padding(16.dp).testTag("todayHomeFirstUse"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Two things for your home", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+        // Rows drop out as they're handled; the heading counts what's left.
+        Text(
+            if (needsPickup && needsRadon) "Two things for your home" else "One thing for your home",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appText,
+        )
         if (needsPickup) GhostButton("Set your pickup day", onClick = onPickup)
         if (needsRadon) GhostButton("Was radon tested?", onClick = onRadon)
         GhostButton("Later", onClick = { state.lifetime.launch { state.hideFirstUse() } })
