@@ -1,3 +1,5 @@
+-- Backwards compatible: yes. Redefines two internal invitation functions with the same
+-- signatures and grants; no table, column or data change.
 -- A household can invite back someone whose membership ended (they left or were removed).
 --
 -- Until now every invitation path refused an ended HomeOccupancy row with MEMBERSHIP_RENEWAL_REQUIRED,
