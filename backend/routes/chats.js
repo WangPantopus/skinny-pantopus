@@ -552,6 +552,8 @@ router.get('/rooms', verifyToken, async (req, res) => {
         )
       `)
       .eq('user_id', userId)
+      // A room the person left isn't listed: its preview would show messages from after they left.
+      .eq('is_active', true)
       .order('joined_at', { ascending: false })
       .limit(lim);
 
@@ -1211,10 +1213,12 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
       identityUserIds.add(String(asBusinessUserId));
     }
 
+    // Only rooms the caller is still in: a former member reads their history in the room itself.
     const { data: mineRows, error: mineErr } = await supabaseAdmin
       .from('ChatParticipant')
       .select('room_id')
-      .in('user_id', Array.from(identityUserIds));
+      .in('user_id', Array.from(identityUserIds))
+      .eq('is_active', true);
 
     if (mineErr) {
       logger.error('Error loading actor conversation rooms', { requestId: req.requestId, userId, otherUserId, error: mineErr.message });
@@ -1418,6 +1422,13 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
+    // Someone who left or was removed keeps their own history, read-only: nothing posted after
+    // they left. Without a recorded leave time there is no history to keep.
+    const leftAt = participant.is_active === false ? participant.left_at : null;
+    if (participant.is_active === false && !leftAt) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const lim = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
 
     const runQuery = async ({ senderKey }) => {
@@ -1438,6 +1449,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
         .order('id', { ascending: false })
         .limit(lim);
 
+      if (leftAt) q = q.lte('created_at', leftAt);
       q = applyCursorPagination(q, before, after);
       return q;
     };
@@ -2249,6 +2261,13 @@ router.delete('/rooms/:roomId/participants/:participantUserId', verifyToken, par
     if (error) {
       logger.error('Error removing participant', { requestId: req.requestId, userId: req.user?.id, roomId, error: error.message });
       return res.status(500).json({ error: 'Failed to remove participant' });
+    }
+
+    // Their open connections stop receiving the room's live messages now, not at the next reconnect.
+    const io = req.app.get('io');
+    const { connectedUsers } = require('../socket/chatSocketio');
+    for (const socketId of connectedUsers.get(participantUserId) || []) {
+      io?.sockets?.sockets?.get(socketId)?.leave(roomId);
     }
     
     // Create system message. Same admission gate as the add path above; a direct
