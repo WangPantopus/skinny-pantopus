@@ -39,7 +39,7 @@ test('an owner label cannot restore denied manage controls, while recovery stays
   render(<MembersPage/>); await screen.findByRole('heading', { name: 'Members', level: 1 });
   expect(screen.queryByRole('button', { name: /Review removal of/ })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Invite' })).not.toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Recover a member removal' })).toHaveAttribute('href', '/app/homes/member-removals');
+  expect(screen.getByRole('link', { name: 'Check an unfinished removal' })).toHaveAttribute('href', '/app/homes/member-removals');
 });
 test('a held old success cannot restore members after a newer failed current read', async () => {
   let resolve!: (value: unknown) => void;
