@@ -182,14 +182,7 @@ private fun RemovalOriginal(
     Text(original.summary, modifier = Modifier.testTag("homeMemberRemovalOriginalSummary"))
     val outcome = state.outcome
     if (outcome?.isTerminal == true) {
-        Text(
-            when (outcome.state) {
-                "completed" -> if (target.self) "You left this Home." else "They no longer have access to this Home."
-                "cancelled" -> "Nothing changed. This attempt was discarded before it took effect."
-                else -> "This couldn't be completed."
-            },
-            modifier = Modifier.testTag("homeMemberRemovalTerminal"),
-        )
+        Text(removalTerminalText(outcome.state, target.self), modifier = Modifier.testTag("homeMemberRemovalTerminal"))
         if (outcome.state == "rejected") Text(memberRemovalRefusalMessage(outcome.code))
         if (outcome.state == "completed") outcome.completedAt?.let { Text("Finished ${reviewedDateLabel(it)}") }
         TextButton(
@@ -216,23 +209,45 @@ private fun RemovalOriginal(
         ) { Text("Discard attempt") }
     }
     // Someone who has left can no longer read that Home's member list, so there is nothing to check.
-    if (target.self && outcome?.state == "completed") return
-    Text(
-        when (state.currentRoster) {
-            HomeMemberRemovalCurrent.Unchecked -> "Check the member list to see who's in the household now."
-            HomeMemberRemovalCurrent.Listed ->
-                if (target.self) "You're still in the household's member list." else "They're still in the household's member list."
-            HomeMemberRemovalCurrent.NotListed ->
-                if (target.self) "You're no longer in the household's member list." else "They're no longer in the household's member list."
-        },
-        modifier = Modifier.testTag("homeMemberRemovalCurrentRoster"),
-    )
+    if (!(target.self && outcome?.state == "completed")) RemovalRosterCheck(state, requestId, target.self, viewModel)
+}
+
+@Composable
+private fun RemovalRosterCheck(
+    state: HomeMemberRemovalUiState,
+    requestId: String,
+    leaving: Boolean,
+    viewModel: HomeMemberRemovalViewModel,
+) {
+    Text(removalRosterText(state.currentRoster, leaving), modifier = Modifier.testTag("homeMemberRemovalCurrentRoster"))
     TextButton(
         onClick = { viewModel.checkCurrentRoster(requestId, state.generation) },
         enabled = !state.working,
         modifier = Modifier.testTag("homeMemberRemovalCheckCurrent"),
     ) { Text("Check member list") }
 }
+
+private fun removalTerminalText(
+    outcomeState: String,
+    leaving: Boolean,
+): String =
+    when (outcomeState) {
+        "completed" -> if (leaving) "You left this Home." else "They no longer have access to this Home."
+        "cancelled" -> "Nothing changed. This attempt was discarded before it took effect."
+        else -> "This couldn't be completed."
+    }
+
+private fun removalRosterText(
+    roster: HomeMemberRemovalCurrent,
+    leaving: Boolean,
+): String =
+    when (roster) {
+        HomeMemberRemovalCurrent.Unchecked -> "Check the member list to see who's in the household now."
+        HomeMemberRemovalCurrent.Listed ->
+            if (leaving) "You're still in the household's member list." else "They're still in the household's member list."
+        HomeMemberRemovalCurrent.NotListed ->
+            if (leaving) "You're no longer in the household's member list." else "They're no longer in the household's member list."
+    }
 
 /** What the removal sheet is about: the reviewed action, or what happened to the saved one. */
 private fun removalHeading(
