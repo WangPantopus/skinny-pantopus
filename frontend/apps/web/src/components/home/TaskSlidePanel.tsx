@@ -323,7 +323,7 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
               {assignedTo && !members.some(member => (member.user_id || member.id) === assignedTo) && <option value={assignedTo}>Current assignee</option>}
               {members.map((m) => (
                 <option key={m.user_id || m.id} value={m.user_id || m.id}>
-                  {m.user?.name || m.user?.username || m.name || m.username || 'Member'}
+                  {m.display_name || m.user?.displayName || m.user?.name || m.user?.handle || m.user?.username || m.name || m.username || 'Member'}
                 </option>
               ))}
             </select>
