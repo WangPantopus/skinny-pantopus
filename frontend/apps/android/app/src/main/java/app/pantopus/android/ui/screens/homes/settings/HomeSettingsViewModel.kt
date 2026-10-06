@@ -128,6 +128,12 @@ class HomeSettingsViewModel
         private var frame: HomeSettingsSampleData.Frame = HomeSettingsSampleData.Frame.Populated
         private var subtexts = RowSubtexts()
         private var showsGuestPasses = true
+        /**
+         * The viewer's effective permissions from `GET /:id/me`, so rows the server
+         * would refuse (Privacy, Access codes, People…) aren't offered. Null when
+         * `/me` didn't load: every row shows, as before.
+         */
+        private var viewerAccess: HomeAccessDto? = null
         private var loadedOnce = false
 
         fun load() {
@@ -303,6 +309,7 @@ class HomeSettingsViewModel
             // members.manage may use (the server answers everyone else 403). Shown
             // when GET /:id/me didn't load, as before.
             showsGuestPasses = access?.canManageMembers ?: true
+            viewerAccess = access
             _rename.update { current ->
                 current.copy(
                     canEdit = canEdit(detail, access),
@@ -371,7 +378,13 @@ class HomeSettingsViewModel
                 membersGroup(),
                 notificationsGroup(),
                 windDownGroup(),
-            )
+            ).filter { it.rows.isNotEmpty() }
+
+        /** True when the viewer holds any of these permissions, or when their access couldn't be read. */
+        private fun allows(vararg permissions: String): Boolean {
+            val access = viewerAccess ?: return true
+            return permissions.any { access.can(it) }
+        }
 
         private fun homeIdentityGroup(): GroupedListGroup {
             val identity = _identity.value
@@ -385,7 +398,7 @@ class HomeSettingsViewModel
                 id = "homeIdentity",
                 overline = "Home identity",
                 rows =
-                    listOf(
+                    listOfNotNull(
                         GroupedListRow("address", "Address", subtext = subtexts.address, control = addressControl),
                         GroupedListRow(
                             "propertyDetails",
@@ -393,8 +406,11 @@ class HomeSettingsViewModel
                             subtext = subtexts.propertyDetails,
                             control = RowControl.Chevron,
                         ),
-                        GroupedListRow("photos", "Photos", subtext = subtexts.photos, control = RowControl.Chevron),
-                        GroupedListRow("documents", "Documents", subtext = subtexts.documents, control = RowControl.Chevron),
+                        // Photos only points to the documents vault, so it needs docs.view too.
+                        GroupedListRow("photos", "Photos", subtext = subtexts.photos, control = RowControl.Chevron)
+                            .takeIf { allows("docs.view") },
+                        GroupedListRow("documents", "Documents", subtext = subtexts.documents, control = RowControl.Chevron)
+                            .takeIf { allows("docs.view") },
                     ),
             )
         }
@@ -404,15 +420,18 @@ class HomeSettingsViewModel
                 id = "access",
                 overline = "Access",
                 rows =
-                    listOf(
-                        GroupedListRow("accessCodes", "Access codes", subtext = subtexts.accessCodes, control = RowControl.Chevron),
-                        GroupedListRow("privacy", "Privacy", subtext = subtexts.privacy, control = RowControl.Chevron),
+                    listOfNotNull(
+                        GroupedListRow("accessCodes", "Access codes", subtext = subtexts.accessCodes, control = RowControl.Chevron)
+                            .takeIf { allows("access.view_codes", "access.view_wifi", "access.manage") },
+                        // Both screens read routes gated on security.manage.
+                        GroupedListRow("privacy", "Privacy", subtext = subtexts.privacy, control = RowControl.Chevron)
+                            .takeIf { allows("security.manage") },
                         GroupedListRow(
                             "ownershipSecurity",
                             "Ownership & Security",
                             subtext = "Discoverability and owner claims",
                             control = RowControl.Chevron,
-                        ),
+                        ).takeIf { allows("security.manage") },
                     ),
             )
 
@@ -422,7 +441,8 @@ class HomeSettingsViewModel
                 overline = "Members",
                 rows =
                     listOfNotNull(
-                        GroupedListRow("people", "People", subtext = subtexts.people, control = RowControl.Chevron),
+                        GroupedListRow("people", "People", subtext = subtexts.people, control = RowControl.Chevron)
+                            .takeIf { allows("members.view") },
                         GroupedListRow("inviteLink", "Invite link", subtext = subtexts.inviteLink, control = RowControl.Chevron)
                             .takeIf { showsGuestPasses },
                     ),

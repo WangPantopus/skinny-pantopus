@@ -78,6 +78,10 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
     /// `members.manage` may use (the server answers everyone else 403). Shown
     /// when `GET /:id/me` didn't load, as before.
     private var showsGuestPasses = true
+    /// The viewer's effective permissions from `GET /:id/me`, so rows the
+    /// server would refuse (Privacy, Access codes, People…) aren't offered.
+    /// Nil when `/me` didn't load: every row shows, as before.
+    private var viewerAccess: HomeAccessDTO?
     /// True while the identity card renders the text field instead of
     /// the home name.
     public private(set) var isRenaming = false
@@ -260,6 +264,7 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         frame = isPending ? .pending : .populated
         canEditHome = Self.canEdit(detail: detail, access: access)
         showsGuestPasses = access?.canManageMembers ?? true
+        viewerAccess = access
 
         currentName = detail.base.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let homeName = detail.base.name?.nonEmpty
@@ -362,9 +367,11 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
             )
         }
     }
+}
 
-    // MARK: - Group projection
+// MARK: - Group projection
 
+extension HomeSettingsViewModel {
     private func groups() -> [GroupedListGroup] {
         [
             homeIdentityGroup(),
@@ -372,7 +379,14 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
             membersGroup(),
             notificationsGroup(),
             windDownGroup()
-        ]
+        ].filter { !$0.rows.isEmpty }
+    }
+
+    /// True when the viewer holds any of these permissions, or when their
+    /// access couldn't be read (the server still decides every request).
+    private func allows(_ permissions: String...) -> Bool {
+        guard let viewerAccess else { return true }
+        return permissions.contains { viewerAccess.can($0) }
     }
 
     private func homeIdentityGroup() -> GroupedListGroup {
@@ -383,31 +397,39 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         )
         let rows: [GroupedListRow] = [
             GroupedListRow(id: "address", label: "Address", subtext: subtexts.address, control: addressControl),
-            GroupedListRow(id: "propertyDetails", label: "Property details", subtext: subtexts.propertyDetails, control: .chevron),
-            GroupedListRow(id: "photos", label: "Photos", subtext: subtexts.photos, control: .chevron),
-            GroupedListRow(id: "documents", label: "Documents", subtext: subtexts.documents, control: .chevron)
-        ]
+            GroupedListRow(id: "propertyDetails", label: "Property details", subtext: subtexts.propertyDetails, control: .chevron)
+        ] + (allows("docs.view")
+            // Photos only points to the documents vault, so it needs docs.view too.
+            ? [
+                GroupedListRow(id: "photos", label: "Photos", subtext: subtexts.photos, control: .chevron),
+                GroupedListRow(id: "documents", label: "Documents", subtext: subtexts.documents, control: .chevron)
+            ]
+            : [])
         return GroupedListGroup(id: "homeIdentity", overline: "Home identity", rows: rows)
     }
 
     private func accessGroup() -> GroupedListGroup {
-        let rows: [GroupedListRow] = [
-            GroupedListRow(id: "accessCodes", label: "Access codes", subtext: subtexts.accessCodes, control: .chevron),
-            GroupedListRow(id: "privacy", label: "Privacy", subtext: subtexts.privacy, control: .chevron),
-            GroupedListRow(
+        var rows: [GroupedListRow] = []
+        if allows("access.view_codes", "access.view_wifi", "access.manage") {
+            rows.append(GroupedListRow(id: "accessCodes", label: "Access codes", subtext: subtexts.accessCodes, control: .chevron))
+        }
+        // Both screens read routes gated on security.manage.
+        if allows("security.manage") {
+            rows.append(GroupedListRow(id: "privacy", label: "Privacy", subtext: subtexts.privacy, control: .chevron))
+            rows.append(GroupedListRow(
                 id: "ownershipSecurity",
                 label: "Ownership & Security",
                 subtext: "Discoverability and owner claims",
                 control: .chevron
-            )
-        ]
+            ))
+        }
         return GroupedListGroup(id: "access", overline: "Access", rows: rows)
     }
 
     private func membersGroup() -> GroupedListGroup {
-        let rows: [GroupedListRow] = [
-            GroupedListRow(id: "people", label: "People", subtext: subtexts.people, control: .chevron)
-        ] + (showsGuestPasses
+        let rows: [GroupedListRow] = (allows("members.view")
+            ? [GroupedListRow(id: "people", label: "People", subtext: subtexts.people, control: .chevron)]
+            : []) + (showsGuestPasses
             ? [GroupedListRow(id: "inviteLink", label: "Invite link", subtext: subtexts.inviteLink, control: .chevron)]
             : [])
         return GroupedListGroup(id: "members", overline: "Members", rows: rows)
