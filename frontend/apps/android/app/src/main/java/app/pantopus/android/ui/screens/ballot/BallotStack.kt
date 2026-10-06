@@ -15,8 +15,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.theme.PantopusColors
 import kotlin.math.PI
@@ -83,6 +82,8 @@ object BallotStackGeometry {
  * status, so the dashed layer style waits). A dashed home-green line
  * drops to the home dot with its white ring. During the peel [story],
  * each told government's layer lifts 8 and takes the green highlight.
+ * The drawing is decorative and hidden from assistive technology: the
+ * title beside it already says how many governments there are.
  */
 @Composable
 fun BallotStack(
@@ -97,7 +98,7 @@ fun BallotStack(
             modifier
                 .fillMaxWidth()
                 .height(BallotStackGeometry.HEIGHT.dp)
-                .semantics { contentDescription = "$count government boundary layers stacked above the address" },
+                .clearAndSetSemantics {},
     ) {
         val unit = density
         val cx = size.width / 2f / unit

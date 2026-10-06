@@ -115,7 +115,8 @@ data class BallotMoverPrompt(
 @JsonClass(generateAdapter = true)
 data class BallotNotice(
     val lead: String,
-    val detail: String,
+    /** Optional: the server validator requires only the lead, and the notice renders with just that. */
+    val detail: String? = null,
 )
 
 /** The Ballot P0 card, present only when the server sent it. */

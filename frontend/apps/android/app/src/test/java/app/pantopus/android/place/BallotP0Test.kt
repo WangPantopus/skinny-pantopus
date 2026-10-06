@@ -2,25 +2,37 @@ package app.pantopus.android.place
 
 import app.pantopus.android.data.api.models.place.BallotCoverage
 import app.pantopus.android.data.api.models.place.BallotDeadline
+import app.pantopus.android.data.api.models.place.BallotGovernments
 import app.pantopus.android.data.api.models.place.BallotPhase
+import app.pantopus.android.data.api.models.place.PlaceCivicDistrictsData
 import app.pantopus.android.data.api.models.place.PlaceCivicElectionData
 import app.pantopus.android.data.api.models.place.PlaceEnumAdapterFactory
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelopeAdapterFactory
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.services.PlaceApi
 import app.pantopus.android.ui.screens.ballot.BallotFormat
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotStackGeometry
 import app.pantopus.android.ui.screens.ballot.BallotStory
 import app.pantopus.android.ui.screens.ballot.BallotTimelineLayout
+import app.pantopus.android.ui.screens.ballot.BallotTimelineLayout.Anchor
+import app.pantopus.android.ui.screens.ballot.BallotTimelineLayout.Side
+import app.pantopus.android.ui.screens.ballot.linkUrl
 import app.pantopus.android.ui.screens.ballot.storyOverline
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import retrofit2.Retrofit
+import retrofit2.converter.moshi.MoshiConverterFactory
 
 /**
  * Ballot P0 (docs/ballot-implementation-plan-2026-09-24.md): the card
@@ -71,19 +83,18 @@ class BallotP0Test {
          "source_line":"Washington Secretary of State","checked_at":"2026-09-24"}
         """.trimIndent()
 
-    private fun intelligence(electionData: String): PlaceIntelligence {
-        val json =
-            """
-            {"place":{"label":"415 NE Everett St, Camas","line1":"415 NE Everett St","city":"Camas","state":"WA","postal_code":"98607"},
-             "tier":"T3","region_supported":true,"generated_at":"2026-09-24T16:00:00Z",
-             "groups":[{"group":"civic","label":"Civic","sections":[
-               {"id":"civic_districts","group":"civic","band":"A","access":"available","status":"ready","as_of":null,
-                "source":"U.S. Census Bureau","coverage":"full","unavailable_reason":null,
-                "data":{"districts":[],"representatives":[]}},
-               {"id":"civic_election","group":"civic","band":"A","access":"available","status":"ready",
-                "as_of":"2026-09-24T00:00:00.000Z","source":"Washington Secretary of State","coverage":"full",
-                "unavailable_reason":null,"data":$electionData}]}]}
-            """.trimIndent()
+    private val governments =
+        """
+        {"count":5,"count_is_minimum":true,"items":[{"level":"federal","name":"United States"}],
+         "summary":"The United States, the state, Clark County, the Camas School District and the City of Camas.",
+         "caveat":"Special districts are not counted yet.","source_line":"Boundaries: Census Bureau"}
+        """.trimIndent()
+
+    private fun intelligence(
+        electionData: String,
+        districtsData: String = NO_DISTRICTS,
+    ): PlaceIntelligence {
+        val json = intelligenceJson(electionData, districtsData)
         return checkNotNull(moshi.adapter(PlaceIntelligence::class.java).fromJson(json))
     }
 
@@ -120,6 +131,11 @@ class BallotP0Test {
         val data = election(intelligence(odd))
         assertEquals(40, data.daysUntil)
         assertNull(data.ballotCard)
+
+        val unlisted = card.replace("\"coverage\":\"supported\"", "\"coverage\":\"someday\"")
+        val section = election(intelligence(unlisted))
+        assertEquals(40, section.daysUntil)
+        assertNull(section.ballotCard)
     }
 
     @Test
@@ -130,6 +146,66 @@ class BallotP0Test {
         val ballot = checkNotNull(data.ballotCard)
         assertTrue(ballot.deadlines.isEmpty())
         assertEquals("This address sits inside at least 5 governments.", ballot.line)
+    }
+
+    @Test
+    fun `civic districts decode their governments and a malformed block never blanks the districts`() {
+        val valid = districtsOf(intelligence("{$base}", districtsJson(governments)))
+        assertEquals(1, valid.districts.size)
+        val decoded = checkNotNull(valid.governments)
+        assertEquals(5, decoded.count)
+        assertTrue(decoded.countIsMinimum)
+        assertEquals("United States", decoded.items.first().name)
+        assertEquals("Boundaries: Census Bureau", decoded.sourceLine)
+
+        val broken = districtsOf(intelligence("{$base}", districtsJson("""{"count":"five"}""")))
+        assertEquals(1, broken.districts.size)
+        assertNull(broken.governments)
+
+        assertNull(BallotGovernments.decodeIn(moshi, mapOf("governments" to "oops")))
+        assertNull(BallotGovernments.decodeIn(moshi, null))
+    }
+
+    @Test
+    fun `an election day notice needs only its lead`() {
+        val lean = card.replace("\"election_day_notice\":null", "\"election_day_notice\":{\"lead\":\"Return by 8 p.m. today.\"}")
+        val notice = checkNotNull(checkNotNull(election(intelligence(lean)).ballotCard).electionDayNotice)
+        assertEquals("Return by 8 p.m. today.", notice.lead)
+        assertNull(notice.detail)
+        assertEquals("Return by 8 p.m. today.", BallotFormat.notice(notice.lead, notice.detail).text)
+    }
+
+    @Test
+    fun `the mover well links only when the server sent a URL`() {
+        val mover = checkNotNull(checkNotNull(election(intelligence(card)).ballotCard).moverPrompt)
+        assertEquals("https://www.sos.wa.gov/register", mover.linkUrl())
+        assertNull(mover.copy(url = null).linkUrl())
+        assertNull(mover.copy(url = "").linkUrl())
+    }
+
+    @Test
+    fun `every intelligence request opts in to the ballot payload`() {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setBody(intelligenceJson("{$base}")))
+        server.enqueue(MockResponse().setBody(intelligenceJson("{$base}")))
+        server.start()
+        try {
+            val api =
+                Retrofit
+                    .Builder()
+                    .baseUrl(server.url("/"))
+                    .addConverterFactory(MoshiConverterFactory.create(moshi))
+                    .build()
+                    .create(PlaceApi::class.java)
+            runBlocking {
+                api.intelligence("home-1")
+                api.intelligence("home-1", sections = "civic_election")
+            }
+            assertEquals("/api/homes/home-1/intelligence?ballot=1", server.takeRequest().path)
+            assertEquals("/api/homes/home-1/intelligence?ballot=1&sections=civic_election", server.takeRequest().path)
+        } finally {
+            server.shutdown()
+        }
     }
 
     @Test
@@ -254,3 +330,227 @@ class BallotP0Test {
         assertEquals("Moved this year?", BallotFormat.notice("", "Moved this year?").text)
     }
 }
+
+/**
+ * The timeline's repair pass (the shared timeline spec). Each vector is the
+ * reference implementation's output for real state deadlines, the same ones
+ * the web and iOS run: labels that collide move, and a layout where nothing
+ * collides is the canvas's own. Text above 115% is listed, not drawn.
+ */
+class BallotTimelineRepairTest {
+    @Test
+    fun `a layout where nothing collides is the canvas's own`() {
+        assertTimeline(
+            BallotTimelineLayout.make(washington, today = "2026-09-24", width = 326f),
+            Expect("today", 8f, Side.BELOW, Anchor.START),
+            Expect("ballots_mailed", 178.5f, Side.ABOVE, Anchor.MIDDLE),
+            Expect("register_online_mail", 256f, Side.BELOW, Anchor.MIDDLE),
+            Expect("return_by", 318f, Side.ABOVE, Anchor.END),
+        )
+        // A narrower card, six days from the registration deadline.
+        val laterOn =
+            listOf(
+                deadline("register_online_mail", "Register by", "Oct 26", 6, needsAction = true),
+                deadline("return_by", "By 8 p.m.", "Nov 3", 14, needsAction = true),
+            )
+        assertTimeline(
+            BallotTimelineLayout.make(laterOn, today = "2026-10-20", width = 296f),
+            Expect("today", 8f, Side.BELOW, Anchor.START),
+            Expect("register_online_mail", 128f, Side.ABOVE, Anchor.MIDDLE),
+            Expect("return_by", 288f, Side.ABOVE, Anchor.END),
+        )
+    }
+
+    @Test
+    fun `Oregon's registration and mailing deadlines a day apart no longer overprint`() {
+        // Oct 13 and Oct 14, three days out: the mailing label drops below, anchored at its marker.
+        assertTimeline(
+            BallotTimelineLayout.make(oregon(3, 4, 24), today = "2026-10-10", width = 326f),
+            Expect("today", 8f, Side.BELOW, Anchor.START),
+            Expect("register_online_mail", 46.75f, Side.ABOVE, Anchor.MIDDLE),
+            Expect("ballots_mailed", 59.67f, Side.BELOW, Anchor.START),
+            Expect("return_by", 318f, Side.ABOVE, Anchor.END),
+        )
+        // Bunched at the left edge: the mailing label also slides clear of Today.
+        assertTimeline(
+            BallotTimelineLayout.make(oregon(1, 2, 22), today = "2026-10-12", width = 296f),
+            Expect("today", 8f, Side.BELOW, Anchor.START),
+            Expect("register_online_mail", 20.73f, Side.ABOVE, Anchor.START),
+            Expect("ballots_mailed", 33.45f, Side.BELOW, Anchor.START, dx = 19.55f),
+            Expect("return_by", 288f, Side.ABOVE, Anchor.END),
+        )
+        // Today is the registration deadline: the mailing label slides past "Today / Oct 13", 12 clear of it.
+        assertTimeline(
+            BallotTimelineLayout.make(oregon(0, 1, 21), today = "2026-10-13", width = 326f),
+            Expect("today", 8f, Side.BELOW, Anchor.START),
+            Expect("register_online_mail", 8f, Side.ABOVE, Anchor.START),
+            Expect("ballots_mailed", 22.76f, Side.BELOW, Anchor.START, dx = 30.24f),
+            Expect("return_by", 318f, Side.ABOVE, Anchor.END),
+        )
+    }
+
+    @Test
+    fun `a long label near an edge is anchored to it`() {
+        // Hawaii's 24-character "Paper forms by 4:30 p.m." would run off the card centred on Oct 26.
+        val hawaii =
+            listOf(
+                deadline("register_online_mail", "Paper forms by 4:30 p.m.", "Oct 26", 1, needsAction = true),
+                deadline("return_by", "By 7 p.m.", "Nov 3", 9, needsAction = true),
+            )
+        assertTimeline(
+            BallotTimelineLayout.make(hawaii, today = "2026-10-25", width = 326f),
+            Expect("today", 8f, Side.BELOW, Anchor.START),
+            Expect("register_online_mail", 42.44f, Side.ABOVE, Anchor.START),
+            Expect("return_by", 318f, Side.ABOVE, Anchor.END),
+        )
+        // Colorado on the narrowest card: the registration label leans on the final marker.
+        val colorado =
+            listOf(
+                deadline("register_online_mail", "Register by", "Oct 26", 16, needsAction = true),
+                deadline("return_by", "By 7 p.m.", "Nov 3", 24, needsAction = true),
+            )
+        assertTimeline(
+            BallotTimelineLayout.make(colorado, today = "2026-10-10", width = 254f),
+            Expect("today", 8f, Side.BELOW, Anchor.START),
+            Expect("register_online_mail", 166.67f, Side.ABOVE, Anchor.END),
+            Expect("return_by", 246f, Side.ABOVE, Anchor.END),
+        )
+    }
+
+    @Test
+    fun `labels are widened with the font scale`() {
+        // The same Oregon day as the 1.0 vector: at 1.15 the labels are 15% wider and still clear.
+        assertTimeline(
+            BallotTimelineLayout.make(oregon(3, 4, 24), today = "2026-10-10", width = 296f, fontScale = 1.15f),
+            Expect("today", 8f, Side.BELOW, Anchor.START),
+            Expect("register_online_mail", 43f, Side.ABOVE, Anchor.MIDDLE),
+            Expect("ballots_mailed", 54.67f, Side.BELOW, Anchor.START),
+            Expect("return_by", 288f, Side.ABOVE, Anchor.END),
+        )
+    }
+
+    @Test
+    fun `text above 115 percent lists the deadlines instead of drawing the chart`() {
+        assertTrue(BallotTimelineLayout.drawsChart(1f))
+        assertTrue(BallotTimelineLayout.drawsChart(0.85f))
+        assertTrue(BallotTimelineLayout.drawsChart(1.15f))
+        assertFalse(BallotTimelineLayout.drawsChart(1.2f))
+        assertFalse(BallotTimelineLayout.drawsChart(2f))
+
+        // The list has one row per marker, today first, each with its date over its label.
+        val rows = BallotTimelineLayout.listed(washington, today = "2026-09-24")
+        assertEquals(listOf("today", "ballots_mailed", "register_online_mail", "return_by"), rows.map { it.key })
+        assertEquals(listOf("Today", "Oct 16", "Oct 26", "Nov 3"), rows.map { it.firstLine })
+        assertEquals(listOf("Sep 24", "Ballots mailed", "Register by", "By 8 p.m."), rows.map { it.secondLine })
+        assertEquals(listOf("register_online_mail"), rows.filter { it.needsAction }.map { it.key })
+
+        // The chart's geometry is the canvas's own at 1 and grows with the font after that.
+        assertEquals(BallotTimelineLayout.Rows(14f, 26f, 38f, 60f, 72f, 74f), BallotTimelineLayout.rows(1f))
+        assertEquals(BallotTimelineLayout.rows(1f), BallotTimelineLayout.rows(0.85f))
+        val large = BallotTimelineLayout.rows(1.15f)
+        assertEquals(27.8f, large.aboveSecond, 0.001f)
+        assertEquals(39.8f, large.track, 0.001f)
+        assertEquals(61.8f, large.belowFirst, 0.001f)
+        assertEquals(75.6f, large.belowSecond, 0.001f)
+        assertEquals(77.6f, large.height, 0.001f)
+    }
+
+    @Test
+    fun `the timeline is read aloud with return by`() {
+        assertEquals(
+            "Timeline: today, Sep 24; ballots mailed Oct 16; register by Oct 26; return by 8 p.m. Nov 3",
+            BallotTimelineLayout.description(washington, today = "2026-09-24"),
+        )
+        // Hawaii's own labels keep their wording, lower-cased at the first letter.
+        val hawaii =
+            listOf(
+                deadline("ballots_mailed", "Ballots arrive", "Oct 16", 22, needsAction = false),
+                deadline("return_by", "By 7 p.m.", "Nov 3", 40, needsAction = true),
+            )
+        assertEquals(
+            "Timeline: today, Sep 24; ballots arrive Oct 16; return by 7 p.m. Nov 3",
+            BallotTimelineLayout.description(hawaii, today = "2026-09-24"),
+        )
+    }
+}
+
+private data class Expect(
+    val key: String,
+    val x: Float,
+    val side: Side,
+    val anchor: Anchor,
+    val dx: Float = 0f,
+)
+
+private fun deadline(
+    key: String,
+    label: String,
+    monthDay: String,
+    daysUntil: Int,
+    needsAction: Boolean,
+    timeline: Boolean = true,
+) = BallotDeadline(key, label, date = "", monthDay = monthDay, daysUntil = daysUntil, needsAction = needsAction, timeline = timeline)
+
+/** Washington on 2026-09-24: the fixture's deadlines, with "Register in person" off the timeline. */
+private val washington =
+    listOf(
+        deadline("ballots_mailed", "Ballots mailed", "Oct 16", 22, needsAction = false),
+        deadline("register_online_mail", "Register by", "Oct 26", 32, needsAction = true),
+        deadline("return_by", "By 8 p.m.", "Nov 3", 40, needsAction = true),
+        deadline("register_in_person", "Register in person", "Nov 3", 40, needsAction = true, timeline = false),
+    )
+
+/** Oregon's three timeline deadlines, [register] / [mailed] / [returnBy] days from today. */
+private fun oregon(
+    register: Int,
+    mailed: Int,
+    returnBy: Int,
+) = listOf(
+    deadline("register_online_mail", "Register by", "Oct 13", register, needsAction = true),
+    deadline("ballots_mailed", "Ballots mailed", "Oct 14", mailed, needsAction = false),
+    deadline("return_by", "By 8 p.m.", "Nov 3", returnBy, needsAction = true),
+)
+
+/** The side, anchor, x and slide of every marker, to two decimals. */
+private fun assertTimeline(
+    layout: BallotTimelineLayout?,
+    vararg expected: Expect,
+) {
+    val markers = checkNotNull(layout).markers
+    assertEquals(expected.map { it.key }, markers.map { it.key })
+    expected.zip(markers).forEach { (want, got) ->
+        assertEquals("${want.key} x", want.x, got.x, 0.01f)
+        assertEquals("${want.key} side", want.side, got.side)
+        assertEquals("${want.key} anchor", want.anchor, got.anchor)
+        assertEquals("${want.key} dx", want.dx, got.dx, 0.01f)
+    }
+}
+
+private fun districtsJson(governments: String): String =
+    """
+    {"districts":[{"level":"federal","office_label":"U.S. House","name":"Washington's 3rd District"}],
+     "representatives":[],"governments":$governments}
+    """.trimIndent()
+
+private fun districtsOf(intel: PlaceIntelligence): PlaceCivicDistrictsData {
+    val section = intel.groups.flatMap { it.sections }.first { it.sectionId == PlaceSectionId.CIVIC_DISTRICTS }
+    return checkNotNull(section.civicDistricts)
+}
+
+private const val NO_DISTRICTS = """{"districts":[],"representatives":[]}"""
+
+private fun intelligenceJson(
+    electionData: String,
+    districtsData: String = NO_DISTRICTS,
+): String =
+    """
+    {"place":{"label":"415 NE Everett St, Camas","line1":"415 NE Everett St","city":"Camas","state":"WA","postal_code":"98607"},
+     "tier":"T3","region_supported":true,"generated_at":"2026-09-24T16:00:00Z",
+     "groups":[{"group":"civic","label":"Civic","sections":[
+       {"id":"civic_districts","group":"civic","band":"A","access":"available","status":"ready","as_of":null,
+        "source":"U.S. Census Bureau","coverage":"full","unavailable_reason":null,
+        "data":$districtsData},
+       {"id":"civic_election","group":"civic","band":"A","access":"available","status":"ready",
+        "as_of":"2026-09-24T00:00:00.000Z","source":"Washington Secretary of State","coverage":"full",
+        "unavailable_reason":null,"data":$electionData}]}]}
+    """.trimIndent()

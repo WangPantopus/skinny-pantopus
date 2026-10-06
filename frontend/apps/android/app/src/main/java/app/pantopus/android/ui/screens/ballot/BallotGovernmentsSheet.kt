@@ -65,7 +65,8 @@ fun BallotGovernmentsSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
-    val close: () -> Unit = { scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() } }
+    // Material's own pattern: a hide() that a second tap or Back cancels leaves the sheet visible, so only a finished hide dismisses.
+    val close: () -> Unit = { scope.launch { sheetState.hide() }.invokeOnCompletion { if (!sheetState.isVisible) onDismiss() } }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -219,7 +220,7 @@ private fun GovernmentsHeader(
             Text(
                 action,
                 style = BallotText.style(14.sp, FontWeight.SemiBold),
-                color = PantopusColors.primary700,
+                color = PantopusColors.primary600,
                 modifier =
                     Modifier
                         .clickable(role = Role.Button, onClick = onAction)

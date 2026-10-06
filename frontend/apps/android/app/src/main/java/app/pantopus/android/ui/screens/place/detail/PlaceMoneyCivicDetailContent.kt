@@ -626,7 +626,8 @@ fun PlaceCivicDetailContent(intel: PlaceIntelligence) {
         val data = env.civicElection?.takeIf { it.ballotCard?.phase != BallotPhase.AFTER }
         if (data != null && env.isLive()) {
             ElectionCard(data)
-            PlaceSourceNote("Official county elections")
+            // With Ballot on, the section is state reference data and names its source; the legacy county label is the fallback.
+            PlaceSourceNote(env.source.orEmpty().ifEmpty { "Official county elections" })
         } else {
             PlaceDetailCard {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -673,7 +674,7 @@ private fun GovernmentsRow(
         PlaceIconTile(PantopusIcon.Layers, PlaceTileTone.HOME, 40.dp)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("Your governments", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-            Text("This address sits inside $count.", fontSize = 12.5.sp, color = PantopusColors.appTextMuted)
+            Text("This address sits inside $count governments.", fontSize = 12.5.sp, color = PantopusColors.appTextMuted)
         }
         PlaceChevron()
     }

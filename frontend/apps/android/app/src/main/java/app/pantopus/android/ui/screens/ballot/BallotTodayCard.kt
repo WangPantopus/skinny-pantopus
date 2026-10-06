@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.data.api.models.place.BallotMoverPrompt
 import app.pantopus.android.data.api.models.place.BallotSummary
 import app.pantopus.android.data.api.models.place.BallotWeek
 import app.pantopus.android.ui.theme.PantopusColors
@@ -37,12 +38,14 @@ fun BallotTodayCard(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
         card.ballotWeek?.takeIf { it.show }?.let { BallotWeekCard(it, onOpenBallot) }
         card.moverPrompt?.let { mover ->
+            // Without a URL the well is plain text: no tap action and nothing for assistive tech to announce as a link.
+            val link = mover.linkUrl()
             BallotNoticeWell(
                 lead = "",
                 detail = "${mover.text} ${BallotFormat.daysLeft(mover.daysLeft)}",
                 radius = Radii.xl,
                 padding = PaddingValues(horizontal = 14.dp, vertical = Spacing.s3),
-                onClick = mover.url?.let { url -> { uriHandler.openQuietly(url) } },
+                onClick = link?.let { url -> { uriHandler.openQuietly(url) } },
                 modifier = Modifier.testTag("today.ballot.mover"),
             )
         }
@@ -51,6 +54,9 @@ fun BallotTodayCard(
 
 /** True when the server says the Today card applies: ballot week, or a recent move. */
 fun BallotSummary.showsOnToday(): Boolean = ballotWeek?.show == true || moverPrompt != null
+
+/** Where the "Moved this year?" well goes: the server's URL, or null (no link at all) when it sent none. */
+fun BallotMoverPrompt.linkUrl(): String? = url?.takeIf { it.isNotBlank() }
 
 @Composable
 private fun BallotWeekCard(

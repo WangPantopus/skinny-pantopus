@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -177,6 +179,10 @@ fun BallotBodyText(
     Text(text, modifier = modifier, style = BallotText.style(13.5.sp, lineHeight = 19.sp), color = PantopusColors.appTextStrong)
 }
 
+/**
+ * The standard primary-fill button. [height] is a floor: the server's label
+ * can wrap at large text sizes, and then the button grows rather than clip it.
+ */
 @Composable
 fun BallotPrimaryButton(
     label: String,
@@ -189,13 +195,19 @@ fun BallotPrimaryButton(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(height)
+                .heightIn(min = height)
                 .clip(RoundedCornerShape(Radii.lg))
-                .background(PantopusColors.primary700)
-                .clickable(role = Role.Button, onClick = onClick),
+                .background(PantopusColors.primary600)
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = BallotText.style(fontSize, FontWeight.SemiBold), color = PantopusColors.appTextInverse)
+        Text(
+            label,
+            style = BallotText.style(fontSize, FontWeight.SemiBold),
+            color = PantopusColors.appTextInverse,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -250,7 +262,7 @@ fun BallotLinksWell(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .clickable(role = Role.Button, onClickLabel = "Opens the official site") { uriHandler.openQuietly(link.url) }
+                        .clickable(role = Role.Button, onClickLabel = "Open the official site") { uriHandler.openQuietly(link.url) }
                         .padding(Spacing.s3),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
                 verticalAlignment = Alignment.CenterVertically,
