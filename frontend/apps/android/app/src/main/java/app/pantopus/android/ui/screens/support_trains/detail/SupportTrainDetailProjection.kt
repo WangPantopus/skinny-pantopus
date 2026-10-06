@@ -385,5 +385,4 @@ object SupportTrainDetailProjection {
 }
 
 /** Stored dietary values are keys ("tree_nut_allergy"); helpers read "Tree nut allergy", as the web shows them. */
-internal fun dietaryLabel(value: String): String =
-    value.replace('_', ' ').trim().replaceFirstChar { it.uppercase() }
+internal fun dietaryLabel(value: String): String = value.replace('_', ' ').trim().replaceFirstChar { it.uppercase() }
