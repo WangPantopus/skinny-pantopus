@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.tenant.TenantRepository
 import app.pantopus.android.ui.components.HaloCircleTone
 import app.pantopus.android.ui.screens.homes.HomeDashboardAccessFactory
 import app.pantopus.android.ui.screens.status.StatusPillTone
@@ -181,6 +182,7 @@ class WaitingRoomContentTest {
                     repository,
                     mockk<HomeDashboardAccessFactory>(relaxed = true),
                     SavedStateHandle(mapOf(WAITING_ROOM_HOME_ID_KEY to "home-1")),
+                    mockk<TenantRepository>(relaxed = true),
                 )
             model.refresh()
             advanceUntilIdle()
