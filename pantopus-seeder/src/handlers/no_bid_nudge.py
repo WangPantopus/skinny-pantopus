@@ -360,6 +360,8 @@ def _send_nudge(
 
 
 def _publish_metrics(stats: dict, start_ms: int) -> None:
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return  # Local runs never write to CloudWatch.
     elapsed_ms = time.monotonic_ns() // 1_000_000 - start_ms
     try:
         import boto3
