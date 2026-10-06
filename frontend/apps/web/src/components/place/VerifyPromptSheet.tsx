@@ -15,8 +15,9 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import * as api from '@pantopus/api';
 import type { LucideIcon } from 'lucide-react';
 import {
   ShieldCheck,
@@ -111,9 +112,29 @@ function Radio({ selected }: { selected: boolean }) {
 export default function VerifyPromptSheet({ open, onClose, homeId, address }: VerifyPromptSheetProps) {
   const router = useRouter();
   const [selected, setSelected] = useState<MethodId>('document');
+  // A landlord request can only be answered by a verified landlord, so that
+  // door joins once the Home has one (or the person already has a request).
+  const [landlordHomeId, setLandlordHomeId] = useState<string | null>(null);
+  const methods = landlordHomeId === homeId ? METHODS : METHODS.filter((m) => m.id !== 'landlord');
+
+  useEffect(() => {
+    if (!open) return;
+    let canceled = false;
+    (async () => {
+      try {
+        const status = await api.tenant.getTenantHomeStatus(homeId);
+        if (canceled || status?.home_id !== homeId) return;
+        const offers = status.landlord?.has_landlord === true || (status.lease?.state ?? 'none') !== 'none';
+        setLandlordHomeId(offers ? homeId : null);
+      } catch {
+        // An unreadable status keeps the two doors that work without a landlord.
+      }
+    })();
+    return () => { canceled = true; };
+  }, [open, homeId]);
 
   const handleStart = () => {
-    const method = METHODS.find((m) => m.id === selected) ?? METHODS[0];
+    const method = methods.find((m) => m.id === selected) ?? methods[0];
     onClose();
     router.push(method.href(homeId));
   };
@@ -173,7 +194,7 @@ export default function VerifyPromptSheet({ open, onClose, homeId, address }: Ve
       <div className="mb-4">
         <Overline>Choose how</Overline>
         <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm overflow-hidden">
-          {METHODS.map((m, i) => {
+          {methods.map((m, i) => {
             const isSelected = selected === m.id;
             return (
               <button

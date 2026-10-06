@@ -23,6 +23,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,11 +32,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.tenant.TenantRepository
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.place.components.PlaceChevron
 import app.pantopus.android.ui.screens.place.components.PlaceChip
@@ -50,6 +54,10 @@ import app.pantopus.android.ui.screens.place.detail.PlaceDetailSectionLabel
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 
 const val PLACE_VERIFY_HOME_ID_KEY = "homeId"
 const val PLACE_VERIFY_METHOD_KEY = "method"
@@ -88,14 +96,46 @@ private val VERIFY_BENEFITS =
 
 // ─── B1 — the verify sheet ───────────────────────────────────
 
+/** Reads the tenant status that decides whether the landlord door is offered. */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface PlaceVerifySheetDeps {
+    fun tenantRepository(): TenantRepository
+}
+
+/**
+ * A landlord request can only be answered by a verified landlord, so that door
+ * joins once the Home has one (or the person already has a request). An
+ * unreadable status keeps the two doors that work without a landlord.
+ */
+@Composable
+private fun rememberVerifyMethods(homeId: String?): List<PlaceVerifyMethod> {
+    val context = LocalContext.current
+    var methods by remember(homeId) { mutableStateOf(listOf(PlaceVerifyMethod.DOCUMENT, PlaceVerifyMethod.MAIL)) }
+    LaunchedEffect(homeId) {
+        if (homeId == null) return@LaunchedEffect
+        val repository =
+            EntryPointAccessors
+                .fromApplication(context.applicationContext, PlaceVerifySheetDeps::class.java)
+                .tenantRepository()
+        val status = (repository.homeStatus(homeId) as? NetworkResult.Success)?.data
+        if (status != null && status.matches(homeId) && status.offersLandlordConfirmation) {
+            methods = PlaceVerifyMethod.entries
+        }
+    }
+    return methods
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaceVerifySheet(
     address: String,
+    homeId: String?,
     onStart: (PlaceVerifyMethod) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selected by remember { mutableStateOf(PlaceVerifyMethod.DOCUMENT) }
+    val methods = rememberVerifyMethods(homeId)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = PantopusColors.appSurface) {
@@ -148,11 +188,11 @@ fun PlaceVerifySheet(
 
             Overline("Choose how")
             Column(modifier = Modifier.fillMaxWidth().placeCard()) {
-                PlaceVerifyMethod.entries.forEachIndexed { i, m ->
+                methods.forEachIndexed { i, m ->
                     Box(modifier = Modifier.clickable { selected = m }) {
                         VerifyRow(m.icon, m.label, m.sub, PlaceTileTone.SKY, trailing = { Radio(selected == m) })
                     }
-                    if (i < PlaceVerifyMethod.entries.lastIndex) Divider()
+                    if (i < methods.lastIndex) Divider()
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))

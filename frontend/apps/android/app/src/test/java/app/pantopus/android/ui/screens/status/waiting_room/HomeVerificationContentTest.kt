@@ -154,7 +154,7 @@ class HomeVerificationContentTest {
 
     @Test
     fun pending_approval_offers_landlord_status_and_no_mailed_code() {
-        val actions = HomeVerificationContent.make(HomeVerificationStatus.PendingApproval).actions
+        val actions = HomeVerificationContent.make(HomeVerificationStatus.PendingApproval, offersLandlord = true).actions
         val landlord =
             actions.firstOrNull { it.actionKey == HomeVerificationContent.ActionKey.LANDLORD_VERIFICATION }
         assertEquals("Check your approval status", landlord?.subtitle)
@@ -167,7 +167,7 @@ class HomeVerificationContentTest {
     fun provisional_offers_upload_landlord_and_mailed_code() {
         val keys =
             HomeVerificationContent
-                .make(HomeVerificationStatus.Provisional)
+                .make(HomeVerificationStatus.Provisional, offersLandlord = true)
                 .actions
                 .map { it.actionKey }
         assertTrue(keys.contains(HomeVerificationContent.ActionKey.UPLOAD_PROOF))
