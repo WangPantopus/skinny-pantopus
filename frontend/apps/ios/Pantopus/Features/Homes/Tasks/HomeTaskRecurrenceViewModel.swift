@@ -25,7 +25,7 @@ final class HomeTaskRecurrenceViewModel {
     private(set) var canDismiss = false
     var frequency: HomeTaskRecurrenceFrequency = .weekly
     var interval = "1"
-    var timezone = "UTC"
+    var timezone = TimeZone.current.identifier
     private let access: HomeTaskAccess
     private let store: any PendingHomeTaskRecurrenceStoring
     private let taskId: String
@@ -247,7 +247,7 @@ final class HomeTaskRecurrenceViewModel {
         let command = pending?.confirmed == nil ? pending?.command : nil
         frequency = command?.frequency ?? state?.configuration?.frequency ?? .weekly
         interval = String(command?.interval ?? state?.configuration?.interval ?? 1)
-        timezone = command?.timezone ?? state?.configuration?.timezone ?? "UTC"
+        timezone = command?.timezone ?? state?.configuration?.timezone ?? TimeZone.current.identifier
     }
 
     private func record(_ failure: any Error, revision: Int) {
