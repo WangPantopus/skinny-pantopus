@@ -56,11 +56,12 @@ export default function HomeHeader({
 
       <div className="flex items-center gap-3 mb-4">
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-bold text-app-text truncate">
+          {/* Long names and unit addresses wrap: a clipped line can hide which unit this is. */}
+          <h1 className="text-xl font-bold text-app-text break-words">
             {homeName || 'Home Dashboard'}
           </h1>
           {homeAddress && (
-            <p className="text-xs text-app-text-secondary truncate">{homeAddress}</p>
+            <p className="text-xs text-app-text-secondary break-words">{homeAddress}</p>
           )}
         </div>
 
