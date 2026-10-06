@@ -113,7 +113,8 @@ private fun HomePostalCurrentStatus(
     val postcard = status.postcard
     if (postcard != null) {
         Text(
-            HomePostalMessages.delivery(postcard.delivery),
+            // Once the code is verified, how the postcard travelled no longer matters.
+            if (postcard.status == "verified") "Address verified by mail" else HomePostalMessages.delivery(postcard.delivery),
             style = PantopusTextStyle.h3,
             modifier = Modifier.testTag("homePostalDelivery"),
         )

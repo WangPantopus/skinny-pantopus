@@ -81,10 +81,10 @@ function VerifyPostcardContent() {
         <h2 className="text-lg font-semibold">{status.postcard.status === 'verified' ? 'Address verified by mail' : status.postcard.status === 'expired' ? 'Postcard code expired'
           : status.postcard.status === 'cancelled' ? 'Postcard no longer active' : 'Your postcard'}</h2>
         {status.request && <><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Mailing address</p><Address address={status.request.address} /></>}
-        <p className="text-sm text-app-text-secondary">{({ not_started: 'This postcard hasn’t been sent yet.',
+        {status.postcard.status !== 'verified' && <p className="text-sm text-app-text-secondary">{({ not_started: 'This postcard hasn’t been sent yet.',
           accepted: 'Your postcard is on its way.',
           unknown: 'We couldn’t confirm the postcard was sent. It may already be on its way; checking again won’t send another.',
-          rejected: 'The mail service couldn’t send this postcard. Check the address and request another.' })[status.postcard.delivery]}</p>
+          rejected: 'The mail service couldn’t send this postcard. Check the address and request another.' })[status.postcard.delivery]}</p>}
         <p className="text-sm text-app-text-secondary">Postcard reference: {status.postcard.id.slice(-8)} · Code expiry: {new Date(status.postcard.expires_at).toLocaleDateString()}</p>
         {status.can_resume && <button className={primary} disabled={busy} onClick={() => void flow.resumeMail()}>Send the postcard</button>}
       </section>}

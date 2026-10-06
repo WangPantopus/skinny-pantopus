@@ -132,7 +132,9 @@ struct HomePostalVerificationView: View {
     @ViewBuilder
     private func currentStatus(_ status: HomePostalStatus) -> some View {
         if let postcard = status.postcard {
-            Text(HomePostalMessages.delivery(postcard["delivery"]?.stringValue)).pantopusTextStyle(.h3)
+            // Once the code is verified, how the postcard travelled no longer matters.
+            Text(postcard["status"]?.stringValue == "verified" ? "Address verified by mail"
+                : HomePostalMessages.delivery(postcard["delivery"]?.stringValue)).pantopusTextStyle(.h3)
                 .accessibilityIdentifier("homePostalDelivery")
             Text(HomePostalMessages.postcardStatus(postcard["status"]?.stringValue)).pantopusTextStyle(.body)
             if postcard["status"]?.stringValue == "pending", let count = postcard["attempts_remaining"]?.numberValue {
