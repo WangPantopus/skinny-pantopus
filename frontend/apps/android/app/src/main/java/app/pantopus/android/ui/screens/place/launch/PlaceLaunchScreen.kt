@@ -172,7 +172,7 @@ private fun Hero(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 32.dp, bottom = 24.dp),
         ) {
             Text(
-                "See what's true about your address.",
+                "Know what matters for your home, and stay on top of it.",
                 fontSize = 31.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.87).sp,

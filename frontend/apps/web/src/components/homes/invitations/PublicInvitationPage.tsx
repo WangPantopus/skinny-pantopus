@@ -198,7 +198,7 @@ export default function PublicInvitationPage() {
           </div>
 
           <p className="text-sm text-app-text-secondary mb-5">
-            Household permissions determine what you can open or manage. An invitation does not grant ownership.
+            Household permissions determine what you can open or manage. This invitation gives you household access. To send neighbor messages or get a residency letter, verify the address yourself.
           </p>
           {(invite.access_start_at || invite.access_end_at) && <p className="text-sm text-app-text-secondary mb-5">
             {invite.access_start_at && <>Access starts {new Date(invite.access_start_at).toLocaleString()}. </>}

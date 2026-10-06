@@ -16,6 +16,9 @@ import SwiftUI
 
 struct PlacePreviewBody: View {
     let preview: PlacePreview
+    /// Signed-in "Save a place": Cancel instead of Sign in, and the wall
+    /// keeps the address for a private save rather than sign-in.
+    var signedInEntry = false
     var onSignIn: () -> Void
     var onCreateAccount: () -> Void
     var onBack: () -> Void
@@ -79,7 +82,7 @@ struct PlacePreviewBody: View {
             }
             .padding(.leading, 4)
             Spacer(minLength: 0)
-            Button("Sign in", action: onSignIn)
+            Button(signedInEntry ? "Cancel" : "Sign in", action: onSignIn)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.Color.primaryInk)
         }
@@ -323,13 +326,17 @@ struct PlacePreviewBody: View {
 
     private var wall: some View {
         VStack(spacing: 10) {
-            Text("Keep this address handy. Choose whether to save it privately after sign-in.")
+            Text(signedInEntry
+                ? "Keep this address handy. Choose whether to save it privately."
+                : "Keep this address handy. Choose whether to save it privately after sign-in.")
                 .font(.system(size: 14.5, weight: .semibold))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.Color.appText)
             PrimaryButton(title: "Continue") { onCreateAccount() }
                 .accessibilityIdentifier("place.preview.continue")
-            Text("Your preview stays on this device for up to 24 hours while you sign in.")
+            Text(signedInEntry
+                ? "Saving a place does not create or verify a Home."
+                : "Your preview stays on this device for up to 24 hours while you sign in.")
                 .font(Theme.Font.caption).foregroundStyle(Theme.Color.appTextMuted)
         }
         .padding(.horizontal, 16)
@@ -345,6 +352,7 @@ struct PlacePreviewBody: View {
 
 struct PlaceComingRegionBody: View {
     let message: String
+    var signedInEntry = false
     var onBrowse: () -> Void
     var onBack: () -> Void
 
@@ -381,7 +389,7 @@ struct PlaceComingRegionBody: View {
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                PrimaryButton(title: "Follow people & places") { onBrowse() }
+                PrimaryButton(title: signedInEntry ? "Back to saved places" : "Follow people & places") { onBrowse() }
             }
             .padding(.horizontal, 28)
             Spacer(minLength: 0)
