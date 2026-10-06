@@ -682,7 +682,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
             ListOfRowsState.EmptyContent(
                 icon: .clipboardList,
                 headline: "No open tasks",
-                subcopy: "Tasks you've posted that are waiting for a helper will show up here.",
+                subcopy: "Tasks you're part of show up here.",
                 ctaTitle: nil,
                 onCTA: nil
             )
