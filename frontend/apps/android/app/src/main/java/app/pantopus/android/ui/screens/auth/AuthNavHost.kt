@@ -2,9 +2,13 @@
 
 package app.pantopus.android.ui.screens.auth
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -24,6 +28,7 @@ import app.pantopus.android.ui.screens.settings.legal.LegalContentScreen
 import app.pantopus.android.ui.screens.settings.legal.LegalDocument
 import app.pantopus.android.ui.screens.status.verify_email.VerifyEmailLandingScreen
 import app.pantopus.android.ui.screens.status.verify_email.VerifyEmailLandingViewModel
+import app.pantopus.android.ui.theme.PantopusColors
 
 /**
  * Nav graph rooted at [AuthRoutes.LOGIN] for the signed-out experience.
@@ -75,9 +80,13 @@ fun AuthNavHost() {
         }
     }
 
+    // The app draws edge to edge (MainActivity.enableEdgeToEdge). The signed-in
+    // tabs get their system-bar insets from the root Scaffold; the signed-out
+    // screens get them here, so no top bar or bottom button sits under a bar.
     NavHost(
         navController = navController,
         startDestination = AuthRoutes.LOGIN,
+        modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).systemBarsPadding(),
     ) {
         composable(
             route = AuthRoutes.LEGAL_PATTERN,
