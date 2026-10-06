@@ -303,10 +303,11 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
 
     private static func addressLine(for home: HomeDTO) -> String? {
         guard let street = home.address?.nonEmpty else { return nil }
+        let line = [street, home.address2?.nonEmpty].compactMap { $0 }.joined(separator: " ")
         if let city = home.city?.nonEmpty {
-            return "\(street), \(city)"
+            return "\(line), \(city)"
         }
-        return street
+        return line
     }
 
     private static func humanizedHomeType(_ raw: String?) -> String? {

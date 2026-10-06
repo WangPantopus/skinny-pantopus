@@ -328,8 +328,9 @@ class HomeSettingsViewModel
 
         private fun addressLine(detail: HomeDetail): String? {
             val street = detail.address?.takeIf { it.isNotBlank() } ?: return null
+            val line = listOfNotNull(street, detail.address2?.takeIf { it.isNotBlank() }).joinToString(" ")
             val city = detail.city?.takeIf { it.isNotBlank() }
-            return if (city != null) "$street, $city" else street
+            return if (city != null) "$line, $city" else line
         }
 
         private fun humanizedHomeType(raw: String?): String? {
