@@ -57,7 +57,7 @@ platform :ios do
       export_method: "app-store",
       clean: true
     )
-    UI.success("✓ Signed Release archive built (no upload). Verify it points at api.pantopus.app with a pk_live_ key.")
+    UI.success("✓ Signed Release archive built (no upload). Verify it points at api.pantopus.com with a pk_live_ key.")
   end
 
   desc "Build and upload to TestFlight (via match for signing)"

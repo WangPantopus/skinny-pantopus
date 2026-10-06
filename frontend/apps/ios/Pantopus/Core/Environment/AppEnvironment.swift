@@ -63,11 +63,11 @@ final class AppEnvironment: @unchecked Sendable {
             // the canonical staging host as the safety net.
             apiBaseURL = Self.secureBundleURL(
                 forInfoKey: "PantopusAPIBaseURL",
-                fallback: "https://staging.api.pantopus.app"
+                fallback: "https://staging-api.pantopus.com"
             )
             socketURL = Self.secureBundleURL(
                 forInfoKey: "PantopusSocketURL",
-                fallback: "https://staging.api.pantopus.app"
+                fallback: "https://staging-api.pantopus.com"
             )
         case .production:
             // Driven by Config/Pantopus.Release.xcconfig → Info.plist, with
@@ -75,11 +75,11 @@ final class AppEnvironment: @unchecked Sendable {
             // a stray localhost/test value can never leak into a prod build.
             apiBaseURL = Self.secureBundleURL(
                 forInfoKey: "PantopusAPIBaseURL",
-                fallback: "https://api.pantopus.app"
+                fallback: "https://api.pantopus.com"
             )
             socketURL = Self.secureBundleURL(
                 forInfoKey: "PantopusSocketURL",
-                fallback: "https://api.pantopus.app"
+                fallback: "https://api.pantopus.com"
             )
         }
 
