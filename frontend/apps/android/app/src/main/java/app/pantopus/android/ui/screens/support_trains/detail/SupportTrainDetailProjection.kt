@@ -80,7 +80,9 @@ object SupportTrainDetailProjection {
             reserveContext =
                 ReserveSheetContext(
                     enabledModes = enabledModes(dto.supportModes),
-                    restrictionChips = (dto.dietaryRestrictions ?: emptyList()) + (dto.dietaryPreferences ?: emptyList()),
+                    restrictionChips =
+                        ((dto.dietaryRestrictions ?: emptyList()) + (dto.dietaryPreferences ?: emptyList()))
+                            .map(::dietaryLabel),
                     contactlessPreferred = dto.contactlessPreferred == true,
                 ),
             viewerRole = viewerRole(dto),
@@ -381,3 +383,7 @@ object SupportTrainDetailProjection {
         return letters.ifEmpty { "ST" }
     }
 }
+
+/** Stored dietary values are keys ("tree_nut_allergy"); helpers read "Tree nut allergy", as the web shows them. */
+internal fun dietaryLabel(value: String): String =
+    value.replace('_', ' ').trim().replaceFirstChar { it.uppercase() }
