@@ -1,5 +1,8 @@
 # Staging setup for physical notification tests
 
+> September 2026 record of the first staging setup. The current ordered steps for
+> staging and production are in [the launch checklist](release/prod-config-checklist.md).
+
 ## Status — September 8, 2026
 
 The code baseline is master `e60c19cc69d065a78df85d0f3d26c5897c5a0555`

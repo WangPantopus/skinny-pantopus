@@ -486,18 +486,15 @@ under-reports the SDK, and `brew uninstall android-commandlinetools` breaks
 
 ---
 
-## Two docs to ignore
+## Release path
 
-`docs/android-release-guide.md` and `docs/android-release-review.md` document
-`frontend/apps/mobile` — the Expo/EAS app, package `com.pantopus.app`, which has
-**zero files in git today**. Every command in both is dead:
-`pnpm --filter pantopus-mobile` matches no workspace. The real Android release
-path is fastlane + Gradle Play Publisher against `app.pantopus.android`
-(`frontend/apps/android/fastlane/Fastfile`, `make beta` / `make release`, or
-`./gradlew publishReleaseBundle`).
-
-Also: **there is no `.github` directory in this repo.** Every CI-workflow
-citation across the Android docs points at files that do not exist.
+The Expo-era release guides for `frontend/apps/mobile` (package
+`com.pantopus.app`) were removed on October 6, 2026; that app isn't in this
+repository. The Android release path is fastlane + Gradle Play Publisher against
+`app.pantopus.android` (`frontend/apps/android/fastlane/Fastfile`, `make beta` /
+`make release`, or `./gradlew publishReleaseBundle`), run in CI by
+`.github/workflows/android-beta.yml`. The ordered launch steps are in
+`docs/release/prod-config-checklist.md`.
 
 ---
 

@@ -89,6 +89,8 @@ def _safe_response_json(response: httpx.Response) -> dict[str, Any]:
 
 def _publish_metric(job_name: str, status: str) -> None:
     """Publish a CloudWatch metric for job execution status."""
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return  # Local runs never write to CloudWatch.
     try:
         import boto3
 

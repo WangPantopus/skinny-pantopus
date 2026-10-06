@@ -32,6 +32,23 @@ def authenticate_curator(supabase_client, email: str, password: str) -> str | No
         return None
 
 
+def curator_auth_client(secrets):
+    """A Supabase client used only to sign the curator in.
+
+    Signing in on a handler's shared service-role client switches that
+    client's later queries to the curator's token, which cannot read or update
+    the seeder tables: the queue item is never marked posted, the next region
+    fails and the tapering metrics are denied. Returns None on failure.
+    """
+    try:
+        from supabase import create_client
+
+        return create_client(secrets.supabase_url, secrets.supabase_service_role_key)
+    except Exception as exc:
+        log.error("Failed to create the curator sign-in client (error_type=%s)", type(exc).__name__)
+        return None
+
+
 def post_to_pantopus(
     api_base_url: str,
     access_token: str,

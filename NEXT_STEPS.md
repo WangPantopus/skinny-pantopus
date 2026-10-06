@@ -84,6 +84,8 @@ Sources, in order of authority for this work:
 
 ## 2. Before the pilot (founder-owned; agents can prepare but never hold credentials)
 
+The ordered steps, with exact values and checks, are in the [launch checklist](docs/release/prod-config-checklist.md); its section 1 lists the decisions it needs from you.
+
 - [ ] Turn the hosted backend on. One scheduled reminder reaches a physical iPhone and a physical Android phone.
 - [ ] Production keys the backend reads; the database baseline adopted in production; TestFlight; a Play internal testing track.
 - [ ] Confirm the Camas, Vancouver and Washougal pickup schedules and their holiday rules by hand for Thanksgiving (November 26), Christmas (December 25) and New Year's Day (January 1). Mark each official or unconfirmed. Today only Camas has rows, and all are unconfirmed.

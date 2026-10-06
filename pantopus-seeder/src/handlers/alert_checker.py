@@ -473,8 +473,14 @@ def _check_aqi_alerts(
     geohash: str, lat: float, lng: float,
     user_ids: list[str], stats: dict,
 ) -> int:
-    """Check AirNow AQI, send push if it spikes above threshold."""
-    api_key = os.environ.get("AIRNOW_API_KEY") or ""
+    """Check AirNow AQI, send push if it spikes above threshold.
+
+    AirNow retired /aq/observation/latLong/current/ on September 30, 2026
+    (it answers 410). Its replacement, /aq/observation/current/ziplatlong/,
+    takes the same key and returns one NowCast reading per pollutant with
+    camelCase fields (nowcastAQI, aqiCategoryName, parameterName).
+    """
+    api_key = os.environ.get("AIRNOW_API_KEY") or os.environ.get("AIRNOW_KEY") or ""
     # Try to get from secrets if not in env
     if not api_key:
         try:
@@ -492,11 +498,10 @@ def _check_aqi_alerts(
             "format": "application/json",
             "latitude": str(lat),
             "longitude": str(lng),
-            "distance": "25",
             "API_KEY": api_key,
         }
         resp = httpx.get(
-            "https://www.airnowapi.org/aq/observation/latLong/current/",
+            "https://www.airnowapi.org/aq/observation/current/ziplatlong/",
             params=params,
             timeout=FETCH_TIMEOUT_S,
         )
@@ -509,13 +514,20 @@ def _check_aqi_alerts(
         if not isinstance(observations, list) or not observations:
             return 0
     except Exception:
-        log.warning("AirNow fetch failed for geohash=%s", geohash, exc_info=True)
+        # The request URL carries the key, so no exception detail is logged.
+        log.warning("AirNow fetch failed for geohash=%s", geohash)
         stats["push_errors"] += 1
         return 0
 
-    # Find the worst AQI reading
-    worst = max(observations, key=lambda o: o.get("AQI", 0))
-    aqi_val = worst.get("AQI", 0)
+    # Find the worst AQI reading (AirNow marks a missing value as negative).
+    def _aqi(obs: dict) -> int:
+        try:
+            return int(obs.get("nowcastAQI"))
+        except (TypeError, ValueError):
+            return -1
+
+    worst = max(observations, key=_aqi)
+    aqi_val = _aqi(worst)
 
     if aqi_val < AQI_UNHEALTHY_THRESHOLD:
         return 0
@@ -528,8 +540,10 @@ def _check_aqi_alerts(
     if _already_notified(supabase, "aqi", alert_id, geohash):
         return 0
 
-    category_name = worst.get("Category", {}).get("Name", "Unhealthy")
-    pollutant = worst.get("ParameterName", "PM2.5")
+    category_name = worst.get("aqiCategoryName") or "Unhealthy"
+    pollutant = worst.get("parameterName") or "PM2.5"
+    if str(pollutant).upper() == "OZONE":
+        pollutant = "O3"
 
     title = f"Air Quality Alert — AQI {aqi_val}"
     body = f"Air quality is {category_name.lower()} ({pollutant}). Consider limiting outdoor activity."
@@ -652,6 +666,8 @@ def _cleanup_expired(supabase) -> None:
 
 
 def _publish_metrics(stats: dict) -> None:
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return  # Local runs never write to CloudWatch.
     try:
         import boto3
         env = os.environ.get("ENVIRONMENT", "production")

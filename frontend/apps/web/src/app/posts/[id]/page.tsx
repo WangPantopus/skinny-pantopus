@@ -151,12 +151,6 @@ export default async function PublicPostPage({
             Pantopus
           </Link>
           <div className="flex items-center gap-3">
-            <Link
-              href={buildCanonicalShareUrlForPost(shareRef)}
-              className="text-sm text-app-text-secondary hover:text-app"
-            >
-              Canonical URL
-            </Link>
             <OpenInAppButton
               appUrl={buildCanonicalAppUrlForPost(shareRef)}
               linkHref={buildCanonicalShareUrlForPost(shareRef)}
