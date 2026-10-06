@@ -2217,8 +2217,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // the review queue from the dock overflow on the
                 // detail screen, or via the explicit
                 // `support-trains/:id/manage` deep link
-                // (handled separately).
-                navController.navigate(ChildRoutes.SUPPORT_TRAINS)
+                // (handled separately). The list goes under a link opened
+                // from the tab root, so Back has somewhere known to land;
+                // opened from a screen (Notifications), Back returns there.
+                if (navController.previousBackStackEntry == null) navController.navigate(ChildRoutes.SUPPORT_TRAINS)
                 if (pending.id.isNotBlank()) {
                     navController.navigate(ChildRoutes.supportTrainDetail(pending.id))
                 }
@@ -2227,9 +2229,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             is DeepLinkRouter.Destination.SupportTrainManage -> {
                 // P4.3 / A13.13 — `pantopus://support-trains/:id/manage`
                 // lands on the organizer Manage Train surface. Drop the
-                // user on the Support Trains list first so a back-tap
-                // pops to a known surface, then push manage.
-                navController.navigate(ChildRoutes.SUPPORT_TRAINS)
+                // user on the Support Trains list first (from the tab root)
+                // so a back-tap pops to a known surface, then push manage.
+                if (navController.previousBackStackEntry == null) navController.navigate(ChildRoutes.SUPPORT_TRAINS)
                 if (pending.id.isNotBlank()) {
                     navController.navigate(ChildRoutes.manageTrain(pending.id))
                 }
