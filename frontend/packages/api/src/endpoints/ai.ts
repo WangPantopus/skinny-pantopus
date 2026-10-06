@@ -3,7 +3,7 @@
 // Chat agent, draft generation, mail summarization, place brief
 // ============================================================
 
-import apiClient, { get, post, del, getApiBaseUrl, fetchAuthHeaders } from '../client';
+import apiClient, { get, post, del, getApiBaseUrl, fetchAuthHeaders, refreshAuthSession } from '../client';
 import type {
   AIDraftGigRequest,
   AIDraftGigResponse,
@@ -83,17 +83,25 @@ export function streamChat(
     }
   };
 
+  const send = () => fetch(`${getApiBaseUrl()}/api/ai/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...fetchAuthHeaders('POST'),
+    },
+    credentials: 'include',
+    body: JSON.stringify(data),
+    signal: controller.signal,
+  });
+
   const run = async () => {
-    const response = await fetch(`${getApiBaseUrl()}/api/ai/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...fetchAuthHeaders('POST'),
-      },
-      credentials: 'include',
-      body: JSON.stringify(data),
-      signal: controller.signal,
-    });
+    let response = await send();
+    // This raw fetch misses the axios client's refresh-and-retry. Once the hour-long access token
+    // lapses, refresh the session the same way and send once more.
+    if (response.status === 401) {
+      const refreshed = await refreshAuthSession({ trigger: 'ai_chat' }).catch(() => null);
+      if (refreshed?.status === 'success') response = await send();
+    }
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({ error: 'NETWORK_ERROR' }));
