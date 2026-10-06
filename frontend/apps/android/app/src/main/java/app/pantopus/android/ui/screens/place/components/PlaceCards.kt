@@ -82,8 +82,11 @@ fun PlaceLockedCard(
             lineHeight = 20.sp,
             color = PantopusColors.appTextSecondary,
         )
-        Spacer(modifier = Modifier.height(10.dp))
-        PlaceTextButton(title = cta)
+        // No action means no button, never a dead control.
+        if (onTap != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            PlaceTextButton(title = cta)
+        }
     }
 }
 
