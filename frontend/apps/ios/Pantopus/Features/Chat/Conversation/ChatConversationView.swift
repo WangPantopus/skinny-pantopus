@@ -849,7 +849,8 @@ extension ChatConversationView {
         AIPromptCard(
             id: "mailbox", category: "Mailbox", icon: .mailbox,
             tint: Theme.Color.home,
-            question: "Summarize today's mail and packages."
+            // It summarizes a letter you give it; it can't read the inbox.
+            question: "Help me understand a letter I got."
         ),
         AIPromptCard(
             id: "marketplace", category: "Marketplace", icon: .shoppingBag,
@@ -869,16 +870,25 @@ extension ChatConversationView {
         }
     }
 
-    /// Launch cut #3 (Marketplace): the Marketplace prompt gives way to a Home
-    /// one (the seasonal checklist stays), keeping the 2×2 grid whole.
+    /// Launch cuts #3 (Marketplace) and #4 (Open Gigs): those prompts give way to
+    /// Home and Nearby ones (the seasonal checklist stays), keeping the 2×2 grid whole.
     private static var launchPromptCards: [AIPromptCard] {
         aiPromptCards.map { card in
-            guard card.id == "marketplace", !LaunchFeatures.marketplace else { return card }
-            return AIPromptCard(
-                id: "home", category: "Home", icon: .home,
-                tint: Theme.Color.success,
-                question: "What should I check around my home before winter?"
-            )
+            if card.id == "marketplace", !LaunchFeatures.marketplace {
+                return AIPromptCard(
+                    id: "home", category: "Home", icon: .home,
+                    tint: Theme.Color.success,
+                    question: "What should I check around my home before winter?"
+                )
+            }
+            if card.id == "tasks", !LaunchFeatures.openGigs {
+                return AIPromptCard(
+                    id: "nearby", category: "Nearby", icon: .mapPin,
+                    tint: Theme.Color.warning,
+                    question: "What's happening near my home?"
+                )
+            }
+            return card
         }
     }
 
