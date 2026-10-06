@@ -3556,6 +3556,9 @@ private struct ChatComposer: View {
                     .lineLimit(1...4)
                     .submitLabel(.send)
                     .onSubmit { if canSend { onSend() } }
+                    // A multi-line field exposes no name of its own; VoiceOver
+                    // read just "text field".
+                    .accessibilityLabel("Message")
                 Button(action: onEmoji) {
                     Icon(.smile, size: 17, color: Theme.Color.appTextMuted)
                         .frame(width: 24, height: 20)
