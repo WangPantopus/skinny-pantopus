@@ -76,13 +76,13 @@ enum class HomeInvitationSenderFailureKind { Storage, Changed, Unknown, Unavaila
 class HomeInvitationSenderFailure(val kind: HomeInvitationSenderFailureKind) : IllegalStateException(
     when (kind) {
         HomeInvitationSenderFailureKind.Storage ->
-            "The protected original could not be read or saved. Keep it and reopen recovery before starting another action."
-        HomeInvitationSenderFailureKind.Changed -> "The invitation action changed. Reopen recovery to review the original."
+            "This invitation couldn't be read or saved on this device. Reload before starting another."
+        HomeInvitationSenderFailureKind.Changed -> "This invitation changed. Reload to see the latest."
         HomeInvitationSenderFailureKind.Unknown ->
-            "The result is not confirmed. Check the original action, retry it, or cancel its unconfirmed attempt."
-        HomeInvitationSenderFailureKind.Unavailable -> "Current invitation details could not be checked. Retry before submitting."
-        HomeInvitationSenderFailureKind.SessionChanged -> "Your session changed. Reopen invitations in the original account to recover."
-        HomeInvitationSenderFailureKind.Busy -> "Wait for the original invitation action to finish being checked."
+            "We couldn't confirm the result. Check again, try again, or discard this attempt."
+        HomeInvitationSenderFailureKind.Unavailable -> "Couldn't load the invitation details. Reload to try again."
+        HomeInvitationSenderFailureKind.SessionChanged -> "Your sign-in changed. Reload in the account that started this invitation."
+        HomeInvitationSenderFailureKind.Busy -> "Wait for your last invitation to finish checking."
     },
 )
 
@@ -90,13 +90,13 @@ class HomeInvitationSenderRefusal(code: String?) : IllegalStateException(senderR
 
 fun senderRefusalMessage(code: String?): String =
     when (code) {
-        "MEMBERS_MANAGE_REQUIRED" -> "You no longer have permission to manage this household’s invitations."
-        "INVITE_SENDER_CHANGED" -> "The invitation or your authority changed. Acknowledge this result, then review current details."
-        "INVITE_ALREADY_PENDING" -> "This person already has a pending invitation. Review it in Pending before explicitly resending."
-        "MEMBER_ALREADY_EXISTS" -> "This person is already a household member. Their existing membership is preserved."
-        "MEMBERSHIP_RENEWAL_REQUIRED" -> "This person’s earlier household membership has ended. An invitation cannot restore it."
-        "INVITE_ALREADY_USED", "INVITE_NOT_PENDING" -> "This invitation is already resolved. Existing membership is preserved."
-        "INVITE_EXPIRED" -> "This invitation expired. Resending does not extend its expiry or access dates."
-        "INVITE_NOT_FOUND", "HOME_NOT_FOUND" -> "The invitation or household is no longer available for this action."
-        else -> "This action was not completed. Review the invitation and current authority before starting another action."
+        "MEMBERS_MANAGE_REQUIRED" -> "You don't have permission to manage this household's invitations."
+        "INVITE_SENDER_CHANGED" -> "The invitation or your permissions changed. Tap Done, then check the details again."
+        "INVITE_ALREADY_PENDING" -> "This person already has a pending invitation. You can resend it from Pending in Members."
+        "MEMBER_ALREADY_EXISTS" -> "This person is already in the household."
+        "MEMBERSHIP_RENEWAL_REQUIRED" -> "This person’s earlier household membership has ended. An invitation can't restore it."
+        "INVITE_ALREADY_USED", "INVITE_NOT_PENDING" -> "This invitation was already answered. Nobody's membership changed."
+        "INVITE_EXPIRED" -> "This invitation has expired. Resending doesn't extend it."
+        "INVITE_NOT_FOUND", "HOME_NOT_FOUND" -> "This invitation is no longer available."
+        else -> "This couldn't be completed. Check the invitation and try again."
     }

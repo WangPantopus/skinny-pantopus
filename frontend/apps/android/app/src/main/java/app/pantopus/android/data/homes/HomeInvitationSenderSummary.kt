@@ -17,15 +17,35 @@ internal fun senderInvitationSummary(
         }
     return listOfNotNull(
         recipient,
-        "Role: $role",
-        (invite["proposed_preset_key"] as? String)?.let {
-            if (it.startsWith("access_request:")) "Household approval" else "Permission preset: $it"
-        },
+        "Role: ${invitationRoleLabel(role)}",
+        (invite["proposed_preset_key"] as? String)?.let(::invitationPresetLine),
         dates["access_start_at"]?.let { "Access begins: ${reviewedDateLabel(it)}" },
         dates["access_end_at"]?.let { "Access ends: ${reviewedDateLabel(it)}" },
         dates["expires_at"]?.let { "Invitation expires: ${reviewedDateLabel(it)}" },
     ).joinToString("\n")
 }
+
+/** "restricted_member" → "Restricted member": a role as a person reads it. */
+internal fun invitationRoleLabel(role: String): String =
+    role.replace('_', ' ').trim().replaceFirstChar { it.uppercase() }.ifEmpty { "Member" }
+
+/** A preset names the relationship chosen on the web (e.g. "Tenant / Roommate"). */
+internal fun invitationPresetLine(key: String): String =
+    if (key.startsWith("access_request:")) {
+        "Approved from a request to join"
+    } else {
+        "Relationship: " + (PRESET_NAMES[key] ?: invitationRoleLabel(key))
+    }
+
+private val PRESET_NAMES =
+    mapOf(
+        "tenant" to "Tenant / Roommate",
+        "spouse" to "Spouse / Partner",
+        "extended_family" to "Extended family",
+        "child" to "Child",
+        "airbnb_guest" to "Short-stay guest",
+        "cleaner_vendor" to "Cleaner / Vendor",
+    )
 
 private fun senderRecipientSummary(invite: Map<String, Any?>): String {
     val email = invite["invitee_email"] as? String

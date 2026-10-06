@@ -22,7 +22,7 @@ test('protected write failure blocks POST and requires re-opening the saved slot
 });
 test('lost reply survives cold recovery and retries exact original bytes once',async()=>{
  const store=memory(),c=new SenderController();await c.open(()=>store);await c.prepare(input);jest.mocked(api.apiClient.request).mockRejectedValueOnce(Error('Lost reply'));
- await expect(c.submit(decision)).rejects.toThrow('result is not confirmed');const original=c.pending!;expect(validSenderDraft(original,c.origin,actor)).toBe(true);c.retire();
+ await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result');const original=c.pending!;expect(validSenderDraft(original,c.origin,actor)).toBe(true);c.retire();
  const cold=new SenderController();await cold.open(()=>store);jest.mocked(api.apiClient.request).mockResolvedValueOnce({status:201,data:result(original)} as never);
  await cold.recover('retry');expect(jest.mocked(api.apiClient.request).mock.calls[1][0].data).toBe(original.request_json);
  expect(cold.canAcknowledge).toBe(true);await cold.recover('retry');expect(api.apiClient.request).toHaveBeenCalledTimes(2);
@@ -37,9 +37,9 @@ test('receipt storage repair does not post again and acknowledgement clears the 
 test('foreign success preserves original and changed session prevents dispatch',async()=>{
  const store=memory(),c=new SenderController();await c.open(()=>store);await c.prepare(input);
  jest.mocked(api.apiClient.request).mockImplementation(async()=>({status:201,data:{...result(c.pending!),home_id:actor}} as never));
- await expect(c.submit(decision)).rejects.toThrow('result is not confirmed');expect(c.pending?.outcome).toBeUndefined();
+ await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result');expect(c.pending?.outcome).toBeUndefined();
  jest.mocked(api.apiClient.get).mockResolvedValueOnce({data:{session:{...session,session_scope:'c'.repeat(64)}}} as never);
- await expect(c.recover('retry')).rejects.toThrow('session changed');expect(api.apiClient.request).toHaveBeenCalledTimes(1);
+ await expect(c.recover('retry')).rejects.toThrow('sign-in changed');expect(api.apiClient.request).toHaveBeenCalledTimes(1);
 });
 test('sharing rechecks current invitation eligibility without another command and retires on refresh',async()=>{
  const store=memory(),c=new SenderController();await c.open(()=>store);await c.prepare(input);
@@ -49,7 +49,7 @@ test('sharing rechecks current invitation eligibility without another command an
   invitation:{id:invite,home_id:home,status:'pending',expires_at:'2099-01-01T00:00:00Z'}}} as never);
  await c.checkShare(c.pending!.request_id);expect(c.shareToken).toBe(c.pending!.token);expect(api.apiClient.request).toHaveBeenCalledTimes(1);
  c.clearShare();expect(c.shareToken).toBeNull();jest.mocked(api.apiClient.post).mockRejectedValueOnce(Error('Current authority denied'));
- await expect(c.checkShare(c.pending!.request_id)).rejects.toThrow('could not be confirmed for sharing');expect(c.shareToken).toBeNull();
+ await expect(c.checkShare(c.pending!.request_id)).rejects.toThrow('Couldn’t get a link');expect(c.shareToken).toBeNull();
 });
 test('unavailable display profile does not prevent loading the original under a confirmed sender session',async()=>{
  jest.mocked(api.users.getMyProfile).mockRejectedValueOnce(Error('Profile unavailable'));const store=memory(),c=new SenderController();await c.open(()=>store);
@@ -67,7 +67,7 @@ test.each(['state','email','in_app'] as const)('malformed array %s cannot replac
   return {status:201,data:field==='state'?{...receipt,state:['completed']}:
    {...receipt,delivery:{...receipt.delivery,[field]:[field==='email'?'provider_accepted':'saved']}}} as never;
  });
- await expect(c.submit(decision)).rejects.toThrow('result is not confirmed');
+ await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result');
  const original=c.pending!;expect(original.outcome).toBeUndefined();expect(c.canAcknowledge).toBe(false);
  expect((await store.load())?.draft.request_json).toBe(original.request_json);
  jest.mocked(api.apiClient.request).mockResolvedValueOnce({status:200,data:result(original)} as never);

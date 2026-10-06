@@ -12,7 +12,7 @@ export function useInvitationDecision(token: string) {
   const publish = useCallback((current: InvitationDecisionController, error = '') => {
     if (controller.current !== current) return;
     if (!current.current()) { setView({ ...empty, blocked: true, lifetime: generation.current,
-      error: 'Your session changed. Reopen recovery to check the original invitation decision.' }); return; }
+      error: 'Your sign-in changed. Reload to check your answer.' }); return; }
     setView({ ready: current.opened, busy: false, error, pending: current.pending, canAcknowledge: current.canAcknowledge,
       blocked: current.needsReload, context: current.context, progress: current.progress, lifetime: generation.current, accountLabel: current.accountLabel, canDecide: current.canDecide });
   }, []);
@@ -31,9 +31,9 @@ export function useInvitationDecision(token: string) {
         publish(current);
       } catch (error) {
         if (disposed || revision !== generation.current) return;
-        if (current?.opened) publish(current, error instanceof Error ? error.message : 'The invitation could not be checked. Reopen recovery to retry.');
+        if (current?.opened) publish(current, error instanceof Error ? error.message : 'Couldn’t check this invitation. Reload to try again.');
         else setView({ ...empty, blocked: true, lifetime: generation.current,
-          error: 'Protected invitation recovery could not be opened. Your saved decision is kept. Reopen recovery to try again.' });
+          error: 'Couldn’t open this invitation. Any answer you gave is kept. Reload to try again.' });
       }
     };
     const visibility = () => { if (document.visibilityState === 'hidden') retire(); else void open(); };
@@ -56,7 +56,7 @@ export function useInvitationDecision(token: string) {
     if (generation.current !== view.lifetime || !current?.current()) return;
     setView(previous => ({ ...previous, busy: true, error: '', context: null, progress: null }));
     try { const result = await action(current); if (controller.current === current && current.current()) { publish(current); return result; } }
-    catch (error) { publish(current, error instanceof Error ? error.message : 'The invitation decision could not be confirmed. Reopen recovery.'); }
+    catch (error) { publish(current, error instanceof Error ? error.message : 'We couldn’t confirm your answer. Check again, try again, or discard this attempt.'); }
   };
   return { ...view, isCurrent: (lifetime: number) => generation.current === lifetime && controller.current?.current() === true, reopen: () => setReload(value => value + 1),
     decide: (action: 'accept' | 'decline', expectedDecision: string) => run(current => current.decide(action, expectedDecision)),

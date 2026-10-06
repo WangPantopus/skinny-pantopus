@@ -38,49 +38,59 @@ export default function SenderInvitationManager({homeId,onAcknowledged}:{homeId:
   const draft=vm.pending,outcome=draft?.outcome,terminal=outcome&&outcome.state!=='pending';
   useEffect(()=>{setCancelConfirm(null);},[vm.lifetime,draft?.request_id]);
   useEffect(()=>{if(outcome?.state==='completed')refresh.current();},[outcome?.state,outcome?.command.request_id]);
-  const label=draft?.action==='withdraw'?'Withdrawal saved':draft?.action==='resend'?'Resend saved':'Invitation saved';
+  const label=draft?.action==='withdraw'?'Invitation withdrawn':draft?.action==='resend'?'Resend requested':'Invitation created';
   const url=vm.shareToken&&draft?.token===vm.shareToken?`${window.location.origin}/invite/${encodeURIComponent(vm.shareToken)}`:null;
   const acknowledge=async()=>{if(!draft)return;const saved=await vm.acknowledge(draft.request_id);if(saved){vm.refreshList();onAcknowledged?.();}};
   return <div className="space-y-6" data-testid="sender-invitation-manager">
-    <div><h2 className="text-xl font-semibold">Household invitations</h2><p className="mt-1 text-sm text-app-text-secondary">An invitation offers household access. Residency and ownership use separate verification.</p>
+    <div><h2 className="text-xl font-semibold">Household invitations</h2><p className="mt-1 text-sm text-app-text-secondary">An invitation gives someone household access for the role you choose. It doesn’t verify that they live here or own the Home.</p>
       {vm.accountLabel&&<p className="mt-2 text-xs text-app-text-secondary">Signed in as {vm.accountLabel}</p>}</div>
     {vm.error&&<p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{vm.error}</p>}
-    {vm.blocked?<button className={button} onClick={vm.reopen}>Reopen invitation recovery</button>:!vm.ready?<p role="status">Opening protected invitation recovery…</p>:draft?<section className="space-y-4 rounded-xl border border-app-border p-4" aria-label="Original invitation action">
-      <h3 className="text-lg font-semibold">{terminal?outcome.state==='completed'?label:outcome.state==='cancelled'?'Attempt cancelled':'Invitation action needs review':'Recover your invitation action'}</h3>
-      {draft.home_id!==homeId&&<p role="note" className="text-sm">This is an earlier action for a different Home. Recover and acknowledge it before starting another invitation.</p>}
-      <p className="text-sm">Original action: {draft.action === 'create' ? 'Create invitation' : draft.action === 'resend' ? 'Resend invitation' : 'Withdraw invitation'}</p>
+    {vm.blocked?<button className={button} onClick={vm.reopen}>Reload</button>:!vm.ready?<p role="status">Loading invitations…</p>:draft?<section className="space-y-4 rounded-xl border border-app-border p-4" aria-label="Your last invitation">
+      <h3 className="text-lg font-semibold">{terminal?outcome.state==='completed'?label:outcome.state==='cancelled'?'Attempt discarded':'Couldn’t finish this':'Check your last invitation'}</h3>
+      {draft.home_id!==homeId&&<p role="note" className="text-sm">This is for another of your Homes. Finish it before inviting someone here.</p>}
+      <p className="text-sm">Action: {draft.action === 'create' ? 'Send invitation' : draft.action === 'resend' ? 'Resend invitation' : 'Withdraw invitation'}</p>
       {draft.action==='create'?<PayloadSummary payload={draft.payload}/>:draft.reviewed_invitation&&terms(draft.reviewed_invitation)}
       {outcome?.state==='completed'?<><p role="status" className="text-sm">{deliveryMessage(outcome)}</p>
         {url&&<div className="space-y-3"><a href={url} className="block break-all text-sm text-blue-600">{url}</a><QRCode value={url} size={160} label="Household invitation QR code"/></div>}
-        {draft.action!=='withdraw'&&!url&&<div className="space-y-2"><p className="text-sm text-app-text-secondary">The saved result is retained. Check that the invitation is still available before sharing its link.</p><button className={button} disabled={vm.busy} onClick={()=>void vm.checkShare(draft.request_id)}>Check link for sharing</button></div>}</>
-        :outcome?.state==='cancelled'?<p className="text-sm">This attempt was cancelled before it was applied. No invitation was withdrawn by cancelling the attempt.</p>
+        {draft.action!=='withdraw'&&!url&&<div className="space-y-2"><p className="text-sm text-app-text-secondary">Want to send it yourself? Get a link to share.</p><button className={button} disabled={vm.busy} onClick={()=>void vm.checkShare(draft.request_id)}>Get invitation link</button></div>}</>
+        :outcome?.state==='cancelled'?<p className="text-sm">Nothing changed. This attempt was discarded before it took effect.</p>
         :outcome?.state==='rejected'?<p className="text-sm">{senderMessage(outcome.code)}</p>
-        :<p className="text-sm">Keep this original until its saved result or cancellation is confirmed. Retrying uses the same request.</p>}
+        :<p className="text-sm">We couldn’t confirm whether this went through. Check again, or try again. Trying again won’t send a second email.</p>}
       {vm.canAcknowledge?<button className={primary} disabled={vm.busy} onClick={()=>void acknowledge()}>Done</button>:<div className="flex flex-wrap gap-2">
-        <button className={button} disabled={vm.busy} onClick={()=>void vm.recover('status',draft.request_id)}>Check saved result</button>
-        <button className={primary} disabled={vm.busy} onClick={()=>void vm.recover('retry',draft.request_id)}>Retry original action</button>
-        <button className={button} disabled={vm.busy} onClick={()=>setCancelConfirm(draft.request_id)}>Cancel this attempt</button></div>}
-      {cancelConfirm===draft.request_id&&!terminal&&<div role="alertdialog" aria-modal="true" aria-label="Cancel original invitation attempt" className="space-y-3 rounded-lg border border-app-border p-3">
-        <p className="text-sm">Cancel only if this original action has not already committed. A saved action wins; existing membership remains unchanged.</p>
-        <button className={button} disabled={vm.busy} onClick={()=>setCancelConfirm(null)}>Keep original</button>{' '}
-        <button className={primary} disabled={vm.busy} onClick={()=>{setCancelConfirm(null);void vm.recover('cancel',draft.request_id);}}>Confirm cancellation</button></div>}
+        <button className={button} disabled={vm.busy} onClick={()=>void vm.recover('status',draft.request_id)}>Check again</button>
+        <button className={primary} disabled={vm.busy} onClick={()=>void vm.recover('retry',draft.request_id)}>Try again</button>
+        <button className={button} disabled={vm.busy} onClick={()=>setCancelConfirm(draft.request_id)}>Discard attempt</button></div>}
+      {cancelConfirm===draft.request_id&&!terminal&&<div role="alertdialog" aria-modal="true" aria-label="Discard this attempt" className="space-y-3 rounded-lg border border-app-border p-3">
+        <p className="text-sm">If it already went through, it stays. Discarding doesn’t withdraw an invitation or remove anyone.</p>
+        <button className={button} disabled={vm.busy} onClick={()=>setCancelConfirm(null)}>Keep it</button>{' '}
+        <button className={primary} disabled={vm.busy} onClick={()=>{setCancelConfirm(null);void vm.recover('cancel',draft.request_id);}}>Discard</button></div>}
     </section>:vm.context&&vm.review?<section role="alertdialog" aria-modal="true" aria-label="Review invitation action" className="space-y-4 rounded-xl border border-app-border p-4">
       <h3 className="text-lg font-semibold">{vm.review.action==='create'?'Review new invitation':vm.review.action==='resend'?'Review resend':'Review withdrawal'}</h3>
       {vm.review.action==='create'?<PayloadSummary payload={vm.review.payload}/>:vm.context.invitation&&terms(vm.context.invitation)}
-      <p className="text-sm">{vm.review.action==='withdraw'?'Withdraw this pending invitation. Existing household membership is preserved.':vm.review.action==='resend'?'Request another delivery attempt. Earlier links and the original access dates remain unchanged.':'Save this invitation and request available delivery. Delivery may remain unconfirmed.'}</p>
+      <p className="text-sm">{reviewMessage(vm.review)}</p>
       <div className="flex flex-wrap gap-2"><button className={button} disabled={vm.busy} onClick={vm.cancelReview}>Back to invitations</button>
-        <button className={primary} disabled={vm.busy} onClick={()=>void vm.submit(vm.context!.decision_token)}>{vm.busy?'Saving…':vm.review.action==='create'?'Confirm invitation':vm.review.action==='resend'?'Confirm resend':'Confirm withdrawal'}</button></div>
+        <button className={primary} disabled={vm.busy} onClick={()=>void vm.submit(vm.context!.decision_token)}>{vm.busy?'Saving…':vm.review.action==='create'?linkOnly(vm.review.payload)?'Create link':'Send invitation':vm.review.action==='resend'?'Confirm resend':'Confirm withdrawal'}</button></div>
     </section>:vm.listDenied?<p className="text-sm text-app-text-secondary">{vm.listError}</p>
       :<CreateInvitationForm key={vm.lifetime} homeId={homeId} disabled={vm.busy} prepare={vm.prepare}/>}
     {vm.ready&&!vm.blocked&&!vm.listDenied&&<section aria-label="Current invitations" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Current invitations</h3><button className={button} disabled={vm.busy} onClick={vm.refreshList}>Refresh invitations</button></div>
-      {vm.listError?<p role="alert" className="text-sm text-amber-800">{vm.listError}</p>:vm.invitations===null?<p role="status" className="text-sm">Checking current invitations…</p>:vm.invitations.length===0?<p className="text-sm text-app-text-secondary">No pending invitations.</p>:<ul className="space-y-3">{vm.invitations.map(i=><li key={i.id} data-invitation-id={i.id} className="space-y-3 rounded-lg border border-app-border p-3">
-        {terms(i)}<p className="text-xs text-app-text-secondary">Status: {i.expires_at&&Date.parse(i.expires_at)<=now?'Expired invitation':i.status}</p><div className="flex flex-wrap gap-2">
+      {vm.listError?<p role="alert" className="text-sm text-amber-800">{vm.listError}</p>:vm.invitations===null?<p role="status" className="text-sm">Loading invitations…</p>:vm.invitations.length===0?<p className="text-sm text-app-text-secondary">No pending invitations.</p>:<ul className="space-y-3">{vm.invitations.map(i=><li key={i.id} data-invitation-id={i.id} className="space-y-3 rounded-lg border border-app-border p-3">
+        {terms(i)}<p className="text-xs text-app-text-secondary">Status: {i.expires_at&&Date.parse(i.expires_at)<=now?'Expired':i.status==='pending'?'Waiting for a reply':i.status}</p><div className="flex flex-wrap gap-2">
           <button className={button} disabled={vm.busy||!!draft||!!vm.context||i.status!=='pending'||!!i.expires_at&&Date.parse(i.expires_at)<=now} onClick={()=>void vm.prepare({home_id:homeId,action:'resend',invitation_id:i.id})}>Resend invitation</button>
           <button className={button} disabled={vm.busy||!!draft||!!vm.context||i.status!=='pending'} onClick={()=>void vm.prepare({home_id:homeId,action:'withdraw',invitation_id:i.id})}>Withdraw invitation</button></div></li>)}</ul>}
     </section>}
-    <p className="text-xs text-app-text-secondary">Closing keeps any original action for recovery. <Link href={`/app/homes/${homeId}/invitations`} className="underline">Open invitation recovery</Link></p>
+    <p className="text-xs text-app-text-secondary">If you close this before an invitation finishes, you can check it later in <Link href={`/app/homes/${homeId}/invitations`} className="underline">Household invitations</Link>.</p>
   </div>;
+}
+/** A link-only invitation names no recipient: nothing is sent, the sender shares the link. */
+function linkOnly(p:SenderPayload){return !p.email&&!p.username&&!p.user_id;}
+function reviewMessage(review:{action:string;payload?:SenderPayload}){
+  if(review.action==='withdraw')return 'They won’t be able to accept it anymore. Anyone already in the household stays.';
+  if(review.action==='resend')return 'We’ll send the same invitation again. Links already sent keep working, and the expiry date doesn’t change.';
+  const p=review.payload;
+  if(!p||linkOnly(p))return 'You’ll get a link to share. Anyone with the link can accept it, so share it only with the person you’re inviting.';
+  return p.email?'We’ll email them the invitation. They join the household only if they accept.'
+    :'We’ll send it to their Pantopus notifications. They join the household only if they accept.';
 }
 function PayloadSummary({payload:p}:{payload:SenderPayload}){return <dl className="space-y-2 text-sm"><div><dt className="font-medium">Recipient</dt><dd className="break-words">{p.email|| (p.username?'@'+p.username:p.user_id?'Selected Pantopus account':'Anyone with the invitation link')}</dd></div>
   <div><dt className="font-medium">Household role</dt><dd>{roles.find(r=>r[0]===p.preset_key)?.[1]||p.relationship||'Member'}</dd></div>
@@ -109,7 +119,7 @@ function CreateInvitationForm({homeId,disabled,prepare}:{homeId:string;disabled:
         :mode==='username'?<div className="space-y-2"><label className="block space-y-1 text-sm"><span>Search by username</span><input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} className={field} autoComplete="off"/></label>
           {searching&&<p role="status" className="text-sm">Searching…</p>}{searchError&&<p role="alert" className="text-sm text-red-700">{searchError}</p>}
           {selected?<p className="text-sm">Selected @{selected.username}</p>:results.map(u=><button type="button" key={u.id} className={button+' block w-full text-left'} onClick={()=>{setSelected(u);setQuery(u.username);}}>{u.name||u.username} (@{u.username})</button>)}
-          {!selected&&!searching&&!searchError&&query.trim().length>=2&&results.length===0&&<p className="text-sm">No users found.</p>}</div>:<p className="text-sm">Anyone with this link can accept its household invitation. Share it only with the intended recipient.</p>}
+          {!selected&&!searching&&!searchError&&query.trim().length>=2&&results.length===0&&<p className="text-sm">No users found.</p>}</div>:<p className="text-sm">Anyone with the link can accept this invitation. Share it only with the person you’re inviting.</p>}
       <label className="block space-y-1 text-sm"><span>Role in household</span><select value={preset} onChange={e=>setPreset(e.target.value)} className={field}>{roles.map(r=><option key={r[0]} value={r[0]}>{r[1]}</option>)}</select></label>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><label className="space-y-1 text-sm"><span>Start date (optional)</span><input type="date" value={start} onChange={e=>setStart(e.target.value)} className={field}/></label>
         <label className="space-y-1 text-sm"><span>End date (inclusive, optional)</span><input type="date" value={end} onChange={e=>setEnd(e.target.value)} className={field}/></label></div>

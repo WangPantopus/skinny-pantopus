@@ -24,7 +24,7 @@ export function validateInvitationContext(value: unknown, session: InvitationSes
   if (!c || !invitationUUID(c.home_id) || !invitationUUID(c.invitation_id) || !hash(c.decision_token)
     || !validInvitationSession(c.session) || c.session.actor_id !== session.actor_id || c.session.session_scope !== session.session_scope
     || c.preview?.home?.id !== c.home_id || c.preview?.invitation?.id !== c.invitation_id
-    || c.preview.invitation.status !== 'pending') throw new Error('The current invitation could not be checked. Reopen it to retry.');
+    || c.preview.invitation.status !== 'pending') throw new Error('Couldn’t check this invitation. Reload to try again.');
   validateInvitationPreview(c.preview);
 }
 export function validInvitationOutcome(value: unknown, draft: InvitationDraft): value is InvitationOutcome {
@@ -57,7 +57,7 @@ export function validInvitationDraft(value: unknown, origin: string, actor: stri
 }
 export const invitationDecisionMessage = (code?: string) => ({
   INVITE_EMAIL_MISMATCH: 'This invitation belongs to a different account. Sign in to the account the sender invited.',
-  INVITE_DECISION_CHANGED: 'The invitation details changed. Acknowledge this result, then review the current invitation before deciding again.',
+  INVITE_DECISION_CHANGED: 'The invitation details changed. Review it again before answering.',
   INVITE_EXPIRED: 'This invitation expired. Ask the household for a new invitation.',
   INVITE_ALREADY_USED: 'This invitation was already accepted, declined or withdrawn. My Homes shows your current access.',
   INVITE_NOT_FOUND: 'This invitation is no longer available. Check the complete link with the sender.',

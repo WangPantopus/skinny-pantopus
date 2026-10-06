@@ -57,7 +57,7 @@ class HomeInvitationSenderCodecTest {
         val selected = fixture.codec.context(context, fixture.scope, fixture.serverSession, fixture.intent("withdraw"))
         assertTrue(selected.summary.contains("@synthetic_recipient"))
         assertTrue(selected.summary.contains("Invitation expires:"))
-        assertTrue(selected.summary.contains("Permission preset: restricted_member"))
+        assertTrue(selected.summary.contains("Relationship: Restricted member"))
         listOf(
             context.replace("\"proposed_role\":\"member\"", "\"proposed_role\":42"),
             context.replace("\"proposed_role_base\":\"member\"", "\"proposed_role_base\":42"),
@@ -89,9 +89,9 @@ class HomeInvitationSenderCodecTest {
           "proposed_role_base":"guest","proposed_preset_key":"access_request:synthetic-approved-request",
           "access_start_at":null,"access_end_at":null,"expires_at":"2026-09-11T00:00:00Z"}}"""
         val selected = fixture.codec.context(context, fixture.scope, fixture.serverSession, fixture.intent("resend"))
-        assertTrue(selected.summary.contains("Role: guest"))
-        assertFalse(selected.summary.contains("Role: member"))
-        assertTrue(selected.summary.contains("Household approval"))
+        assertTrue(selected.summary.contains("Role: Guest"))
+        assertFalse(selected.summary.contains("Role: Member"))
+        assertTrue(selected.summary.contains("Approved from a request to join"))
         assertFalse(selected.summary.contains("access_request:"))
         val legacy = context.replace("\"proposed_role_base\":\"guest\"", "\"proposed_role_base\":null")
         assertTrue(
@@ -165,6 +165,6 @@ class HomeInvitationSenderCodecTest {
         assertTrue(senderDeliveryText(receipt).contains("Email delivery is unconfirmed"))
         assertTrue(senderDeliveryText(receipt).contains("Push or device delivery is not confirmed"))
         assertTrue(senderConfirmationText("create").contains("separate from residency or ownership"))
-        assertEquals("Saved original action: Create invitation", senderOriginalActionText(original))
+        assertEquals("Action: Send invitation", senderOriginalActionText(original))
     }
 }
