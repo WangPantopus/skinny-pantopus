@@ -3,7 +3,7 @@
 // Single source of truth for formatting, status styles, and filters
 // ============================================================
 
-export { formatTimeAgo, formatDate, formatTimestamp, getDateKey, formatDateLabel, formatExpiration } from './time';
+export { formatTimeAgo, formatDate, parseDisplayDate, formatTimestamp, getDateKey, formatDateLabel, formatExpiration } from './time';
 export { getInitials } from './text';
 export {
   POST_TYPE_CONFIG,
