@@ -303,8 +303,8 @@ export default function GuestViewPage() {
             Guest Access
           </span>
           {pass.kind && (
-            <span className="text-[10px] font-medium text-app-text-muted bg-app-surface-sunken px-2 py-0.5 rounded-full capitalize">
-              {pass.kind.replace('_', ' ')}
+            <span className="text-[10px] font-medium text-app-text-muted bg-app-surface-sunken px-2 py-0.5 rounded-full">
+              {GUEST_KIND_LABELS[pass.kind] ?? pass.kind.replace(/_/g, ' ')}
             </span>
           )}
         </div>
@@ -459,6 +459,11 @@ function GuestCard({
     </div>
   );
 }
+
+// The names the host saw when creating the pass.
+const GUEST_KIND_LABELS: Record<string, string> = {
+  wifi_only: 'Wi-Fi only', guest: 'Guest', vendor: 'Vendor / service', airbnb: 'Airbnb / custom',
+};
 
 // ---- Wi-Fi Card with reveal + QR ----
 
