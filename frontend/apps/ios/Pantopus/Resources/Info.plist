@@ -45,21 +45,21 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Pantopus uses the camera for profile photos, listing images, mail capture, and taking photos to send in chat.</string>
+	<string>Pantopus uses the camera for profile photos, photos of your mail and home, and photos you send in chat.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Pantopus uses Face ID to continue signed in after a reinstall, to unlock the app, and to confirm sensitive actions like payments and removing devices.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Pantopus connects to the local development server on your Mac while testing.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Pantopus uses your location to show gigs and neighbors near you, and for location-based notifications.</string>
+	<string>Pantopus uses your location to help find your address and show nearby activity.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Pantopus uses your location to help find your address and show nearby activity.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Pantopus uses the microphone for voice messages in chat.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Pantopus saves images you export, like your booking QR code, to your photo library.</string>
+	<string>Pantopus saves images you choose to export, like a QR code, to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Pantopus uses your photo library to upload profile photos, listing images, and mail.</string>
+	<string>Pantopus uses photos you choose for your profile, posts, home records and mail.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>PantopusAPIBaseURL</key>

@@ -63,6 +63,14 @@ const WEEKDAYS: { id: PickupWeekday; label: string }[] = [
   { id: 'SU', label: 'Sun' },
 ];
 
+const PICKUP_KINDS: PlaceCalendarKind[] = ['garbage', 'recycling', 'yard_waste', 'bulk_pickup'];
+
+// Same wording as the apps' holiday line.
+function holidayMoveLine(e: PlaceCalendarEvent): string | null {
+  if (!e.moved_from || !e.holiday || !e.shift_days || e.shift_days <= 0) return null;
+  return e.shift_days === 1 ? `Moved a day for ${e.holiday}.` : `Moved for ${e.holiday}.`;
+}
+
 function whenLabel(e: PlaceCalendarEvent): string {
   if (e.days_until === 0) return 'Today';
   if (e.days_until === 1) return 'Tomorrow';
@@ -82,6 +90,7 @@ function EventRow({ e }: { e: PlaceCalendarEvent }) {
           <span className={`shrink-0 text-[12.5px] font-semibold tabular-nums ${soon ? 'text-app-home' : 'text-app-text-secondary'}`}>{whenLabel(e)}</span>
         </div>
         {e.detail ? <p className="text-[12.5px] leading-[17px] text-app-text-secondary mt-0.5">{e.detail}</p> : null}
+        {holidayMoveLine(e) ? <p className="text-[12.5px] leading-[17px] text-app-text-secondary mt-0.5">{holidayMoveLine(e)}</p> : null}
         <p className="text-[11.5px] leading-4 text-app-text-muted mt-1">
           {e.source ?? 'Pantopus registry'}
           {e.confidence === 'unverified' ? ' · unconfirmed, please double-check' : ''}
@@ -117,6 +126,10 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
   const [error, setError] = useState<string | null>(null);
 
   const upcoming = calendar.upcoming ?? [];
+  // A home whose pickups still need a day hears how to start them, as in the apps.
+  const setupMessage = homeId && calendar.needs_pickup_day && !upcoming.some((e) => PICKUP_KINDS.includes(e.kind))
+    ? 'Set your pickup day and your pickups start here.'
+    : null;
   const dateOptions = Array.from({ length: frequency === 'weekly' ? 7 : 14 }, (_, offset) => {
     const date = new Date(`${calendar.today}T12:00:00Z`);
     date.setUTCDate(date.getUTCDate() + offset);
@@ -229,14 +242,17 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
       {upcoming.length === 0 ? (
         <div className="flex items-start gap-2.5 py-3">
           <Info size={16} strokeWidth={2} className="shrink-0 mt-0.5 text-app-text-muted" />
-          <p className="text-[13.5px] text-app-text-secondary leading-[19px]">Nothing on the calendar for the next two weeks.</p>
+          <p className="text-[13.5px] text-app-text-secondary leading-[19px]">{setupMessage ?? 'Nothing on the calendar for the next two weeks.'}</p>
         </div>
       ) : (
-        <ul className="divide-y divide-app-border-subtle">
-          {upcoming.map((e) => (
-            <EventRow key={`${e.rule_id}:${e.date}`} e={e} />
-          ))}
-        </ul>
+        <>
+          {setupMessage ? <p className="text-[13.5px] text-app-text-secondary leading-[19px] py-2">{setupMessage}</p> : null}
+          <ul className="divide-y divide-app-border-subtle">
+            {upcoming.map((e) => (
+              <EventRow key={`${e.rule_id}:${e.date}`} e={e} />
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );

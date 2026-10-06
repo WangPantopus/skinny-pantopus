@@ -172,6 +172,10 @@ public struct HomeDetail: Decodable, Sendable, Hashable {
     public let isOwner: Bool
     public let ownershipStatus: String?
     public let residencyStatus: String?
+    /// `HomeOccupancy.verification_source`: `address`, `household` or `legacy`.
+    /// `household` means verified only through an invitation or a manager's
+    /// approval (F3b), not by proving the address.
+    public let residencySource: String?
     public let roleBase: String?
     public let isPendingOwner: Bool
     public let pendingClaimId: String?
@@ -194,6 +198,7 @@ public struct HomeDetail: Decodable, Sendable, Hashable {
         isOwner = try c.decodeIfPresent(Bool.self, forKey: .isOwner) ?? false
         ownershipStatus = try c.decodeIfPresent(String.self, forKey: .ownershipStatus)
         residencyStatus = try c.decodeIfPresent(String.self, forKey: .residencyStatus)
+        residencySource = try c.decodeIfPresent(String.self, forKey: .residencySource)
         roleBase = try c.decodeIfPresent(String.self, forKey: .roleBase)
         isPendingOwner = try c.decodeIfPresent(Bool.self, forKey: .isPendingOwner) ?? false
         pendingClaimId = try c.decodeIfPresent(String.self, forKey: .pendingClaimId)
@@ -210,6 +215,7 @@ public struct HomeDetail: Decodable, Sendable, Hashable {
     private enum FlatKeys: String, CodingKey {
         case owner, occupants, location
         case ownershipStatus = "ownership_status", residencyStatus = "residency_status", roleBase = "role_base"
+        case residencySource = "residency_source"
         case isOwner, isPendingOwner, pendingClaimId, isOccupant, owners
         case canDeleteHome = "can_delete_home"
         case securityState = "security_state"

@@ -254,6 +254,12 @@ export interface PlaceCalendarEvent {
   source_url: string | null;
   /** 'unverified' = seeded by hand; the card says so. */
   confidence: 'official' | 'unverified';
+  /** Set when an official holiday rule moved this pickup: its original date. */
+  moved_from?: string | null;
+  /** The holiday that moved it, e.g. "Thanksgiving". */
+  holiday?: string | null;
+  /** How many days later the pickup moved. */
+  shift_days?: number | null;
 }
 
 /**

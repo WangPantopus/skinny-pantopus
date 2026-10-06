@@ -51,6 +51,22 @@ const createNextConfig = (phase) => ({
   // apex serves these URLs with 200 + same JSON — redirects on /.well-known can break verification).
   async headers() {
     return [
+      // Clickjacking protection for every page except booking embeds, which
+      // other sites frame on purpose. Rules below override these per path.
+      {
+        source: '/((?!book/[^/]+/embed).*)',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+        ],
+      },
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
       {
         source: '/status/:token',
         headers: [

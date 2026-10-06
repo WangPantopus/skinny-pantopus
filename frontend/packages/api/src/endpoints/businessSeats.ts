@@ -53,6 +53,8 @@ export async function createSeatInvite(
   message: string;
   seat: SeatListItem;
   invite_token: string;
+  /** True when this renewed the inviter's pending invite for the same email (the old link stops working). */
+  renewed?: boolean;
 }> {
   return post(`/api/businesses/${businessId}/seats/invite`, data);
 }

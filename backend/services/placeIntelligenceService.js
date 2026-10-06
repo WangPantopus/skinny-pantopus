@@ -821,6 +821,7 @@ const EXEMPTION_UNAVAILABLE_COPY = {
   ATTOM_NOT_CONFIGURED: "Exemption records aren't available for your area yet.",
   ATTOM_UNAVAILABLE: "County exemption records aren't reachable right now.",
   NO_PARCEL_MATCH: "We couldn't match this address to a county parcel record.",
+  NO_PROPERTY_FOUND: "We couldn't match this address to a county parcel record.",
 };
 
 // Real Rent Benchmark (Wave 3) — what verified neighbors on this
@@ -1052,8 +1053,10 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
     }
   }
 
+  // An unreadable privacy row fails closed for the one toggle this payload
+  // honors: the unit stays hidden, and the rest of Place still loads.
   const [privacy, ...groups] = await Promise.all([
-    getHomePrivacy(homeId),
+    getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
     ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access })),
   ]);
 

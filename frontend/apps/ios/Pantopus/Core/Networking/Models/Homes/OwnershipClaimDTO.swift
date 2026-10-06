@@ -16,7 +16,9 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let homeId: String
     public let claimType: String
-    public let method: String
+    /// Nullable in `HomeOwnershipClaim`: real submissions always set it, but
+    /// older rows may not, and one such row must not fail the whole list.
+    public let method: String?
     public let status: String
     public let createdAt: String
     public let updatedAt: String

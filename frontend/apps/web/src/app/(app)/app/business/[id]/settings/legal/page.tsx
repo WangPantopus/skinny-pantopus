@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
-import { toast } from '@/components/ui/toast-store';
 import type { VerificationStatus } from '@pantopus/api';
 
 // ---- Status badge helper ----
@@ -63,7 +62,6 @@ export default function BusinessSettingsLegalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [verificationData, setVerificationData] = useState<VerificationStatus | null>(null);
-  const [access, setAccess] = useState<{ isOwner: boolean }>({ isOwner: false });
 
   // Legal settings (kept from original page)
   const [legalForm, setLegalForm] = useState({ legal_name: '', tax_id_last4: '', support_email: '' });
@@ -86,22 +84,15 @@ export default function BusinessSettingsLegalPage() {
   const uploadInFlight = useRef(false);
   const pendingUpload = useRef<{ draft: string; fileId: string } | null>(null);
 
-  // Review state
-  const [reviewingId, setReviewingId] = useState<string | null>(null);
-  const [reviewNotes, setReviewNotes] = useState('');
-  const [reviewing, setReviewing] = useState(false);
-
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [verRes, privateRes, accessRes] = await Promise.all([
+      const [verRes, privateRes] = await Promise.all([
         api.businesses.getVerificationStatus(businessId),
         api.businesses.getBusinessPrivate(businessId).catch(() => ({ private: {} as Record<string, any> })),
-        api.businessIam.getMyBusinessAccess(businessId).catch(() => ({ isOwner: false })),
       ]);
       setVerificationData(verRes);
-      setAccess({ isOwner: (accessRes as { isOwner?: boolean }).isOwner || false });
 
       const priv = (privateRes as { private?: Record<string, any> }).private || {};
       const privLegalName = typeof priv.legal_name === 'string' ? priv.legal_name : '';
@@ -209,24 +200,6 @@ export default function BusinessSettingsLegalPage() {
     }
   };
 
-  // ---- Evidence review ----
-  const handleReview = async (evidenceId: string, decision: 'approved' | 'rejected') => {
-    setReviewing(true);
-    try {
-      await api.businesses.reviewVerificationEvidence(businessId, {
-        evidence_id: evidenceId,
-        decision,
-        notes: reviewNotes.trim() || undefined,
-      });
-      setReviewingId(null);
-      setReviewNotes('');
-      await load();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Review failed');
-    } finally {
-      setReviewing(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -433,72 +406,7 @@ export default function BusinessSettingsLegalPage() {
           </div>
         )}
 
-        {/* Evidence Review Section (owner only) */}
-        {access.isOwner && pendingEvidence.length > 0 && (
-          <div className="bg-app-surface border border-app-border rounded-xl p-5">
-            <h2 className="text-sm font-semibold text-app-text mb-1">Review Pending Evidence</h2>
-            <p className="text-xs text-app-text-muted mb-3">
-              In v1.1, this will be restricted to platform administrators.
-            </p>
-            <div className="space-y-3">
-              {pendingEvidence.map((e) => (
-                <div key={e.id} className="border border-app-border rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-app-text">
-                        {EVIDENCE_TYPE_LABELS[e.type] || e.type}
-                      </span>
-                      <EvidenceStatusBadge status={e.status} />
-                    </div>
-                    <span className="text-xs text-app-text-muted">
-                      {new Date(e.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  {reviewingId === e.id ? (
-                    <div className="space-y-2">
-                      <textarea
-                        rows={2}
-                        value={reviewNotes}
-                        onChange={(ev) => setReviewNotes(ev.target.value)}
-                        placeholder="Notes (optional)"
-                        className="w-full rounded-lg border border-app-border px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-violet-500"
-                      />
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleReview(e.id, 'approved')}
-                          disabled={reviewing}
-                          className="px-3 py-1.5 rounded-lg bg-green-700 text-white text-sm font-semibold hover:bg-green-800 disabled:opacity-50"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleReview(e.id, 'rejected')}
-                          disabled={reviewing}
-                          className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
-                        >
-                          Reject
-                        </button>
-                        <button
-                          onClick={() => { setReviewingId(null); setReviewNotes(''); }}
-                          className="px-3 py-1.5 rounded-lg border border-app-border text-sm text-app-text-strong hover:bg-app-hover"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => { setReviewingId(e.id); setReviewNotes(''); }}
-                      className="text-sm text-violet-600 hover:underline"
-                    >
-                      Review
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Documents are reviewed by Pantopus admins (Admin → Business verification). */}
 
         {/* Legal Settings (original page content preserved) */}
         <div className="bg-app-surface border border-app-border rounded-xl p-5">

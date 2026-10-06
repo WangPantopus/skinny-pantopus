@@ -296,7 +296,9 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
         } else {
             rowBody
                 .contentShape(Rectangle())
-                .onTapGesture { handleTap(rowId: row.id, control: activeControl, destructive: row.destructive) }
+                .onTapGesture {
+                    handleTap(rowId: row.id, control: activeControl, destructive: row.destructive, toggleEnabled: row.toggleEnabled)
+                }
                 .accessibilityIdentifier(row.accessibilityIdentifier ?? "groupedListRow_\(row.id)")
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(accessibilityLabel(row, control: activeControl))
@@ -499,17 +501,26 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
 
     // MARK: - Interaction
 
-    private func handleTap(rowId: String, control: RowControl, destructive: Bool) {
+    private func handleTap(rowId: String, control: RowControl, destructive: Bool, toggleEnabled: Bool) {
         switch control {
         case .chevron, .chipStatus:
             Task { await dataSource.tapRow(rowId) }
         case .radio:
             optimisticOverrides[rowId] = .radio(isSelected: true)
             Task { await dataSource.selectRadio(rowId) }
-        case .toggle, .slider, .channelTriad, .chips:
-            // Toggle / slider / channel chips / value chips already
-            // drive their own callbacks. Chevron / chipStatus rows also
-            // handle taps for navigation even when destructive.
+        case let .toggle(isOn):
+            // The row's tap gesture takes taps on the switch itself, so a
+            // tap anywhere on the row (or VoiceOver's activate on the
+            // combined element) flips it; dragging the knob still works.
+            if destructive {
+                Task { await dataSource.tapRow(rowId) }
+            } else if toggleEnabled {
+                flipToggle(rowId: rowId, to: !isOn, previous: isOn)
+            }
+        case .slider, .channelTriad, .chips:
+            // Slider / channel chips / value chips already drive their own
+            // callbacks. Chevron / chipStatus rows also handle taps for
+            // navigation even when destructive.
             if destructive {
                 Task { await dataSource.tapRow(rowId) }
             }

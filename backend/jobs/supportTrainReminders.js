@@ -23,6 +23,38 @@ function localReminderTime(reservation, now) {
   });
 }
 
+// A reservation is claimed (its marker set while it is still reserved and
+// unmarked) before anything is sent, so overlapping runs, or a run after a
+// failed marker write, never send twice, and a helper who cancelled first is
+// never reminded. A delivery that doesn't go out releases the claim, so the
+// next run retries it.
+async function claimReminder(reservationId, marker, claimedAt) {
+  const { data, error } = await supabaseAdmin
+    .from('SupportTrainReservation')
+    .update({ [marker]: claimedAt })
+    .eq('id', reservationId)
+    .eq('status', 'reserved')
+    .is(marker, null)
+    .select('id')
+    .maybeSingle();
+  if (error) {
+    logger.error('[supportTrainReminders] reminder claim failed', { errorCode: error.code });
+    return false;
+  }
+  return Boolean(data);
+}
+
+async function releaseReminder(reservationId, marker, claimedAt) {
+  const { error } = await supabaseAdmin
+    .from('SupportTrainReservation')
+    .update({ [marker]: null })
+    .eq('id', reservationId)
+    .eq(marker, claimedAt);
+  if (error) {
+    logger.error('[supportTrainReminders] reminder release failed', { errorCode: error.code });
+  }
+}
+
 async function runSupportTrainReminders() {
   await _send24hReminders();
   await _sendDayOfReminders();
@@ -63,6 +95,8 @@ async function _send24hReminders() {
     let sent = 0;
     for (const res of tomorrowReservations) {
       const slot = res.SupportTrainSlot;
+      const claimedAt = now.toISOString();
+      if (!(await claimReminder(res.id, 'last_reminder_sent', claimedAt))) continue;
       const delivery = await emitSupportTrainEvent({
         event: 'support_train.reservation_reminder_24h',
         supportTrainId: res.support_train_id,
@@ -84,18 +118,8 @@ async function _send24hReminders() {
         },
       });
 
-      if (delivery?.delivered !== true) continue;
-
-      // Mark as reminded so we don't re-send
-      const { error: markError } = await supabaseAdmin
-        .from('SupportTrainReservation')
-        .update({ last_reminder_sent: now.toISOString() })
-        .eq('id', res.id)
-        .eq('status', 'reserved')
-        .is('last_reminder_sent', null);
-
-      if (markError) {
-        logger.error('[supportTrainReminders] reminder marker failed', { errorCode: markError.code });
+      if (delivery?.delivered !== true) {
+        await releaseReminder(res.id, 'last_reminder_sent', claimedAt);
         continue;
       }
 
@@ -153,6 +177,8 @@ async function _sendDayOfReminders() {
     let sent = 0;
     for (const res of eligible) {
       const slot = res.SupportTrainSlot;
+      const claimedAt = now.toISOString();
+      if (!(await claimReminder(res.id, 'day_of_reminder_sent_at', claimedAt))) continue;
       const delivery = await emitSupportTrainEvent({
         event: 'support_train.reservation_reminder_dayof',
         supportTrainId: res.support_train_id,
@@ -174,18 +200,8 @@ async function _sendDayOfReminders() {
         },
       });
 
-      if (delivery?.delivered !== true) continue;
-
-      // Mark as reminded
-      const { error: markError } = await supabaseAdmin
-        .from('SupportTrainReservation')
-        .update({ day_of_reminder_sent_at: now.toISOString() })
-        .eq('id', res.id)
-        .eq('status', 'reserved')
-        .is('day_of_reminder_sent_at', null);
-
-      if (markError) {
-        logger.error('[supportTrainReminders] reminder marker failed', { errorCode: markError.code });
+      if (delivery?.delivered !== true) {
+        await releaseReminder(res.id, 'day_of_reminder_sent_at', claimedAt);
         continue;
       }
 
