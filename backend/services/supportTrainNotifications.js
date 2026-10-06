@@ -13,7 +13,7 @@
  */
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { createNotification, createBulkNotifications } = require('./notificationService');
-const { sendGuestReservationReminderEmail, sendGuestTrainClosedEmail } = require('./emailService');
+const { sendGuestReservationReminderEmail, sendGuestSignupReleasedEmail } = require('./emailService');
 const { inferTimezone } = require('./context/locationResolver');
 const { DateTime } = require('luxon');
 const logger = require('../utils/logger');
@@ -178,7 +178,17 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
       }
 
       case 'support_train.slot_canceled_by_organizer': {
-        // Notify the helper whose reservation was canceled
+        // Notify the helper whose reservation was canceled; an email-only guest gets an email.
+        if (!payload.helper_user_id && payload.helper_guest_email) {
+          await sendGuestSignupReleasedEmail({
+            toEmail: payload.helper_guest_email,
+            guestName: payload.helper_guest_name || 'helper',
+            trainTitle: title,
+            slots: [{ slotLabel: payload.slot_label || 'Your signup', slotDate: formatSlotDate(payload.slot_date) }],
+            removed: true,
+            reason: payload.organizer_reason,
+          });
+        }
         if (payload.helper_user_id) {
           const slotLabel = payload.slot_label || 'your slot';
           const slotDate = formatSlotDate(payload.slot_date);
@@ -438,7 +448,7 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
           );
         }
         for (const h of helpers.filter((x) => !x.userId)) {
-          await sendGuestTrainClosedEmail({
+          await sendGuestSignupReleasedEmail({
             toEmail: h.guestEmail,
             guestName: h.guestName || 'helper',
             trainTitle: title,

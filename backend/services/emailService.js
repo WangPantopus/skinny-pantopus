@@ -696,11 +696,15 @@ async function sendGuestReservationReminderEmail(options) {
 }
 
 /**
- * Tell an email-only Support Train guest that the organizer closed the Train, so the signups
- * listed (label and display date, e.g. "Fri, Oct 9") are no longer needed.
+ * Tell an email-only Support Train guest that the signups listed (label and display date, e.g.
+ * "Fri, Oct 9") are no longer needed: the organizer closed the Train, or (`removed`) took this
+ * signup off it, with their optional reason.
  */
-async function sendGuestTrainClosedEmail({ toEmail, guestName, trainTitle, slots }) {
-  const subject = `No longer needed: ${trainTitle}`;
+async function sendGuestSignupReleasedEmail({ toEmail, guestName, trainTitle, slots, removed = false, reason = null }) {
+  const subject = removed ? `Signup removed: ${trainTitle}` : `No longer needed: ${trainTitle}`;
+  const heading = removed ? 'Your signup was removed' : 'This Support Train has closed';
+  const what = removed ? 'an organizer removed your signup for' : 'the organizer closed';
+  const reasonText = typeof reason === 'string' && reason.trim() ? reason.trim() : null;
   const slotRows = (slots || []).map((s) => `${s.slotLabel} · ${s.slotDate}`);
 
   const html = `
@@ -715,18 +719,20 @@ async function sendGuestTrainClosedEmail({ toEmail, guestName, trainTitle, slots
 
     <div style="background:#111827; padding:32px 32px 24px; text-align:center;">
       <div style="font-size:32px; margin-bottom:8px;">🚂</div>
-      <h1 style="color:#ffffff; font-size:20px; font-weight:600; margin:0;">This Support Train has closed</h1>
+      <h1 style="color:#ffffff; font-size:20px; font-weight:600; margin:0;">${heading}</h1>
     </div>
 
     <div style="padding:32px;">
       <p style="color:#374151; font-size:15px; line-height:1.6; margin:0 0 16px;">
-        Hi <strong>${escapeHtml(guestName)}</strong>, the organizer closed <strong>${escapeHtml(trainTitle)}</strong>. You don't need to bring anything for:
+        Hi <strong>${escapeHtml(guestName)}</strong>, ${what} <strong>${escapeHtml(trainTitle)}</strong>. You don't need to bring anything for:
       </p>
 
       <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin:0 0 20px;">
         ${slotRows.map((row) => `<div style="font-size:15px; font-weight:600; color:#111827;">📅 ${escapeHtml(row)}</div>`).join('\n        ')}
       </div>
-
+${reasonText ? `
+      <p style="color:#374151; font-size:14px; line-height:1.6; margin:0 0 16px;">Reason: ${escapeHtml(reasonText)}</p>
+` : ''}
       <p style="color:#374151; font-size:14px; line-height:1.6; margin:0;">
         Thank you for offering to help.
       </p>
@@ -745,10 +751,10 @@ async function sendGuestTrainClosedEmail({ toEmail, guestName, trainTitle, slots
   const text = `
 ${subject}
 
-Hi ${guestName}, the organizer closed ${trainTitle}. You don't need to bring anything for:
+Hi ${guestName}, ${what} ${trainTitle}. You don't need to bring anything for:
 
 ${slotRows.join('\n')}
-
+${reasonText ? `\nReason: ${reasonText}\n` : ''}
 Thank you for offering to help.
 `;
 
@@ -1136,7 +1142,7 @@ module.exports = {
   sendMonthlyReceipt,
   sendGuestReservationConfirmationEmail,
   sendGuestReservationReminderEmail,
-  sendGuestTrainClosedEmail,
+  sendGuestSignupReleasedEmail,
   sendGuestReservationAddressEmail,
   sendDisplayNameMigrationEmail,
   buildDisplayNameMigrationEmailContent,
