@@ -289,6 +289,8 @@ private struct PlaceResidencyClaimRow: View {
     let claim: ResidencyClaim
     let vm: PlaceResidencyPassViewModel
     @State private var now = Date()
+    /// Revoking can't be undone: the shared link stops verifying for everyone who has it.
+    @State private var confirmingRevoke = false
 
     private var status: ResidencyClaimStatus {
         if claim.status == .active, let expiry = PlacePresentation.parseISO(claim.expiresAt), expiry <= now {
@@ -342,7 +344,7 @@ private struct PlaceResidencyClaimRow: View {
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.Color.primarySolid)
                         Button(role: .destructive) {
-                            Task { await vm.revoke(claim.id) }
+                            confirmingRevoke = true
                         } label: {
                             Text("Revoke")
                                 .font(.system(size: 13, weight: .semibold))
@@ -359,6 +361,13 @@ private struct PlaceResidencyClaimRow: View {
                 do { try await Task.sleep(for: .seconds(max(0, expiry.timeIntervalSinceNow))) } catch { return }
                 now = Date()
             }
+        }
+        .alert("Revoke this pass?", isPresented: $confirmingRevoke) {
+            Button("Revoke pass", role: .destructive) { Task { await vm.revoke(claim.id) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Its link and code stop checking out right away for anyone you shared them with. "
+                + "You can create a new pass any time.")
         }
     }
 }
