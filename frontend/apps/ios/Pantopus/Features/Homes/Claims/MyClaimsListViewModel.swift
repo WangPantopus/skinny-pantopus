@@ -102,7 +102,7 @@ final class MyClaimsListViewModel: ListOfRowsDataSource {
         let claimId = claim.id
         return RowModel(
             id: claim.id,
-            title: "Claim \(claim.id.prefix(8))",
+            title: claim.home?.label ?? "Claim \(claim.id.prefix(8))",
             subtitle: subtitle(for: claim),
             template: .statusChip,
             leading: .icon(.shieldCheck, tint: Theme.Color.primary600),

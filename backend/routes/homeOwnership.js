@@ -191,13 +191,14 @@ router.get('/my-ownership-claims', verifyToken, async (req, res) => {
 
     const { data: claims, error } = await supabaseAdmin
       .from('HomeOwnershipClaim')
-      .select('id, home_id, claim_type, state, claim_phase_v2, method, created_at, updated_at')
+      .select('id, home_id, claim_type, state, claim_phase_v2, method, created_at, updated_at, home:home_id ( address, address2, city, state )')
       .eq('claimant_user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    // Opaque handshake: mask internal states for the claimant
+    // Opaque handshake: mask internal states for the claimant. The claimed
+    // address is the one they entered, so their own claim can name it.
     const maskedClaims = (claims || []).map(c => ({
       id: c.id,
       home_id: c.home_id,
@@ -206,6 +207,10 @@ router.get('/my-ownership-claims', verifyToken, async (req, res) => {
       status: maskClaimState(c.state, c.claim_phase_v2),
       created_at: c.created_at,
       updated_at: c.updated_at,
+      home: c.home ? {
+        address: c.home.address || null, address2: c.home.address2 || null,
+        city: c.home.city || null, state: c.home.state || null,
+      } : null,
     }));
 
     res.set('Cache-Control', 'private, no-store');

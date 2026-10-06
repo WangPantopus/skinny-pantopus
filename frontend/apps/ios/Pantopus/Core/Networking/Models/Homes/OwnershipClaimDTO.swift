@@ -22,6 +22,27 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
     public let status: String
     public let createdAt: String
     public let updatedAt: String
+    /// The address the person claimed (their own entry), when the server sends it.
+    public var home: ClaimedHome?
+
+    /// The claimed Home's address lines.
+    public struct ClaimedHome: Decodable, Sendable, Hashable {
+        public let address: String?
+        public let address2: String?
+        public let city: String?
+        public let state: String?
+
+        /// "901 C Street Unit 4, Vancouver", or nil without a street.
+        var label: String? {
+            let street = [address, address2]
+                .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            guard !street.isEmpty else { return nil }
+            guard let city = city?.trimmingCharacters(in: .whitespaces), !city.isEmpty else { return street }
+            return "\(street), \(city)"
+        }
+    }
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -30,6 +51,7 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
         case method, status
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case home
     }
 }
 

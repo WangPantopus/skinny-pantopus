@@ -132,7 +132,7 @@ class WaitingRoomViewModel
                     _phase.value =
                         WaitingRoomPhase.Approved(
                             StatusWaitingContent.claimSubmitted(
-                                homeName = resolvedAddress(),
+                                homeName = resolvedAddress(claim.home),
                                 approved = true,
                                 submittedOn = dayCaption(claim.createdAt),
                                 decidedOn = dayCaption(claim.updatedAt),
@@ -144,7 +144,7 @@ class WaitingRoomViewModel
                 return
             }
             val ref = claim.id.take(CLAIM_REF_LENGTH).uppercase()
-            val address = resolvedAddress()
+            val address = resolvedAddress(claim.home)
             _content.value =
                 if (seedState == WaitingRoomState.MoreInfoRequested) {
                     WaitingRoomContent.moreInfoRequested(
@@ -215,7 +215,9 @@ class WaitingRoomViewModel
          * Best-effort street address for this home. Falls back to the generic
          * "Your home" label rather than inventing an address.
          */
-        private suspend fun resolvedAddress(): String =
+        // A pending claimant can't read the Home yet, so their own claim's
+        // address comes next; "Your home" is the last resort.
+        private suspend fun resolvedAddress(claimed: OwnershipClaimDto.ClaimedHome? = null): String =
             when (val addressResult = homesRepo.detail(homeId)) {
                 is NetworkResult.Success ->
                     listOfNotNull(
@@ -223,7 +225,10 @@ class WaitingRoomViewModel
                         addressResult.data.home.city,
                         addressResult.data.home.state,
                     ).joinToString(" · ").ifBlank { "Your home" }
-                is NetworkResult.Failure -> "Your home"
+                is NetworkResult.Failure ->
+                    listOfNotNull(claimed?.address, claimed?.city, claimed?.state)
+                        .joinToString(" · ")
+                        .ifBlank { "Your home" }
             }
 
         fun openNotifications() {

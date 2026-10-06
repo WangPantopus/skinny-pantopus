@@ -161,7 +161,7 @@ class MyClaimsListViewModel
         private fun rowFor(claim: OwnershipClaimDto): RowModel =
             RowModel(
                 id = claim.id,
-                title = "Claim ${claim.id.take(8)}",
+                title = claim.home?.label ?: "Claim ${claim.id.take(8)}",
                 subtitle = subtitleFor(claim),
                 template = RowTemplate.StatusChip,
                 leading = RowLeading.Icon(PantopusIcon.ShieldCheck, PantopusColors.primary600),
