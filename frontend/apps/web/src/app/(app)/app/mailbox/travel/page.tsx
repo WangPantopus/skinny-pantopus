@@ -245,8 +245,9 @@ export default function TravelModePage() {
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-app-text-secondary mb-1 block">Departure</label>
+                  <label htmlFor="travel-departure" className="text-xs text-app-text-secondary mb-1 block">Departure</label>
                   <input
+                    id="travel-departure"
                     type="date"
                     value={departure}
                     min={today}
@@ -255,8 +256,9 @@ export default function TravelModePage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-app-text-secondary mb-1 block">Return</label>
+                  <label htmlFor="travel-return" className="text-xs text-app-text-secondary mb-1 block">Return</label>
                   <input
+                    id="travel-return"
                     type="date"
                     value={returnDate}
                     min={departure || today}
