@@ -16,8 +16,8 @@ data class TenantRequestContextDto(
 data class TenantHomeStatusResponse(
     @Json(name = "home_id") val homeId: String,
     @Json(name = "request_context") val requestContext: TenantRequestContextDto,
-    val landlord: Landlord? = null,
     val lease: LeaseStatus? = null,
+    val landlord: Landlord? = null,
 ) {
     /** Whether the Home has a verified landlord who can answer a request. */
     @JsonClass(generateAdapter = true)
