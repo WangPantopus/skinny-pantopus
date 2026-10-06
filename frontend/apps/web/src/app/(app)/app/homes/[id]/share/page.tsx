@@ -24,7 +24,13 @@ function formatExpiry(d: string) {
   const hrs = Math.floor(diff / 3600000);
   if (hrs < 1) return `${Math.floor(diff / 60000)}m remaining`;
   if (hrs < 24) return `${hrs}h remaining`;
-  return `${Math.floor(hrs / 24)}d remaining`;
+  // A 48-hour pass read "1d remaining"; show the hours past the last whole day.
+  return hrs % 24 ? `${Math.floor(hrs / 24)}d ${hrs % 24}h remaining` : `${hrs / 24}d remaining`;
+}
+
+// The same names the apps show for each kind (never the raw `wifi_only`).
+function kindLabel(kind: string) {
+  return TEMPLATES.find((t) => t.id === kind)?.label ?? kind.replace(/_/g, ' ');
 }
 
 function ShareContent() {
@@ -92,7 +98,7 @@ function ShareContent() {
     createRequestId.current ??= crypto.randomUUID();
     try {
       const res = await api.homeIam.createGuestPass(homeId!, {
-        label: `${guestName.trim()} (${selectedTemplate})`,
+        label: guestName.trim(),
         kind: selectedTemplate as GuestPass['kind'],
         request_id: createRequestId.current,
       });
@@ -189,7 +195,7 @@ function ShareContent() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-app-text">{pass.label || 'Guest Pass'}</p>
                   <div className="flex gap-2 mt-0.5">
-                    <span className="text-xs text-app-text-secondary capitalize">{pass.kind}</span>
+                    <span className="text-xs text-app-text-secondary">{kindLabel(pass.kind)}</span>
                     <span className="text-xs text-amber-500 font-medium">
                       {passStatus(pass) === 'scheduled' && pass.start_at
                         ? `Starts ${new Date(pass.start_at).toLocaleString()}`
@@ -197,7 +203,7 @@ function ShareContent() {
                     </span>
                   </div>
                 </div>
-                <button onClick={() => revokePass(pass.id)} title="Revoke" className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
+                <button onClick={() => revokePass(pass.id)} title="Revoke" aria-label={`Revoke ${pass.label || 'guest pass'}`} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
                   <XCircle className="w-4 h-4" />
                 </button>
               </div>
@@ -217,7 +223,7 @@ function ShareContent() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-app-text">{pass.label || 'Guest Pass'}</p>
                   <div className="flex gap-2 mt-0.5">
-                    <span className="text-xs text-app-text-secondary capitalize">{pass.kind}</span>
+                    <span className="text-xs text-app-text-secondary">{kindLabel(pass.kind)}</span>
                     <span className="text-xs text-app-text-muted">
                       {passStatus(pass) === 'revoked' ? 'Revoked' : passStatus(pass) === 'reissue_required' ? 'Needs new link' : 'Expired'}
                     </span>
@@ -233,7 +239,7 @@ function ShareContent() {
         <div className="text-center py-16">
           <Users className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
           <p className="text-sm text-app-text-secondary">No guest passes</p>
-          <p className="text-xs text-app-text-muted mt-1">Tap + to create a quick-share guest pass</p>
+          <p className="text-xs text-app-text-muted mt-1">Select New Pass to create a quick-share guest pass</p>
         </div>
       )}
       </>)}
