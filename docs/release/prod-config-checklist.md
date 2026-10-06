@@ -136,6 +136,15 @@ Supabase dashboard → Authentication:
   and `pantopus://auth/callback`.
 - Email: confirm email **on**; minimum password length **12**; custom SMTP from
   D6 (sender `Pantopus Staging <staging@pantopus.com>`).
+- Rate limits: every sign-in, sign-up, token refresh, password reset and email
+  confirmation reaches Supabase from the API server's one address, so
+  Supabase's per-address defaults would cap the whole app (30 sign-ups, resets
+  and resends, and 150 sign-ins and refreshes, per 5 minutes; a launch-day
+  burst of sign-ups would fail). The API already limits each visitor (20
+  sign-ins or sign-ups a minute per address; resets and resends have their
+  own limits). Under Rate Limits set, per 5 minutes: sign-ups and sign-ins
+  **300**, token refreshes **1500**, verifications **300**. Email sending
+  follows your SMTP plan.
 - Providers (L3 verifies sign-in):
   - Apple: a Services ID (for example `app.pantopus.web`) whose Return URL is
     `https://<staging ref>.supabase.co/auth/v1/callback`, a Sign in with Apple
@@ -227,7 +236,12 @@ Vercel → the Pantopus project:
 
 **Check:** `https://staging.pantopus.com` loads, sign-in works, and the browser's
 network panel shows API calls going to `/api/...` on the same origin (Next.js
-forwards them to the staging API).
+forwards them to the staging API). Then send the signed-in account a chat
+message from another account: it must appear without a reload. The web's
+realtime connects to `/socket.io` on its own origin; Vercel doesn't proxy
+WebSockets, so Socket.IO stays on HTTP long-polling through that rewrite (its
+25-second polls fit Vercel's 120-second origin timeout). A failed WebSocket
+upgrade in the network panel is expected; chat that only updates on reload is not.
 
 ### S8. Staging scheduled jobs (founder runs, L4 prepared)
 
@@ -353,7 +367,8 @@ Don't run any of this until L4 has rehearsed it on a copy:
 As in S3, with Site URL `https://pantopus.com`, redirect URLs
 `https://pantopus.com/auth/callback`, `https://www.pantopus.com/auth/callback`,
 `https://pantopus.com/**` and `pantopus://auth/callback`, production SMTP sender
-`Pantopus <hello@pantopus.com>`, and the production Apple and Google settings.
+`Pantopus <hello@pantopus.com>`, the same rate limits, and the production Apple
+and Google settings.
 
 ### P4. Production Firebase and APNs (founder)
 
@@ -498,8 +513,10 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active) |
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
-| `AIRNOW_API_KEY` | optional | optional | (L1 is replacing AirNow) |
+| `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
 | `OPENAI_API_KEY` | required for AI features | required for AI features | OpenAI project with a budget cap |
+| `OPENAI_CHAT_MODEL`, `OPENAI_DRAFT_MODEL` | `gpt-6-luna` | `gpt-6-luna` | the model the streams verify against locally (a reasoning model: code paths pass `max_completion_tokens`, no custom `temperature`) |
+| `PROPERTY_SUGGESTIONS_LLM_MODEL`, `MAGIC_TASK_AI_MODEL` | unset | unset | their defaults (`gpt-4o-mini`, `gpt-4o`) match how those calls are written; a reasoning model there rejects `max_tokens`/`temperature` |
 | `LOB_ENV` | `test` | `live` | D5 |
 | `LOB_API_KEY` | `test_…` | `live_…` | Lob |
 | `LOB_WEBHOOK_SECRET` | Lob test webhook | Lob live webhook | Lob → Webhooks |
