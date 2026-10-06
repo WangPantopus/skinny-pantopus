@@ -21,7 +21,9 @@ data class TenantHomeStatusResponse(
 ) {
     /** Whether the Home has a verified landlord who can answer a request. */
     @JsonClass(generateAdapter = true)
-    data class Landlord(@Json(name = "has_landlord") val hasLandlord: Boolean = false)
+    data class Landlord(
+        @Json(name = "has_landlord") val hasLandlord: Boolean = false,
+    )
 
     @JsonClass(generateAdapter = true)
     data class LeaseStatus(val state: String, val lease: TenantLeaseDto? = null)

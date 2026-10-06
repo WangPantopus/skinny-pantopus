@@ -245,6 +245,14 @@ data class HomeVerificationContent(
                 .withLocale(Locale.getDefault())
                 .withZone(ZoneId.systemDefault())
 
+        /** Statuses where a landlord request can still help. */
+        private val LANDLORD_STATUSES =
+            setOf(
+                HomeVerificationStatus.PendingApproval,
+                HomeVerificationStatus.Unverified,
+                HomeVerificationStatus.Provisional,
+            )
+
         private fun actions(
             status: HomeVerificationStatus,
             offersLandlord: Boolean,
@@ -273,13 +281,7 @@ data class HomeVerificationContent(
                         actionKey = ActionKey.UPLOAD_PROOF,
                     )
             }
-            if (offersLandlord &&
-                (
-                    status == HomeVerificationStatus.PendingApproval ||
-                        status == HomeVerificationStatus.Unverified ||
-                        status == HomeVerificationStatus.Provisional
-                )
-            ) {
+            if (offersLandlord && status in LANDLORD_STATUSES) {
                 actions +=
                     HomeVerificationAction(
                         id = "landlordVerification",
