@@ -9,6 +9,7 @@ import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.observability.Observability
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.push.FcmTokenProvider
+import app.pantopus.android.push.NotificationDispatcher
 import io.mockk.every
 import io.mockk.mockk
 
@@ -141,6 +142,7 @@ object AuthTestSupport {
         accountHints: AccountHintStore = FakeAccountHintStore(),
         presenceVerifier: PresenceVerifier = FakePresenceVerifier(),
         fcmTokenProvider: FcmTokenProvider = FakeFcmTokenProvider(),
+        notifications: NotificationDispatcher = mockk(relaxed = true),
     ): AuthRepository =
         AuthRepository(
             api = api,
@@ -158,5 +160,6 @@ object AuthTestSupport {
             accountHints = accountHints,
             presenceVerifier = presenceVerifier,
             fcmTokenProvider = fcmTokenProvider,
+            notifications = notifications,
         )
 }
