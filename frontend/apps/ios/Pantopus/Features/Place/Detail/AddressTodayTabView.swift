@@ -98,7 +98,7 @@ struct AddressTodayTabView: View {
             .lineSpacing(3)
             .multilineTextAlignment(.center)
             .foregroundStyle(Theme.Color.appTextSecondary)
-            PrimaryButton(title: "Claim your address") { rootTabs.selected = .place }
+            PrimaryButton(title: "Claim your address") { onAddHome() }
         }
         .padding(24)
         .frame(maxWidth: .infinity)
