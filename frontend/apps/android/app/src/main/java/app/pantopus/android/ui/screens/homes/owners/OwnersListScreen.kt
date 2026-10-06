@@ -49,6 +49,22 @@ import app.pantopus.android.ui.theme.Spacing
 const val OWNERS_LIST_TAG = "ownersList"
 
 /**
+ * Reloads the roster when the screen shows again after Transfer: by then the
+ * owners and the viewer's own access have changed. Returns the call that arms it.
+ */
+@Composable
+private fun rememberRefreshAfterTransfer(onReturn: () -> Unit): () -> Unit {
+    var pending by rememberSaveable { mutableStateOf(false) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (pending) {
+            pending = false
+            onReturn()
+        }
+    }
+    return { pending = true }
+}
+
+/**
  * P15 / T6.3g Owners list. Thin wrapper around [ListOfRowsScreen]; the
  * VM supplies the rows + chrome and emits an [OwnersListEvent] when a
  * row action needs the screen to present a confirm dialog or route to
@@ -66,22 +82,6 @@ const val OWNERS_LIST_TAG = "ownersList"
  *     claim-review surface.
  * @param onBack Pop the back stack.
  */
-/**
- * Reloads the roster when the screen shows again after Transfer: by then the
- * owners and the viewer's own access have changed. Returns the call that arms it.
- */
-@Composable
-private fun rememberRefreshAfterTransfer(onReturn: () -> Unit): () -> Unit {
-    var pending by rememberSaveable { mutableStateOf(false) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        if (pending) {
-            pending = false
-            onReturn()
-        }
-    }
-    return { pending = true }
-}
-
 @Composable
 fun OwnersListScreen(
     onOpenInvite: (String) -> Unit,
