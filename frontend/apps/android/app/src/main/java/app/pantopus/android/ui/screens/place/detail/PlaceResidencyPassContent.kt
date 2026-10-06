@@ -320,18 +320,30 @@ private fun ResidencyClaimRow(
             }
         }
     }
-    if (confirmingRevoke) {
-        ConfirmRevokeDialog(
-            title = "Revoke this pass?",
-            text =
-                "Its link and code stop checking out right away for anyone you shared them with. " +
-                    "You can create a new pass any time.",
-            confirmLabel = "Revoke pass",
-            onConfirm = {
-                confirmingRevoke = false
-                viewModel.revokeClaim(claim.id)
-            },
-            onDismiss = { confirmingRevoke = false },
-        )
-    }
+    RevokePassConfirmation(
+        visible = confirmingRevoke,
+        onConfirm = {
+            confirmingRevoke = false
+            viewModel.revokeClaim(claim.id)
+        },
+        onDismiss = { confirmingRevoke = false },
+    )
+}
+
+@Composable
+private fun RevokePassConfirmation(
+    visible: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (!visible) return
+    ConfirmRevokeDialog(
+        title = "Revoke this pass?",
+        text =
+            "Its link and code stop checking out right away for anyone you shared them with. " +
+                "You can create a new pass any time.",
+        confirmLabel = "Revoke pass",
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+    )
 }
