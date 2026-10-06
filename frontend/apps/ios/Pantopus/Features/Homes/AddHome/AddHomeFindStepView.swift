@@ -80,9 +80,9 @@ struct AddressStep: View {
         }
     }
 
-    // A text field writes its unchanged text back when editing ends (Done, or
-    // a tap on Continue). Only a real edit may restart the search; otherwise
-    // the write would clear the address the person just picked.
+    /// A text field writes its unchanged text back when editing ends (Done, or
+    /// a tap on Continue). Only a real edit may restart the search; otherwise
+    /// the write would clear the address the person just picked.
     private var searchBinding: Binding<String> {
         Binding(
             get: { viewModel.homeSearchQuery },
