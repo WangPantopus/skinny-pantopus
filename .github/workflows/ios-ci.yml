@@ -153,10 +153,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        simulator:
-          - "iPhone 16"
-          - "iPhone 16 Pro"
-          - "iPhone SE (3rd generation)"
+        # Pull requests test on one simulator to spare the shared macOS runners;
+        # master and manual runs cover all three sizes.
+        simulator: ${{ fromJSON(github.event_name == 'pull_request' && '["iPhone 16"]' || '["iPhone 16", "iPhone 16 Pro", "iPhone SE (3rd generation)"]') }}
     steps:
       - uses: actions/checkout@v5
       - name: Select the same Xcode as the build job

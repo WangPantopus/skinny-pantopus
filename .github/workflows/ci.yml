@@ -12,8 +12,12 @@ on:
 # A PR run cancels its superseded predecessor. Each push to master or dev gets its
 # own group, so the next merge no longer cancels it: every merged commit reports a
 # finished result, which master health and Deploy Backend both need.
+# A new PR push cancels its older run. On master the running build always
+# finishes; a newer merge waits as the single pending run (GitHub drops older
+# pending ones), so the latest master always gets a complete run without
+# queueing one full run per merge on the shared macOS runners.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.sha }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

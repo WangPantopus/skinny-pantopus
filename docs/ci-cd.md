@@ -6,10 +6,11 @@ Firewall Playwright test, seeder tests, Android, iOS and infrastructure checks.
 Mobile workflows are reusable children of CI, so a mobile failure or cancellation
 fails the aggregate. Path filtering happens at the job level: a PR runs the
 surfaces it changes, and a push to `master` or `dev` runs the surfaces changed
-since that branch's previous commit. A manual run validates every surface. Each
-pushed commit gets its own run, so the next merge doesn't cancel it; a PR's newer
-push cancels its older run. Database replay joins the aggregate only after the
-verified baseline is adopted.
+since that branch's previous commit. A manual run validates every surface. A PR's
+newer push cancels its older run. On `master` a running build is never cancelled:
+a newer merge waits as the single pending run (GitHub drops older pending ones), so
+the latest commit always gets a complete run. Database replay joins the aggregate
+only after the verified baseline is adopted.
 
 The backend job also checks Following activity against disposable PostgreSQL
 and PostgREST containers with synthetic fixtures. This tests real filtering,
@@ -23,7 +24,9 @@ route retains `root/home` for compatibility. Snapshot updates require inspecting
 the diff; do not increase tolerance to hide a failure.
 
 iOS builds the test bundle once for the runner's architecture, preserves symlinks in a tar artifact, then runs
-that same bundle on three iOS 18.5 simulators. Build and test timeouts are
+that same bundle on iOS 18.5 simulators: iPhone 16 for pull requests (to spare the
+shared macOS runners), and iPhone 16, iPhone 16 Pro and iPhone SE on `master` and
+manual runs. Build and test timeouts are
 separate, and cancellation preserves diagnostics. Xcode 16.4/iOS 18.5 retain the
 existing snapshot contract. TestFlight archives use Xcode 26.2 to meet Apple's
 current SDK upload requirement. UI tests are compiled but not executed on hosted
