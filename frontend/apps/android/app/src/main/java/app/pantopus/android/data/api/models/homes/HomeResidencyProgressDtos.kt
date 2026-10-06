@@ -90,7 +90,7 @@ data class PersonalHomeResidencyProgress(
                         "then enter the code printed on it."
                 }
             "resubmit" -> "Check the street, apartment and how you live here, then send your request again."
-            "access_review" -> "To get access, ask someone in the household to invite you."
+            "access_review" -> "To come back, add this Home again or ask someone in the household to invite you."
             "ownership_verification" -> "Ownership has its own review. Verifying your address by mail doesn't make you an owner."
             else -> "This Home isn't accepting changes right now. Your request is still saved."
         }

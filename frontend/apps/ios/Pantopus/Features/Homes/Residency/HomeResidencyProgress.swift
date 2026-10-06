@@ -129,7 +129,7 @@ struct PersonalHomeResidencyProgress: Decodable, Equatable {
                 : "Your request is saved. To finish, verify your address by mail: request a postcard, "
                 + "then enter the code printed on it."
         case .resubmit: "Check the street, apartment and how you live here, then send your request again."
-        case .accessReview: "To get access, ask someone in the household to invite you."
+        case .accessReview: "To come back, add this Home again or ask someone in the household to invite you."
         case .ownershipVerification: "Ownership has its own review. Verifying your address by mail doesn't make you an owner."
         case .unavailable: "This Home isn't accepting changes right now. Your request is still saved."
         }

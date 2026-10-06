@@ -10,7 +10,7 @@ const guidance = {
   household_review: { title: 'Waiting for household review', body: 'Someone in the household will review your request. You don’t need to upload any documents. Check back here for their answer.' },
   address_verification: { title: 'Your address isn’t verified yet', body: 'Your request is saved. To finish, verify your address by mail: request a postcard, then enter the code printed on it.' },
   resubmit: { title: 'Send your request again', body: 'Check the street, apartment and how you live here, then send your request again.' },
-  access_review: { title: 'You don’t have household access', body: 'To get access, ask someone in the household to invite you.' },
+  access_review: { title: 'You don’t have household access', body: 'To come back, add this Home again or ask someone in the household to invite you.' },
   ownership_verification: { title: 'Continue ownership verification', body: 'Ownership has its own review. Verifying your address by mail doesn’t make you an owner.' },
   unavailable: { title: 'This Home can’t be verified right now', body: 'This Home isn’t accepting changes right now. Your request is still saved.' },
 };
