@@ -110,7 +110,9 @@ export default function ManageSupportTrainPage() {
     if (deleting) return;
 
     const confirmed = window.confirm(
-      'Delete this Support Train permanently? This removes its schedule, updates, and invites. Trains with active helpers or gift fund contributions cannot be deleted.'
+      launchFeatures.giftFunds
+        ? 'Delete this Support Train permanently? This removes its schedule, updates, and invites. Trains with active helpers or gift fund contributions cannot be deleted.'
+        : 'Delete this Support Train permanently? This removes its schedule, updates, and invites. Trains with active helpers cannot be deleted.'
     );
 
     if (!confirmed) return;
@@ -412,8 +414,9 @@ export default function ManageSupportTrainPage() {
                   Danger zone
                 </h2>
                 <p className="mt-1 text-sm text-red-700/90 dark:text-red-200/90">
-                  Delete is for trains created by mistake. Once helpers commit or gift funds arrive,
-                  the backend blocks deletion so the campaign history stays intact.
+                  Delete is for trains created by mistake. Once helpers commit
+                  {launchFeatures.giftFunds ? ' or gift funds arrive' : ''}, the train can&apos;t be
+                  deleted, so its history stays intact.
                 </p>
               </div>
             </div>
@@ -432,7 +435,9 @@ export default function ManageSupportTrainPage() {
             </button>
             <p className="mt-3 text-sm text-red-700/90 dark:text-red-200/90">
               {deleteDisabledReason ||
-                'Permanent. This stays available only until the train has active helpers or gift fund contributions.'}
+                (launchFeatures.giftFunds
+                  ? 'Permanent. This stays available only until the train has active helpers or gift fund contributions.'
+                  : 'Permanent. This stays available only until the train has active helpers.')}
             </p>
           </div>
         </section>

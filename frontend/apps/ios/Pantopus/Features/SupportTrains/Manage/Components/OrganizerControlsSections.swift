@@ -537,7 +537,9 @@ struct ManageLifecycleSection: View {
                         identifier: "manageTrainDeleteButton",
                         isDisabled: isBusy
                     ) { onDelete() }
-                    Text("Permanent. Only possible while no helper has committed and no gift-fund money has come in.")
+                    Text(LaunchFeatures.giftFunds
+                        ? "Permanent. Only possible while no helper has committed and no gift-fund money has come in."
+                        : "Permanent. Only possible while no helper has committed.")
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }
