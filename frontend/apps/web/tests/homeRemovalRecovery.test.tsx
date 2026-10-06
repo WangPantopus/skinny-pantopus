@@ -83,8 +83,8 @@ test('a named review cancels without a removal request and a lost reply exposes 
   expect(api.apiClient.request).not.toHaveBeenCalled(); expect(mockSaved).toBeNull();
   expect(screen.getByRole('button', { name: 'Remove this member' })).toHaveFocus();
   fireEvent.click(screen.getByRole('button', { name: 'Remove this member' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirm removal' }));
-  await screen.findByRole('heading', { name: 'Recover your removal' });
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove member' }));
+  await screen.findByRole('heading', { name: 'Check your last removal' });
   expect(screen.getByRole('button', { name: 'Check again' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Discard attempt' })).toBeVisible();
