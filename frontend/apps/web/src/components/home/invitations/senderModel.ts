@@ -74,7 +74,7 @@ export function validSenderDraft(value: unknown, origin: string, actor: string):
 export const senderMessage = (code?: string) => ({
   INVITE_SENDER_CHANGED: 'The invitation or your permissions changed. Select Done, then check the details again.',
   INVITE_ALREADY_USED: 'This invitation was already answered. Nobody’s membership changed.',
-  INVITE_EXPIRED: 'This invitation has expired. Resending doesn’t extend it.',
+  INVITE_EXPIRED: 'This invitation has expired. Send a new invitation instead.',
   INVITE_NOT_FOUND: 'This invitation is no longer available.',
   INVITE_FORBIDDEN: 'You don’t have permission to do this for this household.',
   HOME_FORBIDDEN: 'You don’t have permission to do this for this household.',

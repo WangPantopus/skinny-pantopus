@@ -96,7 +96,7 @@ fun senderRefusalMessage(code: String?): String =
         "MEMBER_ALREADY_EXISTS" -> "This person is already in the household."
         "MEMBERSHIP_RENEWAL_REQUIRED" -> "This person’s earlier household membership has ended. An invitation can't restore it."
         "INVITE_ALREADY_USED", "INVITE_NOT_PENDING" -> "This invitation was already answered. Nobody's membership changed."
-        "INVITE_EXPIRED" -> "This invitation has expired. Resending doesn't extend it."
+        "INVITE_EXPIRED" -> "This invitation has expired. Send a new invitation instead."
         "INVITE_NOT_FOUND", "HOME_NOT_FOUND" -> "This invitation is no longer available."
         else -> "This couldn't be completed. Check the invitation and try again."
     }
