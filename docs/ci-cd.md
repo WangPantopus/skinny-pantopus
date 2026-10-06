@@ -123,12 +123,22 @@ read-only repository permissions and keep deployment secrets out of PR jobs.
 - Android: `android-v*` tags or manual dispatch use `android-release`. Configure
   `ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`, `PANTOPUS_KEY_ALIAS`,
   `PANTOPUS_KEY_PASSWORD`, `PLAY_STORE_SERVICE_ACCOUNT_JSON`,
-  `PANTOPUS_API_BASE_URL`, `PANTOPUS_SOCKET_URL`, `STRIPE_PUBLISHABLE_KEY` and
-  `MAPS_API_KEY`. Commit a new increasing `versionCode` before each new upload;
+  `PANTOPUS_API_BASE_URL`, `PANTOPUS_SOCKET_URL`, `STRIPE_PUBLISHABLE_KEY`,
+  `MAPS_API_KEY` and `GOOGLE_SERVICES_JSON` (the Firebase config for
+  `app.pantopus.android`; the committed `app/google-services.json` is a build
+  placeholder, so the release job refuses to run without the real one). Commit a new increasing `versionCode` before each new upload;
   tags do not change the app version. Store acceptance/signing must be verified
   with the actual accounts before the first release.
 - Optional repository secrets `SLACK_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL` send
   production deployment outcomes. A disabled deployment is not a success alert.
+
+## Runners and actions
+
+Linux jobs run on `ubuntu-24.04`, pinned so GitHub's move of `ubuntu-latest` to
+Ubuntu 26 (from October 19, 2026) doesn't change the image during the pilot
+launch; move the pin deliberately later. Every action uses a release that runs
+on Node 24. Release workflows pass secrets to scripts through `env`, never by
+template interpolation inside a script.
 
 ## Local checks
 

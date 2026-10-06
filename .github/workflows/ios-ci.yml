@@ -25,7 +25,7 @@ jobs:
     name: Lint (SwiftLint + SwiftFormat)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install pinned SwiftLint & SwiftFormat
         # `brew install` is unpinned: the hosted runners flip between bottles
@@ -83,7 +83,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Select Xcode
         # Xcode 16.4 ships with the iOS 18.5 simulator runtime
@@ -102,7 +102,7 @@ jobs:
         run: xcodegen generate
 
       - name: Cache SPM
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: frontend/apps/ios/SourcePackages
           # v3 — workspace-local package clones avoid the wildcard
@@ -131,7 +131,7 @@ jobs:
             "$IOS_DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/Pantopus.app"
       - name: Package test products (preserve symlinks)
         run: tar -czf ios-test-products.tar.gz -C "$IOS_DERIVED_DATA_PATH" Build/Products
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ios-test-products
           path: frontend/apps/ios/ios-test-products.tar.gz
@@ -139,7 +139,7 @@ jobs:
           compression-level: 0
       - name: Upload build diagnostics
         if: failure() || cancelled()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ios-build-log
           path: frontend/apps/ios/xcodebuild-build.log
@@ -158,10 +158,10 @@ jobs:
           - "iPhone 16 Pro"
           - "iPhone SE (3rd generation)"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select the same Xcode as the build job
         run: sudo xcode-select -switch /Applications/Xcode_16.4.app
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: ios-test-products
           path: frontend/apps/ios
@@ -239,7 +239,7 @@ jobs:
 
       - name: Upload xcodebuild log on failure
         if: failure() || cancelled()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: xcodebuild-log-${{ steps.sim.outputs.slug }}
           path: frontend/apps/ios/xcodebuild-${{ steps.sim.outputs.slug }}.log
@@ -267,7 +267,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ios-test-results-${{ steps.sim.outputs.slug }}
           path: |
