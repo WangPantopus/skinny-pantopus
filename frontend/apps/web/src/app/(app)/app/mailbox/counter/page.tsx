@@ -28,7 +28,7 @@ export default function CounterPage() {
       {/* Header */}
       <div className="px-4 py-3 border-b border-app-border-subtle flex-shrink-0">
         <div className="flex items-center gap-2">
-          <button
+          <button aria-label="Back"
             type="button"
             onClick={() => router.push('/app/mailbox')}
             className="md:hidden p-1 text-app-text-secondary hover:text-app-text-strong"

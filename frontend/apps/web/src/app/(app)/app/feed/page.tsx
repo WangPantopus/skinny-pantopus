@@ -603,7 +603,7 @@ export default function FeedPage() {
           >
             <div className="flex items-center justify-between px-5 py-3 border-b border-app">
               <h3 className="text-sm font-bold text-app">New Post</h3>
-              <button
+              <button aria-label="Close"
                 onClick={() => setShowCompose(false)}
                 className="p-1.5 text-app-muted hover:text-app hover-bg-app rounded-lg transition"
               >

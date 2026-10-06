@@ -77,7 +77,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-app-border-subtle bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/40 dark:to-indigo-950/40">
         {onBack && (
-          <button
+          <button aria-label="Back"
             onClick={onBack}
             className="p-1.5 rounded-lg hover:bg-app-surface/60 transition-colors"
           >

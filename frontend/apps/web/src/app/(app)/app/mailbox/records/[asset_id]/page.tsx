@@ -68,7 +68,7 @@ function LinkMailDrawer({
           <h3 className="text-sm font-semibold text-app-text flex-1">
             Link Mail Item
           </h3>
-          <button
+          <button aria-label="Close"
             type="button"
             onClick={onClose}
             className="p-1 text-app-text-muted hover:text-app-text-secondary"
@@ -177,7 +177,7 @@ export default function AssetDetailPage() {
     <div className="h-full overflow-y-auto bg-app-surface">
       {/* Back button (mobile) */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-app-border-subtle md:hidden">
-        <button
+        <button aria-label="Back"
           type="button"
           onClick={() => router.push('/app/mailbox/records')}
           className="p-1 text-app-text-secondary hover:text-app-text-strong"

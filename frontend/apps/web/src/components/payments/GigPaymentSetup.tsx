@@ -155,7 +155,7 @@ export default function GigPaymentSetup({
             <h2 className="text-lg font-semibold text-app-text">
               {intentPurpose === 'tip' ? 'Confirm Tip' : isSetupIntent ? 'Save Payment Method' : 'Authorize Payment'}
             </h2>
-            <button
+            <button aria-label="Close"
               onClick={onClose}
               className="text-app-text-muted hover:text-app-text-secondary transition"
               disabled={processing}

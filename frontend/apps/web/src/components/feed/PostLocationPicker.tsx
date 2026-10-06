@@ -329,7 +329,7 @@ export default function PostLocationPicker({
             {loading && (
               <div className="w-3.5 h-3.5 border-2 border-app border-t-primary-500 rounded-full animate-spin flex-shrink-0" />
             )}
-            <button
+            <button aria-label="Close"
               onClick={() => { setMode('closed'); setQuery(''); }}
               className="text-app-muted hover:text-app p-0.5"
             >
