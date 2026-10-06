@@ -124,7 +124,7 @@ export default function EndorsementButton({
     } finally {
       setToggling(null);
     }
-  }, [businessId, endorsedCategories, onCountChange, router]);
+  }, [businessId, endorsedCategories, onCountChange, router, pathname]);
 
   // Don't show if the user owns this business or no categories
   if (isOwner || categories.length === 0) return null;
