@@ -87,6 +87,9 @@ export default function AddressAutocomplete({
   const latestValue = useRef(value);
   latestValue.current = value;
   const suggestedFor = useRef<string | null>(null);
+  // The address a pick wrote back into the field: it is an answer, not a new
+  // query, so it must not reopen the list until the person types again.
+  const pickedText = useRef<string | null>(null);
   useEffect(() => {
     alive.current = true;
     const cancel = () => { revision.current++; abortRef.current?.abort(); };
@@ -105,6 +108,7 @@ export default function AddressAutocomplete({
     abortRef.current?.abort();
     const operation = ++revision.current;
     if ((debounced || '').trim().length < 4 || debounced !== value) { setLoading(false); return; }
+    if (debounced === pickedText.current) { setLoading(false); return; }
     const ac = new AbortController(); abortRef.current = ac;
     const current = () => alive.current && operation === revision.current && !ac.signal.aborted
       && debounced === latestValue.current && document.visibilityState !== 'hidden';
@@ -149,6 +153,7 @@ export default function AddressAutocomplete({
       if (!current()) return;
       const n = data.normalized;
       setLoading(false);
+      pickedText.current = n.address;
       onChange(n.address); onSelectNormalized(n);
     } catch { if (current()) setError('Failed to resolve address. Please select it again.'); }
     finally { if (current()) setLoading(false); }
@@ -228,6 +233,7 @@ export default function AddressAutocomplete({
         value={value}
         onChange={(e) => {
           revision.current++; abortRef.current?.abort(); suggestedFor.current = null; setSuggestions([]); setLoading(false);
+          pickedText.current = null;
           onChange(e.target.value);
           setActiveIndex(-1);
           setOpen(true);
