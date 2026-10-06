@@ -2291,6 +2291,54 @@ router.post('/mute', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /api/posts/mute — The people and businesses this person muted, so Settings can list them
+ * and undo a mute (DELETE below). Topic mutes and Personas (a launch cut) aren't listed.
+ */
+router.get('/mute', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { data: mutes, error } = await supabaseAdmin
+      .from('PostMute')
+      .select('muted_entity_type, muted_entity_id, created_at')
+      .eq('user_id', userId)
+      .in('muted_entity_type', ['user', 'business'])
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+
+    const ids = [...new Set((mutes || []).map((m) => m.muted_entity_id))];
+    let accounts = new Map();
+    if (ids.length > 0) {
+      const { data: users, error: usersError } = await supabaseAdmin
+        .from('User')
+        .select('id, username, name, first_name, last_name, profile_picture_url')
+        .in('id', ids);
+      if (usersError) throw usersError;
+      accounts = new Map((users || []).map((u) => [u.id, u]));
+    }
+
+    // A mute of a deleted account has no one to show and no effect, so it isn't listed.
+    const muted = (mutes || [])
+      .filter((m) => accounts.has(m.muted_entity_id))
+      .map((m) => {
+        const account = accounts.get(m.muted_entity_id);
+        const fullName = [account.first_name, account.last_name].filter(Boolean).join(' ');
+        return {
+          entity_type: m.muted_entity_type,
+          entity_id: m.muted_entity_id,
+          name: account.name || fullName || account.username || 'Pantopus member',
+          username: account.username || null,
+          avatar_url: account.profile_picture_url || null,
+          muted_at: m.created_at,
+        };
+      });
+    res.json({ muted });
+  } catch (err) {
+    logger.error('List mutes error', { error: err.message });
+    res.status(500).json({ error: 'Failed to load muted accounts' });
+  }
+});
+
+/**
  * DELETE /api/posts/mute — Unmute a user, business, or persona
  */
 router.delete('/mute', verifyToken, async (req, res) => {

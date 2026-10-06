@@ -286,7 +286,7 @@ function PostCard({
               )}
               {!isOwn && onMute && muteTarget && (
                 <button
-                  onClick={async () => { const yes = await confirmStore.open({ title: muteTarget.entityType === 'persona' ? 'Mute this profile?' : 'Mute this user?', description: 'Their posts will be hidden from your Pulse.', confirmLabel: 'Mute', variant: 'destructive' }); if (yes) { onMute(muteTarget); setMenuOpen(false); } }}
+                  onClick={async () => { const yes = await confirmStore.open({ title: muteTarget.entityType === 'persona' ? 'Mute this profile?' : 'Mute this user?', description: 'Their posts will be hidden from your Pulse. You can unmute them in Settings → Blocked Users.', confirmLabel: 'Mute', variant: 'destructive' }); if (yes) { onMute(muteTarget); setMenuOpen(false); } }}
                   className="w-full text-left px-3 py-2 text-xs text-app-muted hover-bg-app"
                 >
                   {muteTarget.entityType === 'persona' ? 'Mute Profile' : 'Mute User'}

@@ -367,7 +367,7 @@ export default function SettingsPage() {
           {/* Blocked Users */}
           <div className="bg-surface rounded-xl border border-app p-6">
             <h2 className="text-lg font-semibold text-app mb-2">Blocked Users</h2>
-            <p className="text-sm text-app-secondary mb-4">Manage users you&apos;ve blocked from contacting you.</p>
+            <p className="text-sm text-app-secondary mb-4">Manage people you&apos;ve blocked or muted.</p>
             <button
               onClick={() => router.push('/app/profile/settings/blocked')}
               className="w-full flex items-center justify-between px-4 py-3 border border-app rounded-lg hover-bg-app transition group"
