@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.posts
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -25,8 +27,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +54,7 @@ import app.pantopus.android.ui.screens.shared.content_detail.ctas.InlineReplyCta
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostAuthorHeader
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
+import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
@@ -167,12 +172,17 @@ fun PulsePostDetailScreen(
                             contentDescription = "Post options",
                             onClick = { viewModel.openOverflowMenu() },
                         ),
+                    // Only its author still sees a post a moderator removed, so nothing offers to spread it.
                     topBarSecondaryAction =
-                        ContentDetailTopBarAction(
-                            icon = PantopusIcon.Share,
-                            contentDescription = "Share post",
-                            onClick = { launchShareSheet() },
-                        ),
+                        if (content.post.isRemovedByModerator) {
+                            null
+                        } else {
+                            ContentDetailTopBarAction(
+                                icon = PantopusIcon.Share,
+                                contentDescription = "Share post",
+                                onClick = { launchShareSheet() },
+                            )
+                        },
                     onBack = onBack,
                     onOpenProfile = onOpenProfile,
                     nearbyProviders = nearbyProviders,
@@ -229,12 +239,15 @@ fun PulsePostDetailScreen(
                     viewModel.dismissOverflowMenu()
                     viewModel.toggleSave()
                 }
-                OverflowAction(
-                    label = if (isReposted) "Undo repost" else "Repost",
-                    testTag = "pulsePostDetail-repost",
-                ) {
-                    viewModel.dismissOverflowMenu()
-                    viewModel.toggleRepost()
+                val isRemoved = (state as? PulsePostDetailUiState.Loaded)?.content?.post?.isRemovedByModerator == true
+                if (!isRemoved) {
+                    OverflowAction(
+                        label = if (isReposted) "Undo repost" else "Repost",
+                        testTag = "pulsePostDetail-repost",
+                    ) {
+                        viewModel.dismissOverflowMenu()
+                        viewModel.toggleRepost()
+                    }
                 }
                 if (viewModel.isOwner) {
                     OverflowAction(label = "Edit post", testTag = "pulsePostDetail-edit") {
@@ -394,15 +407,20 @@ fun PulsePostDetailLoadedContent(
         topBarSecondaryAction = topBarSecondaryAction,
         cta = { InlineReplyCta() },
         header = {
-            PostAuthorHeader(
-                displayName = content.authorDisplayName,
-                avatarUrl = content.authorAvatarUrl,
-                isVerified = content.authorVerified,
-                identity = content.authorIdentity,
-                timeAndLocality = content.timeAndLocality,
-                intent = content.intent,
-                onAvatarTap = { onOpenProfile(content.post.userId) },
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+                if (content.post.isRemovedByModerator) {
+                    RemovedPostNotice(modifier = Modifier.padding(horizontal = Spacing.s4))
+                }
+                PostAuthorHeader(
+                    displayName = content.authorDisplayName,
+                    avatarUrl = content.authorAvatarUrl,
+                    isVerified = content.authorVerified,
+                    identity = content.authorIdentity,
+                    timeAndLocality = content.timeAndLocality,
+                    intent = content.intent,
+                    onAvatarTap = { onOpenProfile(content.post.userId) },
+                )
+            }
         },
         body = {
             BodyReactionsBody(
@@ -429,9 +447,10 @@ fun PulsePostDetailLoadedContent(
                 reactionEmojis = pulseReactionEmojis,
                 replyingToName = replyingToName,
                 onCancelReply = onCancelReply,
-                onCommentReply = onCommentReply,
+                onCommentReply = if (content.post.isRemovedByModerator) null else onCommentReply,
                 onCommentLike = onCommentLike,
                 onCommentDelete = onCommentDelete,
+                repliesClosedNote = if (content.post.isRemovedByModerator) "Replies are off for this post." else null,
                 // Launch cuts #6/#4: "Nearby providers" is business discovery and broad provider search.
                 belowReactions =
                     if (nearbyProviders.isEmpty() || !(LaunchFeatures.businessDirectory && LaunchFeatures.openGigs)) {
@@ -447,6 +466,45 @@ fun PulsePostDetailLoadedContent(
             )
         },
     )
+}
+
+/** Says why the author still sees a post that a moderator removed. */
+@Composable
+private fun RemovedPostNotice(modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(Radii.lg)
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(PantopusColors.warningBg)
+                .border(1.dp, PantopusColors.warningLight, shape)
+                .padding(Spacing.s3)
+                .semantics(mergeDescendants = true) {}
+                .testTag("pulsePostDetail-removedNotice"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        PantopusIconImage(
+            icon = PantopusIcon.ShieldAlert,
+            contentDescription = null,
+            size = 16.dp,
+            tint = PantopusColors.warning,
+            modifier = Modifier.padding(top = 1.dp),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+            Text(
+                text = "Removed by a moderator",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.warning,
+            )
+            Text(
+                text = "Only you can see this post. Neighbors can't see it or reply.",
+                fontSize = 13.sp,
+                color = PantopusColors.appText,
+            )
+        }
+    }
 }
 
 @Composable
