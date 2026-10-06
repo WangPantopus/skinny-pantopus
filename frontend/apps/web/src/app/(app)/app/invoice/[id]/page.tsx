@@ -42,7 +42,7 @@ function InvoiceContent() {
     if (!invoiceId || finishingReturn.current || searchParams.get('payment') !== 'complete') return;
     finishingReturn.current = true;
     api.businesses.confirmInvoicePayment(invoiceId)
-      .then((res) => { setInvoice(res.invoice); toast.success('Payment received'); })
+      .then((res) => { setInvoice((prev: typeof invoice) => ({ ...prev, ...res.invoice })); toast.success('Payment received'); })
       .catch((e: unknown) => toast.error(e instanceof Error && e.message ? e.message : "This payment hasn't gone through yet."))
       .finally(() => router.replace(`/app/invoice/${invoiceId}`));
   }, [invoiceId, searchParams, router]);
@@ -160,7 +160,8 @@ function InvoiceContent() {
               invoiceId={invoice.id}
               amountLabel={formatCents(invoice.total_cents)}
               onPaid={(paid) => {
-                setInvoice(paid);
+                // The confirm answer is the bare invoice row; keep the business shown in "From".
+                setInvoice((prev: typeof invoice) => ({ ...prev, ...paid }));
                 setClientSecret(null);
                 toast.success(`Payment of ${formatCents(paid.total_cents)} received`);
               }}
@@ -202,6 +203,9 @@ function InvoicePaymentForm({ invoiceId, amountLabel, onPaid, onCancel }: {
   const elements = useElements();
   const [processing, setProcessing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // Set once Stripe accepts the card. A retry then repeats only the confirm step: confirming the
+  // same payment again would fail, and starting over would put a second hold on the card.
+  const [accepted, setAccepted] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,14 +217,17 @@ function InvoicePaymentForm({ invoiceId, amountLabel, onPaid, onCancel }: {
     setProcessing(true);
     setMessage(null);
     try {
-      const { error } = await stripe.confirmPayment({
-        elements,
-        confirmParams: { return_url: `${window.location.origin}/app/invoice/${encodeURIComponent(invoiceId)}?payment=complete` },
-        redirect: 'if_required',
-      });
-      if (error) {
-        setMessage(error.message || 'Your card was not charged. Please try again.');
-        return;
+      if (!accepted) {
+        const { error } = await stripe.confirmPayment({
+          elements,
+          confirmParams: { return_url: `${window.location.origin}/app/invoice/${encodeURIComponent(invoiceId)}?payment=complete` },
+          redirect: 'if_required',
+        });
+        if (error) {
+          setMessage(error.message || 'Your card was not charged. Please try again.');
+          return;
+        }
+        setAccepted(true);
       }
       const res = await api.businesses.confirmInvoicePayment(invoiceId);
       onPaid(res.invoice);
@@ -233,16 +240,18 @@ function InvoicePaymentForm({ invoiceId, amountLabel, onPaid, onCancel }: {
 
   return (
     <form onSubmit={submit}>
-      <PaymentElement />
+      {accepted ? <p className="text-sm text-app-text">Your card was accepted.</p> : <PaymentElement />}
       {message && <p role="alert" className="text-sm text-red-600 mt-3">{message}</p>}
       <div className="flex gap-3 mt-4">
-        <button type="button" onClick={onCancel} disabled={processing}
-          className="flex-1 py-3 border border-app-border rounded-xl font-semibold text-app-text hover:bg-app-hover disabled:opacity-50 transition">
-          Cancel
-        </button>
+        {!accepted && (
+          <button type="button" onClick={onCancel} disabled={processing}
+            className="flex-1 py-3 border border-app-border rounded-xl font-semibold text-app-text hover:bg-app-hover disabled:opacity-50 transition">
+            Cancel
+          </button>
+        )}
         <button type="submit" disabled={processing || !stripe}
           className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50 transition">
-          {processing ? 'Processing…' : `Pay ${amountLabel}`}
+          {processing ? 'Processing…' : accepted ? 'Try again' : `Pay ${amountLabel}`}
         </button>
       </div>
     </form>
