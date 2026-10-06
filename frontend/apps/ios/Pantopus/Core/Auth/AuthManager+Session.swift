@@ -109,30 +109,24 @@ extension AuthManager {
         }
 
         setAccessToken(access)
-        let restore = Task { await self.renewAndHydrate(hadAccessToken: access != nil) }
         guard loadCachedUser() != nil else {
-            await restore.value
+            await renewAndHydrate(hadAccessToken: access != nil)
             return
         }
         // Each call may wait 20 s and retry twice, so an outage once meant ~100 s on the splash.
-        await Self.waitAtMost(Self.launchRestoreCap, for: restore)
-        if state == .unknown, let cached = loadCachedUser() {
+        // The splash follows `state`, so the app opens on the cached identity while this finishes.
+        let opener = Task { [weak self] in
+            try? await Task.sleep(for: Self.launchRestoreCap)
+            guard let self, !Task.isCancelled, state == .unknown, let cached = loadCachedUser() else { return }
             logger.info("Session restore still running — opening on the cached identity")
             setState(.signedIn(cached))
         }
+        await renewAndHydrate(hadAccessToken: access != nil)
+        opener.cancel()
     }
 
     /// How long launch waits for the restore before opening on the cached identity.
     static let launchRestoreCap: Duration = .seconds(5)
-
-    private static func waitAtMost(_ limit: Duration, for task: Task<Void, Never>) async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await task.value }
-            group.addTask { try? await Task.sleep(for: limit) }
-            await group.next()
-            group.cancelAll()
-        }
-    }
 
     /// L1: renew a missing or lapsing access token, then hydrate the profile.
     private func renewAndHydrate(hadAccessToken: Bool) async {
