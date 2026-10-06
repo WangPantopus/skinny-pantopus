@@ -7,7 +7,7 @@ Native Android app for Pantopus, built with Kotlin 2.0, Jetpack Compose, and Mat
 | Layer          | Choice                                                                    |
 |----------------|---------------------------------------------------------------------------|
 | Language       | Kotlin 2.0 (K2 compiler)                                                  |
-| Min / Target   | minSdk 26 (Android 8.0), compileSdk 36, targetSdk 36 (Android 16)         |
+| Min / Target   | minSdk 26 (Android 8.0), compileSdk 35, targetSdk 36 (Android 16)         |
 | UI             | Jetpack Compose + Material 3                                              |
 | Navigation     | Navigation Compose                                                        |
 | DI             | Hilt (Dagger 2)                                                           |

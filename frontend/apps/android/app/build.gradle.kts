@@ -51,8 +51,10 @@ val pantopusEnvRelease = envOr("PANTOPUS_ENV", "production")
 android {
     namespace = "app.pantopus.android"
     // Google Play requires new apps and updates to target Android 16 (API 36)
-    // since August 31, 2026; AGP 8.9.1 is the first to support it.
-    compileSdk = 36
+    // since August 31, 2026 (AGP 8.9.1+). compileSdk stays 35: Paparazzi 1.3.5
+    // can't render against the API 36 platform, and runtime behavior follows
+    // targetSdk, not compileSdk.
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "app.pantopus.android"

@@ -8,8 +8,8 @@ Every fact below was checked against a real machine on **4 September 2026**:
 Gradle 8.9, AGP 8.5.2, Kotlin 2.0.21, OpenJDK 21.0.10 (default) and Temurin
 17.0.19, adb 36.0.2, emulator `Pantopus_CI_API_34` on Android 14. Both of the
 cold-build failures below were reproduced there. On 6 October 2026 the app moved
-to Gradle 8.11.1, AGP 8.9.3 and compileSdk/targetSdk 36 (Google Play's current
-requirement) and was checked on an Android 16 emulator.
+to Gradle 8.11.1, AGP 8.9.3 and targetSdk 36 (Google Play's current requirement;
+compileSdk stays 35 for Paparazzi) and was checked on an Android 16 emulator.
 
 **If you have done the [iOS equivalent](../../ios/docs/device-build-runbook.md):
 none of that applies here.** There is no team ID, no App ID registration, no
