@@ -103,12 +103,12 @@ The ordered steps, with exact values and checks, are in the [launch checklist](d
 
 A checked subitem means the named implementation or local check is complete; a package stays open until its remaining items work in the real apps. [PR 1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533) (mobile Today, pickup and task reminder flows) merged on October 6 together with PRs 1502, 1510, 1514, 1515, 1516, 1530 and 1532, so the work below is on master.
 
-- [ ] WP1 Truthfulness fixes: hide the Hub's "Earn today" offers line; label curator posts on iOS and Android; remove the seeder's engagement-question and neighbor-voice prompt lines and exclude curator posts from organic counts.
+- [x] WP1 Truthfulness fixes: hide the Hub's "Earn today" offers line; label curator posts on iOS and Android; remove the seeder's engagement-question and neighbor-voice prompt lines and exclude curator posts from organic counts.
   - [x] Backend offers gate and pilot/organic reporting work merged in PR1509; existing curator-exclusion evidence retained.
   - [x] Native curator-card labels and constrained-width repair integrated. Actual rebuilt iOS curator/ordinary attribution and chip readability passed; Android exact retained curator/ordinary attribution and report/mute permissions passed through accessibility. Android pixel readability is not established.
   - [x] Non-sports publisher-voice/question/SKIP guards and bounded provider-error logging implemented and integrated; 119 focused and 507 seeder CI checks passed. Sports question behavior is preserved.
   - [x] Six genuine non-sports curator posts from real providers (L1, PR 1557, October 6).
-  - [ ] Curator label on both Nearby feeds, then the remaining native cold-start and visual checks.
+  - [x] The "Pantopus curator" chip shows on curator posts in Pulse on both apps, readable; ordinary neighbor posts stay unlabeled (L1, October 6). Sports-lane questions are kept, as recorded.
 
 - [ ] WP2 Today works for a saved place and for a newly added home in private setup (F1).
   - [x] Actual iOS retained Save → Today content/chip → persisted prompt stamp with both briefings off → Not now → reentry → remove/no-place → resave → cold restoration passed at the retained baseline.
@@ -116,26 +116,30 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] Failed-stamp Not now recovery implemented on both apps; five focused Android recovery tests and integrated CI passed. Actual native fault-path acceptance remains open.
   - [x] Actual iOS synthetic Home takes priority over the retained Saved Place.
   - [x] iOS: real sign-up → address → Save → See Today → morning card, re-entry, remove, cold relaunch and the daylight-saving end window (L1, October 6).
-  - [ ] Android: sign-up, Not now and failed-stamp recovery; real Add Home → private setup on both apps (iOS Add Home keeps the picked address in PR 1585, in review).
+  - [x] Android: real sign-up → verify → save the previewed address → saved-place Today and morning card; failed-stamp Not now recovery; cold start; Add Home → private setup in the same session. The native fault path passed on both apps (L1, October 6).
+  - [ ] iOS Add Home → private setup (waits on PR 1585).
 
 - [ ] WP3 Night-before pickup reminders people can act on (F4): an evening push for confirmed pickup days, nothing on quiet days, holiday moves, a "Bins out" button, and the pickup editor opening on its own in cities with no pickup rows yet (today, everywhere but Camas).
   - [x] Existing calendar/briefing implementation and holiday recurrence-preservation repair integrated (PR1540); service round-trip regressions passed.
   - [x] Actual iOS no-city editor autoopened; Tuesday garbage/alternating-Tuesday recycling persisted and reopened correctly. The first-save primer stayed usable; Remind me/OS Allow persisted evening-only opt-in; unchanged resave did not repeat the primer.
   - [x] The same stored schedule produced the correct combined evening pickup preview and morning pickup exclusion through the whole producer. These were two previews with no delivery or notification writes.
   - [x] Both apps: pickup push with the holiday "Moved a day" line, OS Bins out → reminder action, tap → Today, iOS cold start from the push; editor auto-open and primer; Android permission denied then granted; unconfirmed city defaults never push (L1, October 6).
-  - [ ] A scheduled evening delivery through the jobs backend, a severe-weather night (no live alert to test against yet), private-setup behavior, and delivery to a physical phone from the hosted backend.
+  - [x] The scheduled evening delivery fired on its own (seeder scheduler + jobs backend) on Android and iOS; private-setup push and Bins out; severe alerts lead the composer, moderate ones don't (injected alerts) (L1, October 6).
+  - [ ] A live severe-weather night, and delivery to a physical phone from the hosted backend.
 
 - [ ] WP4 Radon, from fact to reminder (F5, small): "Was it tested?", a home task with a date, a reminder with "Done" and "Not now". Includes two fixes to the task reminder job: finished tasks still get pushes, and pushes ignore a task's visibility.
   - [x] Actual iOS No/not sure → dated radon HomeTask → task-detail Done → persisted completion and Today Done passed.
   - [x] Both apps' task date edit/save/reopen preserves the chosen local day at 09:00 (16:00Z in the tested zone); reopening does not dirty the editor.
   - [x] Native reminder date-picker routes and capability-aware categories integrated: Done + Not now for editors/completers, Done only for complete-only recipients, no actions for unknown capabilities. Finished-task/visibility producer repairs are retained; 22 producer, 12 APNs and 14 Android routing regressions passed. This is not OS-button acceptance.
   - [x] Android: No → dated task → due-day push → OS Done; iOS: Yes path (L1, October 6).
-  - [ ] OS Not now, card Not now, Today's Change date and member Done-only on both apps; delivery to a physical phone.
+  - [x] OS Not now, card Not now, Change date and member Done-only on both apps, plus the overdue "was due" copy, member visibility, a completion push naming nobody and a private-setup home on Android (L1, October 6).
+  - [ ] Delivery to a physical phone.
 
 - [ ] WP5 One first-use prompt (F2, small).
   - [x] On the synthetic iOS Home, the initial two rows were observed; Set pickup focused the editor; saving pickup removed its row.
   - [x] The first-use card disappears once its items are handled (L1, October 6).
-  - [ ] Later, re-entry and private setup on both apps.
+  - [x] Later, re-entry and cold start on both apps; private setup on Android (L1, October 6).
+  - [ ] iOS private setup (waits on PR 1585).
 
 - [ ] WP6 The smallest household journey and the invite verification fix (F3 small, F3b gate).
   - [x] Household provenance/F3b server gates, invitation copy and private completion-notice source integrated.
@@ -150,7 +154,8 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] Actual iOS/Android organic session events and iOS radon decision writes persisted with safe metadata; accepted cold/short-return evidence is retained.
   - [x] Android normal 31-minute background return persisted exactly one session event; immediate short return persisted none, in the same process with no clock manipulation.
   - [x] The admin funnel summary matches the FunnelEvent rows exactly; iOS cold start from a push records `session_open` with push as the source (L1, October 6).
-  - [ ] Android cold start from a push, the iOS 30-minute return, and `reminder_sent` checked against accepted delivery on the hosted backend.
+  - [x] Android cold start from a push records `session_open` with push as the source; the iOS 30-minute return records exactly one `session_open` and a 15-second return none (L1, October 6).
+  - [ ] `reminder_sent` checked against accepted delivery on the hosted backend.
 
 - [ ] WP8 Support Train slot reminders for helpers who signed up by email, and the day-of reminder that never fires after the 24-hour one.
   - [x] PR1512 backend is merged: Train-local evening and independent day-of reminders, guest email, privacy, repeat/retry and no-start-time behavior passed normal API → DB → whole jobs → local SMTP acceptance (seven simulated clock phases; ten accepted messages and one deliberate refusal). The 15 captured temporary rows were already cleaned in that accepted run.
