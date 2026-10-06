@@ -124,6 +124,11 @@ class SignUpViewModel
             val isValid: Boolean get() =
                 agreedToTerms && SignUpField.values().all { validate(it) == null }
 
+            /** Anything typed or chosen; closing an untouched form doesn't ask to discard (iOS `hasInput`). */
+            val hasInput: Boolean get() =
+                listOf(email, password, confirmPassword, username, firstName, middleName, lastName, phoneNumber, inviteCode)
+                    .any { it.isNotEmpty() } || dateOfBirth != null || agreedToTerms
+
             fun validate(field: SignUpField): String? =
                 when (field) {
                     SignUpField.Email -> AuthValidation.email(email)
