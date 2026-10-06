@@ -1,3 +1,5 @@
+-- Backwards compatible: yes. Redefines one internal admission function with the same
+-- signature and grants; no table, column or data change.
 -- Someone who left a Home themselves can apply for it again.
 --
 -- Leaving marks the membership 'moved_out' and ends it. Every self-service admission path then
