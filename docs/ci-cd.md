@@ -4,8 +4,12 @@
 backend image, web lint/type checks/Jest/**production build**, the Identity
 Firewall Playwright test, seeder tests, Android, iOS and infrastructure checks.
 Mobile workflows are reusable children of CI, so a mobile failure or cancellation
-fails the aggregate. PR path filtering happens at the job level. Pushes to
-`master` and `dev` validate every surface. Database replay joins the aggregate
+fails the aggregate. Path filtering happens at the job level: a PR runs the
+surfaces it changes, and a push to `master` or `dev` runs the surfaces changed
+since that branch's previous commit. A manual run validates every surface. A PR's
+newer push cancels its older run. On `master` a running build is never cancelled:
+a newer merge waits as the single pending run (GitHub drops older pending ones), so
+the latest commit always gets a complete run. Database replay joins the aggregate
 only after the verified baseline is adopted.
 
 The backend job also checks Following activity against disposable PostgreSQL
@@ -20,7 +24,9 @@ route retains `root/home` for compatibility. Snapshot updates require inspecting
 the diff; do not increase tolerance to hide a failure.
 
 iOS builds the test bundle once for the runner's architecture, preserves symlinks in a tar artifact, then runs
-that same bundle on three iOS 18.5 simulators. Build and test timeouts are
+that same bundle on iOS 18.5 simulators: iPhone 16 for pull requests (to spare the
+shared macOS runners), and iPhone 16, iPhone 16 Pro and iPhone SE on `master` and
+manual runs. Build and test timeouts are
 separate, and cancellation preserves diagnostics. Xcode 16.4/iOS 18.5 retain the
 existing snapshot contract. TestFlight archives use Xcode 26.2 to meet Apple's
 current SDK upload requirement. UI tests are compiled but not executed on hosted
@@ -123,12 +129,22 @@ read-only repository permissions and keep deployment secrets out of PR jobs.
 - Android: `android-v*` tags or manual dispatch use `android-release`. Configure
   `ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`, `PANTOPUS_KEY_ALIAS`,
   `PANTOPUS_KEY_PASSWORD`, `PLAY_STORE_SERVICE_ACCOUNT_JSON`,
-  `PANTOPUS_API_BASE_URL`, `PANTOPUS_SOCKET_URL`, `STRIPE_PUBLISHABLE_KEY` and
-  `MAPS_API_KEY`. Commit a new increasing `versionCode` before each new upload;
+  `PANTOPUS_API_BASE_URL`, `PANTOPUS_SOCKET_URL`, `STRIPE_PUBLISHABLE_KEY`,
+  `MAPS_API_KEY` and `GOOGLE_SERVICES_JSON` (the Firebase config for
+  `app.pantopus.android`; the committed `app/google-services.json` is a build
+  placeholder, so the release job refuses to run without the real one). Commit a new increasing `versionCode` before each new upload;
   tags do not change the app version. Store acceptance/signing must be verified
   with the actual accounts before the first release.
 - Optional repository secrets `SLACK_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL` send
   production deployment outcomes. A disabled deployment is not a success alert.
+
+## Runners and actions
+
+Linux jobs run on `ubuntu-24.04`, pinned so GitHub's move of `ubuntu-latest` to
+Ubuntu 26 (from October 19, 2026) doesn't change the image during the pilot
+launch; move the pin deliberately later. Every action uses a release that runs
+on Node 24. Release workflows pass secrets to scripts through `env`, never by
+template interpolation inside a script.
 
 ## Local checks
 
