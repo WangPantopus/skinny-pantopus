@@ -2069,6 +2069,7 @@ public struct HubTabRoot: View {
                         case let .homeSecurity(id) where id == homeId: true
                         case let .homeOwnershipSecurity(id) where id == homeId: true
                         case let .homeDashboard(id) where id == homeId: true
+                        case let .placeDashboard(id) where id == homeId: true
                         case let .placeDetail(id, _) where id == homeId: true
                         case let .waitingRoom(id) where id == homeId: true
                         default: false
