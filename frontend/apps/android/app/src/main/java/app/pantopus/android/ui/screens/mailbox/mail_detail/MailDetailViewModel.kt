@@ -978,13 +978,7 @@ class MailDetailViewModel
                     if (detail.certified) MailItemCategory.Certified else MailItemCategory.fromRaw(detail.mailType ?: detail.type)
                 // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
                 val trust = MailTrust.fromRaw(detail.senderTrust)
-                // Same order as the server's resolveSenderDisplay and the web: the name printed on the item first.
-                val senderDisplayName =
-                    detail.printedSender
-                        ?: detail.sender?.name
-                        ?: detail.senderBusinessName
-                        ?: detail.senderAddress
-                        ?: "Unknown sender"
+                val senderDisplayName = resolveSenderName(detail)
                 val senderMeta = detail.sender?.username?.let { "@$it" } ?: detail.senderAddress
                 val senderTypeLabel =
                     senderTypeLabel(
@@ -1043,6 +1037,14 @@ class MailDetailViewModel
                     extractedFacts = detail.extractedFacts,
                 )
             }
+
+            /** Same order as the server's resolveSenderDisplay and the web: the name printed on the item first. */
+            private fun resolveSenderName(detail: MailDetail): String =
+                detail.printedSender
+                    ?: detail.sender?.name
+                    ?: detail.senderBusinessName
+                    ?: detail.senderAddress
+                    ?: "Unknown sender"
 
             /** Pantopus certified mail (`Mail.certified`): Received → Read → Signed from the letter's timestamps. */
             private fun pantopusCertified(detail: MailDetail): CertifiedDetailDto? =
