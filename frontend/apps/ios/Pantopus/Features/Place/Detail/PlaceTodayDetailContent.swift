@@ -1141,6 +1141,8 @@ private final class RadonTodayState {
     var hasDate = false
     var result = ""
     var retained: CreateHomeTaskRequest?
+    /// The viewer can't read the household's tasks (e.g. a guest): the card isn't theirs to answer.
+    var noTaskAccess = false
 
     init(homeId: String) {
         self.homeId = homeId
@@ -1152,7 +1154,7 @@ private final class RadonTodayState {
     }
 
     var hidden: Bool {
-        task == nil && (dismissedUntil.map { $0 > Date() } ?? false)
+        noTaskAccess || (task == nil && (dismissedUntil.map { $0 > Date() } ?? false))
     }
 
     func suspend() {
@@ -1178,7 +1180,13 @@ private final class RadonTodayState {
             guard (try? context.requireCurrent()) != nil, access.lifecycleRevision == revision, access.isCurrent else { return }
             loaded = false
             canCreate = false
-            self.error = "Couldn't check your home's radon tasks. Try again."
+            if case .forbidden = error as? APIError {
+                // A retry can't help someone who can't read the household's tasks.
+                noTaskAccess = true
+                self.error = nil
+            } else {
+                self.error = "Couldn't check your home's radon tasks. Try again."
+            }
         }
     }
 
