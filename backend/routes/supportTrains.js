@@ -3483,6 +3483,9 @@ router.post(
         actorUserId: userId,
         payload: {
           helper_user_id: reservation.user_id,
+          // A guest signed up by email only; the email is how they hear.
+          helper_guest_email: reservation.user_id ? null : reservation.guest_email,
+          helper_guest_name: reservation.user_id ? null : reservation.guest_name,
           slot_id: reservation.slot_id,
           slot_label: slot?.slot_label,
           slot_date: slot?.slot_date,
