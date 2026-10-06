@@ -140,7 +140,7 @@ fun SignUpScreen(
         rightActionLabel = null,
         bottomActionLabel = "Create account",
         isValid = state.isValid,
-        isDirty = true,
+        isDirty = state.hasInput,
         isSaving = state.isSubmitting,
         onClose = onClose,
         onCommit = viewModel::submit,

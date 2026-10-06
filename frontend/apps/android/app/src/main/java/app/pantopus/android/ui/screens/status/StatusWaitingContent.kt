@@ -328,6 +328,15 @@ data class StatusWaitingContent(
                     icon = PantopusIcon.ExternalLink,
                     style = StatusActionButtonStyle.Primary,
                 )
+            // The screen can't see a link opened on another device or in a browser;
+            // this is the way on once the email is confirmed there.
+            val confirmed =
+                StatusActionButton(
+                    id = "confirmedLogIn",
+                    label = "Already confirmed? Log in",
+                    actionKey = "confirmed_log_in",
+                    style = StatusActionButtonStyle.Underline,
+                )
             val useDifferent =
                 StatusActionButton(
                     id = "changeEmail",
@@ -374,7 +383,7 @@ data class StatusWaitingContent(
                             isSpinning = true,
                         )
                     },
-                actionStack = listOf(openMail, resend, useDifferent),
+                actionStack = listOf(openMail, resend, confirmed, useDifferent),
                 footnote =
                     if (resent) {
                         "Still nothing? Double-check the spelling, or use a different email."

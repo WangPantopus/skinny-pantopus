@@ -30,6 +30,7 @@ struct VerifyEmailView: View {
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let onDone: () -> Void
     let onChangeEmail: ((String) -> Void)?
+    let onConfirmed: ((String?) -> Void)?
 
     /// - Parameters:
     ///   - email: Address the verification link was sent to. Surfaced in
@@ -43,12 +44,16 @@ struct VerifyEmailView: View {
     ///     backs out of the surface. Host pops the auth stack.
     ///   - onChangeEmail: Optional handoff for "Use a different email" —
     ///     host should route back to the create-account flow.
+    ///   - onConfirmed: "Already confirmed? Log in" — the link was opened on
+    ///     another device or in a browser. Host returns to login with this
+    ///     email; falls back to `onDone`.
     init(
         email: String? = nil,
         token: String? = nil,
         softGate: Bool = true,
         onDone: @escaping () -> Void = {},
-        onChangeEmail: ((String) -> Void)? = nil
+        onChangeEmail: ((String) -> Void)? = nil,
+        onConfirmed: ((String?) -> Void)? = nil
     ) {
         _viewModel = State(
             initialValue: VerifyEmailViewModel(
@@ -59,6 +64,7 @@ struct VerifyEmailView: View {
         )
         self.onDone = onDone
         self.onChangeEmail = onChangeEmail
+        self.onConfirmed = onConfirmed
     }
 
     var body: some View {
@@ -149,6 +155,8 @@ struct VerifyEmailView: View {
             resend()
         case "change_email":
             showChangeEmailSheet = true
+        case "confirmed_log_in":
+            if let onConfirmed { onConfirmed(viewModel.email) } else { onDone() }
         default:
             break
         }

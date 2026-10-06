@@ -286,6 +286,10 @@ struct LoginView: View {
                             // documented in `docs/mobile/auth-backend-contracts.md`
                             // §2; today we restart signup with the new value.
                             path = [.signUp(inviteCode: nil)]
+                        },
+                        onConfirmed: { email in
+                            if let email, !email.isEmpty { viewModel.email = email }
+                            path = []
                         }
                     )
                 case let .verifyEmailLanding(token, email):
