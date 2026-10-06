@@ -10,7 +10,7 @@ const MESSAGES = {
   HOME_NOT_FOUND: 'This Home is no longer available. Check the address again.',
   RESIDENCY_HOME_UNAVAILABLE: 'This Home cannot accept a residency request right now.',
   OWNERSHIP_FLOW_REQUIRED: 'Use ownership verification to manage your ownership request.',
-  MEMBERSHIP_RENEWAL_REQUIRED: 'Your previous access needs a new household review before it can be restored.',
+  MEMBERSHIP_RENEWAL_REQUIRED: 'You left this household or were removed from it. Ask someone in the household to invite you again.',
   RESIDENCY_ALREADY_VERIFIED: 'Your residency was already verified. Open My Homes to check current access.',
   RESIDENCY_EXISTING_REQUEST: 'Your existing request has different details. Open My Homes to review it.',
 };

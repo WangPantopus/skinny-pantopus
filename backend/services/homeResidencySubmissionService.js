@@ -11,7 +11,7 @@ const MESSAGES = {
   RESIDENCY_HOME_UNAVAILABLE: 'This Home cannot accept a residency request right now.',
   RESIDENCY_ADDRESS_CHANGED: 'This Home’s address has changed. Check the address and apartment again before submitting a new request.',
   OWNERSHIP_FLOW_REQUIRED: 'Use ownership verification to manage your ownership request.',
-  MEMBERSHIP_RENEWAL_REQUIRED: 'Your previous access needs a new household review before it can be restored.',
+  MEMBERSHIP_RENEWAL_REQUIRED: 'You left this household or were removed from it. Ask someone in the household to invite you again.',
   RESIDENCY_ALREADY_VERIFIED: 'This residency was already verified. Open My Homes to check current access.',
   RESIDENCY_EXISTING_REQUEST: 'Review your existing residency request before changing its details.',
 };
