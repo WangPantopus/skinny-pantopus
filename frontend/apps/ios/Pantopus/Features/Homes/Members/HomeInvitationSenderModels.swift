@@ -142,7 +142,8 @@ struct HomeInvitationSenderOutcome: Codable, Equatable {
         case "not_requested": break
         default: lines.append("We couldn't confirm their Pantopus notification.")
         }
-        return lines.isEmpty ? "No email or notification was sent. Share the invitation link so they can accept." : lines.joined(separator: " ")
+        if lines.isEmpty { return "No email or notification was sent. Share the invitation link so they can accept." }
+        return lines.joined(separator: " ")
     }
 }
 
@@ -199,8 +200,14 @@ enum HomeInvitationSenderValidation {
         guard let key else { return "Household role defaults" }
         if key.hasPrefix("access_request:") { return "Household approval" }
         // The web's names for the relationships it offers.
-        let named = ["tenant": "Tenant / Roommate", "spouse": "Spouse / Partner", "extended_family": "Extended family",
-                     "child": "Child", "airbnb_guest": "Short-stay guest", "cleaner_vendor": "Cleaner / Vendor"]
+        let named = [
+            "tenant": "Tenant / Roommate",
+            "spouse": "Spouse / Partner",
+            "extended_family": "Extended family",
+            "child": "Child",
+            "airbnb_guest": "Short-stay guest",
+            "cleaner_vendor": "Cleaner / Vendor"
+        ]
         return named[key] ?? key.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
