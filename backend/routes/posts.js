@@ -2727,9 +2727,12 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { data: existing } = await supabaseAdmin.from('Post').select('user_id').eq('id', id).single();
+    const { data: existing } = await supabaseAdmin.from('Post').select('user_id, archive_reason').eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only restore your own posts' });
+    if (existing.archive_reason === 'moderation') {
+      return res.status(403).json({ error: 'This post was removed for breaking the community guidelines.', code: 'POST_REMOVED' });
+    }
 
     const updatedAt = new Date().toISOString();
     const { error } = await supabaseAdmin
