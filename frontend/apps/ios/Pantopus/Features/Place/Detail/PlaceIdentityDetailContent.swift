@@ -233,7 +233,9 @@ struct PlaceIdentityDetailContent: View {
             PlaceLockedCard(
                 icon: .fileText,
                 title: "Verified residency letter",
-                reason: "Verify your address to issue a server-attested letter that states your verified address for a purpose you choose.",
+                reason: vm.nonResidentViewer
+                    ? "For this home's verified residents."
+                    : "Verify your address to issue a server-attested letter that states your verified address for a purpose you choose.",
                 cta: "Verify address",
                 onTap: vm.verifyAction
             )
@@ -247,7 +249,9 @@ struct PlaceIdentityDetailContent: View {
             PlaceLockedCard(
                 icon: .idCard,
                 title: "Prove residency without sharing your address",
-                reason: "Verify your address to share one fact — your city, school district, or county — behind a live-checked link.",
+                reason: vm.nonResidentViewer
+                    ? "For this home's verified residents."
+                    : "Verify your address to share one fact — your city, school district, or county — behind a live-checked link.",
                 cta: "Verify address",
                 onTap: vm.verifyAction
             )

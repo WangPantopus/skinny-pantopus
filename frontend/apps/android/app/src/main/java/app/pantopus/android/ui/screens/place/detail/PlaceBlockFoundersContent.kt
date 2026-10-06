@@ -82,8 +82,12 @@ fun PlaceBlockFoundersSection(
         PlaceLockedCard(
             title = "Block founders",
             reason =
-                "Verify your address to claim a permanent founding rank on your block — the earliest " +
-                    "verified homes keep their number forever.",
+                if (intel.nonResidentViewer) {
+                    "Founding ranks belong to the verified homes on this block — the earliest keep their number forever."
+                } else {
+                    "Verify your address to claim a permanent founding rank on your block — the earliest " +
+                        "verified homes keep their number forever."
+                },
             cta = "Verify address",
             icon = PantopusIcon.Ribbon,
             onTap = LocalPlaceDetailVerify.current,

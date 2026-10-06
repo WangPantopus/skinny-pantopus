@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
+import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.place.PlaceDeniedState
@@ -75,7 +76,12 @@ fun PlaceDetailScreen(
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 16.dp),
                 ) {
-                    CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh, LocalPlaceDetailVerify provides verify) {
+                    // Guests and service providers can't verify this address: no verify action.
+                    val detailVerify = verify.takeUnless { current.intelligence.nonResidentViewer }
+                    CompositionLocalProvider(
+                        LocalPlaceDetailRetry provides viewModel::refresh,
+                        LocalPlaceDetailVerify provides detailVerify,
+                    ) {
                         GroupContent(group = viewModel.group, intel = current.intelligence, viewModel = viewModel)
                     }
                     Spacer(modifier = Modifier.height(40.dp))
@@ -129,6 +135,10 @@ val LocalPlaceDetailRetry = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 /** Opens the verify sheet: the tap for a locked section's "Verify address" (null where no flow is wired). */
 val LocalPlaceDetailVerify = staticCompositionLocalOf<(() -> Unit)?> { null }
+
+/** Guests and service providers can't verify this address (server `verify_available`). */
+internal val PlaceIntelligence.nonResidentViewer: Boolean
+    get() = tier == PlaceTier.T3 && verifyAvailable == false
 
 /**
  * Fallback card for a section with no bespoke layout.

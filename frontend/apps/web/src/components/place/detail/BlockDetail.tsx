@@ -223,7 +223,7 @@ function FoundersCard({ block, homeId }: { block: BlockStatus; homeId: string })
   );
 }
 
-function FoundersSection({ homeId, verified }: { homeId: string | null; verified: boolean }) {
+function FoundersSection({ homeId, verified, canVerify }: { homeId: string | null; verified: boolean; canVerify: boolean }) {
   const blockQuery = useQuery({
     queryKey: queryKeys.blockFounders(homeId ?? ''),
     queryFn: () => api.blockFounders.getBlockStatus(homeId!),
@@ -239,7 +239,9 @@ function FoundersSection({ homeId, verified }: { homeId: string | null; verified
         <div className="flex-1 min-w-0">
           <div className="text-[14.5px] font-semibold text-app-text">Block founders</div>
           <div className="text-[12.5px] text-app-text-muted mt-0.5">
-            Verify your address to claim a permanent founding rank on your block — the earliest verified homes keep their number forever.
+            {canVerify
+              ? 'Verify your address to claim a permanent founding rank on your block — the earliest verified homes keep their number forever.'
+              : 'Founding ranks belong to the verified homes on this block — the earliest keep their number forever.'}
           </div>
         </div>
       </div>
@@ -275,7 +277,9 @@ export default function BlockDetail({ intelligence, homeId }: { intelligence: Pl
   // The "be first to verify" nudge only makes sense before the viewer is
   // verified; a T4 resident already is, so we drop the CTA for them.
   const verified = intelligence.tier === 'T4';
-  const showVerifyCta = !verified && !!homeId;
+  // Guests and service providers can't verify this address (server `verify_available`).
+  const canVerify = intelligence.verify_available !== false;
+  const showVerifyCta = !verified && !!homeId && canVerify;
 
   return (
     <>
@@ -293,7 +297,7 @@ export default function BlockDetail({ intelligence, homeId }: { intelligence: Pl
         )}
 
         <DetailSectionLabel>Block founders</DetailSectionLabel>
-        <FoundersSection homeId={homeId} verified={verified} />
+        <FoundersSection homeId={homeId} verified={verified} canVerify={canVerify} />
 
         <DetailSectionLabel>Neighborhood</DetailSectionLabel>
         {censusReady ? (

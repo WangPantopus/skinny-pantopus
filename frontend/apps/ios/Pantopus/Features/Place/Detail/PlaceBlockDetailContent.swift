@@ -24,6 +24,14 @@ struct PlaceBlockDetailContent: View {
         _founders = State(initialValue: PlaceBlockFoundersViewModel(homeId: vm.homeId))
     }
 
+    /// Guests and service providers can't verify this address, so they get no instruction to.
+    private var foundersReason: String {
+        if vm.nonResidentViewer {
+            return "Founding places belong to the verified homes on this block — the earliest keep their number forever."
+        }
+        return "Verify your address to claim your permanent founding place on this block, see what each locked block surface is still waiting for, and mail an invitation to a neighbor."
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let density = vm.section(.blockDensity, in: intel) {
@@ -32,7 +40,7 @@ struct PlaceBlockDetailContent: View {
                     PlaceDensityCard(
                         bucket: data.bucket,
                         label: data.label,
-                        ctaTitle: "Be one of the first to verify on your block",
+                        ctaTitle: vm.verifyAction == nil ? nil : "Be one of the first to verify on your block",
                         onTap: vm.verifyAction
                     )
                 } else {
@@ -49,7 +57,7 @@ struct PlaceBlockDetailContent: View {
                 PlaceLockedCard(
                     icon: .crown,
                     title: "Block founders",
-                    reason: "Verify your address to claim your permanent founding place on this block, see what each locked block surface is still waiting for, and mail an invitation to a neighbor.",
+                    reason: foundersReason,
                     cta: "Verify address",
                     onTap: vm.verifyAction
                 )

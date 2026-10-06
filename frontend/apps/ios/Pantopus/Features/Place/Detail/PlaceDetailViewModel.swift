@@ -55,9 +55,16 @@ final class PlaceDetailViewModel {
         self.onStartVerify = onStartVerify
     }
 
-    /// The tap for a locked section's "Verify address"; nil where no flow is wired.
+    /// Guests and service providers can't verify this address (server `verify_available`).
+    var nonResidentViewer: Bool {
+        if case let .loaded(intel) = state { return intel.tier == .t3 && intel.verifyAvailable == false }
+        return false
+    }
+
+    /// The tap for a locked section's "Verify address"; nil where no flow is wired
+    /// or the viewer can't verify this address.
     var verifyAction: (() -> Void)? {
-        guard onStartVerify != nil else { return nil }
+        guard onStartVerify != nil, !nonResidentViewer else { return nil }
         return { [weak self] in self?.showVerify = true }
     }
 
