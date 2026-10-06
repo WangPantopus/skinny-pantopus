@@ -1356,16 +1356,15 @@ private struct RadonTodaySheet: View {
                     }
                     if tested {
                         Toggle("Test date (optional)", isOn: $state.hasDate)
-                        if state.hasDate { DatePicker("Test date", selection: $state.selectedDate, displayedComponents: .date) }
+                        if state.hasDate { RadonDateRow(title: "Test date", date: $state.selectedDate) }
                         TextField("Result (pCi/L)", text: $state.result)
                             .keyboardType(.decimalPad)
                             .textFieldStyle(.roundedBorder)
                     } else {
-                        DatePicker(
-                            "Reminder date",
-                            selection: $state.selectedDate,
-                            in: Calendar.autoupdatingCurrent.startOfDay(for: Date())...,
-                            displayedComponents: .date
+                        RadonDateRow(
+                            title: "Reminder date",
+                            date: $state.selectedDate,
+                            range: Calendar.autoupdatingCurrent.startOfDay(for: Date())...
                         )
                     }
                 }
@@ -1393,6 +1392,28 @@ private struct RadonTodaySheet: View {
                 .map { $0.isFinite && $0 >= 0 } == true
         }
         return Calendar.autoupdatingCurrent.startOfDay(for: state.selectedDate) >= Calendar.autoupdatingCurrent.startOfDay(for: Date())
+    }
+}
+
+/// A date row that stays readable at accessibility text sizes: the compact
+/// picker's date chip grows until its inline label is squeezed to a column one
+/// letter wide, so the label moves above the picker there.
+private struct RadonDateRow: View {
+    let title: String
+    @Binding var date: Date
+    var range: PartialRangeFrom<Date> = Date.distantPast...
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                DatePicker(title, selection: $date, in: range, displayedComponents: .date)
+                    .labelsHidden()
+            }
+        } else {
+            DatePicker(title, selection: $date, in: range, displayedComponents: .date)
+        }
     }
 }
 
