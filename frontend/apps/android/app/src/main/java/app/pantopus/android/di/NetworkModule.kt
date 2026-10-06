@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.ApiService
 import app.pantopus.android.data.api.models.homes.UploadEvidenceRequestJsonAdapter
 import app.pantopus.android.data.api.net.RetryInterceptor
 import app.pantopus.android.data.api.net.SafeHttpLoggingInterceptor
+import app.pantopus.android.data.api.net.UtcTimestampInterceptor
 import app.pantopus.android.data.api.services.AIApi
 import app.pantopus.android.data.api.services.AccountDeletionApi
 import app.pantopus.android.data.api.services.AdminApi
@@ -222,6 +223,8 @@ object NetworkModule {
         return OkHttpClient
             .Builder()
             .cache(cache)
+            // Outermost: UTC timestamps reach Moshi as "Z", which Android 8–13 can parse.
+            .addInterceptor(UtcTimestampInterceptor())
             // X-Client-Platform + X-Device-Id on every request (both clients).
             .addInterceptor(deviceIdentityInterceptor)
             .addNetworkInterceptor(authInterceptor.dispatchGuardInterceptor())

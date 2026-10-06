@@ -1,6 +1,7 @@
 package app.pantopus.android.data.realtime
 
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.data.api.net.UtcTimestamps
 import io.socket.client.Ack
 import io.socket.client.IO
 import io.socket.client.Socket
@@ -139,7 +140,7 @@ class SocketManager
                     callbackFlow {
                         val listener =
                             io.socket.emitter.Emitter.Listener { args ->
-                                (args.firstOrNull() as? JSONObject)?.let { trySend(it) }
+                                (args.firstOrNull() as? JSONObject)?.let { trySend(UtcTimestamps.normalizeInPlace(it)) }
                             }
                         s.on(event, listener)
                         awaitClose { s.off(event, listener) }
@@ -166,7 +167,7 @@ class SocketManager
                         event,
                         payload,
                         Ack { args ->
-                            val response = args.firstOrNull() as? JSONObject
+                            val response = (args.firstOrNull() as? JSONObject)?.let(UtcTimestamps::normalizeInPlace)
                             if (continuation.isActive) continuation.resume(response)
                         },
                     )
