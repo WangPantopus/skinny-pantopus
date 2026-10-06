@@ -89,6 +89,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection.HTTP_FORBIDDEN
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -737,7 +738,7 @@ private class RadonTodayState(
             if (runCatching { requireCurrent() }.isFailure) return
             loaded = false
             canCreate = false
-            noTaskAccess = failure.code == 403
+            noTaskAccess = failure.code == HTTP_FORBIDDEN
             error = if (noTaskAccess) null else "Couldn't check your home's radon tasks. Try again."
         } catch (_: Exception) {
             if (runCatching { requireCurrent() }.isFailure) return
@@ -771,13 +772,15 @@ private class RadonTodayState(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: NetworkError) {
-            if (runCatching { requireCurrent() }.isSuccess) {
-                error = "Couldn't open this task action. Reopen Tasks to recover any saved request."
-            }
+            openFailed()
         } catch (_: Exception) {
-            if (runCatching { requireCurrent() }.isSuccess) {
-                error = "Couldn't open this task action. Reopen Tasks to recover any saved request."
-            }
+            openFailed()
+        }
+    }
+
+    private suspend fun openFailed() {
+        if (runCatching { requireCurrent() }.isSuccess) {
+            error = "Couldn't open this task action. Reopen Tasks to recover any saved request."
         }
     }
 
