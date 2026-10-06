@@ -3251,9 +3251,10 @@ public struct HubTabRoot: View {
                 viewModel: VacationHoldViewModel(onBack: { pop() })
             )
         case let .mailDay(variant):
-            MailDayView(viewModel: MailDayViewModel(variant: variant)) {
-                pop()
-            }
+            // Keep the `onClose:` label: as a trailing closure it binds to
+            // `onSeeHistory` and Back does nothing.
+            // swiftlint:disable:next trailing_closure
+            MailDayView(viewModel: MailDayViewModel(variant: variant), onClose: { pop() })
         case .wallet:
             // Withdraw + payout setup (Block 3C) are handled inside WalletView
             // via the WalletViewModel (Stripe Connect onboarding / dashboard /
