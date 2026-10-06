@@ -449,6 +449,7 @@ import app.pantopus.android.ui.screens.wallet.scheduling.PaymentsSetupScreen
 import app.pantopus.android.ui.screens.wallet.scheduling.PayoutsEarningsScreen
 import app.pantopus.android.ui.screens.you.YouScreen
 import app.pantopus.android.ui.theme.PantopusIcon
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import app.pantopus.android.ui.screens.scheduling.invoices.InvoiceDetailScreen as SchedulingInvoiceDetailScreen
 import app.pantopus.android.ui.screens.scheduling.packages.PackagesListScreen as SchedulingPackagesListScreen
@@ -2063,6 +2064,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
     val navDrawerState = rememberDrawerState(DrawerValue.Closed)
     val navDrawerScope = rememberCoroutineScope()
+    // Place tapped again on its Hub root: one event, so coming back to the Hub
+    // by Back later doesn't replay it.
+    val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     // Child screens keep the tab they were opened from lit (they used to fall
     // back to Place, which also swallowed taps on Place from those screens).
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -2525,6 +2529,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     badges = badges,
                     onSelect = { target ->
                         if (target == currentRoute) {
+                            if (target == PantopusRoute.Place && navController.currentDestination?.route == PantopusRoute.Place.path) {
+                                placeReselects.tryEmit(Unit)
+                            }
                             navController.popToTabRoot(target)
                             return@PantopusBottomBar
                         }
@@ -2569,6 +2576,20 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             val route = navController.currentDestination?.route
                             val otherTab = setOf(PantopusRoute.Today.path, PantopusRoute.Nearby.path, PantopusRoute.Mail.path)
                             if (route in otherTab) placeHostVm.markLeftFromHubRoot()
+                        }
+                    }
+                    // Tapping Place again on the Hub lands on Your Place again; a tap
+                    // on Your Place still opens the Hub, which keeps its bell and tools.
+                    LaunchedEffect(Unit) {
+                        placeReselects.collect {
+                            placeHostVm.refreshIfNoHome()
+                            val homeId = (placeHostVm.landing.value as? HomeLanding.PlaceDashboard)?.homeId ?: return@collect
+                            val linkPending =
+                                DeepLinkRouter.pending.value != null ||
+                                    app.pantopus.android.core.routing.PendingDeepLinkStore.peek() != null
+                            if (!linkPending && navController.currentDestination?.route == PantopusRoute.Place.path) {
+                                navController.navigate(ChildRoutes.placeDashboard(homeId))
+                            }
                         }
                     }
                     LaunchedEffect(placeLanding) {
