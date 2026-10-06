@@ -136,6 +136,12 @@ data class HomeDetail(
     val isOwner: Boolean = false,
     @Json(name = "ownership_status") val ownershipStatus: String? = null,
     @Json(name = "residency_status") val residencyStatus: String? = null,
+    /**
+     * `HomeOccupancy.verification_source`: `address`, `household` or `legacy`.
+     * `household` means verified only through an invitation or a manager's
+     * approval (F3b), not by proving the address.
+     */
+    @Json(name = "residency_source") val residencySource: String? = null,
     @Json(name = "role_base") val roleBase: String? = null,
     val isPendingOwner: Boolean = false,
     val pendingClaimId: String?,

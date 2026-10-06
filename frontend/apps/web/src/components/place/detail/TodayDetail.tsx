@@ -188,6 +188,13 @@ const AQI_BAND_INDEX: Record<AirQualityCategory, number> = {
   hazardous: 5,
 };
 
+// The server sends pollutant tokens ("pm25", "ozone"); show their usual names.
+const POLLUTANT_LABELS: Record<string, string> = { pm25: 'PM2.5', pm10: 'PM10', ozone: 'Ozone', no2: 'NO2', so2: 'SO2', co: 'CO' };
+
+function pollutantLabel(token: string): string {
+  return POLLUTANT_LABELS[token.toLowerCase()] ?? token.toUpperCase();
+}
+
 function aqiMarkerPct(index: number): number {
   const v = Math.max(0, Math.min(500, index));
   for (let b = 0; b < AQI_BREAKS.length - 1; b += 1) {
@@ -211,7 +218,7 @@ function AqiCard({ data }: { data: PlaceAirQualityData }) {
             <span className="text-base font-semibold" style={{ color: labelColor }}>{data.category_label}</span>
           </div>
           <div className="text-[13px] text-app-text-secondary mt-0.5">
-            US Air Quality Index{data.dominant_pollutant ? ` (${data.dominant_pollutant.toUpperCase()})` : ''}
+            US Air Quality Index{data.dominant_pollutant ? ` (${pollutantLabel(data.dominant_pollutant)})` : ''}
           </div>
         </div>
         <span className="w-11 h-11 rounded-xl bg-app-home-bg flex items-center justify-center shrink-0">
