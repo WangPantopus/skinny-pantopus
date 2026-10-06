@@ -1,9 +1,11 @@
 package app.pantopus.android.data.homes
 
+import app.pantopus.android.data.api.models.homedashboard.BillBenchmarkPreferenceRequest
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
 import app.pantopus.android.data.api.models.homedashboard.HomePropertyValueDto
+import app.pantopus.android.data.api.models.homedashboard.HomeSettingsUpdateResponse
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemDto
 import app.pantopus.android.data.api.models.homedashboard.UpdateSeasonalChecklistItemRequest
@@ -59,4 +61,13 @@ open class HomeDashboardRepository
             homeId: String,
             currency: String = "USD",
         ): NetworkResult<HomeBillTrendsDto> = safeApiCall { api.billTrends(homeId, currency) }
+
+        /** `PATCH /api/homes/:id/settings`: the Home's anonymous bill comparison opt-in. */
+        open suspend fun setBillBenchmarkOptIn(
+            homeId: String,
+            optedIn: Boolean,
+        ): NetworkResult<HomeSettingsUpdateResponse> =
+            safeApiCall {
+                api.setBillBenchmarkOptIn(homeId, BillBenchmarkPreferenceRequest(BillBenchmarkPreferenceRequest.Preferences(optedIn)))
+            }
     }

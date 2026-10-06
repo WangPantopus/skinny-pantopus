@@ -208,6 +208,8 @@ final class HomeDashboardViewModel {
     private(set) var billTrends: HomeIntelligenceCardState<HomeBillTrendsDTO> = .loading
     private(set) var billCurrency = "USD"
     private(set) var billCurrencies = ["USD"]
+    private(set) var isSavingBillSharing = false
+    private(set) var billSharingFailed = false
     private var billReadID = UUID()
     /// Checklist item ids with an in-flight PATCH — the row disables while
     /// its mutation is awaiting the server's returned item state.
@@ -593,6 +595,33 @@ final class HomeDashboardViewModel {
     func retryBillTrends() async {
         billTrends = .loading
         await loadBillTrends()
+    }
+
+    var canChangeBillSharing: Bool {
+        can("home.edit")
+    }
+
+    /// The anonymous neighborhood comparison is opt-in per Home (as on the
+    /// web). Reload the card so it shows what the server saved.
+    func setBillBenchmarkOptIn(_ optedIn: Bool) async {
+        guard canChangeBillSharing, !isSavingBillSharing else { return }
+        let revision = generation
+        isSavingBillSharing = true
+        billSharingFailed = false
+        defer { if revision == generation { isSavingBillSharing = false } }
+        do {
+            try await authorize(revision)
+            let _: EmptyResponse = try await api.request(
+                HomeSettingsEndpoints.setBillBenchmarkOptIn(homeId: homeId, optedIn: optedIn)
+            )
+            try await authorize(revision)
+            await loadBillTrends()
+        } catch APIError.forbidden {
+            retireAccess(revision)
+        } catch {
+            guard current(revision) else { return }
+            billSharingFailed = true
+        }
     }
 
     func selectBillCurrency(_ currency: String) async {

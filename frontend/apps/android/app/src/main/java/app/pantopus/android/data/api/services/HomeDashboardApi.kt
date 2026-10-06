@@ -1,10 +1,12 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.homedashboard.BillBenchmarkPreferenceRequest
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
 import app.pantopus.android.data.api.models.homedashboard.HomePropertyValueDto
+import app.pantopus.android.data.api.models.homedashboard.HomeSettingsUpdateResponse
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemDto
 import app.pantopus.android.data.api.models.homedashboard.UpdateSeasonalChecklistItemRequest
@@ -91,4 +93,11 @@ interface HomeDashboardApi {
         @Path("id") homeId: String,
         @Query("currency") currency: String = "USD",
     ): HomeBillTrendsDto
+
+    /** `PATCH /api/homes/:id/settings` — route `backend/routes/homeIam.js`; needs `home.edit`. */
+    @PATCH("api/homes/{id}/settings")
+    suspend fun setBillBenchmarkOptIn(
+        @Path("id") homeId: String,
+        @Body body: BillBenchmarkPreferenceRequest,
+    ): HomeSettingsUpdateResponse
 }

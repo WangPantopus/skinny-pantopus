@@ -24,4 +24,10 @@ public enum HomeSettingsEndpoints {
     public static func updateHome(homeId: String, request: UpdateHomeRequest) -> Endpoint {
         Endpoint(method: .patch, path: "/api/homes/\(homeId)", body: request)
     }
+
+    /// `PATCH /api/homes/:id/settings` — route `backend/routes/homeIam.js`,
+    /// needs `home.edit`. Turns the anonymous bill comparison on or off.
+    public static func setBillBenchmarkOptIn(homeId: String, optedIn: Bool) -> Endpoint {
+        Endpoint(method: .patch, path: "/api/homes/\(homeId)/settings", body: BillBenchmarkPreferenceRequest(optedIn: optedIn))
+    }
 }

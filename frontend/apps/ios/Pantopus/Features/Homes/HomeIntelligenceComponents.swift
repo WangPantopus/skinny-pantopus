@@ -627,11 +627,20 @@ struct PropertyValueCard: View {
 
 /// `GET /api/homes/:id/bill-trends`. 403s for members without finance
 /// permission — the card hides itself in that case.
+/// Who may change the Home's anonymous bill sharing, and the save in flight.
+struct BillSharingState: Equatable {
+    var canChange = false
+    var isSaving = false
+    var failed = false
+}
+
 struct BillTrendsCard: View {
     let state: HomeIntelligenceCardState<HomeBillTrendsDTO>
     var currency = "USD"
     var currencies = ["USD"]
+    var sharing = BillSharingState()
     var onCurrencyChange: (String) -> Void = { _ in }
+    var onSharingChange: (Bool) -> Void = { _ in }
     let onRetry: () -> Void
 
     var body: some View {
@@ -702,27 +711,69 @@ struct BillTrendsCard: View {
                         .frame(minHeight: 44)
                         .accessibilityIdentifier("homeDashboard_billTrendsRetry")
                 }
-            } else if trends.billsByType.isEmpty {
-                Text("No paid \(currency) bills with a period start in the last 24 months.")
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, Spacing.s2)
             } else {
-                VStack(spacing: Spacing.s0) {
-                    ForEach(trends.billsByType.keys.sorted(), id: \.self) { key in
-                        if let series = trends.billsByType[key] {
-                            BillTrendRow(
-                                billType: key,
-                                series: series,
-                                benchmark: trends.benchmarks[key],
-                                currency: trends.currency ?? "USD"
-                            )
+                if trends.billsByType.isEmpty {
+                    Text("No paid \(currency) bills with a period start in the last 24 months.")
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, Spacing.s2)
+                } else {
+                    VStack(spacing: Spacing.s0) {
+                        ForEach(trends.billsByType.keys.sorted(), id: \.self) { key in
+                            if let series = trends.billsByType[key] {
+                                BillTrendRow(
+                                    billType: key,
+                                    series: series,
+                                    benchmark: trends.benchmarks[key],
+                                    currency: trends.currency ?? "USD"
+                                )
+                            }
                         }
                     }
                 }
+                BillSharingRow(optedIn: trends.billBenchmarkOptIn, state: sharing, onChange: onSharingChange)
             }
         }
+    }
+}
+
+/// The anonymous neighborhood comparison is opt-in per Home (as on the web).
+private struct BillSharingRow: View {
+    let optedIn: Bool
+    let state: BillSharingState
+    let onChange: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s1) {
+            if state.canChange {
+                Toggle(isOn: Binding(get: { optedIn }, set: onChange)) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Share bill data anonymously")
+                            .pantopusTextStyle(.small)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Theme.Color.appText)
+                        Text("Help neighbors compare costs. Only averages are shared — never individual amounts.")
+                            .pantopusTextStyle(.caption)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                    }
+                }
+                .tint(Theme.Color.home)
+                .disabled(state.isSaving)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("homeDashboard_billSharing")
+            } else {
+                Text("Bill sharing is \(optedIn ? "on" : "off").")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+            if state.failed {
+                Text("Couldn't change bill sharing. Try again.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.error)
+            }
+        }
+        .padding(.top, Spacing.s2)
     }
 }
 
@@ -746,7 +797,7 @@ private struct BillTrendRow: View {
                 ForEach(series.months.indices, id: \.self) { index in
                     VStack(alignment: .leading, spacing: Spacing.s1) {
                         HStack {
-                            Text(series.months[index])
+                            Text(HomeBillPresentation.month(series.months[index]))
                             Spacer()
                             Text(HomeBillPresentation.amount(series.amounts[index], currency: currency))
                                 .fontWeight(.semibold)
@@ -805,6 +856,7 @@ private struct BillTrendRow: View {
 
     private func monthlyLabel(_ index: Int) -> String {
         let amount = HomeBillPresentation.amount(series.amounts[index], currency: currency)
-        return "Monthly total for \(series.months[index]). Your home: \(amount). \(monthlyComparison(index))"
+        let month = HomeBillPresentation.month(series.months[index], spoken: true)
+        return "Monthly total for \(month). Your home: \(amount). \(monthlyComparison(index))"
     }
 }

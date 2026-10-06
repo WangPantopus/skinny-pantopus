@@ -4,6 +4,8 @@ import app.pantopus.android.data.api.models.homedashboard.HomeBillBenchmarkDto
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendSeriesDto
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
 import java.text.NumberFormat
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.util.Currency
 import java.util.Locale
 
@@ -61,16 +63,25 @@ internal object HomeBillPresentation {
         return formatter.format(value)
     }
 
+    /** "2026-09" reads "Sep 2026" (or "September 2026" for TalkBack). */
+    fun month(
+        value: String,
+        spoken: Boolean = false,
+    ): String =
+        runCatching {
+            YearMonth.parse(value).format(DateTimeFormatter.ofPattern(if (spoken) "MMMM yyyy" else "MMM yyyy", Locale.getDefault()))
+        }.getOrDefault(value)
+
     fun note(
         series: HomeBillTrendSeriesDto,
         benchmark: HomeBillBenchmarkDto?,
         currency: String,
     ): String? {
         if (series.months.isEmpty() || series.amounts.isEmpty()) return null
-        val month = series.months.last()
+        val latest = series.months.last()
         val mine = series.amounts.last()
-        val period = "$month · $currency"
-        val index = benchmark?.months?.indexOf(month) ?: -1
+        val period = "${month(latest)} · $currency"
+        val index = benchmark?.months?.indexOf(latest) ?: -1
         if (benchmark == null || benchmark.insufficientData || (benchmark.householdCount ?: 0) < MINIMUM_HOUSEHOLDS) {
             return "$period · No comparison for this month"
         }

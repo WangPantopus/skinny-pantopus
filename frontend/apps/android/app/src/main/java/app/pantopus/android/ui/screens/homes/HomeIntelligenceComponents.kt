@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -874,7 +876,9 @@ fun BillTrendsCard(
     onRetry: () -> Unit,
     currency: String = "USD",
     currencies: List<String> = listOf("USD"),
+    sharing: BillSharingState = BillSharingState(),
     onCurrencyChange: (String) -> Unit = {},
+    onSharingChange: (Boolean) -> Unit = {},
 ) {
     if (state is HomeIntelligenceCardState.Forbidden) return
     var currencyMenu by remember { mutableStateOf(false) }
@@ -922,9 +926,10 @@ fun BillTrendsCard(
                         retryTag = "homeDashboard_billTrendsRetry",
                         onRetry = onRetry,
                     )
-                } else if (state.value.billsByType.isEmpty()) {
-                    CardNote("No paid $currency bills with a period start in the last 24 months.")
                 } else {
+                    if (state.value.billsByType.isEmpty()) {
+                        CardNote("No paid $currency bills with a period start in the last 24 months.")
+                    }
                     state.value.billsByType.keys.sorted().forEach { key ->
                         state.value.billsByType[key]?.let { series ->
                             BillTrendRow(
@@ -935,7 +940,58 @@ fun BillTrendsCard(
                             )
                         }
                     }
+                    BillSharingRow(optedIn = state.value.billBenchmarkOptIn, state = sharing, onChange = onSharingChange)
                 }
+        }
+    }
+}
+
+/** Who may change the Home's anonymous bill sharing, and the save in flight. */
+data class BillSharingState(
+    val canChange: Boolean = false,
+    val isSaving: Boolean = false,
+    val failed: Boolean = false,
+)
+
+/** The anonymous neighborhood comparison is opt-in per Home (as on the web). */
+@Composable
+private fun BillSharingRow(
+    optedIn: Boolean,
+    state: BillSharingState,
+    onChange: (Boolean) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = Spacing.s2)) {
+        if (state.canChange) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .toggleable(value = optedIn, enabled = !state.isSaving, role = Role.Switch, onValueChange = onChange)
+                        .testTag("homeDashboard_billSharing"),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Share bill data anonymously",
+                        style = PantopusTextStyle.small,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.appText,
+                    )
+                    Text(
+                        "Help neighbors compare costs. Only averages are shared — never individual amounts.",
+                        style = PantopusTextStyle.caption,
+                        color = PantopusColors.appTextSecondary,
+                    )
+                }
+                Switch(checked = optedIn, onCheckedChange = null, enabled = !state.isSaving)
+            }
+        } else {
+            CardNote("Bill sharing is ${if (optedIn) "on" else "off"}.")
+        }
+        if (state.failed) {
+            Text("Couldn't change bill sharing. Try again.", style = PantopusTextStyle.caption, color = PantopusColors.error)
         }
     }
 }
@@ -958,15 +1014,16 @@ private fun BillTrendRow(
                 val month = series.months[index]
                 val amount = HomeBillPresentation.amount(series.amounts[index], currency)
                 val comparison = monthlyBillComparison(month, benchmark, currency)
+                val spoken = HomeBillPresentation.month(month, spoken = true)
                 Column(
                     modifier =
                         Modifier.fillMaxWidth().padding(vertical = Spacing.s2)
                             .clearAndSetSemantics {
-                                contentDescription = "Monthly total for $month. Your home: $amount. $comparison"
+                                contentDescription = "Monthly total for $spoken. Your home: $amount. $comparison"
                             },
                 ) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(month, style = PantopusTextStyle.caption)
+                        Text(HomeBillPresentation.month(month), style = PantopusTextStyle.caption)
                         Text(amount, style = PantopusTextStyle.caption, fontWeight = FontWeight.SemiBold)
                     }
                     Text(comparison, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
