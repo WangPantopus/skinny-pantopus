@@ -146,11 +146,12 @@ class StatusWaitingContentTest {
         assertEquals(StatusPillTone.Neutral, content.statusPill?.tone)
         assertEquals("Waiting for link click…", content.statusPill?.text)
         assertTrue(content.statusPill?.isSpinning == true)
-        assertEquals(listOf("openMail", "resendEmail", "changeEmail"), content.actionStack.map { it.id })
+        assertEquals(listOf("openMail", "resendEmail", "confirmedLogIn", "changeEmail"), content.actionStack.map { it.id })
         assertEquals(
             listOf(
                 StatusActionButtonStyle.Primary,
                 StatusActionButtonStyle.Outline,
+                StatusActionButtonStyle.Underline,
                 StatusActionButtonStyle.Underline,
             ),
             content.actionStack.map { it.style },

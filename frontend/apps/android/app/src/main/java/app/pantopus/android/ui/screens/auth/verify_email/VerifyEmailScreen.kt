@@ -78,6 +78,7 @@ fun VerifyEmailScreen(
     viewModel: VerifyEmailViewModel = hiltViewModel(),
     onDone: () -> Unit = {},
     onChangeEmail: (String) -> Unit = {},
+    onConfirmed: (String?) -> Unit = { onDone() },
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -121,6 +122,7 @@ fun VerifyEmailScreen(
                     onOpenMail = { openMailApp(context) },
                     onResend = viewModel::resend,
                     onChangeEmail = { onChangeEmail(state.email.orEmpty()) },
+                    onConfirmed = { onConfirmed(state.email) },
                 )
             },
             modifier = Modifier.weight(1f),
@@ -133,11 +135,13 @@ private fun handleStackAction(
     onOpenMail: () -> Unit,
     onResend: () -> Unit,
     onChangeEmail: () -> Unit,
+    onConfirmed: () -> Unit,
 ) {
     when (button.actionKey) {
         "open_mail" -> onOpenMail()
         "resend_email" -> onResend()
         "change_email" -> onChangeEmail()
+        "confirmed_log_in" -> onConfirmed()
         else -> Unit
     }
 }
