@@ -259,6 +259,8 @@ async function compose({ homeId, userId }) {
   let aqiData = null;
   if (aqiResult.status === 'fulfilled') {
     aqiData = aqiResult.value;
+    // A failed lookup answers without a reading; it is a failure, not a source.
+    if (aqiData.source === 'error') partialFailures.push('airnow');
   } else {
     partialFailures.push('airnow');
     logger.error('Pulse: AQI fetch failed', { homeId, error: aqiResult.reason?.message });
@@ -353,7 +355,7 @@ async function compose({ homeId, userId }) {
   if (propertyProfile && propertyProfile.source !== 'fallback') {
     sources.push({ provider: 'ATTOM', updated_at: propertyProfile.cached_at });
   }
-  if (aqiData && aqiData.fetchedAt) {
+  if (aqiData && aqiData.fetchedAt && aqiData.source !== 'error') {
     sources.push({ provider: 'AIRNOW_AQI', updated_at: aqiData.fetchedAt });
   }
   if (alertsChecked && noaaData.fetchedAt) {
