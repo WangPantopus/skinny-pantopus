@@ -392,7 +392,7 @@ struct SeasonalChecklistCard: View {
             .buttonStyle(.plain)
             .disabled(done || pending || !canEdit)
             .accessibilityIdentifier("homeDashboard_seasonalItemToggle_\(item.id)")
-            .accessibilityLabel("Mark \(item.title) complete")
+            .accessibilityLabel(done ? "\(item.title), \(item.status == "skipped" ? "skipped" : "done")" : "Mark \(item.title) complete")
 
             VStack(alignment: .leading, spacing: Spacing.s0) {
                 Text(item.title)

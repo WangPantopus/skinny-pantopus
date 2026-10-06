@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -42,6 +43,8 @@ import app.pantopus.android.ui.theme.Spacing
  * transparent white surface with a 12dp backdrop blur on API 31+, a 1dp
  * top border, 4 evenly-spaced tabs, active tint `primary600`, inactive
  * tint `appTextSecondary`. The [PantopusRoute.Messages] tab accepts a badge count.
+ * The app draws edge to edge, so the surface extends under the system
+ * navigation bar and the tabs sit above it.
  *
  * @param selected Currently selected route.
  * @param onSelect Called when the user taps a different tab.
@@ -63,18 +66,14 @@ fun PantopusBottomBar(
         }
 
     Box(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .height(78.dp),
+        modifier = modifier.fillMaxWidth(),
     ) {
         // Blurred tint layer — behind the content. On pre-S devices `blur`
         // is a no-op so we fall back to the solid translucent fill.
         Box(
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .height(78.dp)
+                    .matchParentSize()
                     .background(background)
                     .then(blurModifier),
         )
@@ -82,8 +81,9 @@ fun PantopusBottomBar(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(78.dp)
-                    .border(1.dp, PantopusColors.appBorder),
+                    .border(1.dp, PantopusColors.appBorder)
+                    .navigationBarsPadding()
+                    .height(78.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {

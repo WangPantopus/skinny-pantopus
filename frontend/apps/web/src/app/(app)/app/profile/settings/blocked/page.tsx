@@ -244,7 +244,99 @@ function BlockedContent() {
           })}
         </div>
       )}
+
+      <MutedSection getInitials={getInitials} />
     </div>
+  );
+}
+
+type MutedEntry = Awaited<ReturnType<typeof api.posts.getMutedEntities>>['muted'][number];
+
+// Muting (a post's ⋯ menu) hides someone's posts from Pulse without telling them. This is the
+// one place to see who is muted and undo it (DELETE /api/posts/mute).
+function MutedSection({ getInitials }: { getInitials: (name: string) => string }) {
+  const [muted, setMuted] = useState<MutedEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [unmuting, setUnmuting] = useState<string | null>(null);
+  const generation = useRef(0);
+
+  const load = useCallback(async () => {
+    const mine = ++generation.current;
+    setFailed(false);
+    try {
+      const res = await api.posts.getMutedEntities();
+      if (mine === generation.current) setMuted(res.muted || []);
+    } catch {
+      if (mine === generation.current) setFailed(true);
+    } finally {
+      if (mine === generation.current) setLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Another account signing in must not see this one's list.
+    const changed = () => { setMuted([]); setLoaded(false); void load(); };
+    const retire = () => { generation.current++; };
+    const unsubscribe = api.onTokenChange(changed);
+    void load();
+    return () => { retire(); unsubscribe(); };
+  }, [load]);
+
+  const unmute = async (entry: MutedEntry) => {
+    if (unmuting) return;
+    const mine = generation.current;
+    setUnmuting(entry.entity_id);
+    try {
+      await api.posts.unmuteEntity({ entityType: entry.entity_type, entityId: entry.entity_id });
+      if (mine !== generation.current) return;
+      setMuted((prev) => prev.filter((m) => m.entity_id !== entry.entity_id));
+      toast.success(`${entry.name} unmuted — their posts can show in your Pulse again`);
+    } catch (err: unknown) {
+      if (mine === generation.current) toast.error(err instanceof Error && err.message ? err.message : 'Failed to unmute');
+    } finally {
+      if (mine === generation.current) setUnmuting(null);
+    }
+  };
+
+  if (!loaded) return null;
+  return (
+    <section className="mt-8" aria-labelledby="muted-heading">
+      <h2 id="muted-heading" className="text-base font-bold text-app-text">Muted</h2>
+      <p className="text-xs text-app-text-secondary mt-0.5 mb-2">
+        Their posts are hidden from your Pulse. They aren&apos;t told.
+      </p>
+      {failed ? (
+        <div role="alert" className="text-sm text-app-text-secondary py-3">
+          Couldn&apos;t load who you&apos;ve muted.
+          <button onClick={() => void load()} className="ml-2 underline">Retry</button>
+        </div>
+      ) : muted.length === 0 ? (
+        <p className="text-sm text-app-text-secondary py-3">You haven&apos;t muted anyone.</p>
+      ) : (
+        <div className="divide-y divide-app-border-subtle">
+          {muted.map((entry) => (
+            <div key={`${entry.entity_type}-${entry.entity_id}`} className="flex items-center gap-3 py-3.5">
+              {entry.avatar_url ? (
+                <Image src={entry.avatar_url} alt={entry.name} width={44} height={44} sizes="44px" quality={75} className="w-11 h-11 rounded-full object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-11 h-11 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-bold text-white">{getInitials(entry.name)}</span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-app-text truncate">{entry.name}</p>
+                {entry.username && <p className="text-xs text-app-text-secondary">@{entry.username}</p>}
+              </div>
+              <button onClick={() => void unmute(entry)} disabled={!!unmuting}
+                className="px-4 py-2 border border-app-border text-app-text text-sm font-semibold rounded-lg hover:bg-app-hover disabled:opacity-50 transition min-w-[80px] flex items-center justify-center">
+                {unmuting === entry.entity_id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Unmute'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

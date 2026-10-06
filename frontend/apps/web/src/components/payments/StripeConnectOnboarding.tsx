@@ -178,7 +178,7 @@ export default function StripeConnectOnboarding({
             {loadError
               ? loadError
               : !hasAccount
-              ? 'Connect your bank account through Stripe to get paid for completed gigs. Setup takes about 5 minutes.'
+              ? 'Connect your bank account through Stripe to get paid. Setup takes about 5 minutes.'
               : needsInfo
                 ? 'Your Stripe account needs more information before you can receive payouts.'
                 : 'Stripe is verifying your identity. This usually takes 1-2 business days. You can still return to Stripe to update documents, your bank account, or anything Stripe requests.'}

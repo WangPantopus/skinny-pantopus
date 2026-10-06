@@ -76,6 +76,16 @@ final class SequencedURLProtocol: URLProtocol {
         return URLSession(configuration: config)
     }
 
+    /// Requests sent through one `makeSession(routeResponses:)` session. Other tests'
+    /// late background requests also reach this protocol; counting only a session's
+    /// own requests keeps assertions independent of them.
+    static func capturedRequests(for session: URLSession) -> [URLRequest] {
+        guard let id = session.configuration.httpAdditionalHeaders?[sessionHeader] as? String else { return [] }
+        lock.lock()
+        defer { lock.unlock() }
+        return capturedRequests.filter { $0.value(forHTTPHeaderField: sessionHeader) == id }
+    }
+
     override static func canInit(with _: URLRequest) -> Bool {
         true
     }

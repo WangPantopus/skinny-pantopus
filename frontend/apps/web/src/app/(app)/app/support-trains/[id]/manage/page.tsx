@@ -46,8 +46,9 @@ export default function ManageSupportTrainPage() {
   const [deleting, setDeleting] = useState(false);
 
   // Sort
-  const [sortField, setSortField] = useState<'created_at' | 'status'>('created_at');
-  const [sortAsc, setSortAsc] = useState(false);
+  // By the slot each helper took (soonest first), not when they signed up.
+  const [sortField, setSortField] = useState<'slot_date' | 'status'>('slot_date');
+  const [sortAsc, setSortAsc] = useState(true);
 
   const fetchReservations = useCallback(async () => {
     setReservationsLoading(true);
@@ -356,10 +357,10 @@ export default function ManageSupportTrainPage() {
                   </th>
                   <th
                     className="text-left px-4 py-3 cursor-pointer select-none"
-                    onClick={() => toggleSort('created_at')}
+                    onClick={() => toggleSort('slot_date')}
                   >
                     <span className="flex items-center gap-1">
-                      Date <ArrowUpDown className="w-3 h-3" />
+                      Slot <ArrowUpDown className="w-3 h-3" />
                     </span>
                   </th>
                 </tr>
@@ -387,7 +388,14 @@ export default function ManageSupportTrainPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-app-text-muted text-xs">
-                      {new Date(r.created_at).toLocaleDateString()}
+                      {r.slot_date
+                        ? new Date(r.slot_date + 'T00:00:00Z').toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            timeZone: 'UTC',
+                          })
+                        : '—'}
                     </td>
                   </tr>
                 ))}

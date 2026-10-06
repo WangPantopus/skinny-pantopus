@@ -138,7 +138,7 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
 
   const startFallbackPolling = useCallback(() => {
     if (fallbackRef.current) clearInterval(fallbackRef.current);
-    pollBadges();
+    // No poll here: the initial poll below already fetched the counts once on load.
     fallbackRef.current = setInterval(pollBadges, FALLBACK_POLL_MS);
   }, [pollBadges]);
 

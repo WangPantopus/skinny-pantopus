@@ -10,10 +10,12 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- Camera + media (profile + listings + mail capture) -->
+    <!-- Camera (profile, posts, mail capture). Photos and videos come from the
+         system photo picker, which needs no media permission; Google Play only
+         allows READ_MEDIA_* for apps whose core feature is a media library. -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
 
     <!-- Voice notes (A12.8 Magic Task describe transcription) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -38,7 +40,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Pantopus"
-        android:usesCleartextTraffic="true"
         tools:targetApi="31">
 
         <!-- singleTask: the browser OAuth redirect (pantopus://auth/callback)

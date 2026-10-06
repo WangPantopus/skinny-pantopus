@@ -209,11 +209,13 @@ private struct BusinessCardView: View {
         if let cat = model.categoryLabel { parts.append(cat) }
         parts.append(model.locality)
         if let role = model.role { parts.append(role.label) }
+        // The violet check on the logo is visual only; say it.
+        if model.verified { parts.append("Verified") }
         if model.pending {
             parts.append("Verification pending")
         } else {
-            parts.append("\(model.openChats) open chats")
-            parts.append("\(model.bookingsThisWeek) bookings this week")
+            parts.append(model.openChats == 1 ? "1 open chat" : "\(model.openChats) open chats")
+            parts.append(model.bookingsThisWeek == 1 ? "1 booking this week" : "\(model.bookingsThisWeek) bookings this week")
             if model.reviewCount > 0 { parts.append("rated \(model.ratingText)") }
         }
         return parts.joined(separator: ", ")

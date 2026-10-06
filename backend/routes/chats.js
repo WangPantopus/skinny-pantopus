@@ -2009,7 +2009,7 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
     // Keep RPC path as fallback for environments that already rely on it.
     const { data: message, error: messageErr } = await supabaseAdmin
       .from('ChatMessage')
-      .select('id, user_id, room_id, deleted')
+      .select('id, user_id, room_id, deleted, attachments')
       .eq('id', messageId)
       .single();
 
@@ -2022,7 +2022,21 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
     if (await isGigRoomClosedTo(message.room_id, userId)) {
       return res.status(403).json({ error: 'Not authorized' });
     }
+    // A deleted message's files go with it: the file route answers 410 for a deleted file, so the
+    // other people in the chat can't open them from an old link either. A repeat delete retries this.
+    const deleteAttachments = async () => {
+      const fileIds = [...new Set((Array.isArray(message.attachments) ? message.attachments : [])
+        .map((attachment) => attachment?.id).filter((id) => typeof id === 'string'))];
+      for (const fileId of fileIds) {
+        const { data, error } = await supabaseAdmin.rpc('soft_delete_file', { p_file_id: fileId, p_user_id: userId });
+        if (error || (!data?.success && data?.error !== 'File not found or already deleted')) {
+          logger.warn('Chat attachment delete failed', { messageId, fileId, error: error?.message || data?.error });
+        }
+      }
+    };
+
     if (message.deleted) {
+      await deleteAttachments();
       return res.json({ message: 'Message deleted successfully' });
     }
 
@@ -2040,6 +2054,7 @@ router.delete('/messages/:messageId', verifyToken, messageDeleteLimiter, async (
     }
 
     incCounter('chat.message.deleted');
+    await deleteAttachments();
 
     // Broadcast via socket
     const io = req.app.get('io');

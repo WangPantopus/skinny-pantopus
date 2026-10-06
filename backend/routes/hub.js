@@ -266,12 +266,16 @@ router.get('/', verifyToken, async (req, res) => {
       ).catch(() => ({ count: 0 })),
       // Unread personal mail, as the mailbox counts it (Mail has no status or
       // is_read column; those names made this read fail and show nothing).
+      // The same unread rule as the Mailbox's Personal drawer badge (GET /api/mailbox/v2/drawers),
+      // which this row opens. Home and Business mail are counted where they are shown.
       personalMail: Promise.resolve(
         supabaseAdmin
           .from('Mail')
           .select('id, type')
           .eq('recipient_user_id', userId)
+          .eq('drawer', 'personal')
           .eq('viewed', false)
+          .in('lifecycle', ['delivered', 'opened'])
           .eq('archived', false)
           .is('deleted_at', null)
       ).catch(() => ({ data: null })),

@@ -248,6 +248,10 @@ class LoginViewModel
                             _uiState.update {
                                 it.copy(errorMessage = AuthError.ServerError(OAuthSessionStore.REJECTED_MESSAGE))
                             }
+                        is OAuthSessionStore.Callback.ProviderFailed ->
+                            _uiState.update {
+                                it.copy(errorMessage = AuthError.ServerError(OAuthSessionStore.PROVIDER_FAILED_MESSAGE))
+                            }
                         is OAuthSessionStore.Callback.Code ->
                             authRepository.exchangeOAuthCode(callback.value)
                         is OAuthSessionStore.Callback.Tokens ->

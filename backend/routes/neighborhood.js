@@ -182,7 +182,8 @@ router.get('/cells', verifyToken, async (req, res) => {
       .from('NeighborhoodPreview')
       .select('geohash, verified_users_count')
       .in('geohash', grid.hashes);
-    if (error) logger.warn('neighborhood/cells: NeighborhoodPreview read error', { error: error.message });
+    // Fail closed: a failed read is an error, not a map of empty cells (the apps then hide the map).
+    if (error) throw new Error(`NeighborhoodPreview read failed: ${error.message}`);
     const counts = new Map((data || []).map((r) => [r.geohash, r.verified_users_count]));
     const cells = grid.hashes.map((h) => {
       const b = decodeGeohashBbox(h);

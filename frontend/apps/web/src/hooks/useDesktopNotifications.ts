@@ -31,13 +31,8 @@ export function useDesktopNotifications() {
     };
   }, [unreadCount]);
 
-  // Request notification permission on mount
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    if (Notification.permission === 'default') {
-      void Notification.requestPermission().catch(() => {});
-    }
-  }, []);
+  // Permission is asked for from Settings → Notification Preferences → Desktop alerts:
+  // browsers ignore or quiet a prompt that doesn't follow a click.
 
   // notification:new updates in-app content even when push is off. Only the
   // server's separate, preference-checked alert event may create an OS alert.

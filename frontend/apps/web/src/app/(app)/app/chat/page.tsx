@@ -314,7 +314,7 @@ export default function ChatListPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         <PageHeader
           title="Messages"
-          subtitle={listFailed ? undefined : totalUnread > 0 ? `${totalUnread} unread` : `${conversations.length} conversations`}
+          subtitle={listFailed ? undefined : totalUnread > 0 ? `${totalUnread} unread` : `${conversations.length} ${conversations.length === 1 ? 'conversation' : 'conversations'}`}
           ctaLabel="New message"
           ctaOnClick={openNewChat}
         >

@@ -236,6 +236,14 @@ public final class SupportTrainDetailViewModel {
         )
     }
 
+    /// Stored dietary values are keys ("tree_nut_allergy"); helpers read
+    /// "Tree nut allergy", as the web shows them.
+    nonisolated static func dietaryLabel(_ value: String) -> String {
+        let spaced = value.replacingOccurrences(of: "_", with: " ").trimmingCharacters(in: .whitespaces)
+        guard let first = spaced.first else { return value }
+        return first.uppercased() + spaced.dropFirst()
+    }
+
     private func perform(_ endpoint: Endpoint, success: String, failure: String) async {
         guard !isSubmitting else { return }
         isSubmitting = true
@@ -344,7 +352,8 @@ extension SupportTrainDetailViewModel {
             reserveOptions: openSlots.map(reserveOption(for:)),
             reserveContext: ReserveSheetContext(
                 enabledModes: enabledModes(dto.supportModes),
-                restrictionChips: (dto.dietaryRestrictions ?? []) + (dto.dietaryPreferences ?? []),
+                restrictionChips: ((dto.dietaryRestrictions ?? []) + (dto.dietaryPreferences ?? []))
+                    .map(Self.dietaryLabel),
                 contactlessPreferred: dto.contactlessPreferred ?? false
             ),
             viewerRole: viewerRole(dto),

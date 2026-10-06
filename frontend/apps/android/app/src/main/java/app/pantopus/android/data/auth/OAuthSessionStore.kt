@@ -56,6 +56,19 @@ object OAuthSessionStore {
      */
     const val REJECTED_MESSAGE = "Sign-in couldn't be verified. Please try again."
 
+    /**
+     * The provider's page ended the attempt with an error other than the
+     * person cancelling. Same copy as iOS `AuthManager.oauthProviderFailedMessage`.
+     */
+    const val PROVIDER_FAILED_MESSAGE = "Sign-in didn't finish. Please try again or use your email."
+
+    /**
+     * The Auth server passes the provider's error through to the callback:
+     * Google sends `access_denied` when the person cancels, Apple
+     * `user_cancelled_authorize`.
+     */
+    private val PROVIDER_CANCEL_ERRORS = setOf("access_denied", "user_cancelled_authorize")
+
     private const val CALLBACK_URI = "pantopus://auth/callback"
 
     sealed interface Callback {
@@ -97,6 +110,11 @@ object OAuthSessionStore {
 
         /** User dismissed Custom Tabs without completing. */
         data class Cancelled(
+            override val ownerId: String,
+        ) : Callback
+
+        /** The provider returned an error other than a cancel; see [PROVIDER_FAILED_MESSAGE]. */
+        data class ProviderFailed(
             override val ownerId: String,
         ) : Callback
     }
@@ -285,6 +303,14 @@ object OAuthSessionStore {
             val code = uri.getQueryParameter("code")
             if (!code.isNullOrBlank()) return Callback.Code(ownerId, code)
             val fragment = uri.fragment.orEmpty()
+            val providerError = uri.getQueryParameter("error") ?: fragmentParam(fragment, "error")
+            if (!providerError.isNullOrBlank() && fragmentParam(fragment, "access_token").isNullOrBlank()) {
+                return if (providerError in PROVIDER_CANCEL_ERRORS) {
+                    Callback.Cancelled(ownerId)
+                } else {
+                    Callback.ProviderFailed(ownerId)
+                }
+            }
             val access = fragmentParam(fragment, "access_token")
             val refresh = fragmentParam(fragment, "refresh_token")
             return if (!access.isNullOrBlank() && !refresh.isNullOrBlank()) {
