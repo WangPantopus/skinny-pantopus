@@ -33,6 +33,9 @@ case "$image_mode" in
 esac
 env_file=${PANTOPUS_ENV_FILE:-$HOME/pantopus/.env.$suffix}
 [[ -r "$env_file" ]] || { echo "Missing environment file: $env_file" >&2; exit 2; }
+# Docker's default json-file driver never rotates, so container logs could fill
+# the host disk. The local driver keeps five compressed 20 MB files per container.
+log_options=(--log-driver local --log-opt max-size=20m --log-opt max-file=5)
 health_attempts=${PANTOPUS_HEALTH_ATTEMPTS:-40}
 health_interval=${PANTOPUS_HEALTH_INTERVAL:-3}
 
@@ -96,7 +99,7 @@ if [[ "$image_mode" == registry ]]; then docker pull "$image"; fi
 # The candidate is unexposed and runs no background jobs. Verify DB readiness
 # before interrupting the old API or worker, even on a first-ever deployment.
 docker rm -f "$candidate" >/dev/null 2>&1 || true
-docker run -d --name "$candidate" --env-file "$env_file" \
+docker run -d --name "$candidate" --env-file "$env_file" "${log_options[@]}" \
   -e NODE_ENV=production -e APP_ENV="$target" \
   -e PGBOSS_ENABLED=false -e CRON_ENABLED=false \
   --health-cmd='node scripts/healthcheck.js' --health-interval=5s --health-start-period=20s \
@@ -129,7 +132,7 @@ fi
 # Set created before docker run: Docker can create a container and then fail
 # while binding its port. Recovery must remove that partial container too.
 api_created=true
-docker run -d --name "$api" --env-file "$env_file" \
+docker run -d --name "$api" --env-file "$env_file" "${log_options[@]}" \
   -e NODE_ENV=production -e APP_ENV="$target" \
   -e PGBOSS_ENABLED=false -e CRON_ENABLED=false \
   -p "$api_bind:8000" --restart unless-stopped \
@@ -137,7 +140,7 @@ docker run -d --name "$api" --env-file "$env_file" \
   "$image" >/dev/null
 healthy "$api"
 worker_created=true
-docker run -d --name "$worker" --env-file "$env_file" \
+docker run -d --name "$worker" --env-file "$env_file" "${log_options[@]}" \
   -e NODE_ENV=production -e APP_ENV="$target" \
   -e PGBOSS_ENABLED=true -e CRON_ENABLED=true --restart unless-stopped \
   --health-cmd='node scripts/worker-healthcheck.js' --health-interval=5s --health-start-period=30s \
