@@ -498,8 +498,10 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active) |
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
-| `AIRNOW_API_KEY` | optional | optional | (L1 is replacing AirNow) |
+| `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
 | `OPENAI_API_KEY` | required for AI features | required for AI features | OpenAI project with a budget cap |
+| `OPENAI_CHAT_MODEL`, `OPENAI_DRAFT_MODEL` | `gpt-6-luna` | `gpt-6-luna` | the model the streams verify against locally (a reasoning model: code paths pass `max_completion_tokens`, no custom `temperature`) |
+| `PROPERTY_SUGGESTIONS_LLM_MODEL`, `MAGIC_TASK_AI_MODEL` | unset | unset | their defaults (`gpt-4o-mini`, `gpt-4o`) match how those calls are written; a reasoning model there rejects `max_tokens`/`temperature` |
 | `LOB_ENV` | `test` | `live` | D5 |
 | `LOB_API_KEY` | `test_…` | `live_…` | Lob |
 | `LOB_WEBHOOK_SECRET` | Lob test webhook | Lob live webhook | Lob → Webhooks |
