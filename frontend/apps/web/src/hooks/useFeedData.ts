@@ -556,7 +556,8 @@ export function useFeedData({
       removePostsFromCache((p) => target.entityType === 'persona'
         ? p.identity_context_type === 'persona' && p.identity_context_id === target.entityId
           && !(p.author as AudienceProfile | null)?.viewer?.isOwner
-        : (p.creator?.id || p.user_id) === target.entityId, target.entityType === 'persona');
+        // The author's user id, as PostCard reads it: post.creator.id is their public profile id.
+        : (p.author_user_id || p.user_id) === target.entityId, target.entityType === 'persona');
       showToast(`${target.entityType === 'persona' ? 'Profile' : 'User'} muted — their posts are hidden from your feed`);
     } catch {
       showToast(`Failed to mute ${target.entityType === 'persona' ? 'profile' : 'user'}`);
