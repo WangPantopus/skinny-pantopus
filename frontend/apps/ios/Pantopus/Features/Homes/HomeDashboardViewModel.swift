@@ -672,7 +672,8 @@ final class HomeDashboardViewModel {
                 isVerifiedOwner: detailData.ownershipStatus == "verified",
                 securityBanner: Self.securityBanner(
                     state: detailData.securityState,
-                    claimWindowEndsAt: detailData.claimWindowEndsAt
+                    claimWindowEndsAt: detailData.claimWindowEndsAt,
+                    canInviteCoOwner: can("ownership.manage")
                 )
             ))
         }
@@ -713,9 +714,12 @@ final class HomeDashboardViewModel {
     /// (`CLAIM_WINDOW` / `REVIEW_REQUIRED` / `DISPUTE` / `FROZEN`) and the
     /// render gate matches `HomeStatusBanner.tsx:33` — `normal` and
     /// `frozen_silent` render nothing.
+    /// `canInviteCoOwner` drops the claim window's CTA for viewers who can't
+    /// invite an owner (members, or a seller right after a transfer).
     static func securityBanner(
         state: HomeSecurityState,
-        claimWindowEndsAt: String?
+        claimWindowEndsAt: String?,
+        canInviteCoOwner: Bool = true
     ) -> HomeSecurityBannerContent? {
         switch state {
         case .normal, .frozenSilent:
@@ -728,8 +732,8 @@ final class HomeDashboardViewModel {
                 title: "Claim Window Active",
                 body: date.map { "Co-owners can verify ownership until \($0)." }
                     ?? "Co-owners can verify ownership while the window is open.",
-                ctaLabel: "Invite Co-Owner",
-                action: .inviteCoOwner
+                ctaLabel: canInviteCoOwner ? "Invite Co-Owner" : nil,
+                action: canInviteCoOwner ? .inviteCoOwner : .noAction
             )
         case .reviewRequired:
             return HomeSecurityBannerContent(

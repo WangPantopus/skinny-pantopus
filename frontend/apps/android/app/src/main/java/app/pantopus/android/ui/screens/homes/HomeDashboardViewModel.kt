@@ -727,7 +727,8 @@ class HomeDashboardViewModel
                         address = detail.address ?: detail.name ?: "Home",
                         verified = detail.ownershipStatus == "verified" || detail.owners.any { it.ownerStatus == "verified" },
                         isVerifiedOwner = detail.ownershipStatus == "verified",
-                        securityBanner = securityBanner(detail.securityState, detail.claimWindowEndsAt),
+                        securityBanner =
+                            securityBanner(detail.securityState, detail.claimWindowEndsAt, can("ownership.manage")),
                     ),
                 )
         }
@@ -780,6 +781,9 @@ class HomeDashboardViewModel
             fun securityBanner(
                 state: String?,
                 claimWindowEndsAt: String?,
+                // Drops the claim window's CTA for viewers who can't invite an
+                // owner (members, or a seller right after a transfer).
+                canInviteCoOwner: Boolean = true,
             ): HomeSecurityBannerContent? =
                 when (state) {
                     "claim_window" -> {
@@ -794,8 +798,8 @@ class HomeDashboardViewModel
                                 } else {
                                     "Co-owners can verify ownership while the window is open."
                                 },
-                            ctaLabel = "Invite Co-Owner",
-                            action = HomeSecurityBannerAction.InviteCoOwner,
+                            ctaLabel = if (canInviteCoOwner) "Invite Co-Owner" else null,
+                            action = if (canInviteCoOwner) HomeSecurityBannerAction.InviteCoOwner else HomeSecurityBannerAction.NoAction,
                         )
                     }
                     "review_required" ->
