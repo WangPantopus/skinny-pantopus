@@ -2550,6 +2550,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val placeHostVm: HomeTabHostViewModel = hiltViewModel()
                     val placeLanding by placeHostVm.landing.collectAsStateWithLifecycle()
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
+                    // Back on the Hub root (a child screen popped or the tab reselected):
+                    // a home joined or added since the last check lands Place now.
+                    LaunchedEffect(Unit) { placeHostVm.refreshIfNoHome() }
                     LaunchedEffect(placeLanding) {
                         val landing = placeLanding
                         val canRestoreLanding =
