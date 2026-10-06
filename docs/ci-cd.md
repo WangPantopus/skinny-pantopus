@@ -30,7 +30,8 @@ that same bundle on iOS 18.5 simulators: iPhone 16 for pull requests (to spare t
 shared macOS runners), and iPhone 16, iPhone 16 Pro and iPhone SE on `master` and
 manual runs. Swift packages (about 3.7 GB) are cached from `master` only; pull
 requests restore that copy but never save their own, which no other pull request
-could use and which evicted the other caches. Build and test timeouts are
+could use and which evicted the other caches. The build skips the index store and
+code coverage, which nothing in CI reads. Build and test timeouts are
 separate, and cancellation preserves diagnostics. Xcode 16.4/iOS 18.5 retain the
 existing snapshot contract. TestFlight archives use Xcode 26.2 to meet Apple's
 current SDK upload requirement. UI tests are compiled but not executed on hosted

@@ -120,8 +120,9 @@ jobs:
             -derivedDataPath "$IOS_DERIVED_DATA_PATH" \
             -clonedSourcePackagesDirPath "$IOS_SPM_PATH" \
             -skipPackagePluginValidation -skipMacroValidation \
-            -enableCodeCoverage YES \
+            -enableCodeCoverage NO \
             ARCHS="$(uname -m)" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" \
             build-for-testing 2>&1 | tee xcodebuild-build.log | xcbeautify
       - name: Save SPM packages (master only)
@@ -261,29 +262,12 @@ jobs:
           xcrun simctl list runtimes
           xcrun simctl list devices available iPhone
 
-      - name: Extract coverage summary
-        if: always()
-        run: |
-          set -e
-          bundle="TestResults-${{ steps.sim.outputs.slug }}.xcresult"
-          if [[ -d "$bundle" ]]; then
-            echo "## iOS coverage — ${{ matrix.simulator }}" >> "$GITHUB_STEP_SUMMARY"
-            xcrun xccov view --report --only-targets "$bundle" \
-              | tee coverage-${{ steps.sim.outputs.slug }}.txt \
-              | head -40 >> "$GITHUB_STEP_SUMMARY" || true
-            xcrun xccov view --report --json "$bundle" \
-              > coverage-${{ steps.sim.outputs.slug }}.json || true
-          fi
-
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: ios-test-results-${{ steps.sim.outputs.slug }}
-          path: |
-            frontend/apps/ios/TestResults-${{ steps.sim.outputs.slug }}.xcresult
-            frontend/apps/ios/coverage-${{ steps.sim.outputs.slug }}.txt
-            frontend/apps/ios/coverage-${{ steps.sim.outputs.slug }}.json
+          path: frontend/apps/ios/TestResults-${{ steps.sim.outputs.slug }}.xcresult
           retention-days: 7
 
       - name: Delete simulator
