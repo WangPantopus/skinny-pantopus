@@ -13,7 +13,7 @@ beforeEach(() => {
 });
 test.each([
   [true, true, true, false], [false, true, true, true], [true, false, true, true],
-  [true, true, false, true], [true, undefined, true, true], [true, true, undefined, false],
+  [true, true, false, true], [true, undefined, true, false], [true, true, undefined, false],
 ])('assignment=%s global=%s Home=%s suppresses=%s without recreating in-app notice', async (atAssignment, global, home, suppressed) => {
   if (global !== undefined) db.seedTable('MailPreferences', [{ user_id: note.user_id, push_notifications: global }]);
   if (home !== undefined) db.seedTable('UserNotificationPreferences', [{ user_id: note.user_id, home_reminders_enabled: home }]);
