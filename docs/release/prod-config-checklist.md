@@ -228,7 +228,11 @@ Vercel → the Pantopus project:
   `NEXT_PUBLIC_APP_URL=https://staging.pantopus.com`,
   `NEXT_PUBLIC_APP_ENV=staging`,
   `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=<pk_test_…>`,
-  `NEXT_PUBLIC_MAPBOX_TOKEN=<public pk.… token>`.
+  `NEXT_PUBLIC_MAPBOX_TOKEN=<public pk.… token>`, and
+  `EDGE_PROXY_SECRET` (a plain variable, never `NEXT_PUBLIC_`; the value in
+  `hosted-secrets/staging.env`, which the server's env file also gets in S4).
+  It lets the API see each web visitor's own address instead of Vercel's, so
+  web sign-ins and sign-ups are limited per visitor, not shared by everyone.
   Leave `NEXT_PUBLIC_LAUNCH_FEATURES` empty: cut features stay hidden.
 - Domains: assign `staging.pantopus.com` to the `dev` branch, then change its
   Cloudflare record to Vercel's CNAME (DNS only). The September staging site on
@@ -421,12 +425,16 @@ inbox to `pantopus-job-alarms-production` (stack `pantopus-seeder-production`).
 Vercel Production environment variables: `NEXT_PUBLIC_API_URL=https://api.pantopus.com`,
 `NEXT_PUBLIC_APP_URL=https://pantopus.com`, `NEXT_PUBLIC_APP_ENV=production`,
 `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (matching D4), `NEXT_PUBLIC_MAPBOX_TOKEN`,
+`EDGE_PROXY_SECRET` (the value in `hosted-secrets/production.env`, as in S7),
 and, once the new store listings exist, `NEXT_PUBLIC_IOS_APP_STORE_URL`,
 `NEXT_PUBLIC_IOS_APP_STORE_APP_ID` and `NEXT_PUBLIC_ANDROID_PLAY_STORE_URL`
 (today's defaults point at the April apps). Production branch `master`.
 
 **Check:** `https://pantopus.com` shows the new home page; sign-in works;
-`https://pantopus.com/.well-known/apple-app-site-association` returns JSON.
+`https://pantopus.com/.well-known/apple-app-site-association` returns JSON;
+the web's Settings → Security page (`/app/settings/security`) shows this
+browser's last address as your own network's, not a Vercel or Amazon one (if it
+doesn't, `EDGE_PROXY_SECRET` differs between Vercel and the server).
 
 ### P10. Domains and app links (founder, L4 regenerates the files)
 
@@ -509,6 +517,7 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `APP_URLS` (allowed web origins) | `https://staging.pantopus.com` | `https://pantopus.com,https://www.pantopus.com` | |
 | `TRUST_PROXY` | `1` | `1` (or `2` behind Cloudflare's proxy, P1) | |
 | `INTERNAL_API_KEY`, `CSRF_SECRET`, `STEP_UP_SECRET`, `LOCATION_JITTER_SECRET`, `EMAIL_INBOUND_HMAC_SECRET`, `HOME_POSTCARD_CODE_KEYS_JSON`, `HOME_POSTCARD_CODE_ACTIVE_KEY` | gen | gen | `hosted-secrets/` |
+| `EDGE_PROXY_SECRET` | gen | gen | `hosted-secrets/`; the same value goes into Vercel (S7, P9) |
 | `GOOGLE_ADDRESS_VALIDATION_API_KEY`, `GOOGLE_PLACES_API_KEY` | required | required | Google Cloud (restrict to the server's IP) |
 | `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active) |
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
