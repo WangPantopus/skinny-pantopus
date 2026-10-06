@@ -20,7 +20,7 @@ struct PlaceDashboardView: View {
     @State private var viewModel: PlaceDashboardViewModel
     @State private var showSwitcher = false
     @State private var showVerify = false
-    @State private var ballotGovernments: BallotGovernments?
+    @State private var ballotGovernments: BallotGovernmentsSheet?
 
     private let isActive: Bool
     private let onOpenMenu: () -> Void
@@ -99,18 +99,13 @@ struct PlaceDashboardView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.hidden)
         }
-        .sheet(isPresented: Binding(
-            get: { ballotGovernments != nil },
-            set: { if !$0 { ballotGovernments = nil } }
-        )) {
-            if let governments = ballotGovernments {
-                BallotGovernmentsView(
-                    governments: governments,
-                    address: verifyAddress.components(separatedBy: ",").first ?? verifyAddress
-                ) { ballotGovernments = nil }
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.hidden)
-            }
+        .sheet(item: $ballotGovernments) { sheet in
+            BallotGovernmentsView(
+                governments: sheet.governments,
+                address: verifyAddress.components(separatedBy: ",").first ?? verifyAddress
+            ) { ballotGovernments = nil }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
         }
         .sheet(isPresented: $showVerify) {
             PlaceVerifySheet(
@@ -296,7 +291,9 @@ struct PlaceDashboardView: View {
             BallotCardView(
                 card: card,
                 asOf: asOf,
-                onOpenGovernments: card.governments.map { governments in { ballotGovernments = governments } }
+                onOpenGovernments: card.governments.map { governments in
+                    { ballotGovernments = BallotGovernmentsSheet(governments: governments) }
+                }
             )
         }
     }
@@ -400,6 +397,15 @@ struct PlaceDashboardView: View {
             .filter { $0.first?.isLetter ?? false }
         let letters = words.prefix(2).compactMap(\.first).map(String.init)
         return letters.isEmpty ? "PL" : letters.joined().uppercased()
+    }
+}
+
+/// The governments view's payload, identified so `.sheet(item:)` keeps its
+/// content on screen while the sheet slides away.
+private struct BallotGovernmentsSheet: Identifiable {
+    let governments: BallotGovernments
+    var id: BallotGovernments {
+        governments
     }
 }
 

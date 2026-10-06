@@ -107,7 +107,7 @@ struct BallotGovernmentsView: View {
                 Button(action: playing ? { finished = true } : onClose) {
                     Text(playing ? "Skip" : "Close")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primary700)
+                        .foregroundStyle(Theme.Color.primaryInk)
                         .padding(.vertical, 10)
                         .padding(.leading, Spacing.s3)
                 }

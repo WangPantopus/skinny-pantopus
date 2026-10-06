@@ -103,7 +103,7 @@ struct BallotStackView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: BallotStackGeometry.height)
-        .accessibilityElement()
-        .accessibilityLabel("\(count) government boundary layers stacked above the address")
+        // Decorative: the title beside it already says "at least N governments".
+        .accessibilityHidden(true)
     }
 }

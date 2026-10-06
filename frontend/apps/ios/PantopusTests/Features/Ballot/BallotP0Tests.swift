@@ -4,9 +4,11 @@
 //
 //  Ballot P0 (docs/ballot-implementation-plan-2026-09-24.md): the card
 //  fields decode from `civic_election` only when the server sends them;
-//  a malformed ballot field never blanks the election section; the
-//  timeline places markers exactly as the canvas (and the web) does; the
-//  dashboard drops the election row the card replaces.
+//  a malformed ballot field never blanks the election section; a notice
+//  needs only its lead; the Place request opts into Ballot; the timeline
+//  places markers exactly as the canvas (and the web) does, moving only a
+//  label that would overprint another or leave the card; the dashboard
+//  drops the election row the card replaces.
 //
 
 import XCTest
@@ -106,6 +108,167 @@ final class BallotP0Tests: XCTestCase {
         XCTAssertEqual(layout.markers.filter(\.needsAction).map(\.key), ["register_online_mail"])
         XCTAssertEqual(layout.waitUntilX, 178.5)
         XCTAssertEqual(layout.markers.first?.secondLine, "Sep 24")
+    }
+
+    func testAnElectionDayNoticeNeedsOnlyItsLead() throws {
+        let withDetail = card.replacingOccurrences(
+            of: "\"election_day_notice\":null",
+            with: "\"election_day_notice\":{\"lead\":\"Return by 8 p.m. today.\",\"detail\":\"Use a drop box.\"}"
+        )
+        let both = try XCTUnwrap(election(intelligence(withDetail)).ballotCard?.electionDayNotice)
+        XCTAssertEqual(both.lead, "Return by 8 p.m. today.")
+        XCTAssertEqual(both.detail, "Use a drop box.")
+
+        let leadOnly = card.replacingOccurrences(
+            of: "\"election_day_notice\":null",
+            with: "\"election_day_notice\":{\"lead\":\"Return by 8 p.m. today.\"}"
+        )
+        let notice = try XCTUnwrap(election(intelligence(leadOnly)).ballotCard?.electionDayNotice)
+        XCTAssertEqual(notice.lead, "Return by 8 p.m. today.")
+        XCTAssertNil(notice.detail)
+    }
+
+    func testPlaceIntelligenceRequestsOptIntoBallot() {
+        XCTAssertEqual(PlaceEndpoints.intelligence(homeId: "home-1").query, ["ballot": "1"])
+        XCTAssertEqual(
+            PlaceEndpoints.intelligence(homeId: "home-1", sections: [.civicElection]).query,
+            ["ballot": "1", "sections": "civic_election"]
+        )
+        XCTAssertEqual(PlaceEndpoints.intelligence(homeId: "home-1").path, "/api/homes/home-1/intelligence")
+    }
+
+    // MARK: Timeline label repair (the shared spec's vectors, from real state deadlines)
+
+    /// A timeline deadline as the server sends it.
+    private func deadline(
+        _ key: String,
+        _ label: String,
+        _ date: String,
+        _ monthDay: String,
+        days: Int,
+        needsAction: Bool = true
+    ) throws -> BallotDeadline {
+        let json = """
+        {"key":"\(key)","label":"\(label)","date":"\(date)","month_day":"\(monthDay)","days_until":\(days),
+         "needs_action":\(needsAction),"timeline":true,"detail":null}
+        """
+        return try decoder.decode(BallotDeadline.self, from: Data(json.utf8))
+    }
+
+    /// Where a timeline marker's label is expected: its key, x, row, anchor and slide.
+    private struct Spot {
+        let key: String
+        let x: CGFloat
+        let side: BallotTimelineLayout.Side
+        let anchor: BallotTimelineLayout.Anchor
+        let dx: CGFloat
+
+        init(_ key: String, _ x: CGFloat, _ side: BallotTimelineLayout.Side, _ anchor: BallotTimelineLayout.Anchor, dx: CGFloat = 0) {
+            self.key = key
+            self.x = x
+            self.side = side
+            self.anchor = anchor
+            self.dx = dx
+        }
+    }
+
+    private func assertMarkers(
+        _ layout: BallotTimelineLayout?,
+        _ expected: [Spot],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let markers = try XCTUnwrap(layout, file: file, line: line).markers
+        XCTAssertEqual(markers.map(\.key), expected.map(\.key), file: file, line: line)
+        for (marker, spot) in zip(markers, expected) {
+            XCTAssertEqual(marker.x, spot.x, accuracy: 0.01, "\(spot.key) x", file: file, line: line)
+            XCTAssertEqual(marker.side, spot.side, "\(spot.key) side", file: file, line: line)
+            XCTAssertEqual(marker.anchor, spot.anchor, "\(spot.key) anchor", file: file, line: line)
+            XCTAssertEqual(marker.dx, spot.dx, accuracy: 0.01, "\(spot.key) dx", file: file, line: line)
+        }
+    }
+
+    func testTimelineLeavesACleanLayoutAsTheCanvasHasIt() throws {
+        // WA on Sep 24 at 326: nothing collides, so the repair pass changes nothing.
+        let deadlines = try [
+            deadline("ballots_mailed", "Ballots mailed", "2026-10-16", "Oct 16", days: 22, needsAction: false),
+            deadline("register_online_mail", "Register by", "2026-10-26", "Oct 26", days: 32),
+            deadline("return_by", "By 8 p.m.", "2026-11-03", "Nov 3", days: 40)
+        ]
+        try assertMarkers(
+            BallotTimelineLayout.make(deadlines: deadlines, today: "2026-09-24", width: 326),
+            [
+                Spot("today", 8, .below, .start),
+                Spot("ballots_mailed", 178.5, .above, .middle),
+                Spot("register_online_mail", 256, .below, .middle),
+                Spot("return_by", 318, .above, .end)
+            ]
+        )
+    }
+
+    func testTimelineMovesAnOverprintingLabelToItsOwnRow() throws {
+        // OR on Oct 10 at 326: registration (Oct 13) and ballots mailed (Oct 14) are a day apart, and
+        // the legacy pass left both above the track, printing over each other.
+        let deadlines = try [
+            deadline("register_online_mail", "Register by", "2026-10-13", "Oct 13", days: 3),
+            deadline("ballots_mailed", "Ballots mailed", "2026-10-14", "Oct 14", days: 4, needsAction: false),
+            deadline("return_by", "By 8 p.m.", "2026-11-03", "Nov 3", days: 24)
+        ]
+        try assertMarkers(
+            BallotTimelineLayout.make(deadlines: deadlines, today: "2026-10-10", width: 326),
+            [
+                Spot("today", 8, .below, .start),
+                Spot("register_online_mail", 46.75, .above, .middle),
+                Spot("ballots_mailed", 59.67, .below, .start),
+                Spot("return_by", 318, .above, .end)
+            ]
+        )
+    }
+
+    func testTimelineSlidesALabelAlongItsRowWhenNothingElseClears() throws {
+        // OR on Oct 13 (today IS the registration deadline): both neighbours crowd the left edge, so
+        // "Ballots mailed" slides 30.24pt right of its marker (12pt clear of "Today"), below the track.
+        let deadlines = try [
+            deadline("register_online_mail", "Register by", "2026-10-13", "Oct 13", days: 0),
+            deadline("ballots_mailed", "Ballots mailed", "2026-10-14", "Oct 14", days: 1, needsAction: false),
+            deadline("return_by", "By 8 p.m.", "2026-11-03", "Nov 3", days: 21)
+        ]
+        let layout = BallotTimelineLayout.make(deadlines: deadlines, today: "2026-10-13", width: 326)
+        try assertMarkers(
+            layout,
+            [
+                Spot("today", 8, .below, .start),
+                Spot("register_online_mail", 8, .above, .start),
+                Spot("ballots_mailed", 22.76, .below, .start, dx: 30.24),
+                Spot("return_by", 318, .above, .end)
+            ]
+        )
+        // The slide is drawn: text starts at the marker's x, less the 4 nudge, plus dx.
+        XCTAssertEqual(try XCTUnwrap(layout?.markers[2]).textX, 49, accuracy: 0.01)
+    }
+
+    func testTimelineKeepsALongLabelNearTheEdgeOnTheCard() throws {
+        // HI on Oct 25 at 326: "Paper forms by 4:30 p.m." (24 characters) centred on x = 42 ran off the left edge.
+        let deadlines = try [
+            deadline("register_online_mail", "Paper forms by 4:30 p.m.", "2026-10-26", "Oct 26", days: 1),
+            deadline("return_by", "By 7 p.m.", "2026-11-03", "Nov 3", days: 9)
+        ]
+        try assertMarkers(
+            BallotTimelineLayout.make(deadlines: deadlines, today: "2026-10-25", width: 326),
+            [
+                Spot("today", 8, .below, .start),
+                Spot("register_online_mail", 42.44, .above, .start),
+                Spot("return_by", 318, .above, .end)
+            ]
+        )
+    }
+
+    func testTimelineIsReadAloudWithTheReturnDeadlinesNoun() throws {
+        let ballot = try XCTUnwrap(election(intelligence(card)).ballotCard)
+        XCTAssertEqual(
+            BallotTimelineLayout.accessibilityDescription(deadlines: ballot.deadlines, today: "2026-09-24"),
+            "Timeline: today, Sep 24; ballots mailed Oct 16; register by Oct 26; return by 8 p.m. Nov 3"
+        )
     }
 
     func testTimelineIsEmptyOnElectionDay() throws {

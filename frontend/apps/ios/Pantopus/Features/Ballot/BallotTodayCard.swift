@@ -26,20 +26,30 @@ struct BallotTodayCard: View {
                 weekCard(week)
             }
             if let mover = card.moverPrompt {
-                Button {
-                    if let raw = mover.url, let url = URL(string: raw) { openURL(url) }
-                } label: {
-                    BallotNoticeWell(
-                        lead: "",
-                        detail: "\(mover.text) \(BallotFormat.daysLeft(mover.daysLeft))",
-                        radius: Radii.xl,
-                        verticalPadding: Spacing.s3,
-                        horizontalPadding: 14
-                    )
-                }
+                moverWell(mover)
+            }
+        }
+    }
+
+    /// "Moved this year?": a link when the server sends where to update the
+    /// registration, otherwise a plain well (no button, no tap).
+    @ViewBuilder
+    private func moverWell(_ mover: BallotMoverPrompt) -> some View {
+        let well = BallotNoticeWell(
+            lead: "",
+            detail: "\(mover.text) \(BallotFormat.daysLeft(mover.daysLeft))",
+            radius: Radii.xl,
+            verticalPadding: Spacing.s3,
+            horizontalPadding: 14
+        )
+        if let url = mover.url.flatMap({ URL(string: $0) }) {
+            Button { openURL(url) } label: { well }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("today.ballot.mover")
-            }
+        } else {
+            well
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("today.ballot.mover")
         }
     }
 

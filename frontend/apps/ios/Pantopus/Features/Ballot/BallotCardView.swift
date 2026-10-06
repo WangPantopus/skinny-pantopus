@@ -153,7 +153,7 @@ struct BallotPrimaryButton: View {
                 .frame(maxWidth: .infinity, minHeight: height)
                 .background(
                     RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                        .fill(Theme.Color.primary700)
+                        .fill(Theme.Color.primarySolid)
                 )
         }
         .buttonStyle(.plain)

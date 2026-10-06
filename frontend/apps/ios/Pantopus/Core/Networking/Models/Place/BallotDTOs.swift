@@ -115,7 +115,8 @@ public struct BallotMoverPrompt: Decodable, Sendable, Hashable {
 
 public struct BallotNotice: Decodable, Sendable, Hashable {
     public let lead: String
-    public let detail: String
+    /// The server's validator requires only `lead`; a notice may omit this.
+    public let detail: String?
 }
 
 /// The Ballot P0 card, present only when the server sent it.

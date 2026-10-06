@@ -19,6 +19,13 @@ struct PlaceCivicDetailContent: View {
         vm.section(.civicDistricts, in: intel)?.civicDistricts?.governments
     }
 
+    /// The election section's own source (with Ballot on, the state's office or
+    /// the federal-law date), else the county elections label it always carried.
+    private func electionSource(_ election: PlaceSectionEnvelope) -> String {
+        guard let source = election.source, !source.isEmpty else { return "Official county elections" }
+        return source
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let districts = vm.section(.civicDistricts, in: intel) {
@@ -28,7 +35,7 @@ struct PlaceCivicDetailContent: View {
                     PlaceSourceNote(name: "District boundaries · public GIS records", asOf: "current")
                     if let governments = data.governments {
                         GovernmentsRow(governments: governments) { showGovernments = true }
-                            .padding(.top, 12)
+                            .padding(.top, Spacing.s3)
                     }
                     if !data.representatives.isEmpty {
                         PlaceDetailSectionLabel(text: "Your representatives")
@@ -52,7 +59,7 @@ struct PlaceCivicDetailContent: View {
                 if let data = election.civicElection, data.ballotCard?.phase != .after,
                    election.status == .ready || election.status == .stale {
                     ElectionCard(data: data)
-                    PlaceSourceNote(name: "Official county elections", asOf: nil)
+                    PlaceSourceNote(name: electionSource(election), asOf: nil)
                 } else {
                     NoElectionCard()
                 }
@@ -82,17 +89,17 @@ private struct GovernmentsRow: View {
     var body: some View {
         Button(action: onOpen) {
             PlaceDetailCard(padding: 16) {
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.s3) {
                     PlaceIconTile(icon: .layers, tone: .home, size: 40)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Your governments")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Theme.Color.appText)
-                        Text("This address sits inside \(count).")
+                        Text("This address sits inside \(count) governments.")
                             .font(.system(size: 12.5))
                             .foregroundStyle(Theme.Color.appTextMuted)
                     }
-                    Spacer(minLength: 0)
+                    Spacer(minLength: Spacing.s0)
                     PlaceChevron()
                 }
             }
