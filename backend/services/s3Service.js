@@ -40,6 +40,18 @@ function getPublicUrl(key) {
   return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${key}`;
 }
 
+/** True when a URL points into this deployment's public file storage (a file uploaded through the API). */
+function isPublicStorageUrl(url) {
+  try {
+    const base = new URL(getPublicUrl(''));
+    const reference = new URL(url);
+    return reference.origin === base.origin && !reference.username && !reference.password
+      && reference.pathname.startsWith(base.pathname);
+  } catch {
+    return false;
+  }
+}
+
 const S3_OBJECT_ACL = (process.env.AWS_S3_OBJECT_ACL || '').trim();
 
 function buildPutObjectParams(baseParams) {
@@ -397,7 +409,7 @@ function isAllowedType(mimeType) {
 }
 
 module.exports = {
-  categorizeFile, generateS3Key, getPublicUrl, isAllowedType,
+  categorizeFile, generateS3Key, getPublicUrl, isPublicStorageUrl, isAllowedType,
   uploadToS3, uploadProfilePicture, uploadGigMedia,
   chatFileStorageReference, chatFileObjectMetadata, removeDeletedChatFile,
   verifyGigCompletionFile, normalizeGigCompletionFile,

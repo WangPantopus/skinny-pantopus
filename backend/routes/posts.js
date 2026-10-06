@@ -302,6 +302,16 @@ const createPostSchema = Joi.object({
   return value;
 });
 
+// Photos and videos must be files uploaded through the API. An outside link would show its owner
+// who viewed the post and when (IP address, browser), and its picture could change after posting.
+// Curator (seeded) posts keep their sources' images.
+const OUTSIDE_MEDIA_ERROR = 'Attach photos and videos by uploading them.';
+function hasOutsideMedia(body, attached = []) {
+  const kept = new Set(attached.flat().filter(Boolean));
+  return ['mediaUrls', 'mediaThumbnails', 'mediaLiveUrls'].some((field) => (body[field] || [])
+    .some((url) => url && !kept.has(url) && !s3.isPublicStorageUrl(url)));
+}
+
 const updatePostSchema = Joi.object({
   content: Joi.string().min(1).max(5000),
   title: Joi.string().max(255).allow(null, ''),
@@ -1006,6 +1016,9 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     // Curator accounts are platform-owned content seeders — they post with
     // explicit lat/lng and skip home/trust/place-eligibility checks.
     const isCurator = req.user.accountType === 'curator';
+    if (!isCurator && hasOutsideMedia(req.body)) {
+      return res.status(400).json({ error: OUTSIDE_MEDIA_ERROR });
+    }
 
     // Origin is server-derived from the caller's account type. It is the
     // durable "is this a seeded post?" marker. Never trusted from the body.
@@ -2634,9 +2647,14 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     const { id } = req.params;
     const userId = req.user.id;
 
-    const { data: existing } = await supabaseAdmin.from('Post').select('user_id').eq('id', id).single();
+    const { data: existing } = await supabaseAdmin.from('Post')
+      .select('user_id, media_urls, media_thumbnails, media_live_urls').eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
+    if (req.user.accountType !== 'curator' && hasOutsideMedia(req.body, [normalizeMediaUrls(existing.media_urls),
+      normalizeAlignedMediaUrls(existing.media_thumbnails), normalizeAlignedMediaUrls(existing.media_live_urls)])) {
+      return res.status(400).json({ error: OUTSIDE_MEDIA_ERROR });
+    }
 
     const fieldMap = {
       content: 'content', title: 'title',
