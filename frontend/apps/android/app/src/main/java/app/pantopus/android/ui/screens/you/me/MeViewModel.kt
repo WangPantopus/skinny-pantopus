@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.businesses.BusinessMembership
+import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.MonthlyReceiptDto
@@ -14,6 +15,7 @@ import app.pantopus.android.data.api.models.users.UserProfile
 import app.pantopus.android.data.api.models.users.UserStatsDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessesRepository
+import app.pantopus.android.data.homes.HomeDashboardRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.profile.ProfileInsightsRepository
 import app.pantopus.android.data.profile.ProfileRepository
@@ -49,6 +51,7 @@ class MeViewModel
     constructor(
         private val profileRepo: ProfileRepository,
         private val homesRepo: HomesRepository,
+        private val homeDashboard: HomeDashboardRepository,
         private val insightsRepo: ProfileInsightsRepository,
         private val businessesRepo: BusinessesRepository,
     ) : ViewModel() {
@@ -132,6 +135,8 @@ class MeViewModel
                         (homesResult as? NetworkResult.Success)?.data?.sharedHomes.orEmpty()
                     // A failed homes read must not read as "No shared Home".
                     val homesFailed = homesResult is NetworkResult.Failure
+                    // The Home card's counts come from the primary Home's dashboard.
+                    val dashboard = primaryHomeDashboard(homes)
 
                     val stats =
                         (profileRepo.stats(profile.id) as? NetworkResult.Success)?.data
@@ -139,7 +144,15 @@ class MeViewModel
                     _state.value =
                         MeUiState.Loaded(
                             personal = launchScoped(buildPersonal(profile, stats)),
-                            home = launchScoped(buildHome(homes, profileLocality = localityOf(profile), homesFailed = homesFailed)),
+                            home =
+                                launchScoped(
+                                    buildHome(
+                                        homes,
+                                        profileLocality = localityOf(profile),
+                                        homesFailed = homesFailed,
+                                        dashboard = dashboard,
+                                    ),
+                                ),
                             business = launchScoped(buildBusiness(businesses?.firstOrNull(), businesses == null)),
                             showBusiness = showBusiness,
                         )
@@ -334,12 +347,36 @@ class MeViewModel
             )
         }
 
+        private fun primaryHome(homes: List<MyHome>): MyHome? = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
+
+        /** The primary Home's dashboard; null with no Home or when it didn't load. */
+        private suspend fun primaryHomeDashboard(homes: List<MyHome>): HomeDashboardResponse? {
+            val homeId = primaryHome(homes)?.id ?: return null
+            return (homeDashboard.dashboard(homeId) as? NetworkResult.Success)?.data
+        }
+
+        /** The Home card's counts. A count the person may not see, or one that didn't load, stays "—". */
+        private fun homeStats(dashboard: HomeDashboardResponse?): List<MeStat> {
+            val permissions = dashboard?.myAccess?.permissions.orEmpty().toSet()
+
+            fun value(
+                count: Int?,
+                permission: String,
+            ): String = if (count != null && permission in permissions) count.toString() else "—"
+            return listOf(
+                MeStat("bills", value(dashboard?.counts?.billsDue, "finance.view"), "Bills due"),
+                MeStat("tasks", value(dashboard?.counts?.tasksOpen, "tasks.view"), "Open tasks"),
+                MeStat("members", value(dashboard?.counts?.membersActive, "members.view"), "Members"),
+            )
+        }
+
         private fun buildHome(
             homes: List<MyHome>,
             profileLocality: String?,
             homesFailed: Boolean = false,
+            dashboard: HomeDashboardResponse? = null,
         ): MeIdentityContent {
-            val primary = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
+            val primary = primaryHome(homes)
             if (primary == null) {
                 return MeIdentityContent(
                     identity = MeIdentity.Home,
@@ -384,12 +421,7 @@ class MeViewModel
                 locality = locality ?: profileLocality,
                 tagline = homeTagline,
                 verified = false,
-                stats =
-                    listOf(
-                        MeStat("bills", "—", "Bills due"),
-                        MeStat("tasks", "—", "Open tasks"),
-                        MeStat("members", "—", "Members"),
-                    ),
+                stats = homeStats(dashboard),
                 actionTiles = homeActionTiles(homeId = primary.id),
                 sections =
                     withDebug(

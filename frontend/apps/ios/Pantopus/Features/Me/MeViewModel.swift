@@ -126,11 +126,19 @@ public final class MeViewModel {
         }
 
         let personal = Self.buildPersonal(profile: profile.user, stats: stats)
+        // The Home card's counts come from the primary Home's dashboard.
+        var dashboard: HomeDashboardResponse?
+        if let homeId = Self.primaryHome(in: homes?.sharedHomes ?? [])?.home.id {
+            dashboard = await optional {
+                try await self.api.request(HomeDashboardEndpoints.dashboard(homeId: homeId))
+            }
+        }
         // `homes == nil` is a failed read; it must not read as "No shared Home".
         let home = Self.buildHome(
             homes: homes?.sharedHomes ?? [],
             profileLocality: Self.localityString(profile.user),
-            homesFailed: homes == nil
+            homesFailed: homes == nil,
+            dashboard: dashboard
         )
         let businesses: MyBusinessesResponse? = await optional {
             try await self.api.request(BusinessesEndpoints.myBusinesses())
@@ -351,12 +359,32 @@ private extension MeViewModel {
         )
     }
 
+    static func primaryHome(in homes: [MyHome]) -> MyHome? {
+        homes.first { $0.isPrimaryOwner == true } ?? homes.first
+    }
+
+    /// The Home card's counts from the primary Home's dashboard. A count the person may not
+    /// see, or one that didn't load, stays "—".
+    private static func homeStats(_ dashboard: HomeDashboardResponse?) -> [MeStat] {
+        let permissions = Set(dashboard?.myAccess?.permissions ?? [])
+        func value(_ count: Int?, _ permission: String) -> String {
+            guard let count, permissions.contains(permission) else { return "—" }
+            return "\(count)"
+        }
+        return [
+            MeStat(id: "bills", value: value(dashboard?.counts.billsDue, "finance.view"), label: "Bills due"),
+            MeStat(id: "tasks", value: value(dashboard?.counts.tasksOpen, "tasks.view"), label: "Open tasks"),
+            MeStat(id: "members", value: value(dashboard?.counts.membersActive, "members.view"), label: "Members")
+        ]
+    }
+
     private static func buildHome(
         homes: [MyHome],
         profileLocality: String?,
-        homesFailed: Bool = false
+        homesFailed: Bool = false,
+        dashboard: HomeDashboardResponse? = nil
     ) -> MeIdentityContent {
-        guard let primary = homes.first(where: { $0.isPrimaryOwner == true }) ?? homes.first else {
+        guard let primary = primaryHome(in: homes) else {
             return MeIdentityContent(
                 identity: .home,
                 displayName: "Your Homes",
@@ -393,11 +421,7 @@ private extension MeViewModel {
             locality: locality.isEmpty ? profileLocality : locality,
             tagline: homeTagline,
             verified: false,
-            stats: [
-                MeStat(id: "bills", value: "—", label: "Bills due"),
-                MeStat(id: "tasks", value: "—", label: "Open tasks"),
-                MeStat(id: "members", value: "—", label: "Members")
-            ],
+            stats: homeStats(dashboard),
             actionTiles: homeActionTiles(homeId: home.id),
             sections: withDebug(homeSections(
                 homeId: home.id,

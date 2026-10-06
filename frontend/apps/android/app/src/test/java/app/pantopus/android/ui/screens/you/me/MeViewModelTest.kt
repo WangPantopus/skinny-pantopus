@@ -13,6 +13,7 @@ import app.pantopus.android.data.api.models.users.UserStatsDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessesRepository
+import app.pantopus.android.data.homes.HomeDashboardRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.profile.ProfileInsightsRepository
 import app.pantopus.android.data.profile.ProfileRepository
@@ -35,6 +36,7 @@ import org.junit.Test
 class MeViewModelTest {
     private val profileRepo: ProfileRepository = mockk()
     private val homesRepo: HomesRepository = mockk()
+    private val homeDashboardRepo: HomeDashboardRepository = mockk()
     private val businessesRepo: BusinessesRepository = mockk()
 
     // Profile-tab insight cards (Monthly Receipt / invite progress) degrade to
@@ -46,6 +48,7 @@ class MeViewModelTest {
         // The launch cut hides several tiles and rows; these tests pin the full set.
         LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         coEvery { businessesRepo.myBusinesses() } returns NetworkResult.Success(MyBusinessesResponse(emptyList()))
+        coEvery { homeDashboardRepo.dashboard(any()) } returns NetworkResult.Failure(NetworkError.Server(500, null))
     }
 
     @After fun tearDown() {
@@ -123,7 +126,7 @@ class MeViewModelTest {
             coEvery { profileRepo.ownProfile() } returns NetworkResult.Success(ProfileResponse(profile(), null))
             coEvery { homesRepo.myHomes() } returns NetworkResult.Success(MyHomesResponse(listOf(home()), null))
             coEvery { profileRepo.stats("u1") } returns NetworkResult.Success(stats())
-            val vm = MeViewModel(profileRepo, homesRepo, insightsRepo, businessesRepo)
+            val vm = MeViewModel(profileRepo, homesRepo, homeDashboardRepo, insightsRepo, businessesRepo)
             vm.load()
             val loaded = vm.state.value as MeUiState.Loaded
             assertEquals("Alice Doe", loaded.personal.displayName)
@@ -180,7 +183,7 @@ class MeViewModelTest {
             coEvery { profileRepo.ownProfile() } returns NetworkResult.Success(ProfileResponse(profile(), null))
             coEvery { homesRepo.myHomes() } returns NetworkResult.Success(MyHomesResponse(emptyList(), null))
             coEvery { profileRepo.stats("u1") } returns NetworkResult.Success(stats())
-            val vm = MeViewModel(profileRepo, homesRepo, insightsRepo, businessesRepo)
+            val vm = MeViewModel(profileRepo, homesRepo, homeDashboardRepo, insightsRepo, businessesRepo)
             vm.load()
             val loaded = vm.state.value as MeUiState.Loaded
             assertTrue(loaded.home.isUnbound)
@@ -192,7 +195,7 @@ class MeViewModelTest {
             coEvery { profileRepo.ownProfile() } returns NetworkResult.Success(ProfileResponse(profile(), null))
             coEvery { homesRepo.myHomes() } returns NetworkResult.Success(MyHomesResponse(listOf(home()), null))
             coEvery { profileRepo.stats("u1") } returns NetworkResult.Success(stats())
-            val vm = MeViewModel(profileRepo, homesRepo, insightsRepo, businessesRepo)
+            val vm = MeViewModel(profileRepo, homesRepo, homeDashboardRepo, insightsRepo, businessesRepo)
             vm.load()
             assertEquals(MeIdentity.Personal, vm.activeIdentity.value)
             vm.selectIdentity(MeIdentity.Home)
@@ -205,7 +208,7 @@ class MeViewModelTest {
         runTest {
             coEvery { profileRepo.ownProfile() } returns NetworkResult.Failure(NetworkError.Server(500, null))
             coEvery { homesRepo.myHomes() } returns NetworkResult.Success(MyHomesResponse(emptyList(), null))
-            val vm = MeViewModel(profileRepo, homesRepo, insightsRepo, businessesRepo)
+            val vm = MeViewModel(profileRepo, homesRepo, homeDashboardRepo, insightsRepo, businessesRepo)
             vm.load()
             assertTrue(vm.state.value is MeUiState.Error)
         }
