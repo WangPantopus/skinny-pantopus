@@ -1,4 +1,5 @@
 import { get, post, del } from '../client';
+import type { PlacePreview } from './place';
 
 export interface SavedPlace {
   id: string;
@@ -27,6 +28,11 @@ export async function create(data: {
   expectedUserId?: string;
 }) {
   return post<{ savedPlace: SavedPlace }>('/api/saved-places', data);
+}
+
+/** The public address preview for the saved point (not a lookup of its label). */
+export async function getPreview(id: string) {
+  return get<PlacePreview>(`/api/saved-places/${encodeURIComponent(id)}/preview`);
 }
 
 export async function remove(id: string) {

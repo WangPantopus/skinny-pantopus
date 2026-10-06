@@ -48,6 +48,38 @@ router.get('/:id/today', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/saved-places/:id/preview — the public address preview for the
+// saved point itself. The web used to look the place up again by its label,
+// and a label can be a name ("Gym", "City Hall") that geocodes to another state.
+router.get('/:id/preview', verifyToken, async (req, res) => {
+  if (Joi.string().uuid().validate(req.params.id).error) {
+    return res.status(400).json({ error: 'Invalid saved place id' });
+  }
+  try {
+    const { data: place, error } = await supabaseAdmin
+      .from('SavedPlace')
+      .select('id, label, latitude, longitude, city, state')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!place) return res.status(404).json({ error: 'Saved place not found' });
+    const lat = Number(place.latitude);
+    const lng = Number(place.longitude);
+    res.setHeader('Cache-Control', 'private, no-store');
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.json({ status: 'could_not_place', tier: 'preview', region: null, message: 'This saved place has no location.' });
+    }
+    const { buildPlacePreview } = require('./public');
+    return res.json(await buildPlacePreview({
+      lat, lng, city: place.city || null, state: place.state || null, line: place.label, zipcode: null,
+    }));
+  } catch (err) {
+    logger.error('Failed to load saved place preview:', err);
+    return res.status(500).json({ error: 'Failed to load this saved place' });
+  }
+});
+
 // POST /api/saved-places — add a saved place
 router.post('/', verifyToken, async (req, res) => {
   try {

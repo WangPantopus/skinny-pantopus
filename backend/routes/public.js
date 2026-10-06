@@ -473,6 +473,119 @@ async function readDensityBucket(geohash) {
   }
 }
 
+// The free preview for a located US point: the Band-A sections, the aha card
+// and the wall. GET /place builds it for a geocoded address; a saved place
+// builds it for its stored point (routes/savedPlaces.js), because a saved
+// place's label can be a name like "Gym" that geocodes somewhere else.
+async function buildPlacePreview(place) {
+  const geohash = encodeGeohash6(place.lat, place.lng);
+
+  // 2. The free Band-A snapshot. Flood, the Census teaser, the density
+  //    bucket and the money lead are fetched here; the remaining layers
+  //    come from placePreviewService. Each degrades on its own, none
+  //    persists the preview (caches are location-keyed), none touches ATTOM.
+  // ONE tract resolution, shared, lazy. The census teaser and the money
+  // lead both need it, and letting each resolve its own doubled the
+  // Census geocoder traffic on every anonymous view.
+  //
+  // Shared as a THUNK rather than an awaited value, for two reasons the
+  // first version got wrong: awaiting it up front serialized a round
+  // trip ahead of the parallel fan-out below (~300 ms on a cold cell,
+  // paid even when both consumers were about to hit their in-memory
+  // caches), and passing the resolved value made `null` — "we tried and
+  // could not place it" — indistinguishable from "no hint supplied", so
+  // both consumers re-resolved and a failing geocoder was hit three
+  // times per request instead of once.
+  let tractPromise = null;
+  const resolveTract = () => {
+    if (!tractPromise) tractPromise = geocodeToTractCached(place.lat, place.lng).catch(() => null);
+    return tractPromise;
+  };
+
+  const [floodSettled, areaSettled, bucketSettled, moneySettled, remoteSettled, foundingSettled] = await Promise.allSettled([
+    fetchFloodCached(place.lat, place.lng),
+    fetchCensusTeaserCached(place.lat, place.lng, resolveTract),
+    readDensityBucket(geohash),
+    fetchMoneyLeadCached(place.lat, place.lng, resolveTract),
+    // The rest of Band A (today / seismic / wildfire / health / rent /
+    // civic), each on its own time budget — a slow provider degrades
+    // only its own section (placePreviewService).
+    placePreviewService.composePreviewSections({
+      lat: place.lat, lng: place.lng, city: place.city, state: place.state, resolveTract,
+    }),
+    // Are Founding Neighbor slots genuinely open in this cell? A boolean,
+    // never a count — it only chooses the density card's invitation line.
+    foundingSlotsOpen(geohash),
+  ]);
+
+  const flood = floodSettled.status === 'fulfilled' ? floodSettled.value : null;
+  const area = areaSettled.status === 'fulfilled' ? areaSettled.value : null;
+  const bucket = bucketSettled.status === 'fulfilled' ? bucketSettled.value : 'none';
+  const money = moneySettled.status === 'fulfilled' ? moneySettled.value : null;
+  const remote = remoteSettled.status === 'fulfilled' ? remoteSettled.value : [];
+  const foundingOpen = foundingSettled.status === 'fulfilled' ? Boolean(foundingSettled.value) : true;
+
+  const sections = placePreviewService.assemblePreviewSections({ remote, flood, area, bucket, foundingOpen });
+  const aha = placePreviewService.pickAha(sections);
+
+  const floodSection = flood && flood.flood_zone
+    ? {
+        status: 'ready',
+        zone: flood.flood_zone,
+        description: flood.flood_zone_description || null,
+        source: 'FEMA National Flood Hazard Layer',
+      }
+    : { status: 'unavailable', source: 'FEMA National Flood Hazard Layer' };
+
+  const areaSection = area && (area.median_year_built != null || area.median_home_value != null)
+    ? {
+        status: 'ready',
+        median_year_built: area.median_year_built,
+        median_home_value: area.median_home_value,
+        note: 'Area-level, not your home',
+        source: 'U.S. Census · American Community Survey',
+      }
+    : {
+        status: 'unavailable',
+        note: 'Area-level, not your home',
+        source: 'U.S. Census · American Community Survey',
+      };
+
+  // Density always resolves (a bucket, even 'none'); it never gates ready.
+  const densitySection = {
+    status: 'ready',
+    bucket,                       // enum only — NEVER a count
+    label: placePreviewService.previewDensityLabel(bucket, foundingOpen),
+    source: 'Pantopus verified neighbors',
+  };
+
+  const ready = floodSection.status === 'ready' && areaSection.status === 'ready';
+
+  return {
+    status: ready ? 'ready' : 'partial',
+    tier: 'preview',
+    region: 'US',
+    place: {
+      address: place.line,
+      city: place.city,
+      state: place.state,
+      zipcode: place.zipcode,
+    },
+    // The lead: a dollar figure when one is genuinely available for
+    // this address, else null and the tiles carry the page as before.
+    money_lead: money,
+    free: {
+      flood: floodSection,
+      density: densitySection,
+      area: areaSection,
+    },
+    aha,
+    sections,
+    locked: LOCKED_SECTIONS,
+    disclaimer: 'A free, one-time look at what\'s public. Claim this address to save it and get it every morning.',
+  };
+}
+
 router.get('/place', async (req, res) => {
   try {
     // Same reason as /unlisted: a 200 with an ETag and no Cache-Control is
@@ -515,112 +628,7 @@ router.get('/place', async (req, res) => {
       });
     }
 
-    const geohash = encodeGeohash6(place.lat, place.lng);
-
-    // 2. The free Band-A snapshot. Flood, the Census teaser, the density
-    //    bucket and the money lead are fetched here; the remaining layers
-    //    come from placePreviewService. Each degrades on its own, none
-    //    persists the preview (caches are location-keyed), none touches ATTOM.
-    // ONE tract resolution, shared, lazy. The census teaser and the money
-    // lead both need it, and letting each resolve its own doubled the
-    // Census geocoder traffic on every anonymous view.
-    //
-    // Shared as a THUNK rather than an awaited value, for two reasons the
-    // first version got wrong: awaiting it up front serialized a round
-    // trip ahead of the parallel fan-out below (~300 ms on a cold cell,
-    // paid even when both consumers were about to hit their in-memory
-    // caches), and passing the resolved value made `null` — "we tried and
-    // could not place it" — indistinguishable from "no hint supplied", so
-    // both consumers re-resolved and a failing geocoder was hit three
-    // times per request instead of once.
-    let tractPromise = null;
-    const resolveTract = () => {
-      if (!tractPromise) tractPromise = geocodeToTractCached(place.lat, place.lng).catch(() => null);
-      return tractPromise;
-    };
-
-    const [floodSettled, areaSettled, bucketSettled, moneySettled, remoteSettled, foundingSettled] = await Promise.allSettled([
-      fetchFloodCached(place.lat, place.lng),
-      fetchCensusTeaserCached(place.lat, place.lng, resolveTract),
-      readDensityBucket(geohash),
-      fetchMoneyLeadCached(place.lat, place.lng, resolveTract),
-      // The rest of Band A (today / seismic / wildfire / health / rent /
-      // civic), each on its own time budget — a slow provider degrades
-      // only its own section (placePreviewService).
-      placePreviewService.composePreviewSections({
-        lat: place.lat, lng: place.lng, city: place.city, state: place.state, resolveTract,
-      }),
-      // Are Founding Neighbor slots genuinely open in this cell? A boolean,
-      // never a count — it only chooses the density card's invitation line.
-      foundingSlotsOpen(geohash),
-    ]);
-
-    const flood = floodSettled.status === 'fulfilled' ? floodSettled.value : null;
-    const area = areaSettled.status === 'fulfilled' ? areaSettled.value : null;
-    const bucket = bucketSettled.status === 'fulfilled' ? bucketSettled.value : 'none';
-    const money = moneySettled.status === 'fulfilled' ? moneySettled.value : null;
-    const remote = remoteSettled.status === 'fulfilled' ? remoteSettled.value : [];
-    const foundingOpen = foundingSettled.status === 'fulfilled' ? Boolean(foundingSettled.value) : true;
-
-    const sections = placePreviewService.assemblePreviewSections({ remote, flood, area, bucket, foundingOpen });
-    const aha = placePreviewService.pickAha(sections);
-
-    const floodSection = flood && flood.flood_zone
-      ? {
-          status: 'ready',
-          zone: flood.flood_zone,
-          description: flood.flood_zone_description || null,
-          source: 'FEMA National Flood Hazard Layer',
-        }
-      : { status: 'unavailable', source: 'FEMA National Flood Hazard Layer' };
-
-    const areaSection = area && (area.median_year_built != null || area.median_home_value != null)
-      ? {
-          status: 'ready',
-          median_year_built: area.median_year_built,
-          median_home_value: area.median_home_value,
-          note: 'Area-level, not your home',
-          source: 'U.S. Census · American Community Survey',
-        }
-      : {
-          status: 'unavailable',
-          note: 'Area-level, not your home',
-          source: 'U.S. Census · American Community Survey',
-        };
-
-    // Density always resolves (a bucket, even 'none'); it never gates ready.
-    const densitySection = {
-      status: 'ready',
-      bucket,                       // enum only — NEVER a count
-      label: placePreviewService.previewDensityLabel(bucket, foundingOpen),
-      source: 'Pantopus verified neighbors',
-    };
-
-    const ready = floodSection.status === 'ready' && areaSection.status === 'ready';
-
-    return res.json({
-      status: ready ? 'ready' : 'partial',
-      tier: 'preview',
-      region: 'US',
-      place: {
-        address: place.line,
-        city: place.city,
-        state: place.state,
-        zipcode: place.zipcode,
-      },
-      // The lead: a dollar figure when one is genuinely available for
-      // this address, else null and the tiles carry the page as before.
-      money_lead: money,
-      free: {
-        flood: floodSection,
-        density: densitySection,
-        area: areaSection,
-      },
-      aha,
-      sections,
-      locked: LOCKED_SECTIONS,
-      disclaimer: 'A free, one-time look at what\'s public. Claim this address to save it and get it every morning.',
-    });
+    return res.json(await buildPlacePreview(place));
   } catch (err) {
     console.error('[public/place] Error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -831,5 +839,6 @@ module.exports = router;
 // Shared with Scout (routes/scout.js): one geocoder, one cache, one set of
 // US-bounds rules. A second copy would drift and double the Mapbox spend.
 module.exports.geocodeUsAddress = geocodeUsAddress;
+module.exports.buildPlacePreview = buildPlacePreview;
 // Test-only hook: reset the in-memory preview caches between cases.
 module.exports.__clearPreviewCaches = () => previewCache.clear();
