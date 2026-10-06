@@ -221,7 +221,7 @@ export default function MailDayPage() {
                         >
                           <span className="flex-shrink-0">{mailTypeIcon(item)}</span>
                           <span className="text-sm text-app-text truncate group-hover:text-primary-600">
-                            {item.sender_display || 'Unknown sender'}
+                            {item.sender_display || item.sender_business_name || 'Unknown sender'}
                           </span>
                           <span className="text-xs text-app-text-secondary truncate ml-auto flex-shrink-0">
                             {item.display_title || item.preview_text || ''}
@@ -262,7 +262,7 @@ export default function MailDayPage() {
 
                 {/* Extra stats */}
                 {/* Launch cut #8 (Mail extras): no community-stream count. */}
-                {(summary.earn_count > 0 || (launchFeatures.mailExtras && summary.community_count > 0)) && (
+                {launchFeatures.mailExtras && (summary.earn_count > 0 || summary.community_count > 0) && (
                   <div className="px-5 py-3 border-b border-app-border-subtle flex items-center gap-4 text-xs text-app-text-secondary">
                     {summary.earn_count > 0 && (
                       <span>{summary.earn_count} earn opportunity{summary.earn_count !== 1 ? 's' : ''}</span>

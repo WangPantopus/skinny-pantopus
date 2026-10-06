@@ -112,6 +112,18 @@ final class PlaceLaunchViewModel {
         return true
     }
 
+    /// Signed-in "Save a place": keeps the chosen preview for the private
+    /// save confirmation (`PendingPlaceView`).
+    func prepareForSave() -> Bool {
+        guard let selected, selected.label == query,
+              PlacePendingStore.stash(selected) else {
+            step = .hero
+            errorMessage = "Choose an address suggestion to save this place."
+            return false
+        }
+        return true
+    }
+
     func backToHero() {
         lookupTask?.cancel()
         isLoadingPreview = false

@@ -13,6 +13,7 @@ export type MailItem = {
   ack_status?: 'pending' | 'acknowledged' | null;
   content: string;
   sender_user_id?: string;
+  sender_display?: string;
   sender_business_name?: string;
   sender_address?: string;
   viewed: boolean;
