@@ -1,13 +1,24 @@
 'use client';
 
-import { useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Scroll, ShieldCheck, BookOpen, Receipt, Building2, Folder, FolderOpen, ChevronLeft } from 'lucide-react';
 import * as api from '@pantopus/api';
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
 import { toast } from '@/components/ui/toast-store';
+import { confirmStore } from '@/components/ui/confirm-store';
 import { failureMessage } from '../share/shareFailure';
+
+// "expires in 23h" / "expires in 2d 4h" for a share link's end time.
+function linkExpiry(end: string | null | undefined) {
+  if (!end) return 'no end date';
+  const minutes = Math.floor((new Date(end).getTime() - Date.now()) / 60000);
+  if (minutes < 60) return `expires in ${Math.max(minutes, 1)}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `expires in ${hours}h`;
+  return hours % 24 ? `expires in ${Math.floor(hours / 24)}d ${hours % 24}h` : `expires in ${hours / 24}d`;
+}
 
 const DOC_FOLDERS: { key: string; label: string; icon: ReactNode; types: string[] }[] = [
   { key: 'lease', label: 'Lease / Title', icon: <Scroll className="w-4 h-4" />, types: ['lease', 'title', 'deed', 'rental_agreement'] },
@@ -91,6 +102,21 @@ export default function DocsCard({
     return groups;
   }, [documents]);
 
+  // Live share links per document, so a link can be stopped before it expires.
+  const [links, setLinks] = useState<Record<string, api.ScopedGrant[]>>({});
+  const loadLinks = useCallback(async () => {
+    try {
+      const { grants } = await api.homeIam.getScopedGrants(homeId, { resource_type: 'HomeDocument' });
+      const byDocument: Record<string, api.ScopedGrant[]> = {};
+      for (const grant of grants) (byDocument[grant.resource_id] ??= []).push(grant);
+      setLinks(byDocument);
+    } catch {
+      // People who can't manage links (or a failed read) see no link rows.
+      setLinks({});
+    }
+  }, [homeId]);
+  useEffect(() => { void loadLinks(); }, [loadLinks]);
+
   const handleShare = async (doc: Record<string, any>) => {
     try {
       const res = await api.homeIam.createScopedGrant(homeId, {
@@ -103,6 +129,26 @@ export default function DocsCard({
       toast.success('Share link copied to clipboard!');
     } catch (err: unknown) {
       toast.error(failureMessage(err, 'Failed to create share link'));
+    } finally {
+      void loadLinks();
+    }
+  };
+
+  const stopSharing = async (doc: Record<string, any>, grant: api.ScopedGrant) => {
+    const yes = await confirmStore.open({
+      title: 'Stop sharing',
+      description: `Anyone with this link to "${doc.title || 'this document'}" loses access now.`,
+      confirmLabel: 'Stop sharing',
+      variant: 'destructive',
+    });
+    if (!yes) return;
+    try {
+      await api.homeIam.revokeScopedGrant(homeId, grant.id);
+      toast.success('Share link stopped');
+    } catch (err: unknown) {
+      toast.error(failureMessage(err, 'Failed to stop the share link'));
+    } finally {
+      void loadLinks();
     }
   };
 
@@ -156,6 +202,18 @@ export default function DocsCard({
                           </Link>
                         )}
                       </div>
+                      {(links[doc.id] || []).map((grant) => (
+                        <div key={grant.id} className="flex items-center gap-2 mt-1 text-[10px] text-app-text-secondary">
+                          <span>Share link · {linkExpiry(grant.end_at)}</span>
+                          <button
+                            type="button"
+                            onClick={() => void stopSharing(doc, grant)}
+                            className="font-medium text-red-600 hover:text-red-700"
+                          >
+                            Stop sharing
+                          </button>
+                        </div>
+                      ))}
                     </div>
 
                     <button

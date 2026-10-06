@@ -146,8 +146,9 @@ async function summarizeUpdates(items, locationLabel, briefingKind = 'morning') 
           content: `Area: ${locationLabel || 'nearby'}\nRecent curated updates:\n${bulletLines.join('\n')}`,
         },
       ],
-      max_tokens: 80,
-      temperature: 0.2,
+      // A reasoning draft model spends part of this on reasoning before it
+      // writes; too small a budget returns empty text and the template wins.
+      max_completion_tokens: 1024,
     });
 
     const text = response.choices?.[0]?.message?.content?.trim();

@@ -288,8 +288,9 @@ async function aiPolish(signals, options) {
         { role: 'system', content: SYSTEM_PROMPT.replace('{maxWords}', String(maxWords)) },
         { role: 'user', content: buildFactsPrompt(signals, options) },
       ],
-      max_tokens: 150,
-      temperature: 0.4,
+      // A reasoning draft model spends part of this on reasoning before it
+      // writes; too small a budget returns empty text and the template wins.
+      max_completion_tokens: 1024,
     });
 
     const text = response.choices?.[0]?.message?.content?.trim();
