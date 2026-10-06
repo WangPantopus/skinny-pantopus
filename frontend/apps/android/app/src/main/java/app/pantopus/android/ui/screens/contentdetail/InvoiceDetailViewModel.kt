@@ -49,6 +49,8 @@ class InvoiceDetailViewModel
     ) : ViewModel() {
         companion object {
             const val INVOICE_ID_KEY = "invoiceId"
+            private const val HTTP_BAD_REQUEST = 400
+            private const val HTTP_CONFLICT = 409
         }
 
         private val invoiceId: String = savedStateHandle.get<String>(INVOICE_ID_KEY).orEmpty()
@@ -111,11 +113,16 @@ class InvoiceDetailViewModel
                                 ),
                             ),
                         )
-                    is NetworkResult.Failure ->
+                    is NetworkResult.Failure -> {
                         _paymentStatus.value =
                             InvoicePaymentStatus.Declined(
                                 result.error.displayMessage("Couldn't start this payment. Please try again."),
                             )
+                        // A refused Pay (say, the invoice turned out to be paid already) re-reads the invoice.
+                        if (result.error.code == HTTP_BAD_REQUEST || result.error.code == HTTP_CONFLICT) {
+                            fetch(showLoading = false)
+                        }
+                    }
                 }
             }
         }
