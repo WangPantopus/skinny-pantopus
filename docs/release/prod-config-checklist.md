@@ -455,10 +455,18 @@ and, once the new store listings exist, `NEXT_PUBLIC_IOS_APP_STORE_URL`,
 
 ### Listings (founder approves; L4 drafts)
 
-Listing text around "Know what matters for your home, and stay on top of it.",
-screenshots from the simulator and emulator with test data, App Privacy and
-Data safety answers from `docs/compliance/privacy-data-inventory.md`, a review
-account for each store. Nothing is submitted without your approval.
+- [ ] Founder: approve or edit the listing text. iOS:
+  `frontend/apps/ios/fastlane/metadata/en-US/` (the `release` lane uploads these
+  files and submits for review, so approve them before running it). Android:
+  `frontend/apps/android/fastlane/metadata/android/en-US/` (paste into Play
+  Console; the Play lanes skip metadata). Both use the name "Pantopus Home"
+  per D2.
+- [ ] L4: screenshots from the simulator and emulator with test data in the
+  pilot area, after the release-candidate sweep.
+- [ ] Founder: approve the App Privacy and Data safety answers
+  (`docs/compliance/appstore-privacy-labels.md`, `play-data-safety.md`; L4
+  checks them against the current apps first) and create a review account for
+  each store. Nothing is submitted without your approval.
 
 ## 5. Go-live
 
