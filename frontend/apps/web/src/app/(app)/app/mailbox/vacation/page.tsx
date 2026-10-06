@@ -152,14 +152,14 @@ function VacationContent() {
         <p className="text-[11px] font-bold tracking-wider text-app-text-muted mb-3">TRAVEL DATES</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-app-text-muted mb-1 block">Departure</label>
-            <input type="date" value={startDate} min={localDay(new Date())}
+            <label htmlFor="vacation-start" className="text-xs text-app-text-muted mb-1 block">Departure</label>
+            <input id="vacation-start" type="date" value={startDate} min={localDay(new Date())}
               onChange={e => { setStartDate(e.target.value); if (e.target.value >= endDate) { const d = new Date(`${e.target.value}T00:00:00`); d.setDate(d.getDate() + 1); setEndDate(localDay(d)); } }}
               className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text focus:outline-none focus:ring-1 focus:ring-emerald-500" />
           </div>
           <div>
-            <label className="text-xs text-app-text-muted mb-1 block">Return</label>
-            <input type="date" value={endDate} min={startDate}
+            <label htmlFor="vacation-end" className="text-xs text-app-text-muted mb-1 block">Return</label>
+            <input id="vacation-end" type="date" value={endDate} min={startDate}
               onChange={e => setEndDate(e.target.value)}
               className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text focus:outline-none focus:ring-1 focus:ring-emerald-500" />
           </div>
