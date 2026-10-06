@@ -16,8 +16,10 @@ const HOME_FIELDS = ('id,name,address,address2,city,state,zipcode,country,locati
   + 'visibility,bedrooms,bathrooms,sq_ft,lot_sq_ft,year_built,move_in_date,primary_photo_url,cover_photo_url,'
   + 'is_owner,created_at,updated_at,home_status,security_state,claim_window_ends_at,tenure_mode').split(',');
 const INSTRUCTION_FIELDS = ['entry_instructions', 'parking_instructions'];
+// verification_source tells household members apart from address-verified ones (F3b),
+// so member lists only badge people who proved the address.
 const MEMBER_FIELDS = ['id', 'home_id', 'user_id', 'role', 'role_base', 'is_active', 'verification_status',
-  'start_at', 'end_at', 'access_start_at', 'access_end_at', 'created_at'];
+  'verification_source', 'start_at', 'end_at', 'access_start_at', 'access_end_at', 'created_at'];
 const OWNER_FIELDS = ['id', 'home_id', 'subject_type', 'subject_id', 'owner_status', 'is_primary_owner', 'verification_tier'];
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const object = value => value && typeof value === 'object' && !Array.isArray(value);

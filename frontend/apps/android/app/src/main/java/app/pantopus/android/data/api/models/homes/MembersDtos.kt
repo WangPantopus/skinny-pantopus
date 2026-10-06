@@ -41,7 +41,16 @@ data class OccupantDto(
     @Json(name = "can_manage_access") val canManageAccess: Boolean? = null,
     @Json(name = "can_manage_tasks") val canManageTasks: Boolean? = null,
     @Json(name = "can_view_sensitive") val canViewSensitive: Boolean? = null,
-)
+    /** `address`, `household` (joined by invitation) or `legacy`; null from older servers. */
+    @Json(name = "verification_source") val verificationSource: String? = null,
+) {
+    /**
+     * Household members joined by invitation haven't proved the address (F3b),
+     * so only address-verified (or pre-F3b) members carry the verified badge.
+     */
+    val hasAddressVerification: Boolean
+        get() = verificationSource != "household"
+}
 
 /** Pending invite mapped to a member-like shape by the backend. */
 @JsonClass(generateAdapter = true)
