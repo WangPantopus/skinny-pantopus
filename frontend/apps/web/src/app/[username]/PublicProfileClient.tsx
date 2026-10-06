@@ -465,8 +465,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     const yes = await confirmStore.open({
       title: 'Block user',
       description:
-        `Block ${fullName}? They won't be able to message you, and you won't ` +
-        `see messages from them. They are not notified, and you can unblock ` +
+        `Block ${fullName}? You won't be able to message each other or see ` +
+        `each other's posts. They aren't notified, and you can unblock ` +
         `them from Settings.`,
       confirmLabel: 'Block',
       variant: 'destructive',
