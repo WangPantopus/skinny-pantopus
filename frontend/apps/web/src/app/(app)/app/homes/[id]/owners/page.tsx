@@ -8,11 +8,12 @@ import type { HomeOwner } from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 
+// `color` is dark enough for small text on light surfaces (WCAG AA, 4.5:1);
 // `dark` is a lighter shade of the same hue, for text on dark mode's dark surfaces.
 const TIER_META: Record<string, { icon: typeof ShieldCheck; color: string; dark: string; label: string }> = {
-  legal:    { icon: ShieldCheck, color: '#16a34a', dark: '#4ade80', label: 'Legal' },
-  strong:   { icon: ShieldCheck, color: '#0284c7', dark: '#38bdf8', label: 'Strong' },
-  standard: { icon: Shield,      color: '#f59e0b', dark: '#fbbf24', label: 'Standard' },
+  legal:    { icon: ShieldCheck, color: '#15803d', dark: '#4ade80', label: 'Legal' },
+  strong:   { icon: ShieldCheck, color: '#0369a1', dark: '#38bdf8', label: 'Strong' },
+  standard: { icon: Shield,      color: '#b45309', dark: '#fbbf24', label: 'Standard' },
   weak:     { icon: ShieldAlert,  color: '#6b7280', dark: '#9ca3af', label: 'Weak' },
 };
 const tierAccent = (tier: { color: string; dark: string }) => ({ '--accent': tier.color, '--accent-dark': tier.dark } as CSSProperties);
