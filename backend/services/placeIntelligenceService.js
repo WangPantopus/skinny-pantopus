@@ -1052,8 +1052,10 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
     }
   }
 
+  // An unreadable privacy row fails closed for the one toggle this payload
+  // honors: the unit stays hidden, and the rest of Place still loads.
   const [privacy, ...groups] = await Promise.all([
-    getHomePrivacy(homeId),
+    getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
     ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access })),
   ]);
 
