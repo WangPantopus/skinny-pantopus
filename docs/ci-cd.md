@@ -5,7 +5,8 @@ backend image, web lint/type checks/Jest/**production build**, the Identity
 Firewall Playwright test, seeder tests, Android, iOS and infrastructure checks.
 Mobile workflows are reusable children of CI, so a mobile failure or cancellation
 fails the aggregate. Path filtering happens at the job level: a PR runs the
-surfaces it changes, and a push to `master` or `dev` runs the surfaces changed
+surfaces it changes (a workflow change counts for iOS, Android and the seeder only when it is `ci.yml` or
+that surface's own workflow), and a push to `master` or `dev` runs the surfaces changed
 since that branch's previous commit. A manual run validates every surface. A PR's
 newer push cancels its older run. On `master` a running build is never cancelled:
 a newer merge waits as the single pending run (GitHub drops older pending ones), so

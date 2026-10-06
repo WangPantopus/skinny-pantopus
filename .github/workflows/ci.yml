@@ -70,15 +70,19 @@ jobs:
               - 'pnpm-workspace.yaml'
               - 'turbo.json'
               - '.github/workflows/**'
+            # Mobile and seeder jobs react to their own workflows only, so a
+            # deploy or backend workflow change doesn't start macOS jobs.
             ios:
               - 'frontend/apps/ios/**'
-              - '.github/workflows/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/ios-*.yml'
             android:
               - 'frontend/apps/android/**'
-              - '.github/workflows/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/android-*.yml'
             seeder:
               - 'pantopus-seeder/**'
-              - '.github/workflows/**'
+              - '.github/workflows/ci.yml'
 
   # ─── Backend: privacy gates + Jest ─────────────────────────────────────────
   backend:
