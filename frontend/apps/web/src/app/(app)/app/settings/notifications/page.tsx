@@ -6,7 +6,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import {
   ArrowLeft, Sun, Clock, CloudLightning, Wind, Home, Briefcase, Mail,
-  Moon, Navigation, Smartphone, Check, Megaphone,
+  Moon, Navigation, Smartphone, Check, Megaphone, Monitor,
 } from 'lucide-react';
 import type { UserNotificationPreferences } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -206,7 +206,10 @@ export default function NotificationPreferencesPage() {
           )}
         </Section>
 
-        {/* 4. Briefing Location */}
+        {/* 4. This browser: desktop alerts are asked for only from this click. */}
+        <DesktopAlertsSection />
+
+        {/* 5. Briefing Location */}
         <Section title="Briefing Location">
           {LOCATION_MODES.map((mode, i) => {
             const active = prefs.location_mode === mode.value;
@@ -230,6 +233,51 @@ export default function NotificationPreferencesPage() {
         </Section>
       </div>
     </div>
+  );
+}
+
+// ── Desktop alerts (this browser) ───────────────────────────────
+
+// Browsers ignore or quiet permission prompts that don't follow a click, so the
+// ask happens here instead of when the app opens.
+function DesktopAlertsSection() {
+  const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('unsupported');
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) setPermission(Notification.permission);
+  }, []);
+  if (permission === 'unsupported') return null;
+
+  const turnOn = async () => {
+    try {
+      setPermission(await Notification.requestPermission());
+    } catch {
+      setPermission(Notification.permission);
+    }
+  };
+
+  const subtitle =
+    permission === 'granted' ? 'On for this browser. To turn them off, use the site settings in your browser.'
+      : permission === 'denied' ? 'Blocked in this browser. Allow notifications for this site in your browser settings.'
+        : 'Show new messages and alerts on this computer while Pantopus is open.';
+
+  return (
+    <Section title="This browser">
+      <div className="flex items-center justify-between px-4 py-3.5">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="text-gray-400 dark:text-gray-500 flex-shrink-0"><Monitor className="w-5 h-5" /></div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Desktop alerts</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
+          </div>
+        </div>
+        {permission === 'default' && (
+          <button onClick={turnOn}
+            className="ml-3 px-3 py-1.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition flex-shrink-0">
+            Turn on
+          </button>
+        )}
+      </div>
+    </Section>
   );
 }
 
