@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import * as api from '@pantopus/api';
-import type { HomeMember } from '@pantopus/types';
-import TransferAdminWizard from './TransferAdminWizard';
 import ErrorState from '@/components/ui/ErrorState';
 import { failureMessage } from '../share/shareFailure';
 import { toast } from '@/components/ui/toast-store';
@@ -160,7 +158,6 @@ export default function HomeSettingsTab({
   const [notifGuestPass, setNotifGuestPass] = useState(true);
 
   // Section 5: Data Management
-  const [showTransfer, setShowTransfer] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteStep, setDeleteStep] = useState(0);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -347,16 +344,6 @@ export default function HomeSettingsTab({
 
   return (
     <div className="space-y-6">
-      {/* Transfer Admin Wizard */}
-      <TransferAdminWizard
-        open={showTransfer}
-        onClose={() => setShowTransfer(false)}
-        homeId={homeId}
-        members={members as HomeMember[]}
-        currentUserId={currentUserId}
-        onTransferred={onHomeUpdate}
-      />
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -598,36 +585,10 @@ export default function HomeSettingsTab({
       {canManageDataDestruction && (
         <SettingsSection title="Data Management" icon="⚙️">
           <div className="space-y-4">
-            {/* Export */}
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-app-text">Export Home Data</div>
-                <div className="text-[10px] text-app-text-muted">Download all data as JSON</div>
-              </div>
-              <button
-                disabled
-                className="px-3 py-1.5 rounded-lg border border-app-border text-xs text-app-text-muted cursor-not-allowed"
-              >
-                Coming soon
-              </button>
-            </div>
-
-            {/* Transfer */}
-            <div className="flex items-center justify-between border-t border-app-border-subtle pt-4">
-              <div>
-                <div className="text-sm font-medium text-app-text">Transfer Home</div>
-                <div className="text-[10px] text-app-text-muted">Transfer primary admin to another member</div>
-              </div>
-              <button
-                onClick={() => setShowTransfer(true)}
-                className="px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-xs font-medium text-amber-700 hover:bg-amber-100 transition"
-              >
-                Transfer
-              </button>
-            </div>
-
+            {/* Ownership transfer is the apps' verified Owners flow (the API refuses the old
+                admin hand-off), so this card offers deletion only. */}
             {/* Delete */}
-            <div className="border-t border-app-border-subtle pt-4">
+            <div>
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-medium text-red-700">Delete Home</div>
