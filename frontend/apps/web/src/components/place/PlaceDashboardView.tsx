@@ -86,7 +86,9 @@ export default function PlaceDashboardView({
   // we derive the verify entry (T3) and the available identity rows (T4)
   // from the resolved tier. The verify nudge + locked cards open the B1
   // prompt sheet; skip the client identity group if a wave starts serving one.
-  const showVerify = tier === 'T3';
+  // Guests and service providers aren't residents, so they get no verify prompts.
+  const canVerify = !(tier === 'T3' && intelligence.verify_available === false);
+  const showVerify = tier === 'T3' && canVerify;
   const hasServerIdentity = intelligence.groups.some((g) => g.group === 'identity');
   const showIdentity = tier === 'T4' && !hasServerIdentity;
 
@@ -155,7 +157,7 @@ export default function PlaceDashboardView({
                       {group.sections
                         .filter((section) => !fold || !isUnavailableSection(section))
                         .map((section) => (
-                          <Fragment key={section.id}>{renderSection(section, { onOpen, onVerify: openVerify, onClaim, onRetry, retrying })}</Fragment>
+                          <Fragment key={section.id}>{renderSection(section, { onOpen, onVerify: canVerify ? openVerify : undefined, onClaim: canVerify ? onClaim : undefined, onRetry, retrying })}</Fragment>
                         ))}
                       {fold ? <CoverageRow titles={unavailable.map((s) => sectionTitle(s.id))} reason={sharedReason} onOpen={onOpen} /> : null}
                     </>

@@ -1242,6 +1242,8 @@ data class PlaceIntelligence(
     /** ISO 8601. */
     @Json(name = "generated_at") val generatedAt: String,
     val groups: List<PlaceGroupBlock> = emptyList(),
+    /** Whether this viewer can start residency verification here; false for guests and service providers. */
+    @Json(name = "verify_available") val verifyAvailable: Boolean? = null,
 )
 
 // ─── Anonymous T0 preview (`GET /api/public/place`) ──────────

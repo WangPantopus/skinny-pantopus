@@ -935,6 +935,8 @@ export interface PlaceGroupBlock {
 export interface PlaceIntelligence {
   place: PlaceAddressRef;
   tier: PlaceTier;
+  /** Whether this viewer can start residency verification (false for guests and service providers). Omitted by older servers. */
+  verify_available?: boolean;
   region_supported: boolean;
   /** ISO 8601. */
   generated_at: string;
