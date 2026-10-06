@@ -212,6 +212,12 @@ val buildingRelease =
         task.endsWith("Release", ignoreCase = true) || task.startsWith("publish")
     }
 
+// Decision D4: the pilot runs on Stripe test keys until live payments are
+// switched on. PANTOPUS_ALLOW_TEST_PAYMENTS=true lets a release carry a real
+// pk_test_ key (a card then fails instead of being charged); placeholders
+// never pass, and without the flag a release still needs pk_live_.
+val allowTestPayments = envOr("PANTOPUS_ALLOW_TEST_PAYMENTS", "false").toBoolean()
+
 if (buildingRelease) {
     val apiIsLocal = apiBaseUrl.contains("localhost") || apiBaseUrl.contains("10.0.2.2")
     val apiOk = apiBaseUrl.startsWith("https://") && !apiIsLocal
@@ -219,8 +225,17 @@ if (buildingRelease) {
     if (!apiOk) {
         problems += "PANTOPUS_API_BASE_URL must be an https:// production URL (got \"$apiBaseUrl\")"
     }
-    if (!stripeKey.startsWith("pk_live_")) {
-        problems += "STRIPE_PUBLISHABLE_KEY must be a live key (pk_live_…) for release (got \"${stripeKey.take(8)}…\")"
+    val stripeOk =
+        !stripeKey.contains("REPLACE_ME") &&
+            (stripeKey.startsWith("pk_live_") || (allowTestPayments && stripeKey.startsWith("pk_test_")))
+    if (!stripeOk) {
+        problems +=
+            if (allowTestPayments) {
+                "STRIPE_PUBLISHABLE_KEY must be a real pk_live_ or pk_test_ key for release (got \"${stripeKey.take(8)}…\")"
+            } else {
+                "STRIPE_PUBLISHABLE_KEY must be a live key (pk_live_…) for release (got \"${stripeKey.take(8)}…\"); " +
+                    "set PANTOPUS_ALLOW_TEST_PAYMENTS=true to ship Stripe test mode (decision D4)"
+            }
     }
     if (problems.isNotEmpty()) {
         val detail = problems.joinToString("\n  - ", prefix = "\n  - ")

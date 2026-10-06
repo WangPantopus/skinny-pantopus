@@ -73,6 +73,8 @@ jobs:
           PANTOPUS_API_BASE_URL: ${{ secrets.PANTOPUS_API_BASE_URL }}
           PANTOPUS_SOCKET_URL: ${{ secrets.PANTOPUS_SOCKET_URL }}
           STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          # Decision D4: environment variable (not a secret), 'true' while the pilot uses Stripe test keys.
+          PANTOPUS_ALLOW_TEST_PAYMENTS: ${{ vars.PANTOPUS_ALLOW_TEST_PAYMENTS }}
           MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
           PANTOPUS_KEYSTORE_PASSWORD: ${{ secrets.PANTOPUS_KEYSTORE_PASSWORD }}
           PANTOPUS_KEY_ALIAS: ${{ secrets.PANTOPUS_KEY_ALIAS }}
@@ -82,6 +84,7 @@ jobs:
           PANTOPUS_API_BASE_URL=$PANTOPUS_API_BASE_URL
           PANTOPUS_SOCKET_URL=$PANTOPUS_SOCKET_URL
           STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY
+          PANTOPUS_ALLOW_TEST_PAYMENTS=${PANTOPUS_ALLOW_TEST_PAYMENTS:-false}
           MAPS_API_KEY=$MAPS_API_KEY
           PANTOPUS_KEYSTORE_FILE=$(pwd)/pantopus-release.jks
           PANTOPUS_KEYSTORE_PASSWORD=$PANTOPUS_KEYSTORE_PASSWORD

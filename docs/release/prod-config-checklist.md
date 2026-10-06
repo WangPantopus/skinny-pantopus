@@ -450,7 +450,11 @@ and, once the new store listings exist, `NEXT_PUBLIC_IOS_APP_STORE_URL`,
   `PANTOPUS_KEY_ALIAS`, `PANTOPUS_KEY_PASSWORD`, `PLAY_STORE_SERVICE_ACCOUNT_JSON`,
   `PANTOPUS_API_BASE_URL=https://api.pantopus.com`,
   `PANTOPUS_SOCKET_URL=https://api.pantopus.com`, `STRIPE_PUBLISHABLE_KEY`,
-  `MAPS_API_KEY` and `GOOGLE_SERVICES_JSON` (P4).
+  `MAPS_API_KEY` and `GOOGLE_SERVICES_JSON` (P4). While the pilot uses Stripe test
+  mode (D4), the secret is the `pk_test_` key and the environment also needs the
+  **variable** (not secret) `PANTOPUS_ALLOW_TEST_PAYMENTS=true`; without it the
+  release build refuses anything but `pk_live_`. Delete the variable when live
+  payments start. iOS needs no switch: its secret simply carries the matching key.
 - [ ] Founder: run **Android Beta (Play Store)**.
 
 ### Listings (founder approves; L4 drafts)
