@@ -74,6 +74,7 @@ public struct MembersListView: View {
             InviteMemberWizardView(homeId: homeId, target: target) { original in
                 invitationTarget = nil
                 if let original {
+                    removalResult = nil
                     invitationResult = switch (original.outcome?.state, original.action) {
                     case ("completed", .withdraw): "Invitation withdrawn."
                     case ("completed", .resend): "Resend requested."
@@ -97,6 +98,7 @@ public struct MembersListView: View {
                 removalPresentation = nil
                 if let original {
                     let left = original.review.dictValue?["target"]?.dictValue?["is_self"] == .bool(true)
+                    invitationResult = nil
                     removalResult = original.outcome?.state == "completed"
                         ? (left ? "You left this Home." : "Member removed.") : "Nothing changed."
                 }
