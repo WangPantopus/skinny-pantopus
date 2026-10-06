@@ -131,6 +131,7 @@ public struct ChatConversationView: View {
                 creatorContext: resolvedCreatorContext,
                 onBack: onBack,
                 onOpenDetails: { detailsPresented = true },
+                onNewAIChat: { viewModel.startNewAIConversation() },
                 onOpenProfile: headerProfileTap
             )
             if isSelecting {
@@ -1561,6 +1562,8 @@ private struct ChatConversationHeader: View {
     let onBack: @MainActor () -> Void
     /// Opens the conversation-details drawer (topics + safety actions).
     var onOpenDetails: @MainActor () -> Void = {}
+    /// The assistant's "New chat" (AI thread only).
+    var onNewAIChat: @MainActor () -> Void = {}
     /// Opens the other person's profile from their avatar and name (person DMs only).
     var onOpenProfile: (@MainActor () -> Void)?
 
@@ -1700,7 +1703,7 @@ private struct ChatConversationHeader: View {
                 // more-horizontal (decorative until it has actions).
                 HStack(spacing: 2) {
                     Button {
-                        viewModel.startNewAIConversation()
+                        onNewAIChat()
                     } label: {
                         Icon(.squarePen, size: 18, color: Theme.Color.appTextStrong)
                             .frame(width: 34, height: 34)
