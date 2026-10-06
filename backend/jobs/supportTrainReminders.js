@@ -16,6 +16,12 @@ const { listEffectivelyOpenSlots } = require('../services/supportTrainSlotAvaila
 const { inferTimezone } = require('../services/context/locationResolver');
 const { DateTime } = require('luxon');
 
+// Helpers are reminded only while the Train is running: not once it is closed (completed),
+// paused, unpublished or archived. The open-slots nudge below applies the same rule.
+function trainTakesReminders(reservation) {
+  return ['published', 'active'].includes(reservation.SupportTrain?.status);
+}
+
 function localReminderTime(reservation, now) {
   const train = reservation.SupportTrain;
   return DateTime.fromJSDate(now, {
@@ -72,7 +78,7 @@ async function _send24hReminders() {
       .select(`
         id, user_id, guest_name, guest_email, support_train_id, contribution_mode,
         dish_title, restaurant_name, guest_address_shared_at, last_reminder_sent,
-        SupportTrain:support_train_id ( delivery_lat, delivery_lng ),
+        SupportTrain:support_train_id ( delivery_lat, delivery_lng, status ),
         SupportTrainSlot:slot_id (
           id, slot_date, slot_label, support_mode, start_time, end_time, status
         )
@@ -86,6 +92,7 @@ async function _send24hReminders() {
     }
 
     const tomorrowReservations = (reservations || []).filter(r => {
+      if (!trainTakesReminders(r)) return false;
       const localNow = localReminderTime(r, now);
       return localNow.hour >= 17 &&
         r.SupportTrainSlot?.slot_date === localNow.plus({ days: 1 }).toISODate() &&
@@ -145,7 +152,7 @@ async function _sendDayOfReminders() {
       .select(`
         id, user_id, guest_name, guest_email, support_train_id, contribution_mode,
         dish_title, restaurant_name, guest_address_shared_at, day_of_reminder_sent_at,
-        SupportTrain:support_train_id ( delivery_lat, delivery_lng ),
+        SupportTrain:support_train_id ( delivery_lat, delivery_lng, status ),
         SupportTrainSlot:slot_id (
           id, slot_date, slot_label, support_mode, start_time, end_time, status
         )
@@ -159,6 +166,7 @@ async function _sendDayOfReminders() {
     }
 
     const eligible = (reservations || []).filter(r => {
+      if (!trainTakesReminders(r)) return false;
       const slot = r.SupportTrainSlot;
       const localNow = localReminderTime(r, now);
       if (!slot || slot.slot_date !== localNow.toISODate()) return false;

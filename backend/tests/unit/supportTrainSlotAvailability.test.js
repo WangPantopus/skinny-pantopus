@@ -43,7 +43,7 @@ describe('supportTrainSlotAvailability', () => {
         private_note_to_organizer: 'private note sentinel',
         guest_address_shared_at: shared,
         last_reminder_sent: eveningMarker, day_of_reminder_sent_at: dayMarker,
-        SupportTrain: coords,
+        SupportTrain: { ...coords, status: trainStatus },
         SupportTrainSlot: { id: 'slot', slot_date: date, slot_label: 'Dinner',
           start_time: start, end_time: end, status: slotStatus },
       }]);
@@ -159,6 +159,15 @@ describe('supportTrainSlotAvailability', () => {
         userId: 'helper', type: 'support_train_reminders', link: '/app/support-trains/train',
       }));
     });
+
+    it.each([['active', 1], ['published', 1], ['completed', 0], ['paused', 0], ['draft', 0]])(
+      'reminds helpers only while the Train runs (%s)', async (trainStatus, sends) => {
+        seed({ account: true, eveningMarker: '2026-10-04T00:00:00Z', trainStatus });
+        await runSupportTrainReminders();
+        const helperReminders = createNotification.mock.calls
+          .filter(([n]) => n.userId === 'helper' && n.type === 'support_train_reminders');
+        expect(helperReminders).toHaveLength(sends);
+      });
 
     it('does not repeat during the fall DST repeated hour', async () => {
       seed({ date: '2026-11-01', start: '03:30' });
