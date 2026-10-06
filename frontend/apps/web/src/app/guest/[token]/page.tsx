@@ -468,6 +468,9 @@ function WifiCard({ wifi }: { wifi: { network_name: string; password: string } |
   return (
     <GuestCard icon="📶" title="Wi-Fi">
       <div className="space-y-4">
+        {networks.length === 0 && (
+          <p className="text-sm text-app-text-secondary">Your host hasn&apos;t added a Wi-Fi network yet. Ask them for the details.</p>
+        )}
         {networks.map((net, i) => (
           <WifiEntry key={i} network={net} />
         ))}
