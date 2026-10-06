@@ -10,6 +10,7 @@ import androidx.core.app.NotificationManagerCompat
 import app.pantopus.android.core.routing.HomeTaskNotificationRoute
 import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.data.analytics.PilotEvents
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskAccessFactory
@@ -71,6 +72,10 @@ class ReminderActionReceiver : BroadcastReceiver() {
                         NotificationManagerCompat.from(context).cancel(intent.getIntExtra(NOTIFICATION_ID, 0))
                     }
                 }
+            } catch (_: NetworkError) {
+                // API refusals and outages are Throwables, not Exceptions: unhandled, a
+                // Done tap on a deleted task or while offline crashed the app. Same
+                // uncertain reply as below: claim nothing.
             } catch (_: Exception) {
                 // Expired auth, denied permissions or an uncertain task reply do not
                 // claim completion. Leave the task/notification available to reopen.
