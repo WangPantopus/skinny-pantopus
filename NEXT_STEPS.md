@@ -89,7 +89,8 @@ The ordered steps, with exact values and checks, are in the [launch checklist](d
 - [ ] Turn the hosted backend on. One scheduled reminder reaches a physical iPhone and a physical Android phone.
   - [x] Prepared by L4 on October 6: every step with values and checks in the launch checklist (PR 1556); deploys stop a crash-looping release within seconds (PR 1576); the reminder Lambdas are ready for hosted runs, with 7 AM Pacific task reminders through daylight saving and failure alarms (PR 1584); backup and restore including uploaded files, rehearsed end to end (PR 1586). Your steps are listed in order in `launch-streams/status/FOUNDER.md`.
 - [ ] Production keys the backend reads; the database baseline adopted in production; TestFlight; a Play internal testing track.
-  - [ ] Store builds in review: Android targets API 36 as Google Play requires (PR 1601); iOS release settings and privacy manifest (PR 1567).
+  - [x] iOS release settings, privacy manifests and the production API host are on master (PR 1567).
+  - [ ] Android targets API 36 as Google Play requires (PR 1601; the main screens checked on an Android 16 emulator); store listing drafts, privacy answers and the Play account-deletion page draft wait for your approval (PR 1635).
 - [ ] Confirm the Camas, Vancouver and Washougal pickup schedules and their holiday rules by hand for Thanksgiving (November 26), Christmas (December 25) and New Year's Day (January 1). Mark each official or unconfirmed. PR 1552 added draft holiday rows for the three cities; all stay unconfirmed and never push until you confirm them (FOUNDER.md).
 - [ ] Talk to ten first-time homeowners and ten meal-train organizers before and during the build. Ask the homeowners whether they would add their home to a Crew Day on their street, and what they would type into a box that answers questions about their home. Their questions become the agent's first test set.
 - [ ] Five strangers, ten seconds on the app's first screen: "What does this do, and why would you type your address?"
@@ -147,7 +148,9 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] iOS Done/reopen controls, immediate Add → saved detail and Back/list refresh repaired. Actual creation with the keyboard open succeeded without Retry and persisted one task; all 45 final scoped access/routing tests passed.
   - [x] False mailbox postcard proof and stale native caches repaired; truthful copy passed on both apps. Invited-member letter/pass/RealRent/RateWatch restrictions were observed on Android; 93 backend and native cache regressions passed.
   - [x] Reciprocal: Android owner invites → iOS member accepts → task Done → FCM/APNs pushes open the task (L2, October 6).
-  - [ ] A household member's postcard journey (PR 1598, in review), Android invite accept with its push, the remaining F3b consumers and roles, the external invitation email and hosted delivery.
+  - [x] Invitation email → app links → acceptance with FCM and APNs pushes; F3b answers checked for the owner, a household member, an address-verified resident and an outsider (L2, October 6).
+  - [x] A household member requests a postcard (PR 1598) → Lob test mode → wrong code refused, right code → address-verified (L2, October 6).
+  - [ ] Delivery to a physical phone and the invitation email from the hosted backend.
 
 - [ ] WP7 Pilot measurement: app events, reminder events and the report.
   - [x] Backend event migration, authenticated collection, delivery-qualified reporting and activation/report work merged in PR1509 with its bounded accepted API/report evidence.
@@ -160,7 +163,8 @@ A checked subitem means the named implementation or local check is complete; a p
 - [ ] WP8 Support Train slot reminders for helpers who signed up by email, and the day-of reminder that never fires after the 24-hour one.
   - [x] PR1512 backend is merged: Train-local evening and independent day-of reminders, guest email, privacy, repeat/retry and no-start-time behavior passed normal API → DB → whole jobs → local SMTP acceptance (seven simulated clock phases; ten accepted messages and one deliberate refusal). The 15 captured temporary rows were already cleaned in that accepted run.
   - [x] Existing accepted normal mobile Train/create/publish/signup/cancel/organizer/lifecycle journeys remain reusable because their relevant source is unchanged; no duplicate replay was needed.
-  - [ ] Verify natural scheduling, actual signed-in native pushes and real external inbox/physical delivery. Concurrent exactly-once delivery and atomic cancellation-versus-send were not established by the local SMTP acceptance. L3 is running the natural-timing check on local jobs on October 6.
+  - [x] Day-of reminder at its natural time on local jobs: iOS and Android pushes to signed-in helpers, the email to a guest helper, a cancelled signup skipped, no duplicates (L3, October 6).
+  - [ ] The evening-before reminder at its natural time (L3 runs it on October 6 at 21:00Z), and delivery to a physical phone and a real inbox from the hosted backend. Concurrent exactly-once delivery and atomic cancellation-versus-send are still not established.
 
 ## 4. The pilot
 
