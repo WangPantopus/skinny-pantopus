@@ -255,3 +255,21 @@ export async function createScopedGrant(homeId: string, data: {
 }): Promise<{ grant: ScopedGrant; token: string }> {
   return post(`/api/homes/${homeId}/scoped-grants`, data);
 }
+
+/**
+ * Current share links (unexpired, not revoked) for one kind of resource,
+ * optionally one resource
+ */
+export async function getScopedGrants(homeId: string, params: {
+  resource_type: string;
+  resource_id?: string;
+}): Promise<{ grants: ScopedGrant[] }> {
+  return get<{ grants: ScopedGrant[] }>(`/api/homes/${homeId}/scoped-grants`, params);
+}
+
+/**
+ * Stop a share link before it expires
+ */
+export async function revokeScopedGrant(homeId: string, grantId: string): Promise<{ message: string; grant: ScopedGrant }> {
+  return del(`/api/homes/${homeId}/scoped-grants/${grantId}`);
+}

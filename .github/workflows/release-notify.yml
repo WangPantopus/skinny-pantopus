@@ -15,7 +15,7 @@ permissions:
 jobs:
   notify:
     name: Notify Release Channels
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event.workflow_run.conclusion != 'cancelled'
     env:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Decide if notification is needed
         id: gate
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const run = context.payload.workflow_run;
