@@ -62,10 +62,13 @@ public struct MyPostsView: View {
                 presenting: bindable.kebabTarget
             ) { target in
                 if target.isArchived {
-                    Button("Restore post") {
-                        restore(postId: target.postId)
+                    // A post a moderator removed can't be restored (the backend refuses).
+                    if !target.isRemovedByModerator {
+                        Button("Restore post") {
+                            restore(postId: target.postId)
+                        }
+                        .accessibilityIdentifier("kebab-restore")
                     }
-                    .accessibilityIdentifier("kebab-restore")
                 } else {
                     Button("Archive post") {
                         archive(postId: target.postId)
