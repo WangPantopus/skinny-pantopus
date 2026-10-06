@@ -459,7 +459,8 @@ doesn't, `EDGE_PROXY_SECRET` differs between Vercel and the server).
   `APP_STORE_CONNECT_KEY_CONTENT` (base64 of the `.p8`), `APPLE_TEAM_ID`.
 - [ ] L4: Release build points at `https://api.pantopus.com`, has no test keys or
   local URLs, and meets current App Store rules (privacy manifest, account
-  deletion, Sign in with Apple, permission strings).
+  deletion, Sign in with Apple, permission strings). The app is iPhone-only (no
+  iPad layouts), so App Store Connect needs iPhone screenshots only.
 - [ ] Founder: run **iOS Beta (TestFlight)** (tag `ios-v<version>` or manual run).
 
 ### Android (Play internal track)
