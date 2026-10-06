@@ -5,9 +5,11 @@ backend image, web lint/type checks/Jest/**production build**, the Identity
 Firewall Playwright test, seeder tests, Android, iOS and infrastructure checks.
 Mobile workflows are reusable children of CI, so a mobile failure or cancellation
 fails the aggregate. Path filtering happens at the job level: a PR runs the
-surfaces it changes, and a push to `master` or `dev` runs the surfaces changed
+surfaces it changes (a workflow change counts for iOS, Android and the seeder only when it is `ci.yml` or
+that surface's own workflow), and a push to `master` or `dev` runs the surfaces changed
 since that branch's previous commit. A manual run validates every surface. A PR's
-newer push cancels its older run. On `master` a running build is never cancelled:
+newer push cancels its older run, which ends at once (`CI OK` is skipped for a
+cancelled run rather than waiting for a runner). On `master` a running build is never cancelled:
 a newer merge waits as the single pending run (GitHub drops older pending ones), so
 the latest commit always gets a complete run. Database replay joins the aggregate
 only after the verified baseline is adopted.
@@ -26,7 +28,10 @@ the diff; do not increase tolerance to hide a failure.
 iOS builds the test bundle once for the runner's architecture, preserves symlinks in a tar artifact, then runs
 that same bundle on iOS 18.5 simulators: iPhone 16 for pull requests (to spare the
 shared macOS runners), and iPhone 16, iPhone 16 Pro and iPhone SE on `master` and
-manual runs. Build and test timeouts are
+manual runs. Swift packages (about 3.7 GB) are cached from `master` only; pull
+requests restore that copy but never save their own, which no other pull request
+could use and which evicted the other caches. The build skips the index store and
+code coverage, which nothing in CI reads. Build and test timeouts are
 separate, and cancellation preserves diagnostics. Xcode 16.4/iOS 18.5 retain the
 existing snapshot contract. TestFlight archives use Xcode 26.2 to meet Apple's
 current SDK upload requirement. UI tests are compiled but not executed on hosted
