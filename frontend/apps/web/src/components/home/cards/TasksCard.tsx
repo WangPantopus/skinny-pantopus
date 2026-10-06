@@ -105,7 +105,7 @@ export function TasksCardPreview({
       ) : (
         <div className="text-center py-2">
           <div className="mb-1"><ClipboardList className="w-5 h-5 mx-auto text-app-text-muted" /></div>
-          <p className="text-xs text-app-text-muted">No tasks yet</p>
+          <p className="text-xs text-app-text-muted">{tasks.length > 0 ? 'No open tasks' : 'No tasks yet'}</p>
         </div>
       )}
     </DashboardCard>
