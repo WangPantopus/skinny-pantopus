@@ -409,7 +409,8 @@ class MyHomesListViewModel
                             RowChip("Private setup", PantopusIcon.Home, RowChip.Tint.Status(StatusChipVariant.Warning)),
                         )
                     }
-                    if (home.accessKind == "private_setup" && home.pendingClaimId != null) {
+                    // Ownership requests already say "Verification in progress".
+                    if (home.accessKind != "verification" && home.pendingClaimId != null) {
                         add(
                             RowChip("Ownership in review", PantopusIcon.Clock, RowChip.Tint.Status(StatusChipVariant.Warning)),
                         )
@@ -465,9 +466,31 @@ class MyHomesListViewModel
                 chips = chips.takeIf { it.isNotEmpty() },
                 // Status chips wrap instead of squeezing "Household access" into a sliver at large text.
                 wrapChips = true,
-                footer = footerTitle?.let { homeFooter(home, it, revision) },
+                footer =
+                    if (home.accessKind == "shared" && showsClaimStatus(home)) {
+                        claimFooter(home, revision)
+                    } else {
+                        footerTitle?.let { homeFooter(home, it, revision) }
+                    },
             )
         }
+
+        /** A resident (e.g. address-verified by mail) whose ownership claim still waits. */
+        private fun claimFooter(
+            home: MyHome,
+            revision: Long,
+        ): RowFooter =
+            RowFooter(
+                listOf(
+                    RowFooterAction(
+                        title = "Check ownership claim",
+                        icon = PantopusIcon.ArrowRight,
+                        variant = CompactButtonVariant.Ghost,
+                        testTag = "myHomes.row_${home.id}.claim",
+                        onClick = { if (current(revision)) onOpenWaitingRoom?.invoke(home.id) },
+                    ),
+                ),
+            )
 
         private fun homeFooter(
             home: MyHome,

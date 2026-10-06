@@ -182,12 +182,6 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// An ownership claim is already filed for this Home. Its status lives in
-    /// the Waiting Room (which also offers "Update evidence"), not a blank upload.
-    private func showsClaimStatus(_ entry: MyHome) -> Bool {
-        entry.pendingClaimId != nil && onOpenWaitingRoom != nil
-    }
-
     enum PendingVerification: Equatable { case owner, residency }
     static func pendingVerification(for entry: MyHome) -> PendingVerification? {
         guard entry.accessKind == "verification" else { return nil }
@@ -211,42 +205,6 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         }
     }
 
-    private func footer(for entry: MyHome, pending: PendingVerification?, revision: Int) -> RowFooter? {
-        let ownerAction = showsClaimStatus(entry) ? "Check ownership claim" : "Continue ownership verification"
-        let footerTitle = entry
-            .accessKind == "private_setup" ? "My tasks" : pending == .owner ? ownerAction : pending == .residency ?
-            "Check residency status" : nil
-        return footerTitle.map { text in
-            let action = RowFooterAction(
-                title: text,
-                icon: .arrowRight,
-                variant: .primary,
-                identifier: "myHomes.row_\(entry.id).continue"
-            ) { [weak self] in
-                Task<Void, Never> { @MainActor in self?.open(entry, revision: revision) }
-            }
-            var actions = [action]
-            if entry.accessKind == "private_setup", onVerifyResidency != nil {
-                actions.append(RowFooterAction(
-                    title: "Check status",
-                    icon: .shieldCheck,
-                    variant: .ghost,
-                    identifier: "myHomes.row_\(entry.id).verification"
-                ) { [weak self] in
-                    Task<Void, Never> { @MainActor in
-                        guard let self, self.current(revision) else { return }
-                        if self.showsClaimStatus(entry) {
-                            self.onOpenWaitingRoom?(entry.id)
-                        } else {
-                            self.onVerifyResidency?(entry.id)
-                        }
-                    }
-                })
-            }
-            return RowFooter(actions: actions)
-        }
-    }
-
     private func row(for entry: MyHome, revision: Int) -> RowModel {
         let home = entry.home
         let personal = Self.pendingVerification(for: entry) == .residency ? requests.first { $0.homeId == entry.id } : nil
@@ -257,7 +215,8 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         let subtitle = [unit, roleLabel(for: entry), locality].compactMap { $0 }.joined(separator: " · ")
         var chips: [RowChip] = []
         if entry.accessKind == "private_setup" { chips.append(.init(text: "Private setup", icon: .home, tint: .status(.warning))) }
-        if entry.accessKind == "private_setup", entry.pendingClaimId != nil {
+        // Ownership requests already say "Verification in progress".
+        if entry.accessKind != "verification", entry.pendingClaimId != nil {
             chips.append(.init(text: "Ownership in review", icon: .clock, tint: .status(.warning)))
         }
         if entry.hasSharedAccess, entry.ownershipStatus == "verified" { chips.append(.init(
@@ -336,6 +295,67 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         case "guest": return "Guest"
         case "service_provider": return "Service provider"
         default: return nil
+        }
+    }
+}
+
+// MARK: - Row footers
+
+extension MyHomesListViewModel {
+    /// An ownership claim is already filed for this Home. Its status lives in
+    /// the Waiting Room (which also offers "Update evidence"), not a blank upload.
+    private func showsClaimStatus(_ entry: MyHome) -> Bool {
+        entry.pendingClaimId != nil && onOpenWaitingRoom != nil
+    }
+
+    private func footer(for entry: MyHome, pending: PendingVerification?, revision: Int) -> RowFooter? {
+        // A resident (e.g. address-verified by mail) whose ownership claim still waits.
+        if entry.accessKind == "shared", showsClaimStatus(entry) {
+            let action = RowFooterAction(
+                title: "Check ownership claim",
+                icon: .arrowRight,
+                variant: .ghost,
+                identifier: "myHomes.row_\(entry.id).claim"
+            ) { [weak self] in
+                Task<Void, Never> { @MainActor in
+                    guard let self, self.current(revision) else { return }
+                    self.onOpenWaitingRoom?(entry.id)
+                }
+            }
+            return RowFooter(actions: [action])
+        }
+        let ownerAction = showsClaimStatus(entry) ? "Check ownership claim" : "Continue ownership verification"
+        let footerTitle = entry
+            .accessKind == "private_setup" ? "My tasks" : pending == .owner ? ownerAction : pending == .residency ?
+            "Check residency status" : nil
+        return footerTitle.map { text in
+            let action = RowFooterAction(
+                title: text,
+                icon: .arrowRight,
+                variant: .primary,
+                identifier: "myHomes.row_\(entry.id).continue"
+            ) { [weak self] in
+                Task<Void, Never> { @MainActor in self?.open(entry, revision: revision) }
+            }
+            var actions = [action]
+            if entry.accessKind == "private_setup", onVerifyResidency != nil {
+                actions.append(RowFooterAction(
+                    title: "Check status",
+                    icon: .shieldCheck,
+                    variant: .ghost,
+                    identifier: "myHomes.row_\(entry.id).verification"
+                ) { [weak self] in
+                    Task<Void, Never> { @MainActor in
+                        guard let self, self.current(revision) else { return }
+                        if self.showsClaimStatus(entry) {
+                            self.onOpenWaitingRoom?(entry.id)
+                        } else {
+                            self.onVerifyResidency?(entry.id)
+                        }
+                    }
+                })
+            }
+            return RowFooter(actions: actions)
         }
     }
 }
