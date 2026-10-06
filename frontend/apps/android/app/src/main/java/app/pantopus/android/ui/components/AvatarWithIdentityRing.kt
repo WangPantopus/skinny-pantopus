@@ -68,7 +68,10 @@ fun AvatarWithIdentityRing(
             modifier
                 .size(size)
                 .semantics {
-                    contentDescription = "$name, ${(progress * 100).toInt()}% profile complete"
+                    // A new account has no name yet; don't read a stray comma.
+                    contentDescription =
+                        listOfNotNull(name.takeIf { it.isNotBlank() }, "${(progress * 100).toInt()}% profile complete")
+                            .joinToString(", ")
                 },
         contentAlignment = Alignment.Center,
     ) {
