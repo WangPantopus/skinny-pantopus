@@ -27,6 +27,28 @@ public struct FeedMuteRequest: Encodable, Sendable, Hashable {
     }
 }
 
+/// `GET /api/posts/mute` — one muted person or business.
+public struct MutedEntityDTO: Decodable, Sendable, Hashable {
+    public let entityType: String
+    public let entityId: String
+    public let name: String
+    public let username: String?
+    public let avatarUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case entityType = "entity_type"
+        case entityId = "entity_id"
+        case name
+        case username
+        case avatarUrl = "avatar_url"
+    }
+}
+
+/// `GET /api/posts/mute` reply.
+public struct MutedEntitiesResponse: Decodable, Sendable, Hashable {
+    public let muted: [MutedEntityDTO]
+}
+
 /// Body for `POST /api/posts/mute/topic`.
 public struct FeedMuteTopicRequest: Encodable, Sendable, Hashable {
     public let postType: String

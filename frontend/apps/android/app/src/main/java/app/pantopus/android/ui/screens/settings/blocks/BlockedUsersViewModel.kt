@@ -5,9 +5,12 @@ package app.pantopus.android.ui.screens.settings.blocks
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
+import app.pantopus.android.data.api.models.feed.MutedEntityDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
+import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
@@ -60,6 +63,7 @@ class BlockedUsersViewModel
     constructor(
         private val privacy: PrivacyRepository,
         private val blocks: BlocksRepository,
+        private val feedActions: FeedActionsRepository,
         private val auth: AuthRepository,
         sessionFactory: HomeClaimSessionScopeFactory,
     ) : ViewModel() {
@@ -96,6 +100,10 @@ class BlockedUsersViewModel
         private var complete = false
         private var entries: MutableList<BlockedEntry> = mutableListOf()
 
+        /** People and businesses muted from a Pulse post (`GET /api/posts/mute`). Listed under
+         *  the blocks because this is the one place to undo a mute. */
+        private var mutes: MutableList<MutedEntityDto> = mutableListOf()
+
         init {
             viewModelScope.launch {
                 sessionScope.invalidated.collect { if (it) retire() }
@@ -108,6 +116,7 @@ class BlockedUsersViewModel
             mutation++
             pending = null
             entries.clear()
+            mutes.clear()
             complete = false
             _state.value = ListOfRowsUiState.Error("Reopen blocked users to load your current list.")
         }
@@ -162,7 +171,10 @@ class BlockedUsersViewModel
                 if (!current() || loadRequest != request) return@launch
                 val profile = privacy.blocks()
                 if (!current() || loadRequest != request) return@launch
+                val muted = feedActions.mutedEntities()
+                if (!current() || loadRequest != request) return@launch
                 snapshot++
+                mutes = (muted as? NetworkResult.Success)?.data?.muted.orEmpty().toMutableList()
 
                 complete = personal is NetworkResult.Success && profile is NetworkResult.Success
                 if (personal is NetworkResult.Failure && profile is NetworkResult.Failure) {
@@ -244,13 +256,49 @@ class BlockedUsersViewModel
             }
         }
 
+        /** Optimistic unmute, the same shape as [unblock]: the row goes at once and comes back
+         *  if `DELETE /api/posts/mute` fails. */
+        fun unmute(entityId: String) {
+            if (!active || !sessionScope.isCurrent || pending != null) return
+            val index = mutes.indexOfFirst { it.entityId == entityId }
+            if (index < 0) return
+            val removed = mutes.removeAt(index)
+            val rowId = mutedRowId(entityId)
+            pending = rowId
+            val action = ++mutation
+            request++
+            val openingSnapshot = snapshot
+            rebuild()
+            viewModelScope.launch {
+                if (!current() || action != mutation) return@launch
+                val type = FeedMuteEntityType.entries.firstOrNull { it.wireValue == removed.entityType } ?: FeedMuteEntityType.User
+                val result = feedActions.unmute(type, entityId)
+                if (!current() || action != mutation || pending != rowId) return@launch
+                pending = null
+                when (result) {
+                    is NetworkResult.Success -> {
+                        request++
+                        _toast.value = ToastMessage("${removed.name} unmuted", ToastKind.Success)
+                    }
+                    is NetworkResult.Failure -> {
+                        if (openingSnapshot == snapshot) mutes.add(index.coerceAtMost(mutes.size), removed)
+                        _toast.value = ToastMessage("Couldn't unmute ${removed.name}. Try again.", ToastKind.Error)
+                    }
+                }
+                rebuild()
+            }
+        }
+
+        private fun mutedRowId(entityId: String) = "muted-$entityId"
+
         private fun rebuild() {
             val visible = entries.filterNot { it.id == pending }
-            if (visible.isEmpty() && !complete) {
+            val visibleMutes = mutes.filterNot { mutedRowId(it.entityId) == pending }
+            if (visible.isEmpty() && visibleMutes.isEmpty() && !complete) {
                 _state.value = ListOfRowsUiState.Error("Couldn't load your complete blocked list. Please retry.")
                 return
             }
-            if (visible.isEmpty()) {
+            if (visible.isEmpty() && visibleMutes.isEmpty()) {
                 // A14.4 empty hero — neutral grey disc + user-minus glyph
                 // (the design's `user-x`; `UserMinus` is the in-inventory
                 // person-with-negation glyph) + reassurance about silence.
@@ -291,30 +339,62 @@ class BlockedUsersViewModel
                             ),
                     )
                 }
-            _state.value =
-                ListOfRowsUiState.Loaded(
-                    sections =
-                        listOf(
-                            RowSection(
-                                id = "blocked",
-                                header = "Blocked · ${visible.size}",
-                                // Launch cut #4 (Open Gigs): no bidding to block.
-                                footer =
-                                    (if (complete) "" else "We couldn't load the complete list. Pull to refresh. ") +
-                                        (
-                                            if (LaunchFeatures.openGigs) {
-                                                "Blocked people can't message you, see your profile, or bid on your tasks. "
-                                            } else {
-                                                "Blocked people can't message you or see your profile. "
-                                            }
-                                        ) +
-                                        "Unblocking doesn't notify them.",
-                                rows = rows,
-                                style = SectionStyle.Card,
-                            ),
-                        ),
-                    hasMore = false,
-                )
+            val sections = mutableListOf<RowSection>()
+            if (visible.isNotEmpty()) {
+                sections +=
+                    RowSection(
+                        id = "blocked",
+                        header = "Blocked · ${visible.size}",
+                        // Launch cut #4 (Open Gigs): no bidding to block.
+                        footer =
+                            (if (complete) "" else "We couldn't load the complete list. Pull to refresh. ") +
+                                (
+                                    if (LaunchFeatures.openGigs) {
+                                        "Blocked people can't message you, see your profile, or bid on your tasks. "
+                                    } else {
+                                        "Blocked people can't message you or see your profile. "
+                                    }
+                                ) +
+                                "Unblocking doesn't notify them.",
+                        rows = rows,
+                        style = SectionStyle.Card,
+                    )
+            }
+            if (visibleMutes.isNotEmpty()) {
+                sections +=
+                    RowSection(
+                        id = "muted",
+                        header = "Muted · ${visibleMutes.size}",
+                        footer = "Their posts are hidden from your Pulse. They aren't told when you mute or unmute them.",
+                        rows = visibleMutes.map(::mutedRow),
+                        style = SectionStyle.Card,
+                    )
+            }
+            _state.value = ListOfRowsUiState.Loaded(sections = sections, hasMore = false)
+        }
+
+        private fun mutedRow(mute: MutedEntityDto): RowModel {
+            val entityId = mute.entityId
+            return RowModel(
+                id = mutedRowId(entityId),
+                title = mute.name,
+                subtitle = mute.username?.let { "@$it" },
+                template = RowTemplate.AvatarKebab,
+                leading =
+                    RowLeading.AvatarWithBadge(
+                        name = mute.name,
+                        imageUrl = mute.avatarUrl,
+                        background = AvatarBackground.Solid(PantopusColors.appSurfaceSunken),
+                        size = AvatarBadgeSize.Small,
+                        verified = false,
+                    ),
+                trailing =
+                    RowTrailing.PillButton(
+                        label = "Unmute",
+                        tone = RowPillTone.Neutral,
+                        onClick = { unmute(entityId) },
+                    ),
+            )
         }
 
         /**

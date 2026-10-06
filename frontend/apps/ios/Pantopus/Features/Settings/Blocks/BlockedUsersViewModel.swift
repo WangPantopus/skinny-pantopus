@@ -68,6 +68,9 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
     private var pending: String?
     private var complete = false
     private var entries: [BlockedEntry] = []
+    /// People and businesses muted from a Pulse post (`GET /api/posts/mute`).
+    /// Listed under the blocks because this is the one place to undo a mute.
+    private var mutes: [MutedEntityDTO] = []
 
     /// One row's worth of "someone you blocked", flattened from the two
     /// separate existing block contracts the app can produce. They stay
@@ -110,6 +113,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
         mutation += 1
         pending = nil
         entries = []
+        mutes = []
         complete = false
         state = .error(message: "Reopen blocked users to load your current list.")
     }
@@ -153,7 +157,10 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
         guard current(), loadRequest == request else { return }
         let profile = try? await api.request(PrivacyEndpoints.blocks, as: PrivacyBlocksResponse.self)
         guard current(), loadRequest == request else { return }
+        let muted = try? await api.request(FeedActionsEndpoints.mutedEntities(), as: MutedEntitiesResponse.self)
+        guard current(), loadRequest == request else { return }
         snapshot += 1
+        mutes = muted?.muted ?? []
 
         complete = personal != nil && profile != nil
         guard personal != nil || profile != nil else {
@@ -235,11 +242,12 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
 
     private func rebuild() {
         let visible = entries.filter { $0.id != pending }
-        if visible.isEmpty, !complete {
+        let visibleMutes = mutes.filter { Self.mutedRowId($0.entityId) != pending }
+        if visible.isEmpty, visibleMutes.isEmpty, !complete {
             state = .error(message: "Couldn't load your complete blocked list. Please retry.")
             return
         }
-        guard !visible.isEmpty else {
+        guard !visible.isEmpty || !visibleMutes.isEmpty else {
             // A14.4 empty hero — neutral grey disc + user-minus glyph
             // (the design's `user-x`; `userMinus` is the in-inventory
             // person-with-negation glyph) + reassurance about silence.
@@ -274,23 +282,31 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
                 }
             ) {}
         }
-        state = .loaded(
-            sections: [
-                RowSection(
-                    id: "blocked",
-                    header: "Blocked · \(visible.count)",
-                    footer: (complete ? "" : "We couldn't load the complete list. Pull to refresh. ")
-                        // Launch cut #4 (Open gigs): no bidding to block.
-                        + (LaunchFeatures.openGigs
-                            ? "Blocked people can't message you, see your profile, or bid on your tasks. "
-                            : "Blocked people can't message you or see your profile. ")
-                        + "Unblocking doesn't notify them.",
-                    rows: rows,
-                    style: .card
-                )
-            ],
-            hasMore: false
-        )
+        var sections: [RowSection] = []
+        if !visible.isEmpty {
+            sections.append(RowSection(
+                id: "blocked",
+                header: "Blocked · \(visible.count)",
+                footer: (complete ? "" : "We couldn't load the complete list. Pull to refresh. ")
+                    // Launch cut #4 (Open gigs): no bidding to block.
+                    + (LaunchFeatures.openGigs
+                        ? "Blocked people can't message you, see your profile, or bid on your tasks. "
+                        : "Blocked people can't message you or see your profile. ")
+                    + "Unblocking doesn't notify them.",
+                rows: rows,
+                style: .card
+            ))
+        }
+        if !visibleMutes.isEmpty {
+            sections.append(RowSection(
+                id: "muted",
+                header: "Muted · \(visibleMutes.count)",
+                footer: "Their posts are hidden from your Pulse. They aren't told when you mute or unmute them.",
+                rows: visibleMutes.map(mutedRow),
+                style: .card
+            ))
+        }
+        state = .loaded(sections: sections, hasMore: false)
     }
 
     /// `Blocked <date> · <context>` — the design's source-context line.
@@ -360,5 +376,65 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
             return blockedDateFormatter.string(from: date)
         }
         return nil
+    }
+}
+
+// MARK: - Muted (the one place to undo a Pulse mute)
+
+extension BlockedUsersViewModel {
+    /// Optimistic unmute, the same shape as `unblock`: the row goes at once
+    /// and comes back if `DELETE /api/posts/mute` fails.
+    public func unmute(_ entityId: String) async {
+        let rowId = Self.mutedRowId(entityId)
+        guard current(), pending == nil else { return }
+        guard let index = mutes.firstIndex(where: { $0.entityId == entityId }) else { return }
+        let removed = mutes.remove(at: index)
+        pending = rowId
+        mutation += 1
+        let action = mutation
+        request += 1
+        let openingSnapshot = snapshot
+        rebuild()
+        do {
+            let entityType = FeedMuteEntityType(rawValue: removed.entityType) ?? .user
+            _ = try await api.request(FeedActionsEndpoints.unmute(entityType: entityType, entityId: entityId))
+            guard current(), action == mutation else { return }
+            pending = nil
+            request += 1
+            rebuild()
+            toast = ToastMessage(text: "\(removed.name) unmuted", kind: .success)
+        } catch {
+            guard current(), action == mutation else { return }
+            pending = nil
+            if openingSnapshot == snapshot {
+                mutes.insert(removed, at: min(index, mutes.count))
+            }
+            rebuild()
+            toast = ToastMessage(text: "Couldn't unmute \(removed.name). Try again.", kind: .error)
+        }
+    }
+
+    private static func mutedRowId(_ entityId: String) -> String {
+        "muted-\(entityId)"
+    }
+
+    private func mutedRow(_ mute: MutedEntityDTO) -> RowModel {
+        let entityId = mute.entityId
+        return RowModel(
+            id: Self.mutedRowId(entityId),
+            title: mute.name,
+            subtitle: mute.username.map { "@\($0)" },
+            template: .avatarKebab,
+            leading: .avatarWithBadge(
+                name: mute.name,
+                imageURL: mute.avatarUrl.flatMap(URL.init(string:)),
+                background: .solid(Theme.Color.appSurfaceSunken),
+                size: .small,
+                verified: false
+            ),
+            trailing: .pillButton(label: "Unmute", tone: .neutral) { [weak self] in
+                Task { @MainActor in await self?.unmute(entityId) }
+            }
+        ) {}
     }
 }

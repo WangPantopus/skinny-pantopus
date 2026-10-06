@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.feed.FeedPreferencesResponse
 import app.pantopus.android.data.api.models.feed.FeedPreferencesUpdateRequest
 import app.pantopus.android.data.api.models.feed.FeedSeededDismissResponse
 import app.pantopus.android.data.api.models.feed.FeedSolveResponse
+import app.pantopus.android.data.api.models.feed.MutedEntitiesResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.HTTP
@@ -43,9 +44,17 @@ interface FeedActionsApi {
     ): FeedActionAckResponse
 
     /**
+     * `GET /api/posts/mute` — the people and businesses the viewer muted,
+     * listed in Settings → Blocked users so a mute can be undone. Route
+     * `backend/routes/posts.js:2297`.
+     */
+    @GET("api/posts/mute")
+    suspend fun mutedEntities(): MutedEntitiesResponse
+
+    /**
      * `DELETE /api/posts/mute` — reverses [mute]. The handler reads the
      * body, so the request has to carry one. Route
-     * `backend/routes/posts.js:2147`.
+     * `backend/routes/posts.js:2344`.
      */
     @HTTP(method = "DELETE", path = "api/posts/mute", hasBody = true)
     suspend fun unmute(
