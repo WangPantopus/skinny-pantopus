@@ -67,11 +67,6 @@ class HomeTabHostViewModel
         }
 
         /**
-         * Re-checks quietly while the landing is the no-home Hub, so a home joined or added
-         * later in this session lands Place the next time the Hub root shows. No skeleton
-         * or error replaces the Hub on this check.
-         */
-        /**
          * The landed Home stopped being readable (left, removed, deleted): land on the
          * account's next shared Home, or the Hub when there is none, as a relaunch would.
          * Returns the Home to open, or null for the Hub.
@@ -84,6 +79,11 @@ class HomeTabHostViewModel
             return next?.id
         }
 
+        /**
+         * Re-checks quietly while the landing is the no-home Hub, so a home joined or added
+         * later in this session lands Place the next time the Hub root shows. No skeleton
+         * or error replaces the Hub on this check.
+         */
         fun refreshIfNoHome() {
             if (_landing.value != HomeLanding.Hub || resolveJob?.isActive == true) return
             resolveJob =
