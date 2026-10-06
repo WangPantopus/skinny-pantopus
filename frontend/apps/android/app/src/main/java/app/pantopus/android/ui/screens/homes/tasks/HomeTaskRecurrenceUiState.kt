@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceRequest
 import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceState
 import app.pantopus.android.data.api.models.homes.recurrenceDate
 import app.pantopus.android.data.homes.PendingHomeTaskRecurrence
+import java.time.ZoneId
 
 data class HomeTaskRecurrenceUiState(
     val visible: Boolean = false,
@@ -17,7 +18,7 @@ data class HomeTaskRecurrenceUiState(
     val error: String? = null,
     val frequency: String = "WEEKLY",
     val interval: String = "1",
-    val timezone: String = "UTC",
+    val timezone: String = ZoneId.systemDefault().id,
 ) {
     val canChange get() = active && visible && !busy && pending == null && task != null && schedule?.canManage == true
     val canStart get() =
@@ -40,7 +41,7 @@ data class HomeTaskRecurrenceUiState(
         return copy(
             frequency = command?.frequency ?: schedule?.configuration?.frequency ?: "WEEKLY",
             interval = (command?.interval ?: schedule?.configuration?.interval ?: 1).toString(),
-            timezone = command?.timezone ?: schedule?.configuration?.timezone ?: "UTC",
+            timezone = command?.timezone ?: schedule?.configuration?.timezone ?: ZoneId.systemDefault().id,
         )
     }
 }

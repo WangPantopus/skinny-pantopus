@@ -22,6 +22,10 @@ const ATTOM_ENDPOINTS = {
   salestrend_snapshot: '/salestrend/snapshot',
 };
 const CACHE_TTL_DAYS = 30;
+// ATTOM answers HTTP 400 "SuccessWithoutResult" when it has no record for the
+// address. That's an answer, not an outage, and every lookup is billed, so the
+// cache remembers it for a week instead of asking again on each Place view.
+const NO_RESULT_TTL_DAYS = 7;
 const FETCH_TIMEOUT_MS = 10000;
 
 // ── ATTOM API helpers ──────────────────────────────────────────────────────
@@ -47,8 +51,17 @@ function buildAttomAddressLine1(home) {
  * @returns {Promise<object|null>}
  */
 async function attomFetch(endpoint, params) {
+  return (await attomRequest(endpoint, params)).json;
+}
+
+/**
+ * attomFetch, plus whether ATTOM said it has no record (noResult) rather than
+ * failing.
+ * @returns {Promise<{ json: object|null, noResult: boolean }>}
+ */
+async function attomRequest(endpoint, params) {
   const apiKey = process.env.ATTOM_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) return { json: null, noResult: false };
 
   const qs = new URLSearchParams(params);
   const url = `${ATTOM_BASE}${endpoint}?${qs}`;
@@ -65,8 +78,18 @@ async function attomFetch(endpoint, params) {
 
     if (!res.ok) {
       const text = await res.text();
-      logger.warn('ATTOM API error', { endpoint, status: res.status, body: text.slice(0, 200) });
-      return null;
+      let noResult = false;
+      try {
+        noResult = res.status === 400 && JSON.parse(text)?.status?.msg === 'SuccessWithoutResult';
+      } catch (_) {
+        // Not JSON: a real error.
+      }
+      if (noResult) {
+        logger.info('ATTOM has no record', { endpoint });
+      } else {
+        logger.warn('ATTOM API error', { endpoint, status: res.status, body: text.slice(0, 200) });
+      }
+      return { json: null, noResult };
     }
 
     const json = await res.json();
@@ -85,7 +108,7 @@ async function attomFetch(endpoint, params) {
       }
     }
 
-    return json;
+    return { json, noResult: false };
   } catch (err) {
     clearTimeout(timeout);
     if (err.name === 'AbortError') {
@@ -93,7 +116,7 @@ async function attomFetch(endpoint, params) {
     } else {
       logger.error('ATTOM fetch error', { endpoint, error: err.message });
     }
-    return null;
+    return { json: null, noResult: false };
   }
 }
 
@@ -149,7 +172,16 @@ function getRawPayloadFetchedAt(rawPayload, key) {
   return getRawPayloadEntry(rawPayload, key)?.fetched_at || null;
 }
 
-function buildRawPayload(home, existingRawPayload, endpointResponses, fetchedAtIso) {
+// A recent "no record" answer for the same request (an address edit asks again).
+function hasFreshNoResult(rawPayload, home, key) {
+  const entry = getRawPayloadEntry(rawPayload, key);
+  if (!entry?.no_result) return false;
+  const age = Date.now() - Date.parse(entry.fetched_at);
+  return age >= 0 && age < NO_RESULT_TTL_DAYS * 24 * 60 * 60 * 1000
+    && JSON.stringify(entry.request_params) === JSON.stringify(attomEndpointParams(home, key));
+}
+
+function buildRawPayload(home, existingRawPayload, endpointResponses, fetchedAtIso, noResultKeys = []) {
   const payload = normalizeRawPayload(existingRawPayload);
   const endpoints = { ...payload.endpoints };
 
@@ -159,6 +191,14 @@ function buildRawPayload(home, existingRawPayload, endpointResponses, fetchedAtI
       endpoint: ATTOM_ENDPOINTS[key] || null,
       request_params: attomEndpointParams(home, key),
       response,
+      fetched_at: fetchedAtIso,
+    };
+  }
+  for (const key of noResultKeys) {
+    endpoints[key] = {
+      endpoint: ATTOM_ENDPOINTS[key] || null,
+      request_params: attomEndpointParams(home, key),
+      no_result: true,
       fetched_at: fetchedAtIso,
     };
   }
@@ -200,7 +240,7 @@ async function getCachedRawAttom(homeId, { allowExpired = false } = {}) {
   }
 }
 
-async function setCachedRawAttom(homeId, home, endpointResponses, existingRawPayload = null) {
+async function setCachedRawAttom(homeId, home, endpointResponses, existingRawPayload = null, noResultKeys = []) {
   try {
     let basePayload = existingRawPayload;
     if (!basePayload) {
@@ -211,7 +251,7 @@ async function setCachedRawAttom(homeId, home, endpointResponses, existingRawPay
     const now = new Date();
     const nowIso = now.toISOString();
     const expiresAt = new Date(now.getTime() + CACHE_TTL_DAYS * 24 * 60 * 60 * 1000);
-    const rawPayload = buildRawPayload(home, basePayload, endpointResponses, nowIso);
+    const rawPayload = buildRawPayload(home, basePayload, endpointResponses, nowIso, noResultKeys);
 
     if (!Object.keys(rawPayload.endpoints || {}).length) {
       return basePayload || rawPayload;
@@ -527,36 +567,44 @@ async function getOrFetchAttomResponsesForHome(home, requestedKeys) {
     }
   }
 
-  const missingKeys = requestedKeys.filter((key) => responses[key] == null);
+  const noResultKeys = requestedKeys.filter((key) => responses[key] == null && hasFreshNoResult(rawPayload, home, key));
+  for (const key of noResultKeys) {
+    sources[key] = 'unavailable';
+    responses[key] = null;
+  }
+  const missingKeys = requestedKeys.filter((key) => responses[key] == null && !noResultKeys.includes(key));
   if (!missingKeys.length || !process.env.ATTOM_API_KEY) {
     for (const key of missingKeys) {
       sources[key] = sources[key] || 'unavailable';
       responses[key] = responses[key] ?? null;
     }
-    return { responses, sources, rawPayload };
+    return { responses, sources, rawPayload, noResultKeys };
   }
 
   const fetchResults = await Promise.all(
     missingKeys.map(async (key) => [
       key,
-      await attomFetch(ATTOM_ENDPOINTS[key], attomEndpointParams(home, key)),
+      await attomRequest(ATTOM_ENDPOINTS[key], attomEndpointParams(home, key)),
     ])
   );
 
   const fetchedResponses = {};
-  for (const [key, response] of fetchResults) {
+  const fetchedNoResult = [];
+  for (const [key, { json: response, noResult }] of fetchResults) {
     responses[key] = response;
     sources[key] = response != null ? 'attom' : 'unavailable';
     if (response != null) {
       fetchedResponses[key] = response;
+    } else if (noResult) {
+      fetchedNoResult.push(key);
     }
   }
 
-  if (Object.keys(fetchedResponses).length) {
-    rawPayload = await setCachedRawAttom(home.id, home, fetchedResponses, rawPayload);
+  if (Object.keys(fetchedResponses).length || fetchedNoResult.length) {
+    rawPayload = await setCachedRawAttom(home.id, home, fetchedResponses, rawPayload, fetchedNoResult);
   }
 
-  return { responses, sources, rawPayload };
+  return { responses, sources, rawPayload, noResultKeys: [...noResultKeys, ...fetchedNoResult] };
 }
 
 /**
@@ -629,14 +677,16 @@ async function getHomeAttomPropertyDetail(home) {
     };
   }
 
-  const { responses, sources, rawPayload } = await getOrFetchAttomResponsesForHome(home, ['property_detail']);
+  const { responses, sources, rawPayload, noResultKeys } = await getOrFetchAttomResponsesForHome(home, ['property_detail']);
   const detailData = responses.property_detail;
 
   if (detailData == null) {
+    let unavailableReason = process.env.ATTOM_API_KEY ? 'ATTOM_UNAVAILABLE' : 'ATTOM_NOT_CONFIGURED';
+    if (noResultKeys.includes('property_detail')) unavailableReason = 'NO_PROPERTY_FOUND';
     return {
       attomPayload: null,
       source: sources.property_detail || 'unavailable',
-      unavailableReason: process.env.ATTOM_API_KEY ? 'ATTOM_UNAVAILABLE' : 'ATTOM_NOT_CONFIGURED',
+      unavailableReason,
     };
   }
 

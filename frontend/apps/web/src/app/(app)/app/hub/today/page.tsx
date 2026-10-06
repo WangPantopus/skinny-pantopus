@@ -80,6 +80,15 @@ const URGENCY_TEXT: Record<string, string> = {
   low: 'text-blue-700 dark:text-blue-400',
 };
 
+// The footer names its sources the way the Place cards do, not by provider code.
+const PROVIDER_NAMES: Record<string, string> = {
+  OPEN_METEO: 'Open-Meteo',
+  WEATHERKIT: 'Apple Weather',
+  AIRNOW: 'AirNow (EPA)',
+  NOAA: 'National Weather Service',
+};
+const SECTION_NAMES: Record<string, string> = { weather: 'weather', aqi: 'air quality', alerts: 'alerts' };
+
 function freshnessLabel(fetchedAt: string): string {
   const mins = Math.round((Date.now() - new Date(fetchedAt).getTime()) / 60000);
   if (mins < 1) return 'Just now';
@@ -366,9 +375,9 @@ export default function HubTodayPage() {
             {/* Meta footer */}
             {today.meta.providers_used.length > 0 && (
               <div className="text-[11px] text-app-text-muted px-1">
-                Sources: {today.meta.providers_used.join(', ')}
+                Sources: {today.meta.providers_used.map((p) => PROVIDER_NAMES[p] ?? p).join(', ')}
                 {today.meta.partial_failures.length > 0 && (
-                  <> · Some data unavailable: {today.meta.partial_failures.join(', ')}</>
+                  <> · Some data unavailable: {today.meta.partial_failures.map((f) => SECTION_NAMES[f] ?? f).join(', ')}</>
                 )}
               </div>
             )}

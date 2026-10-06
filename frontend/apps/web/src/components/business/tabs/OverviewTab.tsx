@@ -190,7 +190,12 @@ export default function OverviewTab({
                   </div>
                   {!item.done && targetTab && (
                     <button
-                      onClick={() => router.push(`${dashPath}?tab=${targetTab}`)}
+                      onClick={() => router.push(
+                        // Verification is on the legal settings page; the Settings tab only links to it.
+                        item.action?.includes('/verification')
+                          ? `/app/business/${businessId}/settings/legal`
+                          : `${dashPath}?tab=${targetTab}`,
+                      )}
                       className="text-sky-600 hover:text-sky-800 text-xs"
                       aria-label={item.label}
                     >

@@ -136,6 +136,8 @@ async function detail(homeId, actorId) {
     return { home: { ...home, owner, occupants, owners: visibleOwners.map(row => pick(row, OWNER_FIELDS)),
       isOwner: access.isOwner, isOccupant: !!access.occupancy, isPendingOwner: mine?.owner_status === 'pending',
       ownership_status: mine?.owner_status || null, residency_status: access.occupancy?.verification_status || null,
+      // F3b: 'household' when the verification came only from an invitation or a manager's approval.
+      residency_source: access.occupancy?.verification_source || null,
       role_base: access.effective_role_base, pendingClaimId: pendingClaim(claims)?.id || null, can_delete_home: canDelete } };
   });
 }

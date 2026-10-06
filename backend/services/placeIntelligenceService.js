@@ -821,6 +821,7 @@ const EXEMPTION_UNAVAILABLE_COPY = {
   ATTOM_NOT_CONFIGURED: "Exemption records aren't available for your area yet.",
   ATTOM_UNAVAILABLE: "County exemption records aren't reachable right now.",
   NO_PARCEL_MATCH: "We couldn't match this address to a county parcel record.",
+  NO_PROPERTY_FOUND: "We couldn't match this address to a county parcel record.",
 };
 
 // Real Rent Benchmark (Wave 3) — what verified neighbors on this
