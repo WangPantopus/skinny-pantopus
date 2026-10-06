@@ -179,10 +179,15 @@ class ChatConversationViewModel
         private val _gigContext = MutableStateFlow<ChatGigContextStrip?>(null)
         val gigContext: StateFlow<ChatGigContextStrip?> = _gigContext.asStateFlow()
 
-        // A15.3 capability chips for the AI welcome card (tap-to-send).
+        // A15.3 capability chips for the AI welcome card (tap-to-send). Launch cut #4 (Open gigs):
+        // the assistant doesn't price tasks, so "Price a task" gives way to the nearby question (as on web).
         val aiPrompts: List<ChatPromptChip> =
             listOf(
-                ChatPromptChip("price", "Price a task", PantopusIcon.Hammer),
+                if (LaunchFeatures.openGigs) {
+                    ChatPromptChip("price", "Price a task", PantopusIcon.Hammer)
+                } else {
+                    ChatPromptChip("nearby", "What's happening nearby?", PantopusIcon.MapPin)
+                },
                 ChatPromptChip("draft", "Draft a Pulse post", PantopusIcon.Pencil),
                 ChatPromptChip("mail", "Summarize mail", PantopusIcon.Mailbox),
                 ChatPromptChip("neighbor", "Find a neighbor", PantopusIcon.Search),

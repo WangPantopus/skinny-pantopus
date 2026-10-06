@@ -344,6 +344,15 @@ public final class ChatConversationViewModel {
         ChatPromptChip(id: "listing", label: "Share a listing", icon: .tag)
     ]
 
+    /// First-launch scope (launch cut #4, Open gigs): the assistant doesn't price tasks, so
+    /// "Price a task" gives way to the nearby question the web assistant offers.
+    static var launchAICapabilities: [ChatPromptChip] {
+        defaultAICapabilities.map { chip in
+            guard chip.id == "price", !LaunchFeatures.openGigs else { return chip }
+            return ChatPromptChip(id: "nearby", label: "What's happening nearby?", icon: .mapPin)
+        }
+    }
+
     /// First-launch scope: "Ask about the gig" (launch cut #4, Open gigs) and
     /// "Share a listing" (launch cut #3, Marketplace) are hidden.
     static var launchEmptyChips: [ChatPromptChip] {
@@ -492,7 +501,7 @@ public final class ChatConversationViewModel {
         self.aiConversationStore = aiConversationStore
         self.locationProvider = locationProvider
         self.activeThreadTracker = activeThreadTracker
-        aiPrompts = Self.defaultAICapabilities
+        aiPrompts = Self.launchAICapabilities
         emptyChips = Self.launchEmptyChips
         // Continue the user's existing AI conversation across thread
         // opens within this app session.
@@ -526,7 +535,7 @@ public final class ChatConversationViewModel {
         aiConversationStore = .shared
         locationProvider = DeviceLocationProvider.shared
         activeThreadTracker = .shared
-        aiPrompts = Self.defaultAICapabilities
+        aiPrompts = Self.launchAICapabilities
         emptyChips = Self.launchEmptyChips
         self.fanEntitlement = fanEntitlement
         state = previewState
