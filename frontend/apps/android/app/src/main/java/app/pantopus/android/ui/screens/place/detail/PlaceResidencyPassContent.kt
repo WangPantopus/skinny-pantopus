@@ -320,21 +320,17 @@ private fun ResidencyClaimRow(
             }
         }
     }
-    RevokePassConfirmation(
-        visible = confirmingRevoke,
-        onConfirm = {
-            confirmingRevoke = false
-            viewModel.revokeClaim(claim.id)
-        },
-        onDismiss = { confirmingRevoke = false },
-    )
+    RevokePassConfirmation(visible = confirmingRevoke, onDismiss = { confirmingRevoke = false }) {
+        confirmingRevoke = false
+        viewModel.revokeClaim(claim.id)
+    }
 }
 
 @Composable
 private fun RevokePassConfirmation(
     visible: Boolean,
-    onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
 ) {
     if (!visible) return
     ConfirmRevokeDialog(
