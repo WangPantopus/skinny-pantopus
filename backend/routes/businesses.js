@@ -269,6 +269,10 @@ const updateCatalogItemSchema = createCatalogItemSchema.fork(
 const createCategoryRequestSchema = createCategorySchema.keys({ client_request_id: Joi.string().uuid().allow(null) });
 const createCatalogItemRequestSchema = createCatalogItemSchema.keys({ client_request_id: Joi.string().uuid().allow(null) });
 
+// Item photos must be uploaded files: an outside link would show its owner who viewed the business and when,
+// and its picture could change after posting.
+const CATALOG_OUTSIDE_IMAGE_ERROR = 'Attach photos by uploading them.';
+
 const createPageSchema = Joi.object({
   slug: Joi.string().min(1).max(100).required(),
   title: Joi.string().min(1).max(200).required(),
@@ -2578,6 +2582,9 @@ router.post('/:businessId/catalog/items', verifyToken, validate(createCatalogIte
         code: 'DONATION_NO_FIXED_PRICE',
       });
     }
+    if (req.body.image_url && !isPublicStorageUrl(req.body.image_url)) {
+      return res.status(400).json({ error: CATALOG_OUTSIDE_IMAGE_ERROR });
+    }
 
     const { client_request_id: requestId, ...fields } = req.body;
     let created;
@@ -2669,6 +2676,18 @@ router.patch('/:businessId/catalog/items/:itemId', verifyToken, validate(updateC
         error: 'Donation items cannot have a fixed price. Use suggested_amounts for preset options or leave blank for open-amount.',
         code: 'DONATION_NO_FIXED_PRICE',
       });
+    }
+    if (req.body.image_url && !isPublicStorageUrl(req.body.image_url)) {
+      // An item may keep the photo it already has.
+      const { data: current } = await supabaseAdmin
+        .from('BusinessCatalogItem')
+        .select('image_url')
+        .eq('id', itemId)
+        .eq('business_user_id', businessId)
+        .maybeSingle();
+      if (current?.image_url !== req.body.image_url) {
+        return res.status(400).json({ error: CATALOG_OUTSIDE_IMAGE_ERROR });
+      }
     }
 
     const { data: item, error } = await supabaseAdmin

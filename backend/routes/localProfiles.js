@@ -23,6 +23,7 @@ const { applyLocationPrecision, leastPrecise } = require('../utils/locationPriva
 const { requireIdentityFirewallEnabled } = require('../utils/featureFlags');
 const { isSearchable, isScopedBlocked } = require('../utils/visibilityPolicy');
 const { hasBlocked } = require('../services/blockService');
+const { isPublicStorageUrl } = require('../services/s3Service');
 
 router.use(requireIdentityFirewallEnabled);
 
@@ -378,6 +379,12 @@ router.patch('/me', verifyToken, validate(updateLocalProfileSchema), async (req,
   try {
     const existing = await ensureLocalProfile(req.user.id);
     if (!existing) return res.status(404).json({ error: 'Local profile not found' });
+    // An uploaded photo or the one the profile already has: an outside link would show its owner who viewed the
+    // profile and when.
+    const avatarUrl = req.body.avatar_url;
+    if (avatarUrl && avatarUrl !== existing.avatar_url && !isPublicStorageUrl(avatarUrl)) {
+      return res.status(400).json({ error: 'Add a profile photo by uploading it.' });
+    }
 
     const updates = { ...req.body, updated_at: new Date().toISOString() };
     if (updates.handle) updates.handle_normalized = normalizeHandle(updates.handle);
