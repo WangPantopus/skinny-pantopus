@@ -79,6 +79,9 @@ final class AIChatStreamClient: AIChatStreaming, @unchecked Sendable {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
+                    // This stream bypasses APIClient, so renew a lapsing token first, as it does;
+                    // otherwise the first message after the token expires fails.
+                    await AuthManager.shared.refreshIfExpiringSoon()
                     let token = await AuthManager.shared.accessToken
                     let url = environment.apiBaseURL.appendingPathComponent("/api/ai/chat")
                     var urlRequest = URLRequest(url: url)
