@@ -636,7 +636,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                 imageURL: Self.avatarURL(occ.avatarUrl),
                 background: .gradient(MemberAvatarTone.tone(for: occ.userId).gradient),
                 size: .medium,
-                verified: true
+                verified: occ.hasAddressVerification
             ),
             trailing: hasActions ? .kebab : .none,
             onTap: { /* Future: open member detail. */ },
