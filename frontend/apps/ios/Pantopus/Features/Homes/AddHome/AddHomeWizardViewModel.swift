@@ -835,10 +835,11 @@ final class AddHomeWizardViewModel: WizardModel {
             guard addressIsCurrent(revision) else { return }
             validatedAddressId = nil
             geocodedAddress = nil
-            // A refused address (a PO box, a missing field) says why; other
-            // failures may be temporary.
-            if let apiError = error as? APIError, case let .clientError(status, message?) = apiError, [400, 422].contains(status) {
-                errorMessage = message
+            // A refused address (a PO box, a missing field) or a rate limit says
+            // why in the server's words; other failures may be temporary.
+            if let apiError = error as? APIError, case let .clientError(status, body) = apiError,
+               [400, 422, 429].contains(status), let reason = APIError.friendlyClientMessage(body) {
+                errorMessage = reason
             } else {
                 errorMessage = "Could not check this address. Try again."
             }
