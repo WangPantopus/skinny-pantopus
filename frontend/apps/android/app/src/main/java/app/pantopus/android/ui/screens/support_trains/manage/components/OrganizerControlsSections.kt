@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.support_trains.SupportTrainFundDto
 import app.pantopus.android.ui.screens.support_trains.detail.SupportTrainViewerRole
 import app.pantopus.android.ui.screens.support_trains.manage.ManageHelperRow
@@ -598,8 +599,12 @@ fun ManageLifecycleSection(
                 )
                 Text(
                     text =
-                        "Permanent. Only possible while no helper has committed and no " +
-                            "gift-fund money has come in.",
+                        if (LaunchFeatures.giftFunds) {
+                            "Permanent. Only possible while no helper has committed and no " +
+                                "gift-fund money has come in."
+                        } else {
+                            "Permanent. Only possible while no helper has committed."
+                        },
                     color = PantopusColors.appTextMuted,
                     fontSize = 11.5.sp,
                 )

@@ -56,6 +56,7 @@ export const LAUNCH_FEATURE_KEYS = [
   'business_directory', // 6. General business directory
   'household_extras', // 7. Polls, packages, pet section, family calendar, bill management
   'mail_extras', // 8. Letters, e-signing, community mail, event invitations by mail
+  'gift_funds', // 9. Support Train gift funds (no app can take a contribution yet)
 ] as const;
 
 export type LaunchFeatureKey = (typeof LAUNCH_FEATURE_KEYS)[number];
@@ -80,6 +81,7 @@ export const launchFeatures = {
   businessDirectory: enabledLaunchFeatures.has('business_directory'),
   householdExtras: enabledLaunchFeatures.has('household_extras'),
   mailExtras: enabledLaunchFeatures.has('mail_extras'),
+  giftFunds: enabledLaunchFeatures.has('gift_funds'),
 };
 
 // Pages that exist only for a hidden feature, matched against the pathname.

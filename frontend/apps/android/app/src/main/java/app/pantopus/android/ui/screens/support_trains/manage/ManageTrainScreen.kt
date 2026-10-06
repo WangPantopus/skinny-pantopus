@@ -49,6 +49,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.screens.inbox.newmessage.NewMessageScreen
 import app.pantopus.android.ui.screens.support_trains.detail.SupportTrainViewerRole
 import app.pantopus.android.ui.screens.support_trains.manage.components.CloseTrainSheet
@@ -603,24 +604,27 @@ private fun OrganizerControls(
         onDiscard = { viewModel.discardNudge() },
     )
 
-    ManageFundSection(
-        fund = ui.fund,
-        canDisable = content.viewerRole == SupportTrainViewerRole.PRIMARY_ORGANIZER,
-        isBusy = ui.isSubmitting,
-        goalDollars = ui.fundGoalDollars,
-        onGoalChange = { viewModel.updateFundGoal(it) },
-        onEnable = { viewModel.enableFund() },
-        onDisable = {
-            viewModel.requestConfirm(
-                ManageDestructiveConfirm(
-                    kind = ManageConfirmKind.DisableFund,
-                    title = "Disable the gift fund?",
-                    message = "Neighbors won't be able to chip in money any more.",
-                    confirmLabel = "Disable",
-                ),
-            )
-        },
-    )
+    // Launch cut #9: no app takes a contribution yet.
+    if (LaunchFeatures.giftFunds) {
+        ManageFundSection(
+            fund = ui.fund,
+            canDisable = content.viewerRole == SupportTrainViewerRole.PRIMARY_ORGANIZER,
+            isBusy = ui.isSubmitting,
+            goalDollars = ui.fundGoalDollars,
+            onGoalChange = { viewModel.updateFundGoal(it) },
+            onEnable = { viewModel.enableFund() },
+            onDisable = {
+                viewModel.requestConfirm(
+                    ManageDestructiveConfirm(
+                        kind = ManageConfirmKind.DisableFund,
+                        title = "Disable the gift fund?",
+                        message = "Neighbors won't be able to chip in money any more.",
+                        confirmLabel = "Disable",
+                    ),
+                )
+            },
+        )
+    }
 }
 
 @Composable

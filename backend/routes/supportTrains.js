@@ -25,6 +25,7 @@ const {
 const stripeService = require('../stripe/stripeService');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
 const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
 const {
@@ -707,7 +708,8 @@ router.post(
       enable_home_cooked_meals,
       enable_takeout,
       enable_groceries,
-      enable_gift_funds,
+      // Launch cut #9: no app takes a contribution yet, so a fund stays off.
+      enable_gift_funds: Boolean(enable_gift_funds) && isLaunchFeatureEnabled('gift_funds'),
       ai_draft_payload: draft_payload,
     };
     const readRequestTrain = async () => {
@@ -1950,10 +1952,17 @@ const enableFundSchema = Joi.object({
   goal_amount: Joi.number().integer().min(1).max(100000).optional(), // cents, $0.01–$1000
 });
 
+// Launch cut #9: until contributions can be taken, a fund can't be opened or paid into.
+function requireGiftFunds(req, res, next) {
+  if (isLaunchFeatureEnabled('gift_funds')) return next();
+  return res.status(403).json({ error: 'GIFT_FUNDS_UNAVAILABLE', message: "Gift funds aren't available yet." });
+}
+
 // Enable gift fund (idempotent)
 router.post(
   '/:id/fund/enable',
   verifyToken,
+  requireGiftFunds,
   supportTrainWriteLimiter,
   loadSupportTrain,
   requireSupportTrainRole(['primary', 'co_organizer']),
@@ -2093,6 +2102,7 @@ const contributeFundSchema = Joi.object({
 router.post(
   '/:id/fund/contributions',
   verifyToken,
+  requireGiftFunds,
   supportTrainWriteLimiter,
   loadSupportTrain,
   validate(contributeFundSchema),
@@ -4141,7 +4151,7 @@ router.get(
         home_cooked_meals: st.enable_home_cooked_meals,
         takeout: st.enable_takeout,
         groceries: st.enable_groceries,
-        gift_funds: st.enable_gift_funds,
+        gift_funds: Boolean(st.enable_gift_funds) && isLaunchFeatureEnabled('gift_funds'),
       },
 
       // Recipient info (always public). No summary until the household size is known:
@@ -4310,7 +4320,7 @@ router.patch(
     if (body.enable_groceries !== undefined)
       supportTrainPatch.enable_groceries = body.enable_groceries;
     if (body.enable_gift_funds !== undefined)
-      supportTrainPatch.enable_gift_funds = body.enable_gift_funds;
+      supportTrainPatch.enable_gift_funds = Boolean(body.enable_gift_funds) && isLaunchFeatureEnabled('gift_funds');
     if (body.show_exact_address_after_signup !== undefined)
       supportTrainPatch.show_exact_address_after_signup = body.show_exact_address_after_signup;
 
