@@ -66,6 +66,8 @@ function InvoiceContent() {
       setClientSecret(result.client_secret);
     } catch (e: unknown) {
       toast.error(e instanceof Error && e.message ? e.message : 'Payment failed. Please try again.');
+      // A refused Pay (say, the invoice turned out to be paid already) re-reads the invoice.
+      api.businesses.getReceivedInvoice(invoice.id).then((result) => setInvoice(result.invoice)).catch(() => {});
     } finally {
       setPaying(false);
     }
