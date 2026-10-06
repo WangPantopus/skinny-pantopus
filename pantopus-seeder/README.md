@@ -97,7 +97,7 @@ The briefing scheduler publishes metrics to `Pantopus/Briefing/{environment}`:
 
 - AWS CLI (configured with credentials)
 - AWS SAM CLI (`sam --version`)
-- Python 3.12
+- Python 3.13 (the Lambda runtime) and Docker (for `sam build --use-container`)
 
 ### First-time setup
 
@@ -111,14 +111,16 @@ The briefing scheduler publishes metrics to `Pantopus/Briefing/{environment}`:
 2. **Deploy the stack** (creates the Secrets Manager secret with placeholder values):
 
    ```bash
-   chmod +x deploy/build.sh
-   ./deploy/build.sh
+   python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt   # once
+   PATH="$PWD/.venv/bin:$PATH" ./deploy/build.sh   # copies src into build/ and runs the tests
    cd deploy
-   sam deploy --guided
+   sam build --use-container   # installs the Lambda dependencies for Linux arm64
+   sam deploy --config-env staging   # or prod; see samconfig.toml
    ```
 
-   The build script installs dependencies into `build/` (arm64 target) and copies
-   source code. The SAM template's `CodeUri` points there.
+   The build script copies source code and `requirements-lambda.txt` into `build/`
+   (the template's `CodeUri`); `sam build --use-container` installs the
+   dependencies. Deploying without `sam build` uploads code without them.
 
 3. **Populate the secret** in AWS Secrets Manager with real values.
    The stack creates the secret container, but secret contents are managed
@@ -138,8 +140,21 @@ The briefing scheduler publishes metrics to `Pantopus/Briefing/{environment}`:
        "WEATHERKIT_KEY_ID": "",
        "WEATHERKIT_TEAM_ID": "",
        "WEATHERKIT_SERVICE_ID": "",
-       "WEATHERKIT_PRIVATE_KEY": ""
+       "WEATHERKIT_PRIVATE_KEY": "",
+       "AIRNOW_API_KEY": ""
      }'
+   ```
+
+   `AIRNOW_API_KEY` enables the alert checker's air-quality pushes; without it
+   only weather alerts run.
+
+   The stack also creates the SNS topic `pantopus-job-alarms-{environment}`,
+   which CloudWatch alarms notify when a reminder or job function fails.
+   Subscribe an inbox once (AWS emails a confirmation link):
+
+   ```bash
+   aws sns subscribe --topic-arn <JobAlarmTopicArn from the stack outputs> \
+     --protocol email --notification-endpoint <your email>
    ```
 
 4. **Seed the Sports event registry** after applying the Sports topic migration:

@@ -58,12 +58,16 @@ const ZIP_BASED_MIMES = new Set([
  * Validate that the file buffer's actual content matches the claimed MIME type.
  * Returns { valid: true } or { valid: false, detected, declared }.
  * On detection errors (e.g. file-type throws), allows upload and returns { valid: true }.
+ * Images, videos and audio always carry recognizable magic bytes, so a media
+ * upload whose content isn't identified at all is rejected; other types (plain
+ * text, CSV) may stay unidentified.
  */
 async function validateFileMime(file) {
   if (!file || !Buffer.isBuffer(file.buffer)) {
     return { valid: false, detected: null, declared: file?.mimetype, reason: 'missing_buffer' };
   }
 
+  const declaredMedia = /^(image|video|audio)\//.test(file.mimetype || '');
   let detected;
   try {
     const fileTypeFromBuffer = await getFileTypeFromBuffer();
@@ -79,12 +83,13 @@ async function validateFileMime(file) {
   }
 
   if (!detected) {
-    // file-type can't identify the file (e.g. plain text) — allow but log
-    logger.warn('MIME detection returned undefined — allowing upload', {
+    // file-type can't identify the file. Fine for plain text; a script or page
+    // claiming to be an image would otherwise be stored in the public bucket.
+    logger.warn(`MIME detection returned undefined — ${declaredMedia ? 'rejecting media' : 'allowing'} upload`, {
       declared: file.mimetype,
       originalname: file.originalname,
     });
-    return { valid: true };
+    return declaredMedia ? { valid: false, detected: null, declared: file.mimetype } : { valid: true };
   }
 
   const declaredMime = file.mimetype;
@@ -158,7 +163,9 @@ async function validateAndStripUploads(req, res, next) {
           detected: result.detected,
         });
         return res.status(400).json({
-          error: `File "${file.originalname}" content does not match its declared type (declared: ${result.declared}, detected: ${result.detected})`,
+          error: result.detected
+            ? `File "${file.originalname}" content does not match its declared type (declared: ${result.declared}, detected: ${result.detected})`
+            : `File "${file.originalname}" isn't a valid image, video or audio file.`,
         });
       }
 

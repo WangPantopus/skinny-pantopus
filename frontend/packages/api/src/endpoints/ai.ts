@@ -3,7 +3,7 @@
 // Chat agent, draft generation, mail summarization, place brief
 // ============================================================
 
-import apiClient, { get, post, del, getAuthToken, getApiBaseUrl } from '../client';
+import apiClient, { get, post, del, getApiBaseUrl, fetchAuthHeaders } from '../client';
 import type {
   AIDraftGigRequest,
   AIDraftGigResponse,
@@ -84,13 +84,13 @@ export function streamChat(
   };
 
   const run = async () => {
-    const token = getAuthToken();
     const response = await fetch(`${getApiBaseUrl()}/api/ai/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...fetchAuthHeaders('POST'),
       },
+      credentials: 'include',
       body: JSON.stringify(data),
       signal: controller.signal,
     });

@@ -362,7 +362,28 @@ export function configureApiClient(options: {
 }
 
 export function getApiBaseUrl(): string {
-  return apiClient.defaults.baseURL || API_BASE_URL;
+  // The web client's base is '' (same-origin through the Next proxy, where the
+  // session cookie lives); only an unset base falls back to the API host.
+  return apiClient.defaults.baseURL ?? API_BASE_URL;
+}
+
+/**
+ * Auth headers for a raw fetch (e.g. a streaming response), matching the
+ * transport the axios client uses: on the web the httpOnly session cookie
+ * plus the CSRF header for writes, never a Bearer token; elsewhere the
+ * stored Bearer token.
+ */
+export function fetchAuthHeaders(method = 'GET'): Record<string, string> {
+  if (_isWeb) {
+    const headers: Record<string, string> = { 'x-token-transport': 'cookie' };
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
+      const csrf = getCookie('pantopus_csrf');
+      if (csrf) headers['x-csrf-token'] = csrf;
+    }
+    return headers;
+  }
+  const token = _tokenCache || _storage.getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 // ============ TOKEN MANAGEMENT ============

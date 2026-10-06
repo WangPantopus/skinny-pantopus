@@ -60,6 +60,10 @@ struct PlaceLaunchView: View {
     var onSignIn: () -> Void
     /// Begin account creation after keeping the chosen preview.
     var onCreateAccount: () -> Void
+    /// The signed-in "Save a place" entry (Saved Places): Continue keeps the
+    /// previewed address for a private save instead of sign-in, and the
+    /// leading action is Cancel. Mirrors Android's `onSavePreview`.
+    var onSavePreview: (() -> Void)?
 
     @State private var viewModel = PlaceLaunchViewModel()
     @FocusState private var addressFocused: Bool
@@ -73,15 +77,30 @@ struct PlaceLaunchView: View {
             case let .preview(preview):
                 PlacePreviewBody(
                     preview: preview,
-                    onSignIn: { if viewModel.prepareForAuth() { onSignIn() } },
-                    onCreateAccount: { if viewModel.prepareForAuth() { onCreateAccount() } },
+                    signedInEntry: signedInEntry,
+                    onSignIn: { if signedInEntry || viewModel.prepareForAuth() { onSignIn() } },
+                    onCreateAccount: continuePreview,
                     onBack: viewModel.backToHero,
                     onRetry: viewModel.retryPreview,
                     retrying: viewModel.isLoadingPreview
                 )
             case let .region(message):
-                PlaceComingRegionBody(message: message, onBrowse: browseBeacons) { viewModel.backToHero() }
+                PlaceComingRegionBody(message: message, signedInEntry: signedInEntry, onBrowse: browseBeacons) {
+                    viewModel.backToHero()
+                }
             }
+        }
+    }
+
+    private var signedInEntry: Bool {
+        onSavePreview != nil
+    }
+
+    private func continuePreview() {
+        if let onSavePreview {
+            if viewModel.prepareForSave() { onSavePreview() }
+        } else if viewModel.prepareForAuth() {
+            onCreateAccount()
         }
     }
 
@@ -104,7 +123,7 @@ struct PlaceLaunchView: View {
                 brandLockup
                 regionPill
                 Spacer()
-                Button("Sign in", action: onSignIn)
+                Button(signedInEntry ? "Cancel" : "Sign in", action: onSignIn)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("placeLaunchSignIn")
@@ -128,12 +147,14 @@ struct PlaceLaunchView: View {
                 Text(message).foregroundStyle(Theme.Color.appTextSecondary)
                     .accessibilityIdentifier("place.launch.error")
             }
-            Text("See what's true about your address.")
+            Text("Know what matters for your home, and stay on top of it.")
                 .font(.system(size: 31, weight: .bold))
                 .kerning(-0.87)
                 .lineSpacing(4)
                 .foregroundStyle(Theme.Color.appText)
-            Text("Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account.")
+            Text(signedInEntry
+                ? "Look up an address, preview its public information, and choose whether to save it privately."
+                : "Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account.")
                 .font(.system(size: 15))
                 .lineSpacing(3)
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -144,7 +165,13 @@ struct PlaceLaunchView: View {
                 suggestionList
             } else {
                 seePlaceButton
-                privacyProof
+                if signedInEntry {
+                    Text("Only you will see this.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                } else {
+                    privacyProof
+                }
                 exampleCard
                     .padding(.top, Spacing.s2)
                 // Launch cut #1 (Beacon): hidden for the first launch.

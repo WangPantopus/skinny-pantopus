@@ -295,11 +295,14 @@ export default function useMailboxData() {
 
   // Helper functions
   const getSenderName = (item: MailItem) => {
-    if (item.sender_business_name) return item.sender_business_name;
+    // Same order as the server's resolveSenderDisplay; mail with no known
+    // sender is not attributed to Pantopus.
+    if (item.sender_display?.trim()) return item.sender_display.trim();
     if (item.sender?.name) return item.sender.name;
     if (item.sender?.username) return `@${item.sender.username}`;
+    if (item.sender_business_name) return item.sender_business_name;
     if (item.sender_address) return item.sender_address;
-    return 'Pantopus';
+    return 'Unknown sender';
   };
 
   const getDisplayTitle = (item: MailItem) => {

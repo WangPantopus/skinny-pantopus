@@ -17,10 +17,14 @@ RETRY_MARKER = "[RETRY]"
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Briefing cleanup Lambda entry point. Triggered daily by EventBridge."""
     try:
-        return _run(event, context)
+        result = _run(event, context)
     except Exception:
         log.exception("Briefing cleanup handler failed with unhandled exception")
-        return {"error": "unhandled_exception"}
+        raise
+    if result.get("error"):
+        # Fail the invocation so the Lambda Errors metric and its alarm see it.
+        raise RuntimeError(f"Briefing cleanup run failed: {result}")
+    return result
 
 
 def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:

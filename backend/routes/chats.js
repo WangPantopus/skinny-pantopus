@@ -1896,13 +1896,16 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     if (recipientUserIds.length > 0) {
       (async () => {
         try {
-          // Filter to recipients who have push enabled
-          const { data: enabledRows } = await supabaseAdmin
+          // Skip recipients who turned push off; an account with no
+          // preference row has the default (on).
+          const { data: disabledRows, error: prefsError } = await supabaseAdmin
             .from('MailPreferences')
             .select('user_id')
             .in('user_id', recipientUserIds)
-            .eq('push_notifications', true);
-          const pushEnabledIds = (enabledRows || []).map((r) => r.user_id);
+            .eq('push_notifications', false);
+          if (prefsError) return;
+          const disabled = new Set((disabledRows || []).map((r) => r.user_id));
+          const pushEnabledIds = recipientUserIds.filter((id) => !disabled.has(id));
           if (pushEnabledIds.length === 0) return;
 
           const senderName = serializeUserIdentityForViewer(message.sender)?.displayName || 'Someone';
