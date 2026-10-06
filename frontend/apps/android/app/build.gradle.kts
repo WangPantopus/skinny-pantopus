@@ -140,6 +140,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    lint {
+        // AGP 8.9's lint also runs the Compose runtime checks on unit tests,
+        // where the Paparazzi snapshot tests read view-model state directly on
+        // purpose (StateFlowValueCalledInComposition). App code is still checked.
+        ignoreTestSources = true
+    }
+
     kotlinOptions {
         jvmTarget = "17"
         freeCompilerArgs +=
