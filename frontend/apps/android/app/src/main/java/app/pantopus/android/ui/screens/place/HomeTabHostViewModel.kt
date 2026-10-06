@@ -3,6 +3,7 @@ package app.pantopus.android.ui.screens.place
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.routing.PlacePendingStore
+import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
@@ -69,29 +70,20 @@ class HomeTabHostViewModel
         }
 
         /**
-         * Re-checks quietly while the landing is the no-home Hub, so a home joined or added
-         * later in this session lands Place the next time the Hub root shows. No skeleton
-         * or error replaces the Hub on this check.
-         */
-        /**
          * Where the Hub's "Verify your address" goes: a Home that already waits on
          * verification continues there, as My Homes does (a filed claim's Waiting
          * Room, residency status, or ownership evidence); with none, Add Home.
          */
         suspend fun verificationTarget(): HubVerificationTarget {
             val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.homes.orEmpty()
-            for (home in homes) {
-                if (home.pendingClaimId != null) return HubVerificationTarget.WaitingRoom(home.id)
-                if (home.accessKind == "private_setup") return HubVerificationTarget.Residency(home.id)
-                when (pendingVerificationFor(home)) {
-                    PendingVerification.Owner -> return HubVerificationTarget.ClaimOwnership(home.id)
-                    PendingVerification.Residency -> return HubVerificationTarget.Residency(home.id)
-                    null -> Unit
-                }
-            }
-            return HubVerificationTarget.AddHome
+            return homes.firstNotNullOfOrNull(::hubVerificationTargetFor) ?: HubVerificationTarget.AddHome
         }
 
+        /**
+         * Re-checks quietly while the landing is the no-home Hub, so a home joined or added
+         * later in this session lands Place the next time the Hub root shows. No skeleton
+         * or error replaces the Hub on this check.
+         */
         fun refreshIfNoHome() {
             if (_landing.value != HomeLanding.Hub || resolveJob?.isActive == true) return
             resolveJob =
@@ -199,6 +191,16 @@ sealed interface HomeLanding {
 
     data object Hub : HomeLanding
 }
+
+/** My Homes' choice for one Home, or null when it isn't waiting on verification. */
+private fun hubVerificationTargetFor(home: MyHome): HubVerificationTarget? =
+    when {
+        home.pendingClaimId != null -> HubVerificationTarget.WaitingRoom(home.id)
+        home.accessKind == "private_setup" -> HubVerificationTarget.Residency(home.id)
+        pendingVerificationFor(home) == PendingVerification.Owner -> HubVerificationTarget.ClaimOwnership(home.id)
+        pendingVerificationFor(home) == PendingVerification.Residency -> HubVerificationTarget.Residency(home.id)
+        else -> null
+    }
 
 /** The screen the Hub's "Verify your address" opens. */
 sealed interface HubVerificationTarget {
