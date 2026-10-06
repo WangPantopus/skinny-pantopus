@@ -8,6 +8,9 @@ import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import { authPageHref, readAuthRedirectQuery, safeRedirectPath } from '@/lib/auth-utils';
 
 const NO_CODE_ERROR_DELAY_MS = 700;
+// The Auth server passes the provider's error through: Google sends
+// access_denied when the person cancels, Apple user_cancelled_authorize.
+const PROVIDER_CANCEL_ERRORS = new Set(['access_denied', 'user_cancelled_authorize']);
 
 function AuthCallbackPageContent() {
   const router = useRouter();
@@ -25,6 +28,15 @@ function AuthCallbackPageContent() {
     const access = hash.get('access_token');
     if (access) hashCredentials.current = { access, refresh: hash.get('refresh_token') };
     if (window.location.hash) window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+    const providerError = params.get('error') || hash.get('error');
+    if (providerError && !code && !hashCredentials.current) {
+      if (PROVIDER_CANCEL_ERRORS.has(providerError)) {
+        router.replace(authPageHref('/login', redirectTo));
+      } else {
+        setError("Sign-in didn't finish. Please try again or use your email.");
+      }
+      return () => { cancelled = true; };
+    }
     const credentials = hashCredentials.current;
     if (!code && !credentials) {
       const timeout = setTimeout(() => {

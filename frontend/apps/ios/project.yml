@@ -173,6 +173,11 @@ targets:
           - webcredentials:www.pantopus.com
           - webcredentials:pantopus.app
           - webcredentials:www.pantopus.app
+        # Native Sign in with Apple (AppleSignInCoordinator). The App ID
+        # app.pantopus.ios needs the Sign In with Apple capability before
+        # its App Store profile is generated.
+        com.apple.developer.applesignin:
+          - Default
         # Phase 6c — shared UserDefaults suite feeding the Tasks-near-me
         # widget snapshot (also declared on PantopusWidgets).
         com.apple.security.application-groups:

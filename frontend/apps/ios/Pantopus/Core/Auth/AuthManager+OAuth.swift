@@ -12,16 +12,34 @@ extension AuthManager {
     /// `OAuthSessionStore.REJECTED_MESSAGE`.
     static let oauthRejectedMessage = "Sign-in couldn't be verified. Please try again."
 
+    /// Copy when Apple's sheet can't run on this device.
+    static let appleUnavailableMessage =
+        "Sign in with Apple isn't available on this device. Please use your email instead."
+
+    /// Copy when the provider's page ends the attempt with an error other
+    /// than the person cancelling.
+    static let oauthProviderFailedMessage = "Sign-in didn't finish. Please try again or use your email."
+
+    /// The Auth server passes the provider's error through to the callback:
+    /// Google sends `access_denied` when the person cancels, Apple
+    /// `user_cancelled_authorize`.
+    private static let oauthCancelErrors: Set<String> = ["access_denied", "user_cancelled_authorize"]
+
     /// 32 bytes = 256 bits of entropy, hex-encoded (URL-safe by construction).
     private static let oauthNonceBytes = 32
 
     private static let hexDigits: [Character] = Array("0123456789abcdef")
 
-    /// Browser OAuth through `GET /api/users/oauth/:provider` (route
+    /// Apple uses the native Sign in with Apple sheet; Google uses browser
+    /// OAuth through `GET /api/users/oauth/:provider` (route
     /// `backend/routes/users.js:4006`) and `POST /api/users/oauth/callback`
     /// (route `backend/routes/users.js:4186`). Legacy fragment tokens fall
     /// back to `POST /api/users/oauth/token` (`:3792`).
     func signIn(with provider: OAuthProvider) async throws {
+        if provider == .apple {
+            try await signInWithAppleSheet()
+            return
+        }
         do {
             // Per-attempt CSRF nonce: it rides on `redirectTo` and must come
             // back on the callback, so an authorization code from any other
@@ -52,6 +70,12 @@ extension AuthManager {
             guard Self.oauthNonceMatches(callbackURL, expected: nonce) else {
                 throw OAuthWebAuthenticationError.rejectedCallback
             }
+            if let providerError = Self.oauthCallbackError(callbackURL) {
+                if Self.oauthCancelErrors.contains(providerError) {
+                    throw OAuthWebAuthenticationError.cancelled
+                }
+                throw AuthError.serverError(Self.oauthProviderFailedMessage)
+            }
 
             let loginResponse = try await exchangeOAuthCallback(callbackURL)
             try persistLoginResponse(loginResponse, method: provider == .apple ? .apple : .google)
@@ -68,6 +92,53 @@ extension AuthManager {
         } catch {
             throw AuthError.unknown
         }
+    }
+
+    /// Native Sign in with Apple → `POST /api/users/oauth/native` (route
+    /// `backend/routes/users.js` `/oauth/native`). Carries the device
+    /// descriptor (+ DPoP) so the session is bound at issue, like `/login`.
+    private func signInWithAppleSheet() async throws {
+        let credential: AppleSignInCredential
+        do {
+            credential = try await AppleSignInCoordinator().signIn()
+        } catch AppleSignInError.cancelled {
+            throw OAuthWebAuthenticationError.cancelled
+        } catch AppleSignInError.unavailable {
+            throw AuthError.serverError(Self.appleUnavailableMessage)
+        } catch {
+            throw AuthError.serverError(Self.oauthProviderFailedMessage)
+        }
+        do {
+            let response: LoginResponse = try await apiClient.request(
+                AuthEndpoints.oauthNative(
+                    OAuthNativeRequest(
+                        provider: .apple,
+                        idToken: credential.identityToken,
+                        nonce: credential.rawNonce,
+                        accessToken: nil,
+                        device: makeDeviceDescriptor(),
+                        givenName: credential.givenName,
+                        familyName: credential.familyName
+                    )
+                )
+            )
+            try persistLoginResponse(response, method: .apple)
+        } catch APIError.unauthorized {
+            // 401 here means the identity token was refused, not a password.
+            throw AuthError.serverError(Self.oauthProviderFailedMessage)
+        } catch let apiError as APIError {
+            throw Self.mapGenericAuthError(apiError)
+        }
+    }
+
+    /// The provider error the Auth server put on the callback (`?error=`
+    /// or `#error=`), if the attempt ended without a code or tokens.
+    private static func oauthCallbackError(_ url: URL) -> String? {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let fromQuery = components?.queryItems?.first { $0.name == "error" }?.value
+        let error = fromQuery ?? fragmentParam(url.fragment, name: "error")
+        guard let error, !error.isEmpty else { return nil }
+        return error
     }
 
     static func isOAuthCallback(_ url: URL) -> Bool {

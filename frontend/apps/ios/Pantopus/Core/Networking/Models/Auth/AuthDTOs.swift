@@ -114,21 +114,35 @@ public struct OAuthTokenExchangeRequest: Encodable, Sendable, Hashable {
 
 /// `POST /api/users/oauth/native` request — native Sign in with Apple /
 /// Google id-token exchange (CONTRACT "Existing routes"; route
-/// `backend/routes/users.js` `/oauth/native`). The iOS UI for it is
-/// Phase 3; the DTO ships now so the contract is exercised end-to-end.
+/// `backend/routes/users.js` `/oauth/native`). Sent by
+/// `AuthManager.signInWithAppleSheet`. `givenName` / `familyName` carry the
+/// name Apple shares only on the first authorization; the server uses them
+/// when it creates the profile.
 public struct OAuthNativeRequest: Encodable, Sendable, Hashable {
     public let provider: String
     public let idToken: String
     public let nonce: String?
     public let accessToken: String?
     public let device: DeviceDescriptor?
+    public let givenName: String?
+    public let familyName: String?
 
-    public init(provider: OAuthProvider, idToken: String, nonce: String?, accessToken: String?, device: DeviceDescriptor?) {
+    public init(
+        provider: OAuthProvider,
+        idToken: String,
+        nonce: String?,
+        accessToken: String?,
+        device: DeviceDescriptor?,
+        givenName: String? = nil,
+        familyName: String? = nil
+    ) {
         self.provider = provider.rawValue
         self.idToken = idToken
         self.nonce = nonce
         self.accessToken = accessToken
         self.device = device
+        self.givenName = givenName
+        self.familyName = familyName
     }
 }
 

@@ -84,6 +84,17 @@ beforeEach(() => {
 });
 
 describe('GET /oauth/:provider', () => {
+  const realFetch = global.fetch;
+  beforeEach(() => {
+    // The route asks the Auth server whether the provider's authorize URL
+    // leads to the provider before returning it.
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 302,
+      headers: { get: () => 'https://accounts.example.com/authorize' },
+    });
+  });
+  afterAll(() => { global.fetch = realFetch; });
+
   test('accepts token flow request but starts OAuth without forcing response_type', async () => {
     const signInWithOAuth = jest.fn().mockResolvedValue({
       data: { url: 'https://auth.example.com/start' },

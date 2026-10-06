@@ -951,6 +951,10 @@ const oauthNativeSchema = Joi.object({
   nonce: Joi.string().max(512).allow('', null).optional(),
   accessToken: Joi.string().max(8192).allow('', null).optional(),
   device: deviceDescriptorSchema.optional(),
+  // Apple shares the person's name with the app only on the first
+  // authorization, never in the identity token.
+  givenName: Joi.string().trim().max(100).allow('', null).optional(),
+  familyName: Joi.string().trim().max(100).allow('', null).optional(),
 });
 
 const reauthenticateSchema = Joi.object({
@@ -4438,6 +4442,49 @@ router.get('/:id/relationship', verifyToken, async (req, res) => {
 
 // ============ OAUTH ENDPOINTS ============
 
+const OAUTH_PROVIDER_LABELS = { google: 'Google', apple: 'Apple' };
+const OAUTH_PROBE_OK_TTL_MS = 5 * 60 * 1000;
+const OAUTH_PROBE_FAIL_TTL_MS = 30 * 1000;
+const OAUTH_PROBE_TIMEOUT_MS = 5000;
+const oauthProviderProbes = new Map();
+
+/**
+ * A provider the Auth server doesn't have set up (disabled, or enabled
+ * without its client ID / redirect URI) answers its authorize URL with a raw
+ * JSON 400 page, which the browser sheet or Custom Tab would show instead of
+ * the provider. Ask the Auth server first — without following the redirect,
+ * so no provider page loads — and only hand out a URL that leads to the
+ * provider. Results are cached briefly; nothing is written by the probe.
+ */
+async function isOAuthProviderAvailable(provider, authorizeUrl) {
+  const cached = oauthProviderProbes.get(provider);
+  const now = Date.now();
+  if (cached && now - cached.at < (cached.ok ? OAUTH_PROBE_OK_TTL_MS : OAUTH_PROBE_FAIL_TTL_MS)) {
+    return cached.ok;
+  }
+  let response;
+  try {
+    response = await fetch(authorizeUrl, {
+      method: 'GET',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(OAUTH_PROBE_TIMEOUT_MS),
+    });
+  } catch (err) {
+    // Unreachable Auth server: the browser flow would fail too. Not cached,
+    // so the next tap tries again.
+    logger.warn('OAuth provider probe failed', { provider, error: err.message });
+    return false;
+  }
+  const location = response.headers.get('location') || '';
+  const ok = response.status >= 300 && response.status < 400
+    && /^https:\/\//i.test(location) && !/[?#&]error=/.test(location);
+  if (!ok) {
+    logger.warn('OAuth provider unavailable on the Auth server', { provider, status: response.status });
+  }
+  oauthProviderProbes.set(provider, { ok, at: now });
+  return ok;
+}
+
 /**
  * GET /api/users/oauth/:provider
  * Generate OAuth redirect URL for a given provider (google, apple)
@@ -4502,6 +4549,13 @@ router.get('/oauth/:provider', oauthLimiter, async (req, res) => {
     if (error) {
       logger.error('OAuth URL generation error', { provider, error: error.message });
       return res.status(500).json({ error: 'Failed to initiate OAuth login' });
+    }
+
+    if (!(await isOAuthProviderAvailable(provider, data.url))) {
+      return res.status(503).json({
+        error: `${OAUTH_PROVIDER_LABELS[provider]} sign-in isn't available right now. Please use your email instead.`,
+        code: 'OAUTH_PROVIDER_UNAVAILABLE',
+      });
     }
 
     res.json({ url: data.url });
@@ -4737,7 +4791,7 @@ router.post('/oauth/callback', oauthLimiter, authRouteDpop(), async (req, res) =
  * binding as /oauth/callback (CONTRACT "Existing routes").
  */
 router.post('/oauth/native', oauthLimiter, validate(oauthNativeSchema), authRouteDpop(), async (req, res) => {
-  const { provider, idToken, nonce, accessToken } = req.body;
+  const { provider, idToken, nonce, accessToken, givenName, familyName } = req.body;
 
   try {
     const authClient = createAuthClient();
@@ -4754,7 +4808,11 @@ router.post('/oauth/native', oauthLimiter, validate(oauthNativeSchema), authRout
     const { session, user } = sessionData;
     const userId = user.id;
     const email = user.email || user.user_metadata?.email || null;
-    const meta = user.user_metadata || {};
+    const meta = { ...(user.user_metadata || {}) };
+    // Only fills a profile created on this sign-in; ensureOAuthUserProfile
+    // leaves an existing profile's name alone.
+    if (givenName && !meta.given_name) meta.given_name = givenName;
+    if (familyName && !meta.family_name) meta.family_name = familyName;
 
     if (!email) {
       logger.error('OAuth native sign-in failed — no email available', { userId, provider });
