@@ -38,7 +38,10 @@ struct AddressStep: View {
                 }
             }
             ForEach(viewModel.searchResults) { suggestion in
-                Button { viewModel.selectSearchResult(suggestion) } label: {
+                Button {
+                    endTyping()
+                    viewModel.selectSearchResult(suggestion)
+                } label: {
                     VStack(alignment: .leading, spacing: Spacing.s1) {
                         Text(suggestion.primaryText).font(Theme.Font.body)
                         Text(suggestion.secondaryText ?? suggestion.label).pantopusTextStyle(.small)
@@ -47,8 +50,11 @@ struct AddressStep: View {
                 }
                 .accessibilityIdentifier("addHome_searchResult_\(suggestion.suggestionId)")
             }
-            UseCurrentLocationPill(action: viewModel.useCurrentLocation)
-                .disabled(viewModel.isFindingAddress || !viewModel.isCurrent)
+            UseCurrentLocationPill {
+                endTyping()
+                viewModel.useCurrentLocation()
+            }
+            .disabled(viewModel.isFindingAddress || !viewModel.isCurrent)
             ManualAddressButton(action: viewModel.addManuallyTapped)
             if viewModel.isManualEntry {
                 manualField("Street address", .street, viewModel.form.address.street)
@@ -78,6 +84,13 @@ struct AddressStep: View {
                 .accessibilityLabel(label)
                 .accessibilityIdentifier("addHome_\(field.rawValue)")
         }
+    }
+
+    /// Picking an address ends typing. Closing the keyboard first lets the
+    /// search field finish editing with the text the person typed, before the
+    /// pick replaces it, and brings Continue back below the filled address.
+    private func endTyping() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     /// A text field writes its unchanged text back when editing ends (Done, or
