@@ -133,10 +133,14 @@ describe('pilot Hub truthfulness', () => {
     try {
       const actor = 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa';
       seedTable('User', [{ id: actor, username: 'pilot-test' }]);
-      seedTable('Mail', ['ad', 'newsletter', 'personal'].map((type, i) => ({
-        id: String(i), type, recipient_user_id: actor, viewed: false,
-        archived: false, deleted_at: null,
-      })));
+      seedTable('Mail', [
+        ...['ad', 'newsletter', 'personal'].map((type, i) => ({
+          id: String(i), type, recipient_user_id: actor, drawer: 'personal', lifecycle: 'delivered', viewed: false,
+          archived: false, deleted_at: null,
+        })),
+        // Home mail is counted on the Home card, not in the personal inbox row.
+        { id: '3', type: 'bill', recipient_user_id: actor, drawer: 'home', lifecycle: 'delivered', viewed: false, archived: false, deleted_at: null },
+      ]);
       const res = await request(makeApp()).get('/api/hub').set('x-test-user-id', actor);
       expect(res.status).toBe(200);
       expect(res.body.statusItems).toEqual(expect.arrayContaining([
