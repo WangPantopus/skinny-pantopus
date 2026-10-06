@@ -101,7 +101,7 @@ fun PlaceIdentityDetailContent(
             PlaceResidencyPassSection(viewModel, canIssue = false)
         }
     } else {
-        ResidencySections(isVerified, viewModel)
+        ResidencySections(isVerified, intel.nonResidentViewer, viewModel)
     }
 
     PlaceDetailSectionLabel("Mailbox")
@@ -116,6 +116,7 @@ fun PlaceIdentityDetailContent(
 @Composable
 private fun ResidencySections(
     isVerified: Boolean,
+    nonResident: Boolean,
     viewModel: PlaceDetailViewModel,
 ) {
     PlaceDetailSectionLabel("Residency letter")
@@ -125,7 +126,12 @@ private fun ResidencySections(
     } else {
         PlaceLockedCard(
             title = "Verified residency letter",
-            reason = "Verify your address to issue a server-attested letter that states your verified address for a purpose you choose.",
+            reason =
+                if (nonResident) {
+                    "For this home's verified residents."
+                } else {
+                    "Verify your address to issue a server-attested letter that states your verified address for a purpose you choose."
+                },
             cta = "Verify address",
             icon = PantopusIcon.FileText,
             onTap = LocalPlaceDetailVerify.current,
@@ -140,8 +146,12 @@ private fun ResidencySections(
         PlaceLockedCard(
             title = "Prove residency without sharing your address",
             reason =
-                "Verify your address to share one fact — your city, school district, or " +
-                    "county — behind a live-checked link.",
+                if (nonResident) {
+                    "For this home's verified residents."
+                } else {
+                    "Verify your address to share one fact — your city, school district, or " +
+                        "county — behind a live-checked link."
+                },
             cta = "Verify address",
             icon = PantopusIcon.IdCard,
             onTap = LocalPlaceDetailVerify.current,

@@ -885,7 +885,7 @@ function RateWatchForm({ homeId, initialMonth, onDone }: { homeId: string; initi
   );
 }
 
-function RateWatchSection({ homeId, verified }: { homeId: string; verified: boolean }) {
+function RateWatchSection({ homeId, verified, canVerify }: { homeId: string; verified: boolean; canVerify: boolean }) {
   const watchQuery = useQuery({
     queryKey: queryKeys.recordWatch(homeId),
     queryFn: () => api.recordWatch.getRecordWatch(homeId),
@@ -900,7 +900,11 @@ function RateWatchSection({ homeId, verified }: { homeId: string; verified: bool
         </span>
         <div className="flex-1 min-w-0">
           <div className="text-[14.5px] font-semibold text-app-text">Rate watch</div>
-          <div className="text-[12.5px] text-app-text-muted mt-0.5">Verify your address to watch the market against the month your loan was recorded — only the proven resident can watch a home.</div>
+          <div className="text-[12.5px] text-app-text-muted mt-0.5">
+            {canVerify
+              ? 'Verify your address to watch the market against the month your loan was recorded — only the proven resident can watch a home.'
+              : "Only this home's verified resident can watch its market against the month the loan was recorded."}
+          </div>
         </div>
       </div>
     );
@@ -992,7 +996,7 @@ export default function MoneyDetail({ intelligence, homeId }: { intelligence: Pl
 
         <DetailSectionLabel>Rate watch</DetailSectionLabel>
         {homeId ? (
-          <RateWatchSection homeId={homeId} verified={intelligence.tier === 'T4'} />
+          <RateWatchSection homeId={homeId} verified={intelligence.tier === 'T4'} canVerify={intelligence.verify_available !== false} />
         ) : (
           <ComingSoonRow icon={TrendingDown} title="Rate watch" sub="Claim your place to watch the market against your loan month" />
         )}

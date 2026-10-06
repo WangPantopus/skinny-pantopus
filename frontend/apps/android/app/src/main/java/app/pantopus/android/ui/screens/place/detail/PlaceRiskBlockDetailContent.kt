@@ -103,8 +103,12 @@ fun PlaceRiskDetailContent(
         PlaceLockedCard(
             title = "The 911-ready household card",
             reason =
-                "Verify your address to issue a fridge card — its headline is the verified " +
-                    "address a caller reads to 911.",
+                if (intel.nonResidentViewer) {
+                    "Issued by this home's verified residents — its headline is the verified address a caller reads to 911."
+                } else {
+                    "Verify your address to issue a fridge card — its headline is the verified " +
+                        "address a caller reads to 911."
+                },
             cta = "Verify address",
             icon = PantopusIcon.HeartPulse,
             onTap = LocalPlaceDetailVerify.current,
@@ -435,7 +439,7 @@ fun PlaceBlockDetailContent(
             PlaceDensityCard(
                 bucket = data.bucket,
                 label = data.label,
-                ctaTitle = "Be one of the first to verify on your block",
+                ctaTitle = LocalPlaceDetailVerify.current?.let { "Be one of the first to verify on your block" },
                 onTap = LocalPlaceDetailVerify.current,
             )
         } else {

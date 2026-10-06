@@ -66,7 +66,9 @@ struct PlaceRiskDetailContent: View {
                 PlaceLockedCard(
                     icon: .heartPulse,
                     title: "The 911-ready household card",
-                    reason: "Verify your address to issue a fridge card — its headline is the verified address a caller reads to 911.",
+                    reason: vm.nonResidentViewer
+                        ? "Issued by this home's verified residents — its headline is the verified address a caller reads to 911."
+                        : "Verify your address to issue a fridge card — its headline is the verified address a caller reads to 911.",
                     cta: "Verify address",
                     onTap: vm.verifyAction
                 )

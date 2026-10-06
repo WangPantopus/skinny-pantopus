@@ -414,6 +414,8 @@ export default function RiskDetail({ intelligence, homeId }: { intelligence: Pla
   const router = useRouter();
   const [fridgeCardOpen, setFridgeCardOpen] = useState(false);
   const verified = intelligence.tier === 'T4';
+  // Guests and service providers can't verify this address (server `verify_available`).
+  const canVerify = intelligence.verify_available !== false;
   const heatCold = findPlaceSection(intelligence, 'heat_cold');
   const flood = findPlaceSection(intelligence, 'flood');
   const floodReady = isReady(flood);
@@ -516,9 +518,13 @@ export default function RiskDetail({ intelligence, homeId }: { intelligence: Pla
           <LockedCard
             icon={HeartPulse}
             title="The 911-ready household card"
-            reason="Verify your address to issue a fridge card — its headline is the verified address a caller reads to 911."
+            reason={
+              canVerify
+                ? 'Verify your address to issue a fridge card — its headline is the verified address a caller reads to 911.'
+                : "Issued by this home's verified residents — its headline is the verified address a caller reads to 911."
+            }
             cta="Verify address"
-            onCta={() => homeId && router.push(`/app/homes/${homeId}/verify-postcard`)}
+            onCta={canVerify ? () => homeId && router.push(`/app/homes/${homeId}/verify-postcard`) : undefined}
           />
         )}
 

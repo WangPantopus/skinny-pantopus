@@ -125,8 +125,12 @@ fun PlaceMoneyDetailContent(
         PlaceLockedCard(
             title = "Rate watch",
             reason =
-                "Verify your address to watch the market against the month your loan was " +
-                    "recorded — only the proven resident can watch a home.",
+                if (intel.nonResidentViewer) {
+                    "Only this home's verified resident can watch its market against the month the loan was recorded."
+                } else {
+                    "Verify your address to watch the market against the month your loan was " +
+                        "recorded — only the proven resident can watch a home."
+                },
             cta = "Verify address",
             icon = PantopusIcon.TrendingDown,
             onTap = LocalPlaceDetailVerify.current,

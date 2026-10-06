@@ -965,13 +965,23 @@ export default function IdentityDetail({ intelligence, homeId, residentName }: {
             {nonResident && homeId && <EarlierLettersAndClaims homeId={homeId} />}
           </>
         ) : (
-          <LockedCard
-            icon={BadgeCheck}
-            title="Verify your address"
-            reason="Verify your address to get your badge and generate a residency letter."
-            cta="Verify address"
-            onCta={() => homeId && router.push(`/app/homes/${homeId}/verify-postcard`)}
-          />
+          intelligence.verify_available === false ? (
+            // Guests and service providers can't verify this address.
+            <LockedCard
+              icon={BadgeCheck}
+              title="Badge and residency letter"
+              reason="For this home's verified residents."
+              cta="Verify address"
+            />
+          ) : (
+            <LockedCard
+              icon={BadgeCheck}
+              title="Verify your address"
+              reason="Verify your address to get your badge and generate a residency letter."
+              cta="Verify address"
+              onCta={() => homeId && router.push(`/app/homes/${homeId}/verify-postcard`)}
+            />
+          )
         )}
 
         {homeId && (
