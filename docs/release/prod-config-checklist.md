@@ -246,6 +246,8 @@ realtime connects to `/socket.io` on its own origin; Vercel doesn't proxy
 WebSockets, so Socket.IO stays on HTTP long-polling through that rewrite (its
 25-second polls fit Vercel's 120-second origin timeout). A failed WebSocket
 upgrade in the network panel is expected; chat that only updates on reload is not.
+Also run `node scripts/staging/check-hosted.cjs https://staging.pantopus.com https://staging-api.pantopus.com`
+from the repository: every line passes except Android app links, which wait for P10.
 
 ### S8. Staging scheduled jobs (founder runs, L4 prepared)
 
@@ -443,7 +445,10 @@ doesn't, `EDGE_PROXY_SECRET` differs between Vercel and the server).
 - L4 regenerates the association files once the signing certificates exist:
   `APPLE_TEAM_ID=<team> ANDROID_SHA256_FINGERPRINTS=<Play signing>,<upload> node tools/gen-association-files.mjs`.
 
-**Check:** Apple's and Google's link checkers accept both domains.
+**Check:** Apple's and Google's link checkers accept both domains, and
+`node scripts/staging/check-hosted.cjs https://pantopus.com https://api.pantopus.com --production`
+passes every line (health, HTTPS, security headers, the web's API and realtime forwarding, both
+app-link files, robots.txt).
 
 ## 4. Store builds
 
