@@ -119,6 +119,8 @@ data class HomeDetail(
     val id: String,
     val name: String?,
     val address: String?,
+    /** The unit or apartment line ("Unit 2"), shown with the street in Settings. */
+    val address2: String? = null,
     val city: String?,
     val state: String?,
     val zipcode: String?,
