@@ -180,12 +180,15 @@ class MaintenanceDetailViewModelTest {
     @Test
     fun `notes load from server with an empty draft store`() =
         runTest {
+            val saved = task("task-1").copy(notes = "Saved server note", category = "hvac", performerContact = "555-0142")
             coEvery { repo.getHomeMaintenance("home-1", null) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(listOf(task("task-1").copy(notes = "Saved server note"))))
+                NetworkResult.Success(GetHomeMaintenanceResponse(listOf(saved)))
             val vm = makeVm()
             vm.load()
             val state = vm.state.value as MaintenanceDetailUiState.Loaded
             assertEquals("Saved server note", state.task.notes)
+            assertEquals("hvac", state.task.category)
+            assertEquals("555-0142", state.task.performerContact)
             assertNull(state.draft)
         }
 }

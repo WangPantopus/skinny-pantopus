@@ -358,7 +358,8 @@ class MaintenanceListViewModel
                 now: Instant,
             ): MaintenanceRowProjection {
                 val chip = chipStatus(task, now)
-                val category = MaintenanceCategory.from(task.task)
+                val category =
+                    MaintenanceCategory.entries.firstOrNull { it.rawValue == task.category } ?: MaintenanceCategory.from(task.task)
                 val title = if (task.task.isEmpty()) category.label else task.task
                 val amount = formatCost(task.cost)
                 val dueShort = formatDateShort(task.dueDate)

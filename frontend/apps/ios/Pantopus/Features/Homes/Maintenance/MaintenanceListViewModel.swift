@@ -276,7 +276,7 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
     /// derivation without standing the VM up.
     static func project(task: MaintenanceTaskDTO, now: Date) -> MaintenanceRowProjection {
         let chip = chipStatus(for: task, now: now)
-        let category = MaintenanceCategory.from(task: task.task)
+        let category = task.category.flatMap(MaintenanceCategory.init(rawValue:)) ?? MaintenanceCategory.from(task: task.task)
         let title = task.task.isEmpty ? category.label : task.task
         let amount = formatCost(task.cost)
         let dueShort = formatDateShort(iso: task.dueDate)
