@@ -188,6 +188,8 @@ public final class AIConversationStore {
     public static let shared = AIConversationStore()
 
     private var conversationIdsByUserId: [String: String] = [:]
+    /// People who tapped "New chat": reopening the thread must not resume their previous conversation.
+    private var freshStartUserIds: Set<String> = []
 
     public init() {}
 
@@ -197,6 +199,17 @@ public final class AIConversationStore {
 
     public func setConversationId(_ id: String, forUserId userId: String) {
         conversationIdsByUserId[userId] = id
+        freshStartUserIds.remove(userId)
+    }
+
+    /// "New chat": forget the conversation; the next message starts a new one.
+    public func startFresh(forUserId userId: String) {
+        conversationIdsByUserId[userId] = nil
+        freshStartUserIds.insert(userId)
+    }
+
+    public func didStartFresh(forUserId userId: String) -> Bool {
+        freshStartUserIds.contains(userId)
     }
 }
 
@@ -343,6 +356,15 @@ public final class ChatConversationViewModel {
         ChatPromptChip(id: "gig", label: "Ask about the gig", icon: .briefcase),
         ChatPromptChip(id: "listing", label: "Share a listing", icon: .tag)
     ]
+
+    /// First-launch scope (launch cut #4, Open gigs): the assistant doesn't price tasks, so
+    /// "Price a task" gives way to the nearby question the web assistant offers.
+    static var launchAICapabilities: [ChatPromptChip] {
+        defaultAICapabilities.map { chip in
+            guard chip.id == "price", !LaunchFeatures.openGigs else { return chip }
+            return ChatPromptChip(id: "nearby", label: "What's happening nearby?", icon: .mapPin)
+        }
+    }
 
     /// First-launch scope: "Ask about the gig" (launch cut #4, Open gigs) and
     /// "Share a listing" (launch cut #3, Marketplace) are hidden.
@@ -492,7 +514,7 @@ public final class ChatConversationViewModel {
         self.aiConversationStore = aiConversationStore
         self.locationProvider = locationProvider
         self.activeThreadTracker = activeThreadTracker
-        aiPrompts = Self.defaultAICapabilities
+        aiPrompts = Self.launchAICapabilities
         emptyChips = Self.launchEmptyChips
         // Continue the user's existing AI conversation across thread
         // opens within this app session.
@@ -526,7 +548,7 @@ public final class ChatConversationViewModel {
         aiConversationStore = .shared
         locationProvider = DeviceLocationProvider.shared
         activeThreadTracker = .shared
-        aiPrompts = Self.defaultAICapabilities
+        aiPrompts = Self.launchAICapabilities
         emptyChips = Self.launchEmptyChips
         self.fanEntitlement = fanEntitlement
         state = previewState
@@ -575,7 +597,8 @@ public final class ChatConversationViewModel {
     /// lands, seed `messages` here via `localMessage(...)` with user vs
     /// assistant rows by role.
     private func restoreAIConversationIfNeeded() async {
-        guard case .ai = mode, aiConversationId == nil else { return }
+        guard case .ai = mode, aiConversationId == nil,
+              !aiConversationStore.didStartFresh(forUserId: currentUserId) else { return }
         do {
             let response: AIConversationsResponse = try await api.request(AIEndpoints.conversations())
             guard let latest = response.conversations.first else { return }
@@ -893,6 +916,8 @@ public final class ChatConversationViewModel {
                     guard let self else { return }
                     switch event {
                     case let .conversation(id):
+                        // A reply cancelled by "New chat" must not bring its conversation back.
+                        guard !Task.isCancelled else { break }
                         aiConversationId = id
                         aiConversationStore.setConversationId(id, forUserId: currentUserId)
                     case let .textDelta(delta):
@@ -932,6 +957,18 @@ public final class ChatConversationViewModel {
     /// placeholder bubble is dropped.
     public func cancelAIStream() {
         aiStreamTask?.cancel()
+    }
+
+    /// A15.3 "New chat": stop a reply in progress, clear the thread back to its starter prompts, and
+    /// forget the conversation so the next message starts a new one. A message being written stays.
+    public func startNewAIConversation() {
+        guard case .ai = mode else { return }
+        aiStreamTask?.cancel()
+        aiConversationId = nil
+        aiConversationStore.startFresh(forUserId: currentUserId)
+        messages = []
+        aiDraftsByMessageId = [:]
+        rebuild()
     }
 
     private func finalizeCancelledAIStream(assistantId: String, partialText: String) {

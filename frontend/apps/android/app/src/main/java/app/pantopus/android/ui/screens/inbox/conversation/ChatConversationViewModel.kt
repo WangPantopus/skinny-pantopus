@@ -179,10 +179,15 @@ class ChatConversationViewModel
         private val _gigContext = MutableStateFlow<ChatGigContextStrip?>(null)
         val gigContext: StateFlow<ChatGigContextStrip?> = _gigContext.asStateFlow()
 
-        // A15.3 capability chips for the AI welcome card (tap-to-send).
+        // A15.3 capability chips for the AI welcome card (tap-to-send). Launch cut #4 (Open gigs):
+        // the assistant doesn't price tasks, so "Price a task" gives way to the nearby question (as on web).
         val aiPrompts: List<ChatPromptChip> =
             listOf(
-                ChatPromptChip("price", "Price a task", PantopusIcon.Hammer),
+                if (LaunchFeatures.openGigs) {
+                    ChatPromptChip("price", "Price a task", PantopusIcon.Hammer)
+                } else {
+                    ChatPromptChip("nearby", "What's happening nearby?", PantopusIcon.MapPin)
+                },
                 ChatPromptChip("draft", "Draft a Pulse post", PantopusIcon.Pencil),
                 ChatPromptChip("mail", "Summarize mail", PantopusIcon.Mailbox),
                 ChatPromptChip("neighbor", "Find a neighbor", PantopusIcon.Search),
@@ -345,7 +350,7 @@ class ChatConversationViewModel
                 // Cold relaunch: the session holder is empty — restore the
                 // latest backend conversation id so the thread continues
                 // across app restarts.
-                if (aiConversationId == null) restoreLatestAiConversation()
+                if (aiConversationId == null && aiSession.freshStartUserId != currentUserId) restoreLatestAiConversation()
             }
             loadTopicsIfNeeded()
             loadGigContextIfNeeded()
@@ -1012,6 +1017,24 @@ class ChatConversationViewModel
             }
         }
 
+        /**
+         * A15.3 "New chat": stop a reply in progress, clear the thread back to its starter prompts, and
+         * forget the conversation so the next message starts a new one. A message being written stays.
+         */
+        fun startNewAiConversation() {
+            if (mode !is ChatThreadMode.Ai) return
+            aiStreamJob?.cancel()
+            aiStreamJob = null
+            _isAiStreaming.value = false
+            streamingAssistantId = null
+            aiConversationId = null
+            aiSession.conversationId = null
+            aiSession.freshStartUserId = currentUserId
+            messages.clear()
+            aiDraftsByMessageId.clear()
+            rebuild()
+        }
+
         private suspend fun streamAiMessage(text: String) {
             val imageUrls = uploadQueuedAIImagesIfNeeded()
             val userMessage =
@@ -1040,6 +1063,7 @@ class ChatConversationViewModel
                         is AIChatStreamEvent.Conversation -> {
                             aiConversationId = event.id
                             aiSession.conversationId = event.id
+                            aiSession.freshStartUserId = null
                         }
                         is AIChatStreamEvent.TextDelta -> {
                             streamedText += event.delta

@@ -363,6 +363,7 @@ fun ChatConversationScreen(
                     onBack = onBack,
                     onOpenDetails = { showDetailsSheet = true },
                     onOpenProfile = profileTapFor(args.mode, conversationMode, onOpenProfile),
+                    onNewAiChat = viewModel::startNewAiConversation,
                 )
             }
             gigContext?.let { strip ->
@@ -872,6 +873,8 @@ internal fun ChatHeader(
     onOpenDetails: () -> Unit = {},
     // Opens the other person's profile from their avatar and name (person DMs only).
     onOpenProfile: (() -> Unit)? = null,
+    // The assistant's "New chat" (AI thread only).
+    onNewAiChat: () -> Unit = {},
 ) {
     val isAi = conversationMode == ChatConversationMode.AiAssistant || counterparty is ChatCounterparty.Ai
     val isFanThread = conversationMode == ChatConversationMode.FanThread
@@ -976,12 +979,26 @@ internal fun ChatHeader(
                 }
             }
             // A15.3 AI header: "New chat" (lucide square-pen; closest token
-            // icon is MessageSquarePlus) + overflow. New-chat is a no-op for
-            // now — the VM keeps one rolling AI conversation per app session
-            // and exposes no thread-reset yet.
+            // icon is MessageSquarePlus) + overflow (decorative until it has actions).
             isAi -> {
                 Row {
-                    HeaderIcon(PantopusIcon.MessageSquarePlus)
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .clickable(onClick = onNewAiChat)
+                                .testTag("chatAINewChat")
+                                .semantics { contentDescription = "New chat" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.MessageSquarePlus,
+                            contentDescription = null,
+                            size = 18.dp,
+                            tint = PantopusColors.appText,
+                        )
+                    }
                     HeaderIcon(PantopusIcon.MoreHorizontal)
                 }
             }
