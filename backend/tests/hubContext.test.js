@@ -152,7 +152,7 @@ describe('Location Resolver', () => {
     supabase.from.mockImplementation((table) => table === 'SavedPlace' ? savedChain : chain);
     const anchored = await resolveLocation(MOCK_USER_ID);
     expect(anchored).toMatchObject({ source: 'saved_place', label: saved.label, latitude: 45.5,
-      longitude: -122.6, homeId: null, savedPlaceId: saved.id, timezone: 'America/Los_Angeles' });
+      longitude: -122.6, homeId: null, savedPlaceId: saved.id, timezone: 'America/Los_Angeles', confidence: 0.6 });
     expect(anchored.geohash).toBeTruthy();
     expect(savedChain.eq).toHaveBeenCalledWith('user_id', MOCK_USER_ID);
     expect(savedChain.order).toHaveBeenCalledWith('created_at', { ascending: false });
