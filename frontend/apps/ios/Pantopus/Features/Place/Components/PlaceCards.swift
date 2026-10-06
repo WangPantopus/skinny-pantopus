@@ -250,7 +250,7 @@ extension PlaceHeroCard {
                 title: "Daily conditions",
                 reason: "Create a free account to see weather, air quality, and alerts for this address every day.",
                 cta: "Create account"
-            )
+            ) {}
             PlaceDensityCard(bucket: .few)
             PlaceDensityCard(bucket: .none)
         }
