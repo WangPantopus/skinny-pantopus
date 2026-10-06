@@ -24,12 +24,22 @@ const createNextConfig = (phase) => ({
     // Next.js 16+: every `quality` passed to <Image /> must appear here (dev warning today).
     // Repo uses 75 (avatars/thumbs) and 80 (larger media / posts / listings).
     qualities: [75, 80],
+    // Uploaded files live in S3/CloudFront or Supabase Storage. An <Image> whose
+    // host is missing here throws and takes the whole page down.
     remotePatterns: [
       { protocol: 'https', hostname: '**.amazonaws.com' },
       { protocol: 'https', hostname: '**.cloudfront.net' },
+      { protocol: 'https', hostname: '**.supabase.co' },
       { protocol: 'https', hostname: 'pantopus.com' },
       { protocol: 'https', hostname: 'www.pantopus.com' },
-      { protocol: 'http', hostname: 'localhost' },
+      // Local storage only in development: in production these would let the
+      // image optimizer fetch from the server's own internal addresses.
+      ...(phase === PHASE_DEVELOPMENT_SERVER
+        ? [
+            { protocol: 'http', hostname: 'localhost' },
+            { protocol: 'http', hostname: '127.0.0.1' },
+          ]
+        : []),
     ],
   },
   env: {
