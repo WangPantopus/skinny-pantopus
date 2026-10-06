@@ -33,6 +33,7 @@ const LAUNCH_FEATURE_KEYS = [
   'business_directory', // 6. General business directory
   'household_extras', // 7. Polls, packages, pet section, family calendar, bill management
   'mail_extras', // 8. Letters, e-signing, community mail, event invitations by mail
+  'gift_funds', // 9. Support Train gift funds (no app can take a contribution yet)
 ];
 
 function isLaunchFeatureEnabled(key) {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
+import { launchFeatures } from '@/lib/featureFlags';
 import { getAuthToken } from '@pantopus/api';
 import { buildSupportTrainShareUrl } from '@pantopus/utils';
 import ErrorState from '@/components/ui/ErrorState';
@@ -252,7 +253,8 @@ export default function ManageSupportTrainPage() {
           )}
         </section>
 
-        {/* ── Donation Summary ── */}
+        {/* ── Donation Summary ── (launch cut #9: shown only once gift funds are on) */}
+        {launchFeatures.giftFunds && (
         <section className="bg-app-surface border border-app-border rounded-xl p-6">
           <h2 className="text-lg font-semibold text-app-text mb-4 flex items-center gap-2">
             <Heart className="w-5 h-5 text-app-text-muted" />
@@ -317,6 +319,7 @@ export default function ManageSupportTrainPage() {
             </>
           )}
         </section>
+        )}
       </div>
 
       {/* ── Reservation Table ── */}
