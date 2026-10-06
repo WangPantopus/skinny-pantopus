@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.feed.FeedPreferencesResponse
 import app.pantopus.android.data.api.models.feed.FeedPreferencesUpdateRequest
 import app.pantopus.android.data.api.models.feed.FeedSeededDismissResponse
 import app.pantopus.android.data.api.models.feed.FeedSolveResponse
+import app.pantopus.android.data.api.models.feed.MutedEntitiesResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.FeedActionsApi
@@ -34,6 +35,9 @@ class FeedActionsRepository
             safeApiCall {
                 api.mute(FeedMuteRequest(entityType = entityType.wireValue, entityId = entityId))
             }
+
+        /** `GET /api/posts/mute` — who the viewer muted. */
+        suspend fun mutedEntities(): NetworkResult<MutedEntitiesResponse> = safeApiCall { api.mutedEntities() }
 
         /** `DELETE /api/posts/mute`. */
         suspend fun unmute(

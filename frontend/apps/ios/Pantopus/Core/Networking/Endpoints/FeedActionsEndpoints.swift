@@ -29,11 +29,22 @@ public enum FeedActionsEndpoints {
         )
     }
 
-    // `DELETE /api/posts/mute` (backend/routes/posts.js:2147) is deliberately
-    // not declared here. RN's feed exposes mute but no unmute — its only
-    // unmute is the audience-member one (a separate surface), so a helper here
-    // would be an endpoint with zero call sites, which is the exact defect
-    // shape the parity audit flagged. Add it with the screen that needs it.
+    /// `GET /api/posts/mute` — the people and businesses the viewer muted,
+    /// listed in Settings → Blocked users so a mute can be undone.
+    /// Route `backend/routes/posts.js:2297`.
+    public static func mutedEntities() -> Endpoint {
+        Endpoint(method: .get, path: "/api/posts/mute")
+    }
+
+    /// `DELETE /api/posts/mute` — undoes a mute from Settings → Blocked users.
+    /// Route `backend/routes/posts.js:2344`.
+    public static func unmute(entityType: FeedMuteEntityType, entityId: String) -> Endpoint {
+        Endpoint(
+            method: .delete,
+            path: "/api/posts/mute",
+            body: FeedMuteRequest(entityType: entityType.rawValue, entityId: entityId)
+        )
+    }
 
     /// `POST /api/posts/mute/topic` — mutes a post type, optionally scoped
     /// to one surface (`place` / `connections` / `personas`). Route
