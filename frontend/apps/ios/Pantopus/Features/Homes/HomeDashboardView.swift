@@ -347,11 +347,15 @@ struct HomeDashboardView: View {
     /// surface so one failing read can't blank the Overview.
     @ViewBuilder
     private var homeIntelligenceStack: some View {
-        HealthScoreRingCard(
-            state: viewModel.healthScore,
-            onAction: { handleQuickAction($0) },
-            onRetry: { Task { await viewModel.refreshHealthScore() } }
-        )
+        // The score reads bills, documents and sensitive records; a member who
+        // can't read them doesn't get the card at all (as on the web and Android).
+        if case .forbidden = viewModel.healthScore {} else {
+            HealthScoreRingCard(
+                state: viewModel.healthScore,
+                onAction: { handleQuickAction($0) },
+                onRetry: { Task { await viewModel.refreshHealthScore() } }
+            )
+        }
         SeasonalChecklistCard(
             state: viewModel.checklist,
             pendingItemIds: viewModel.pendingChecklistItemIds,

@@ -581,7 +581,12 @@ private fun SeasonalRow(
                     .testTag("homeDashboard_seasonalItemToggle_${item.id}")
                     .semantics {
                         role = Role.Button
-                        contentDescription = "Mark ${item.title} complete"
+                        contentDescription =
+                            when {
+                                !done -> "Mark ${item.title} complete"
+                                item.status == "skipped" -> "${item.title}, skipped"
+                                else -> "${item.title}, done"
+                            }
                     },
             contentAlignment = Alignment.Center,
         ) {
