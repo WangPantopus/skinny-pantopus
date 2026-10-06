@@ -2925,6 +2925,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments = listOf(navArgument(PLACE_DASHBOARD_HOME_ID_KEY) { type = NavType.StringType }),
                 ) { entry ->
                     val homeId = entry.arguments?.getString(PLACE_DASHBOARD_HOME_ID_KEY).orEmpty()
+                    // The Place landing lives on the tab root; a Home that turns unreadable here
+                    // (left, removed, deleted) is replaced the way a relaunch would.
+                    val placeRoot =
+                        remember(entry) { runCatching { navController.getBackStackEntry(PantopusRoute.Place.path) }.getOrNull() }
+                    val placeHost: HomeTabHostViewModel? = placeRoot?.let { hiltViewModel(it) }
+                    val recoverScope = rememberCoroutineScope()
                     PlaceDashboardScreen(
                         homeId = homeId,
                         onOpenSection = { hid, slug -> navController.navigate(ChildRoutes.placeDetail(hid, slug)) },
@@ -2941,6 +2947,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenPrivacyMirror = { navController.navigate(ChildRoutes.placePrivacyMirror(homeId)) },
                         onOpenHomeTools = { navController.navigate(ChildRoutes.homeDashboard(homeId)) },
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
+                        onPlaceUnavailable = { goneId ->
+                            val host = placeHost ?: return@PlaceDashboardScreen
+                            recoverScope.launch {
+                                val next = host.replaceUnavailable(goneId)
+                                // Only if this unreadable Home is still on screen.
+                                if (navController.currentBackStackEntry?.arguments?.getString(PLACE_DASHBOARD_HOME_ID_KEY) != goneId) {
+                                    return@launch
+                                }
+                                navController.popBackStack(PantopusRoute.Place.path, inclusive = false)
+                                if (next != null) navController.navigate(ChildRoutes.placeDashboard(next))
+                            }
+                        },
                     )
                 }
                 composable(

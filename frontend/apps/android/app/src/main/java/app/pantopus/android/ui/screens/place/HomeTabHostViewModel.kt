@@ -71,6 +71,19 @@ class HomeTabHostViewModel
          * later in this session lands Place the next time the Hub root shows. No skeleton
          * or error replaces the Hub on this check.
          */
+        /**
+         * The landed Home stopped being readable (left, removed, deleted): land on the
+         * account's next shared Home, or the Hub when there is none, as a relaunch would.
+         * Returns the Home to open, or null for the Hub.
+         */
+        suspend fun replaceUnavailable(homeId: String): String? {
+            relandOnReturn = false
+            val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.sharedHomes.orEmpty().filter { it.id != homeId }
+            val next = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
+            _landing.value = next?.let { HomeLanding.PlaceDashboard(it.id) } ?: HomeLanding.Hub
+            return next?.id
+        }
+
         fun refreshIfNoHome() {
             if (_landing.value != HomeLanding.Hub || resolveJob?.isActive == true) return
             resolveJob =
