@@ -175,6 +175,10 @@ public enum YouRoute: Hashable {
     /// BLOCK 2E — "Saved places": the places the user has bookmarked from
     /// Explore. Reached from the Me profile "Saved places" Activity row.
     case savedPlaces
+    /// Signed-in "Save a place" from Saved places: the address lookup and
+    /// preview, then the private save confirmation (as in the Place stack).
+    case savePlace
+    case placeArrival
     case privacyHandshake(personaHandle: String)
     /// P1.3 — Broadcast detail full-screen takeover, pushed when the
     /// creator taps an update card on the Audience Profile. The
@@ -633,7 +637,7 @@ public struct YouTabRoot: View {
     /// Back (lists, `.homeDashboard`, placeholders).
     static func drawsOwnHeader(_ route: YouRoute) -> Bool {
         switch route {
-        case .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
+        case .savePlace, .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
              .documentDetail, .packageDetail, .helpCenter, .publicProfile, .pulsePost,
              .legalContent, .privacySettings, .dataExport, .legal, .settings, .paymentsSettings,
              .mailItemDetail, .gigDetail, .listingDetail, .businessProfile, .editBusinessPage,
@@ -1967,6 +1971,28 @@ public struct YouTabRoot: View {
                 onBack: { Task { @MainActor in pop() } },
                 onOpenSaved: { Task { @MainActor in path.append(.savedPlaces) } }
             )
+        case .savePlace:
+            PlaceLaunchView(
+                onSignIn: { pop() },
+                onCreateAccount: { pop() },
+                onSavePreview: {
+                    if path.last == .savePlace { path.removeLast() }
+                    path.append(.placeArrival)
+                }
+            )
+        case .placeArrival:
+            PendingPlaceView(
+                viewModel: PendingPlaceViewModel(userId: currentUserId ?? ""),
+                onDone: { pop() },
+                onToday: {
+                    pop()
+                    if let userId = currentUserId {
+                        DeepLinkRouter.shared.handle(path: "/app/today", expectedUserID: userId)
+                    }
+                },
+                onSavedPlaces: { pop() },
+                onSetUpHome: { path.append(.addHome) }
+            )
         case .savedPlaces:
             SavedPlacesView(
                 viewModel: SavedPlacesViewModel(
@@ -1977,6 +2003,7 @@ public struct YouTabRoot: View {
                             path.append(.explore(focus: nil))
                         }
                     },
+                    onSavePlace: { Task { @MainActor in path.append(.savePlace) } },
                     onOpenMap: { latitude, longitude, label in
                         Task { @MainActor in
                             if !path.isEmpty { path.removeLast() }

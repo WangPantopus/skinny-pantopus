@@ -20,7 +20,9 @@ export default function AuthenticatedInvitationPage({ token }: { token: string }
     if (!context || !canDecide) return;
     const expected = context.decision_token;
     const yes = await confirmStore.open({ title: action === 'accept' ? 'Accept this invitation?' : 'Decline this invitation?',
-      description: `${accountLabel} will ${action} the invitation to ${context.preview.home?.name || 'this Home'}. Household permissions and access dates still apply.`,
+      description: action === 'accept'
+        ? `${accountLabel} will accept the invitation to ${context.preview.home?.name || 'this Home'}. Household permissions and access dates still apply.`
+        : `${accountLabel} will decline the invitation to ${context.preview.home?.name || 'this Home'}. You won't join this household; the sender can invite you again.`,
       confirmLabel: action === 'accept' ? 'Confirm acceptance' : 'Confirm decline', variant: action === 'accept' ? 'primary' : 'destructive' });
     if (yes) await recovery.decide(action, expected);
   };
@@ -85,7 +87,7 @@ export default function AuthenticatedInvitationPage({ token }: { token: string }
       <p className="text-app-text-secondary">{context.preview.home?.city}</p>
       <p>Invited by {context.preview.inviter?.name || 'the household'}</p>
       <p className="rounded-lg bg-blue-50 p-3 text-blue-950">Offered role: {context.preview.invitation.proposed_role?.replaceAll('_', ' ')}</p>
-      <p className="text-sm text-app-text-secondary">Household permissions determine what you can open or manage. This invitation does not grant ownership.</p>
+      <p className="text-sm text-app-text-secondary">Household permissions determine what you can open or manage. This invitation gives you household access. To send neighbor messages or get a residency letter, verify the address yourself.</p>
       {context.preview.invitation.access_start_at && <p className="text-sm">Access starts {new Date(context.preview.invitation.access_start_at).toLocaleString()}.</p>}
       {context.preview.invitation.access_end_at && <p className="text-sm">Access ends {new Date(context.preview.invitation.access_end_at).toLocaleString()}.</p>}
       {context.preview.invitation.expires_at && <p className="text-sm text-app-text-secondary">Invitation expires {new Date(context.preview.invitation.expires_at).toLocaleString()}.</p>}
