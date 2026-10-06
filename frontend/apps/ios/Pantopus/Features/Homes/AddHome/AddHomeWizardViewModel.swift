@@ -835,7 +835,13 @@ final class AddHomeWizardViewModel: WizardModel {
             guard addressIsCurrent(revision) else { return }
             validatedAddressId = nil
             geocodedAddress = nil
-            errorMessage = "Could not check this address. Try again."
+            // A refused address (a PO box, a missing field) says why; other
+            // failures may be temporary.
+            if let apiError = error as? APIError, case let .clientError(status, message?) = apiError, [400, 422].contains(status) {
+                errorMessage = message
+            } else {
+                errorMessage = "Could not check this address. Try again."
+            }
         }
     }
 

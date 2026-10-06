@@ -846,6 +846,10 @@ open class AddHomeWizardViewModel
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (refused: NetworkError.ClientError) {
+                // A refused address (a PO box, a missing field) says why; other
+                // failures may be temporary.
+                addressCheckFailed(revision, refused.message.takeIf { refused.code == 400 || refused.code == 422 })
             } catch (_: NetworkError) {
                 addressCheckFailed(revision)
             } catch (_: IllegalStateException) {
@@ -855,13 +859,16 @@ open class AddHomeWizardViewModel
             }
         }
 
-        private fun addressCheckFailed(revision: Long) {
+        private fun addressCheckFailed(
+            revision: Long,
+            reason: String? = null,
+        ) {
             if (addressIsCurrent(revision)) {
                 _state.update {
                     it.copy(
                         validatedAddressId = null,
                         geocodedAddress = null,
-                        errorMessage = "Could not check this address. Try again.",
+                        errorMessage = reason ?: "Could not check this address. Try again.",
                     )
                 }
             }
