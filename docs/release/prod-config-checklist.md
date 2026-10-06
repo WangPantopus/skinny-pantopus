@@ -514,7 +514,9 @@ app-link files, robots.txt).
   minute (for example UptimeRobot or Better Stack, free tiers) alerting the
   founder's email; optional Slack alerts via `SLACK_ALERTS_WEBHOOK_URL`.
 - [ ] Rollback: the **Rollback Backend** workflow with the previous release
-  digest from the deploy summary (see `docs/ci-cd.md`).
+  digest from the deploy summary (see `docs/ci-cd.md`). L4 rehearsed the same
+  deploy and rollback transaction locally on October 6: about 22 s per release,
+  about 3 s of API downtime, and a broken release stops before the running API.
 - [ ] Turn off what's no longer used: the September staging site on the server
   once Vercel serves staging, and the April apps per D2.
 - [ ] Start with five households (NEXT_STEPS section 4).
