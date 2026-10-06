@@ -2,9 +2,12 @@
 
 package app.pantopus.android.ui.screens.auth
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -24,6 +27,7 @@ import app.pantopus.android.ui.screens.settings.legal.LegalContentScreen
 import app.pantopus.android.ui.screens.settings.legal.LegalDocument
 import app.pantopus.android.ui.screens.status.verify_email.VerifyEmailLandingScreen
 import app.pantopus.android.ui.screens.status.verify_email.VerifyEmailLandingViewModel
+import app.pantopus.android.ui.theme.PantopusColors
 
 /**
  * Nav graph rooted at [AuthRoutes.LOGIN] for the signed-out experience.
@@ -78,6 +82,9 @@ fun AuthNavHost() {
     NavHost(
         navController = navController,
         startDestination = AuthRoutes.LOGIN,
+        // The activity draws edge to edge. Keep the signed-out screens below the
+        // status bar, so their Close / Back buttons take taps instead of the system bar.
+        modifier = Modifier.background(PantopusColors.appSurface).statusBarsPadding(),
     ) {
         composable(
             route = AuthRoutes.LEGAL_PATTERN,
