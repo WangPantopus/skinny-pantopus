@@ -302,7 +302,7 @@ fun HomeDashboardScreen(
      */
     fun handleSecurityAction(action: HomeSecurityBannerAction) {
         val homeId = viewModel.currentHomeId() ?: return
-        if (action == HomeSecurityBannerAction.InviteCoOwner && !viewModel.can("members.manage")) return
+        if (action == HomeSecurityBannerAction.InviteCoOwner && !viewModel.can("ownership.manage")) return
         if (action == HomeSecurityBannerAction.OpenSecuritySettings && !viewModel.can("security.manage")) return
         when (action) {
             HomeSecurityBannerAction.InviteCoOwner ->

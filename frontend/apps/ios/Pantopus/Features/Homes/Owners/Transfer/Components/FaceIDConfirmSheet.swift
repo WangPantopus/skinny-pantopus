@@ -132,7 +132,7 @@ public struct FaceIDConfirmSheet: View {
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
-            Text("\(biometryLabel) will sign the transfer and record it on the home's chain.")
+            Text("\(biometryLabel) confirms it's you.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
@@ -216,7 +216,7 @@ public struct FaceIDConfirmSheet: View {
         return "you grant \(recipientName) ownership of \(homeAddress) and forfeit your own "
             + "owner record. They must verify ownership before the transfer completes. "
             + coOwnerClause
-            + "Recorded on chain at "
+            + "Recorded in this home's history at "
     }
 
     private var legal: some View {
