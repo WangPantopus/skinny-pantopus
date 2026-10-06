@@ -19,6 +19,10 @@ const logger = require('../utils/logger');
 const { writeAuditLog } = require('../utils/businessPermissions');
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
 const { setEntityFeeOverride } = require('../services/businessEntityService');
+const s3 = require('../services/s3Service');
+
+// A reviewer opens each document through a short-lived link instead of a stored URL.
+const DOCUMENT_LINK_SECONDS = 10 * 60;
 
 // All routes require auth + admin role
 router.use(verifyToken, requireAdmin);
@@ -70,12 +74,39 @@ router.get('/queue', async (req, res) => {
       }
     }
 
+    // The uploaded document behind each piece of evidence: only a live file the
+    // business uploaded for verification gets a link.
+    const fileIds = [...new Set((evidence || []).map(e => e.file_id).filter(Boolean))];
+    const documentLinks = {};
+    if (fileIds.length > 0) {
+      const { data: files, error: filesErr } = await supabaseAdmin
+        .from('File')
+        .select('id, file_path, mime_type, file_context, is_deleted')
+        .in('id', fileIds);
+      if (filesErr) {
+        logger.error('Admin verification queue file lookup failed', { error: filesErr.message });
+      }
+      for (const f of (files || [])) {
+        if (f.is_deleted || f.file_context !== 'business_verification' || !f.file_path) continue;
+        try {
+          documentLinks[f.id] = {
+            url: await s3.getPresignedDownloadUrl(f.file_path, DOCUMENT_LINK_SECONDS),
+            mime_type: f.mime_type || null,
+          };
+        } catch (linkErr) {
+          logger.warn('Admin verification document link failed', { fileId: f.id, error: linkErr.message });
+        }
+      }
+    }
+
     const items = (evidence || []).map(e => ({
       id: e.id,
       business_user_id: e.business_user_id,
       business: businessMap[e.business_user_id] || null,
       evidence_type: e.evidence_type,
       file_id: e.file_id,
+      document_url: documentLinks[e.file_id]?.url || null,
+      document_mime_type: documentLinks[e.file_id]?.mime_type || null,
       metadata: e.metadata,
       created_at: e.created_at,
     }));
