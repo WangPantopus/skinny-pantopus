@@ -99,7 +99,7 @@ object DeepLinkRouter {
 
         data class HomeDashboard(val id: String) : Destination
 
-        data class HomeTask(val homeId: String, val taskId: String) : Destination
+        data class HomeTask(val homeId: String, val taskId: String, val openDueDateEdit: Boolean = false) : Destination
 
         data class HomeMemberRequests(val id: String) : Destination
 
@@ -307,6 +307,9 @@ object DeepLinkRouter {
         /** `pantopus://homes/:id/waiting-room` — A18.4 persistent waiting room. */
         data class WaitingRoom(val homeId: String) : Destination
 
+        /** `/app/today` selects the address Today root. */
+        data object TodayTab : Destination
+
         /**
          * `pantopus://hub-today?deliveryId=&kind=morning|evening` — the Hub
          * "Today" briefing opened from a Morning/Evening Briefing push. The
@@ -410,11 +413,24 @@ object DeepLinkRouter {
         )
     }
 
-    /**
-     * Receive a raw path-style link from a notification payload (e.g.
-     * `link` on `NotificationDto`). Routed through the same resolver as
-     * full URL deep links.
-     */
+    /** Bind an action arrival to the server-selected recipient through auth hydration. */
+    fun handle(
+        path: String,
+        expectedUserId: String,
+    ) {
+        val current = signedInUserIdProvider()
+        if (current == null) {
+            val normalized = Paths.normalizeIncoming(path)
+            if (resolveString(normalized) is Destination.Unknown) return
+            if (PendingDeepLinkStore.stash(Paths.normalized(normalized), expectedUserId)) {
+                _prefersLoginPresentation.value = true
+            }
+            return
+        }
+        if (current == expectedUserId) handle(path)
+    }
+
+    /** Receive a payload path through the same resolver as full URL links. */
     fun handle(path: String) {
         val normalized = Paths.normalizeIncoming(path)
         if (Paths.isOAuthCallback(normalized)) return
@@ -533,6 +549,8 @@ object DeepLinkRouter {
             val stored = resolveString(it)
             when (destination) {
                 is Destination.Conversation -> stored is Destination.Conversation && stored.id == destination.id
+                is Destination.HomeTask ->
+                    stored is Destination.HomeTask && stored.homeId == destination.homeId && stored.taskId == destination.taskId
                 else -> stored == destination
             }
         }
@@ -680,7 +698,8 @@ object DeepLinkRouter {
             "home" -> Destination.Home
             "nearby" -> if (segments.size == 1) Destination.Nearby else Destination.Unknown(raw)
             "notifications" -> Destination.Notifications
-            "hub-today", "hub_today", "today" ->
+            "today" -> if (segments.size == 1) Destination.TodayTab else Destination.Unknown(raw)
+            "hub-today", "hub_today" ->
                 // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.
                 Destination.HubToday(
                     briefingDeliveryId =
@@ -776,7 +795,7 @@ object DeepLinkRouter {
                     val home = HomeTaskNotificationRoute.canonicalId(id)
                     val task = HomeTaskNotificationRoute.canonicalId(trailing.getOrNull(1))
                     return if (trailing.size == 2 && home != null && task != null) {
-                        Destination.HomeTask(home, task)
+                        Destination.HomeTask(home, task, Paths.queryParam(queryPart, "edit") == "due_date")
                     } else {
                         Destination.Unknown(raw)
                     }

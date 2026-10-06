@@ -63,6 +63,14 @@ final class HomeTaskAccessTests: XCTestCase {
         XCTAssertEqual(current.capabilities?.canComplete, false)
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.last?.url?.path, "/api/homes/\(home)/tasks/\(task)")
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.last?.value(forHTTPHeaderField: "X-Pantopus-Session-Scope"), scope)
+        for legacyDetails in [NSNull(), "legacy", ["legacy"], 42] as [Any] {
+            let decoded = try JSONDecoder().decode(
+                HomeTaskDTO.self,
+                from: Data(json(record().merging(["details": legacyDetails]) { _, value in value }).utf8)
+            )
+            XCTAssertEqual(decoded.id, task)
+            XCTAssertNil(decoded.details)
+        }
     }
 
     func testWrongActorHomeOrScopeCannotBindARead() async {
@@ -137,6 +145,19 @@ final class HomeTaskAccessTests: XCTestCase {
             XCTFail("Suspended action continued")
         } catch {}
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET"])
+        SequencedURLProtocol.reset()
+        SequencedURLProtocol.sequence = [.status(200, body: detail(record(complete: true)))]
+        let guarded = access()
+        var gateRan = false
+        do {
+            _ = try await guarded.complete(taskId: task, status: "done") {
+                gateRan = true
+                throw CancellationError()
+            }
+            XCTFail("Locked background action continued")
+        } catch {}
+        XCTAssertTrue(gateRan)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET"])
     }
 
     func testRevokedCompletionCapabilityPreventsPut() async {
@@ -170,6 +191,26 @@ final class HomeTaskAccessTests: XCTestCase {
             XCTFail("Wrong task accepted")
         } catch {}
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "PUT"])
+        for status in ["done", "open"] {
+            let wrongStatus = status == "done" ? "open" : "done"
+            for wrongReadback in [false, true] {
+                SequencedURLProtocol.reset()
+                SequencedURLProtocol.sequence = [
+                    .status(200, body: detail(record(complete: true))),
+                    .status(200, body: json(["task": record(status: wrongReadback ? status : wrongStatus)]))
+                ]
+                if wrongReadback {
+                    SequencedURLProtocol.sequence.append(.status(200, body: detail(record(status: wrongStatus))))
+                }
+                do { _ = try await access().complete(taskId: task, status: status)
+                    XCTFail("Same-ID incorrect status accepted")
+                } catch {}
+                XCTAssertEqual(
+                    SequencedURLProtocol.capturedRequests.map(\.httpMethod),
+                    wrongReadback ? ["GET", "PUT", "GET"] : ["GET", "PUT"]
+                )
+            }
+        }
     }
 
     func testMalformedSuccessfulDeleteDoesNotReportDeletion() async {
@@ -366,6 +407,81 @@ extension HomeTaskAccessTests {
         XCTAssertNil(vm.task)
         await vm.resume(ifCurrent: vm.activationRevision)
         XCTAssertNotNil(vm.task)
+    }
+}
+
+extension HomeTaskAccessTests {
+    func testDetailCompletesAndReopensWithoutEditPermission() async {
+        for status in ["open", "done"] {
+            SequencedURLProtocol.reset()
+            let next = status == "done" ? "open" : "done"
+            SequencedURLProtocol.sequence = [
+                .status(200, body: detail(record(status: status, complete: true))),
+                .status(200, body: detail(record(status: status, complete: true))),
+                .status(200, body: json(["task": record(status: next, complete: true)])),
+                .status(200, body: detail(record(status: next)))
+            ]
+            let vm = HouseholdTaskDetailViewModel(homeId: home, taskId: task, access: access())
+            await vm.load()
+            await vm.toggleDone()
+            XCTAssertEqual(vm.task?.status, next)
+            XCTAssertEqual(vm.task?.capabilities?.canComplete, false)
+            XCTAssertNil(vm.error)
+            XCTAssertFalse(vm.acting)
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "GET", "PUT", "GET"])
+        }
+    }
+
+    func testDetailCompletionDeniesReadOnlyAndRevokedAssignment() async {
+        for initiallyAllowed in [false, true] {
+            SequencedURLProtocol.reset()
+            SequencedURLProtocol.sequence = [
+                .status(200, body: detail(record(complete: initiallyAllowed))), .status(200, body: detail())
+            ]
+            let vm = HouseholdTaskDetailViewModel(homeId: home, taskId: task, access: access())
+            await vm.load()
+            await vm.toggleDone()
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, initiallyAllowed ? 2 : 1)
+            XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.httpMethod == "PUT" })
+            if initiallyAllowed { XCTAssertNil(vm.task)
+                XCTAssertNotNil(vm.error)
+            }
+        }
+    }
+
+    func testDetailCompletionSerializesAndDiscardsSuspendedOrFailedResult() async throws {
+        for boundary in ["before-write", "after-write", "lost-response"] {
+            SequencedURLProtocol.reset()
+            SequencedURLProtocol.sequence = [
+                .status(200, body: detail(record(complete: true))),
+                .status(200, body: detail(record(complete: true)), gate: boundary == "before-write" ? boundary : nil),
+                .status(boundary == "lost-response" ? 503 : 200, body: json(["task": record(status: "done")]), gate: boundary),
+                .status(200, body: detail(record(status: "done")))
+            ]
+            let vm = HouseholdTaskDetailViewModel(homeId: home, taskId: task, access: access())
+            await vm.load()
+            let action = Task { await vm.toggleDone() }
+            let requestCount = boundary == "before-write" ? 2 : 3
+            try await waitForRequest(count: requestCount)
+            XCTAssertTrue(vm.acting)
+            await vm.toggleDone()
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, requestCount)
+            if boundary != "lost-response" { vm.suspend() }
+            for _ in 0..<100 {
+                if SequencedURLProtocol.release(boundary) { break }
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            await action.value
+            XCTAssertNil(vm.task)
+            XCTAssertFalse(vm.acting)
+            XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, requestCount)
+            if boundary == "lost-response" {
+                XCTAssertNotNil(vm.error)
+                await vm.load()
+                XCTAssertEqual(vm.task?.status, "done")
+                XCTAssertNil(vm.error)
+            }
+        }
     }
 }
 

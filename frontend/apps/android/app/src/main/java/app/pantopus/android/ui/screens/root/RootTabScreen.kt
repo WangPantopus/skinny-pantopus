@@ -799,13 +799,14 @@ private object ChildRoutes {
     /** P2.4 — Edit an existing household task. Reached from the
      *  "Edit recurring" overflow action on a Recurring row. */
     const val EDIT_HOUSEHOLD_TASK =
-        "homes/{$ADD_HOUSEHOLD_TASK_HOME_ID_KEY}/tasks/{$ADD_HOUSEHOLD_TASK_TASK_ID_KEY}/edit"
+        "homes/{$ADD_HOUSEHOLD_TASK_HOME_ID_KEY}/tasks/{$ADD_HOUSEHOLD_TASK_TASK_ID_KEY}/edit?focusDueDate={focusDueDate}"
 
     /** Build the concrete path for the Edit Household Task form. */
     fun editHouseholdTask(
         homeId: String,
         taskId: String,
-    ): String = "homes/$homeId/tasks/$taskId/edit"
+        focusDueDate: Boolean = false,
+    ): String = "homes/$homeId/tasks/$taskId/edit?focusDueDate=$focusDueDate"
 
     /** Maintenance list per home (T6.3b / P10). */
     const val HOME_MAINTENANCE = "homes/{$MAINTENANCE_HOME_ID_KEY}/maintenance"
@@ -1723,6 +1724,7 @@ private object ChildRoutes {
 
     /** BLOCK 2E — Saved Places list. */
     const val SAVED_PLACES = "saved-places"
+    const val SAVE_PLACE = "saved-places/add"
 
     fun explore(
         latitude: Double,
@@ -2256,6 +2258,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             }
             is DeepLinkRouter.Destination.HomeTask -> {
                 navController.navigate(ChildRoutes.householdTaskDetail(pending.homeId, pending.taskId))
+                if (pending.openDueDateEdit) {
+                    navController.navigate(ChildRoutes.editHouseholdTask(pending.homeId, pending.taskId, focusDueDate = true))
+                }
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.HomeMemberRequests -> {
@@ -2433,6 +2438,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.waitingRoom(pending.homeId))
                 DeepLinkRouter.consume()
             }
+            DeepLinkRouter.Destination.TodayTab -> {
+                navController.navigateToRootTab(PantopusRoute.Today)
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.HubToday -> {
                 // Morning/Evening Briefing push → the stored delivery, not just
                 // the live `/api/hub/today` snapshot.
@@ -2569,6 +2578,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             state = arrival,
                             onSave = placeHostVm::save,
                             onDone = placeHostVm::finish,
+                            onToday = {
+                                placeHostVm.finish()
+                                navController.navigateToRootTab(PantopusRoute.Today, restoreState = false)
+                            },
                             onSavedPlaces = { navController.navigate(ChildRoutes.SAVED_PLACES) },
                             onSetUpHome = { navController.navigate(ChildRoutes.ADD_HOME) },
                             onRetryPreview = placeHostVm::loadPreview,
@@ -4220,10 +4233,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         listOf(
                             navArgument(ADD_HOUSEHOLD_TASK_HOME_ID_KEY) { type = NavType.StringType },
                             navArgument(ADD_HOUSEHOLD_TASK_TASK_ID_KEY) { type = NavType.StringType },
+                            navArgument("focusDueDate") {
+                                type = NavType.BoolType
+                                defaultValue = false
+                            },
                         ),
-                ) {
+                ) { entry ->
                     AddHouseholdTaskFormScreen(
                         onClose = { navController.popBackStack() },
+                        focusDueDate = entry.arguments?.getBoolean("focusDueDate") == true,
                     )
                 }
                 composable(
@@ -6205,12 +6223,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.SAVED_PLACES) {
                     SavedPlacesScreen(
                         onBack = { navController.popBackStack() },
-                        onExplore = {
-                            navController.navigate(ChildRoutes.EXPLORE) {
-                                popUpTo(ChildRoutes.SAVED_PLACES) { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        },
+                        onSavePlace = { navController.navigate(ChildRoutes.SAVE_PLACE) },
                         onOpenMap = { latitude, longitude, label ->
                             navController.navigate(ChildRoutes.explore(latitude, longitude, label)) {
                                 popUpTo(ChildRoutes.SAVED_PLACES) { inclusive = true }
@@ -6218,6 +6231,50 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             }
                         },
                     )
+                }
+                composable(ChildRoutes.SAVE_PLACE) {
+                    var confirming by rememberSaveable { mutableStateOf(false) }
+                    if (!confirming) {
+                        app.pantopus.android.ui.screens.place.launch.PlaceLaunchScreen(
+                            onSignIn = { navController.popBackStack() },
+                            onCreateAccount = { navController.popBackStack() },
+                            onSavePreview = { confirming = true },
+                        )
+                    } else {
+                        val arrivalVm: HomeTabHostViewModel = hiltViewModel()
+                        val arrival by arrivalVm.arrival.collectAsStateWithLifecycle()
+                        val closeArrival = {
+                            if (!arrival.isSaving) {
+                                arrivalVm.finish()
+                                navController.popBackStack()
+                            }
+                        }
+                        androidx.activity.compose.BackHandler(onBack = { closeArrival() })
+                        if (arrival.draft == null) {
+                            ErrorState(
+                                headline = "This preview is no longer available",
+                                message = "Look up the address again to save it for this account.",
+                                onRetry = { navController.popBackStack() },
+                            )
+                        } else {
+                            app.pantopus.android.ui.screens.place.launch.PendingPlaceScreen(
+                                state = arrival,
+                                onSave = arrivalVm::save,
+                                onDone = { closeArrival() },
+                                onToday = {
+                                    arrivalVm.finish()
+                                    navController.popBackStack(ChildRoutes.SAVED_PLACES, inclusive = true)
+                                    navController.navigateToRootTab(PantopusRoute.Today, restoreState = false)
+                                },
+                                onSavedPlaces = { closeArrival() },
+                                onSetUpHome = {
+                                    closeArrival()
+                                    navController.navigate(ChildRoutes.ADD_HOME)
+                                },
+                                onRetryPreview = arrivalVm::loadPreview,
+                            )
+                        }
+                    }
                 }
                 composable(ChildRoutes.MAILBOX_ROOT) {
                     MailboxRootScreen(

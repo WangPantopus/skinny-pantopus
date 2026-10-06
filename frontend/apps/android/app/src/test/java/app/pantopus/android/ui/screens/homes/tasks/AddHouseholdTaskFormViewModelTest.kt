@@ -39,6 +39,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddHouseholdTaskFormViewModelTest {
@@ -189,7 +193,8 @@ class AddHouseholdTaskFormViewModelTest {
             val vm = vm(edit = true)
             assertEquals(AddHouseholdTaskFormUiState.Editing, vm.state.value)
             assertEquals(task.title, vm.fields.value[AddHouseholdTaskField.Title]?.value)
-            assertEquals("2026-09-10", vm.fields.value[AddHouseholdTaskField.DueAt]?.value)
+            val localDay = OffsetDateTime.parse(task.dueAt).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
+            assertEquals(localDay.toString(), vm.fields.value[AddHouseholdTaskField.DueAt]?.value)
             assertFalse(vm.isDirty)
             coVerify(exactly = 1) { access.read("task") }
         }
@@ -235,7 +240,9 @@ class AddHouseholdTaskFormViewModelTest {
             assertEquals("Wash dishes", body.captured.title)
             assertEquals("FREQ=WEEKLY", body.captured.recurrenceRule)
             assertEquals("member", body.captured.assignedTo)
-            assertEquals("2026-09-15", body.captured.dueAt)
+            val localDue = OffsetDateTime.parse(body.captured.dueAt).atZoneSameInstant(ZoneId.systemDefault())
+            assertEquals(LocalDate.of(2026, 9, 15), localDue.toLocalDate())
+            assertEquals(LocalTime.of(9, 0), localDue.toLocalTime())
             assertEquals("After dinner", body.captured.description)
             assertEquals(task.id, vm.createdTaskId.value)
             assertTrue(vm.consumeCompletion())

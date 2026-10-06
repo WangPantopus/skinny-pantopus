@@ -34,6 +34,8 @@ struct PantopusApp: App {
                     if !ProcessInfo.processInfo.isUITestSeededAuthSession {
                         await authManager.restoreSession()
                     }
+                    PilotEvents.shared.authChanged()
+                    if scenePhase == .active { PilotEvents.shared.enterForeground() }
                     #if DEBUG
                     if UITestArrivalFixture.enabled,
                        let link = ProcessInfo.processInfo.environment["UI_TESTS_ENTRY_LINK"] {
@@ -60,6 +62,7 @@ struct PantopusApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active:
+                        PilotEvents.shared.enterForeground()
                         capturePrivacy.coversAppSwitcher = false
                         appLock.appDidBecomeActive()
                         // Proactive DPoP refresh when < 120 s of access-token
@@ -77,6 +80,7 @@ struct PantopusApp: App {
                         // `MainActivity.onStop()`.
                         capturePrivacy.coversAppSwitcher = true
                     case .background:
+                        PilotEvents.shared.enterBackground()
                         capturePrivacy.coversAppSwitcher = true
                         appLock.appDidEnterBackground()
                     @unknown default:
@@ -187,6 +191,7 @@ struct RootView: View {
             installStepUpPrompt()
         }
         .onChange(of: auth.state) { previous, new in
+            PilotEvents.shared.authChanged()
             syncAppLock()
             if case .signedOut = new, auth.sessionEndReason != nil {
                 // Dismissing the reason banner must not dismiss the form.

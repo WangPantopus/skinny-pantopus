@@ -116,6 +116,11 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let chipLabel: String
     /// Posted far from the author's homes; the meta line says Visitor (web shows a Visitor badge).
     public let isVisitor: Bool
+    /// Curator attribution comes from `origin`, never the cold-start fact flag.
+    public let origin: String?
+    public var isCurator: Bool {
+        origin == "curator"
+    }
 
     /// Still-image URLs — kept for call sites (and tests) that only care
     /// about what the card displays, not the attachment kinds.
@@ -140,7 +145,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         commentCount: Int = 0,
         actions: PulsePostActions = PulsePostActions(),
         chipLabel: String? = nil,
-        isVisitor: Bool = false
+        isVisitor: Bool = false,
+        origin: String? = nil
     ) {
         self.id = id
         self.authorName = authorName
@@ -159,6 +165,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.actions = actions
         self.chipLabel = chipLabel ?? intent.cardChipLabel
         self.isVisitor = isVisitor
+        self.origin = origin
     }
 }
 
@@ -283,10 +290,7 @@ public struct PulsePostCard: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
-                Text(content.meta)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .lineLimit(1)
+                headerMetadata
             }
             Spacer(minLength: Spacing.s2)
             PulseIntentChip(intent: content.intent, label: content.chipLabel)
@@ -485,6 +489,7 @@ public struct PulsePostCard: View {
 
     private var a11yLabel: String {
         var parts = [content.authorName, content.chipLabel]
+        if content.isCurator { parts.append("Pantopus curator") }
         if content.isVisitor { parts.append("Visitor") }
         if let title = content.title, !title.isEmpty { parts.append(title) }
         if !content.body.isEmpty { parts.append(content.body) }
@@ -497,6 +502,37 @@ public struct PulsePostCard: View {
 
 /// The card's VoiceOver actions sit in an extension so the card's body stays within SwiftLint's type length.
 private extension PulsePostCard {
+    @ViewBuilder var headerMetadata: some View {
+        if content.isCurator {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.s1) {
+                    curatorChip
+                    metadataText
+                }
+                .fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 2) {
+                    curatorChip
+                    metadataText
+                }
+            }
+        } else {
+            metadataText
+        }
+    }
+
+    var metadataText: some View {
+        Text(content.meta)
+            .font(.system(size: 10.5))
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .lineLimit(1)
+    }
+
+    /// The f9 export's neutral origin chip, without its out-of-scope explainer.
+    var curatorChip: some View {
+        PulseCuratorChip()
+            .accessibilityIdentifier("pulsePostCurator_\(content.id)")
+    }
+
     /// The card's controls as VoiceOver actions, named as their buttons are.
     @ViewBuilder var cardActions: some View {
         if let reaction = content.reactions.first(where: \.isInteractive) {
@@ -514,6 +550,32 @@ private extension PulsePostCard {
         if let onOverflow {
             Button("Post options", action: onOverflow)
         }
+    }
+}
+
+private struct PulseCuratorChip: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: Spacing.s1) {
+            PantopusMark(size: 16)
+                .accessibilityHidden(true)
+            Text("Pantopus curator")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.Color.appTextStrong)
+                .lineLimit(1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, Spacing.s2)
+        .padding(.vertical, 3)
+        .background(colorScheme == .dark ? Theme.Color.appSurfaceRaised : Theme.Color.appSurfaceSunken)
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(
+            colorScheme == .dark ? Theme.Color.appTextSecondary : .clear,
+            lineWidth: 1
+        ))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Pantopus curator")
     }
 }
 

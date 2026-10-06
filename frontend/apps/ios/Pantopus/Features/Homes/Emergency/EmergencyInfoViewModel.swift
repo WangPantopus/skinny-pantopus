@@ -223,6 +223,9 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
     /// Last successful payload — held so a chip filter change can
     /// re-project without re-fetching.
     private var emergencies: [HomeEmergencyDTO]?
+    /// Only the latest read may publish data or an error. A delayed success
+    /// must not restore private rows after a newer access denial.
+    private var fetchGeneration = 0
 
     private let homeId: String
     private let api: APIClient
@@ -288,13 +291,17 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
     func loadMoreIfNeeded() async {}
 
     private func fetch() async {
+        fetchGeneration &+= 1
+        let generation = fetchGeneration
         do {
             let response: GetHomeEmergenciesResponse = try await api.request(
                 HomesEndpoints.emergencies(homeId: homeId)
             )
+            guard generation == fetchGeneration else { return }
             emergencies = response.emergencies
             rebuildState()
         } catch {
+            guard generation == fetchGeneration else { return }
             emergencies = nil
             state = .error(
                 message: (error as? APIError)?.errorDescription

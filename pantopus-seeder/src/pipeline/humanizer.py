@@ -44,15 +44,13 @@ def _build_system_prompt(region_display_name: str = "") -> str:
         '- No greetings ("Hey neighbors", "Good morning everyone")\n'
         "- No hashtags, no emoji\n"
         "- Never use first-person singular (I, my, me)\n"
+        "- Write as Pantopus, the platform publisher; never imply you live in "
+        "the area or speak for its residents\n"
+        "- Do not end the update with a question or invite replies\n"
         "- Do not editorialize or add information not present in the source\n\n"
         "SEASONAL TIMING: For seasonal posts, never recommend an action for a "
         "calendar window that is already earlier than Today's date. If the source "
         "is only useful for a missed window, reply exactly \"SKIP\".\n\n"
-        "ENGAGEMENT: After the main content, add a short casual question on a new line "
-        "to invite locals to share their experience or opinion. Keep it natural and "
-        "relevant to the topic — not forced or generic. Examples:\n"
-        '  "Anyone else notice this?" / "Have you tried this spot?" / '
-        '"How are you preparing?" / "What route are you taking instead?"\n\n'
         'End with a source attribution on its own line: "Source: [name]"\n'
         "Do NOT include URLs in the source line — just the source name."
     )
@@ -101,8 +99,7 @@ def _build_sports_system_prompt(scope: str, region_display_name: str = "") -> st
         "- A dry standings/schedule dump with no storyline worth talking about\n"
         "- About something that already concluded more than 24 hours ago\n\n"
         "PART 2 — WRITE A CONVERSATION STARTER (not a news summary):\n"
-        "Your output must be a short, casual post that invites discussion. "
-        "It should read like something a neighbor might say, NOT like ESPN copy.\n\n"
+        "Your output must be a short, casual post that invites discussion.\n\n"
         "Rules:\n"
         "- 1–2 sentences of context + a short question inviting replies\n"
         "- End with a clear question on its own line\n"
@@ -128,6 +125,16 @@ _FIRST_PERSON_PATTERNS = re.compile(
     r"(?<![A-Za-z])"
     r"I"
     r"(?:\s|['\u2019]m|['\u2019]ve|['\u2019]d)"
+)
+
+# Check the update separately from its publisher/source name. Existing outputs
+# can put the Source caption on the same line as the last sentence.
+_SOURCE_ATTRIBUTION_PATTERN = re.compile(r"\bSource:\s*", re.IGNORECASE)
+_NEIGHBOR_VOICE_PATTERN = re.compile(
+    r"\b(?:our|my)\s+(?:local\s+)?(?:neighbou?rhood|community|town|city|street|block)\b"
+    r"|\bas\s+(?:a|your|a\s+fellow)\s+neighbou?r\b"
+    r"|\bwe\s+(?:locals|residents|neighbou?rs)\b",
+    re.IGNORECASE,
 )
 
 
@@ -280,6 +287,13 @@ def _validate_humanized_text(
     if reason is not None:
         return reason
 
+    if category != "sports":
+        update = _SOURCE_ATTRIBUTION_PATTERN.split(text, maxsplit=1)[0].rstrip()
+        if update.rstrip(" \t\r\n\"'\u2019\u201d)]}").endswith("?"):
+            return "engagement_question"
+        if _NEIGHBOR_VOICE_PATTERN.search(update):
+            return "neighbor_voice"
+
     if category == "seasonal":
         return _validate_seasonal_timing(text, today)
 
@@ -358,7 +372,7 @@ def humanize(
     try:
         client = openai.OpenAI(api_key=openai_api_key)
     except Exception as exc:
-        return None, f"api_error:{exc}"
+        return None, f"api_error:{type(exc).__name__}"
 
     messages = [{"role": "user", "content": user_message}]
 
@@ -391,6 +405,8 @@ def humanize(
     text2, api_err2 = _call_api(client, messages, system_prompt)
     if api_err2:
         return None, api_err2
+    if text2 and text2.strip().upper() == "SKIP":
+        return None, "ai_quality_gate:skipped"
 
     reason2 = _validate_humanized_text(text2, category)
     if reason2 is None:
@@ -416,5 +432,5 @@ def _call_api(client, messages: list[dict], system_prompt: str = "") -> tuple[st
             return None, "empty_response"
         return text, None
     except Exception as exc:
-        log.warning("OpenAI API error: %s", exc, exc_info=True)
-        return None, f"api_error:{exc}"
+        log.warning("OpenAI API error (error_type=%s)", type(exc).__name__)
+        return None, f"api_error:{type(exc).__name__}"

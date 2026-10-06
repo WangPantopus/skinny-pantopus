@@ -2,18 +2,30 @@
 
 package app.pantopus.android.place
 
+import android.app.KeyguardManager
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.core.security.AppLockManager
+import app.pantopus.android.data.api.models.place.AddressCalendarResponse
+import app.pantopus.android.data.api.models.place.PlaceAddressCalendarData
 import app.pantopus.android.data.api.models.place.PlaceRealRentData
 import app.pantopus.android.data.api.models.place.RealRentStanding
 import app.pantopus.android.data.api.models.place.RealRentState
 import app.pantopus.android.data.api.models.place.RemoveRentReportResponse
 import app.pantopus.android.data.api.models.place.RentReport
 import app.pantopus.android.data.api.models.place.RentReportResponse
+import app.pantopus.android.data.api.models.place.SetPickupDayRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.homes.HomeAdminRepository
+import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
+import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_SLUG_KEY
@@ -23,9 +35,11 @@ import app.pantopus.android.ui.screens.place.detail.savedRentLine
 import app.pantopus.android.ui.screens.place.detail.standingChip
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -67,10 +81,25 @@ class PlaceRealRentContributionTest {
         Dispatchers.resetMain()
     }
 
-    private fun makeVm(): PlaceDetailViewModel =
-        PlaceDetailViewModel(
+    private fun makeVm(
+        sessions: HomeClaimSessionScopeFactory = mockk(relaxed = true),
+        preferences: NotificationPreferencesRepository = mockk(relaxed = true),
+        locked: MutableStateFlow<Boolean> = MutableStateFlow(false),
+        deviceLocked: MutableStateFlow<Boolean> = MutableStateFlow(false),
+    ): PlaceDetailViewModel {
+        val keyguard = mockk<KeyguardManager>()
+        every { keyguard.isDeviceLocked } answers { deviceLocked.value }
+        val context = mockk<Context>()
+        every { context.getSystemService(KeyguardManager::class.java) } returns keyguard
+        val appLock = mockk<AppLockManager>()
+        every { appLock.isLocked } returns locked
+        return PlaceDetailViewModel(
             repo = repo,
             adminRepo = mockk<HomeAdminRepository>(relaxed = true),
+            sessionScopes = sessions,
+            preferencesRepository = preferences,
+            appLock = appLock,
+            context = context,
             savedStateHandle =
                 SavedStateHandle(
                     mapOf(
@@ -79,6 +108,7 @@ class PlaceRealRentContributionTest {
                     ),
                 ),
         )
+    }
 
     private fun report(
         monthlyRent: Int = 2400,
@@ -181,6 +211,23 @@ class PlaceRealRentContributionTest {
             val vm = makeVm()
             vm.setRentReport("2400", "2")
             assertEquals(sentence, vm.rentSaveError.value)
+
+            val identity = HomeClaimScopeTestFixture()
+            val preferences = mockk<NotificationPreferencesRepository>()
+            val scoped = makeVm(claimScopeFactory(identity), preferences)
+            coEvery { repo.addressCalendar("home-1") } returns NetworkResult.Success(AddressCalendarResponse(PlaceAddressCalendarData()))
+            var refused = false
+            coEvery { preferences.updatePreferences(any(), any()) } coAnswers {
+                val guard = checkNotNull(secondArg<AuthenticatedDispatchGuard?>())
+                try {
+                    guard.verify(TokenStorage.SessionCredentials("user-1", null, "replacement-session"))
+                } catch (_: IllegalStateException) {
+                    refused = true
+                }
+                NetworkResult.Failure(NetworkError.Forbidden)
+            }
+            assertTrue(scoped.enablePickupReminders("home-1", "America/Los_Angeles") != null)
+            assertTrue(refused)
         }
 
     @Test
@@ -191,6 +238,24 @@ class PlaceRealRentContributionTest {
             vm.setRentReport("2400", "2")
             assertEquals(PlaceDetailViewModel.VERIFICATION_REQUIRED_MESSAGE, vm.rentSaveError.value)
             assertNotEquals(NetworkError.Forbidden.message, vm.rentSaveError.value)
+            val identity = HomeClaimScopeTestFixture()
+            val locked = MutableStateFlow(false)
+            val scoped = makeVm(claimScopeFactory(identity), locked = locked)
+            var refused = false
+            coEvery { repo.clearPickupDay("home-1", "opened-version", any()) } coAnswers {
+                val guard = checkNotNull(thirdArg<AuthenticatedDispatchGuard?>())
+                locked.value = true
+                try {
+                    guard.verify(TokenStorage.SessionCredentials("user-1", null, "opening-token"))
+                } catch (_: IllegalStateException) {
+                    refused = true
+                }
+                NetworkResult.Failure(NetworkError.Forbidden)
+            }
+            scoped.clearPickupDay("opened-version")
+            assertTrue(refused)
+            assertNull(scoped.calendarError.value)
+            coVerify(exactly = 0) { repo.intelligence(any()) }
         }
 
     private fun forbidden(): HttpException = HttpException(Response.error<Any>(403, """{"error":"go verify"}""".toResponseBody(null)))
@@ -208,6 +273,11 @@ class PlaceRealRentContributionTest {
             assertTrue(error is NetworkError.ClientError)
             assertTrue(error.code == 403)
             assertEquals("go verify", error.message)
+            val identity = HomeClaimScopeTestFixture()
+            val scoped = makeVm(claimScopeFactory(identity), deviceLocked = MutableStateFlow(true))
+            scoped.clearPickupDay("opened-version")
+            assertFalse(scoped.calendarBusy.value)
+            coVerify(exactly = 0) { repo.clearPickupDay(any(), any(), any()) }
         }
 
     // ── Defect 5: the delete reports itself as in flight ─────────
@@ -222,6 +292,25 @@ class PlaceRealRentContributionTest {
                 NetworkResult.Success(RemoveRentReportResponse(removed = true))
             }
             assertFalse(vm.isSavingRent.value)
+
+            val identity = HomeClaimScopeTestFixture()
+            val scoped = makeVm(claimScopeFactory(identity))
+            var refused = false
+            coEvery { repo.clearPickupDay("home-1", "opened-version", any()) } coAnswers {
+                assertTrue(scoped.calendarBusy.value)
+                val guard = checkNotNull(thirdArg<AuthenticatedDispatchGuard?>())
+                try {
+                    guard.verify(TokenStorage.SessionCredentials("user-1", null, "replacement-session"))
+                } catch (_: IllegalStateException) {
+                    refused = true
+                }
+                NetworkResult.Failure(NetworkError.ClientError(409, "changed"))
+            }
+            scoped.clearPickupDay("opened-version")
+            assertTrue(refused)
+            assertFalse(scoped.calendarBusy.value)
+            assertNull(scoped.calendarError.value)
+            coVerify(exactly = 0) { repo.intelligence(any()) }
             vm.removeRentReport()
             assertTrue("the control must be disabled while the DELETE is in flight", inFlight)
             assertFalse(vm.isSavingRent.value)
@@ -236,6 +325,12 @@ class PlaceRealRentContributionTest {
             vm.removeRentReport()
             assertEquals("Could not remove your rent.", vm.rentSaveError.value)
             assertFalse(vm.isSavingRent.value)
+            val identity = HomeClaimScopeTestFixture()
+            val scoped = makeVm(claimScopeFactory(identity))
+            identity.storedAccount = "user-2"
+            scoped.clearPickupDay("opened-version")
+            assertFalse(scoped.calendarBusy.value)
+            coVerify(exactly = 0) { repo.clearPickupDay(any(), any(), any()) }
         }
 
     // ── Defect 6: the saved contribution reads back as money ─────
@@ -256,6 +351,19 @@ class PlaceRealRentContributionTest {
                 NetworkResult.Success(RentReportResponse(report()))
             val vm = makeVm()
             assertFalse(vm.isEditingRent.value)
+            val identity = HomeClaimScopeTestFixture()
+            val scoped = makeVm(claimScopeFactory(identity))
+            coEvery { repo.setPickupDay("home-1", any(), any()) } coAnswers {
+                checkNotNull(thirdArg<AuthenticatedDispatchGuard?>()).verify(
+                    TokenStorage.SessionCredentials("user-1", null, "opening-token"),
+                )
+                identity.storedAccount = "user-2"
+                NetworkResult.Success(AddressCalendarResponse(PlaceAddressCalendarData(needsPickupDay = false)))
+            }
+            scoped.setPickupDay(SetPickupDayRequest("TU"), offerPrimer = true)
+            assertNull(scoped.pickupPrimerHomeId.value)
+            assertNull(scoped.calendarError.value)
+            coVerify(exactly = 0) { repo.intelligence(any()) }
             vm.beginEditingRent()
             assertTrue(vm.isEditingRent.value)
             vm.setRentReport("2400", "2")

@@ -228,6 +228,7 @@ public struct HubTodayPayload: Decodable, Sendable, Hashable {
     }
 
     public struct TodayLocation: Decodable, Sendable, Hashable {
+        public var source: String?
         public let label: String?
         public let timezone: String?
         public let latitude: Double?

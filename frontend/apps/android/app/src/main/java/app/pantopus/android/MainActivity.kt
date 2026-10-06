@@ -3,6 +3,7 @@ package app.pantopus.android
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -17,14 +18,19 @@ import androidx.lifecycle.lifecycleScope
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.core.security.SecureWindowController
+import app.pantopus.android.data.analytics.PilotEvents
+import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.OAuthSessionStore
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
 import app.pantopus.android.push.PushTokenSyncer
+import app.pantopus.android.push.ReminderActionReceiver
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.navigation.PantopusNavHost
 import app.pantopus.android.ui.theme.PantopusTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -52,6 +58,12 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var appLockManager: AppLockManager
 
     @Inject lateinit var secureWindowController: SecureWindowController
+
+    @Inject lateinit var pilotEvents: PilotEvents
+
+    @Inject lateinit var authRepository: AuthRepository
+
+    @Inject lateinit var tokenStorage: TokenStorage
 
     /**
      * App-wide [ToastController]. Survives configuration changes via the
@@ -85,6 +97,9 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         secureWindowController.bind(this)
         observeAppLockPrivacyHold()
+        lifecycleScope.launch {
+            authRepository.state.collect { pilotEvents.authChanged() }
+        }
         // A recreated Activity retains its navigation/ViewModel state. Replaying the
         // launch link would replace that screen and discard its in-progress input.
         // Fresh processes still route the launch intent; onNewIntent handles new links.
@@ -100,6 +115,8 @@ class MainActivity : FragmentActivity() {
         // Mirror iOS AppDelegate.requestNotificationPermission():
         // on Android 13+ the OS requires an explicit runtime prompt.
         // On earlier versions notifications are granted by default.
+        // Asking at launch lets radon, task, briefing and Support Train
+        // reminders arrive even when the pickup primer is never opened.
         requestNotificationPermissionIfNeeded()
     }
 
@@ -108,6 +125,7 @@ class MainActivity : FragmentActivity() {
         // Foreground marker for chat-push suppression — a notification
         // for the on-screen conversation is skipped only while visible.
         activeChatThread.isForeground = true
+        pilotEvents.enterForeground()
         appLockManager.appDidBecomeActive()
         launchPushTokenSync()
     }
@@ -119,6 +137,7 @@ class MainActivity : FragmentActivity() {
         // iOS sees no `.background` for those at all, so arming here would
         // lock the app in the user's hands on every rotation.
         appLockManager.appDidEnterBackground(isConfigurationChange = isChangingConfigurations)
+        if (!isChangingConfigurations) pilotEvents.enterBackground()
         activeChatThread.isForeground = false
         super.onStop()
     }
@@ -130,7 +149,39 @@ class MainActivity : FragmentActivity() {
         setIntent(intent)
     }
 
+    private fun forwardReminderAction(
+        intent: Intent,
+        uri: Uri,
+    ): Boolean {
+        if (intent.getStringExtra(ReminderActionReceiver.ACTION) != ReminderActionReceiver.TASK_NOT_NOW) return false
+        val recipient = intent.getStringExtra(ReminderActionReceiver.RECIPIENT)
+        val session = intent.getStringExtra(ReminderActionReceiver.SESSION)
+        val destination = DeepLinkRouter.resolve(uri) as? DeepLinkRouter.Destination.HomeTask
+        if (recipient == null || session == null || intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return true
+        if (destination == null || !destination.openDueDateEdit) return true
+        // Existing encrypted pending-route storage binds the cold login replay.
+        DeepLinkRouter.handle(uri.toString(), expectedUserId = recipient)
+        intent.removeExtra(ReminderActionReceiver.ACTION)
+        lifecycleScope.launch {
+            val hydrated = authRepository.state.first { it != AuthRepository.State.Unknown }
+            if ((hydrated as? AuthRepository.State.SignedIn)?.user?.id != recipient) return@launch
+            if (ReminderActionReceiver.sessionFingerprint(tokenStorage.sessionIdentity()) != session) return@launch
+            pilotEvents.send(PilotEvents.Event.ReminderAction, mapOf("kind" to "task", "action" to "not_now"), recipient)
+        }
+        return true
+    }
+
     private fun forwardDeepLink(intent: Intent?) {
+        if (intent?.getBooleanExtra(ReminderActionReceiver.PUSH_OPEN, false) == true) {
+            val pushType = intent.getStringExtra(ReminderActionReceiver.PUSH_TYPE)
+            intent.removeExtra(ReminderActionReceiver.PUSH_OPEN)
+            intent.removeExtra(ReminderActionReceiver.PUSH_TYPE)
+            // Task-history restoration can retain the original notification intent.
+            // It is an organic return, not another response to that notification.
+            if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) {
+                pilotEvents.notificationOpened(pushType)
+            }
+        }
         val uri = intent?.data ?: return
         if (intent.action != Intent.ACTION_VIEW) return
         // Browser OAuth callbacks belong to the in-flight sign-in attempt,
@@ -140,6 +191,7 @@ class MainActivity : FragmentActivity() {
             OAuthSessionStore.deliver(uri)
             return
         }
+        if (forwardReminderAction(intent, uri)) return
         DeepLinkRouter.handle(uri)
     }
 

@@ -2,14 +2,20 @@
 
 package app.pantopus.android.ui.screens.homes.tasks
 
+import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskCapabilitiesDto
+import app.pantopus.android.data.api.models.homes.HomeTaskCollectionCapabilitiesDto
+import app.pantopus.android.data.api.models.homes.HomeTaskCreationReceiptDto
+import app.pantopus.android.data.api.models.homes.HomeTaskCreationResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskSessionDto
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.data.homes.HomeTasksRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
@@ -75,6 +81,59 @@ class HomeTaskAccessTest {
             coVerify { repository.getHomeTask("home", "task", server.sessionScope) }
         }
 
+    @Test fun same_dispatch_guard_reaches_list_create_edit_and_delete() =
+        runTest {
+            var unlocked = true
+            var selected = TokenStorage.SessionCredentials("user-1", null, "opening-token")
+            val dispatched = mutableSetOf<String>()
+            val guards = mutableSetOf<AuthenticatedDispatchGuard>()
+            var currentTask = task.copy(description = "Keep")
+
+            suspend fun verify(
+                operation: String,
+                guard: AuthenticatedDispatchGuard?,
+            ) {
+                guards += checkNotNull(guard)
+                guard.verify(selected)
+                dispatched += operation
+            }
+            access = HomeTaskAccessFactory(repository, claimScopeFactory(identity)).create("home", scope) { check(unlocked) }
+            coEvery { repository.getHomeTasks(any(), any(), any()) } coAnswers {
+                verify("list", arg<AuthenticatedDispatchGuard?>(2))
+                NetworkResult.Success(GetHomeTasksResponse(listOf(currentTask), HomeTaskCollectionCapabilitiesDto(true), server))
+            }
+            coEvery { repository.getHomeTask(any(), any(), any(), any()) } coAnswers {
+                verify("read", arg<AuthenticatedDispatchGuard?>(3))
+                NetworkResult.Success(HomeTaskResponse(currentTask, server))
+            }
+            val receipt = HomeTaskCreationReceiptDto("home", "user-1", "request", "task", "b".repeat(64), "2026-10-04T00:00:00Z")
+            coEvery { repository.createHomeTaskWithReceipt(any(), any(), any(), any()) } coAnswers {
+                verify("create", arg<AuthenticatedDispatchGuard?>(3))
+                NetworkResult.Success(HomeTaskCreationResponse(currentTask, receipt, server, true))
+            }
+            coEvery { repository.patchHomeTask(any(), any(), any(), any(), any()) } coAnswers {
+                verify("edit", arg<AuthenticatedDispatchGuard?>(4))
+                currentTask = currentTask.copy(description = null)
+                NetworkResult.Success(HomeTaskResponse(currentTask))
+            }
+            coEvery { repository.deleteHomeTask(any(), any(), any(), any()) } coAnswers {
+                verify("delete", arg<AuthenticatedDispatchGuard?>(3))
+                NetworkResult.Success(Unit)
+            }
+            access.list()
+            assertEquals(receipt, access.create(CreateHomeTaskRequest("chore", "Original", requestId = "request")).creationReceipt)
+            val edited = access.edit("task", HomeTaskEditPatch(mapOf("description" to null)))
+            assertEquals(currentTask, edited)
+            access.delete("task")
+            assertEquals(setOf("list", "read", "create", "edit", "delete"), dispatched)
+            assertEquals(1, guards.size)
+            unlocked = false
+            denied { access.list() }
+            unlocked = true
+            selected = TokenStorage.SessionCredentials("user-1", null, "replacement-token")
+            denied { access.list() }
+        }
+
     @Test fun standalone_detail_binds_current_actor_without_collection() =
         runTest {
             assertEquals(task, access.read("task"))
@@ -137,6 +196,16 @@ class HomeTaskAccessTest {
             }
             coVerify(exactly = 0) { repository.updateHomeTask(any(), any(), any(), any()) }
             coVerify(exactly = 0) { repository.deleteHomeTask(any(), any(), any()) }
+            coEvery { repository.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(task, server))
+            var gateRan = false
+            denied {
+                access.complete("task", true) {
+                    gateRan = true
+                    error("locked")
+                }
+            }
+            assertEquals(true, gateRan)
+            coVerify(exactly = 0) { repository.updateHomeTask(any(), any(), any(), any()) }
         }
 
     @Test fun completion_sends_only_status_and_returns_current_projection() =
@@ -157,6 +226,18 @@ class HomeTaskAccessTest {
                     HomeTaskResponse(task.copy(id = "other")),
                 )
             denied { access.complete("task", true) }
+            for (completed in listOf(true, false)) {
+                val requested = if (completed) "done" else "open"
+                val wrong = task.copy(status = if (completed) "open" else "done")
+                coEvery { repository.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(task, server))
+                coEvery { repository.updateHomeTask(any(), any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(wrong))
+                denied { access.complete("task", completed) }
+                coEvery { repository.updateHomeTask(any(), any(), any(), any()) } answers {
+                    coEvery { repository.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(wrong, server))
+                    NetworkResult.Success(HomeTaskResponse(task.copy(status = requested)))
+                }
+                denied { access.complete("task", completed) }
+            }
         }
 
     @Test fun local_relogin_during_mutation_drops_late_success() =

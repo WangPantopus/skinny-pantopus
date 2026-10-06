@@ -113,7 +113,13 @@ struct HomeInvitationDecisionView: View {
             Text(context.city).foregroundStyle(Theme.Color.appTextSecondary)
             Text("Invited by \(context.inviter)")
             Text("Offered role: \(TokenAcceptViewModel.humanRole(context.role))")
-            Text("Household permissions determine what you can open or manage. This invitation does not grant ownership.")
+            Text(
+                """
+                Household permissions determine what you can open or manage. \
+                This invitation gives you household access. To send neighbor messages \
+                or get a residency letter, verify the address yourself.
+                """
+            )
             ForEach(
                 [("access_start_at", "Access starts"), ("access_end_at", "Access ends"), ("expires_at", "Invitation expires")],
                 id: \.0

@@ -26,8 +26,9 @@ class HomeTaskCreationFactory
         fun create(
             homeId: String,
             lifetime: CoroutineScope,
+            dispatchGuard: (suspend () -> Unit)? = null,
         ): HomeTaskCreationCoordinator =
-            HomeTaskCreationCoordinator(homeId, retrofit.baseUrl().toString(), accessFactory.create(homeId, lifetime), store)
+            HomeTaskCreationCoordinator(homeId, retrofit.baseUrl().toString(), accessFactory.create(homeId, lifetime, dispatchGuard), store)
     }
 
 /** One retained command per origin/account/Home; reopening never resubmits it automatically. */

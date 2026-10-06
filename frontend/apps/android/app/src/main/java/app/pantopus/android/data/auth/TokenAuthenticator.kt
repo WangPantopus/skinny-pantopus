@@ -111,7 +111,20 @@ class TokenAuthenticator
             }
         }
 
-        private fun Request.withBearer(token: String): Request = newBuilder().header("Authorization", "Bearer $token").build()
+        private fun Request.withBearer(token: String): Request? {
+            val guard = tag(AuthenticatedDispatchGuard::class.java) ?: return newBuilder().header("Authorization", "Bearer $token").build()
+            return runBlocking {
+                try {
+                    val credentials = guard.requireCredentials(tokenStorage)
+                    if (credentials.accessToken != token) return@runBlocking null
+                    // OkHttp follow-ups bypass application interceptors. Keep the
+                    // original tag and check this exact replay's selected session.
+                    newBuilder().header("Authorization", "Bearer $token").build()
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
 
         private fun responseCount(response: Response): Int {
             var count = 1

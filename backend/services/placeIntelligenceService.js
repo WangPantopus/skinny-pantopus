@@ -43,6 +43,7 @@ const { getSystemsLedger } = require('./homeSystemsService');
 const nfipPremiumService = require('./nfipPremiumService');
 const exemptionCheckService = require('./exemptionCheckService');
 const realRentService = require('./realRentService');
+const { locationFromCoordinates } = require('./context/locationResolver');
 
 const HOME_SELECT =
   'id, owner_id, address, address2, city, state, zipcode, map_center_lat, map_center_lng, year_built, sq_ft, bedrooms, bathrooms, lot_sq_ft, home_type';
@@ -61,7 +62,7 @@ const DENSITY_LABELS = {
 function resolveTier(access) {
   if (!access || !access.hasAccess) return 'T1';
   const vs = access.occupancy && access.occupancy.verification_status;
-  if (vs === 'verified') return 'T4';
+  if (vs === 'verified' && access.occupancy.verification_source !== 'household') return 'T4';
   return 'T3';
 }
 
@@ -269,19 +270,30 @@ function engineHours(hourly) {
   return out;
 }
 
+// Provider identity is independent of the live/cache transport marker.
+function todayProviderLabel(provider) {
+  switch (provider) {
+    case 'WEATHERKIT': return 'Apple WeatherKit';
+    case 'OPEN_METEO': return 'Open-Meteo';
+    case 'NOAA': return 'National Weather Service';
+    default: return 'Source unavailable';
+  }
+}
+
 // Shared Today envelope builder. `weather` / `aqi` are the Hub-shaped
 // blocks (or null → unavailable); `alerts` is an array (or null →
 // unavailable; an EMPTY array is still "ready": "No active alerts").
 // `hub` / `home` feed the good-day verdicts and are absent for the
 // anonymous point snapshot (that section then reads unavailable and the
 // preview simply does not list it).
-function buildTodayEnvelopes({ weather, aqi, alerts, asOf = null, hub = null, home = null }) {
+function buildTodayEnvelopes({ weather, aqi, alerts, weatherProvider, alertsProvider, asOf = null, hub = null, home = null }) {
   const out = [];
 
   if (weather) {
     out.push(serializePlaceSection('weather', {
       access: 'available',
       asOf,
+      source: todayProviderLabel(weatherProvider),
       data: {
         current_temp_f: weather.current_temp_f,
         condition_code: mapConditionCode(weather.condition_code),
@@ -324,7 +336,9 @@ function buildTodayEnvelopes({ weather, aqi, alerts, asOf = null, hub = null, ho
       onset: a.starts_at || null,
       ends: a.ends_at || null,
     }));
-    out.push(serializePlaceSection('alerts', { access: 'available', asOf, status: 'ready', data: { active } }));
+    out.push(serializePlaceSection('alerts', {
+      access: 'available', asOf, source: todayProviderLabel(alertsProvider), status: 'ready', data: { active },
+    }));
   } else {
     out.push(serializePlaceSection('alerts', { access: 'available', status: 'unavailable' }));
   }
@@ -374,6 +388,8 @@ async function composeToday(userId, home, hub) {
     weather: hub && hub.weather ? hub.weather : null,
     aqi: hub && hub.aqi ? hub.aqi : null,
     alerts: alertsChecked ? (hub.alerts || []) : null,
+    weatherProvider: hub?.meta?.section_providers?.weather,
+    alertsProvider: hub?.meta?.section_providers?.alerts,
     asOf: (hub && hub.fetched_at) || null,
     hub,
     home,
@@ -428,6 +444,8 @@ async function composeTodayForPoint(lat, lng) {
     weather,
     aqi,
     alerts,
+    weatherProvider: w?.provider,
+    alertsProvider: al?.provider,
     asOf: (w && w.fetchedAt) || (a && a.fetchedAt) || new Date().toISOString(),
   });
 
@@ -467,7 +485,9 @@ async function composeAddressCalendar(home) {
     if (!data.rule_count) {
       return [serializePlaceSection('address_calendar', {
         status: 'unavailable',
-        unavailableReason: `No calendar for ${home.city} yet. Set your pickup day and it starts here.`,
+        unavailableReason: home.id
+          ? `No calendar for ${home.city} yet. Set your pickup day and it starts here.`
+          : `No public calendar for ${home.city} yet.`,
       })];
     }
     return [serializePlaceSection('address_calendar', { asOf: new Date().toISOString(), data })];
@@ -1033,7 +1053,34 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
   });
 }
 
+// SavedPlace Today reuses only the public point composers. In particular its
+// calendar has no Home id, so it cannot load household pickup overrides.
+async function composeSavedPlaceToday(place) {
+  const anchor = locationFromCoordinates({ latitude: place.latitude, longitude: place.longitude, label: place.label });
+  if (!anchor) throw new Error('Saved place coordinates are unavailable');
+  const address = {
+    map_center_lat: anchor.latitude,
+    map_center_lng: anchor.longitude,
+    city: place.city,
+    state: place.state,
+    timezone: anchor.timezone,
+  };
+  // Weather, air, alerts and daylight only. A saved place has no household, so
+  // it shows no address calendar: no city pickup days and no tax or council
+  // dates (pilot brief WP2 and section 13).
+  const sections = await Promise.all([
+    composeTodayForPoint(anchor.latitude, anchor.longitude),
+    placeSectionAdapters.composeSunriseSunset(address),
+  ]);
+  return serializePlaceIntelligence({
+    place: { label: place.label, line1: place.label, city: place.city, state: place.state },
+    tier: 'T1',
+    sections: sections.flat(),
+  });
+}
+
 module.exports = {
+  composeSavedPlaceToday,
   composeHomeIntelligence,
   composeTodayForPoint,
   // Exported for unit testing.

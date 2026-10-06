@@ -142,15 +142,28 @@ describe('verifyDpop — rejections', () => {
   });
 
   test('iat skewed by more than 300 s (past) → DPOP_INVALID', async () => {
-    const proof = await proofFor({ htu: HTU, iat: Math.floor(Date.now() / 1000) - 301 });
-    const req = fakeReq({ headers: { DPoP: proof } });
-    expect((await dpop.verifyDpop(req)).code).toBe('DPOP_INVALID');
+    const fixedNow = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(fixedNow);
+    try {
+      const proof = await proofFor({ htu: HTU, iat: Math.floor(Date.now() / 1000) - 301 });
+      const req = fakeReq({ headers: { DPoP: proof } });
+      expect((await dpop.verifyDpop(req)).code).toBe('DPOP_INVALID');
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   test('iat skewed by more than 300 s (future) → DPOP_INVALID', async () => {
-    const proof = await proofFor({ htu: HTU, iat: Math.floor(Date.now() / 1000) + 301 });
-    const req = fakeReq({ headers: { DPoP: proof } });
-    expect((await dpop.verifyDpop(req)).code).toBe('DPOP_INVALID');
+    // Signing may cross a second boundary and otherwise reduce 301 s to 300 s.
+    const fixedNow = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(fixedNow);
+    try {
+      const proof = await proofFor({ htu: HTU, iat: Math.floor(Date.now() / 1000) + 301 });
+      const req = fakeReq({ headers: { DPoP: proof } });
+      expect((await dpop.verifyDpop(req)).code).toBe('DPOP_INVALID');
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   test('iat inside the ±300 s window is accepted', async () => {

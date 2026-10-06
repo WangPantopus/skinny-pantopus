@@ -105,6 +105,16 @@ describe('push/apnsClient.buildPayload', () => {
       data: { link: '/chat/42', type: 'chat_message', aps: 'IGNORED', empty: null },
     });
     expect(payload.aps).toEqual({ alert: { title: 'New message', body: 'Hello' }, sound: 'default' });
+    for (const category of ['PICKUP_REMINDER', 'TASK_REMINDER', 'TASK_REMINDER_DONE_ONLY']) {
+      const reminder = apnsClient.buildPayload({ title: 'Reminder', data: { category, recipient_user_id: 'test-actor' } });
+      expect(reminder.aps.category).toBe(category);
+      expect(reminder.category).toBe(category);
+      expect(reminder.recipient_user_id).toBe('test-actor');
+      expect(reminder.aps.sound).toBe('default');
+    }
+    for (const category of [undefined, 'OTHER_CATEGORY', { name: 'TASK_REMINDER' }]) {
+      expect(apnsClient.buildPayload({ data: { category } }).aps).not.toHaveProperty('category');
+    }
     expect(payload.link).toBe('/chat/42');
     expect(payload.type).toBe('chat_message');
     expect(payload.aps).not.toBe('IGNORED'); // reserved key not overwritten

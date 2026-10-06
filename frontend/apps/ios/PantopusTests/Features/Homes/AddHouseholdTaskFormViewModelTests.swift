@@ -340,7 +340,9 @@ final class AddHouseholdTaskFormViewModelTests: XCTestCase {
         XCTAssertEqual(body.title, "Wash dishes")
         XCTAssertEqual(body.task_type, "chore")
         XCTAssertEqual(body.assigned_to, "30000000-0000-4000-8000-000000000002")
-        XCTAssertEqual(body.due_at, "2026-06-15")
+        let due = try XCTUnwrap(ISO8601DateFormatter().date(from: XCTUnwrap(body.due_at)))
+        let localDay = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day, .hour, .minute], from: due)
+        XCTAssertEqual(localDay, DateComponents(year: 2026, month: 6, day: 15, hour: 9, minute: 0))
         XCTAssertEqual(body.description, "After dinner.")
         XCTAssertEqual(body.recurrence_rule, "FREQ=WEEKLY")
     }

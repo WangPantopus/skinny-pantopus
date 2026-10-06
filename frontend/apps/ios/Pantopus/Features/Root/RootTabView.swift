@@ -105,6 +105,7 @@ public struct RootTabView: View {
     /// A notification link to a screen inside the profile cover (persona
     /// inboxes, "Your audience") opens the cover on that screen.
     @State private var profileInitialRoute: YouRoute?
+    @State private var addHomeRequest: UUID?
 
     public init() {}
 
@@ -112,14 +113,18 @@ public struct RootTabView: View {
         TabView(selection: tabBinding) {
             HubTabRoot(
                 onOpenProfile: { showProfile = true },
-                onOpenProfileScreen: { route in presentProfile(at: route) }
+                onOpenProfileScreen: { route in presentProfile(at: route) },
+                addHomeRequest: $addHomeRequest
             )
             .tabItem { tabLabel(.place) }
             .tag(RootTab.place)
 
-            TodayTabRoot()
-                .tabItem { tabLabel(.today) }
-                .tag(RootTab.today)
+            TodayTabRoot {
+                model.selected = .place
+                addHomeRequest = UUID()
+            }
+            .tabItem { tabLabel(.today) }
+            .tag(RootTab.today)
 
             NeighborhoodTabRoot()
                 .tabItem { tabLabel(.nearby) }
@@ -240,7 +245,7 @@ public struct RootTabView: View {
              .invoiceDetail:
             model.selected = .place
         // Morning/Evening Briefing push — the Today tab consumes it.
-        case .hubToday:
+        case .hubToday, .todayTab:
             model.selected = .today
         // `pantopus://place` — the address dashboard is the Place tab's
         // landing surface; its stack consumes the concrete destination.
@@ -322,19 +327,23 @@ public struct TodayTabRoot: View {
     @State private var router = DeepLinkRouter.shared
     /// Bumped to remount the view with a new delivery id.
     @State private var generation = 0
+    @State private var isShowingBriefing = false
     @State private var briefingDeliveryId: String?
     @State private var briefingKind: String?
     @State private var systemSheet: SystemSheetRequest?
     @State private var showsNotificationSettings = false
+    private let onAddHome: () -> Void
 
-    public init() {}
+    public init(onAddHome: @escaping () -> Void = {}) {
+        self.onAddHome = onAddHome
+    }
 
     public var body: some View {
         NavigationStack {
             Group {
                 // A morning-push deep link opens that briefing; on its own the
                 // tab is the address's day (weather, calendar, air).
-                if briefingDeliveryId != nil {
+                if isShowingBriefing {
                     TodayDetailView(
                         viewModel: TodayDetailViewModel(
                             briefingDeliveryId: briefingDeliveryId,
@@ -343,6 +352,7 @@ public struct TodayTabRoot: View {
                         // Back returns to the address's day; Share sends the briefing's text;
                         // Manage opens the briefing and alert settings, as on Android.
                         onBack: {
+                            isShowingBriefing = false
                             briefingDeliveryId = nil
                             briefingKind = nil
                         },
@@ -350,10 +360,9 @@ public struct TodayTabRoot: View {
                         onManage: { showsNotificationSettings = true }
                     )
                 } else {
-                    AddressTodayTabView()
+                    AddressTodayTabView(onAddHome: onAddHome)
                 }
             }
-            .id(generation)
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("todayTabRoot")
             .navigationDestination(isPresented: $showsNotificationSettings) {
@@ -361,6 +370,7 @@ public struct TodayTabRoot: View {
                     .toolbar(.hidden, for: .navigationBar)
             }
         }
+        .id(generation)
         .sheet(item: $systemSheet) { request in request.makeView() }
         .onChange(of: router.pending) { _, pending in
             consumeDeepLinkIfNeeded(pending: pending)
@@ -375,11 +385,23 @@ public struct TodayTabRoot: View {
 
     private func consumeDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
         guard let pending, rootTabs.selected == .today else { return }
-        if case let .hubToday(deliveryId, kind) = pending {
+        switch pending {
+        case .todayTab:
+            isShowingBriefing = false
+            briefingDeliveryId = nil
+            briefingKind = nil
+            showsNotificationSettings = false
+            systemSheet = nil
+            generation += 1
+            _ = router.consume()
+        case let .hubToday(deliveryId, kind):
+            isShowingBriefing = true
             briefingDeliveryId = deliveryId
             briefingKind = kind
             generation += 1
             _ = router.consume()
+        default:
+            break
         }
     }
 }

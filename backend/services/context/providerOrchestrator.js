@@ -13,12 +13,13 @@ const { fetchAQI } = require('./aqiProvider');
 const { fetchAlerts } = require('./alertsProvider');
 const { collectInternalContext } = require('./internalContextCollector');
 const { getSeasonalContext } = require('../ai/seasonalEngine');
-const { rankSignals } = require('./usefulnessEngine');
+const { rankSignals, costOfInaction } = require('./usefulnessEngine');
 const { composeBriefing, composeTemplate } = require('./briefingComposer');
 const { getRecentBriefings } = require('./briefingHistoryService');
 const { getLocalUpdateContext } = require('./localUpdateProvider');
 const addressCalendarService = require('../addressCalendarService');
-const { buildTomorrowWeatherIntro, selectEveningSignal } = require('./eveningBriefingService');
+const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
+const { buildTomorrowWeatherIntro, buildTomorrowPickupSignal, selectEveningSignal } = require('./eveningBriefingService');
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -185,8 +186,11 @@ function clearHubTodayCache(userId) {
  * @returns {Promise<Object>} HubTodayResult
  */
 // The address calendar for the location's home (Wedge Phase 2, D6) — null
-// when there is no home or the lookup fails; never throws.
-async function fetchAddressCalendar(homeId, userId) {
+// when there is no home or the lookup fails; never throws. A saved place is a
+// private bookmark, not a home: it gets weather, air and alerts only (pilot
+// brief WP2 and section 13), so it never loads public pickup or tax dates.
+async function fetchAddressCalendar(location, userId) {
+  const homeId = location.homeId;
   if (!homeId) return null;
   try {
     return await addressCalendarService.composeForHomeId(homeId, { userId });
@@ -204,7 +208,7 @@ async function getHubToday(userId, options = {}) {
   // Check in-memory cache first
   const cached = _hubTodayCache.get(cacheKey);
   if (cached) {
-    if (Date.now() < cached.expiresAt) {
+    if (!isLaunchFeatureEnabled('household_extras') && Date.now() < cached.expiresAt) {
       return cached.result;
     }
     _hubTodayCache.delete(cacheKey); // evict expired entry
@@ -237,7 +241,7 @@ async function getHubToday(userId, options = {}) {
     fetchAQI(latitude, longitude),
     fetchAlerts(latitude, longitude),
     collectInternalContext(userId, location.homeId),
-    fetchAddressCalendar(location.homeId, userId),
+    fetchAddressCalendar(location, userId),
   ]);
   const fetchMs = Date.now() - fetchStartMs;
 
@@ -245,13 +249,32 @@ async function getHubToday(userId, options = {}) {
   const weather = weatherResult.status === 'fulfilled' ? weatherResult.value : null;
   const aqi = aqiResult.status === 'fulfilled' ? aqiResult.value : null;
   const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : null;
-  const internal = internalResult.status === 'fulfilled' ? internalResult.value : {
+  let internal = internalResult.status === 'fulfilled' ? internalResult.value : {
     bills_due: [], tasks_due: [], calendar_events: [],
     unread_mail_count: 0, urgent_mail_count: 0,
     active_gigs: [], unread_notifications: 0,
     collected_at: new Date().toISOString(),
   };
-  const addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
+  let addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
+
+  // AddressCalendarRule household rows use their own authorized reader, not
+  // internal.calendar_events. Refresh that projection after providers too, and
+  // drop it if the user's current Home anchor changed during the wait.
+  if (location.homeId) {
+    try {
+      const currentLocation = await resolveLocation(userId);
+      addressCalendar = currentLocation.homeId === location.homeId
+        ? await fetchAddressCalendar(currentLocation, userId) : null;
+    } catch (_) { addressCalendar = null; }
+  }
+
+  // The collector may have completed while a slow public provider was still
+  // pending. Recollect household records under current authority at this response
+  // boundary, after the calendar awaits too, without repeating public providers.
+  if (internal.bills_due?.length || internal.tasks_due?.length || internal.calendar_events?.length) {
+    try { internal = await collectInternalContext(userId, location.homeId); }
+    catch (_) { internal = defaultInternalContext(); }
+  }
 
   // Log per-provider status
   const providerTimings = { fetch_total_ms: fetchMs };
@@ -407,6 +430,13 @@ async function getHubToday(userId, options = {}) {
     expires_at: expiresAt.toISOString(),
     meta: {
       providers_used: providersUsed,
+      // Preserve role-specific provenance with the memoized payload. The
+      // aggregate providers_used cannot distinguish weather from alerts,
+      // especially when an alert check succeeds with an empty list.
+      section_providers: {
+        weather: weather?.current && weather.source !== 'error' ? weather.provider || null : null,
+        alerts: Array.isArray(alerts?.alerts) && alerts.source !== 'error' ? alerts.provider || null : null,
+      },
       partial_failures: partialFailures,
       cache_hits: cacheHits,
       total_latency_ms: totalMs,
@@ -422,8 +452,13 @@ async function getHubToday(userId, options = {}) {
     });
   }
 
-  // Cache successful result
-  _hubTodayCache.set(cacheKey, { result, expiresAt: Date.now() + HUB_TODAY_CACHE_TTL_MS });
+  // Household records require current authority on each read. Preserve the
+  // short memo for public context only; provider caches remain unchanged.
+  if (!isLaunchFeatureEnabled('household_extras') && !internal.bills_due?.length
+    && !internal.tasks_due?.length && !internal.calendar_events?.length
+    && !(location.homeId && addressCalendar)) {
+    _hubTodayCache.set(cacheKey, { result, expiresAt: Date.now() + HUB_TODAY_CACHE_TTL_MS });
+  }
   if (_hubTodayCache.size > HUB_TODAY_CACHE_MAX) {
     const firstKey = _hubTodayCache.keys().next().value;
     _hubTodayCache.delete(firstKey);
@@ -470,7 +505,7 @@ async function composeMorningBriefing(userId, location) {
     fetchAQI(latitude, longitude),
     fetchAlerts(latitude, longitude),
     collectInternalContext(userId, location.homeId),
-    fetchAddressCalendar(location.homeId, userId),
+    fetchAddressCalendar(location, userId),
     getRecentBriefings(userId),
   ]);
 
@@ -478,8 +513,13 @@ async function composeMorningBriefing(userId, location) {
   const aqi = aqiResult.status === 'fulfilled' ? aqiResult.value : null;
   const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : null;
   const recentBriefings = recentBriefingsResult.status === 'fulfilled' ? recentBriefingsResult.value : [];
-  const internal = internalResult.status === 'fulfilled' ? internalResult.value : defaultInternalContext();
+  let internal = internalResult.status === 'fulfilled' ? internalResult.value : defaultInternalContext();
   const addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
+
+  // Public providers may outlast the original authorized household read.
+  if (internal.bills_due?.length || internal.tasks_due?.length || internal.calendar_events?.length) {
+    internal = await collectInternalContext(userId, location.homeId);
+  }
 
   const seasonal = getSeasonalContext({ latitude, longitude });
   const briefingHistory = filterHistoryForLocation(recentBriefings, location.geohash);
@@ -538,7 +578,9 @@ async function composeMorningBriefing(userId, location) {
   // seasonal tip both fail the second test, which is the point — the
   // lock screen already shows the temperature, and the gutters will
   // still need clearing tomorrow.
-  const top = rankedOutput.signals[0] || null;
+  const pushSignals = rankedOutput.signals.filter(signal =>
+    signal.kind !== 'address_calendar' || !['garbage', 'recycling', 'yard_waste', 'bulk_pickup'].includes(signal.data?.kind));
+  const top = pushSignals[0] || null;
   const topScore = top?.score || 0;
   const topCost = top?.cost_of_inaction ?? 0;
   if (!top || topScore < MIN_PUSH_SCORE || topCost < MIN_PUSH_COST) {
@@ -550,7 +592,7 @@ async function composeMorningBriefing(userId, location) {
     };
   }
 
-  const briefingSignals = rankedOutput.signals.slice(0, 1);
+  const briefingSignals = pushSignals.slice(0, 1);
   const briefing = await composeBriefing({
     ...rankedOutput,
     signals: briefingSignals,
@@ -562,6 +604,13 @@ async function composeMorningBriefing(userId, location) {
     weather,
     timezone: location.timezone,
   });
+
+  if (briefingSignals.some(signal => ['bill_due', 'task_due', 'calendar'].includes(signal.kind))) {
+    const current = await collectInternalContext(userId, location.homeId);
+    if (['bills_due', 'tasks_due', 'calendar_events'].some(key => JSON.stringify(current[key] || []) !== JSON.stringify(internal[key] || []))) {
+      throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
+    }
+  }
 
   return {
     text: briefing.text,
@@ -581,18 +630,26 @@ async function composeEveningBriefing(userId, location) {
     fetchWeather(latitude, longitude),
     fetchAlerts(latitude, longitude),
     collectInternalContext(userId, location.homeId),
-    fetchAddressCalendar(location.homeId, userId),
+    fetchAddressCalendar(location, userId),
     getRecentBriefings(userId),
   ]);
 
   const weather = weatherResult.status === 'fulfilled' ? weatherResult.value : null;
   const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : null;
   const recentBriefings = recentBriefingsResult.status === 'fulfilled' ? recentBriefingsResult.value : [];
-  const internal = internalResult.status === 'fulfilled' ? internalResult.value : defaultInternalContext();
-  const addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
+  let internal = internalResult.status === 'fulfilled' ? internalResult.value : defaultInternalContext();
+  let addressCalendar = addressCalendarResult.status === 'fulfilled' ? addressCalendarResult.value : null;
+  if (internal.bills_due?.length || internal.tasks_due?.length || internal.calendar_events?.length) {
+    internal = await collectInternalContext(userId, location.homeId);
+  }
   const briefingHistory = filterHistoryForLocation(recentBriefings, location.geohash);
 
-  let selectedSignal = selectEveningSignal({
+  // A confirmed pickup can change while public providers are pending too.
+  if (buildTomorrowPickupSignal(addressCalendar, location.timezone, briefingHistory)) {
+    addressCalendar = await fetchAddressCalendar(location, userId);
+  }
+
+  const selectedSignal = selectEveningSignal({
     alerts,
     internal,
     addressCalendar,
@@ -600,48 +657,16 @@ async function composeEveningBriefing(userId, location) {
     recentBriefings: briefingHistory,
     includeEveningTip: false,
   });
-  let localUpdateTokens = 0;
-
-  if (!selectedSignal) {
-    const localUpdates = await getLocalUpdateContext({
-      latitude,
-      longitude,
-      locationLabel: location.label,
-      briefingKind: 'evening',
-    });
-    localUpdateTokens = localUpdates?.tokens_used || 0;
-    selectedSignal = selectEveningSignal({
-      alerts,
-      internal,
-      addressCalendar,
-      timeZone: location.timezone,
-      recentBriefings: briefingHistory,
-      localUpdates,
-      includeEveningTip: false,
-    });
-  }
-
-  if (!selectedSignal) {
-    selectedSignal = selectEveningSignal({
-      alerts,
-      internal,
-      addressCalendar,
-      timeZone: location.timezone,
-      recentBriefings: briefingHistory,
-      includeEveningTip: true,
-    });
-  }
-
-  const leadIntro = buildTomorrowWeatherIntro(weather);
-  const signals = selectedSignal ? [selectedSignal] : [];
-  const hasLead = Boolean(leadIntro);
-
-  if (!signals.length && !hasLead) {
+  if (!selectedSignal || selectedSignal.kind === 'local_update' || costOfInaction(selectedSignal) < MIN_PUSH_COST) {
     return {
       ...emptyBriefingResult('low_signal_day'),
       location_geohash: location.geohash,
+      home_id: location.homeId || null,
     };
   }
+
+  const leadIntro = buildTomorrowWeatherIntro(weather);
+  const signals = [selectedSignal];
 
   const briefing = await composeBriefing({
     signals,
@@ -657,10 +682,24 @@ async function composeEveningBriefing(userId, location) {
     forceTemplate: true,
   });
 
+  if (selectedSignal.kind === 'address_calendar') {
+    const current = buildTomorrowPickupSignal(await fetchAddressCalendar(location, userId), location.timezone, briefingHistory);
+    if (!current || JSON.stringify(current.data) !== JSON.stringify(selectedSignal.data)) {
+      throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
+    }
+  }
+
+  if (signals.some(signal => ['bill_due', 'task_due', 'calendar'].includes(signal.kind))) {
+    const current = await collectInternalContext(userId, location.homeId);
+    if (['bills_due', 'tasks_due', 'calendar_events'].some(key => JSON.stringify(current[key] || []) !== JSON.stringify(internal[key] || []))) {
+      throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
+    }
+  }
+
   return {
     text: briefing.text,
     mode: briefing.mode,
-    tokens_used: briefing.tokens_used + localUpdateTokens,
+    tokens_used: briefing.tokens_used,
     signals_snapshot: signals,
     location_geohash: location.geohash,
     home_id: location.homeId || null,

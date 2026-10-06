@@ -81,3 +81,35 @@ test('an already-persisted event cannot repeat push emission or reset its read s
     expect(push.sendToUser).not.toHaveBeenCalled(); expect(db.getTable('Notification')).toEqual([existing]);
   } finally { from.mockRestore(); }
 });
+
+test('task completion stores generic text and the exact task without title or actor disclosure', async () => {
+  db.seedTable('MailPreferences', [{ user_id: userId, push_notifications: true }]);
+  await notifications.notifyTaskCompleted({ creatorUserId: userId, homeId: 'home', taskId: 'task',
+    completedAt: '2026-10-04T09:00:00+00:00', taskTitle: 'Private radon title', completedByName: 'Private person' });
+  await new Promise(setImmediate);
+  expect(db.getTable('Notification')).toEqual([expect.objectContaining({
+    user_id: userId, type: 'task_completed', title: 'A Home task was completed', body: null,
+    metadata: { home_id: 'home', task_id: 'task' },
+    idempotency_key: 'home-task-completed:task:2026-10-04T09:00:00+00:00',
+  })]);
+  expect(push.sendToUser).toHaveBeenCalledWith(userId, expect.objectContaining({
+    title: 'A Home task was completed',
+    data: expect.objectContaining({ home_id: 'home', task_id: 'task' }),
+  }));
+  expect(JSON.stringify(push.sendToUser.mock.calls)).not.toMatch(/Private radon title|Private person/);
+});
+
+test('the same completion identity cannot repeat a notice or push', async () => {
+  const existing = { id: 'completion', user_id: userId, type: 'task_completed', is_read: true };
+  db.seedTable('Notification', [existing]);
+  const from = jest.spyOn(db, 'from').mockReturnValueOnce({ insert: () => ({ select: () => ({
+    single: async () => ({ data: null, error: { code: '23505' } }),
+  }) }) });
+  try {
+    expect(await notifications.notifyTaskCompleted({ creatorUserId: userId, homeId: 'home', taskId: 'task',
+      completedAt: '2026-10-04T09:00:00+00:00' })).toBeNull();
+    await new Promise(setImmediate);
+    expect(db.getTable('Notification')).toEqual([existing]);
+    expect(push.sendToUser).not.toHaveBeenCalled();
+  } finally { from.mockRestore(); }
+});

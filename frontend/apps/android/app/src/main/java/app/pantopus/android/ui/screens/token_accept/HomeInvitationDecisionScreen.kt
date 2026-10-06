@@ -99,7 +99,11 @@ fun HomeInvitationDecisionScreen(
             if (context.city.isNotBlank()) Text(context.city, color = PantopusColors.appTextSecondary)
             Text("Invited by ${context.inviter}")
             Text("Offered role: ${TokenAcceptViewModel.humanRole(context.role)}")
-            Text("Household permissions and access dates still apply. This invitation does not grant ownership.")
+            Text(
+                "Household permissions and access dates still apply. " +
+                    "This invitation gives you household access. " +
+                    "To send neighbor messages or get a residency letter, verify the address yourself.",
+            )
             context.accessStart?.let { Text("Access starts: ${reviewedDateLabel(it)}") }
             context.accessEnd?.let { Text("Access ends: ${reviewedDateLabel(it)}") }
             context.expiresAt?.let { Text("Invitation expires: ${reviewedDateLabel(it)}") }

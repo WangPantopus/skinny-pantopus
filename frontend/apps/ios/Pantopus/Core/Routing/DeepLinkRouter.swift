@@ -40,7 +40,7 @@ final class DeepLinkRouter {
         case listing(id: String)
         case homeDetail(id: String)
         case homeDashboard(id: String)
-        case homeTask(homeId: String, taskId: String)
+        case homeTask(homeId: String, taskId: String, openDueDateEdit: Bool = false)
         case homeMemberRequests(id: String)
         /// `pantopus://homes/:id/members` — the Members list on its default tab
         /// (`challenge_window_opened`, `member_moved_out`, and
@@ -181,6 +181,8 @@ final class DeepLinkRouter {
         /// Mirrors RN `resolveNotificationRoute`'s `/hub-today?…` target
         /// (`pantopus/frontend/apps/mobile/src/utils/notificationRouting.ts:18`).
         case hubToday(briefingDeliveryId: String?, kind: String?)
+        /// `/app/today` opens the address Today tab, without a briefing detail.
+        case todayTab
         /// `pantopus://profile?tab=receipt` — the profile tab with the Monthly
         /// Receipt card auto-expanded, the target RN resolves for a
         /// `monthly_receipt` notification
@@ -269,6 +271,20 @@ final class DeepLinkRouter {
         handle(url: url)
     }
 
+    /// A notification action may resume only for its server-selected recipient.
+    func handle(path: String, expectedUserID: String) {
+        guard let current = Self.signedInUserIDProvider() else {
+            let normalized = Self.normalizeIncoming(path)
+            guard canResolve(path: normalized) else { return }
+            if PendingDeepLinkStore.stash(normalized, expectedUserID: expectedUserID) {
+                prefersLoginPresentation = true
+            }
+            return
+        }
+        guard current == expectedUserID else { return }
+        handle(path: path)
+    }
+
     /// True when `path` resolves to a destination the app can open (not
     /// `.unknown`). Lets list hosts route a link or fall back to their own
     /// placeholder instead of dropping the tap.
@@ -292,6 +308,7 @@ final class DeepLinkRouter {
 
     func completeHomeTaskArrival(homeId: String, taskId: String) {
         completeArrival(.homeTask(homeId: homeId, taskId: taskId))
+        completeArrival(.homeTask(homeId: homeId, taskId: taskId, openDueDateEdit: true))
     }
 
     func completeConversationArrival(id: String) {
@@ -600,7 +617,9 @@ final class DeepLinkRouter {
             // token-accept surface it uses for `.invite`.
             if let code = segments.dropFirst().first, !code.isEmpty { return .joinInvite(code: code) }
             return .unknown(url)
-        case "hub-today", "hub_today", "today":
+        case "today":
+            return segments.count == 1 ? .todayTab : .unknown(url)
+        case "hub-today", "hub_today":
             // `?deliveryId=` + `?kind=` ride the Morning/Evening Briefing push.
             return .hubToday(
                 briefingDeliveryId: queryValue("deliveryId", in: comps)
@@ -739,7 +758,12 @@ final class DeepLinkRouter {
         if trailing.first == "tasks" {
             guard trailing.count == 2, UUID(uuidString: id) != nil,
                   let taskId = trailing.last, UUID(uuidString: taskId) != nil else { return .unknown(url) }
-            return .homeTask(homeId: id.lowercased(), taskId: taskId.lowercased())
+            return .homeTask(
+                homeId: id.lowercased(),
+                taskId: taskId.lowercased(),
+                openDueDateEdit: URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+                    .contains { $0.name == "edit" && $0.value == "due_date" } == true
+            )
         }
         if trailing.first == "residency" {
             guard trailing.count == 1, UUID(uuidString: id) != nil else { return .unknown(url) }

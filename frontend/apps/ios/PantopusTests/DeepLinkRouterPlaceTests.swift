@@ -41,6 +41,31 @@ final class DeepLinkRouterPlaceTests: XCTestCase {
         let url = try XCTUnwrap(URL(string: "pantopus://place"))
         DeepLinkRouter.shared.handle(url: url)
         XCTAssertEqual(DeepLinkRouter.shared.pending, .place(homeId: nil, slug: nil))
+        for path in ["pantopus://today", "https://pantopus.app/app/today", "/app/today"] {
+            DeepLinkRouter.shared.handle(path: path)
+            XCTAssertEqual(DeepLinkRouter.shared.consume(), .todayTab)
+        }
+        let home = "a1000000-0000-4000-8000-000000000001"
+        let task = "b1000000-0000-4000-8000-000000000002"
+        DeepLinkRouter.shared.handle(path: "/app/homes/\(home)/tasks/\(task)?edit=due_date")
+        XCTAssertEqual(DeepLinkRouter.shared.consume(), .homeTask(homeId: home, taskId: task, openDueDateEdit: true))
+        DeepLinkRouter.shared.completeHomeTaskArrival(homeId: home, taskId: task)
+        let edit = "/app/homes/\(home)/tasks/\(task)?edit=due_date"
+        DeepLinkRouter.shared.handle(path: edit, expectedUserID: "different-user")
+        XCTAssertNil(DeepLinkRouter.shared.consume())
+        DeepLinkRouter.bindSignedInUserIDProvider { nil }
+        DeepLinkRouter.shared.handle(path: edit, expectedUserID: "routing-user")
+        XCTAssertNil(PendingDeepLinkStore.take(userID: "different-user"))
+        DeepLinkRouter.shared.handle(path: edit, expectedUserID: "routing-user")
+        let replay = try XCTUnwrap(PendingDeepLinkStore.take(userID: "routing-user"))
+        DeepLinkRouter.bindSignedInUserIDProvider { "routing-user" }
+        DeepLinkRouter.shared.handle(path: replay)
+        XCTAssertEqual(DeepLinkRouter.shared.consume(), .homeTask(homeId: home, taskId: task, openDueDateEdit: true))
+        DeepLinkRouter.shared.completeHomeTaskArrival(homeId: home, taskId: task)
+        for alias in ["hub-today", "hub_today"] {
+            DeepLinkRouter.shared.handle(path: "/app/\(alias)?deliveryId=delivery&kind=evening")
+            XCTAssertEqual(DeepLinkRouter.shared.consume(), .hubToday(briefingDeliveryId: "delivery", kind: "evening"))
+        }
     }
 
     func testPlaceTakesHomeIdFromThePath() throws {

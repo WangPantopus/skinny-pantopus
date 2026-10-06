@@ -2,9 +2,11 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesResponse
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PUT
+import retrofit2.http.Tag
 
 /**
  * T2 — the notification / briefing preferences pair from
@@ -32,5 +34,6 @@ interface NotificationPreferencesApi {
     @PUT("api/hub/preferences")
     suspend fun updatePreferences(
         @Body patch: NotificationPreferencesPatch,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): NotificationPreferencesResponse
 }

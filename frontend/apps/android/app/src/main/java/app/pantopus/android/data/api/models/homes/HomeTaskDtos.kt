@@ -38,7 +38,11 @@ data class HomeTaskDto(
     val visibility: String? = null,
     val capabilities: HomeTaskCapabilitiesDto? = null,
     @Json(name = "automatic_recurrence") val automaticRecurrence: HomeTaskAutomaticRecurrence? = null,
-)
+    /** Built-in dynamic JSON decoding keeps malformed legacy details from discarding the task. */
+    @Json(name = "details") val detailsValue: Any? = null,
+) {
+    val details: Map<*, *>? get() = detailsValue as? Map<*, *>
+}
 
 /** Missing capabilities never enable an action. */
 @JsonClass(generateAdapter = true)
@@ -94,6 +98,9 @@ data class CreateHomeTaskRequest(
     @Json(name = "recurrence_rule") val recurrenceRule: String? = null,
     val priority: String? = null,
     @Json(name = "request_id") val requestId: String? = null,
+    val status: String? = null,
+    val details: Map<String, Any?>? = null,
+    val visibility: String? = null,
 )
 
 /**

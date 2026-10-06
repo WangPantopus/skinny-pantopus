@@ -55,7 +55,7 @@ Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
-- [ ] Who builds each package. Default: the routing in section 11 of the brief; Stream 1 assigns.
+- [x] Assign package owners (October 5): Stream 1 coordinates/integrates; WP1 owns curator/seeder work; 4-1 owns Today/pickup/radon/first use; WP3 owns pickup backend; 3-1 owns household tasks/invitations; 3-2 owns privacy/F3b; 4-2 owns native actions/events; WP8 owns Trains and its assigned saved-place entry repair. Current owners and exact scope are in the [live successor prompt](https://github.com/WangPantopus/skinny-pantopus/blob/codex/workstream-coordination/docs/workstreams/NEXT-STREAM1-PROMPT-2026-10-02-clean-checkpoint.md).
 - [ ] Whether invited household members see pickup days and bills. Default: not in the pilot; they see shared tasks and complete the ones assigned to them.
 - [ ] Where the new promise appears. Default: the store listings and the app's first screen.
 - [ ] The pilot start date. Default: when section 2 below is done and one full journey works on the hosted backend.
@@ -84,21 +84,62 @@ Rules of the road stay [AGENTS.md](AGENTS.md) and the live coordination guide (`
 - [ ] Confirm the Camas, Vancouver and Washougal pickup schedules and their holiday rules by hand for Thanksgiving (November 26), Christmas (December 25) and New Year's Day (January 1). Mark each official or unconfirmed. Today only Camas has rows, and all are unconfirmed.
 - [ ] Talk to ten first-time homeowners and ten meal-train organizers before and during the build. Ask the homeowners whether they would add their home to a Crew Day on their street, and what they would type into a box that answers questions about their home. Their questions become the agent's first test set.
 - [ ] Five strangers, ten seconds on the app's first screen: "What does this do, and why would you type your address?"
-- [ ] Review and merge PR 1499 (the September 26 drafts and the marketing draft), then reconcile it with this file.
+- [x] Review and merge PR 1499 (the September 26 drafts and marketing draft): merged October 5 in batch 358, commit `f391ac5ee`.
+- [ ] Finish reconciling the merged planning/marketing drafts with this checklist and the remaining strategy-document updates; the merge alone does not complete that reconciliation.
 - [ ] Verify Lob and USPS Every Door Direct Mail rate cards before budgeting any mail drop.
 - [ ] Agents' closing-gift kit (draft in PR 1499), the first homeowners association conversation, the business walk.
 - [ ] Optional: draw the radon card in Claude Design. Agents build it from the brief and existing components if it isn't ready.
 
 ## 3. Build now: the mobile pilot (instructions in the brief)
 
+**October 5 handoff:** checked subitems below mean that the named implementation or bounded local acceptance is complete. They do not mean the entire package is shipped. The eight package parents remain open until their remaining acceptance is complete. Application candidate [PR1533](https://github.com/WangPantopus/skinny-pantopus/pull/1533), code commit `743279810`, passed [all 16 CI checks](https://github.com/WangPantopus/skinny-pantopus/actions/runs/37375810539). It remains draft and unmerged. Reuse that evidence where source/configuration/behavior is unchanged. Exact evidence, owner handoffs and the ordered continuation are in the [live Stream 1 successor prompt](https://github.com/WangPantopus/skinny-pantopus/blob/codex/workstream-coordination/docs/workstreams/NEXT-STREAM1-PROMPT-2026-10-02-clean-checkpoint.md).
+
 - [ ] WP1 Truthfulness fixes: hide the Hub's "Earn today" offers line; label curator posts on iOS and Android; remove the seeder's engagement-question and neighbor-voice prompt lines and exclude curator posts from organic counts.
+  - [x] Backend offers gate and pilot/organic reporting work merged in PR1509; existing curator-exclusion evidence retained.
+  - [x] Native curator-card labels and constrained-width repair integrated. Actual rebuilt iOS curator/ordinary attribution and chip readability passed; Android exact retained curator/ordinary attribution and report/mute permissions passed through accessibility. Android pixel readability is not established.
+  - [x] Non-sports publisher-voice/question/SKIP guards and bounded provider-error logging implemented and integrated; 119 focused and 507 seeder CI checks passed. Sports question behavior is preserved.
+  - [ ] Obtain five genuine non-sports provider outputs, finish the owner's remaining named native/cold/cancellation and visual boundaries, and merge the accepted package. Synthetic outputs are not substitutes.
+
 - [ ] WP2 Today works for a saved place and for a newly added home in private setup (F1).
+  - [x] Actual iOS retained Save → Today content/chip → persisted prompt stamp with both briefings off → Not now → reentry → remove/no-place → resave → cold restoration passed at the retained baseline.
+  - [x] Both native save confirmations now implement See Today. Android signed-in first-save entry, honest provider error, fresh Retry and Cancel passed; no redundant login or saved row was introduced.
+  - [x] Failed-stamp Not now recovery implemented on both apps; five focused Android recovery tests and integrated CI passed. Actual native fault-path acceptance remains open.
+  - [x] Actual iOS synthetic Home takes priority over the retained Saved Place.
+  - [ ] Finish successful provider lookup → preview → save → new See Today action, Android saved-place/cold behavior, actual eligible Turn on/timezone and failed-stamp recovery, and real same-session Add Home/private-setup/public-only acceptance. Mapbox lookup and Google/Smarty address validation were unavailable. Synthetic Home behavior does not establish real onboarding or delivery exclusions.
+
 - [ ] WP3 Night-before pickup reminders people can act on (F4): an evening push for confirmed pickup days, nothing on quiet days, holiday moves, a "Bins out" button, and the pickup editor opening on its own in cities with no pickup rows yet (today, everywhere but Camas).
+  - [x] Existing calendar/briefing implementation and holiday recurrence-preservation repair integrated (PR1540); service round-trip regressions passed.
+  - [x] Actual iOS no-city editor autoopened; Tuesday garbage/alternating-Tuesday recycling persisted and reopened correctly. The first-save primer stayed usable; Remind me/OS Allow persisted evening-only opt-in; unchanged resave did not repeat the primer.
+  - [x] The same stored schedule produced the correct combined evening pickup preview and morning pickup exclusion through the whole producer. These were two previews with no delivery or notification writes.
+  - [ ] Complete Android pickup/primer/permission acceptance, actual quiet/severe/unconfirmed/dedup/access and holiday-week resave cases not already covered by reusable evidence, private-setup behavior, local scheduling/DST, push → Today, and OS Bins out → event. Actual delivery/provider/device boundaries remain open.
+
 - [ ] WP4 Radon, from fact to reminder (F5, small): "Was it tested?", a home task with a date, a reminder with "Done" and "Not now". Includes two fixes to the task reminder job: finished tasks still get pushes, and pushes ignore a task's visibility.
+  - [x] Actual iOS No/not sure → dated radon HomeTask → task-detail Done → persisted completion and Today Done passed.
+  - [x] Both apps' task date edit/save/reopen preserves the chosen local day at 09:00 (16:00Z in the tested zone); reopening does not dirty the editor.
+  - [x] Native reminder date-picker routes and capability-aware categories integrated: Done + Not now for editors/completers, Done only for complete-only recipients, no actions for unknown capabilities. Finished-task/visibility producer repairs are retained; 22 producer, 12 APNs and 14 Android routing regressions passed. This is not OS-button acceptance.
+  - [ ] Complete Yes/date/result, device-local 30-day Not now, Today Change date, Android/private-setup and remaining original-create/member/cold cases; verify actual due-day eligible-recipient delivery and OS Done/Not now through API/persistence. Do not equate task-detail completion with tapping a notification action.
+
 - [ ] WP5 One first-use prompt (F2, small).
+  - [x] On the synthetic iOS Home, the initial two rows were observed; Set pickup focused the editor; saving pickup removed its row.
+  - [ ] Verify explicit radon-row/card disappearance, device-local Later/reentry/cold behavior, private setup and both-platform acceptance. Android's pristine two-row observation on that same Home was missed and remains unverified; never reset the Home or recreate tasks to manufacture it.
+
 - [ ] WP6 The smallest household journey and the invite verification fix (F3 small, F3b gate).
+  - [x] Household provenance/F3b server gates, invitation copy and private completion-notice source integrated.
+  - [x] Actual iOS owner invitation/assignment → Android member household acceptance/completion → owner Android generic in-app notice → exact Done task passed using the retained synthetic Home/task. Invitation acceptance supplied household access, not address proof.
+  - [x] iOS Done/reopen controls, immediate Add → saved detail and Back/list refresh repaired. Actual creation with the keyboard open succeeded without Retry and persisted one task; all 45 final scoped access/routing tests passed.
+  - [x] False mailbox postcard proof and stale native caches repaired; truthful copy passed on both apps. Invited-member letter/pass/RealRent/RateWatch restrictions were observed on Android; 93 backend and native cache regressions passed.
+  - [ ] Complete reciprocal invited-member iOS completion/iOS notice navigation, all remaining listed F3b consumers/recipients/roles and populated backfill cases, plus genuine external invitation/push/hosted delivery. Keep the accepted household task; do not reset the already-Done radon task to replay J3.
+
 - [ ] WP7 Pilot measurement: app events, reminder events and the report.
+  - [x] Backend event migration, authenticated collection, delivery-qualified reporting and activation/report work merged in PR1509 with its bounded accepted API/report evidence.
+  - [x] Actual iOS/Android organic session events and iOS radon decision writes persisted with safe metadata; accepted cold/short-return evidence is retained.
+  - [x] Android normal 31-minute background return persisted exactly one session event; immediate short return persisted none, in the same process with no clock manipulation.
+  - [ ] Finish iOS actual 30-minute return, notification-origin opening and actual reminder-action → summary joins; validate reminder_sent against genuine accepted delivery. Do not count synthetic/curator activity as organic users or claim physical delivery from a successful API response.
+
 - [ ] WP8 Support Train slot reminders for helpers who signed up by email, and the day-of reminder that never fires after the 24-hour one.
+  - [x] PR1512 backend is merged: Train-local evening and independent day-of reminders, guest email, privacy, repeat/retry and no-start-time behavior passed normal API → DB → whole jobs → local SMTP acceptance (seven simulated clock phases; ten accepted messages and one deliberate refusal). The 15 captured temporary rows were already cleaned in that accepted run.
+  - [x] Existing accepted normal mobile Train/create/publish/signup/cancel/organizer/lifecycle journeys remain reusable because their relevant source is unchanged; no duplicate replay was needed.
+  - [ ] Verify natural scheduling, actual signed-in native pushes and real external inbox/physical delivery. Concurrent exactly-once delivery and atomic cancellation-versus-send were not established by the local SMTP acceptance.
 
 ## 4. The pilot
 

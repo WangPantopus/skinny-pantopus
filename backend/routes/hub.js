@@ -822,12 +822,26 @@ router.put('/preferences', verifyToken, validate(preferencesSchema), async (req,
     if (prompted === true) patch.daily_briefing_prompted_at = new Date().toISOString();
     if (prompted === false) patch.daily_briefing_prompted_at = null;
 
+    const { data: existing, error: readError } = await supabaseAdmin
+      .from('UserNotificationPreferences').select('user_id').eq('user_id', userId).maybeSingle();
+    if (readError) throw readError;
+    if (!existing) {
+      const { data: saved, error: savedError } = await supabaseAdmin
+        .from('SavedPlace').select('id').eq('user_id', userId).limit(1);
+      if (savedError) throw savedError;
+      const savedOnly = saved?.length > 0 && !(await homeListService.read(userId)).homes
+        .some(home => ['shared', 'private_setup'].includes(home.access_kind));
+      const { error: createError } = await supabaseAdmin.from('UserNotificationPreferences')
+        .upsert({ user_id: userId, daily_briefing_enabled: false, evening_briefing_enabled: !savedOnly },
+          { onConflict: 'user_id', ignoreDuplicates: true });
+      if (createError) throw createError;
+    }
+    // Apply only explicit choices. The insert-only default above cannot
+    // overwrite a row created concurrently by another preference write.
     const { data, error } = await supabaseAdmin
       .from('UserNotificationPreferences')
-      .upsert(
-        { user_id: userId, ...patch, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' }
-      )
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
       .select('*')
       .single();
 

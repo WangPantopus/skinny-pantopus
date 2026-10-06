@@ -24,6 +24,23 @@ function failure(code = 'SHARE_UNAVAILABLE', status = 503) {
 // A guest pass is an anonymous bearer link. Its emergency section shares where the
 // shutoffs are and whom to call, never a person's medical or legal details.
 const PERSONAL_EMERGENCY_TYPES = new Set(['allergy', 'medical_condition', 'medication', 'power_of_attorney']);
+const SAFE_EMERGENCY_TYPES = new Set(['shutoff_water', 'shutoff_gas', 'shutoff_electric', 'breaker_map',
+  'extinguisher', 'first_aid', 'evac_plan', 'emergency_contacts', 'other', 'contact', 'pet_medical']);
+// Same resource contract as HomeScopedGrant's check and scoped issuance.
+const SCOPED_RESOURCE_TYPES = new Set(['HomeTask', 'HomeCalendarEvent', 'HomeDocument', 'HomeIssue', 'HomeAsset', 'HomePackage']);
+const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+function emergencyView(item) {
+  if (!isObject(item) || (!SAFE_EMERGENCY_TYPES.has(item.type) && !PERSONAL_EMERGENCY_TYPES.has(item.type))
+    || (Object.hasOwn(item, 'info_type') && item.info_type !== item.type)) throw failure();
+  if (PERSONAL_EMERGENCY_TYPES.has(item.type)) return null;
+  if (typeof item.label !== 'string' || (item.location != null && typeof item.location !== 'string')
+    || (Object.hasOwn(item, 'location_in_home') && item.location_in_home !== item.location)) throw failure();
+  // Keep the existing SQL DTO, never forward arbitrary details from a malformed
+  // provider response. Safe utility/contact and explicit pet care retain aliases.
+  return { type: item.type, info_type: item.type, label: item.label,
+    location: item.location, location_in_home: item.location };
+}
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const randomToken = () => crypto.randomBytes(32).toString('hex');
 const validToken = value => typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
@@ -87,17 +104,22 @@ async function read({ kind, token, recipientId = null, passcode }) {
     p_passcode_hash: passcodeHash(passcode), p_receipt_hash: hash(receipt),
   });
   const view = result.view;
-  if (!view || typeof view !== 'object') throw failure();
+  if (!isObject(view)) throw failure();
   if (kind === 'guest') {
-    if (!view.pass || !view.sections) throw failure();
+    if (!isObject(view.pass) || !isObject(view.sections)) throw failure();
+    if (Object.hasOwn(view.sections, 'emergency') && !Array.isArray(view.sections.emergency)) throw failure();
     return { pass: view.pass, sections: { ...view.sections,
       ...(view.sections.docs ? { docs: view.sections.docs.map(document => documentView(document, receipt)) } : {}),
       ...(Array.isArray(view.sections.emergency) ? {
-        emergency: view.sections.emergency.filter(item => !PERSONAL_EMERGENCY_TYPES.has(item?.type)),
+        emergency: view.sections.emergency.map(emergencyView).filter(Boolean),
       } : {}),
     } };
   }
-  if (!view.grant || !view.resource) throw failure();
+  if (!isObject(view.grant) || !isObject(view.resource)) throw failure();
+  if (!SCOPED_RESOURCE_TYPES.has(view.grant.resource_type)
+    || PERSONAL_EMERGENCY_TYPES.has(view.resource.type) || PERSONAL_EMERGENCY_TYPES.has(view.resource.info_type)) {
+    throw failure('SHARE_RESOURCE_DENIED', 403);
+  }
   return { grant: view.grant, resource: documentView(view.resource, receipt) };
 }
 async function download({ receipt, documentId, recipientId = null }) {

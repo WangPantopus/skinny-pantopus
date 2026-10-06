@@ -45,7 +45,7 @@ const PERSONAL_TEMPLATES = [
   { name: 'home_invite', pushTitle: '{actor.displayName} invited you to join a home', pushBody: "You've been invited to {home.name} as a household member." },
   { name: 'home_invite_accepted', pushTitle: '{actor.displayName} joined your home', pushBody: '{actor.displayName} accepted your invitation to {home.name}.' },
   { name: 'task_assigned', pushTitle: '{actor.displayName} assigned you a task', pushBody: '{task.title}' },
-  { name: 'task_completed', pushTitle: 'Task completed: {task.title}', pushBody: '{actor.displayName} marked this task as done.' },
+  { name: 'task_completed', pushTitle: 'A Home task was completed', pushBody: '' },
   { name: 'bid_received', pushTitle: 'New bid on "{gig.title}"', pushBody: '{actor.displayName} placed a bid on your gig.' },
   { name: 'first_bid_received', pushTitle: 'Your first response! 🎉', pushBody: "{actor.displayName} wants to help with '{gig.title}'" },
   { name: 'bid_accepted', pushTitle: 'Your bid was accepted!', pushBody: 'Your bid on "{gig.title}" was accepted. You can start a chat to coordinate.' },
@@ -534,15 +534,16 @@ async function notifyTaskAssigned({ assigneeUserId, assignerName, taskTitle, hom
 /**
  * Notify the task creator that it was completed.
  */
-async function notifyTaskCompleted({ creatorUserId, completedByName, taskTitle, homeId }) {
+async function notifyTaskCompleted({ creatorUserId, homeId, taskId, completedAt }) {
+  if (!creatorUserId || !homeId || !taskId || !completedAt || !Number.isFinite(Date.parse(completedAt))) return null;
   return createNotification({
     userId: creatorUserId,
     type: 'task_completed',
-    title: `Task completed: ${taskTitle}`,
-    body: `${completedByName} marked this task as done.`,
+    title: 'A Home task was completed',
     icon: '✅',
     link: `/app/homes/${homeId}/dashboard?tab=tasks`,
-    metadata: { home_id: homeId },
+    metadata: { home_id: homeId, task_id: taskId },
+    idempotencyKey: `home-task-completed:${taskId}:${completedAt}`,
   });
 }
 

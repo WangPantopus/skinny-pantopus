@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.place.MailboxCheckResponse
 import retrofit2.http.GET
+import retrofit2.http.Headers
 import retrofit2.http.Path
 
 /**
@@ -15,6 +16,7 @@ interface MailboxCheckApi {
      * copy is per-caller. Route `backend/routes/mailboxCheck.js:24`.
      */
     @GET("api/homes/{id}/mailbox-check")
+    @Headers("Cache-Control: no-cache, no-store")
     suspend fun check(
         @Path("id") homeId: String,
     ): MailboxCheckResponse

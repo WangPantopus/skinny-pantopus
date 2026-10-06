@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -23,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -39,6 +43,7 @@ import app.pantopus.android.ui.screens.shared.media.PostMediaItem
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.PantopusMark
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 
@@ -109,7 +114,11 @@ data class PulsePostCardContent(
     val chipLabel: String = intent.cardChipLabel,
     /** Posted far from the author's homes; the meta line says Visitor (web shows a Visitor badge). */
     val isVisitor: Boolean = false,
+    /** Curator attribution comes from `origin`, never the cold-start fact flag. */
+    val origin: String? = null,
 ) {
+    val isCurator: Boolean get() = origin == "curator"
+
     /** Thumbnail-preferring URL projection kept for test compatibility. */
     val mediaUrls: List<String>
         get() = media.map { it.thumbnailUrl ?: it.url }
@@ -206,6 +215,7 @@ fun PulsePostCard(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun CardHeader(
     content: PulsePostCardContent,
     onOverflow: (() -> Unit)?,
@@ -230,19 +240,66 @@ private fun CardHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = content.meta,
-                fontSize = 10.5.sp,
-                color = PantopusColors.appTextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (content.isCurator) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    CuratorChip(postId = content.id)
+                    CardMetadata(content.meta, Modifier.align(Alignment.CenterVertically))
+                }
+            } else {
+                CardMetadata(content.meta)
+            }
         }
         PulseIntentChip(intent = content.intent, label = content.chipLabel)
         HeaderTrailingControl(
             content = content,
             onOverflow = onOverflow,
             onDismissSeeded = onDismissSeeded,
+        )
+    }
+}
+
+@Composable
+private fun CardMetadata(
+    meta: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = meta,
+        modifier = modifier,
+        fontSize = 10.5.sp,
+        color = PantopusColors.appTextSecondary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/** The f9 export's neutral origin chip, without its out-of-scope explainer. */
+@Composable
+private fun CuratorChip(postId: String) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val shape = RoundedCornerShape(Radii.pill)
+    Row(
+        modifier =
+            Modifier
+                .clip(shape)
+                .background(if (dark) PantopusColors.appSurfaceRaisedDark else PantopusColors.appSurfaceSunken)
+                .then(if (dark) Modifier.border(1.dp, PantopusColors.appTextSecondaryDark, shape) else Modifier)
+                .padding(horizontal = Spacing.s2, vertical = 3.dp)
+                .testTag("pulsePostCurator_$postId"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+    ) {
+        PantopusMark(size = 16.dp)
+        Text(
+            text = "Pantopus curator",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (dark) PantopusColors.appTextStrongDark else PantopusColors.appTextStrong,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
@@ -604,6 +661,7 @@ private fun buildA11yLabel(content: PulsePostCardContent): String {
     val parts = mutableListOf<String>()
     parts.add(content.authorName)
     if (content.chipLabel.isNotEmpty()) parts.add(content.chipLabel)
+    if (content.isCurator) parts.add("Pantopus curator")
     if (content.isVisitor) parts.add("Visitor")
     content.title?.takeIf { it.isNotEmpty() }?.let { parts.add(it) }
     if (content.body.isNotEmpty()) parts.add(content.body)

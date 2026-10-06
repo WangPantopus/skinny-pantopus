@@ -72,6 +72,14 @@ final class TodayDetailMappingTests: XCTestCase {
         XCTAssertEqual(content.chips.first?.value, "42")
         XCTAssertEqual(content.chips.first?.dotTone, .success)
         XCTAssertFalse(content.isAlert)
+        let locationJSON = Data(#"{"location":{"source":"saved_place","latitude":45.6,"longitude":-122.7}}"#.utf8)
+        let decoded = try? JSONDecoder().decode(HubTodayPayload.self, from: locationJSON)
+        XCTAssertEqual(decoded?.location?.source, "saved_place")
+        XCTAssertEqual(decoded?.location?.latitude, 45.6)
+        XCTAssertEqual(decoded?.location?.longitude, -122.7)
+        let legacy = try? JSONDecoder().decode(HubTodayPayload.self, from: Data(#"{"location":{"label":"Home"}}"#.utf8))
+        XCTAssertNil(legacy?.location?.source)
+        XCTAssertEqual(legacy?.location?.label, "Home")
     }
 
     func testTemperatureFallsBackWhenMissing() {

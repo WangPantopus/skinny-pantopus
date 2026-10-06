@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.homes.HomeTaskSessionDto
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.data.homes.HomeTasksRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
@@ -31,7 +32,19 @@ class HomeTaskAccessFactory
         fun create(
             homeId: String,
             scope: CoroutineScope,
-        ): HomeTaskAccess = HomeTaskAccess(homeId, repository, sessions.create(scope))
+            dispatchGuard: (suspend () -> Unit)? = null,
+        ): HomeTaskAccess {
+            val session = sessions.create(scope)
+            val guard =
+                dispatchGuard?.let { actionGuard ->
+                    AuthenticatedDispatchGuard { credentials ->
+                        session.requireCurrent()
+                        session.requireDispatchCredentials(credentials)
+                        actionGuard()
+                    }
+                }
+            return HomeTaskAccess(homeId, repository, session, guard)
+        }
     }
 
 /** Local opening identity is captured before the first suspended server request. */
@@ -39,6 +52,7 @@ class HomeTaskAccess(
     private val homeId: String,
     private val repository: HomeTasksRepository,
     private val session: HomeClaimSessionScope,
+    private val dispatchGuard: AuthenticatedDispatchGuard? = null,
 ) {
     val invalidated get() = session.invalidated
     val isCurrent get() = session.isCurrent
@@ -47,7 +61,7 @@ class HomeTaskAccess(
 
     suspend fun list(): GetHomeTasksResponse {
         requireCurrent()
-        val response = repository.getHomeTasks(homeId, serverSession?.sessionScope).taskValue()
+        val response = repository.getHomeTasks(homeId, serverSession?.sessionScope, dispatchGuard).taskValue()
         requireCurrent()
         bind(response.taskSession)
         response.tasks.forEach { exact(it, it.id) }
@@ -56,7 +70,7 @@ class HomeTaskAccess(
 
     suspend fun read(taskId: String): HomeTaskDto {
         requireCurrent()
-        val response = repository.getHomeTask(homeId, taskId, serverSession?.sessionScope).taskValue()
+        val response = repository.getHomeTask(homeId, taskId, serverSession?.sessionScope, dispatchGuard).taskValue()
         requireCurrent()
         bind(response.taskSession)
         return exact(response.task, taskId)
@@ -65,26 +79,31 @@ class HomeTaskAccess(
     suspend fun complete(
         taskId: String,
         completed: Boolean,
+        beforeDispatch: suspend () -> Unit = {},
     ): HomeTaskDto {
         check(read(taskId).capabilities?.canComplete == true) { TASK_ACCESS_CHANGED }
         requireCurrent()
+        beforeDispatch()
+        requireCurrent()
+        val requestedStatus = if (completed) "done" else "open"
         val response =
             repository.updateHomeTask(
                 homeId,
                 taskId,
-                UpdateHomeTaskRequest(status = if (completed) "done" else "open"),
+                UpdateHomeTaskRequest(status = requestedStatus),
                 checkNotNull(serverSession).sessionScope,
+                dispatchGuard,
             ).taskValue()
         requireCurrent()
-        exact(response.task, taskId)
+        check(exact(response.task, taskId).status == requestedStatus) { TASK_ACCESS_CHANGED }
         // Mutations return a raw receipt. Read the current projection and capabilities.
-        return read(taskId)
+        return read(taskId).also { check(it.status == requestedStatus) { TASK_ACCESS_CHANGED } }
     }
 
     suspend fun delete(taskId: String) {
         check(read(taskId).capabilities?.canDelete == true) { TASK_ACCESS_CHANGED }
         requireCurrent()
-        repository.deleteHomeTask(homeId, taskId, checkNotNull(serverSession).sessionScope).taskValue()
+        repository.deleteHomeTask(homeId, taskId, checkNotNull(serverSession).sessionScope, dispatchGuard).taskValue()
         requireCurrent()
     }
 
@@ -97,7 +116,7 @@ class HomeTaskAccess(
         requireCurrent()
         val response =
             try {
-                repository.createHomeTaskWithReceipt(homeId, request, checkNotNull(serverSession).sessionScope).taskValue()
+                repository.createHomeTaskWithReceipt(homeId, request, checkNotNull(serverSession).sessionScope, dispatchGuard).taskValue()
             } catch (error: NetworkError) {
                 throw HomeTaskCreationFailure(error)
             }
@@ -114,7 +133,7 @@ class HomeTaskAccess(
         check(read(taskId).capabilities?.canEdit == true) { TASK_ACCESS_CHANGED }
         requireCurrent()
         if (patch.fields.isEmpty()) return read(taskId)
-        val response = repository.patchHomeTask(homeId, taskId, patch, checkNotNull(serverSession).sessionScope).taskValue()
+        val response = repository.patchHomeTask(homeId, taskId, patch, checkNotNull(serverSession).sessionScope, dispatchGuard).taskValue()
         requireCurrent()
         exact(response.task, taskId)
         check(patch.matches(response.task)) { "The task update was not confirmed. Reload before continuing." }

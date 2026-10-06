@@ -3,7 +3,7 @@ import Foundation
 /// Only exact task metadata selects a task; legacy links retain their old path.
 enum HomeTaskNotificationRoute {
     static func isTask(_ type: String?) -> Bool {
-        ["task_assigned", "task_completed"].contains(type?.lowercased() ?? "")
+        ["task_assigned", "task_completed", "task_due"].contains(type?.lowercased() ?? "")
     }
 
     static func path(type: String?, homeId: String?, taskId: String?) -> String? {
@@ -16,8 +16,8 @@ enum HomeTaskNotificationRoute {
         let metadata = userInfo["metadata"] as? [String: Any]
         return path(
             type: userInfo["type"] as? String,
-            homeId: userInfo["home_id"] as? String ?? metadata?["home_id"] as? String,
-            taskId: userInfo["task_id"] as? String ?? metadata?["task_id"] as? String
+            homeId: userInfo["homeId"] as? String ?? userInfo["home_id"] as? String ?? metadata?["home_id"] as? String,
+            taskId: userInfo["taskId"] as? String ?? userInfo["task_id"] as? String ?? metadata?["task_id"] as? String
         )
     }
 }

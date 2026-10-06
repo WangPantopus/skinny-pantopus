@@ -10,6 +10,25 @@ import XCTest
 @testable import Pantopus
 
 final class FeedDTOsTests: XCTestCase {
+    func testDecodesOriginIndependentlyOfSeededFacts() throws {
+        for origin in ["curator", "user", "system", "unknown"] {
+            let json = Data("""
+            {"id":"p1","created_at":"2026-10-04T00:00:00Z","origin":"\(origin)","is_seeded":false}
+            """.utf8)
+            let post = try JSONDecoder().decode(FeedPostDTO.self, from: json)
+            XCTAssertEqual(post.origin, origin)
+            XCTAssertFalse(post.isSeeded)
+        }
+        for suffix in ["", ",\"origin\":null"] {
+            let json = Data("""
+            {"id":"fact_1","created_at":"2026-10-04T00:00:00Z","is_seeded":true\(suffix)}
+            """.utf8)
+            let post = try JSONDecoder().decode(FeedPostDTO.self, from: json)
+            XCTAssertNil(post.origin)
+            XCTAssertTrue(post.isSeeded)
+        }
+    }
+
     func testDecodesSeededFeedRowWithNullUserId() throws {
         let json = Data("""
         {

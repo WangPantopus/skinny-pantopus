@@ -88,3 +88,53 @@ test.each(['short', {}, null, 'a'.repeat(65)])('invalid bearer token %p never re
   await expect(service.read({ kind: 'guest', token: bad })).rejects.toMatchObject({ statusCode: 400 });
   expect(rpc).not.toHaveBeenCalled();
 });
+
+const personalTypes = ['allergy', 'medical_condition', 'medication', 'power_of_attorney'];
+const safeTypes = ['shutoff_water', 'shutoff_gas', 'shutoff_electric', 'breaker_map', 'extinguisher',
+  'first_aid', 'evac_plan', 'emergency_contacts', 'other', 'contact', 'pet_medical'];
+const emergency = type => ({ type, info_type: type, label: `Fixture ${type}`, location: 'Fixture cabinet',
+  location_in_home: 'Fixture cabinet' });
+
+test('guest emergency projection retains utility/contact/pet care while omitting personal rows from old bindings', async () => {
+  db.setRpcMock(async () => ({ data: { ok: true, view: { pass: { label: 'Guest' }, sections: {
+    emergency: [...safeTypes, ...personalTypes].map(type => ({ ...emergency(type), details: { private: 'must-not-return' } })),
+    parking: 'Driveway',
+  } } } }));
+  const result = await service.read({ kind: 'guest', token });
+  expect(result.sections.emergency).toEqual(safeTypes.map(emergency));
+  expect(result.sections.parking).toBe('Driveway');
+  expect(JSON.stringify(result)).not.toContain('must-not-return');
+  for (const type of personalTypes) expect(JSON.stringify(result)).not.toContain(`Fixture ${type}`);
+});
+
+test.each([null, {}, 'private', [{ label: 'private' }], [null], [emergency('unknown')],
+  [{ ...emergency('contact'), info_type: 'medication' }],
+  [{ ...emergency('contact'), location_in_home: 'different' }]])(
+  'malformed guest emergency section %p fails closed without its payload', async section => {
+    db.setRpcMock(async () => ({ data: { ok: true, view: { pass: {}, sections: { emergency: section } } } }));
+    await expect(service.read({ kind: 'guest', token })).rejects.toMatchObject({ code: 'SHARE_UNAVAILABLE', statusCode: 503 });
+  });
+
+// The real HomeScopedGrant check and issuance reject HomeEmergency. These
+// malformed RPC responses exercise the API boundary, not a reachable SQL grant.
+test.each(personalTypes)('a malformed scoped Emergency %s response never returns personal data', async type => {
+  db.setRpcMock(async () => ({ data: { ok: true, view: {
+    grant: { resource_type: 'HomeEmergency', can_view: true }, resource: emergency(type),
+  } } }));
+  await expect(service.read({ kind: 'scoped', token })).rejects.toMatchObject({ code: 'SHARE_RESOURCE_DENIED', statusCode: 403 });
+});
+
+test.each([undefined, 'HomeEmergency', 'HomeAccessSecret', 'unknown'])(
+  'scoped resource type %p must match the existing issuance allowlist', async type => {
+    db.setRpcMock(async () => ({ data: { ok: true, view: { grant: { resource_type: type }, resource: emergency('contact') } } }));
+    await expect(service.read({ kind: 'scoped', token })).rejects.toMatchObject({ code: 'SHARE_RESOURCE_DENIED' });
+  });
+
+test('supported scoped documents keep the private receipt URL and refuse a disguised Emergency payload', async () => {
+  db.setRpcMock(async () => ({ data: { ok: true, view: { grant: { resource_type: 'HomeDocument' }, resource: document } } }));
+  const result = await service.read({ kind: 'scoped', token });
+  expect(result.resource.url).toMatch(/^\/api\/homes\/shared-documents\/[a-f0-9]{64}\//);
+  expect(result.resource._document).toBeUndefined();
+  db.setRpcMock(async () => ({ data: { ok: true, view: { grant: { resource_type: 'HomeTask' }, resource: emergency('medication') } } }));
+  await expect(service.read({ kind: 'scoped', token })).rejects.toMatchObject({ code: 'SHARE_RESOURCE_DENIED' });
+});

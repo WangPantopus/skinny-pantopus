@@ -160,10 +160,60 @@ describe('composeForHome', () => {
     expect(cal.upcoming.find((e) => e.kind === 'recycling').days_until).toBe(0);
   });
 
+  it('moves that week\'s household and city pickups while preserving their provenance and alternating week', async () => {
+    const holiday = { id: 'holiday', scope_type: 'city', scope_key: 'WA:Camas', kind: 'pickup_holiday', title: 'Thanksgiving: pickup moves one day later', rrule: 'FREQ=DAILY;COUNT=1', dtstart: '2026-11-26', confidence: 'official', source: 'Synthetic official test source', source_url: 'https://example.test/holiday', params: { holiday: 'Thanksgiving', kinds: ['garbage', 'recycling', 'yard_waste'], shift_days: 1 } };
+    const garbage = { id: 'garbage', scope_type: 'home', scope_key: HOME, kind: 'garbage', title: 'Garbage day', rrule: 'FREQ=WEEKLY;BYDAY=TH', dtstart: '2026-11-19', confidence: 'official', source: 'Set by your household' };
+    const recycling = { ...garbage, id: 'recycling', kind: 'recycling', title: 'Recycling day', rrule: 'FREQ=WEEKLY;INTERVAL=2;BYDAY=FR', dtstart: '2026-11-27' };
+    const rules = [garbage, recycling, holiday];
+    const cal = await svc.composeForHome(home, { rules, now: new Date('2026-11-25T18:00:00Z') });
+    expect(cal.homeId).toBe(HOME);
+    expect(cal.upcoming.filter(e => e.kind === 'garbage').map(e => e.date)).toEqual(['2026-11-27', '2026-12-03']);
+    expect(cal.upcoming.find(e => e.kind === 'garbage')).toMatchObject({ moved_from: '2026-11-26', holiday: 'Thanksgiving', shift_days: 1, scope: 'home', source: 'Set by your household', confidence: 'official' });
+    expect(cal.upcoming.find(e => e.kind === 'recycling')).toMatchObject({ date: '2026-11-28', moved_from: '2026-11-27' });
+    expect(cal.pickup_schedule.recycling_next_date).toBe('2026-11-27');
+    expect(cal.upcoming.find(e => e.kind === 'pickup_holiday')).toMatchObject({ date: '2026-11-26', source: holiday.source, source_url: holiday.source_url, confidence: 'official' });
+    const after = await svc.composeForHome(home, { rules, now: new Date('2026-11-27T18:00:00Z') });
+    expect(after.upcoming.find(e => e.kind === 'garbage')).toMatchObject({ date: '2026-11-27', days_until: 0, moved_from: '2026-11-26' });
+    const city = await svc.composeForHome(home, { rules: [{ ...garbage, scope_type: 'city', scope_key: 'WA:Camas', confidence: 'unverified' }, holiday], now: new Date('2026-11-25T18:00:00Z') });
+    expect(city.upcoming.find(e => e.kind === 'garbage')).toMatchObject({ date: '2026-11-27', scope: 'city', confidence: 'unverified', moved_from: '2026-11-26' });
+    const unverified = await svc.composeForHome(home, { rules: [garbage, { ...holiday, confidence: 'unverified' }], now: new Date('2026-11-25T18:00:00Z') });
+    expect(unverified.upcoming.find(e => e.kind === 'garbage').date).toBe('2026-11-26');
+    expect(unverified.upcoming.some(e => e.kind === 'pickup_holiday')).toBe(true);
+    // Both mobile editors round-trip pickup_schedule when saving. A holiday
+    // must neither become the recurring weekday nor drop a still-pending move.
+    seedTable('Home', [home]);
+    for (const day of ['2026-11-25', '2026-11-27', '2026-11-28']) {
+      seedTable('AddressCalendarRule', rules);
+      const now = new Date(`${day}T18:00:00Z`);
+      const before = await svc.composeForHome(home, { now });
+      await svc.setPickupDay(home, { userId: USER, weekday: before.pickup_schedule.weekday,
+        recyclingFrequency: before.pickup_schedule.recycling_frequency,
+        recyclingNextDate: before.pickup_schedule.recycling_next_date, now });
+      const saved = getTable('AddressCalendarRule').filter(rule => rule.scope_type === 'home');
+      expect(saved.find(rule => rule.kind === 'garbage').dtstart).toBe(garbage.dtstart);
+      expect(saved.find(rule => rule.kind === 'recycling')).toMatchObject({ dtstart: recycling.dtstart, rrule: recycling.rrule });
+      const afterSave = await svc.composeForHome(home, { now });
+      const occurrences = calendar => calendar.upcoming.map(({ kind, date, moved_from }) => ({ kind, date, moved_from }));
+      expect(occurrences(afterSave)).toEqual(occurrences(before));
+    }
+  });
+
+  it('limits holiday shifts to listed pickup kinds and the holiday through Saturday, including window edges', async () => {
+    const holiday = { id: 'holiday', scope_type: 'city', scope_key: 'WA:Camas', kind: 'pickup_holiday', title: 'Holiday', rrule: 'FREQ=DAILY;COUNT=1', dtstart: '2026-11-26', confidence: 'official', params: { holiday: 'Test holiday', kinds: ['garbage', 'property_tax'], shift_days: 2 } };
+    const rule = { id: 'garbage', scope_type: 'home', scope_key: HOME, kind: 'garbage', title: 'Garbage day', rrule: 'FREQ=DAILY', dtstart: '2026-11-25', confidence: 'official' };
+    const out = await svc.composeForHome(home, { rules: [rule, holiday, { ...rule, id: 'tax', kind: 'property_tax' }], now: new Date('2026-11-25T18:00:00Z'), windowDays: 6 });
+    expect(out.upcoming.filter(e => e.kind === 'garbage').map(e => e.date)).toEqual(['2026-11-25', '2026-11-28', '2026-11-29', '2026-11-30', '2026-12-01']);
+    expect(out.upcoming.find(e => e.kind === 'garbage' && e.date === '2026-11-30')).toMatchObject({ moved_from: '2026-11-28', shift_days: 2 });
+    expect(out.upcoming.filter(e => e.kind === 'property_tax')).toHaveLength(7);
+    const edge = await svc.composeForHome(home, { rules: [rule, holiday], now: new Date('2026-11-27T18:00:00Z'), windowDays: 1 });
+    expect(edge.upcoming.filter(e => e.kind === 'garbage')).toEqual([expect.objectContaining({ date: '2026-11-28', moved_from: '2026-11-26' })]);
+  });
+
   it('retains the previous schedule when the atomic swap fails and isolates another home', async () => {
     seedCamas();
     await svc.setPickupDay(home, { userId: USER, weekday: 'TH', now: NOW });
     const other = { ...home, id: 'other-home' };
+    getTable('Home').push(other);
     await svc.setPickupDay(other, { userId: USER, weekday: 'FR', now: NOW });
     const before = structuredClone(getTable('AddressCalendarRule'));
     pickupRpc.mockResolvedValueOnce({ data: null, error: { message: 'transaction failed' } });
@@ -284,9 +334,12 @@ describe('briefing signals (the push)', () => {
     expect(sig[0].label).toBe('Garbage day today');
   });
 
-  it('hedges an unconfirmed city default in the detail', () => {
-    const [sig] = generateAddressCalendarSignals({ upcoming: [ev({ scope: 'city', confidence: 'unverified', source: 'City of Camas' })] });
-    expect(sig.detail).toMatch(/Unconfirmed/);
+  it('never signals city pickups or holiday information, and qualifies other unconfirmed dates', () => {
+    const sig = generateAddressCalendarSignals({ upcoming: ['garbage', 'recycling', 'yard_waste', 'bulk_pickup', 'pickup_holiday'].map(kind => ev({ kind, scope: 'city', confidence: 'unverified' })) });
+    expect(sig).toEqual([]);
+    const [sweeping] = generateAddressCalendarSignals({ upcoming: [ev({ kind: 'street_sweeping', scope: 'city', confidence: 'unverified' })] });
+    expect(sweeping.score).toBe(0.62);
+    expect(sweeping.detail).toContain(' (Unconfirmed.)');
   });
 
   it('ranks with the rest of the briefing and carries a cost of inaction above the push bar', () => {

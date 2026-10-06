@@ -109,6 +109,15 @@ class HomeClaimSessionScope(
         }
     }
 
+    /** Validate the coherent credentials selected for this exact request. */
+    fun requireDispatchCredentials(credentials: TokenStorage.SessionCredentials?) {
+        val selected = credentials?.let { tokenIdentity(it.accessToken, it.userId, it.sessionId) }
+        if (!isCurrent || selected == null || selected != openingIdentity) {
+            _invalidated.value = true
+            error(CLAIM_SESSION_CHANGED)
+        }
+    }
+
     suspend fun confirmCurrent(): Boolean =
         try {
             requireCurrent()

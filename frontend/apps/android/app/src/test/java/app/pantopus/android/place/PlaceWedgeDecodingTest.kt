@@ -1,7 +1,9 @@
 package app.pantopus.android.place
 
+import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.place.BlockFounding
 import app.pantopus.android.data.api.models.place.BlockStatusResponse
+import app.pantopus.android.data.api.models.place.PlaceCalendarEvent
 import app.pantopus.android.data.api.models.place.PlaceEnumAdapterFactory
 import app.pantopus.android.data.api.models.place.PlaceGroup
 import app.pantopus.android.data.api.models.place.PlacePreview
@@ -12,6 +14,7 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.isRecentMove
+import app.pantopus.android.ui.screens.place.detail.RadonToday
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import org.junit.Assert.assertEquals
@@ -21,6 +24,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Wedge v2 on Android — the aha card + Band-A sections on the anonymous
@@ -63,6 +67,20 @@ class PlaceWedgeDecodingTest {
         assertEquals(PlaceGroup.RISK_READINESS, preview.sections?.first()?.groupId)
         assertEquals(PlaceSectionStatus.READY, preview.sections?.first()?.status)
         assertNotNull(preview.sections?.first()?.flood)
+        val radon =
+            """
+            {"id":"lead_radon","group":"risk_readiness","band":"A","access":"available","status":"ready",
+             "as_of":null,"source":"EPA radon zones","coverage":"full","unavailable_reason":null,
+             "data":{"year_built":1979,"lead_paint_risk":"moderate","radon_zone":2,"county_name":"Clark County",
+                     "summary":"Screening only","disclaimer":"Test this home."}}
+            """.trimIndent()
+        val adapter = moshi.adapter(PlaceSectionEnvelope::class.java)
+        val named = adapter.fromJson(radon)!!
+        assertEquals("Clark County", named.leadRadon?.countyName)
+        assertEquals(2, named.leadRadon?.radonZone)
+        val legacy = adapter.fromJson(radon.replace(",\"county_name\":\"Clark County\"", ""))!!
+        assertNull(legacy.leadRadon?.countyName)
+        assertEquals(2, legacy.leadRadon?.radonZone)
     }
 
     @Test
@@ -75,6 +93,55 @@ class PlaceWedgeDecodingTest {
         val older = adapter.fromJson("""{"status":"ready","tier":"preview"}""")!!
         assertNull(older.aha)
         assertNull(older.sections)
+        val date = LocalDate.of(2026, 11, 12)
+        val tested = RadonToday.payload(true, date, true, "2.5")
+        assertEquals("done", tested.status)
+        assertEquals("members", tested.visibility)
+        assertEquals("2026-11-12", tested.details?.get("tested_on"))
+        assertEquals(2.5, tested.details?.get("result_pci"))
+        assertTrue(runCatching { RadonToday.payload(true, date, false, "NaN") }.isFailure)
+        assertTrue(runCatching { RadonToday.payload(true, date, false, "-1") }.isFailure)
+        val reminder = RadonToday.payload(false, date, false, "")
+        assertEquals("Test for radon", reminder.title)
+        assertNull(reminder.status)
+        assertEquals("members", reminder.visibility)
+        assertTrue(reminder.dueAt?.contains("T09:00:00") == true)
+        assertEquals("2026-11-01T09:00:00-08:00", RadonToday.dueAt(LocalDate.of(2026, 11, 1), ZoneId.of("America/Los_Angeles")))
+        val rows =
+            listOf(
+                HomeTaskDto(
+                    "open",
+                    "home",
+                    "reminder",
+                    "Test for radon",
+                    status = "in_progress",
+                    createdAt = "2026-10-02T12:00:00Z",
+                    detailsValue = reminder.details,
+                ),
+                HomeTaskDto(
+                    "done",
+                    "home",
+                    "reminder",
+                    "Radon test",
+                    status = "done",
+                    createdAt = "2026-10-03T12:00:00Z",
+                    detailsValue = tested.details,
+                ),
+                HomeTaskDto(
+                    "canceled",
+                    "home",
+                    "reminder",
+                    "Test for radon",
+                    status = "canceled",
+                    createdAt = "2026-10-04T12:00:00Z",
+                    detailsValue = reminder.details,
+                ),
+            )
+        assertEquals("open", RadonToday.selected(rows)?.id)
+        assertEquals("done", RadonToday.selected(rows.drop(1))?.id)
+        assertNull(RadonToday.selected(listOf(rows[2])))
+        assertTrue(RadonToday.message(rows[1]).startsWith("Radon tested"))
+        assertTrue(RadonToday.message(rows[1]).endsWith("2.5 pCi/L"))
     }
 
     @Test
@@ -107,6 +174,28 @@ class PlaceWedgeDecodingTest {
         assertTrue(needsDay.addressCalendar?.needsPickupDay == true)
         assertEquals("Set your pickup day", PlacePresentation.reading(needsDay).value)
         assertEquals("Address calendar", PlacePresentation.config(PlaceSectionId.ADDRESS_CALENDAR).title)
+        assertEquals("Set your pickup day and your pickups start here.", needsDay.addressCalendar?.pickupSetupMessage)
+        assertNull(withNext.addressCalendar?.pickupSetupMessage)
+        val legacy = checkNotNull(withNext.addressCalendar?.upcoming?.first())
+        assertNull(legacy.holidayMoveLine)
+        val eventAdapter = moshi.adapter(PlaceCalendarEvent::class.java)
+        for ((days, line) in listOf(1 to "Moved a day for Thanksgiving.", 2 to "Moved for Thanksgiving.")) {
+            val moved =
+                checkNotNull(
+                    eventAdapter.fromJson(
+                        """{"rule_id":"pickup","kind":"garbage","date":"2026-11-27",
+                            "moved_from":"2026-11-26","holiday":"Thanksgiving","shift_days":$days}""",
+                    ),
+                )
+            assertEquals("2026-11-26", moved.movedFrom)
+            assertEquals(line, moved.holidayMoveLine)
+        }
+        val emptyPickup = checkNotNull(needsDay.addressCalendar)
+        assertNull(emptyPickup.copy(upcoming = listOf(legacy)).pickupSetupMessage)
+        assertEquals(
+            emptyPickup.pickupSetupMessage,
+            emptyPickup.copy(upcoming = listOf(legacy.copy(kind = "property_tax"))).pickupSetupMessage,
+        )
     }
 
     @Test

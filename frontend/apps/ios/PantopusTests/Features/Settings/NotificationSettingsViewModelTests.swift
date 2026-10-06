@@ -391,6 +391,12 @@ extension NotificationSettingsViewModelTests {
     func testBeaconDefaultsAndOptOutPersistWithoutChangingOtherToggles() async throws {
         let defaults = try JSONDecoder().decode(NotificationPreferencesDTO.self, from: Data("{}".utf8))
         XCTAssertTrue(defaults.beaconPushEnabled)
+        XCTAssertNil(defaults.dailyBriefingPromptedAt)
+        let asked = try JSONDecoder().decode(
+            NotificationPreferencesDTO.self,
+            from: Data(#"{"daily_briefing_prompted_at":"2026-10-04T11:00:00Z"}"#.utf8)
+        )
+        XCTAssertEqual(asked.dailyBriefingPromptedAt, "2026-10-04T11:00:00Z")
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.prefsJSON()),
             .status(200, body: Self.prefsJSON(beacon: false))

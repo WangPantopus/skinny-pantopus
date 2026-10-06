@@ -16,6 +16,10 @@ import SwiftUI
 public struct AddHouseholdTaskFormView: View {
     @State var viewModel: AddHouseholdTaskFormViewModel
     @State private var isVisible = false
+    @State private var didFocusDueDate = false
+    @State private var showDueDatePicker = false
+    @State private var selectedDueDate = Date()
+    private let focusDueDate: Bool
     @Environment(\.scenePhase) private var scenePhase
     private let onClose: @MainActor () -> Void
     private let onCreated: (@MainActor (String) -> Void)?
@@ -23,17 +27,20 @@ public struct AddHouseholdTaskFormView: View {
     init(
         homeId: String,
         taskId: String? = nil,
+        focusDueDate: Bool = false,
         api: APIClient = .shared,
+        viewModel: AddHouseholdTaskFormViewModel? = nil,
         onClose: @escaping @MainActor () -> Void,
         onCreated: (@MainActor (String) -> Void)? = nil
     ) {
         _viewModel = State(
-            initialValue: AddHouseholdTaskFormViewModel(
+            initialValue: viewModel ?? AddHouseholdTaskFormViewModel(
                 homeId: homeId,
                 taskId: taskId,
                 api: api
             )
         )
+        self.focusDueDate = focusDueDate
         self.onClose = onClose
         self.onCreated = onCreated
     }
@@ -98,27 +105,66 @@ public struct AddHouseholdTaskFormView: View {
     }
 
     private var editor: some View {
-        FormShell(
-            title: viewModel.isEditing ? "Edit task" : "Add task",
-            rightActionLabel: viewModel.saveLabel,
-            isValid: viewModel.isValid,
-            isDirty: viewModel.isDirty,
-            isSaving: viewModel.isSaving,
-            onClose: onClose,
-            onCommit: { Task { await viewModel.save() } },
-            content: {
-                if let message = viewModel.recoveryMessage {
-                    Text(message).font(.callout).accessibilityIdentifier("homeTask.savedRequest")
+        ScrollViewReader { proxy in
+            FormShell(
+                title: viewModel.isEditing ? "Edit task" : "Add task",
+                rightActionLabel: viewModel.saveLabel,
+                isValid: viewModel.isValid,
+                isDirty: viewModel.isDirty,
+                isSaving: viewModel.isSaving,
+                onClose: onClose,
+                onCommit: { Task { await viewModel.save() } },
+                content: {
+                    if let message = viewModel.recoveryMessage {
+                        Text(message).font(.callout).accessibilityIdentifier("homeTask.savedRequest")
+                    }
+                    Group {
+                        titleAndCategorySection
+                        assigneeSection
+                        scheduleSection.id("taskDueDate")
+                        notesSection
+                    }.disabled(viewModel.hasPendingSave || viewModel.isSaving)
                 }
-                Group {
-                    titleAndCategorySection
-                    assigneeSection
-                    scheduleSection
-                    notesSection
-                }.disabled(viewModel.hasPendingSave || viewModel.isSaving)
+            )
+            .formShakeOnChange(of: viewModel.shakeTrigger)
+            .accessibilityIdentifier("addHouseholdTaskFormShell")
+            .sheet(isPresented: $showDueDatePicker) {
+                NavigationStack {
+                    ScrollView {
+                        DatePicker("Due date", selection: $selectedDueDate, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                            // The task form stores a calendar day at UTC midnight.
+                            // Use that zone here and in its compact field too.
+                            .environment(\.timeZone, TimeZone(secondsFromGMT: 0) ?? .current)
+                            .padding(Spacing.s4)
+                            .accessibilityIdentifier("taskReminderDueDatePicker")
+                    }
+                    .navigationTitle("Due date")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showDueDatePicker = false }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                guard viewModel.isCurrent, scenePhase == .active else { return }
+                                viewModel.setDueDate(selectedDueDate)
+                                showDueDatePicker = false
+                            }
+                            .accessibilityIdentifier("taskReminderDueDateDone")
+                        }
+                    }
+                }
+                .tint(Theme.Color.primaryInk)
+                .presentationDetents([.medium, .large])
             }
-        )
-        .formShakeOnChange(of: viewModel.shakeTrigger)
-        .accessibilityIdentifier("addHouseholdTaskFormShell")
+            .task {
+                guard focusDueDate, !didFocusDueDate else { return }
+                didFocusDueDate = true
+                proxy.scrollTo("taskDueDate", anchor: .bottom)
+                selectedDueDate = dueDatePickerSelection
+                showDueDatePicker = true
+            }
+        }
     }
 }

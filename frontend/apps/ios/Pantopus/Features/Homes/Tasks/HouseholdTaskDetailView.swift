@@ -5,6 +5,7 @@ struct HouseholdTaskDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: HouseholdTaskDetailViewModel
     @State private var isVisible = false
+    @State private var mountOwner: UUID?
     @State private var mediaModel: HomeTaskMediaViewModel?
     @State private var attachmentPresentation: AttachmentPresentation?
     @State private var recurrencePresentation: RecurrencePresentation?
@@ -13,8 +14,13 @@ struct HouseholdTaskDetailView: View {
     private let taskId: String
     private let onEdit: @MainActor () -> Void
 
-    init(homeId: String, taskId: String, onEdit: @escaping @MainActor () -> Void = {}) {
-        _viewModel = State(initialValue: HouseholdTaskDetailViewModel(homeId: homeId, taskId: taskId))
+    init(
+        homeId: String,
+        taskId: String,
+        viewModel: HouseholdTaskDetailViewModel? = nil,
+        onEdit: @escaping @MainActor () -> Void = {}
+    ) {
+        _viewModel = State(initialValue: viewModel ?? HouseholdTaskDetailViewModel(homeId: homeId, taskId: taskId))
         self.onEdit = onEdit
         self.homeId = homeId
         self.taskId = taskId
@@ -49,6 +55,13 @@ struct HouseholdTaskDetailView: View {
                             LabeledContent("Repeat preference", value: recurrence)
                             Text("Automatic repeats are off.").font(.caption)
                         }
+                        if task.capabilities?.canComplete == true {
+                            Button(task.status == "done" ? "Mark not done" : "Mark done") {
+                                Task { await viewModel.toggleDone() }
+                            }
+                            .disabled(viewModel.acting)
+                            .accessibilityIdentifier("householdTaskDetail.complete")
+                        }
                     }
                     Section {
                         Button("Repeat schedule") {
@@ -80,7 +93,10 @@ struct HouseholdTaskDetailView: View {
                         }
                     }
                 }
-                .refreshable { await viewModel.load() }
+                .refreshable {
+                    guard isVisible, scenePhase == .active else { return }
+                    await viewModel.load()
+                }
             } else {
                 ContentUnavailableView {
                     Label("Task unavailable", systemImage: "checklist")
@@ -105,8 +121,14 @@ struct HouseholdTaskDetailView: View {
         .sheet(item: $gigPresentation, onDismiss: { resumeCurrentScreen() }, content: { presentation in
             HomeTaskGigView(model: presentation.model)
         })
-        .onAppear { isVisible = true }
-        .task { await viewModel.load() }
+        .onAppear { isVisible = true
+            attachIfNeeded()
+        }
+        .task {
+            guard !Task.isCancelled, scenePhase == .active else { return }
+            attachIfNeeded()
+            await viewModel.load()
+        }
         .onChange(of: scenePhase) { _, phase in
             guard isVisible else { return }
             if phase == .active { resumeCurrentScreen() } else { viewModel.suspend() }
@@ -127,9 +149,13 @@ struct HouseholdTaskDetailView: View {
                 gigPresentation = nil
             }
         }
-        .onDisappear { DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
-            isVisible = false
-            viewModel.suspend()
+        .onDisappear { isVisible = false
+            if let owner = mountOwner {
+                mountOwner = nil
+                if viewModel.detachView(owner) {
+                    DeepLinkRouter.shared.completeHomeTaskArrival(homeId: homeId, taskId: taskId)
+                }
+            }
             if attachmentPresentation == nil { mediaModel?.retire()
                 mediaModel = nil
             }
@@ -159,5 +185,9 @@ struct HouseholdTaskDetailView: View {
             guard isVisible, scenePhase == .active else { return }
             await viewModel.resume(ifCurrent: revision)
         }
+    }
+
+    private func attachIfNeeded() {
+        if mountOwner == nil { mountOwner = viewModel.attachView() }
     }
 }
