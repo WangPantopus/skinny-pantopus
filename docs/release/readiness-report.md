@@ -1,5 +1,8 @@
 # Release Readiness & Hardening Sweep — RR-C
 
+> Historical snapshot (June 2026). The current launch steps are in
+> [the launch checklist](prod-config-checklist.md).
+
 **Date:** 2026-06-05 · **Branch:** `claude/tender-brahmagupta-qSVBG` · **Base:** `896723d`
 **Scope:** iOS (`frontend/apps/ios`) + Android (`frontend/apps/android`), backend contract checks.
 **Method:** Static end-to-end trace of each surface through both clients and the backend, plus a live
