@@ -1,5 +1,6 @@
 'use client';
 
+import { parseDisplayDate } from '@pantopus/ui-utils';
 import type { CounterItem } from '@/types/mailbox';
 import DrawerBadge from './DrawerBadge';
 
@@ -45,7 +46,7 @@ export default function CounterCard({ item, onAction }: CounterCardProps) {
           <DrawerBadge drawer={item.drawer} size="sm" />
           {item.due_date && (
             <span className={`text-xs ${isOverdue ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-app-text-muted'}`}>
-              Due {new Date(item.due_date).toLocaleDateString()}
+              Due {parseDisplayDate(item.due_date).toLocaleDateString()}
             </span>
           )}
         </div>

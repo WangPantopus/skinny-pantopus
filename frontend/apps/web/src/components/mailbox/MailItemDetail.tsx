@@ -10,6 +10,7 @@ import type {
 // Security: DOMPurify is required to sanitize HTML rendered via dangerouslySetInnerHTML.
 // Do not remove — mail content is untrusted user/external input (AUTH-3.2).
 import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
+import { parseDisplayDate } from '@pantopus/ui-utils';
 import TrustBadge from './TrustBadge';
 import UrgencyIndicator from './UrgencyIndicator';
 import DrawerBadge from './DrawerBadge';
@@ -168,7 +169,7 @@ function AmountDueBlockView({ block }: { block: InsideBlock & { type: 'amount_du
           </p>
           {block.due_date && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-              Due {new Date(block.due_date).toLocaleDateString()}
+              Due {parseDisplayDate(block.due_date).toLocaleDateString()}
             </p>
           )}
         </div>
