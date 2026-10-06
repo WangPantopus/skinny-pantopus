@@ -315,7 +315,7 @@ extension SupportTrainDetailViewModel {
             kind: kind(from: dto.supportModes),
             title: title,
             dateRange: dateRange(slots: slots),
-            daysLeft: daysLeft(slots: slots),
+            daysLeft: daysLeft(slots: slots, status: dto.status),
             slotsFilled: slotsFilled,
             slotsTotal: slotsTotal,
             // `/:id` carries no helper roster. Organizers aren't helpers, so the
@@ -603,7 +603,9 @@ extension SupportTrainDetailViewModel {
         return "\(format(min, "EEE MMM d")) → \(format(max, "EEE MMM d"))"
     }
 
-    private nonisolated static func daysLeft(slots: [SupportTrainSlotDTO]) -> Int {
+    /// Days until the last slot. A closed Train has none left, whatever its last date.
+    private nonisolated static func daysLeft(slots: [SupportTrainSlotDTO], status: String?) -> Int {
+        if status == "completed" || status == "archived" { return 0 }
         let cal = utcCalendar()
         let dates = slots.compactMap { parseSlotDate($0.slotDate) }
         guard let max = dates.max() else { return 0 }

@@ -43,7 +43,7 @@ object SupportTrainDetailProjection {
                 kind = kind(dto.supportModes),
                 title = title,
                 dateRange = dateRange(slots),
-                daysLeft = daysLeft(slots),
+                daysLeft = daysLeft(slots, dto.status),
                 slotsFilled = covered,
                 slotsTotal = total,
                 contributors = emptyList(),
@@ -332,7 +332,12 @@ object SupportTrainDetailProjection {
         return "${format(min, "EEE MMM d")} → ${format(max, "EEE MMM d")}"
     }
 
-    private fun daysLeft(slots: List<SupportTrainSlotDto>): Int {
+    // Days until the last slot. A closed Train has none left, whatever its last date.
+    private fun daysLeft(
+        slots: List<SupportTrainSlotDto>,
+        status: String?,
+    ): Int {
+        if (status == "completed" || status == "archived") return 0
         val max = slots.mapNotNull { parseDate(it.slotDate) }.maxByOrNull { it.time } ?: return 0
         val diff = ((max.time - startOfTodayUtc().time) / MILLIS_PER_DAY).toInt()
         return maxOf(0, diff)
