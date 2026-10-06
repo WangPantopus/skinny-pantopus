@@ -128,6 +128,7 @@ class HomeSettingsViewModel
         private var frame: HomeSettingsSampleData.Frame = HomeSettingsSampleData.Frame.Populated
         private var subtexts = RowSubtexts()
         private var showsGuestPasses = true
+
         /**
          * The viewer's effective permissions from `GET /:id/me`, so rows the server
          * would refuse (Privacy, Access codes, People…) aren't offered. Null when
@@ -274,30 +275,7 @@ class HomeSettingsViewModel
                 detail.name?.takeIf { it.isNotBlank() }
                     ?: detail.address?.takeIf { it.isNotBlank() }
                     ?: "This home"
-            // The chip and footer describe this viewer's real standing: the detail
-            // payload carries their owner_status / occupancy verification and role.
-            val verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
-            // An invitation or a manager's approval gives household access, not a
-            // verified address (F3b), so it doesn't read as "Verified".
-            val householdOnly =
-                verified && detail.ownershipStatus != "verified" && detail.residencySource == "household"
-            _identity.value =
-                HomeSettingsSampleData.Identity(
-                    homeName = homeName,
-                    addressChipLabel =
-                        when {
-                            isPending -> "Verifying"
-                            householdOnly -> "Household access"
-                            verified -> "Verified"
-                            else -> "Unverified"
-                        },
-                    addressChipTone =
-                        when {
-                            isPending || !verified -> RowControl.ChipTone.Warning
-                            householdOnly -> RowControl.ChipTone.Info
-                            else -> RowControl.ChipTone.Success
-                        },
-                )
+            _identity.value = identityFor(homeName, detail, isPending)
             _footerCaption.value = "$homeName · ${if (isPending) "Claim pending" else roleLabel(detail, access)}"
             subtexts =
                 RowSubtexts(
@@ -316,6 +294,30 @@ class HomeSettingsViewModel
                     draft = if (current.isRenaming) current.draft else currentName,
                 )
             }
+        }
+
+        /**
+         * The chip describes this viewer's real standing: the detail payload carries
+         * their owner_status, occupancy verification and its source. An invitation or
+         * a manager's approval gives household access, not a verified address (F3b),
+         * so it doesn't read as "Verified".
+         */
+        private fun identityFor(
+            homeName: String,
+            detail: HomeDetail,
+            isPending: Boolean,
+        ): HomeSettingsSampleData.Identity {
+            val verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
+            val householdOnly =
+                verified && detail.ownershipStatus != "verified" && detail.residencySource == "household"
+            val (label, tone) =
+                when {
+                    isPending -> "Verifying" to RowControl.ChipTone.Warning
+                    householdOnly -> "Household access" to RowControl.ChipTone.Info
+                    verified -> "Verified" to RowControl.ChipTone.Success
+                    else -> "Unverified" to RowControl.ChipTone.Warning
+                }
+            return HomeSettingsSampleData.Identity(homeName = homeName, addressChipLabel = label, addressChipTone = tone)
         }
 
         /** Human label for the viewer's role in this home (owner, else their role_base). */
