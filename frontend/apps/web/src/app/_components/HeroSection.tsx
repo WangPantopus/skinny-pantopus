@@ -56,7 +56,6 @@ export default function HeroSection() {
                   border: '1px solid var(--rule)',
                   boxShadow: '0 1px 2px rgba(15,23,42,0.05), 0 10px 30px rgba(15,23,42,0.07)',
                 }}
-                aria-label="Type your address to see your free preview"
               >
                 <span aria-hidden="true" style={{ color: 'var(--color-primary-700)', fontSize: '20px' }}>⌖</span>
                 <span className="flex-1 line-clamp-2" style={{ color: 'var(--ink-3)', fontSize: '16px' }}>
