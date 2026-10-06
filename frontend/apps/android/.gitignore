@@ -37,7 +37,8 @@ fastlane/Preview.html
 fastlane/screenshots
 fastlane/test_output
 fastlane/play-service-account.json
-fastlane/metadata
+# Listing text is tracked (approved by the founder); downloaded store images aren't.
+fastlane/metadata/android/*/images/
 vendor/bundle
 
 # KSP / annotation processing

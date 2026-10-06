@@ -1,7 +1,7 @@
 # Pantopus — Privacy Data Inventory
 
 **Status:** Pre-launch (Bucket 2, Block RR-A)
-**Last reviewed:** 2026-08-18 (persistent login & trusted devices — new identifiers, see §2.6, §2.9, §5)
+**Last reviewed:** 2026-10-06 (launch review: health details in emergency info §2.10, location wired §2.4, system boot time and App Group defaults §3)
 **Owner:** Mobile / Compliance
 
 This is the single source of truth for **what personal data the Pantopus
@@ -17,7 +17,7 @@ consistent with it:
 | Google Play **Data safety** form | `docs/compliance/play-data-safety.md` | Play Console → App content → Data safety |
 
 > **Cross-platform note.** Both apps talk to the same backend
-> (`api.pantopus.app`) and collect the same product data, so the data
+> (`api.pantopus.com`) and collect the same product data, so the data
 > *categories* are shared. Platform-specific mechanics (APNs vs FCM tokens,
 > required-reason APIs, SDK lists) are called out inline.
 
@@ -29,7 +29,7 @@ All first-party data egress flows through a small number of chokepoints:
 
 | Chokepoint | iOS | Android | Notes |
 |------------|-----|---------|-------|
-| REST API | `Core/Networking/APIClient.swift` | `data/api/**` (Retrofit) | JSON over TLS to `https://api.pantopus.app`. Bearer token from secure storage. |
+| REST API | `Core/Networking/APIClient.swift` | `data/api/**` (Retrofit) | JSON over TLS to `https://api.pantopus.com`. Bearer token from secure storage. |
 | File upload | `Core/Networking/MultipartUploader.swift` → `POST /api/files/upload` | mirror | Photos / documents as `multipart/form-data`. |
 | Realtime | `Core/Realtime` (Socket.IO) | Socket.IO | Chat messages, presence. |
 | Payments | Stripe `PaymentSheet` (`Core/Payments`) | Stripe Android SDK | Card data goes **device → Stripe**, never through our servers. |
@@ -85,18 +85,9 @@ track across apps/sites owned by other companies (always *No* here).
 |-------|----------|---------|
 | Coarse / precise location | Maps + "near you" surfaces (Nearby, Explore, Gigs/Tasks map, Mailbox map). iOS purpose strings `NSLocationWhenInUseUsageDescription` / `…AlwaysAndWhenInUse…` in `project.yml`. Android `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` in `AndroidManifest.xml`. | Backend (lat/lng query params on nearby/gig reads) |
 
-> ⚠️ **iOS implementation-status finding (not a fabrication).** On iOS the
-> live `CLLocationManager` provider is **not yet wired** —
-> `Core/Location/LocationProvider.swift` ships a `FallbackLocationProvider`
-> that returns a hardcoded coordinate, and no `CLLocationManager` symbol is
-> referenced anywhere in the app. The location **permission strings already
-> ship** in `project.yml`, the map/Nearby features are built around device
-> location, and **Android already collects real device location**, so
-> location is **forward-declared** in the iOS manifest + labels for GA. This
-> is the App-Review-safe direction (over-declaring is permitted;
-> under-declaring is the rejection risk). **Action for the GA build:** confirm
-> the real location provider is wired *or* drop the iOS location entries +
-> purpose strings before submission so the manifest matches the binary.
+> **2026-10-06:** iOS device location is wired (`Core/Location/DeviceLocationProvider.swift`
+> requests when-in-use authorization for address lookup and nearby surfaces), so the
+> location entries describe the shipped binary. The app never requests "always" access.
 
 ### 2.5 User Content — *App Functionality, Linked, not Tracking*
 
@@ -187,6 +178,15 @@ Keychain/Keystore review, not for the labels):**
 > covers Auto Backup; the explicit exclusion covers device-to-device transfer).
 > Verify before the Phase-1 store submission.
 
+### 2.10 Health — *App Functionality, Linked, not Tracking* — *new 2026-10*
+
+| Field | Evidence | Sent to |
+|-------|----------|---------|
+| Medical details a household chooses to enter in a home's emergency info (for example conditions or medications for a family member) | Home emergency info (`backend/routes/home.js`, emergency info routes, gated by `sensitive.view`; guest passes never include medical rows) | Backend; shown only to people the owner granted sensitive access |
+
+Optional and user-entered; never used for analytics or shared with third parties.
+Apple: **Health**. Google Play: **Health info**.
+
 ---
 
 ## 3. Required-reason API audit (iOS — Apple "privacy-impacting" APIs)
@@ -197,13 +197,13 @@ manifests and are **out of scope** for this file.
 
 | Apple category | Used by app code? | Evidence | Reason code in manifest |
 |----------------|-------------------|----------|-------------------------|
-| **UserDefaults** (`NSPrivacyAccessedAPICategoryUserDefaults`) | **Yes** | Hub banner-dismissed flag (`Features/Hub/HubViewModel.swift`); per-surface search recents (`Features/Shared/SearchList/SearchListState.swift`, `RecentQueriesStore`) | **`CA92.1`** — read/write info accessible only to the app itself |
+| **UserDefaults** (`NSPrivacyAccessedAPICategoryUserDefaults`) | **Yes** | Hub banner-dismissed flag (`Features/Hub/HubViewModel.swift`); per-surface search recents (`Features/Shared/SearchList/SearchListState.swift`, `RecentQueriesStore`); the widget snapshot in the `group.app.pantopus.ios` App Group (`Core/Widgets/GigWidgetSnapshot.swift`, read by the `PantopusWidgets` extension) | **`CA92.1`** (app only) and **`1C8F.1`** (App Group); the widget extension's own manifest declares `1C8F.1` |
 | File timestamp (`…FileTimestamp`) | **No** | The only `FileManager.attributesOfItem(atPath:)` call (`Features/Homes/Documents/UploadDocumentFormViewModel.swift:286`) reads **`.size` only** — no `.modificationDate`/`.creationDate`/`stat` timestamp symbol is referenced. Not triggered. | — |
-| System boot time (`…SystemBootTime`) | **No** | No `systemUptime` / `mach_absolute_time` / boot-time API in app code. | — |
+| System boot time (`…SystemBootTime`) | **Yes** (since 2026-10) | `ProcessInfo.processInfo.systemUptime` in `Core/Analytics/PilotEvents.swift` measures time between foreground and background for pilot session events. | **`35F9.1`** — time elapsed between in-app events |
 | Disk space (`…DiskSpace`) | **No** | No `volumeAvailableCapacity` / `systemFreeSize` / `statfs`. (`.size` of a single picked file is not the disk-space category.) | — |
 | Active keyboards (`…ActiveKeyboards`) | **No** | No `activeInputModes`. | — |
 
-→ iOS manifest `NSPrivacyAccessedAPITypes` = **UserDefaults `CA92.1`** only.
+→ iOS manifest `NSPrivacyAccessedAPITypes` = **UserDefaults `CA92.1` + `1C8F.1`** and **System boot time `35F9.1`**.
 
 > **2026-08 re-check (persistent login).** The new auth code uses
 > `LocalAuthentication` (`LAContext.evaluatePolicy`), `CryptoKit`
