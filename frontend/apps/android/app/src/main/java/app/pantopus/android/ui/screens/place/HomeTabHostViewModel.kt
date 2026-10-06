@@ -12,6 +12,8 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.ui.screens.homes.PendingVerification
+import app.pantopus.android.ui.screens.homes.pendingVerificationFor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,6 +73,25 @@ class HomeTabHostViewModel
          * later in this session lands Place the next time the Hub root shows. No skeleton
          * or error replaces the Hub on this check.
          */
+        /**
+         * Where the Hub's "Verify your address" goes: a Home that already waits on
+         * verification continues there, as My Homes does (a filed claim's Waiting
+         * Room, residency status, or ownership evidence); with none, Add Home.
+         */
+        suspend fun verificationTarget(): HubVerificationTarget {
+            val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.homes.orEmpty()
+            for (home in homes) {
+                if (home.pendingClaimId != null) return HubVerificationTarget.WaitingRoom(home.id)
+                if (home.accessKind == "private_setup") return HubVerificationTarget.Residency(home.id)
+                when (pendingVerificationFor(home)) {
+                    PendingVerification.Owner -> return HubVerificationTarget.ClaimOwnership(home.id)
+                    PendingVerification.Residency -> return HubVerificationTarget.Residency(home.id)
+                    null -> Unit
+                }
+            }
+            return HubVerificationTarget.AddHome
+        }
+
         fun refreshIfNoHome() {
             if (_landing.value != HomeLanding.Hub || resolveJob?.isActive == true) return
             resolveJob =
@@ -177,4 +198,15 @@ sealed interface HomeLanding {
     data class PlaceDashboard(val homeId: String) : HomeLanding
 
     data object Hub : HomeLanding
+}
+
+/** The screen the Hub's "Verify your address" opens. */
+sealed interface HubVerificationTarget {
+    data object AddHome : HubVerificationTarget
+
+    data class WaitingRoom(val homeId: String) : HubVerificationTarget
+
+    data class Residency(val homeId: String) : HubVerificationTarget
+
+    data class ClaimOwnership(val homeId: String) : HubVerificationTarget
 }
