@@ -37,6 +37,24 @@ function formatSlotDate(slotDate) {
   });
 }
 
+// "17:00:00" -> "5:00 pm", the way the apps show slot times.
+function formatClockTime(value) {
+  const match = /^(\d{1,2}):(\d{2})/.exec(String(value || ''));
+  if (!match) return String(value || '');
+  const hours = Number(match[1]);
+  return `${hours % 12 || 12}:${match[2]} ${hours >= 12 ? 'pm' : 'am'}`;
+}
+
+/** A slot's time window for emails: "5:00 pm – 7:00 pm", "From 5:00 pm", "Until 7:00 pm". */
+function formatSupportTrainSlotTime(slot) {
+  if (!slot) return null;
+  const { start_time: start, end_time: end } = slot;
+  if (start && end) return `${formatClockTime(start)} – ${formatClockTime(end)}`;
+  if (start) return `From ${formatClockTime(start)}`;
+  if (end) return `Until ${formatClockTime(end)}`;
+  return null;
+}
+
 function buildReminderTitle() {
   return 'Support Train Reminder';
 }
@@ -305,10 +323,7 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
             const secondLine = home ? [home.city, home.state, home.zipcode] : [delivery.delivery_city, delivery.delivery_state, delivery.delivery_zip];
             if (firstLine) addressLabel = [firstLine, secondLine.filter(Boolean).join(', ')].filter(Boolean).join('\n');
           }
-          const slotTime = payload.start_time && payload.end_time
-            ? `${payload.start_time} - ${payload.end_time}`
-            : payload.start_time ? `${payload.start_time}+`
-              : payload.end_time ? `Until ${payload.end_time}` : null;
+          const slotTime = formatSupportTrainSlotTime(payload);
           const result = await sendGuestReservationReminderEmail({
             toEmail: payload.helper_guest_email,
             guestName: payload.helper_guest_name || 'helper',
@@ -459,4 +474,4 @@ async function _getAllParticipants(supportTrainId, excludeUserId) {
   return [...ids];
 }
 
-module.exports = { emitSupportTrainEvent };
+module.exports = { emitSupportTrainEvent, formatSupportTrainSlotTime };
