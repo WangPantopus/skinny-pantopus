@@ -22,7 +22,27 @@ data class OwnershipClaimDto(
     val status: String,
     @Json(name = "created_at") val createdAt: String,
     @Json(name = "updated_at") val updatedAt: String,
-)
+    /** The address the person claimed (their own entry), when the server sends it. */
+    val home: ClaimedHome? = null,
+) {
+    /** The claimed Home's address lines. */
+    @JsonClass(generateAdapter = true)
+    data class ClaimedHome(
+        val address: String? = null,
+        val address2: String? = null,
+        val city: String? = null,
+        val state: String? = null,
+    ) {
+        /** "901 C Street Unit 4, Vancouver", or null without a street. */
+        val label: String?
+            get() {
+                val street = listOfNotNull(address, address2).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" ")
+                if (street.isEmpty()) return null
+                val town = city?.trim().orEmpty()
+                return if (town.isEmpty()) street else "$street, $town"
+            }
+    }
+}
 
 /** Envelope for `GET /api/homes/my-ownership-claims`. */
 @JsonClass(generateAdapter = true)
