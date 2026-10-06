@@ -35,6 +35,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,10 +110,9 @@ fun HouseholdTaskDetailScreen(
 internal fun HouseholdTaskReadOnlyContent(task: HomeTaskDto) {
     Text(task.title, style = MaterialTheme.typography.headlineSmall)
     task.description?.takeIf(String::isNotBlank)?.let { Text(it) }
-    Text("Status: ${task.status.replace('_', ' ')}")
-    Text("Type: ${task.taskType}")
-    task.dueAt?.let { Text("Due: $it") }
-    task.priority?.let { Text("Priority: $it") }
+    Text("Status: ${task.status.taskLabel()}")
+    task.priority?.let { Text("Priority: ${it.taskLabel()}") }
+    task.dueAt?.let { Text("Due: ${taskDueLabel(it)}") }
     HouseholdTasksListViewModel.assigneeDisplay(task.assignedTo)?.let { Text("Assigned to $it") }
     if (task.automaticRecurrence != null) {
         Text(task.automaticRecurrence.label())
@@ -117,8 +121,16 @@ internal fun HouseholdTaskReadOnlyContent(task: HomeTaskDto) {
             task.recurrenceRule,
         )?.let { Text("Saved repeat preference: $it. Automatic repeats are off.") }
     }
-    task.visibility?.let { Text("Visibility: ${it.replace('_', ' ')}") }
 }
+
+private fun String.taskLabel(): String = replace('_', ' ').replaceFirstChar { it.titlecase(Locale.getDefault()) }
+
+/** The due time in this device's zone, as iOS shows it ("Oct 20, 2026, 9:00 AM"). */
+private fun taskDueLabel(value: String): String =
+    runCatching {
+        OffsetDateTime.parse(value).atZoneSameInstant(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT))
+    }.getOrDefault("Date unavailable")
 
 @Composable
 private fun TaskDetailActions(

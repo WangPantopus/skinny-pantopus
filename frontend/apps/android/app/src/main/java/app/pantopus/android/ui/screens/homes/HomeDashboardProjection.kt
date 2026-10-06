@@ -135,6 +135,11 @@ object HomeDashboardProjection {
                     ),
                 )
             }
+            // The maintenance log (`GET /api/homes/:id/maintenance`) has no count in
+            // the dashboard aggregate, so its tile carries no badge and isn't muted.
+            if (allowed("maintenance.view")) {
+                add(QuickActionTile("view_maintenance", "Maintenance", PantopusIcon.Hammer, QuickActionTone.Home))
+            }
             if (allowed("docs.view")) {
                 add(tile("view_docs", "Docs", PantopusIcon.FileText, QuickActionTone.Home, safe.documents))
             }

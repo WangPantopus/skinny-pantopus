@@ -17,6 +17,7 @@ import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
+import java.time.ZoneId
 
 internal class HomeTaskRecurrenceFixture {
     val home = "d1000000-0000-4000-8000-000000000001"
@@ -35,7 +36,7 @@ internal class HomeTaskRecurrenceFixture {
     val store = RecurrenceMemoryStore()
     var task = HomeTaskDto(taskId, home, "chore", "Private recurrence source", dueAt = stamp, updatedAt = stamp)
     var state = HomeTaskRecurrenceState(true, home, taskId, true, stamp, 0, server)
-    val request = HomeTaskRecurrenceRequest(id, "start", 0, stamp, "WEEKLY", 1, "UTC")
+    val request = HomeTaskRecurrenceRequest(id, "start", 0, stamp, "WEEKLY", 1, ZoneId.systemDefault().id)
     val original = PendingHomeTaskRecurrence(key, request)
 
     init {

@@ -16,7 +16,9 @@ data class OwnershipClaimDto(
     val id: String,
     @Json(name = "home_id") val homeId: String,
     @Json(name = "claim_type") val claimType: String,
-    val method: String,
+    // Nullable in `HomeOwnershipClaim`: real submissions always set it, but
+    // older rows may not, and one such row must not fail the whole list.
+    val method: String? = null,
     val status: String,
     @Json(name = "created_at") val createdAt: String,
     @Json(name = "updated_at") val updatedAt: String,
