@@ -293,6 +293,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
+          # This job doesn't install pnpm; don't let setup-node cache for it.
+          package-manager-cache: false
       - run: node --test scripts/deploy/*.test.cjs scripts/db/*.test.cjs scripts/staging/*.test.cjs
       - name: Protect migration history
         id: database
