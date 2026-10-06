@@ -337,7 +337,10 @@ jobs:
 
   ci-ok:
     name: CI OK
-    if: always()
+    # Not always(): a cancelled run (a pull request's newer push) must end at once.
+    # With always() its CI OK still waited for a runner, holding the concurrency
+    # group, so the newer run sat pending behind a run that was already cancelled.
+    if: ${{ !cancelled() }}
     needs: [changes, backend, backend-image, web, web-e2e, seeder, ios, android, infrastructure, database]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
