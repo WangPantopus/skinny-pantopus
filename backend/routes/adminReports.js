@@ -272,10 +272,11 @@ router.post('/post/:reportId/remove', async (req, res) => {
         return res.status(500).json({ error: 'Failed to remove the post' });
       }
       // The author still sees the post, so without this they'd never learn neighbors can't.
-      // Neither the reporter nor the moderator is named.
+      // Neither the reporter nor the moderator is named. The apps sort notices by words in the
+      // type, and one with "post" in it would show as a Reply; this one lands under System.
       notificationService.createNotification({
         userId: post.user_id,
-        type: 'post_removed',
+        type: 'content_removed',
         title: 'Your post was removed',
         body: 'A Pantopus moderator removed it after a report. Neighbors can no longer see it.',
         icon: '🛡️',
