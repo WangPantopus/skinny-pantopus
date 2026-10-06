@@ -65,7 +65,7 @@ export default function PrivacyPage() {
           </p>
           <p>
             For privacy questions, contact us at{' '}
-            <a href="mailto:privacy@pantopus.com" className="text-indigo-600 dark:text-indigo-400 hover:underline">
+            <a href="mailto:privacy@pantopus.com" className="text-indigo-600 dark:text-indigo-400 underline underline-offset-2 hover:decoration-2">
               privacy@pantopus.com
             </a>.
           </p>
@@ -136,7 +136,7 @@ export default function PrivacyPage() {
           ]} />
           <p>
             To exercise any of these rights, contact us at{' '}
-            <a href="mailto:privacy@pantopus.com" className="text-indigo-600 dark:text-indigo-400 hover:underline">
+            <a href="mailto:privacy@pantopus.com" className="text-indigo-600 dark:text-indigo-400 underline underline-offset-2 hover:decoration-2">
               privacy@pantopus.com
             </a>.
           </p>
@@ -157,7 +157,7 @@ export default function PrivacyPage() {
         <PolicySection title="9. Contact">
           <p>
             For privacy-related questions, data requests, or concerns, reach us at:{' '}
-            <a href="mailto:privacy@pantopus.com" className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
+            <a href="mailto:privacy@pantopus.com" className="text-indigo-600 dark:text-indigo-400 underline underline-offset-2 hover:decoration-2 font-medium">
               privacy@pantopus.com
             </a>
           </p>
@@ -227,7 +227,7 @@ function SiteNav() {
 
 function SiteFooter() {
   return (
-    <footer className="bg-gray-900 text-app-text-muted py-16">
+    <footer className="bg-gray-900 text-slate-400 py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-5 gap-8 mb-12">
           <div className="md:col-span-2">
@@ -235,12 +235,12 @@ function SiteFooter() {
               <LayoutDashboard className="w-5 h-5 text-primary-600" />
               <span className="text-lg font-bold text-white">Pantopus</span>
             </div>
-            <p className="text-sm text-app-text-secondary leading-relaxed max-w-xs">
+            <p className="text-sm text-slate-400 leading-relaxed max-w-xs">
               Your real-world network. Verified people, real homes, local work, and Beacons in one place.
             </p>
           </div>
           <div>
-            <h4 className="text-white font-semibold mb-4 text-sm">Product</h4>
+            <h3 className="text-white font-semibold mb-4 text-sm">Product</h3>
             <ul className="space-y-2.5 text-sm">
               <li><Link href="/#features" className="hover:text-white transition">Features</Link></li>
               <li><Link href="/#how-it-works" className="hover:text-white transition">How it works</Link></li>
@@ -248,21 +248,21 @@ function SiteFooter() {
             </ul>
           </div>
           <div>
-            <h4 className="text-white font-semibold mb-4 text-sm">Company</h4>
+            <h3 className="text-white font-semibold mb-4 text-sm">Company</h3>
             <ul className="space-y-2.5 text-sm">
               <li><Link href="/about" className="hover:text-white transition">About</Link></li>
               <li><Link href="/contact" className="hover:text-white transition">Contact</Link></li>
             </ul>
           </div>
           <div>
-            <h4 className="text-white font-semibold mb-4 text-sm">Legal</h4>
+            <h3 className="text-white font-semibold mb-4 text-sm">Legal</h3>
             <ul className="space-y-2.5 text-sm">
               <li><Link href="/privacy" className="hover:text-white transition">Privacy</Link></li>
               <li><Link href="/terms" className="hover:text-white transition">Terms</Link></li>
             </ul>
           </div>
         </div>
-        <div className="border-t border-gray-800 pt-8 text-center text-sm text-app-text-secondary">
+        <div className="border-t border-gray-800 pt-8 text-center text-sm text-slate-400">
           <p>© 2026 Pantopus. All rights reserved.</p>
         </div>
       </div>
