@@ -57,6 +57,13 @@ Sources, in order of authority for this work:
 - [x] Task reminders arrive the morning of the due day in the household's time zone; Support Train reminders use the train's local time.
 - [x] The task-completed push doesn't name the task or the person on the lock screen.
 
+**Made by the founder on October 6.**
+
+- [x] Launch checklist decisions D1, D2, D4, D5, D7 and D8 as recommended: the API at `api.pantopus.com` (staging `staging-api.pantopus.com`); new store listings named "Pantopus Home"; Stripe test mode during the pilot; a live Lob key and a real return address before production; no error monitoring in the pilot; one server carries staging and production. D3 (a new production database or the April one, and whether April users sign up again) and D6 (which email service is already paid for) are still open.
+- [x] A homeowner whose ownership claim is pending can verify their address by postcard while the claim waits; they become a verified resident and ownership stays pending. Admin identity attestation was not chosen.
+- [x] Support Train gift funds stay off for the first launch and get built later, only if that can be done without money mistakes (section 5).
+- [x] Holiday pickup moves: the founder confirmed the Vancouver, Washougal and Camas rules from the official sources (PR 1693 marks those rows official). Camas garbage on New Year's Day 2027 stays unconfirmed, and never pushes, until the founder's call to Camas Sanitation (section 2).
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -169,7 +176,10 @@ A checked subitem means the named implementation or local check is complete; a p
 
 - [ ] Release-candidate sweep (L4) before the pilot.
   - [x] October 6: every reachable web page on the production build opened as a homeowner, a new user and a non-member (198 pages; three old /app addresses crashed and are fixed in PR 1655); every route opened as an app link on Android and, signed out, on iOS with no crashes; signed-in Lighthouse: performance 72–77, accessibility 93–100.
-  - [ ] Native Release builds with the largest text, dark mode, VoiceOver and TalkBack and a small screen on the pilot journeys; a signed-in iOS pass; store screenshots with test data.
+  - [x] October 6, iOS signed in as a homeowner: VoiceOver names every control on the four tabs, dark mode reads correctly, the tabs fit an iPhone SE, and with the server unreachable each tab says so, offers a retry and recovers when it's back. Two Place-tab issues went to L1: its section rows aren't announced as buttons, and re-tapping the Place tab icon shows the older hub screen (switching tabs brings Your Place back since PR 1678).
+  - [ ] Known gap, after the pilot: the iOS app doesn't follow the system text size. Its type styles are fixed sizes, so text never grows at larger settings (nothing breaks).
+  - [x] October 6, Android Release build (R8-shrunk, Android 16 emulator, homeowner): Place, Today, Pulse, a post, chat with sending, Home dashboard, creating and deleting a task, the menu and the wallet all work with no crash; TalkBack names the controls; text holds at the largest font (2×); cold start 1.3 s. Found: Pulse shows an empty feed until location or an area is chosen (L3), and the first-use card says "Two things" over one row (L1, iOS too).
+  - [ ] The iOS Release build on the pilot journeys; store screenshots with test data.
 
 ## 4. The pilot
 
@@ -203,6 +213,7 @@ Phases 0 and 1 of the [Street Organizer launch plan](docs/product/street-organiz
 - [ ] Ledger "Next" ideas: city founding map, open-slots card, seasonal card, weekly email digest, address-change watches, home-file chat, draft-and-approve replies, home handover, national library, health and market sections, the density-lock change, saved-place snapshot columns, an audit of shipped screens against the September docs' checklist.
 - [ ] Street Organizer Phase 2 software, only after Gate 2: plans, My plans, Nearby and Household inside existing surfaces, crew route tools, postcards with codes and the weekly digest. Its invitation pages are web, so it reopens the mobile-only decision.
 - [ ] Pulse, after Crew Day launches, per [PR 625](https://github.com/WangPantopus/skinny-pantopus/pull/625) and its review: one town-wide space first, with street areas opening on Crew Day streets. Aim for the place people ask their town, alongside the Facebook groups they already use, not a replacement for them.
+- [ ] Support Train gift funds (off since October 6, PR 1624; the routes exist and are untested). First decide who receives the money (the recipient, the organizer, or Pantopus holding it), whether it waits until the Train ends, any platform fee, what happens when the recipient has no account, and whether organizers see anonymous amounts ([audit](docs/support-train-payments-audit.md)). Recommended order: first let the organizer add an outside fundraiser link (no money passes through Pantopus); in-app gifts through Stripe only after those decisions, with the same test-card checks as invoices.
 - [ ] Porchlight stays an option: at most a by-hand trial with five families after the pilot.
 - [ ] The Pantopus Agent, in four stages, each only after the one before passes its gate ([product design](docs/product/pantopus-agent-product-design-2026-10-04.md), [system design](docs/product/pantopus-agent-system-design-2026-10-04.md)):
   - [ ] Stage 1, Know: one box on the Today tab answering from what Pantopus already knows, with sources, and tasks and reminders after one tap. In the pilot area first.
