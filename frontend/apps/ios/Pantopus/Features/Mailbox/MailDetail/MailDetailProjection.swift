@@ -17,7 +17,11 @@ extension MailDetailViewModel {
         let category = item.certified ? MailItemCategory.certified : MailItemCategory.fromRaw(item.mailType ?? item.type)
         // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
         let trust = MailTrust.fromRaw(item.senderTrust)
-        let senderDisplayName = detail.sender?.name
+        // Same order as the server's resolveSenderDisplay and the web: the name
+        // printed on the item first.
+        let printedSender = item.senderDisplay?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let senderDisplayName = (printedSender?.isEmpty == false ? printedSender : nil)
+            ?? detail.sender?.name
             ?? item.senderBusinessName
             ?? item.senderAddress
             ?? "Unknown sender"
@@ -80,7 +84,8 @@ extension MailDetailViewModel {
             memoryDetail: variants.memory,
             packageDetail: variants.package,
             partyDetail: variants.party,
-            recordsDetail: variants.records
+            recordsDetail: variants.records,
+            extractedFacts: item.keyFacts
         )
     }
 
