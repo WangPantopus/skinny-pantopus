@@ -15,7 +15,7 @@ Play's terms. Human/console work; this file is the script.
 | Question | Answer |
 |----------|--------|
 | Does your app collect or share any of the required user data types? | **Yes** |
-| Is all of the user data collected by your app encrypted in transit? | **Yes** — all traffic is HTTPS/TLS to `api.pantopus.app`; Socket.IO over TLS. |
+| Is all of the user data collected by your app encrypted in transit? | **Yes** — all traffic is HTTPS/TLS to `api.pantopus.com`; Socket.IO over TLS. |
 | Do you provide a way for users to request that their data is deleted? | **Yes** — in-app account deletion (Profile & Privacy) plus a privacy-policy contact. |
 | Delete account URL (required when users can create an account) | `https://pantopus.com/delete-account` — draft text in [account-deletion-page.md](account-deletion-page.md); publish it before submitting. |
 

@@ -17,7 +17,7 @@ consistent with it:
 | Google Play **Data safety** form | `docs/compliance/play-data-safety.md` | Play Console → App content → Data safety |
 
 > **Cross-platform note.** Both apps talk to the same backend
-> (`api.pantopus.app`) and collect the same product data, so the data
+> (`api.pantopus.com`) and collect the same product data, so the data
 > *categories* are shared. Platform-specific mechanics (APNs vs FCM tokens,
 > required-reason APIs, SDK lists) are called out inline.
 
@@ -29,7 +29,7 @@ All first-party data egress flows through a small number of chokepoints:
 
 | Chokepoint | iOS | Android | Notes |
 |------------|-----|---------|-------|
-| REST API | `Core/Networking/APIClient.swift` | `data/api/**` (Retrofit) | JSON over TLS to `https://api.pantopus.app`. Bearer token from secure storage. |
+| REST API | `Core/Networking/APIClient.swift` | `data/api/**` (Retrofit) | JSON over TLS to `https://api.pantopus.com`. Bearer token from secure storage. |
 | File upload | `Core/Networking/MultipartUploader.swift` → `POST /api/files/upload` | mirror | Photos / documents as `multipart/form-data`. |
 | Realtime | `Core/Realtime` (Socket.IO) | Socket.IO | Chat messages, presence. |
 | Payments | Stripe `PaymentSheet` (`Core/Payments`) | Stripe Android SDK | Card data goes **device → Stripe**, never through our servers. |
