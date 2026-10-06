@@ -76,7 +76,7 @@ test('a held roster reply cannot survive account retirement', async () => {
 test('a named review cancels without a removal request and a lost reply exposes explicit recovery', async () => {
   render(<MemberRemovalRecovery homeId={home} targetId={target}/>);
   fireEvent.click(await screen.findByRole('button', { name: 'Remove this member' }));
-  await screen.findByRole('alertdialog', { name: 'Review member removal' });
+  await screen.findByRole('alertdialog', { name: 'Remove member' });
   expect(screen.getByRole('heading', { name: 'Remove member' })).toHaveFocus();
   expect(screen.getByText('@fixture_member')).toBeVisible(); expect(screen.getByText('Fixture household')).toBeVisible();
   fireEvent.keyDown(screen.getByRole('heading', { name: 'Remove member' }), { key: 'Escape' });
