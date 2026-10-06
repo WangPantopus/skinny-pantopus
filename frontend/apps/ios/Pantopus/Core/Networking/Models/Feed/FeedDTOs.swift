@@ -147,4 +147,6 @@ public struct FeedPagination: Decodable, Sendable, Hashable {
 public struct FeedResponse: Decodable, Sendable, Hashable {
     public let posts: [FeedPostDTO]
     public let pagination: FeedPagination?
+    /// Place feed only: no area was given and the person has no home or saved place to fall back on.
+    public var requiresViewingLocation: Bool?
 }

@@ -132,6 +132,20 @@ enum class FeedSurface(
         }
 
     companion object {
+        /** Pulse with no area chosen, no device location and no home or saved place to fall back on. */
+        fun noAreaContent(): FeedEmptyContent =
+            FeedEmptyContent(
+                icon = PantopusIcon.MapPin,
+                headline = "Set an area to see local posts",
+                body = "Choose an area, or turn on location, to see what neighbors near you are posting.",
+                ctaLabel = "Choose an area",
+                ctaIcon = PantopusIcon.MapPin,
+                footerIcon = PantopusIcon.MapPin,
+                footerLead = "",
+                footerEmphasis = null,
+                footerTrail = "",
+            )
+
         /**
          * The two surfaces the in-Pulse toggle switches between. `personas`
          * lives on its own Beacon Updates route reached from the drawer, so

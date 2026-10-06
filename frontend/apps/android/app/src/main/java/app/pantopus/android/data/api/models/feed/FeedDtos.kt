@@ -103,6 +103,8 @@ data class FeedCursor(
 data class FeedResponse(
     val posts: List<FeedPost>,
     val pagination: FeedPagination? = null,
+    /** Place feed only: no area was given and the person has no home or saved place to fall back on. */
+    val requiresViewingLocation: Boolean? = null,
 )
 
 /**

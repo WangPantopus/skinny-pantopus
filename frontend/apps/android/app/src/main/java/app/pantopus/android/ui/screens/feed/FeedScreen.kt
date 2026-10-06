@@ -296,7 +296,11 @@ fun FeedScreen(
                         Column(modifier = Modifier.fillMaxSize()) {
                             Box(modifier = Modifier.weight(1f)) {
                                 FeedEmptyState(content = s.content) {
-                                    onEmptyCta?.invoke() ?: onCompose(activeIntent)
+                                    if (s.needsArea) {
+                                        contextBarViewModel.openSwitcher()
+                                    } else {
+                                        onEmptyCta?.invoke() ?: onCompose(activeIntent)
+                                    }
                                 }
                             }
                             // Sports lane starter prompts — tapping one
