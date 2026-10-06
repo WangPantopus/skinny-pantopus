@@ -47,7 +47,9 @@ public struct ExploreMapView: View {
         @Bindable var savedBindable = savedStore
         return GeometryReader { geo in
             let totalHeight = geo.size.height
-            let sheetHeight = max(120, totalHeight * viewModel.sheetStop.heightFraction + dragTranslation)
+            // The sheet runs under the tab bar to the screen edge; its stops measure the part above it.
+            let bottomInset = geo.safeAreaInsets.bottom
+            let sheetHeight = max(120, totalHeight * viewModel.sheetStop.heightFraction + dragTranslation) + bottomInset
             ZStack(alignment: .top) {
                 mapLayer
                 floatingPill
@@ -55,7 +57,7 @@ public struct ExploreMapView: View {
                 typeToggle
                     .padding(.top, geo.safeAreaInsets.top + 50)
                 mapControls(bottomInset: sheetHeight + 14)
-                bottomSheet(height: sheetHeight, screenHeight: totalHeight)
+                bottomSheet(height: sheetHeight, screenHeight: totalHeight, contentBottomInset: bottomInset)
             }
             .ignoresSafeArea(edges: .bottom)
         }
@@ -426,7 +428,7 @@ public struct ExploreMapView: View {
 
     // MARK: - Bottom sheet
 
-    private func bottomSheet(height: CGFloat, screenHeight: CGFloat) -> some View {
+    private func bottomSheet(height: CGFloat, screenHeight: CGFloat, contentBottomInset: CGFloat) -> some View {
         VStack(spacing: Spacing.s0) {
             Spacer(minLength: Spacing.s0)
             VStack(spacing: Spacing.s0) {
@@ -440,6 +442,8 @@ public struct ExploreMapView: View {
                 sheetBody
                     .frame(maxHeight: .infinity, alignment: .top)
             }
+            // Content stays above the tab bar and home indicator; only the background runs under them.
+            .padding(.bottom, contentBottomInset)
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .background(Theme.Color.appSurface)
