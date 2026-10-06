@@ -22,6 +22,7 @@ export type MailItem = {
   archived: boolean;
   starred: boolean;
   created_at: string;
+  sender_display?: string | null;
   sender_business_name?: string | null;
   sender_address?: string | null;
   sender?: { id?: string; username?: string; name?: string } | null;

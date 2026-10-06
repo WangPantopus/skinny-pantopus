@@ -43,6 +43,7 @@ export interface MailItemV2 {
   recipient_name?: string;
   recipient_address_id?: string;
   sender_display?: string;
+  sender_business_name?: string | null;
   sender_logo_url?: string;
   sender_trust: SenderTrust;
   sender_user_id?: string;

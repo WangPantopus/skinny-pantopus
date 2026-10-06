@@ -174,14 +174,23 @@ function emitDesktopAlert(notification) {
  * Check whether a user has push notifications enabled in their preferences.
  * Returns false if the preference row doesn't exist or push is disabled.
  */
+// The account-level Push Notifications switch. An account with no
+// MailPreferences row never changed it, so the column default (on) applies;
+// only an explicit opt-out suppresses. A device can register its token through
+// /api/auth/devices/register, which creates no row, and treating "no row" as
+// "off" silenced every push for those accounts. A read error fails closed.
+function pushSwitchOn(row) {
+  return !row || row.push_notifications !== false;
+}
+
 async function isPushEnabled(userId) {
   try {
     const { data, error } = await supabaseAdmin
       .from('MailPreferences')
       .select('push_notifications')
       .eq('user_id', userId)
-      .single();
-    return !error && data?.push_notifications === true;
+      .maybeSingle();
+    return !error && pushSwitchOn(data);
   } catch {
     return false;
   }
@@ -1336,7 +1345,7 @@ async function deliverStoredGigNotification(notification, { pushAllowedAtCapture
   // A suppressed event stays in-app and is never replayed when push is enabled.
   const suppressed = (notification.type === 'tip_received' && !pushAllowedAtCapture)
     || pushAllowedAtCompletion === false
-    || global.data?.push_notifications !== true || granular.data?.gig_updates_enabled === false;
+    || !pushSwitchOn(global.data) || granular.data?.gig_updates_enabled === false;
   if (!suppressed) emitDesktopAlert(notification);
   const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }
     : await pushService.sendToUserWithReceipt(userId, {
@@ -1373,7 +1382,7 @@ async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAs
   ]);
   if (global.error || granular.error) throw new Error('Home notification preferences unavailable');
   // A notice created while disabled stays in-app even if push is later enabled.
-  const suppressed = !pushAllowedAtAssignment || global.data?.push_notifications !== true
+  const suppressed = !pushAllowedAtAssignment || !pushSwitchOn(global.data)
     || granular.data?.home_reminders_enabled === false;
   if (!suppressed) emitDesktopAlert(notification);
   const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }

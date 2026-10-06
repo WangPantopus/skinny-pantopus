@@ -17,7 +17,7 @@ from src.config.constants import (
 from src.config.region_registry import RegionConfig, load_active_regions, load_sources_for_region
 from src.config.secrets import get_secrets
 from src.pipeline.humanizer import humanize
-from src.pipeline.poster import authenticate_curator, post_to_pantopus
+from src.pipeline.poster import authenticate_curator, curator_auth_client, post_to_pantopus
 from src.tapering.density_checker import allowed_categories, check_density, should_post_in_slot
 
 log = logging.getLogger("seeder.handlers.poster")
@@ -181,7 +181,7 @@ def _process_region(region_cfg: RegionConfig, slot_name: str, supabase, secrets)
         _update_queue_item(supabase, item["id"], "humanized", humanized_text=humanized_text)
 
         # Authenticate
-        token = authenticate_curator(supabase, secrets.curator_email, secrets.curator_password)
+        token = authenticate_curator(curator_auth_client(secrets), secrets.curator_email, secrets.curator_password)
         if token is None:
             log.error("Curator auth failed for region %s — resetting item to queued for retry", region)
             _update_queue_item(supabase, item["id"], "queued")
@@ -237,13 +237,16 @@ def _select_items(supabase, region: str, categories: list[str]) -> list[dict]:
         last_source = last_posted.get("source") if last_posted else None
         last_category = last_posted.get("category") if last_posted else None
 
-        # Query all queued items for this region in allowed categories
+        # Query queued items for this region in allowed categories. Highest
+        # source priority first: ordered by freshness alone, a burst of P3
+        # sports items filled the window and no local news was ever scored.
         result = (
             supabase.table("seeder_content_queue")
             .select("*")
             .eq("status", "queued")
             .eq("region", region)
             .filter("category", "in", f'({",".join(categories)})')
+            .order("source_priority")
             .order("fetched_at", desc=True)
             .limit(50)
             .execute()

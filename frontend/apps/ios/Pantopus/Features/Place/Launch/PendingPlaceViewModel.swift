@@ -75,6 +75,7 @@ final class PendingPlaceViewModel {
             }
             saved = result
             PlacePendingStore.clear(id: draft.id, defaults: defaults)
+            NotificationCenter.default.post(name: .savedPlacesDidChange, object: nil)
         } catch {
             errorMessage = "We couldn’t save this address. Your preview is still here — please try again."
         }

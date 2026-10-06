@@ -177,6 +177,10 @@ function secondaryText(f) {
 // ── Provider ─────────────────────────────────────────────────
 
 // Cache key prefix for resolved suggestions (pre-parsed on autocomplete).
+// A stalled Mapbox call must fail fast into the caller's error path instead of
+// leaving address search spinning (fetch has no timeout of its own).
+const MAPBOX_TIMEOUT_MS = 5000;
+
 const RESOLVE_PREFIX = 'geo:resolve:';
 const RESOLVE_TTL = 300_000; // 5 minutes
 
@@ -200,7 +204,7 @@ const mapboxProvider = {
       `&autocomplete=true&limit=${limit}&country=${encodeURIComponent(country)}` +
       `&types=address,place,locality,postcode`;
 
-    const r = await fetch(url);
+    const r = await fetch(url, { signal: AbortSignal.timeout(MAPBOX_TIMEOUT_MS) });
     if (!r.ok) {
       const text = await r.text();
       logger.warn('mapbox_autocomplete_error', { status: r.status, body: text });
@@ -253,7 +257,7 @@ const mapboxProvider = {
       `?access_token=${encodeURIComponent(token)}` +
       `&limit=1&country=us&types=address,place,locality,postcode`;
 
-    const r = await fetch(url);
+    const r = await fetch(url, { signal: AbortSignal.timeout(MAPBOX_TIMEOUT_MS) });
     if (!r.ok) {
       const text = await r.text();
       logger.warn('mapbox_resolve_error', { status: r.status, body: text });
@@ -282,7 +286,7 @@ const mapboxProvider = {
       `?access_token=${encodeURIComponent(token)}` +
       `&limit=1&types=address,place,locality,postcode`;
 
-    const r = await fetch(url);
+    const r = await fetch(url, { signal: AbortSignal.timeout(MAPBOX_TIMEOUT_MS) });
     if (!r.ok) {
       const text = await r.text();
       logger.warn('mapbox_reverse_error', { status: r.status, body: text });
@@ -310,7 +314,7 @@ const mapboxProvider = {
       `?access_token=${encodeURIComponent(token)}` +
       `&limit=1&country=us&types=address,place,locality,postcode`;
 
-    const r = await fetch(url);
+    const r = await fetch(url, { signal: AbortSignal.timeout(MAPBOX_TIMEOUT_MS) });
     if (!r.ok) {
       const text = await r.text();
       logger.warn('mapbox_forward_error', { status: r.status, body: text });
@@ -398,7 +402,7 @@ const mapboxProvider = {
       url += `&proximity=${encodeURIComponent(lng)},${encodeURIComponent(lat)}`;
     }
 
-    const r = await fetch(url);
+    const r = await fetch(url, { signal: AbortSignal.timeout(MAPBOX_TIMEOUT_MS) });
     if (!r.ok) {
       const text = await r.text();
       logger.warn('mapbox_search_places_error', { status: r.status, body: text });

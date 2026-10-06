@@ -164,6 +164,11 @@ app.set('trust proxy', trustProxy);
 
 // Initialize Socket.io
 const io = socketIo(server, {
+  // Accept /socket.io as well as /socket.io/ (engine.io matches this path as
+  // a prefix). The web connects same-origin through the Next rewrite, and Next
+  // redirects /socket.io/ to /socket.io, which used to 404 here, so the web's
+  // realtime never connected off localhost. The apps keep the default path.
+  addTrailingSlash: false,
   cors: {
     origin: (origin, callback) => {
       if (isAllowedOrigin(origin)) return callback(null, true);
@@ -487,19 +492,29 @@ app.use((req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  logger.error('Unhandled error', {
-    error: err.message,
-    stack: err.stack,
-    path: req.path,
-    method: req.method
-  });
+  // Refused origins and rejected uploads are the client's problem, not server faults.
+  let status = err.status || err.statusCode || 500;
+  if (err.message === 'Not allowed by CORS') status = 403;
+  else if (err.name === 'MulterError') status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+  else if (/^File type not allowed/.test(err.message || '')) status = 415;
+
+  if (status >= 500) {
+    logger.error('Unhandled error', { error: err.message, stack: err.stack, path: req.path, method: req.method });
+  } else {
+    logger.warn('Request rejected', { error: err.message, status, path: req.path, method: req.method });
+  }
 
   if (res.headersSent) {
     return next(err);
   }
 
-  return res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
+  // Internal error messages can describe the database or providers; production
+  // clients get a generic one for server faults.
+  const message = status >= 500 && process.env.NODE_ENV === 'production'
+    ? 'Internal server error'
+    : (err.message || 'Internal server error');
+  return res.status(status).json({
+    error: message,
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });

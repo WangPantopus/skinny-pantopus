@@ -104,8 +104,70 @@ async function listEffectivelyOpenSlots({
   return filterEffectivelyOpenSlots(slots || [], reservations);
 }
 
+/**
+ * A helper is deleting their account. SupportTrainReservation.user_id is
+ * ON DELETE SET NULL, so their open signups would otherwise keep slots taken
+ * by nobody, with reminders going nowhere. Cancel them as the helper leaving
+ * each slot would: the slot's count is recomputed and its organizers are
+ * told. Delivered and confirmed signups stay as the train's history.
+ * Returns how many signups were cancelled.
+ */
+async function cancelSignupsForDeletedAccount(userId) {
+  const { data: reservations, error } = await supabaseAdmin
+    .from('SupportTrainReservation')
+    .select('id, support_train_id, slot_id')
+    .eq('user_id', userId)
+    .eq('status', 'reserved');
+  if (error) throw error;
+  if (!reservations || reservations.length === 0) return 0;
+
+  const { error: cancelError } = await supabaseAdmin
+    .from('SupportTrainReservation')
+    .update({ status: 'canceled', canceled_at: new Date().toISOString() })
+    .in('id', reservations.map((reservation) => reservation.id))
+    .eq('status', 'reserved');
+  if (cancelError) throw cancelError;
+
+  const slotLabels = new Map();
+  for (const slotId of new Set(reservations.map((reservation) => reservation.slot_id))) {
+    const { data: slot } = await supabaseAdmin
+      .from('SupportTrainSlot')
+      .select('id, slot_label, status, capacity')
+      .eq('id', slotId)
+      .maybeSingle();
+    if (!slot) continue;
+    slotLabels.set(slot.id, slot.slot_label);
+    // Reads normalize counts from reservations anyway; a failed sync only
+    // leaves the denormalized counter stale.
+    try {
+      const count = await countActiveReservationsForSlot(slot.id);
+      const patch = { filled_count: count };
+      if (AVAILABILITY_SLOT_STATUSES.includes(slot.status)) {
+        patch.status = count >= normalizeCapacity(slot) ? 'full' : 'open';
+      }
+      await supabaseAdmin.from('SupportTrainSlot').update(patch).eq('id', slot.id);
+    } catch (_) { /* see above */ }
+  }
+
+  const { emitSupportTrainEvent } = require('./supportTrainNotifications');
+  for (const reservation of reservations) {
+    await emitSupportTrainEvent({
+      event: 'support_train.slot_canceled_by_helper',
+      supportTrainId: reservation.support_train_id,
+      actorUserId: userId,
+      payload: {
+        slot_id: reservation.slot_id,
+        slot_label: slotLabels.get(reservation.slot_id),
+        helper_reason: 'They closed their Pantopus account.',
+      },
+    });
+  }
+  return reservations.length;
+}
+
 module.exports = {
   ACTIVE_RESERVATION_STATUSES,
+  cancelSignupsForDeletedAccount,
   buildActiveReservationCountBySlotId,
   countActiveReservationsForSlot,
   filterEffectivelyOpenSlots,

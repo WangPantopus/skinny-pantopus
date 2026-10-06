@@ -17,7 +17,8 @@ const HOME_LOCATION_SELECT = 'id, name, address, city, state, map_center_lat, ma
 
 // Confidence scores by source type
 const CONFIDENCE = {
-  saved_place: 0.95,
+  // A private bookmark, not a home or a pinned location (pilot brief WP2).
+  saved_place: 0.60,
   custom: 0.95,
   viewing_pinned: 0.90,
   primary_home: 0.95,

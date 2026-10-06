@@ -21,7 +21,7 @@ from typing import Any
 from src.config.region_registry import RegionConfig, load_active_regions
 from src.config.secrets import get_secrets
 from src.pipeline.humanizer import humanize
-from src.pipeline.poster import authenticate_curator, post_to_pantopus
+from src.pipeline.poster import authenticate_curator, curator_auth_client, post_to_pantopus
 from src.sports.events_defaults import ensure_default_sports_events
 
 log = logging.getLogger("seeder.handlers.sports_poster")
@@ -218,7 +218,7 @@ def _run(_event: dict[str, Any], _context: Any) -> dict[str, Any]:
             _update_queue_item_if_needed(supabase, item, "humanized", humanized_text=humanized_text)
 
             if token is None:
-                token = authenticate_curator(supabase, secrets.curator_email, secrets.curator_password)
+                token = authenticate_curator(curator_auth_client(secrets), secrets.curator_email, secrets.curator_password)
             if token is None:
                 log.error("Curator auth failed — resetting item %s to queued", _item_label(item))
                 _update_queue_item_if_needed(supabase, item, "queued")
@@ -715,7 +715,7 @@ def _post_regional_featured_matchups(
             continue
 
         if token is None:
-            token = authenticate_curator(supabase, secrets.curator_email, secrets.curator_password)
+            token = authenticate_curator(curator_auth_client(secrets), secrets.curator_email, secrets.curator_password)
         if token is None:
             log.error("Curator auth failed — cannot post regional sports matchup")
             result["failed"] += 1

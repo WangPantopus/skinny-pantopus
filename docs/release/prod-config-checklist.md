@@ -1,272 +1,516 @@
-# Production Config & Release Build Checklist (RR-D)
+# Pantopus launch checklist
 
-## September22 consolidated provider and activation package (L01 draft)
+One ordered list from "nothing hosted" to "pilot live": decisions first, then
+staging, then production, store builds and go-live. Work through it top to
+bottom. Each step says **who** does it, **what** to do with the exact values or
+commands, and **check**: how to see that it worked.
 
-This section is the current planning source for the existing80-row backlog; the historical
-native checklist below is implementation context, not proof of current hosted readiness.
-Prices were checked against official pages on2026-09-22, in USD using US public rates where
-applicable. No subscription, new provider, key, resource, deployment or production flag was
-activated. Existing subscriptions may already cover part of these amounts; account invoices
-and exact hosted capacity are not available in the accepted evidence.
+- **Founder** steps need your accounts or consoles (AWS, Cloudflare, Supabase,
+  Vercel, GitHub settings, App Store Connect, Google Play, Stripe, Lob).
+  Agents never enter credentials in consoles or write secrets into hosted
+  services.
+- **L4** steps are prepared in this repository or on the Mac by launch stream L4.
+- Secret *values* never go in this file. L4 generated the internal secrets into
+  `~/.config/pantopus/hosted-secrets/staging.env` and `production.env` on the
+  Mac (mode 600); provider keys come from each provider's console.
 
-### Existing integration, cost basis and remaining acceptance
+Last checked: 2026-10-06 by L4.
 
-| Existing dependency | Published cost basis | Concrete prerequisite / remaining boundary |
+## 0. What's running today
+
+| Piece | State on October 6, 2026 |
+|---|---|
+| Website `pantopus.com` | Up, on Vercel. The deployment is about four months old (June). Its JavaScript calls `https://api.pantopus.com`. |
+| Production API `api.pantopus.com` | Doesn't answer. The DNS record is proxied by Cloudflare to the server's old public address; the server's address changed when it restarted in September. |
+| September server (AWS, Oregon) | Running. nginx serves `https://staging-api.pantopus.com` (healthy, database connected, backend release from September 8) and `https://staging.pantopus.com`. The June production container and its env file are kept on the same server, unrouted. It costs money every hour it runs. |
+| `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
+| April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The live website links to both. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
+| New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
+| Supabase | The April production project, a testing project, and the September `Pantopus-staging` project (Free). No project has adopted the canonical migration ledger. |
+| GitHub | Environments `production` and `staging` exist with no secrets; `BACKEND_DEPLOY_ENABLED` is unset, so each master push ends with "Backend deployment is disabled". There's no `dev` branch. `ios-release` and `android-release` have no secrets. |
+| AWS Lambdas | Unknown from here. The seeder stack (`pantopus-seeder/deploy/template.yaml`) also carries the briefing, home-reminder, weather-alert, mail and job-trigger functions. |
+
+**Reminders run on AWS Lambda.** Morning and evening briefings (the night-before
+pickup push rides the evening one), task and bill reminders, weather alerts and
+mail notices are sent by the Lambdas, which call the backend's internal API.
+The pilot can't start until the Lambda stack runs against the hosted backend
+(steps S8 and P8).
+
+## 1. Decisions (founder)
+
+Each has a default that the steps below follow until you change it here.
+
+- [ ] **D1 API hosts.** Default: production `https://api.pantopus.com`, staging
+  `https://staging-api.pantopus.com`, for the website and both apps. Both names
+  already exist in your Cloudflare zone, staging already has a certificate, and
+  the website calls `api.pantopus.com` today. (The native apps defaulted to
+  `api.pantopus.app`, which has no DNS; L4 switches them.) Also point
+  `pantopus.app` and `www.pantopus.app` at the website (step P10): the apps share
+  `https://pantopus.app` links.
+- [ ] **D2 Store listings.** Default: new listings for `app.pantopus.ios` and
+  `app.pantopus.android`; take the April apps off sale once the new ones are
+  live. The App Store won't accept a second app named exactly "Pantopus" while
+  the April app holds that name, so either give the new listing a longer name
+  (for example "Pantopus Home") or rename the April app first with an update.
+  The alternative, shipping the native apps as updates to `com.pantopus.app`,
+  means changing the native app IDs, push setup and signing; L4 doesn't
+  recommend it this close to the pilot.
+- [ ] **D3 Production database.** Default (L4's recommendation): **a new
+  production Supabase project** built from the canonical migrations, exactly as
+  staging is. Keep the April project untouched and paused as an archive; the
+  April users (friends) sign up again in the new app. The alternative is to
+  adopt the April project (keeps their accounts and meal trains, but needs a
+  backup, a local rehearsal of the September forward-upgrade SQL on a copy of
+  real data, and a maintenance window; section P2B).
+- [ ] **D4 Payments during the pilot.** Default: production uses Stripe **test**
+  keys until you activate live payments; no pilot journey takes money. Pilot
+  store builds then carry the matching `pk_test_` key (L4 adjusts the Android
+  release guard, which demands `pk_live_`). A real card fails in test mode
+  instead of being charged.
+- [ ] **D5 Postcards.** Production won't start without Lob live settings:
+  `LOB_ENV=live`, a live key, the webhook secret and a real return address
+  (`LOB_FROM_*`; the defaults are a placeholder San Francisco address). Default:
+  provide them before production (step P5). Staging uses Lob test mode.
+- [ ] **D6 Email.** Default: Postmark SMTP for backend email and for Supabase
+  Auth email, sending from `pantopus.com` with SPF, DKIM and DMARC.
+- [ ] **D7 Error monitoring.** Default: off. Sentry and PostHog keys are optional
+  (backend `SLACK_ALERTS_WEBHOOK_URL`, app `SENTRY_DSN`).
+- [ ] **D8 Hosting.** Default: the September server carries both staging
+  (`127.0.0.1:18001`) and production (`127.0.0.1:8000`) behind nginx, as designed
+  in September. It's enough for 5 to 50 households; give production its own
+  instance before a wider launch.
+
+## 2. Staging
+
+Staging uses production security settings (`NODE_ENV=production`,
+`APP_ENV=staging`) with sandbox vendors: Stripe test, Lob test, APNs and FCM
+staging. Only synthetic accounts and the founder's own devices.
+
+### S1. Server address (founder)
+
+1. AWS console → EC2 → Elastic IPs → **Allocate**, then **Associate** it with
+   the September server. A fixed address stops DNS breaking when the server
+   restarts.
+2. Cloudflare → `pantopus.com` DNS: set `staging-api` and `staging` A records to
+   the Elastic IP, **DNS only** (grey cloud). Leave `api` for step P1.
+3. Keep the server's SSH host key pinned: compare the key in the EC2 console
+   (or through Systems Manager) before accepting it.
+
+**Check:** `curl -s https://staging-api.pantopus.com/health` returns
+`{"status":"healthy","database":"connected",...}` from the new address.
+
+### S2. Staging database (founder runs, L4 prepared)
+
+Default: reset the existing `Pantopus-staging` project to the canonical
+migrations (it holds only synthetic data). If you'd rather keep it, create a new
+Free project `pantopus-staging-2` in the same region and use it instead.
+
+On the Mac, from the repository root, with the Supabase CLI pinned in
+`supabase/migration-policy.json` (2.116.0):
+
+```bash
+supabase login
+supabase link --project-ref <staging project ref>
+supabase db reset --linked        # existing project: drops its objects, replays every migration
+# or, for a brand-new empty project:
+supabase db push --linked
+```
+
+Then in the Supabase dashboard → Storage, create three buckets: **private**
+`home-documents` (file size limit 25 MB), **private** `gig-completion` (100 MB)
+and **public** `pantopus-uploads` (100 MB) for avatars and post photos. Under
+Storage → S3 Connection, create an access key for the backend (Appendix A,
+storage row).
+
+**Check:** `supabase migration list --linked` shows every file in
+`supabase/migrations/` on both sides, and `supabase db push --linked --dry-run`
+reports nothing to push. In the dashboard, `home-documents` and `gig-completion`
+show as private.
+
+### S3. Staging Auth (founder)
+
+Supabase dashboard → Authentication:
+
+- URL configuration: Site URL `https://staging.pantopus.com`; redirect URLs
+  `https://staging.pantopus.com/auth/callback`, `https://staging.pantopus.com/**`
+  and `pantopus://auth/callback`.
+- Email: confirm email **on**; minimum password length **12**; custom SMTP from
+  D6 (sender `Pantopus Staging <staging@pantopus.com>`).
+- Providers (L3 verifies sign-in):
+  - Apple: a Services ID (for example `app.pantopus.web`) whose Return URL is
+    `https://<staging ref>.supabase.co/auth/v1/callback`, a Sign in with Apple
+    key (`.p8`) turned into the client secret (it expires after at most six
+    months: put the renewal in your calendar), and Supabase "Client IDs"
+    `app.pantopus.web,app.pantopus.ios` (the iOS app uses Apple's native sheet,
+    so the bundle ID must be listed).
+  - Google: a Web OAuth client in Google Cloud with the authorized redirect URI
+    `https://<staging ref>.supabase.co/auth/v1/callback`; its client ID and
+    secret go into the Supabase Google provider.
+
+**Check:** a new synthetic account receives the confirmation email and can sign
+in on the web and both apps.
+
+### S4. Staging env file (founder, on the server)
+
+On the server, back up the current file, then write `~/pantopus/.env.staging`
+(mode 600). Appendix A lists every setting. The generated internal secrets come
+from the Mac:
+
+```bash
+# On the Mac: copy the generated staging secrets to the server over the pinned SSH key
+scp -i <key> ~/.config/pantopus/hosted-secrets/staging.env <user>@<elastic ip>:~/pantopus/staging-generated.env
+# On the server:
+cd ~/pantopus && cp -p .env.staging .env.staging.$(date -u +%Y%m%d) 2>/dev/null
+# write the provider settings from Appendix A into .env.staging, then append the generated ones:
+cat staging-generated.env >> .env.staging && rm staging-generated.env && chmod 600 .env.staging
+```
+
+`HOME_POSTCARD_CODE_KEYS_JSON` replaces any older staging value; staging
+postcards sent with an old key stop verifying, which is acceptable for synthetic
+data. Never copy the June production env file into staging.
+
+**Check:** `stat -c %a ~/pantopus/.env.staging` prints `600`, and
+`grep -E '^[A-Z_0-9]+=$' ~/pantopus/.env.staging` prints nothing (no empty
+values). The backend's own startup checks run in S6.
+
+### S5. GitHub `staging` environment (founder)
+
+Repository → Settings → Environments → `staging`:
+
+| Kind | Name | Value |
 |---|---|---|
-| Supabase Postgres/Auth/private Storage | Pro from$25/month; includes one Micro project through compute credit; another Micro from$10/month. PITR from$100/month is extra. [Pricing](https://supabase.com/pricing) | Select production plus staging projects/regions and recovery objective. Reconcile each actual hosted ledger; local canonical replay and retained candidate ledger84 are different. Verify private Home/task/completion buckets and restore bytes independently. |
-| Vercel web | Pro$20/month with included usage credit; additional developer seats/usage extra. [Pricing](https://vercel.com/pricing) | Bind exact release SHA, API/web domains, redirect allowlist and build env. Existing Vercel Git integration is retained; no hosting replacement proposed. |
-| EC2 backend + Docker + existing scheduler/Socket.IO | Region, instance, EBS, IPv4, transfer and uptime determine cost; no flat total inferred. [EC2 pricing](https://aws.amazon.com/ec2/pricing/on-demand/) | Obtain selected EC2 instance/region/disk/traffic quote and bind existing deployment/rollback workflows. One tested local worker is not hosted throughput/capacity evidence. Include monitoring, backups and any load balancer/NAT costs actually selected. |
-| S3 + optional CloudFront for public uploads | Storage/requests/transfer and selected CDN plan are metered. [S3](https://aws.amazon.com/s3/pricing/), [CloudFront](https://aws.amazon.com/cloudfront/pricing/) | Existing `backend/config/aws.js` defaults to us-west-2; bind actual bucket/region/IAM/CDN and external byte restore. Private Home/completion bytes use the existing Supabase private mechanism; do not make those public or count one storage provider as proof of the other. |
-| Postmark SMTP (current example/provider) | Basic$15/month for10,000 emails; excess$1.80/1,000. Pro$16.50 includes configurable retention/inbound features. [Pricing](https://postmarkapp.com/pricing) | Verify sending domain, SMTP sender, DKIM/SPF/DMARC, signup/reset/invitation delivery and bounces. Choose retention based on actual data policy. Local capture/preview does not establish delivered email. No need to purchase another SMTP vendor for this code. |
-| Smarty US address verification | Published Professional option$552/year (monthly equivalent$46); confirm selected allowance/term in the actual quote. [Pricing](https://www.smarty.com/pricing) | Existing provider previously returned402 for inactive subscription. Confirm existing entitlement, supported US/DPV scope, renewal/lookup cap and successful residential acceptance. A free trial is not a continuing launch entitlement. |
-| Google Address Validation + Places + Android Maps | Address Validation Pro has5,000 monthly free events then$17/1,000 in the first paid tier; Enterprise and Places/Maps SKUs differ. [SKU table](https://developers.google.com/maps/billing-and-pricing/pricing) | Bind billing project, exact invoked SKUs, API restrictions, supported geography and caps. Google result alone did not satisfy the unavailable Smarty residential boundary. Do not assume all Maps/Places calls share one free allowance. |
-| Mapbox geocoding/maps | GL JS starts with50,000 free monthly map loads then$5/1,000 in the first paid tier; search/geocoding have separate meters. [Pricing](https://www.mapbox.com/pricing) | Existing geo provider defaults to Mapbox. Quote actual endpoints plus token restrictions and measured requests. The web-load allowance is not a geocoding allowance or proof of native provider configuration. |
-| Lob operational verification postcards | Developer subscription from$0; published postcards start$0.905/piece. Format, postage/service and plan determine final rate. [Pricing](https://www.lob.com/pricing) | Accepted TEST operational postcard create/read/delete sent no physical mail. Bind live account/from address/template/webhook, paid inventory/caps and real delivery/lost-mail policy. No physical mail is authorized by this draft. |
-| Stripe Payments | US domestic cards2.9%+$0.30 per successful charge; international/FX/disputes and optional products add costs. [Pricing](https://stripe.com/us/pricing) | Match account/live keys and webhook signing, retain exact originals/refund/dispute controls, verify hosted retry and truthful unknown outcomes. TEST charges and local wallet credits are not bank delivery. |
-| Stripe Connect (platform controls pricing) | $2 per monthly active payout account plus0.25%+$0.25 per payout. [Connect pricing](https://stripe.com/connect/pricing) | Confirm actual Connect commercial model/country, account onboarding, live payouts and responsibility for fees/losses. Existing wallet/reversal/debt limits remain P06/P09. Founder cancellation-fee payer/recipient decision remains separate; these prices do not decide that policy. |
-| Apple Developer + App Store Connect/APNs | $99/year membership. [Enrollment](https://developer.apple.com/programs/enroll/) | Confirm organization/team/signing/entitlements, production APNs credentials and installed physical-device delivery/callbacks. Existing simulator push records are not APNs delivery. |
-| Google Play + FCM | Play$25 one-time registration; FCM is no-cost. [Play](https://support.google.com/googleplay/android-developer/answer/6112435), [FCM](https://firebase.google.com/pricing) | Confirm Play account/signing/internal track, Firebase project/service-account scoping and real token/foreground/background/cold delivery. Other Firebase services are priced separately. |
-| Google/Apple OAuth | No additional per-login charge assumed here; no verified account-specific commercial quote. Existing Auth and developer plans above cover only their listed products. | Configure provider IDs/secrets, consent/scope, verified domains and exact redirects in the selected Auth project. Exercise cancel/error/revocation/return on all clients before acceptance. |
-| OpenAI app AI features | Current code defaults: GPT-4o$2.50 input/$10 output per1M text tokens; GPT-4o-mini$0.15/$0.60. [GPT-4o](https://developers.openai.com/api/docs/models/gpt-4o), [GPT-4o-mini](https://developers.openai.com/api/docs/models/gpt-4o-mini) | Bind selected deployed models, metered input/output/image/tool usage and project budget. Missing key uses existing fallback. No model migration or AI activation proposed; optional gap-fill flag and visible AI features need their own acceptance. |
-| Twilio / mailbox SMS | US long-code SMS$0.0083/segment plus carrier fees; number$1.15/month; registration costs extra. [Pricing](https://www.twilio.com/en-us/sms/pricing/us) | **Implementation boundary:** `backend/routes/mailbox.js` calls `smsService.sendSms`, whose current body only logs and returns placeholder success. Credentials alone cannot establish delivery. Confirm intended SMS product/recipient/consent contract, reproduce through the actual caller, then assign focused repair before buying capacity. |
-| Domains, certificates, error monitoring and CI/distribution | Existing domains/plan entitlements and usage must be quoted; no unverified zero-cost assumption. | Reconcile pantopus.com/pantopus.app/API host, AASA/assetlinks and signing fingerprints; exact SHA artifacts, logs/alerts, GitHub Actions retention/minutes and operator support. Existing release docs contain historical host claims, not current DNS acceptance. |
+| Secret | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | Docker Hub user and a read/write access token |
+| Secret | `EC2_HOST` | the Elastic IP |
+| Secret | `EC2_USERNAME` | the server's SSH user |
+| Secret | `EC2_SSH_KEY` | private key for that user |
+| Secret | `EC2_KNOWN_HOSTS` | the verified host-key line (`ssh-keyscan` output checked against the console) |
+| Variable | `BACKEND_API_BIND` | `127.0.0.1:18001` |
+| Variable | `BACKEND_DEPLOY_ENABLED` | `true` (last, after everything above) |
 
-### Reviewable budgeting example (not an approved purchase or traffic forecast)
+Leave `DB_MIGRATIONS_ENABLED` unset until the database steps are proven; the
+staging database already took the migrations in S2. Deployment branch rule:
+allow `master` and `dev` (see `docs/ci-cd.md`).
 
-For **one production Micro plus one staging Micro**, one Vercel developer seat and Postmark
-Basic, the known recurring subtotal is **$70/month** before usage ($25+$10+$20+$15).
-If the displayed Smarty annual option is selected, add **$552 paid annually**, equivalent to
-$46/month: **$116/month equivalent**. Apple adds$99/year; new Play registration adds$25 once.
-These sums exclude existing-account credits and taxes, EC2/EBS/network, public storage/CDN,
-PITR, domain renewals, monitoring/CI, card/payout fees, postage, SMS, address/maps excess and AI.
-They are a partial subtotal, never a total launch budget.
+### S6. First staging release (founder starts, L4 watches)
 
-Illustrative usage, independent of a launch cohort:100 domestic$20 card charges imply$88
-base processing fees;20 monthly active Connect payout accounts each receiving one$80 payout
-imply$49 in the stated Connect model, for$137 combined before other fees.100 postcards at the
-published starting rate imply$90.50 before format/service differences.1M uncached input plus
-0.25M output text tokens implies$5.00 on GPT-4o or$0.30 on GPT-4o-mini. Provider rounding,
-actual capabilities and selected commercial terms govern the bill. These examples neither
-set Pantopus fees nor authorize transactions.
-
-### One activation decision, followed by bounded acceptance
-
-1. Finish the reviewed application merge queue and bind final master CI/build/schema hashes;
-   keep the existing80-row evidence matrix authoritative. Resolve P04/P05 policy, daily-agenda
-   producer semantics, attachments and other explicit founder decisions in their owner rows.
-2. Supply one account/entitlement and cost sheet using this table: existing subscriptions,
-   selected region/instance/storage/egress, exact Smarty quote, traffic and mail/payment/payout
-   assumptions, recovery objective/PITR choice, geography, per-provider caps and responsible owner.
-   Missing quoted components remain visible; no piecemeal purchase/activation.
-3. Prepare exact hosted ledger adoption, private byte restore, signed artifact/config manifest,
-   domain/association and worker/webhook plans. The recent local ops metadata receipt found
-   deployment/migration flags disabled and no configured repository/environment secrets;
-   that read-only observation must be refreshed before any eventual activation.
-4. Present the concrete combined cost/configuration/cutover plan for the founder's authorization.
-   After authorization and access, execute the listed provider/device journeys and record real
-   receipts. Keep rollback and failure handling available. Do not mark L01/L02 complete from
-   pricing research, local fixtures or CI, and do not start a pilot until L03/L04 gates hold.
-
-Source binding: inspected existing checkout6c49692d6, masterb30e0d395 and current live
-coordination. Core integration paths: `backend/.env.example`, `backend/config/aws.js`,
-`backend/config/openai.js`, `backend/services/emailService.js`, `smsService.js`,
-`s3Service.js`, addressValidation providers, push clients and existing deployment/native lanes.
-No secret values were read for this inventory and no raw logs are included.
-
-
-Goal: ship signed Release builds of the **native** apps
-(`frontend/apps/ios`, bundle `app.pantopus.ios`; `frontend/apps/android`,
-package `app.pantopus.android`) that point at the production backend with
-**live** payments.
-
-This doc covers two things:
-
-1. **What the repo now does automatically** (code — already merged on this
-   branch). You don't have to touch these.
-2. **What a human must do in a console / CI** (can't live in the repo):
-   backend Stripe live mode, and supplying real secrets to CI.
-
-> Note: this is the native iOS/Android pipeline. The Expo app under
-> `frontend/apps/mobile` (package `com.pantopus.app`) has its own release
-> path documented in `docs/android-release-guide.md` and
-> `frontend/apps/mobile/README.release.md`.
-
----
-
-## 1. In-repo (done in code)
-
-### iOS (`frontend/apps/ios`)
-
-- **Per-configuration xcconfig** (`Config/Pantopus.{base,Debug,Staging,Release}.xcconfig`).
-  Defaults that ship in git:
-
-  | Config   | API base URL              | Stripe key default | APNs (`aps-environment`) |
-  |----------|---------------------------|--------------------|--------------------------|
-  | Debug    | `http://localhost:8000`   | `pk_test_REPLACE_ME` | `development`          |
-  | Staging  | `https://staging.api.pantopus.app` | `pk_test_REPLACE_ME` | `production`  |
-  | Release  | `https://api.pantopus.app` | `pk_live_REPLACE_ME` | `production`          |
-
-  Each config `#include? "Secrets.xcconfig"` last, so the CI-injected values
-  override the committed placeholders.
-- **`aps-environment` is config-driven** via `$(APS_ENVIRONMENT)` so
-  TestFlight/App Store builds use the production APNs environment.
-- **`AppEnvironment`** resolves `.local` (Debug), `.staging` (Staging, via the
-  `STAGING` compilation flag), `.production` (Release). For staging/prod the
-  API/socket URL is read from Info.plist but **guarded to `https://`** — a
-  stray localhost/http value can never leak into a prod build (falls back to
-  the canonical host).
-- **Staging scheme** `Pantopus (Staging)` added for a pre-prod target.
-- **Secrets actually flow into the build:** `fastlane before_all` now runs
-  `make env-to-xcconfig`, materializing `Config/Secrets.xcconfig` from the
-  CI-written `.env`. (Previously the build silently shipped the
-  `pk_test_REPLACE_ME` placeholder because the secrets file was never
-  generated in CI.)
-- **App Store Connect API key auth** wired into `beta`/`release`/`build_release`
-  lanes (non-interactive CI). Apple account details come from env, not the
-  committed `Appfile`.
-- **Release logging floor** raised to `.notice` (`#if !DEBUG`) so APNs tokens,
-  deep-link paths, and analytics breadcrumbs don't print in shipped builds.
-
-### Android (`frontend/apps/android`)
-
-- **`PANTOPUS_ENV` defaults to `production` for the release buildType** (was
-  `local` everywhere) so Sentry tags events correctly and uses the 0.1 trace
-  sample rate.
-- **Release-config guard** in `app/build.gradle.kts`: a release build with a
-  non-`https://`/localhost API URL or a non-`pk_live_` Stripe key **warns** by
-  default and **fails** under `-Ppantopus.requireProdConfig=true` (set by the
-  fastlane release lane / CI). Local `assembleRelease` smoke tests still work.
-- **ProGuard/R8 rules verified complete** (`app/proguard-rules.pro`): keeps
-  Stripe (`com.stripe.android.**` + `model.**` + `keepnames`), Moshi
-  (`@JsonClass`, `JsonAdapter` subclasses, `*JsonAdapter`,
-  `@com.squareup.moshi.*` members), and the API models package
-  (`data.api.models.**`), plus Retrofit/OkHttp/Hilt/Coroutines/Socket.IO/Sentry.
-- Release minify + resource shrink already on; signing reads keystore from
-  env/secrets (debug-keystore fallback only for unsigned smoke builds).
-
-### CI workflows (already present)
-
-- `.github/workflows/ios-beta.yml` → `fastlane beta` (TestFlight), env
-  `ios-release`.
-- `.github/workflows/android-beta.yml` → `fastlane beta` (Play **internal**
-  track), env `android-release`.
-
----
-
-## 2. Human / console steps (NOT in repo)
-
-### 2a. Backend — switch Stripe to LIVE
-
-These are backend deployment env vars (see `backend/.env.example`,
-`backend/stripe/`), set in the hosted backend's secret store — **not** in this
-repo:
-
-- [ ] Set **`STRIPE_SECRET_KEY`** to the live secret (`sk_live_…`).
-- [ ] Set **`STRIPE_PUBLISHABLE_KEY`** to the live publishable key
-      (`pk_live_…`). The backend returns this to clients
-      (`/checkout` intents, `pays.js`, `gigs.js`).
-- [ ] Set **`STRIPE_WEBHOOK_SECRET`** to the **live** endpoint's signing
-      secret (`whsec_…`) — create a live webhook endpoint in the Stripe
-      Dashboard pointing at the prod backend (`stripeWebhooks.js` verifies it).
-- [ ] **Stripe Connect:** confirm Connect is enabled for **live** mode and
-      Express payouts are turned on (the seller onboarding/payout flow in
-      `backend/stripe/stripeService.js` requires live Connect for real
-      payouts). Verify the platform profile / payout settings are completed in
-      the live Dashboard.
-- [ ] Confirm the live publishable key handed to CI (below) **matches** the
-      live account the backend's secret key belongs to.
-
-### 2b. Provide secrets to CI
-
-Set these in the GitHub repository **environments** the workflows reference.
-The app's prod API base URL is baked into the Release xcconfig (iOS) / passed
-as a secret (Android); the **live** Stripe key, signing material, and store
-API keys must all come from secrets.
-
-**iOS — environment `ios-release`** (consumed by `ios-beta.yml` → `.env`):
-
-| Secret | Value |
-|--------|-------|
-| `STRIPE_PUBLISHABLE_KEY` | **`pk_live_…`** (live) |
-| `MATCH_GIT_URL` | private certs repo URL |
-| `MATCH_PASSWORD` | match decryption passphrase |
-| `APP_STORE_CONNECT_KEY_ID` | App Store Connect API key id |
-| `APP_STORE_CONNECT_ISSUER_ID` | issuer id |
-| `APP_STORE_CONNECT_KEY_CONTENT` | **base64** of the `.p8` key |
-| `APPLE_TEAM_ID` | 10-char team id |
-| `SENTRY_DSN` _(optional)_ | prod Sentry DSN |
-| `FASTLANE_APPLE_ID` / `APP_STORE_CONNECT_TEAM_ID` _(optional)_ | legacy auth / multi-team |
-
-> The prod API base URL is the Release xcconfig default
-> (`https://api.pantopus.app`); add `PANTOPUS_API_BASE_URL` to the iOS `.env`
-> step only if it ever diverges.
-
-**Android — environment `android-release`** (consumed by `android-beta.yml`):
-
-| Secret | Value |
-|--------|-------|
-| `PANTOPUS_API_BASE_URL` | **`https://api.pantopus.app`** |
-| `PANTOPUS_SOCKET_URL` | prod socket URL |
-| `STRIPE_PUBLISHABLE_KEY` | **`pk_live_…`** (live) |
-| `MAPS_API_KEY` | Maps key restricted to `app.pantopus.android` + SHA-1 |
-| `ANDROID_KEYSTORE_BASE64` | base64 of the upload keystore |
-| `PANTOPUS_KEYSTORE_PASSWORD` / `PANTOPUS_KEY_ALIAS` / `PANTOPUS_KEY_PASSWORD` | keystore creds |
-| `PLAY_STORE_SERVICE_ACCOUNT_JSON` | Play Developer API service-account JSON |
-| `SENTRY_DSN` _(optional)_ | prod Sentry DSN |
-
-> `PANTOPUS_ENV` need not be set — the release buildType defaults to
-> `production`. Set it only to ship a non-prod variant.
-
-### 2c. Store consoles (one-time)
-
-- [ ] App Store Connect: app record for `app.pantopus.ios`, API key issued,
-      `match` certs/profiles repo seeded (`fastlane match appstore`).
-- [ ] Google Play Console: app for `app.pantopus.android`, upload key
-      registered, Play App Signing enabled, service account granted API
-      access, internal testing track set up.
-
----
-
-## 3. Verify (dry-run — signed artifact pointing at prod)
-
-Run after secrets are in place; needs Xcode (macOS) / Android SDK + signing.
-
-**iOS** (builds a signed Release archive, no upload):
-
-```sh
-cd frontend/apps/ios
-# CI writes .env from secrets; locally export the same vars or use a .env
-bundle exec fastlane ios build_release
+```bash
+git push origin origin/master:refs/heads/dev
 ```
 
-Then confirm in the archive's `Info.plist`:
-- `PantopusAPIBaseURL` = `https://api.pantopus.app`
-- `StripePublishableKey` starts with `pk_live_`
-- `aps-environment` (entitlements) = `production`
+CI runs on `dev`; when it passes, **Deploy Backend** builds the image, starts an
+unexposed candidate, checks its database connection, then swaps the API and
+worker together and keeps the previous containers for rollback.
 
-**Android** (signed AAB, prod config enforced):
+**Check:** the workflow summary shows the commit and image digest;
+`curl -s https://staging-api.pantopus.com/health` is healthy; on the server,
+`docker ps` shows `pantopus-backend-staging` and `pantopus-worker-staging`
+healthy, and `docker logs pantopus-worker-staging` shows `[Worker] Ready`.
 
-```sh
-cd frontend/apps/android
-bundle exec fastlane android build_release         # bundleRelease + requireProdConfig
-# or, equivalently:
-./gradlew bundleRelease -Ppantopus.requireProdConfig=true
-./gradlew publishReleaseBundle --dry-run           # Play upload dry run
-```
+### S7. Staging web (founder)
 
-The build fails fast if `PANTOPUS_API_BASE_URL` isn't an `https://` prod URL
-or `STRIPE_PUBLISHABLE_KEY` isn't a `pk_live_` key. Inspect
-`BuildConfig` in the AAB to confirm `PANTOPUS_ENV=production`.
+Vercel → the Pantopus project:
 
----
+- Git: connect `WangPantopus/skinny-pantopus`, root directory
+  `frontend/apps/web`, framework Next.js, Node 22. Install command
+  `pnpm install --frozen-lockfile`; build command `pnpm --filter @pantopus/web build`
+  (or the default `next build`).
+- Preview environment variables (used by the `dev` branch):
+  `NEXT_PUBLIC_API_URL=https://staging-api.pantopus.com`,
+  `NEXT_PUBLIC_APP_URL=https://staging.pantopus.com`,
+  `NEXT_PUBLIC_APP_ENV=staging`,
+  `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=<pk_test_…>`,
+  `NEXT_PUBLIC_MAPBOX_TOKEN=<public pk.… token>`.
+  Leave `NEXT_PUBLIC_LAUNCH_FEATURES` empty: cut features stay hidden.
+- Domains: assign `staging.pantopus.com` to the `dev` branch, then change its
+  Cloudflare record to Vercel's CNAME (DNS only). The September staging site on
+  the server can then be retired.
 
-## 4. Final pre-ship checks
+**Check:** `https://staging.pantopus.com` loads, sign-in works, and the browser's
+network panel shows API calls going to `/api/...` on the same origin (Next.js
+forwards them to the staging API).
 
-- [ ] No `pk_test`, `localhost`, `10.0.2.2`, or staging URLs in the Release
-      artifacts (the guards above enforce this; spot-check anyway).
-- [ ] No verbose/debug logging in Release (iOS `.notice` floor; Android Timber
-      tree only planted under `BuildConfig.DEBUG`; OkHttp logging `NONE` in
-      release).
-- [ ] A small live test transaction succeeds end-to-end (charge + Connect
-      payout) before the public release lane (`fastlane ios release` /
-      `fastlane android release`).
+### S8. Staging scheduled jobs (founder runs, L4 prepared)
+
+The worker container already runs cron and pg-boss. The Lambda stack sends the
+reminders:
+
+1. Deploy from the Mac with AWS SAM (it shows the change set and asks before
+   creating anything):
+   ```bash
+   cd pantopus-seeder && ./deploy/build.sh && cd deploy
+   sam deploy --config-env staging
+   ```
+2. The stack creates the secret `pantopus/seeder/staging` with placeholders. Fill
+   it from a private JSON file with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+   (staging), `PANTOPUS_API_BASE_URL=https://staging-api.pantopus.com`,
+   `INTERNAL_API_KEY` (the value in `hosted-secrets/staging.env`),
+   `CURATOR_EMAIL` and `CURATOR_PASSWORD` (a staging curator account),
+   `OPENAI_API_KEY`, and optionally `WEATHERKIT_KEY_ID`, `WEATHERKIT_TEAM_ID`,
+   `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY` (and the air-quality key
+   once L1's seeder change says where `alert_checker` reads it):
+   ```bash
+   aws secretsmanager put-secret-value --secret-id pantopus/seeder/staging --secret-string file://<private json file>
+   ```
+3. The stack includes `JobTriggerFunction`, which runs ten payment and
+   maintenance jobs through the backend's locked internal endpoints. Appendix A
+   therefore sets `LAMBDA_BACKED_CRON_ENABLED=false`, so the worker doesn't run
+   the same ten jobs at the same minute. The open-gigs nudge in the stack finds
+   nothing while open gigs stay off.
+
+**Check:** CloudWatch logs for `pantopus-briefing-scheduler-staging` show runs
+every 15 minutes with no errors; `select job_name, last_success, last_failure
+from job_locks` in the staging SQL editor shows the job-trigger runs; the
+founder's staging phone gets one scheduled reminder (section 5).
+
+### S9. Staging apps (founder, L4 builds)
+
+For the founder's own devices: an iOS build and an Android build pointing at
+`https://staging-api.pantopus.com`, with the staging Firebase project. L4
+prepares them with the store build work (section 4): iOS through TestFlight or
+installed from this Mac, Android as a signed APK.
+
+### S10. Staging journey (L4 with founder)
+
+L4 runs the pilot journey on staging with synthetic accounts: sign-up and email
+confirmation, Add Home (private setup), Today, pickup days, radon task, a
+household invitation, task done, a reminder push delivered to the founder's
+iPhone (TestFlight) and an Android phone, notification tap-through, and the
+web for the same account. Failures go to the owning stream.
+
+## 3. Production
+
+Same shape as staging, with live vendors where D4 and D5 say so.
+
+### P1. Production address (founder)
+
+1. Cloudflare → `pantopus.com` DNS: set `api` to the Elastic IP. Default: **DNS
+   only** (grey cloud), like staging, with the backend's `TRUST_PROXY=1`. If you
+   keep Cloudflare's proxy (orange cloud), set `TRUST_PROXY=2` and allow the
+   server's port 443 only from Cloudflare's address ranges, or rate limits see
+   Cloudflare's address instead of the visitor's.
+2. On the server, add an nginx site for `api.pantopus.com` proxying to
+   `127.0.0.1:8000` (copy the staging site: same headers, WebSocket upgrade for
+   `/socket.io/`, `client_max_body_size 110m` because videos may be 100 MB), then
+   `sudo certbot --nginx -d api.pantopus.com`.
+
+**Check:** `curl -sI https://api.pantopus.com/` shows a valid certificate
+(after P6 the health check answers).
+
+### P2A. Production database: new project (default, founder)
+
+1. Supabase → New project `pantopus-production`, **Pro** plan, region
+   `us-west-2` (Oregon, next to the server). Turn on daily backups (included in
+   Pro); point-in-time recovery is optional.
+2. On the Mac:
+   ```bash
+   supabase link --project-ref <production ref>
+   supabase db push --linked --dry-run   # lists every migration in supabase/migrations
+   supabase db push --linked
+   ```
+3. Storage buckets and the S3 access key as in S2.
+4. Keep the April project as it is (pause it; don't delete it).
+
+**Check:** as in S2: `supabase db push --linked --dry-run` reports nothing to
+push, and the three buckets exist with the right privacy.
+
+### P2B. Production database: adopt the April project (only if D3 says so)
+
+Don't run any of this until L4 has rehearsed it on a copy:
+
+1. Founder: take a full backup outside the repository:
+   `supabase db dump --linked -f <private>/schema.sql`,
+   `supabase db dump --linked --data-only --use-copy -f <private>/data.sql`, and
+   the ledger with `supabase migration list --linked`. Hand L4 the files
+   privately (they contain real users' data).
+2. L4: restore them into a disposable local database, apply the September
+   forward-upgrade SQL (retained in the private evidence archive under
+   `baseline-adoption/`), compare catalogs with the canonical baseline, then
+   apply every later migration, and write the exact ledger-repair commands.
+3. Founder, in a maintenance window: run the reviewed SQL and ledger repair, then
+   `supabase db push --linked`. See `docs/supabase-migration-automation-runbook.md`.
+
+### P3. Production Auth (founder)
+
+As in S3, with Site URL `https://pantopus.com`, redirect URLs
+`https://pantopus.com/auth/callback`, `https://www.pantopus.com/auth/callback`,
+`https://pantopus.com/**` and `pantopus://auth/callback`, production SMTP sender
+`Pantopus <hello@pantopus.com>`, and the production Apple and Google settings.
+
+### P4. Production Firebase and APNs (founder)
+
+- Firebase: add an Android app `app.pantopus.android` (in a production Firebase
+  project, or `pantopus-staging` if you accept one project for the pilot),
+  download its `google-services.json` for the `GOOGLE_SERVICES_JSON` release
+  secret, and create a service account with only the Firebase Cloud Messaging
+  admin role for the backend (`FCM_SERVICE_ACCOUNT_JSON`, one line).
+- APNs: the existing key works for sandbox and production. Production uses
+  `APNS_PRODUCTION=true`: TestFlight and App Store builds receive production
+  pushes.
+
+### P5. Production env file (founder, on the server)
+
+Write `~/pantopus/.env.prod` as in S4 from `hosted-secrets/production.env` and
+Appendix A's production column. **First move the June file aside**
+(`mv .env.prod .env.prod.june-2026`): the deploy reads `.env.prod` for the new
+containers, and none of the June settings (old database, old keys) may carry
+over.
+
+### P6. GitHub `production` environment and first release (founder)
+
+Same secrets as S5 (production values) plus `BACKEND_API_BIND=127.0.0.1:8000`;
+restrict the environment to `master`; set `BACKEND_DEPLOY_ENABLED=true` last.
+The next CI success on master deploys. If the June container is named
+`pantopus-backend`, the deploy stops it and keeps it as
+`pantopus-backend-previous`, the automatic fallback if the first start fails.
+
+**Check:** `curl -s https://api.pantopus.com/health` is healthy, and both
+containers are healthy on the server.
+
+### P7. Stripe and Lob webhooks (founder)
+
+- Stripe (test mode per D4, live later): endpoint
+  `https://api.pantopus.com/api/webhooks/stripe`, events as listed in
+  `backend/stripe/stripeWebhooks.js`; put its signing secret in
+  `STRIPE_WEBHOOK_SECRET`.
+- Lob (live): webhook `https://api.pantopus.com/api/v1/webhooks/lob`; its
+  secret in `LOB_WEBHOOK_SECRET`.
+
+### P8. Production scheduled jobs (founder runs, L4 prepared)
+
+As S8 with `pantopus/seeder/production`, `PANTOPUS_API_BASE_URL=https://api.pantopus.com`,
+the production `INTERNAL_API_KEY` and a production curator account:
+`sam deploy --config-env prod`.
+
+### P9. Production web (founder)
+
+Vercel Production environment variables: `NEXT_PUBLIC_API_URL=https://api.pantopus.com`,
+`NEXT_PUBLIC_APP_URL=https://pantopus.com`, `NEXT_PUBLIC_APP_ENV=production`,
+`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (matching D4), `NEXT_PUBLIC_MAPBOX_TOKEN`,
+and, once the new store listings exist, `NEXT_PUBLIC_IOS_APP_STORE_URL`,
+`NEXT_PUBLIC_IOS_APP_STORE_APP_ID` and `NEXT_PUBLIC_ANDROID_PLAY_STORE_URL`
+(today's defaults point at the April apps). Production branch `master`.
+
+**Check:** `https://pantopus.com` shows the new home page; sign-in works;
+`https://pantopus.com/.well-known/apple-app-site-association` returns JSON.
+
+### P10. Domains and app links (founder, L4 regenerates the files)
+
+- Vercel: add `pantopus.app` and `www.pantopus.app` to the same project without
+  a redirect, so `/.well-known` files load there too (Cloudflare records DNS only).
+- L4 regenerates the association files once the signing certificates exist:
+  `APPLE_TEAM_ID=<team> ANDROID_SHA256_FINGERPRINTS=<Play signing>,<upload> node tools/gen-association-files.mjs`.
+
+**Check:** Apple's and Google's link checkers accept both domains.
+
+## 4. Store builds
+
+### iOS (TestFlight, then App Store)
+
+- [ ] Founder: turn on the **Sign in with Apple** capability for the App ID
+  `app.pantopus.ios` (before `match` creates the App Store profile), then the
+  App Store Connect app record for `app.pantopus.ios` (name per D2), an App
+  Store Connect API key, a private `match` repository and password.
+  Secrets in the GitHub `ios-release` environment: `STRIPE_PUBLISHABLE_KEY`,
+  `MATCH_GIT_URL`, `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`,
+  `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
+  `APP_STORE_CONNECT_KEY_CONTENT` (base64 of the `.p8`), `APPLE_TEAM_ID`.
+- [ ] L4: Release build points at `https://api.pantopus.com`, has no test keys or
+  local URLs, and meets current App Store rules (privacy manifest, account
+  deletion, Sign in with Apple, permission strings).
+- [ ] Founder: run **iOS Beta (TestFlight)** (tag `ios-v<version>` or manual run).
+
+### Android (Play internal track)
+
+- [ ] L4: target API 36 (Google Play's requirement for new apps and updates
+  since August 31, 2026), drop the unused photo and video read permissions (the
+  app uses the system photo picker), Release build checks.
+- [ ] Founder: Play Console app `app.pantopus.android` with Play App Signing, an
+  upload keystore, a service account with release access. Secrets in
+  `android-release`: `ANDROID_KEYSTORE_BASE64`, `PANTOPUS_KEYSTORE_PASSWORD`,
+  `PANTOPUS_KEY_ALIAS`, `PANTOPUS_KEY_PASSWORD`, `PLAY_STORE_SERVICE_ACCOUNT_JSON`,
+  `PANTOPUS_API_BASE_URL=https://api.pantopus.com`,
+  `PANTOPUS_SOCKET_URL=https://api.pantopus.com`, `STRIPE_PUBLISHABLE_KEY`,
+  `MAPS_API_KEY` and `GOOGLE_SERVICES_JSON` (P4).
+- [ ] Founder: run **Android Beta (Play Store)**.
+
+### Listings (founder approves; L4 drafts)
+
+Listing text around "Know what matters for your home, and stay on top of it.",
+screenshots from the simulator and emulator with test data, App Privacy and
+Data safety answers from `docs/compliance/privacy-data-inventory.md`, a review
+account for each store. Nothing is submitted without your approval.
+
+## 5. Go-live
+
+- [ ] The pilot journey passes on **production** with a founder test account
+  (S10's list), on iOS, Android and the web.
+- [ ] One scheduled reminder reaches the founder's iPhone (TestFlight build) and
+  an Android phone from production, and tapping it opens the right screen.
+- [ ] Backups: Supabase daily backup visible in the dashboard; a restore of the
+  latest backup into a scratch project works once (L4 rehearses the local
+  version first).
+- [ ] Monitoring: an uptime check on `https://api.pantopus.com/health` every
+  minute (for example UptimeRobot or Better Stack, free tiers) alerting the
+  founder's email; optional Slack alerts via `SLACK_ALERTS_WEBHOOK_URL`.
+- [ ] Rollback: the **Rollback Backend** workflow with the previous release
+  digest from the deploy summary (see `docs/ci-cd.md`).
+- [ ] Turn off what's no longer used: the September staging site on the server
+  once Vercel serves staging, and the April apps per D2.
+- [ ] Start with five households (NEXT_STEPS section 4).
+
+## Appendix A. Backend settings
+
+Write these as `KEY=value` lines (no quotes, one line each) into
+`~/pantopus/.env.staging` and `~/pantopus/.env.prod`. The deploy script adds
+`NODE_ENV=production`, `APP_ENV`, `PGBOSS_ENABLED` and `CRON_ENABLED` itself.
+"gen" means the value is in `~/.config/pantopus/hosted-secrets/<env>.env`.
+
+| Setting | Staging | Production | Source |
+|---|---|---|---|
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | staging project | production project | Supabase → Project Settings → API |
+| `DATABASE_URL` | session pooler URI, port 5432, ending `?sslmode=verify-full&sslrootcert=/app/config/certificates/supabase-prod-ca-2021.crt` | same, production | Supabase → Connect → Session pooler (the direct host is IPv6 only) |
+| `PUBLIC_API_BASE_URL` | `https://staging-api.pantopus.com` | `https://api.pantopus.com` | D1 |
+| `APP_URL`, `AUTH_REDIRECT_URL`, `WEB_APP_URL`, `CLIENT_URL`, `FRONTEND_URL`, `PUBLIC_WEB_URL`, `WEB_BASE_URL` | `https://staging.pantopus.com` | `https://pantopus.com` | web address |
+| `APP_URLS` (allowed web origins) | `https://staging.pantopus.com` | `https://pantopus.com,https://www.pantopus.com` | |
+| `TRUST_PROXY` | `1` | `1` (or `2` behind Cloudflare's proxy, P1) | |
+| `INTERNAL_API_KEY`, `CSRF_SECRET`, `STEP_UP_SECRET`, `LOCATION_JITTER_SECRET`, `EMAIL_INBOUND_HMAC_SECRET`, `HOME_POSTCARD_CODE_KEYS_JSON`, `HOME_POSTCARD_CODE_ACTIVE_KEY` | gen | gen | `hosted-secrets/` |
+| `GOOGLE_ADDRESS_VALIDATION_API_KEY`, `GOOGLE_PLACES_API_KEY` | required | required | Google Cloud (restrict to the server's IP) |
+| `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active) |
+| `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
+| `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
+| `AIRNOW_API_KEY` | optional | optional | (L1 is replacing AirNow) |
+| `OPENAI_API_KEY` | required for AI features | required for AI features | OpenAI project with a budget cap |
+| `LOB_ENV` | `test` | `live` | D5 |
+| `LOB_API_KEY` | `test_…` | `live_…` | Lob |
+| `LOB_WEBHOOK_SECRET` | Lob test webhook | Lob live webhook | Lob → Webhooks |
+| `LOB_FROM_NAME`, `LOB_FROM_ADDRESS_LINE1`, `LOB_FROM_CITY`, `LOB_FROM_STATE`, `LOB_FROM_ZIP` | test address | real return address | D5 |
+| `STRIPE_SECRET_KEY` | `sk_test_…` (required) | per D4 | Stripe |
+| `STRIPE_PUBLISHABLE_KEY` | `pk_test_…` | per D4 | Stripe |
+| `STRIPE_WEBHOOK_SECRET` | test endpoint's `whsec_…` | per D4 | Stripe → Webhooks (P7) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | D6 | D6 | Postmark (server token) |
+| `SUPPORT_EMAIL`, `PLATFORM_SUPPORT_EMAIL`, `ADMIN_ALERT_EMAIL` | founder's address | support address | |
+| `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY_BASE64` | existing key | existing key | Apple Developer |
+| `APNS_BUNDLE_ID` | `app.pantopus.ios` | `app.pantopus.ios` | |
+| `APNS_PRODUCTION` | `true` for TestFlight builds, `false` for development-signed builds | `true` | |
+| `FCM_SERVICE_ACCOUNT_JSON` | `pantopus-staging` sender | production sender (P4) | Firebase, one line |
+| `AWS_S3_ENDPOINT`, `AWS_S3_FORCE_PATH_STYLE=true`, `AWS_S3_REGION` and `AWS_REGION` (project region), `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET=pantopus-uploads`, `AWS_CLOUDFRONT_URL=https://<ref>.supabase.co/storage/v1/object/public/pantopus-uploads` | staging project | production project | Supabase Storage → S3 Connection (the same setup the local test kit uses). An AWS S3 bucket also works: drop the endpoint and path-style lines. |
+| `HOME_DOCUMENTS_BUCKET`, `GIG_COMPLETION_BUCKET` | `home-documents`, `gig-completion` | same | S2 / P2A buckets |
+| `LAMBDA_BACKED_CRON_ENABLED` | `false` | `false` | S8 |
+| `SLACK_ALERTS_WEBHOOK_URL` | optional | optional | D7 |
+| `LAUNCH_FEATURES` | empty | empty | launch cuts stay off |
+
+Startup refuses a production process without `CSRF_SECRET`, `STEP_UP_SECRET`,
+the Google, Smarty and Lob keys, `LOB_WEBHOOK_SECRET` and the right `LOB_ENV`,
+and refuses staging without test Lob and Stripe keys.
+
+## Appendix B. Costs (prices checked September 22, 2026)
+
+Known recurring cost for one production Supabase Pro project, staging on Free,
+one Vercel Pro seat and Postmark Basic: about **$60 a month** before usage
+($25 + $20 + $15). Add the EC2 server and its disk, an Elastic IP ($3.60 a
+month), Smarty ($552 a year if the Professional plan is chosen), the Apple
+Developer membership ($99 a year), Play registration ($25 once if not already
+paid), Lob postcards (from $0.905 each), Stripe fees on live payments (2.9% +
+$0.30 per card charge; Connect payouts $2 per active account a month plus 0.25%
++ $0.25), Google and Mapbox usage beyond their free tiers, and OpenAI usage.
+Check current prices before buying; these are not approvals to spend.
