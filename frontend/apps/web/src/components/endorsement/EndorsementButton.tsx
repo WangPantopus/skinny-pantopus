@@ -7,7 +7,7 @@
  *   1. On load, fetches the categories the current user has already endorsed.
  *   2. Shows a dropdown of the business's categories.
  *   3. Toggling a category calls endorseBusiness / retractEndorsement.
- *   4. Requires auth — redirects to /login if not logged in.
+ *   4. Requires auth — redirects to /login (and back here) if not logged in.
  *
  * Visual:
  *   - Collapsed: a single "👍 Endorse" button (or "👍 Endorsed (N)" if any)
@@ -15,11 +15,12 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { CATEGORY_MAP } from '@/components/discover/constants';
 import { toast } from '@/components/ui/toast-store';
+import { authPageHref } from '@/lib/auth-utils';
 
 interface EndorsementButtonProps {
   /** The business user id to endorse */
@@ -42,6 +43,7 @@ export default function EndorsementButton({
   isOwner = false,
 }: EndorsementButtonProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [endorsedCategories, setEndorsedCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +96,7 @@ export default function EndorsementButton({
   const toggleCategory = useCallback(async (category: string) => {
     const token = getAuthToken();
     if (!token) {
-      router.push('/login');
+      router.push(authPageHref('/login', pathname));
       return;
     }
 
@@ -122,7 +124,7 @@ export default function EndorsementButton({
     } finally {
       setToggling(null);
     }
-  }, [businessId, endorsedCategories, onCountChange, router]);
+  }, [businessId, endorsedCategories, onCountChange, router, pathname]);
 
   // Don't show if the user owns this business or no categories
   if (isOwner || categories.length === 0) return null;
@@ -137,7 +139,7 @@ export default function EndorsementButton({
         onClick={() => {
           const token = getAuthToken();
           if (!token) {
-            router.push('/login');
+            router.push(authPageHref('/login', pathname));
             return;
           }
           setOpen((o) => !o);

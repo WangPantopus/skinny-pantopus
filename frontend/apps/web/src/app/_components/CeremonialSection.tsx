@@ -96,8 +96,7 @@ export default function CeremonialSection() {
               <svg
                 viewBox="0 0 400 280"
                 width="100%"
-                height="auto"
-                style={{ maxHeight: '100%', filter: 'drop-shadow(0 30px 50px rgba(0,0,0,0.45))' }}
+                style={{ height: 'auto', maxHeight: '100%', filter: 'drop-shadow(0 30px 50px rgba(0,0,0,0.45))' }}
               >
                 <defs>
                   <linearGradient id="cePaper1" x1="0" y1="0" x2="0" y2="1">
@@ -133,8 +132,7 @@ export default function CeremonialSection() {
               <svg
                 viewBox="0 0 400 280"
                 width="100%"
-                height="auto"
-                style={{ maxHeight: '100%', filter: 'drop-shadow(0 30px 50px rgba(0,0,0,0.5))' }}
+                style={{ height: 'auto', maxHeight: '100%', filter: 'drop-shadow(0 30px 50px rgba(0,0,0,0.5))' }}
               >
                 <defs>
                   <linearGradient id="cePaper2" x1="0" y1="0" x2="0" y2="1">
@@ -171,8 +169,7 @@ export default function CeremonialSection() {
               <svg
                 viewBox="0 0 400 320"
                 width="100%"
-                height="auto"
-                style={{ maxHeight: '100%', filter: 'drop-shadow(0 30px 50px rgba(0,0,0,0.5))' }}
+                style={{ height: 'auto', maxHeight: '100%', filter: 'drop-shadow(0 30px 50px rgba(0,0,0,0.5))' }}
               >
                 <defs>
                   <linearGradient id="cePaper3" x1="0" y1="0" x2="0" y2="1">

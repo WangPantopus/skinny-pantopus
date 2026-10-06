@@ -30,7 +30,7 @@ final class PantopusTests: XCTestCase {
         case .staging:
             XCTAssertTrue(env.apiBaseURL.absoluteString.contains("staging"))
         case .production:
-            XCTAssertEqual(env.apiBaseURL.host, "api.pantopus.app")
+            XCTAssertEqual(env.apiBaseURL.host, "api.pantopus.com")
         }
     }
 }

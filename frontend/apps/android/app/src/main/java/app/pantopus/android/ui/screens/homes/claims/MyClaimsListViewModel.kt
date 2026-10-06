@@ -182,12 +182,12 @@ class MyClaimsListViewModel
             return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
         }
 
-        private fun friendlyMethod(method: String): String? =
+        private fun friendlyMethod(method: String?): String? =
             when (method) {
                 "doc_upload" -> "Document upload"
                 "fast_track" -> "Fast-track invite"
                 "id_verification" -> "ID verification"
-                else -> method.takeIf { it.isNotEmpty() }
+                else -> method?.takeIf { it.isNotEmpty() }
             }
 
         private fun relativeSubmitted(iso: String): String? =

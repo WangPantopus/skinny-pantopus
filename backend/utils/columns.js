@@ -60,7 +60,7 @@ const POST_DETAIL = '*';
 
 /** Columns for home list / dashboard */
 const HOME_LIST = `
-  id, address, city, state, zipcode, location,
+  id, address, address2, city, state, zipcode, location,
   owner_id, name, home_type,
   primary_photo_url, cover_photo_url, description,
   visibility, home_status,
