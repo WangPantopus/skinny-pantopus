@@ -177,6 +177,18 @@ final class OwnersListViewModel: ListOfRowsDataSource {
             owners = response.owners
             applyState()
         } catch {
+            if case .forbidden = error as? APIError {
+                // Not (or no longer) an owner, e.g. right after transferring
+                // the Home: a retry can't change that, so say so plainly.
+                state = .empty(
+                    ListOfRowsState.EmptyContent(
+                        icon: .shield,
+                        headline: "You're not an owner of this Home",
+                        subcopy: "Only the Home's owners can see its owners and transfers."
+                    )
+                )
+                return
+            }
             state = .error(
                 message: (error as? APIError)?.errorDescription
                     ?? "Couldn't load owners. Try again."

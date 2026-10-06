@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
@@ -63,6 +66,22 @@ const val OWNERS_LIST_TAG = "ownersList"
  *     claim-review surface.
  * @param onBack Pop the back stack.
  */
+/**
+ * Reloads the roster when the screen shows again after Transfer: by then the
+ * owners and the viewer's own access have changed. Returns the call that arms it.
+ */
+@Composable
+private fun rememberRefreshAfterTransfer(onReturn: () -> Unit): () -> Unit {
+    var pending by rememberSaveable { mutableStateOf(false) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (pending) {
+            pending = false
+            onReturn()
+        }
+    }
+    return { pending = true }
+}
+
 @Composable
 fun OwnersListScreen(
     onOpenInvite: (String) -> Unit,
@@ -77,6 +96,7 @@ fun OwnersListScreen(
     val access by viewModel.access.collectAsStateWithLifecycle()
 
     var removeTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val refreshAfterTransfer = rememberRefreshAfterTransfer { viewModel.refresh() }
 
     LaunchedEffect(Unit) {
         viewModel.load()
@@ -114,7 +134,10 @@ fun OwnersListScreen(
             )
         }
         if (access?.can("ownership.transfer") == true) {
-            TransferOwnershipBar(onTap = { onOpenTransfer(viewModel.homeId) })
+            TransferOwnershipBar(onTap = {
+                refreshAfterTransfer()
+                onOpenTransfer(viewModel.homeId)
+            })
         }
     }
 

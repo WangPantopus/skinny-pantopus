@@ -146,7 +146,7 @@ private fun SheetHeader(biometryLabel: String) {
             color = PantopusColors.appText,
         )
         Text(
-            text = "$biometryLabel will sign the transfer and record it on the home's chain.",
+            text = "$biometryLabel confirms it's you.",
             fontSize = 12.5.sp,
             color = PantopusColors.appTextSecondary,
             modifier = Modifier.padding(horizontal = Spacing.s5),
@@ -270,7 +270,7 @@ private fun LegalBlock(
             if (coOwnerNames.isNotEmpty()) {
                 append("$coOwnerNames must approve before it takes effect. ")
             }
-            append("Recorded on chain at ")
+            append("Recorded in this home's history at ")
             append(timestamp)
             append(".")
         }
