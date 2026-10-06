@@ -24,7 +24,7 @@ final class WaitingRoomContentTests: XCTestCase {
         XCTAssertEqual(content.halo.icon, .hourglass)
         XCTAssertTrue(content.halo.isPulsing)
         XCTAssertEqual(content.headline, "Under review")
-        XCTAssertTrue(content.subcopy.contains("reviewer is checking your documents"))
+        XCTAssertTrue(content.subcopy.contains("waiting for a Pantopus reviewer"))
         XCTAssertEqual(content.address, "418 Linden Ave · Apt 3B")
         XCTAssertEqual(content.claimRef, "CLM-4F2A")
         XCTAssertNil(content.reviewerNote)
@@ -33,10 +33,10 @@ final class WaitingRoomContentTests: XCTestCase {
         XCTAssertEqual(content.timeline.map(\.state), [.done, .current, .pending])
         XCTAssertEqual(content.timeline[1].sub, "Started 9h ago")
         XCTAssertFalse(content.timelinePaused)
-        // ETA pill — primary tone, "within 24–48 hours".
+        // Pill — primary tone; no review time is promised.
         XCTAssertEqual(content.etaPill.tone, .primary)
-        XCTAssertEqual(content.etaPill.text, "Decision usually within 24–48 hours")
-        XCTAssertEqual(content.etaPill.icon, .calendarClock)
+        XCTAssertEqual(content.etaPill.text, "We'll notify you when it's decided")
+        XCTAssertEqual(content.etaPill.icon, .bell)
         XCTAssertEqual(content.manageSectionTitle, "Manage this claim")
         XCTAssertEqual(content.primaryCta.label, "View claim")
         XCTAssertEqual(content.primaryCta.icon, .fileText)

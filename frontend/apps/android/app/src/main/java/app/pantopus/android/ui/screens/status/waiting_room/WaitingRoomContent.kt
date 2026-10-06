@@ -173,7 +173,7 @@ data class WaitingRoomContent(
         /**
          * Active wait — `Under review`, info-toned pulsing halo, the Submitted
          * → Under review → Approved timeline with "Under review" current, and
-         * the "within 24–48 hours" ETA pill.
+         * the "We'll notify you when it's decided" pill (no review time is promised).
          */
         fun active(
             address: String = SAMPLE_ADDRESS,
@@ -185,10 +185,11 @@ data class WaitingRoomContent(
                 title = ROOM_TITLE,
                 halo = StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.Hourglass, isPulsing = true),
                 headline = "Under review",
-                // A person reviews ownership documents; no county-records check exists.
+                // A person reviews ownership documents (no county-records check), and no
+                // review time is promised while identity confirmation is undecided.
                 subcopy =
-                    "A Pantopus reviewer is checking your documents. " +
-                        "You'll get a push the moment we decide.",
+                    "Your documents are waiting for a Pantopus reviewer. " +
+                        "Meanwhile, you can verify your address by mail.",
                 address = address,
                 claimRef = claimRef,
                 reviewerNote = null,
@@ -201,8 +202,8 @@ data class WaitingRoomContent(
                 timelinePaused = false,
                 etaPill =
                     StatusWaitingPill(
-                        text = "Decision usually within 24–48 hours",
-                        icon = PantopusIcon.CalendarClock,
+                        text = "We'll notify you when it's decided",
+                        icon = PantopusIcon.Bell,
                         tone = StatusPillTone.Primary,
                     ),
                 manageSectionTitle = MANAGE_TITLE,

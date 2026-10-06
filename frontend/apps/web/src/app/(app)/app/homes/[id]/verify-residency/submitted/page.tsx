@@ -28,10 +28,10 @@ export default function VerifyResidencySubmittedPage() {
             <Hourglass className="w-10 h-10 text-blue-600 dark:text-blue-400" />
           </div>
 
-          <h1 className="text-2xl font-bold text-app-text mb-3">A person is reviewing your document</h1>
+          <h1 className="text-2xl font-bold text-app-text mb-3">A person will review your document</h1>
           <p className="text-app-text-secondary text-base leading-relaxed mb-2 max-w-sm">
-            Usually within hours, always within a business day. You&apos;ll get a notification the moment it&apos;s
-            decided, and everything you have now stays available while you wait.
+            You&apos;ll get a notification the moment it&apos;s decided, and everything you have now stays available
+            while you wait.
           </p>
           <p className="text-sm text-app-text-muted mb-10">Your document is seen by one reviewer, never by neighbors, and deleted once your claim is decided.</p>
 

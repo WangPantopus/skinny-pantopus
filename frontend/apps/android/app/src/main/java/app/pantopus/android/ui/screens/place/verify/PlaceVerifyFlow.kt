@@ -331,7 +331,7 @@ private fun Pending(
         when (method) {
             PlaceVerifyMethod.MAIL -> "We've mailed a postcard to your address. Enter the code when it arrives — usually within a week."
             PlaceVerifyMethod.LANDLORD -> "We've asked your landlord or property manager to confirm you live here."
-            PlaceVerifyMethod.DOCUMENT -> "A person is reviewing the document you uploaded — usually within hours."
+            PlaceVerifyMethod.DOCUMENT -> "A person will review the document you uploaded. You'll get a notification when it's decided."
         },
         fontSize = 14.sp,
         lineHeight = 20.sp,

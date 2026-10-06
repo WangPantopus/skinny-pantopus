@@ -230,7 +230,7 @@ public extension WaitingRoomContent {
 
     /// Active wait — `Under review`, info-toned pulsing halo, the Submitted →
     /// Under review → Approved timeline with "Under review" current, and the
-    /// "within 24–48 hours" ETA pill.
+    /// "We'll notify you when it's decided" pill (no review time is promised).
     static func active(
         address: String = sampleAddress,
         claimRef: String = sampleClaimRef,
@@ -241,9 +241,10 @@ public extension WaitingRoomContent {
             title: roomTitle,
             halo: StatusHalo(tone: .info, icon: .hourglass, isPulsing: true),
             headline: "Under review",
-            // A person reviews ownership documents; no county-records check exists.
-            subcopy: "A Pantopus reviewer is checking your documents. " +
-                "You'll get a push the moment we decide.",
+            // A person reviews ownership documents (no county-records check), and no
+            // review time is promised while identity confirmation is undecided.
+            subcopy: "Your documents are waiting for a Pantopus reviewer. " +
+                "Meanwhile, you can verify your address by mail.",
             address: address,
             claimRef: claimRef,
             reviewerNote: nil,
@@ -254,8 +255,8 @@ public extension WaitingRoomContent {
             ],
             timelinePaused: false,
             etaPill: StatusWaitingPill(
-                text: "Decision usually within 24–48 hours",
-                icon: .calendarClock,
+                text: "We'll notify you when it's decided",
+                icon: .bell,
                 tone: .primary
             ),
             manageSectionTitle: manageTitle,
