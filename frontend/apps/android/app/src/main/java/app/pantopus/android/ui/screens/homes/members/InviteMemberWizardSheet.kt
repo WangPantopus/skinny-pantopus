@@ -154,7 +154,9 @@ private fun SenderConfirmDialog(
                     modifier = Modifier.testTag("homeSenderConfirm"),
                 ) { Text(if (selected.requestId == null) senderConfirmLabel(action) else "Discard") }
             },
-            dismissButton = { TextButton(onClick = { onDismiss() }) { Text(if (selected.requestId == null) "Keep reviewing" else "Keep it") } },
+            dismissButton = {
+                TextButton(onClick = { onDismiss() }) { Text(if (selected.requestId == null) "Keep reviewing" else "Keep it") }
+            },
         )
     }
 }
