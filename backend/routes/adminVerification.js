@@ -226,6 +226,8 @@ async function reviewEvidence(evidenceId, decision, adminUserId, notes) {
       .update({
         verification_status: 'document_verified',
         verification_tier: 'document_verified',
+        // The apps' verified mark reads the identity tier; a document approval is bi3.
+        identity_verification_tier: 'bi3_documented',
         verified_at: now,
         verified_by: adminUserId,
         updated_at: now,
