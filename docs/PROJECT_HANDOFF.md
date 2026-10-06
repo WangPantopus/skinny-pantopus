@@ -8,6 +8,13 @@ the [launch checklist](release/prod-config-checklist.md), and [AGENTS.md](../AGE
 ground rules. Everything below is history: notes that point to the coordination branch or a
 "live hub" are out of date.
 
+**Release status, October 6 evening (L4).** Next for the founder: the decisions and the staging
+and production steps in the launch checklist, and approving the store listing drafts (PR 1635).
+Merged today on the release side: Android targets API 36 (PR 1601) and parses API dates on Android
+8–13 (PR 1650); web visitors keep their own address behind Vercel (PR 1645); a Support Train
+privacy fix (PR 1637); CI capacity work. Not verifiable here: anything hosted, physical phones,
+Android 8–13 devices. NEXT_STEPS section 2 and its release-candidate row track the rest.
+
 **October 3 owner-checkout recovery:** local `master` contained nine migration-test
 fixture commits and tracked only four files. The disk matched the last real
 checkout `ed5ea9ec5`, apart from five local documents. The original head is retained

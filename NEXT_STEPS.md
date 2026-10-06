@@ -87,10 +87,11 @@ Sources, in order of authority for this work:
 The ordered steps, with exact values and checks, are in the [launch checklist](docs/release/prod-config-checklist.md); its section 1 lists the decisions it needs from you.
 
 - [ ] Turn the hosted backend on. One scheduled reminder reaches a physical iPhone and a physical Android phone.
-  - [x] Prepared by L4 on October 6: every step with values and checks in the launch checklist (PR 1556); deploys stop a crash-looping release within seconds (PR 1576); the reminder Lambdas are ready for hosted runs, with 7 AM Pacific task reminders through daylight saving and failure alarms (PR 1584); backup and restore including uploaded files, rehearsed end to end (PR 1586). Your steps are listed in order in `launch-streams/status/FOUNDER.md`.
+  - [x] Prepared by L4 on October 6: every step with values and checks in the launch checklist (PR 1556); deploys stop a crash-looping release within seconds (PR 1576); the reminder Lambdas are ready for hosted runs, with 7 AM Pacific task reminders through daylight saving and failure alarms (PR 1584); backup and restore including uploaded files, rehearsed end to end (PR 1586). Your steps are listed in order in `launch-streams/status/FOUNDER.md`; Supabase Auth's limits for the API server's single address and the web's `EDGE_PROXY_SECRET` (so each web visitor keeps their own sign-in limit) are steps in the checklist (PRs 1631, 1645).
 - [ ] Production keys the backend reads; the database baseline adopted in production; TestFlight; a Play internal testing track.
   - [x] iOS release settings, privacy manifests and the production API host are on master (PR 1567).
-  - [ ] Android targets API 36 as Google Play requires (PR 1601; the main screens checked on an Android 16 emulator); store listing drafts, privacy answers and the Play account-deletion page draft wait for your approval (PR 1635).
+  - [x] Android targets API 36 as Google Play requires (PR 1601, merged October 6; the main screens checked on an Android 16 emulator), and API dates now parse on Android 8–13 (PR 1650).
+  - [ ] Store listing drafts, privacy answers and the Play account-deletion page draft wait for your approval (PR 1635).
 - [ ] Confirm the Camas, Vancouver and Washougal pickup schedules and their holiday rules by hand for Thanksgiving (November 26), Christmas (December 25) and New Year's Day (January 1). Mark each official or unconfirmed. PR 1552 added draft holiday rows for the three cities; all stay unconfirmed and never push until you confirm them (FOUNDER.md).
 - [ ] Talk to ten first-time homeowners and ten meal-train organizers before and during the build. Ask the homeowners whether they would add their home to a Crew Day on their street, and what they would type into a box that answers questions about their home. Their questions become the agent's first test set.
 - [ ] Five strangers, ten seconds on the app's first screen: "What does this do, and why would you type your address?"
@@ -165,6 +166,10 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] Existing accepted normal mobile Train/create/publish/signup/cancel/organizer/lifecycle journeys remain reusable because their relevant source is unchanged; no duplicate replay was needed.
   - [x] Day-of reminder at its natural time on local jobs: iOS and Android pushes to signed-in helpers, the email to a guest helper, a cancelled signup skipped, no duplicates (L3, October 6).
   - [ ] The evening-before reminder at its natural time (L3 runs it on October 6 at 21:00Z), and delivery to a physical phone and a real inbox from the hosted backend. Concurrent exactly-once delivery and atomic cancellation-versus-send are still not established.
+
+- [ ] Release-candidate sweep (L4) before the pilot.
+  - [x] October 6: every reachable web page on the production build opened as a homeowner, a new user and a non-member (198 pages; three old /app addresses crashed and are fixed in PR 1655); every route opened as an app link on Android and, signed out, on iOS with no crashes; signed-in Lighthouse: performance 72–77, accessibility 93–100.
+  - [ ] Native Release builds with the largest text, dark mode, VoiceOver and TalkBack and a small screen on the pilot journeys; a signed-in iOS pass; store screenshots with test data.
 
 ## 4. The pilot
 
