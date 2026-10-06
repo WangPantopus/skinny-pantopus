@@ -204,9 +204,15 @@ sealed interface HomeLanding {
 sealed interface HubVerificationTarget {
     data object AddHome : HubVerificationTarget
 
-    data class WaitingRoom(val homeId: String) : HubVerificationTarget
+    data class WaitingRoom(
+        val homeId: String,
+    ) : HubVerificationTarget
 
-    data class Residency(val homeId: String) : HubVerificationTarget
+    data class Residency(
+        val homeId: String,
+    ) : HubVerificationTarget
 
-    data class ClaimOwnership(val homeId: String) : HubVerificationTarget
+    data class ClaimOwnership(
+        val homeId: String,
+    ) : HubVerificationTarget
 }
