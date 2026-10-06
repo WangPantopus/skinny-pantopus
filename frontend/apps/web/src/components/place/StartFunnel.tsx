@@ -112,7 +112,7 @@ function HeroStep({
           <h1
             className={`text-[31px] leading-[37px] sm:text-[36px] sm:leading-[43px] lg:text-[42px] lg:leading-[48px] font-bold -tracking-[0.028em] text-app-text text-balance ${fromCard ? 'mt-4' : ''}`}
           >
-            See what&apos;s true about your address.
+            Know what matters for your home, and stay on top of it.
           </h1>
           <p className="mt-3.5 max-w-[46ch] text-[15.5px] leading-[23px] text-app-text-secondary -tracking-[0.005em]">
             Wildfire and flood risk, today&apos;s air, radon, water, who represents you, and the neighbors who&apos;ve

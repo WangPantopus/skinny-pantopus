@@ -1324,35 +1324,64 @@ private struct RadonTodayCard: View {
 private struct RadonTodaySheet: View {
     @Bindable var state: RadonTodayState
 
+    private var tested: Bool {
+        state.sheet == "yes"
+    }
+
+    /// The title sits in the body, as on Android, so it can wrap instead of
+    /// running into a top-bar action; the action is a full-width button below.
     var body: some View {
-        FormShell(
-            title: state.sheet == "yes" ? "When was it tested?" : "Add a radon test to your list",
-            rightActionLabel: state.sheet == "yes" ? "Save" : "Add reminder",
-            isValid: state.retained != nil || valid, isDirty: true, isSaving: state.busy,
-            onClose: { state.sheet = nil }, onCommit: { Task { await state.save() } },
-            content: {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 8) {
+                    Text(tested ? "When was it tested?" : "Add a radon test to your list")
+                        .pantopusTextStyle(.h3)
+                        .foregroundStyle(Theme.Color.appText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 10)
+                        .accessibilityAddTraits(.isHeader)
+                    Button { state.sheet = nil } label: {
+                        Icon(.x, size: 22, color: Theme.Color.appText)
+                            .frame(width: 44, height: 44)
+                    }
+                    .disabled(state.busy)
+                    .accessibilityLabel("Close")
+                    .accessibilityIdentifier("radonSheetClose")
+                }
                 VStack(alignment: .leading, spacing: 16) {
                     if state.retained != nil {
                         Text("An earlier task request is saved. Save retries that exact request.")
                             .font(.callout)
                     }
-                    if state.sheet == "yes" {
+                    if tested {
                         Toggle("Test date (optional)", isOn: $state.hasDate)
-                        if state.hasDate { DatePicker("Test date", selection: $state.selectedDate, displayedComponents: .date) }
-                        TextField("Result (pCi/L)", text: $state.result).keyboardType(.decimalPad)
+                        if state.hasDate { RadonDateRow(title: "Test date", date: $state.selectedDate) }
+                        TextField("Result (pCi/L)", text: $state.result)
+                            .keyboardType(.decimalPad)
+                            .textFieldStyle(.roundedBorder)
                     } else {
-                        DatePicker(
-                            "Reminder date",
-                            selection: $state.selectedDate,
-                            in: Calendar.autoupdatingCurrent.startOfDay(for: Date())...,
-                            displayedComponents: .date
+                        RadonDateRow(
+                            title: "Reminder date",
+                            date: $state.selectedDate,
+                            range: Calendar.autoupdatingCurrent.startOfDay(for: Date())...
                         )
                     }
-                    if let error = state.error { Text(error).foregroundStyle(Theme.Color.error) }
                 }
                 .disabled(state.busy || state.retained != nil)
+                if let error = state.error { Text(error).foregroundStyle(Theme.Color.error) }
+                PrimaryButton(
+                    title: tested ? "Save" : "Add reminder",
+                    isLoading: state.busy,
+                    isEnabled: !state.busy && (state.retained != nil || valid)
+                ) { await state.save() }
+                    .accessibilityIdentifier("radonSheetCommit")
             }
-        )
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 20)
+        }
+        .background(Theme.Color.appSurface)
         .interactiveDismissDisabled(state.busy)
         .presentationDetents([.medium, .large])
     }
@@ -1363,6 +1392,28 @@ private struct RadonTodaySheet: View {
                 .map { $0.isFinite && $0 >= 0 } == true
         }
         return Calendar.autoupdatingCurrent.startOfDay(for: state.selectedDate) >= Calendar.autoupdatingCurrent.startOfDay(for: Date())
+    }
+}
+
+/// A date row that stays readable at accessibility text sizes: the compact
+/// picker's date chip grows until its inline label is squeezed to a column one
+/// letter wide, so the label moves above the picker there.
+private struct RadonDateRow: View {
+    let title: String
+    @Binding var date: Date
+    var range: PartialRangeFrom<Date> = Date.distantPast...
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                DatePicker(title, selection: $date, in: range, displayedComponents: .date)
+                    .labelsHidden()
+            }
+        } else {
+            DatePicker(title, selection: $date, in: range, displayedComponents: .date)
+        }
     }
 }
 

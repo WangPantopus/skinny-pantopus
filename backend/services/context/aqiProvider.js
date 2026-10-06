@@ -26,6 +26,7 @@ async function fetchAQI(latitude, longitude) {
     category: reading?.category ?? null,
     pollutant: reading?.pollutant ?? null,
     color: reading?.color ?? null,
+    observed_at: reading?.observed_at ?? null,
     is_noteworthy: (reading?.aqi ?? 0) > 100,
     provider: PROVIDER,
     fetchedAt: result.fetchedAt || null,

@@ -211,7 +211,9 @@ const QUICK_PROMPTS = [
   ...(launchFeatures.openGigs ? [{ label: '🛋️ Help me move something', text: 'I need help moving furniture' }] : []),
   ...(launchFeatures.marketplace ? [{ label: '🏷️ Sell an item', text: 'I want to sell' }] : []),
   { label: '📢 Post to neighbors', text: 'I want to tell my neighbors about' },
-  { label: '📬 Summarize my mail', text: 'Can you summarize my recent mail?' },
+  // The assistant summarizes a letter it is given (or one shared from Mail); it
+  // can't browse the inbox, so the prompt asks for the letter itself.
+  { label: '📬 Summarize a letter', text: 'Can you summarize this letter for me? Here it is: ' },
   { label: '🌤️ What\'s happening nearby?', text: 'What\'s happening near my home?' },
   ...(launchFeatures.openGigs ? [{ label: '🧹 Need cleaning help', text: 'I need someone to clean my house' }] : []),
 ];

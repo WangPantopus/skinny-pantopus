@@ -1,6 +1,6 @@
 """Lambda handler for home bill/task/calendar reminder push notifications.
 
-Triggered twice daily by EventBridge (morning + evening).
+Triggered twice daily by EventBridge Scheduler (07:00 and 18:00 Pacific).
 Queries HomeBill, HomeTask, and HomeCalendarEvent for items due soon,
 then sends push notifications to household members via the Node backend.
 """
@@ -20,7 +20,12 @@ from src.config.secrets import get_briefing_secrets, BriefingSecrets
 from src.utils.supabase_errors import is_missing_table_error, log_missing_table_once
 
 logging.basicConfig(level=logging.INFO, force=True)
+# httpx logs every request URL at INFO, and Supabase filters carry full user
+# ids; keep them out of CloudWatch.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.home_reminders")
+
+PACIFIC = ZoneInfo("America/Los_Angeles")
 
 SEND_TIMEOUT_S = 15
 
@@ -28,10 +33,14 @@ SEND_TIMEOUT_S = 15
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Home reminders Lambda entry point."""
     try:
-        return _run(event, context)
+        result = _run(event, context)
     except Exception:
         log.exception("Home reminders handler failed")
-        return {"error": "unhandled_exception"}
+        raise
+    if result.get("error") or result.get("errors"):
+        # Fail the invocation so the Lambda Errors metric and its alarm see it.
+        raise RuntimeError(f"Home reminders run failed: {result}")
+    return result
 
 
 def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -52,11 +61,12 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
     stats = {"bills_notified": 0, "tasks_notified": 0, "calendar_notified": 0, "errors": 0}
 
     _process_bills_due(supabase, secrets, stats)
-    # Use the scheduled event time, so a delayed morning invocation remains
-    # morning. The 01:00 UTC run must never send due-day task reminders.
+    # Use the scheduled time, so a delayed morning invocation remains morning.
+    # Only the 07:00 Pacific run sends due-day task reminders (template.yaml
+    # passes its scheduled time), in daylight and standard time alike.
     try:
         scheduled_at = datetime.fromisoformat(event["time"].replace("Z", "+00:00")) if event.get("time") else datetime.now(timezone.utc)
-        morning_run = scheduled_at.astimezone(timezone.utc).hour == 14
+        morning_run = scheduled_at.astimezone(PACIFIC).hour == 7
     except (ValueError, TypeError):
         morning_run = False
     if morning_run:
@@ -410,6 +420,8 @@ def _send_reminder(secrets: BriefingSecrets, user_id: str, title: str, body: str
 
 
 def _publish_metrics(stats: dict) -> None:
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return  # Local runs never write to CloudWatch.
     try:
         import boto3
         env = os.environ.get("ENVIRONMENT", "production")

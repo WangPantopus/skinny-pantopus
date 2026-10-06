@@ -8,6 +8,7 @@
  * Endpoints:
  *   GET  /?status=pending            — Reports of people, posts, tasks and neighbor messages, newest first
  *   POST /:kind/:reportId/resolve    — { outcome: 'resolved' | 'dismissed' }
+ *   POST /post/:reportId/remove      — take the reported post down, then close its open reports
  *
  * Direct-message reports arrive as reports of the person (UserReport). A neighbor-message report is a flag on
  * the message itself (NeighborMessage.reported_at, free-text report_reason) with no review status, so it is
@@ -225,6 +226,71 @@ router.post('/:kind/:reportId/resolve', async (req, res) => {
   } catch (err) {
     logger.error('Admin report resolve error', { error: err.message });
     res.status(500).json({ error: 'Failed to update the report' });
+  }
+});
+
+/**
+ * Remove a reported post: it is archived with reason 'moderation', which
+ * canViewPost and every feed already honour (only its author still sees it,
+ * and the author can't restore it), and every open report on that post is
+ * closed as resolved. Repeating it changes nothing.
+ */
+router.post('/post/:reportId/remove', async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    if (!UUID_REGEX.test(reportId)) return res.status(400).json({ error: 'Invalid report id' });
+
+    const { data: report, error: reportError } = await supabaseAdmin
+      .from('PostReport')
+      .select('id, post_id, status')
+      .eq('id', reportId)
+      .maybeSingle();
+    if (reportError) {
+      logger.error('Admin post removal: report lookup failed', { reportId, error: reportError.message });
+      return res.status(500).json({ error: 'Failed to remove the post' });
+    }
+    if (!report) return res.status(404).json({ error: 'Report not found' });
+
+    const now = new Date().toISOString();
+    const { data: post, error: postError } = await supabaseAdmin
+      .from('Post')
+      .select('id, archive_reason')
+      .eq('id', report.post_id)
+      .maybeSingle();
+    if (postError) {
+      logger.error('Admin post removal: post lookup failed', { reportId, error: postError.message });
+      return res.status(500).json({ error: 'Failed to remove the post' });
+    }
+    if (post && post.archive_reason !== 'moderation') {
+      const { error: removeError } = await supabaseAdmin
+        .from('Post')
+        .update({ archived_at: now, archive_reason: 'moderation', updated_at: now })
+        .eq('id', post.id);
+      if (removeError) {
+        logger.error('Admin post removal failed', { reportId, postId: post.id, error: removeError.message });
+        return res.status(500).json({ error: 'Failed to remove the post' });
+      }
+    }
+
+    const { data: closed, error: closeError } = await supabaseAdmin
+      .from('PostReport')
+      .update({ status: 'resolved', resolved_at: now })
+      .eq('post_id', report.post_id)
+      .in('status', ['pending', 'reviewed'])
+      .select('id');
+    if (closeError) {
+      logger.error('Admin post removal: closing reports failed', { reportId, error: closeError.message });
+      return res.status(500).json({ error: 'The post was removed, but its reports could not be closed' });
+    }
+
+    logger.info('admin.post_removed', {
+      report_id: reportId, post_id: report.post_id, post_found: Boolean(post),
+      reports_closed: (closed || []).length, admin_id: req.user.id,
+    });
+    res.json({ removed: Boolean(post), post_id: report.post_id, reports_closed: (closed || []).length });
+  } catch (err) {
+    logger.error('Admin post removal error', { error: err.message });
+    res.status(500).json({ error: 'Failed to remove the post' });
   }
 });
 

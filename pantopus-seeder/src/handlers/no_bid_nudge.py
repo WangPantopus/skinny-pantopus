@@ -25,6 +25,9 @@ from src.config.secrets import get_briefing_secrets, BriefingSecrets
 from src.utils.supabase_errors import is_missing_table_error, log_missing_table_once
 
 logging.basicConfig(level=logging.INFO, force=True)
+# httpx logs every request URL at INFO, and Supabase filters carry full user
+# ids; keep them out of CloudWatch.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.no_bid_nudge")
 
 SEND_TIMEOUT_S = 15
@@ -360,6 +363,8 @@ def _send_nudge(
 
 
 def _publish_metrics(stats: dict, start_ms: int) -> None:
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return  # Local runs never write to CloudWatch.
     elapsed_ms = time.monotonic_ns() // 1_000_000 - start_ms
     try:
         import boto3

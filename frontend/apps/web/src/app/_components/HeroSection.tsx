@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // HeroSection — Marketing homepage redesign
-// The wedge promise ("See what's true about your address") with an
+// The pilot promise ("Know what matters for your home, and stay on top of it") with an
 // address-field-shaped door into the /start funnel. Server component.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -38,7 +38,7 @@ export default function HeroSection() {
             </p>
 
             <h1 className="mh-display-hero mh-reveal mh-reveal-d1 mb-8">
-              See what&rsquo;s true about your address.
+              Know what matters for your home, and stay on top of it.
             </h1>
 
             <p className="mh-lede mh-reveal mh-reveal-d2 mb-10 max-w-[560px]">

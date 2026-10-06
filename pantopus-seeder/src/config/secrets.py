@@ -167,6 +167,8 @@ class BriefingSecrets(BaseModel):
     weatherkit_team_id: str = ""
     weatherkit_service_id: str = ""
     weatherkit_private_key: str = ""
+    # AirNow key for alert_checker's air-quality pushes (optional — AQI checks are skipped without it)
+    airnow_api_key: str = ""
 
     @field_validator("supabase_url", "pantopus_api_base_url")
     @classmethod
@@ -242,6 +244,7 @@ def _load_briefing_from_secrets_manager(secret_name: str) -> BriefingSecrets:
         weatherkit_team_id=raw.get("WEATHERKIT_TEAM_ID", ""),
         weatherkit_service_id=raw.get("WEATHERKIT_SERVICE_ID", ""),
         weatherkit_private_key=raw.get("WEATHERKIT_PRIVATE_KEY", ""),
+        airnow_api_key=raw.get("AIRNOW_API_KEY", ""),
     )
 
 
@@ -256,6 +259,7 @@ def _load_briefing_from_env() -> BriefingSecrets:
         weatherkit_team_id=os.environ.get("WEATHERKIT_TEAM_ID", ""),
         weatherkit_service_id=os.environ.get("WEATHERKIT_SERVICE_ID", ""),
         weatherkit_private_key=os.environ.get("WEATHERKIT_PRIVATE_KEY", ""),
+        airnow_api_key=os.environ.get("AIRNOW_API_KEY") or os.environ.get("AIRNOW_KEY", ""),
     )
 
 

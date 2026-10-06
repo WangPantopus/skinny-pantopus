@@ -8,6 +8,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { formatTimeAgo } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
+import { confirmStore } from '@/components/ui/confirm-store';
 
 type AdminReport = api.admin.AdminReport;
 type ReportStatus = api.admin.ReportStatus;
@@ -107,6 +108,28 @@ export default function AdminReportsPage() {
     }
   };
 
+  const removePost = async (report: AdminReport) => {
+    if (acting) return;
+    const confirmed = await confirmStore.open({
+      title: 'Remove this post?',
+      description: 'Only its author will still see it, and they can’t restore it. Every open report on it is closed.',
+      confirmLabel: 'Remove post',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
+    setActing(`${report.kind}:${report.id}`);
+    try {
+      const result = await api.admin.removeReportedPost(report.id);
+      toast.success(result.removed ? 'Post removed' : 'The post was already gone; report closed');
+      fetchReports();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to remove the post');
+      fetchReports();
+    } finally {
+      setActing(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-app-surface">
       {/* Header */}
@@ -183,6 +206,15 @@ export default function AdminReportsPage() {
                     )}
                     {status === 'pending' && report.closable && (
                       <>
+                        {report.kind === 'post' && (
+                          <button
+                            onClick={() => removePost(report)}
+                            disabled={acting === key}
+                            className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition"
+                          >
+                            Remove post
+                          </button>
+                        )}
                         <button
                           onClick={() => closeReport(report, 'resolved')}
                           disabled={acting === key}

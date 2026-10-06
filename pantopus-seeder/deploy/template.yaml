@@ -338,20 +338,32 @@ Resources:
       Timeout: 120
       MemorySize: 256
       Events:
-        MorningReminders:
-          Type: Schedule
+        # EventBridge Scheduler keeps 07:00 and 18:00 in Pacific time across
+        # daylight saving. The handler reads the scheduled time from the input:
+        # only the 07:00 run sends due-day task reminders. (New event names: a
+        # stack update can't change the type of the old UTC rules in place.)
+        MorningRemindersPacific:
+          Type: ScheduleV2
           Properties:
             Name: !Sub pantopus-home-reminders-morning-${Environment}
-            Schedule: cron(0 14 * * ? *)
-            Description: !Sub 'Morning home reminders ~7 AM PT [${Environment}]'
-            Enabled: true
-        EveningReminders:
-          Type: Schedule
+            ScheduleExpression: cron(0 7 * * ? *)
+            ScheduleExpressionTimezone: America/Los_Angeles
+            Description: !Sub 'Morning home reminders, 7 AM Pacific [${Environment}]'
+            Input: '{"time": "<aws.scheduler.scheduled-time>"}'
+            RetryPolicy:
+              MaximumEventAgeInSeconds: 7200
+            State: ENABLED
+        EveningRemindersPacific:
+          Type: ScheduleV2
           Properties:
             Name: !Sub pantopus-home-reminders-evening-${Environment}
-            Schedule: cron(0 1 * * ? *)
-            Description: !Sub 'Evening home reminders ~6 PM PT [${Environment}]'
-            Enabled: true
+            ScheduleExpression: cron(0 18 * * ? *)
+            ScheduleExpressionTimezone: America/Los_Angeles
+            Description: !Sub 'Evening home reminders, 6 PM Pacific [${Environment}]'
+            Input: '{"time": "<aws.scheduler.scheduled-time>"}'
+            RetryPolicy:
+              MaximumEventAgeInSeconds: 7200
+            State: ENABLED
       Policies:
         - Statement:
             - Effect: Allow
@@ -549,6 +561,130 @@ Resources:
                   cloudwatch:namespace: !Sub Pantopus/Jobs/${Environment}
 
   # ---------------------------------------------------------------------------
+  # Job-failure alarms — a failed run of a reminder or job function (secrets,
+  # database or backend unreachable, a failed delivery) notifies the topic.
+  # Subscribe an inbox once after deploying (docs/release/prod-config-checklist.md, S8).
+  # ---------------------------------------------------------------------------
+  JobAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub pantopus-job-alarms-${Environment}
+
+  BriefingSchedulerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-briefing-scheduler-errors-${Environment}
+      AlarmDescription: !Sub 'pantopus-briefing-scheduler-${Environment} failed: morning and evening briefings, including the night-before pickup push. Check its CloudWatch logs.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BriefingSchedulerFunction
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  HomeRemindersErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-home-reminders-errors-${Environment}
+      AlarmDescription: !Sub 'pantopus-home-reminders-${Environment} failed: due-day task reminders. Check its CloudWatch logs.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HomeRemindersFunction
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  MailNotificationsErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-mail-notifications-errors-${Environment}
+      AlarmDescription: !Sub 'pantopus-mail-notifications-${Environment} failed: urgent mail and the daily mail summary. Check its CloudWatch logs.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref MailNotificationsFunction
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  AlertCheckerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-alert-checker-errors-${Environment}
+      AlarmDescription: !Sub 'pantopus-alert-checker-${Environment} failed: weather and air-quality alerts. Check its CloudWatch logs.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AlertCheckerFunction
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  BriefingCleanupErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-briefing-cleanup-errors-${Environment}
+      AlarmDescription: !Sub 'pantopus-briefing-cleanup-${Environment} failed: the daily retry of failed briefings. Check its CloudWatch logs.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BriefingCleanupFunction
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  JobTriggerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub pantopus-job-trigger-errors-${Environment}
+      AlarmDescription: !Sub 'pantopus-job-trigger-${Environment} failed: payment and maintenance jobs. Check its CloudWatch logs.'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref JobTriggerFunction
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref JobAlarmTopic
+
+  # ---------------------------------------------------------------------------
   # Secrets Manager secret — populate manually after first deployment
   # ---------------------------------------------------------------------------
   SeederSecret:
@@ -638,6 +774,9 @@ Outputs:
   JobTriggerFunctionName:
     Description: Name of the job trigger Lambda function
     Value: !Ref JobTriggerFunction
+  JobAlarmTopicArn:
+    Description: SNS topic that receives the job-failure alarms
+    Value: !Ref JobAlarmTopic
   SecretArn:
     Description: ARN of the Secrets Manager secret
     Value: !Ref SeederSecret

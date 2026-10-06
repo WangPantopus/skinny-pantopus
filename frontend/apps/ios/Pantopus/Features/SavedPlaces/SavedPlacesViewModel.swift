@@ -11,6 +11,12 @@
 
 import SwiftUI
 
+public extension Notification.Name {
+    /// Posted after a place is saved from the address lookup, so a Saved
+    /// places list still on the stack re-reads.
+    static let savedPlacesDidChange = Notification.Name("savedPlacesDidChange")
+}
+
 @Observable
 @MainActor
 public final class SavedPlacesViewModel {
@@ -34,6 +40,7 @@ public final class SavedPlacesViewModel {
     private let api: APIClient
     private let onBack: @MainActor () -> Void
     private let onExplore: @MainActor () -> Void
+    private let onSavePlace: @MainActor () -> Void
     private let onOpenMap: @MainActor (_ latitude: Double, _ longitude: Double, _ label: String) -> Void
     private let now: @Sendable () -> Date
 
@@ -45,6 +52,7 @@ public final class SavedPlacesViewModel {
     public convenience init(
         onBack: @escaping @MainActor () -> Void = {},
         onExplore: @escaping @MainActor () -> Void = {},
+        onSavePlace: @escaping @MainActor () -> Void = {},
         onOpenMap: @escaping @MainActor (Double, Double, String) -> Void = { _, _, _ in },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -52,6 +60,7 @@ public final class SavedPlacesViewModel {
             api: .shared,
             onBack: onBack,
             onExplore: onExplore,
+            onSavePlace: onSavePlace,
             onOpenMap: onOpenMap,
             now: now
         )
@@ -61,12 +70,14 @@ public final class SavedPlacesViewModel {
         api: APIClient,
         onBack: @escaping @MainActor () -> Void = {},
         onExplore: @escaping @MainActor () -> Void = {},
+        onSavePlace: @escaping @MainActor () -> Void = {},
         onOpenMap: @escaping @MainActor (Double, Double, String) -> Void = { _, _, _ in },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.api = api
         self.onBack = onBack
         self.onExplore = onExplore
+        self.onSavePlace = onSavePlace
         self.onOpenMap = onOpenMap
         self.now = now
     }
@@ -131,6 +142,11 @@ public final class SavedPlacesViewModel {
 
     public func explore() {
         onExplore()
+    }
+
+    /// Look up an address and save it privately (signed-in Place lookup).
+    public func savePlace() {
+        onSavePlace()
     }
 
     // MARK: - Row action sheet

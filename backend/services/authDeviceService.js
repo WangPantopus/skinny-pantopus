@@ -1260,6 +1260,24 @@ async function onAccountDeleted({ userId, accessToken = null, req }) {
 }
 
 /**
+ * True when the person has another unrevoked session on this device that was
+ * issued after `session`: they signed in again before the old session's
+ * sign-out arrived. Errors count as "no", so a sign-out still clears the
+ * device's push token.
+ */
+async function hasNewerSessionOnDevice(userId, deviceRowId, session) {
+  try {
+    const issuedAt = new Date(session.issued_at || 0).getTime();
+    const active = await authSessionService.listActiveSessions(userId);
+    return active.some((s) => s.id !== session.id && s.device_id === deviceRowId
+      && new Date(s.issued_at || 0).getTime() > issuedAt);
+  } catch (err) {
+    logger.warn('auth.logout.newer_session_check_failed', { userId, error: err.message });
+    return false;
+  }
+}
+
+/**
  * POST /logout scope=local. Cookie clearing + admin.signOut(jwt,'local') stay
  * in the route. Row side effects here, ONLY with proof:
  *   (a) valid Bearer (req.user set by verifyToken/optionalAuth-like check) →
@@ -1314,8 +1332,13 @@ async function logoutLocal({ userId = null, bearerSessionId = null, deviceId, re
   out.revokedSession = await authSessionService.revokeSessionRow(session.id, 'logout', { userId: uid });
   if (device) {
     out.deviceRowId = device.id;
-    await pushService.removeTokensForDevice(uid, device.device_id);
-    await authSessionService.revokeGrantsForUser(uid, { deviceRowId: device.id });
+    // The person may already have signed in again on this device (switching
+    // or re-entering an account signs the old session out afterwards). The
+    // device's push token and resume grant then belong to that newer session.
+    if (!(await hasNewerSessionOnDevice(uid, device.id, session))) {
+      await pushService.removeTokensForDevice(uid, device.device_id);
+      await authSessionService.revokeGrantsForUser(uid, { deviceRowId: device.id });
+    }
     await updateDevice(device.id, { last_seen_at: nowIso() });
   }
   await authSessionService.recordSecurityEvent({

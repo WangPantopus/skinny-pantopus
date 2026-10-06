@@ -1,5 +1,9 @@
 # Cron Job Migration: Step-by-Step Deployment & Testing Guide
 
+> Phases 1 to 3 below are implemented. For the hosted setup (worker, Lambda stack,
+> `LAMBDA_BACKED_CRON_ENABLED=false`) follow steps S8 and P8 of
+> [the launch checklist](release/prod-config-checklist.md).
+
 ## Context
 
 All code for Phase 1-3 is written. This guide covers how to test locally, deploy to staging, verify, cut over to the new system, and roll back if needed — for each phase independently.

@@ -22,7 +22,7 @@ const tabRoutes: Record<NearbyTab, string> = {
 
 const tabDescriptions: Record<NearbyTab, string> = {
   gigs: 'Discover tasks near you',
-  people: 'Find neighbors and professionals',
+  people: 'Find people and homes',
   businesses: 'Explore local businesses',
 };
 

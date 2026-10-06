@@ -630,8 +630,14 @@ function Card({ title, icon: Icon, expanded, onToggle, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-app-surface border border-app-border rounded-xl overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center gap-3 p-4 hover:bg-app-surface-sunken transition">
+    // No overflow-hidden: it clipped the address suggestions open inside a card.
+    <div className="bg-app-surface border border-app-border rounded-xl">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-app-surface-sunken transition"
+      >
         <Icon className="w-5 h-5 text-app-text-muted" />
         <span className="flex-1 text-left text-sm font-semibold text-app-text">{title}</span>
         {expanded ? <ChevronUp className="w-4 h-4 text-app-text-muted" /> : <ChevronDown className="w-4 h-4 text-app-text-muted" />}

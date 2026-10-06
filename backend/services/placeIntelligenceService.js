@@ -280,13 +280,19 @@ function todayProviderLabel(provider) {
   }
 }
 
+// AirNow's NowCast is hourly; a reading older than this reads as stale.
+const AQI_STALE_MS = 3 * 60 * 60 * 1000;
+
 // Shared Today envelope builder. `weather` / `aqi` are the Hub-shaped
 // blocks (or null → unavailable); `alerts` is an array (or null →
 // unavailable; an EMPTY array is still "ready": "No active alerts").
+// `aqiMissing` says why `aqi` is null: 'error' when the provider failed
+// (a retryable error, never a coverage claim), 'no_reading' when it answered
+// with no monitor near the point, otherwise unknown.
 // `hub` / `home` feed the good-day verdicts and are absent for the
 // anonymous point snapshot (that section then reads unavailable and the
 // preview simply does not list it).
-function buildTodayEnvelopes({ weather, aqi, alerts, weatherProvider, alertsProvider, asOf = null, hub = null, home = null }) {
+function buildTodayEnvelopes({ weather, aqi, aqiMissing = null, alerts, weatherProvider, alertsProvider, asOf = null, hub = null, home = null }) {
   const out = [];
 
   if (weather) {
@@ -311,9 +317,14 @@ function buildTodayEnvelopes({ weather, aqi, alerts, weatherProvider, alertsProv
 
   if (aqi) {
     const category = mapAqiCategory(aqi.category);
+    // The reading's own hour, not the fetch time, so an old reading never
+    // looks current.
+    const observedMs = aqi.observed_at ? Date.parse(aqi.observed_at) : NaN;
+    const observed = Number.isFinite(observedMs);
     out.push(serializePlaceSection('air_quality', {
       access: 'available',
-      asOf,
+      asOf: observed ? aqi.observed_at : asOf,
+      ...(observed && Date.now() - observedMs > AQI_STALE_MS ? { status: 'stale' } : {}),
       data: {
         index: aqi.index,
         category,
@@ -322,8 +333,14 @@ function buildTodayEnvelopes({ weather, aqi, alerts, weatherProvider, alertsProv
         health_message: AQI_HEALTH_MESSAGES[category],
       },
     }));
+  } else if (aqiMissing === 'error') {
+    out.push(serializePlaceSection('air_quality', { access: 'available', status: 'error' }));
   } else {
-    out.push(serializePlaceSection('air_quality', { access: 'available', status: 'unavailable' }));
+    out.push(serializePlaceSection('air_quality', {
+      access: 'available',
+      status: 'unavailable',
+      unavailableReason: aqiMissing === 'no_reading' ? 'No air quality monitor reports near this address.' : null,
+    }));
   }
 
   if (Array.isArray(alerts)) {
@@ -384,9 +401,12 @@ async function composeToday(userId, home, hub) {
   const alertsChecked = Boolean(hub)
     && !(hub.location && hub.location.source === 'none')
     && !((hub.meta && hub.meta.partial_failures) || []).includes('alerts');
+  const located = Boolean(hub) && !(hub.location && hub.location.source === 'none');
+  const aqiFailed = located && ((hub.meta && hub.meta.partial_failures) || []).includes('aqi');
   return buildTodayEnvelopes({
     weather: hub && hub.weather ? hub.weather : null,
     aqi: hub && hub.aqi ? hub.aqi : null,
+    aqiMissing: located ? (aqiFailed ? 'error' : 'no_reading') : null,
     alerts: alertsChecked ? (hub.alerts || []) : null,
     weatherProvider: hub?.meta?.section_providers?.weather,
     alertsProvider: hub?.meta?.section_providers?.alerts,
@@ -427,7 +447,10 @@ async function composeTodayForPoint(lat, lng) {
         daily: w.daily,
       }
     : null;
-  const aqi = a && a.aqi != null ? { index: a.aqi, category: a.category, dominant_pollutant: a.pollutant } : null;
+  const aqi = a && a.aqi != null
+    ? { index: a.aqi, category: a.category, dominant_pollutant: a.pollutant, observed_at: a.observed_at ?? null }
+    : null;
+  const aqiMissing = !a || a.source === 'error' || a.source === 'unavailable' ? 'error' : 'no_reading';
   const alerts = al && al.source !== 'error' && Array.isArray(al.alerts)
     ? al.alerts.map((x) => ({
         id: x.id,
@@ -443,6 +466,7 @@ async function composeTodayForPoint(lat, lng) {
   return buildTodayEnvelopes({
     weather,
     aqi,
+    aqiMissing,
     alerts,
     weatherProvider: w?.provider,
     alertsProvider: al?.provider,
@@ -797,6 +821,7 @@ const EXEMPTION_UNAVAILABLE_COPY = {
   ATTOM_NOT_CONFIGURED: "Exemption records aren't available for your area yet.",
   ATTOM_UNAVAILABLE: "County exemption records aren't reachable right now.",
   NO_PARCEL_MATCH: "We couldn't match this address to a county parcel record.",
+  NO_PROPERTY_FOUND: "We couldn't match this address to a county parcel record.",
 };
 
 // Real Rent Benchmark (Wave 3) — what verified neighbors on this
@@ -1028,8 +1053,10 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
     }
   }
 
+  // An unreadable privacy row fails closed for the one toggle this payload
+  // honors: the unit stays hidden, and the rest of Place still loads.
   const [privacy, ...groups] = await Promise.all([
-    getHomePrivacy(homeId),
+    getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
     ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access })),
   ]);
 

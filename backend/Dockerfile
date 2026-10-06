@@ -24,7 +24,8 @@ CMD ["npm", "run", "dev"]
 
 FROM node:22-alpine AS production
 WORKDIR /app
-ENV NODE_ENV=production
+# DOTENV_CONFIG_QUIET: the image has no .env files; skip dotenv's notices.
+ENV NODE_ENV=production DOTENV_CONFIG_QUIET=true
 COPY --from=prod-deps /out ./
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \

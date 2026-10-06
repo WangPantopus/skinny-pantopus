@@ -20,6 +20,9 @@ from src.config.secrets import get_briefing_secrets, BriefingSecrets
 
 # Configure logging for Lambda (root logger must be set to INFO)
 logging.basicConfig(level=logging.INFO, force=True)
+# httpx logs every request URL at INFO, and Supabase filters carry full user
+# ids; keep them out of CloudWatch.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.briefing")
 log.setLevel(logging.INFO)
 
@@ -36,10 +39,15 @@ SEND_TIMEOUT_S = 30
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Briefing scheduler Lambda entry point. Triggered every 15 min by EventBridge."""
     try:
-        return _run(event, context)
+        result = _run(event, context)
     except Exception:
         log.exception("Briefing handler failed with unhandled exception")
-        return {"error": "unhandled_exception", "users_processed": 0}
+        raise
+    if result.get("error") or result.get("failed"):
+        # Fail the invocation so the Lambda Errors metric and its alarm see it.
+        # Failed deliveries are retried by the daily briefing cleanup.
+        raise RuntimeError(f"Briefing scheduler run failed: {result}")
+    return result
 
 
 def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -137,7 +145,7 @@ def _find_eligible_users(supabase) -> list[dict[str, Any]]:
     except Exception as exc:
         print(f"[BRIEFING] ERROR querying UserNotificationPreferences: {exc}")
         log.exception("Failed to query UserNotificationPreferences")
-        return []
+        raise
 
     log.info("Briefing: found %d preference rows", len(prefs_rows))
     if not prefs_rows:
@@ -184,7 +192,7 @@ def _find_eligible_users(supabase) -> list[dict[str, Any]]:
                 already_processed.add((row["user_id"], row.get("briefing_kind") or "morning"))
     except Exception:
         log.exception("Failed to batch-check DailyBriefingDelivery")
-        return []
+        raise
 
     # 3. Filter by time window, quiet hours, and idempotency
     eligible: list[dict[str, Any]] = []
@@ -316,6 +324,8 @@ def _process_user(user_id: str, secrets: BriefingSecrets, briefing_kind: str = "
 
 def _publish_metrics(stats: dict[str, int]) -> None:
     """Publish briefing metrics to CloudWatch."""
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return  # Local runs never write to CloudWatch.
     try:
         import boto3
 

@@ -24,6 +24,9 @@ from src.config.secrets import get_briefing_secrets, BriefingSecrets
 from src.utils.supabase_errors import is_missing_table_error, log_missing_table_once
 
 logging.basicConfig(level=logging.INFO, force=True)
+# httpx logs every request URL at INFO, and Supabase filters carry full user
+# ids; keep them out of CloudWatch.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.mail_notifications")
 
 SEND_TIMEOUT_S = 15
@@ -33,10 +36,14 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Mail notifications Lambda entry point."""
     try:
-        return _run(event, context)
+        result = _run(event, context)
     except Exception:
         log.exception("Mail notifications handler failed")
-        return {"error": "unhandled_exception"}
+        raise
+    if result.get("error") or result.get("errors"):
+        # Fail the invocation so the Lambda Errors metric and its alarm see it.
+        raise RuntimeError(f"Mail notifications run failed: {result}")
+    return result
 
 
 def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -303,6 +310,8 @@ def _send_reminder(secrets: BriefingSecrets, user_id: str, title: str, body: str
 
 
 def _publish_metrics(stats: dict) -> None:
+    if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return  # Local runs never write to CloudWatch.
     try:
         import boto3
         env = os.environ.get("ENVIRONMENT", "production")

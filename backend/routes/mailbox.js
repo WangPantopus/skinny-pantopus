@@ -1438,6 +1438,7 @@ router.get('/', verifyToken, async (req, res) => {
         subject,
         content,
         sender_user_id,
+        sender_display,
         sender_business_name,
         sender_address,
         viewed,
