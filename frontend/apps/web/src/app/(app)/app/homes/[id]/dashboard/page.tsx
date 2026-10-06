@@ -97,7 +97,7 @@ export default function HomeDashboardPage() {
 function InvitationsLink({ homeId }: { homeId: string }) {
   const { can } = useHomePermissions();
   if (!can('members.manage')) return null;
-  return <div className="mb-3 flex justify-end"><Link href={`/app/homes/${homeId}/invitations`} className="text-sm text-blue-600 dark:text-blue-400 underline">Manage invitations and recovery</Link></div>;
+  return <div className="mb-3 flex justify-end"><Link href={`/app/homes/${homeId}/invitations`} className="text-sm text-blue-600 dark:text-blue-400 underline">Manage invitations</Link></div>;
 }
 
 // A member's own typed new-issue draft, held above the access re-check that remounts the dashboard.

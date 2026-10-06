@@ -29,13 +29,11 @@ struct HomeInvitationDecisionView: View {
                 if let draft = model.pending { recovery(draft) } else if let context = model.context { offer(context) }
                 if model.isWorking { ProgressView("Checking your invitation…").accessibilityIdentifier("homeInvitationLoading") }
                 if model.error != nil || model.context == nil && model.pending == nil {
-                    control("Reopen invitation", "homeInvitationReopen") { await onReopen() }
+                    control("Reload", "homeInvitationReopen") { await onReopen() }
                 }
                 Button("Use another account") { accountSwitchLifetime = model.generation }
                     .frame(minHeight: 44).disabled(model.isWorking).accessibilityIdentifier("homeInvitationSwitchAccount")
                 Button("Close", action: onClose).frame(minHeight: 44).accessibilityIdentifier("homeInvitationClose")
-                Text("A saved decision proves what happened. Current household access and message delivery are checked separately.")
-                    .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
             }
             .padding(Spacing.s5).frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -62,23 +60,23 @@ struct HomeInvitationDecisionView: View {
             Button("Sign out and continue") { Task { await model.switchAccount(lifetime: lifetime) } }
                 .accessibilityIdentifier("homeInvitationConfirmSwitchAccount")
         } message: { _ in
-            Text("You will be signed out. Any saved invitation decision stays protected for this account.")
+            Text("You'll be signed out. Any answer you already gave stays with this account.")
         }
         // An alert, not a confirmation dialog: the dialog's popover is dismissed by a tap outside it, and a double-tapped
         // opener's second tap landed there while it was still opening, leaving a shown dialog whose confirm did nothing.
         // An alert ignores outside taps (Android shows this confirmation as a modal dialog too).
         .alert(
             confirmation?.action == .accept ? "Accept this invitation?" : confirmation?
-                .action == .decline ? "Decline this invitation?" : "Cancel the original attempt?",
+                .action == .decline ? "Decline this invitation?" : "Discard this attempt?",
             isPresented: Binding(get: { confirmation != nil }, set: { if !$0 { confirmation = nil } }),
             presenting: confirmation
         ) { selected in
             if let action = selected.action {
-                Button(action == .accept ? "Confirm acceptance" : "Confirm decline", role: action == .decline ? .destructive : nil) {
+                Button(action == .accept ? "Accept" : "Decline", role: action == .decline ? .destructive : nil) {
                     Task { await model.decide(action, reviewedToken: selected.reviewedToken, lifetime: selected.lifetime) }
                 }.accessibilityIdentifier("homeInvitationConfirmDecision")
             } else {
-                Button("Confirm cancellation", role: .destructive) {
+                Button("Discard", role: .destructive) {
                     Task { await model.recover(.cancel, requestId: selected.requestId, lifetime: selected.lifetime) }
                 }.accessibilityIdentifier("homeInvitationConfirmCancel")
             }
@@ -89,21 +87,22 @@ struct HomeInvitationDecisionView: View {
     }
 
     private func confirmationMessage(_ selected: Confirmation) -> String {
-        if selected.action == nil {
-            return "If the decision is already saved, its original result is recovered. "
-                + "Cancelling an attempt does not decline the invitation."
+        let home = model.context?.homeLabel ?? "this Home"
+        switch selected.action {
+        case nil: return "If your answer already went through, it stays. Discarding doesn't decline the invitation."
+        case .decline: return "\(model.accountLabel) won't join the household at \(home). The sender can invite you again later."
+        default: return "\(model.accountLabel) will join the household at \(home). "
+            + "What you can open depends on your role and the invitation's dates."
         }
-        return "\(model.accountLabel) will decide on the invitation to \(model.context?.homeLabel ?? "this Home"). "
-            + "Household permissions and access dates still apply."
     }
 
     private var title: String {
         guard let draft = model.pending else { return model.context == nil ? "Invitation status" : "You're invited" }
         switch draft.outcome?.state {
-        case "completed": return draft.action == .accept ? "Acceptance saved" : "Decline saved"
-        case "cancelled": return "Decision attempt cancelled"
-        case "rejected": return "Decision needs review"
-        default: return "Recover your invitation decision"
+        case "completed": return draft.action == .accept ? "Invitation accepted" : "Invitation declined"
+        case "cancelled": return "Attempt discarded"
+        case "rejected": return "Couldn't finish this"
+        default: return "Check your answer"
         }
     }
 
@@ -152,16 +151,16 @@ struct HomeInvitationDecisionView: View {
     private func recovery(_ draft: PendingHomeInvitationDecision) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             Text(draft.homeLabel).pantopusTextStyle(.h3).accessibilityIdentifier("homeInvitationOriginalHome")
-            Text("Original decision: \(draft.action == .accept ? "Accept invitation" : "Decline invitation")")
+            Text("Your answer: \(draft.action == .accept ? "Accept" : "Decline")")
             if draft.token != model.token {
-                Text("This is an earlier invitation. Finish its recovery before deciding on the link you just opened.")
+                Text("This is an earlier invitation. Finish it before answering the one you just opened.")
             }
             Text(explanation(draft)).accessibilityIdentifier("homeInvitationExplanation")
             if draft.outcome?.state == "completed", draft.action == .accept {
-                control("Check current Home access", "homeInvitationAccess") { await model.checkAccess() }
+                control("Check Home access", "homeInvitationAccess") { await model.checkAccess() }
                 if let progress = model.progress {
-                    Text(progress.currentAccess == "shared" ? "Your current account can open this Home. Household permissions still apply."
-                        : "Your saved acceptance does not provide current shared access. My Homes shows the available next steps.")
+                    Text(progress.currentAccess == "shared" ? "You can open this Home now."
+                        : "You can't open this Home yet. My Homes shows what's next.")
                         .accessibilityIdentifier("homeInvitationCurrentAccess")
                     if progress.currentAccess == "shared" {
                         control("Open Home", "homeInvitationOpenHome") {
@@ -179,19 +178,19 @@ struct HomeInvitationDecisionView: View {
                     if original.outcome?.state == "completed", original.token == model.token { onClose() } else { await onReopen() }
                 }
             } else {
-                control("Check saved decision", "homeInvitationCheck") { await model.recover(
+                control("Check again", "homeInvitationCheck") { await model.recover(
                     .check,
                     requestId: draft.requestId,
                     lifetime: model.generation
                 )
                 }
-                control("Retry original decision", "homeInvitationRetry") { await model.recover(
+                control("Try again", "homeInvitationRetry") { await model.recover(
                     .retry,
                     requestId: draft.requestId,
                     lifetime: model.generation
                 )
                 }
-                Button("Cancel original attempt") {
+                Button("Discard attempt") {
                     guard confirmation == nil else { return }
                     confirmation = Confirmation(action: nil, reviewedToken: "", requestId: draft.requestId, lifetime: model.generation)
                 }.frame(minHeight: 44).disabled(model.isWorking).accessibilityIdentifier("homeInvitationCancel")
@@ -202,12 +201,12 @@ struct HomeInvitationDecisionView: View {
     private func explanation(_ draft: PendingHomeInvitationDecision) -> String {
         switch draft.outcome?.state {
         case "completed": draft.action == .accept
-            ? "Your acceptance is saved. Current household access is checked separately; roles, permissions and access dates still apply."
-            : "Your decline is saved for this account. An open invitation link may remain available to other people."
-        case "cancelled": "The server confirmed that this attempt cannot accept or decline the invitation."
+            ? "You're part of this household now. What you can open depends on your role and the invitation's dates."
+            : "You won't join this household. If it was shared as an open link, other people with the link can still use it."
+        case "cancelled": "Nothing changed. This attempt was discarded before it took effect."
         case "rejected": HomeInvitationDecisionError.message(draft.outcome?.code)
-        default: "Your original decision is stored securely on this device. Check its result or retry that same decision. "
-            + "Confirm cancellation before starting a different attempt."
+        default: "We couldn't confirm your answer. It's saved on this device, "
+            + "so you can check again or try again without answering twice."
         }
     }
 

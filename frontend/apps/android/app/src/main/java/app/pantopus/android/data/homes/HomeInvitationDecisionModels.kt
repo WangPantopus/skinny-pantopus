@@ -59,13 +59,13 @@ enum class HomeInvitationFailureKind { Storage, Changed, Unknown, Unavailable, S
 class HomeInvitationFailure(val kind: HomeInvitationFailureKind) : IllegalStateException(
     when (kind) {
         HomeInvitationFailureKind.Storage ->
-            "The protected original could not be read or saved. Keep it and reopen recovery before starting another decision."
-        HomeInvitationFailureKind.Changed -> "The saved decision or invitation changed. Reopen recovery to review the original."
+            "Your answer couldn't be read or saved on this device. Reload before answering again."
+        HomeInvitationFailureKind.Changed -> "This invitation changed. Reload to see the latest."
         HomeInvitationFailureKind.Unknown ->
-            "The result is not confirmed. Check the saved decision, retry that same decision, or confirm cancellation of the attempt."
-        HomeInvitationFailureKind.Unavailable -> "The invitation could not be checked right now. Retry to review its current details."
-        HomeInvitationFailureKind.SessionChanged -> "Your session changed. Reopen the invitation to recover your original decision."
-        HomeInvitationFailureKind.Busy -> "Wait for the original invitation decision to finish being checked."
+            "We couldn't confirm your answer. Check again, try again, or discard this attempt."
+        HomeInvitationFailureKind.Unavailable -> "Couldn't check the invitation right now. Reload to try again."
+        HomeInvitationFailureKind.SessionChanged -> "Your sign-in changed. Reload the invitation to check your answer."
+        HomeInvitationFailureKind.Busy -> "Wait for your last answer to finish checking."
     },
 )
 
@@ -75,7 +75,7 @@ fun invitationRefusalMessage(code: String?): String =
     when (code) {
         "INVITE_EMAIL_MISMATCH" -> "This invitation belongs to a different account. Sign in to the account the sender invited."
         "INVITE_DECISION_CHANGED" ->
-            "The invitation details changed. Acknowledge this result, then review the current invitation before deciding again."
+            "The invitation details changed. Review it again before answering."
         "INVITE_EXPIRED" -> "This invitation expired. Ask the household for a new invitation."
         "INVITE_ALREADY_USED" -> "This invitation was already accepted, declined or withdrawn. My Homes shows your current access."
         "INVITE_NOT_FOUND", "INVITE_INVALID" -> "This invitation is unavailable. Check the complete link with the sender."
