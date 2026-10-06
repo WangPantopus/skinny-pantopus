@@ -113,12 +113,13 @@ private fun HomePostalCurrentStatus(
     val postcard = status.postcard
     if (postcard != null) {
         Text(
-            // Once the code is verified, how the postcard travelled no longer matters.
-            if (postcard.status == "verified") "Address verified by mail" else HomePostalMessages.delivery(postcard.delivery),
+            HomePostalMessages.postcardHeadline(postcard.status, postcard.delivery),
             style = PantopusTextStyle.h3,
             modifier = Modifier.testTag("homePostalDelivery"),
         )
-        Text(HomePostalMessages.postcardStatus(postcard.status), style = PantopusTextStyle.body)
+        if (!HomePostalMessages.postcardEnded(postcard.status)) {
+            Text(HomePostalMessages.postcardStatus(postcard.status), style = PantopusTextStyle.body)
+        }
         if (postcard.status == "pending") {
             Text(
                 "${postcard.attemptsRemaining} tries left",

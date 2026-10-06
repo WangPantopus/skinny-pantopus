@@ -54,6 +54,20 @@ object HomePostalMessages {
             else -> "We couldn't confirm whether this went through. Check again, or try again."
         }
 
+    /** Once a postcard is verified, expired or replaced, how it travelled no longer matters. */
+    fun postcardEnded(status: String?): Boolean = status in setOf("verified", "expired", "cancelled")
+
+    fun postcardHeadline(
+        status: String?,
+        deliveryState: String?,
+    ): String =
+        when (status) {
+            "verified" -> "Address verified by mail"
+            "expired" -> "Postcard code expired"
+            "cancelled" -> "Postcard no longer active"
+            else -> delivery(deliveryState)
+        }
+
     fun delivery(state: String?): String =
         when (state) {
             "not_started" -> "Your postcard hasn't been sent yet"

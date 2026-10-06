@@ -32,6 +32,20 @@ enum HomePostalMessages {
         }
     }
 
+    /// Once a postcard is verified, expired or replaced, how it travelled no longer matters.
+    static func postcardEnded(_ status: String?) -> Bool {
+        ["verified", "expired", "cancelled"].contains(status ?? "")
+    }
+
+    static func postcardHeadline(_ status: String?, delivery state: String?) -> String {
+        switch status {
+        case "verified": "Address verified by mail"
+        case "expired": "Postcard code expired"
+        case "cancelled": "Postcard no longer active"
+        default: delivery(state)
+        }
+    }
+
     static func delivery(_ state: String?) -> String {
         switch state {
         case "not_started": "Your postcard hasn't been sent yet"

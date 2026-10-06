@@ -81,7 +81,7 @@ function VerifyPostcardContent() {
         <h2 className="text-lg font-semibold">{status.postcard.status === 'verified' ? 'Address verified by mail' : status.postcard.status === 'expired' ? 'Postcard code expired'
           : status.postcard.status === 'cancelled' ? 'Postcard no longer active' : 'Your postcard'}</h2>
         {status.request && <><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Mailing address</p><Address address={status.request.address} /></>}
-        {status.postcard.status !== 'verified' && <p className="text-sm text-app-text-secondary">{({ not_started: 'This postcard hasn’t been sent yet.',
+        {!['verified', 'expired', 'cancelled'].includes(status.postcard.status) && <p className="text-sm text-app-text-secondary">{({ not_started: 'This postcard hasn’t been sent yet.',
           accepted: 'Your postcard is on its way.',
           unknown: 'We couldn’t confirm the postcard was sent. It may already be on its way; checking again won’t send another.',
           rejected: 'The mail service couldn’t send this postcard. Check the address and request another.' })[status.postcard.delivery]}</p>}
