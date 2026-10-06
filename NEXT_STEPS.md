@@ -62,7 +62,7 @@ Sources, in order of authority for this work:
 - [x] Launch checklist decisions D1, D2, D4, D5, D7 and D8 as recommended: the API at `api.pantopus.com` (staging `staging-api.pantopus.com`); new store listings named "Pantopus Home"; Stripe test mode during the pilot; a live Lob key and a real return address before production; no error monitoring in the pilot; one server carries staging and production. D3 (a new production database or the April one, and whether April users sign up again) and D6 (which email service is already paid for) are still open.
 - [x] A homeowner whose ownership claim is pending can verify their address by postcard while the claim waits; they become a verified resident and ownership stays pending. Admin identity attestation was not chosen.
 - [x] Support Train gift funds stay off for the first launch and get built later, only if that can be done without money mistakes (section 5).
-- [x] Holiday pickup moves stay unconfirmed, and never push, until someone confirms them with the hauler or the city (section 2).
+- [x] Holiday pickup moves: the founder confirmed the Vancouver, Washougal and Camas rules from the official sources (PR 1693 marks those rows official). Camas garbage on New Year's Day 2027 stays unconfirmed, and never pushes, until the founder's call to Camas Sanitation (section 2).
 
 **Still open. The brief builds the default until you decide.**
 
