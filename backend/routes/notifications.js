@@ -413,12 +413,14 @@ router.patch('/:id/read', verifyToken, async (req, res) => {
       .eq('id', id)
       .eq('user_id', userId)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       logger.error('Error marking notification read', { error: error.message, id });
       return res.status(500).json({ error: 'Failed to update notification' });
     }
+    // Not this person's, or deleted elsewhere (e.g. on the web, then tapped on the phone).
+    if (!data) return res.status(404).json({ error: 'Notification not found' });
 
     res.json({ notification: data });
   } catch (err) {
