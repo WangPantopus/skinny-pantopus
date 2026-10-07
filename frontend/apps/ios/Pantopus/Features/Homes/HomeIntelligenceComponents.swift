@@ -340,6 +340,15 @@ struct SeasonalChecklistCard: View {
 
             ProgressTrack(percentage: checklist.progress.percentage)
 
+            // Checking items off needs home.edit; say so instead of showing dead checkboxes.
+            if !canEdit, checklist.items.contains(where: { $0.status == "pending" }) {
+                Text("Only people who can edit this Home can check these off.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("homeDashboard_seasonalChecklistReadOnly")
+            }
+
             VStack(spacing: Spacing.s0) {
                 ForEach(checklist.items) { item in
                     row(item)

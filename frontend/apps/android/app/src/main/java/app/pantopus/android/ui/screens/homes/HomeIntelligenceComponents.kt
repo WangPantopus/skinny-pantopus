@@ -497,6 +497,16 @@ private fun SeasonalLoaded(
 
         ProgressTrack(percentage = checklist.progress.percentage)
 
+        // Checking items off needs home.edit; say so instead of showing dead checkboxes.
+        if (!canEdit && checklist.items.any { it.status == "pending" }) {
+            Text(
+                text = "Only people who can edit this Home can check these off.",
+                style = PantopusTextStyle.caption,
+                color = PantopusColors.appTextSecondary,
+                modifier = Modifier.testTag("homeDashboard_seasonalChecklistReadOnly"),
+            )
+        }
+
         checklist.items.forEach { item ->
             SeasonalRow(
                 item = item,
