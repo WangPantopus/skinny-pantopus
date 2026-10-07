@@ -2,7 +2,7 @@
 
 **Derived from:** `docs/compliance/privacy-data-inventory.md`
 **Package:** `app.pantopus.android`
-**Last reviewed:** 2026-10-06 (launch review: *Health info* added for emergency info; photo rows no longer mention listings)
+**Last reviewed:** 2026-10-07 (founder approved the answers with decisions A and B below; earlier: *Health info* added for emergency info, photo rows no longer mention listings)
 
 Answers to enter in **Play Console → App content → Data safety**. Play's
 taxonomy differs from Apple's, so the same inventory is re-expressed in
@@ -17,15 +17,21 @@ Play's terms. Human/console work; this file is the script.
 | Does your app collect or share any of the required user data types? | **Yes** |
 | Is all of the user data collected by your app encrypted in transit? | **Yes** — all traffic is HTTPS/TLS to `api.pantopus.com`; Socket.IO over TLS. |
 | Do you provide a way for users to request that their data is deleted? | **Yes** — in-app account deletion (Profile & Privacy) plus a privacy-policy contact. |
-| Delete account URL (required when users can create an account) | `https://pantopus.com/delete-account` — draft text in [account-deletion-page.md](account-deletion-page.md); publish it before submitting. |
+| Delete account URL (required when users can create an account) | `https://pantopus.com/delete-account` — text approved October 7 ([account-deletion-page.md](account-deletion-page.md)); the page ships with the web app and is live after the production web deploy (checklist P9), so submit after that. |
 
-> **"Collected" vs "Shared".** Play defines *shared* = transferred to a
-> third party. We **collect** to our backend. We **share** payment data with
-> **Stripe** (payment processing) and diagnostics with **Sentry** (app
-> functioning/diagnostics) — both are "service providers / processors",
-> which Play lets you treat as collection-with-a-processor rather than
-> advertising sharing. **No data is shared for advertising or with data
-> brokers.**
+> **"Collected" vs "Shared" (founder decision A, October 7).** Play's form
+> doesn't count data sent to a service provider that processes it on our
+> behalf as *shared*. Stripe processes payments that way, and Sentry would
+> process crash reports that way (it is off for the pilot, decision D7). So
+> every row below is **collected, not shared**, and the form says no data is
+> shared. If a partner ever uses data for its own purposes, that row changes
+> first. **No data is shared for advertising or with data brokers.**
+>
+> **Crash data while Sentry is off (founder decision B, October 7).** With no
+> Sentry key the apps send no crash or performance reports. The rows stay
+> declared anyway: the Sentry library ships in the apps (its iOS privacy
+> manifest lists crash, performance and other diagnostic data), and turning
+> Sentry on later then needs no form change.
 
 ---
 
@@ -47,7 +53,7 @@ purpose is **App functionality / Account management**; analytics where noted.
 ### Financial info
 | Play data type | Collected | Shared | Purpose | Notes |
 |----------------|-----------|--------|---------|-------|
-| Payment info | Yes | **Yes → Stripe** | App functionality (payments) | Collected by Stripe SDK; app never stores the card. |
+| Payment info | Yes | No | App functionality (payments) | Entered in Stripe's payment form, which processes it on our behalf; the app never stores the card. |
 
 ### Location
 | Play data type | Collected | Shared | Purpose | Notes |
@@ -84,13 +90,13 @@ purpose is **App functionality / Account management**; analytics where noted.
 ### App activity
 | Play data type | Collected | Shared | Purpose | Notes |
 |----------------|-----------|--------|---------|-------|
-| App interactions | Yes | **Yes → Sentry** | Analytics, App functionality | Screen views / CTA taps (typed taxonomy) |
+| App interactions | Yes | No | Analytics, App functionality | Pantopus's own pilot measurement (session and reminder events sent to our API) |
 
 ### App info and performance
 | Play data type | Collected | Shared | Purpose | Notes |
 |----------------|-----------|--------|---------|-------|
-| Crash logs | Yes | **Yes → Sentry** | App functionality (diagnostics) | `sentry-android` |
-| Diagnostics (performance) | Yes | **Yes → Sentry** | App functionality (diagnostics) | Performance / network tracing |
+| Crash logs | Yes | No | App functionality (diagnostics) | `sentry-android`, off while no Sentry key is set (decision B) |
+| Diagnostics (performance) | Yes | No | App functionality (diagnostics) | Performance / network tracing, off while no Sentry key is set |
 
 ### Device or other IDs
 | Play data type | Collected | Shared | Purpose | Notes |
@@ -159,7 +165,7 @@ Installed apps, SMS/Call logs, Purchase history (no IAP), Advertising ID
 |-------------------------|-----------|-----------------|
 | Contact Info | Name / Email / Phone / Address | Contact Info |
 | Other Data (DOB) | Personal info → Other info | Other Data Types |
-| Financial Info | Financial info → Payment info (shared→Stripe) | Payment Info |
+| Financial Info | Financial info → Payment info (collected, not shared) | Payment Info |
 | Location | Approximate + Precise location | Coarse + Precise Location |
 | User Content (photos) | Photos / Videos | Photos or Videos |
 | User Content (audio) | Voice or sound recordings | Audio Data |
@@ -167,10 +173,9 @@ Installed apps, SMS/Call logs, Purchase history (no IAP), Advertising ID
 | User Content (other) | Other user-generated content | Other User Content |
 | Identifiers (incl. 2026-08 device id / install id / device public key / session id) | Device or other IDs (App functionality + Fraud prevention, security, and compliance) | User ID + Device ID |
 | Security & session records (§2.9: IP + UA, security events) | Device or other IDs (same row, security purpose) | Other Data Types (note) |
-| Diagnostics | Crash logs + Diagnostics (shared→Sentry) | Crash + Performance Data |
-| Usage Data | App interactions (shared→Sentry) | Product Interaction |
+| Diagnostics | Crash logs + Diagnostics (collected, not shared) | Crash + Performance Data |
+| Usage Data | App interactions (collected, not shared) | Product Interaction |
 
-The Play "shared" column is **stricter** than Apple's labels: Play counts a
-processor (Stripe, Sentry) as "shared", while Apple treats the same as
-first-party collection. Both are correct for their respective forms; the
-underlying behavior is identical.
+Both forms treat a service provider that processes data on our behalf
+(Stripe, and Sentry if it is turned on) as part of our own collection, so
+nothing is declared as shared.
