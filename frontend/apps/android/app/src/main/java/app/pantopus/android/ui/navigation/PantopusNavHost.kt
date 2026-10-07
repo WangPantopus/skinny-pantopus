@@ -56,7 +56,6 @@ const val WELCOME_BACK_TOAST_TAG = "auth.welcomeBackToast"
 @Composable
 fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
-    val lastInteractiveSignInAt by viewModel.lastInteractiveSignInAt.collectAsStateWithLifecycle()
     val sessionEndReason by viewModel.sessionEndReason.collectAsStateWithLifecycle()
     var previousAuth by remember { mutableStateOf<AuthRepository.State?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -113,12 +112,11 @@ fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
                         onSignOut = { viewModel.signOutFromAppLock() },
                     ) {
                         RootTabScreen()
-                        // One-time post-login offer to turn app lock on (RN
-                        // `AppLockSetupPromptLayer`, `src/app/_layout.tsx:132`).
+                        // One-time offer to turn app lock on, after the first sensitive
+                        // action the person verifies (RN raised it right after sign-in).
                         AppLockSetupPromptDialog(
                             manager = viewModel.appLockManager,
                             isSignedIn = true,
-                            lastInteractiveSignInAt = lastInteractiveSignInAt,
                         )
                         // Step-up coordinator (device_key biometric / password
                         // sheet) for the 403 STEP_UP_REQUIRED interceptor and

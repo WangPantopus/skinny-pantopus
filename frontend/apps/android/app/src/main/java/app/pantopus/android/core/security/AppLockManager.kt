@@ -198,6 +198,15 @@ class AppLockManager
          */
         private var lastSensitiveAuthAtMs: Long? = null
 
+        private val _sensitiveActionVerifiedAt = MutableStateFlow<Long?>(null)
+
+        /**
+         * When a sensitive action was last verified on this account. The one-time app-lock offer
+         * follows the first one: right after sign-in it was one more prompt on top of the
+         * notification permission.
+         */
+        val sensitiveActionVerifiedAt: StateFlow<Long?> = _sensitiveActionVerifiedAt.asStateFlow()
+
         /**
          * Set by [appDidEnterBackground], consumed by [appDidBecomeActive], so a
          * foreground pass without a matching background (a device-credential
@@ -227,6 +236,7 @@ class AppLockManager
             if (this.userId == userId) return
             identityGeneration += 1
             lastSensitiveAuthAtMs = null
+            _sensitiveActionVerifiedAt.value = null
             isPrompting = false
             backgroundedWhilePrompting = false
             this.userId = userId
@@ -466,6 +476,7 @@ class AppLockManager
             }
             if (verified) {
                 lastSensitiveAuthAtMs = System.currentTimeMillis()
+                _sensitiveActionVerifiedAt.value = lastSensitiveAuthAtMs
                 return SensitiveActionOutcome.Verified
             }
             val message = _lastError.value ?: DEFAULT_VERIFY_FAILURE
