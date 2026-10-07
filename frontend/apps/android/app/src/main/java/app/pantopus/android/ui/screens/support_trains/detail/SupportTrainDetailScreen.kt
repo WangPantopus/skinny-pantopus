@@ -29,6 +29,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -407,6 +410,8 @@ private fun LoadedBody(
     onConfirmDelivery: (String) -> Unit = {},
     onRequestLeave: (SlotRowContent) -> Unit = {},
 ) {
+    // Sections whose "See all N" was tapped.
+    var expandedSections by remember { mutableStateOf(setOf<String>()) }
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier =
@@ -435,34 +440,22 @@ private fun LoadedBody(
             CalendarCard(content.calendarDays, onSelectDate = { if (!signupsClosed) onSignUp() })
 
             content.sections.forEach { section ->
-                SectionOverline(section.overline, actionLabel = section.actionLabel)
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    section.rows.forEach { row ->
-                        SlotRow(
-                            content = row,
-                            onSignUp =
-                                if (row.state == SlotRowState.Open && !signupsClosed) {
-                                    { onReserveSlot(row.slotId) }
-                                } else {
-                                    null
-                                },
-                            onEdit =
-                                if (row.mine && onEditSlot != null) {
-                                    { onEditSlot(row) }
-                                } else {
-                                    null
-                                },
-                        )
-                        CommitmentActions(
-                            row = row,
-                            viewerRole = content.viewerRole,
-                            isSubmitting = isSubmitting,
-                            onMarkDelivered = onMarkDelivered,
-                            onConfirmDelivery = onConfirmDelivery,
-                            onRequestLeave = onRequestLeave,
-                        )
-                    }
-                }
+                val expanded = section.id in expandedSections
+                SlotSectionBlock(
+                    section = section,
+                    expanded = expanded,
+                    onToggleExpanded = {
+                        expandedSections = if (expanded) expandedSections - section.id else expandedSections + section.id
+                    },
+                    signupsClosed = signupsClosed,
+                    viewerRole = content.viewerRole,
+                    isSubmitting = isSubmitting,
+                    onReserveSlot = onReserveSlot,
+                    onEditSlot = onEditSlot,
+                    onMarkDelivered = onMarkDelivered,
+                    onConfirmDelivery = onConfirmDelivery,
+                    onRequestLeave = onRequestLeave,
+                )
             }
 
             content.exactAddress?.let { address ->
@@ -484,6 +477,55 @@ private fun LoadedBody(
                 onSignUp = onSignUp,
                 onSendCard = onSendCard ?: {},
                 onJoinAsBackup = onJoinAsBackup ?: {},
+            )
+        }
+    }
+}
+
+/** One stack of slot rows under its overline; "See all N" lists the rest of the section in place. */
+@Composable
+private fun SlotSectionBlock(
+    section: SlotSection,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    signupsClosed: Boolean,
+    viewerRole: SupportTrainViewerRole,
+    isSubmitting: Boolean,
+    onReserveSlot: (String?) -> Unit,
+    onEditSlot: ((SlotRowContent) -> Unit)?,
+    onMarkDelivered: (String) -> Unit,
+    onConfirmDelivery: (String) -> Unit,
+    onRequestLeave: (SlotRowContent) -> Unit,
+) {
+    SectionOverline(
+        section.overline,
+        actionLabel = section.actionLabel?.let { if (expanded) "Show fewer" else it },
+        onAction = onToggleExpanded,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        (if (expanded) section.rows + section.moreRows else section.rows).forEach { row ->
+            SlotRow(
+                content = row,
+                onSignUp =
+                    if (row.state == SlotRowState.Open && !signupsClosed) {
+                        { onReserveSlot(row.slotId) }
+                    } else {
+                        null
+                    },
+                onEdit =
+                    if (row.mine && onEditSlot != null) {
+                        { onEditSlot(row) }
+                    } else {
+                        null
+                    },
+            )
+            CommitmentActions(
+                row = row,
+                viewerRole = viewerRole,
+                isSubmitting = isSubmitting,
+                onMarkDelivered = onMarkDelivered,
+                onConfirmDelivery = onConfirmDelivery,
+                onRequestLeave = onRequestLeave,
             )
         }
     }
@@ -629,6 +671,7 @@ private fun ExactAddressCard(
 private fun SectionOverline(
     label: String,
     actionLabel: String? = null,
+    onAction: () -> Unit = {},
 ) {
     Row(
         modifier =
@@ -653,7 +696,7 @@ private fun SectionOverline(
                 fontWeight = FontWeight.SemiBold,
                 modifier =
                     Modifier
-                        .clickable { /* See-all wiring is a follow-up */ }
+                        .clickable(onClick = onAction)
                         .padding(Spacing.s1)
                         .testTag("supportTrainSeeAll-$label"),
             )

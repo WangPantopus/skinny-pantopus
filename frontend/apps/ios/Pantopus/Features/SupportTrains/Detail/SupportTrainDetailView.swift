@@ -54,6 +54,8 @@ public struct SupportTrainDetailView: View {
     /// Confirm target for "Leave this slot" — RN gates the cancel behind
     /// an alert naming the slot (`src/app/support-trains/[id].tsx:331`).
     @State private var pendingLeave: SlotRowContent?
+    /// Sections whose "See all N" was tapped.
+    @State private var expandedSections: Set<String> = []
 
     public var body: some View {
         VStack(spacing: Spacing.s0) {
@@ -166,9 +168,13 @@ public struct SupportTrainDetailView: View {
                     calendarCard(days: content.calendarDays)
 
                     ForEach(content.sections) { section in
-                        overline(section.overline, action: section.actionLabel)
+                        let expanded = expandedSections.contains(section.id)
+                        overline(
+                            section.overline,
+                            action: section.actionLabel.map { expanded ? "Show fewer" : $0 }
+                        ) { toggleSection(section.id) }
                         VStack(spacing: Spacing.s2) {
-                            ForEach(section.rows) { row in
+                            ForEach(expanded ? section.rows + section.moreRows : section.rows) { row in
                                 VStack(spacing: Spacing.s2) {
                                     SlotRow(
                                         content: row,
@@ -343,7 +349,15 @@ public struct SupportTrainDetailView: View {
         return { onEditSlot(row) }
     }
 
-    private func overline(_ label: String, action: String? = nil) -> some View {
+    private func toggleSection(_ id: String) {
+        if expandedSections.contains(id) {
+            expandedSections.remove(id)
+        } else {
+            expandedSections.insert(id)
+        }
+    }
+
+    private func overline(_ label: String, action: String? = nil, onAction: @escaping () -> Void = {}) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label)
                 .font(.system(size: 10.5, weight: .bold))
@@ -352,15 +366,17 @@ public struct SupportTrainDetailView: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: Spacing.s2)
             if let action {
-                Button {
-                    // The "See all" actions all currently surface as the
-                    // same in-screen drilldown — defer the navigation
-                    // hook to a follow-up. Keep the affordance so the
-                    // visual contract stays true to the design.
-                } label: {
+                // "See all N" lists the rest of the section here; "Show fewer" folds it back.
+                Button(action: onAction) {
                     Text(action)
                         .font(.system(size: 11.5, weight: .semibold))
                         .foregroundStyle(Theme.Color.primaryInk)
+                        // Tap area 44 pt tall without moving the header row: pad the hit shape out, take the padding back.
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 15)
+                        .contentShape(Rectangle())
+                        .padding(.horizontal, -8)
+                        .padding(.vertical, -15)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(action) \(label)")

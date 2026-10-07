@@ -531,7 +531,8 @@ extension SupportTrainDetailViewModel {
                 id: "open",
                 overline: "Open slots near you",
                 actionLabel: sortedOpen.count > shown.count ? "See all \(sortedOpen.count)" : nil,
-                rows: shown
+                rows: shown,
+                moreRows: sortedOpen.dropFirst(shown.count).map { slotRow($0, covered: false) }
             ))
         }
 
@@ -551,7 +552,8 @@ extension SupportTrainDetailViewModel {
                 id: "covered",
                 overline: "Already on the train",
                 actionLabel: sortedCovered.count > shown.count ? "See all \(sortedCovered.count)" : nil,
-                rows: shown
+                rows: shown,
+                moreRows: sortedCovered.dropFirst(shown.count).map { slotRow($0, covered: true) }
             ))
         }
         return sections

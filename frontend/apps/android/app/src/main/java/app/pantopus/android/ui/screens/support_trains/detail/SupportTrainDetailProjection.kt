@@ -257,7 +257,14 @@ object SupportTrainDetailProjection {
         if (open.isNotEmpty()) {
             val shown = open.take(4).map { slotRow(it, covered = false) }
             val action = if (open.size > shown.size) "See all ${open.size}" else null
-            out += SlotSection(id = "open", overline = "Open slots near you", actionLabel = action, rows = shown)
+            out +=
+                SlotSection(
+                    id = "open",
+                    overline = "Open slots near you",
+                    actionLabel = action,
+                    rows = shown,
+                    moreRows = open.drop(shown.size).map { slotRow(it, covered = false) },
+                )
         }
 
         // The viewer's own signups are listed under "Your commitment". A slot only
@@ -272,7 +279,14 @@ object SupportTrainDetailProjection {
         if (covered.isNotEmpty()) {
             val shown = covered.take(4).map { slotRow(it, covered = true) }
             val action = if (covered.size > shown.size) "See all ${covered.size}" else null
-            out += SlotSection(id = "covered", overline = "Already on the train", actionLabel = action, rows = shown)
+            out +=
+                SlotSection(
+                    id = "covered",
+                    overline = "Already on the train",
+                    actionLabel = action,
+                    rows = shown,
+                    moreRows = covered.drop(shown.size).map { slotRow(it, covered = true) },
+                )
         }
         return out
     }
