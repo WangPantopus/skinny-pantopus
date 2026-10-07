@@ -48,6 +48,8 @@ struct HomePostalVerificationView: View {
         .submitLabel(.done)
         .onSubmit(dismissKeyboard)
         .background(Theme.Color.appBg)
+        // Most of this screen uses fixed-size styles; capping keeps its buttons and fields from outgrowing them.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .navigationTitle("Mail verification")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
