@@ -99,6 +99,7 @@ fun StartSupportTrainWizardScreen(
         model = viewModel,
         modifier = Modifier.testTag(SCREEN_TAG),
         identity = WizardIdentity.Warm,
+        handleSystemBack = true,
     ) {
         when (form.step) {
             StartSupportTrainStep.WhoAndWhy ->

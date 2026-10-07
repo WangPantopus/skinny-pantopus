@@ -406,7 +406,7 @@ class HouseholdTasksListViewModel
             val filtered = loaded.filter { passes(it, tab, now) }
             if (filtered.isEmpty()) {
                 _banner.value = null
-                _state.value = emptyContent(tab)
+                _state.value = emptyContent(tab, hasTasks = loaded.isNotEmpty())
                 return
             }
             val rows = filtered.map { rowFor(it, tab, now) }
@@ -418,13 +418,17 @@ class HouseholdTasksListViewModel
             _banner.value = bannerFor(tab, loaded, now)
         }
 
-        private fun emptyContent(tab: HouseholdTasksTab): ListOfRowsUiState.Empty =
+        private fun emptyContent(
+            tab: HouseholdTasksTab,
+            hasTasks: Boolean,
+        ): ListOfRowsUiState.Empty =
             when (tab) {
+                // Tasks that are all finished aren't "no tasks yet".
                 HouseholdTasksTab.Active ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.ListChecks,
-                        headline = "No tasks yet",
-                        subcopy = "Household tasks you can view will appear here.",
+                        headline = if (hasTasks) "No open tasks" else "No tasks yet",
+                        subcopy = if (hasTasks) "Tasks you finish move to Done." else "Household tasks you can view will appear here.",
                         ctaTitle = "Add a task".takeIf { canCreate },
                         onCta = if (canCreate) ::requestCreate else null,
                     )

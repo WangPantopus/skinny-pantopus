@@ -126,7 +126,7 @@ fun InviteTeammateWizardSheet(
                     .background(PantopusColors.appBg)
                     .testTag(INVITE_TEAMMATE_WIZARD_TAG),
         ) {
-            WizardShell(model = viewModel) {
+            WizardShell(model = viewModel, handleSystemBack = true) {
                 when (state.currentStep) {
                     InviteTeammateStep.Role -> RoleStep(state.form.role, viewModel::setRole)
                     InviteTeammateStep.Identify ->

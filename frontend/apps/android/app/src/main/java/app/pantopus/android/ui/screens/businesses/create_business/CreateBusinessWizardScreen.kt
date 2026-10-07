@@ -64,6 +64,7 @@ fun CreateBusinessWizardScreen(
         model = viewModel,
         modifier = Modifier.testTag(CREATE_BUSINESS_SCREEN_TAG),
         identity = WizardIdentity.Business,
+        handleSystemBack = true,
     ) {
         when (state.currentStep) {
             CreateBusinessStep.PickCategory -> {
