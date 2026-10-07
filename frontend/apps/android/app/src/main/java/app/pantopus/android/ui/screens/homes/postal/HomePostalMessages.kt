@@ -60,13 +60,18 @@ object HomePostalMessages {
     fun postcardHeadline(
         status: String?,
         deliveryState: String?,
+        attemptsRemaining: Int? = null,
     ): String =
-        when (status) {
-            "verified" -> "Address verified by mail"
-            "expired" -> "Postcard code expired"
-            "cancelled" -> "Postcard no longer active"
+        when {
+            status == "verified" -> "Address verified by mail"
+            // A code also expires when its tries are used up.
+            status == "expired" && attemptsRemaining == 0 -> "No tries left for this postcard"
+            status == "expired" -> "Postcard code expired"
+            status == "cancelled" -> "Postcard no longer active"
             else -> delivery(deliveryState)
         }
+
+    fun triesLeft(count: Int): String = if (count == 1) "1 try left" else "$count tries left"
 
     fun delivery(state: String?): String =
         when (state) {

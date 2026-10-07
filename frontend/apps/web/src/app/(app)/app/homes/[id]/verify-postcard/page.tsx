@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Mail, ShieldCheck } from 'lucide-react';
 import { usePostalVerification } from '@/components/homes/postcard/usePostalVerification';
-import { postalMessage, validMailingAddress, type MailingAddress } from '@/components/homes/postcard/postcardModel';
+import { postalMessage, triesLeft, validMailingAddress, type MailingAddress } from '@/components/homes/postcard/postcardModel';
 import { residencyRequestLabel } from '@/components/homes/residencyProgressModel';
 
 const emptyAddress = (): MailingAddress => ({ line1: '', line2: '', city: '', state: '', postal_code: '', country: 'US' });
@@ -60,7 +60,7 @@ function VerifyPostcardContent() {
         : outcome?.state === 'cancelled' ? 'Nothing changed. This attempt was discarded before it took effect.'
           : outcome?.state === 'rejected' ? postalMessage(outcome.code)
             : 'We couldn’t confirm whether this went through. Check again, or try again.'}</p>
-      {outcome?.code === 'POSTCARD_WRONG_CODE' && <p className="text-sm font-semibold">{outcome.attempts_remaining ? `${outcome.attempts_remaining} tries left.` : 'No tries left. Request a new postcard.'}</p>}
+      {outcome?.code === 'POSTCARD_WRONG_CODE' && <p className="text-sm font-semibold">{outcome.attempts_remaining ? triesLeft(outcome.attempts_remaining) : 'No tries left. Request a new postcard.'}</p>}
       {flow.canAcknowledge ? <button className={primary} disabled={busy} onClick={() => { setCode(''); setConfirmed(false); void flow.acknowledge(); }}>Done</button>
         : <div className="grid gap-3 sm:grid-cols-2">
           <button className={button} disabled={busy} onClick={() => void flow.recover('status')}>Check again</button>
@@ -78,7 +78,7 @@ function VerifyPostcardContent() {
       {progress?.request && <section className={panel}><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Your Home’s address</p>
         <p className="break-words text-sm">{residencyRequestLabel(progress.request)}</p></section>}
       {status.postcard && <section className={panel}>
-        <h2 className="text-lg font-semibold">{status.postcard.status === 'verified' ? 'Address verified by mail' : status.postcard.status === 'expired' ? 'Postcard code expired'
+        <h2 className="text-lg font-semibold">{status.postcard.status === 'verified' ? 'Address verified by mail' : status.postcard.status === 'expired' ? status.postcard.attempts_remaining === 0 ? 'No tries left for this postcard' : 'Postcard code expired'
           : status.postcard.status === 'cancelled' ? 'Postcard no longer active' : 'Your postcard'}</h2>
         {status.request && <><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Mailing address</p><Address address={status.request.address} /></>}
         {!['verified', 'expired', 'cancelled'].includes(status.postcard.status) && <p className="text-sm text-app-text-secondary">{({ not_started: 'This postcard hasn’t been sent yet.',
@@ -96,7 +96,7 @@ function VerifyPostcardContent() {
         <input id="postal-code" type="text" autoComplete="one-time-code" autoCapitalize="characters" spellCheck={false}
           value={code} maxLength={8} onChange={event => setCode(event.target.value.replace(/[^a-z0-9]/gi, '').toUpperCase())}
           disabled={busy} className={`${inputStyle} text-center text-2xl tracking-widest`} />
-        <p className="text-sm text-app-text-secondary">{status.postcard?.attempts_remaining} tries left.</p>
+        <p className="text-sm text-app-text-secondary">{triesLeft(status.postcard?.attempts_remaining ?? 0)}</p>
         <button className={primary} disabled={busy || !/^[a-z0-9]{6,8}$/i.test(code)}>Verify code</button>
       </form>}
       {status.can_request && <form className={panel} onSubmit={event => { event.preventDefault(); if (confirmed) void flow.requestMail(address); }}>

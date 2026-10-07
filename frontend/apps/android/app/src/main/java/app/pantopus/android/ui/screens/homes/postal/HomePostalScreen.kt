@@ -113,7 +113,7 @@ private fun HomePostalCurrentStatus(
     val postcard = status.postcard
     if (postcard != null) {
         Text(
-            HomePostalMessages.postcardHeadline(postcard.status, postcard.delivery),
+            HomePostalMessages.postcardHeadline(postcard.status, postcard.delivery, postcard.attemptsRemaining),
             style = PantopusTextStyle.h3,
             modifier = Modifier.testTag("homePostalDelivery"),
         )
@@ -122,7 +122,7 @@ private fun HomePostalCurrentStatus(
         }
         if (postcard.status == "pending") {
             Text(
-                "${postcard.attemptsRemaining} tries left",
+                HomePostalMessages.triesLeft(postcard.attemptsRemaining),
                 style = PantopusTextStyle.caption,
                 modifier = Modifier.testTag("homePostalAttemptsRemaining"),
             )

@@ -37,13 +37,18 @@ enum HomePostalMessages {
         ["verified", "expired", "cancelled"].contains(status ?? "")
     }
 
-    static func postcardHeadline(_ status: String?, delivery state: String?) -> String {
+    static func postcardHeadline(_ status: String?, delivery state: String?, attemptsRemaining: Int? = nil) -> String {
         switch status {
         case "verified": "Address verified by mail"
-        case "expired": "Postcard code expired"
+        // A code also expires when its tries are used up.
+        case "expired": attemptsRemaining == 0 ? "No tries left for this postcard" : "Postcard code expired"
         case "cancelled": "Postcard no longer active"
         default: delivery(state)
         }
+    }
+
+    static func triesLeft(_ count: Int) -> String {
+        count == 1 ? "1 try left" : "\(count) tries left"
     }
 
     static func delivery(_ state: String?) -> String {

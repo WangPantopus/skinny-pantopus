@@ -132,14 +132,18 @@ struct HomePostalVerificationView: View {
     @ViewBuilder
     private func currentStatus(_ status: HomePostalStatus) -> some View {
         if let postcard = status.postcard {
-            Text(HomePostalMessages.postcardHeadline(postcard["status"]?.stringValue, delivery: postcard["delivery"]?.stringValue))
-                .pantopusTextStyle(.h3)
-                .accessibilityIdentifier("homePostalDelivery")
+            Text(HomePostalMessages.postcardHeadline(
+                postcard["status"]?.stringValue,
+                delivery: postcard["delivery"]?.stringValue,
+                attemptsRemaining: postcard["attempts_remaining"]?.numberValue.map { Int($0) }
+            ))
+            .pantopusTextStyle(.h3)
+            .accessibilityIdentifier("homePostalDelivery")
             if !HomePostalMessages.postcardEnded(postcard["status"]?.stringValue) {
                 Text(HomePostalMessages.postcardStatus(postcard["status"]?.stringValue)).pantopusTextStyle(.body)
             }
             if postcard["status"]?.stringValue == "pending", let count = postcard["attempts_remaining"]?.numberValue {
-                Text("\(Int(count)) tries left").pantopusTextStyle(.caption)
+                Text(HomePostalMessages.triesLeft(Int(count))).pantopusTextStyle(.caption)
                     .accessibilityIdentifier("homePostalAttemptsRemaining")
             }
         } else {

@@ -6,6 +6,7 @@ export interface PostalDraft {
   version: 1; origin: string; actor_id: string; home_id: string; request_id: string;
   kind: 'mail' | 'code'; postcard_id: string | null; request_json: string; outcome?: PostalOutcome;
 }
+export const triesLeft = (count: number) => count === 1 ? '1 try left.' : `${count} tries left.`;
 export const postalUUID = (v: unknown): v is string => typeof v === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(v);
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const date = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse(v));
