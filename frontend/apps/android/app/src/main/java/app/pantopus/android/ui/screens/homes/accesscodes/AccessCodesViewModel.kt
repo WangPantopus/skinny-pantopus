@@ -113,6 +113,11 @@ class AccessCodesViewModel
         /** Pull-to-refresh. */
         fun refresh() = reload()
 
+        /** Back from adding, editing or deleting a code: read the list again (the first read stays with [load]). */
+        fun refreshIfLoaded() {
+            if (loadedOnce) reload()
+        }
+
         /** Update the live chip selection. Rebuilds sections in place. */
         fun selectChip(id: String) {
             if (_selectedChip.value == id) return

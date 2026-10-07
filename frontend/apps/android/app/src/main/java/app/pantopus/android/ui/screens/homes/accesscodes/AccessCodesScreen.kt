@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
@@ -66,6 +68,8 @@ fun AccessCodesScreen(
         remember {
             context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshIfLoaded() }
 
     LaunchedEffect(Unit) {
         viewModel.bindClipboard { value ->
