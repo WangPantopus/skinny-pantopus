@@ -84,7 +84,7 @@ public struct BusinessPaymentsView: View {
                 Text("Business payout account")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
-                Text("Set up Stripe to receive payments for business gigs and services.")
+                Text("Set up Stripe once to withdraw what your business earns.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
@@ -212,8 +212,8 @@ public struct BusinessPaymentsView: View {
         HStack(alignment: .top, spacing: Spacing.s2) {
             Icon(.shield, size: 14, color: Theme.Color.business)
             Text(
-                "This payout account is linked to your business entity. "
-                    + "Payments from gigs and services are deposited to it."
+                "This is your own payout account, the same one your Wallet withdraws to. "
+                    + "What the business earns reaches your wallet first."
             )
             .pantopusTextStyle(.caption)
             .foregroundStyle(Theme.Color.appTextSecondary)

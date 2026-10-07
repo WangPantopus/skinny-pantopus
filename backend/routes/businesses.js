@@ -4637,46 +4637,69 @@ router.get('/:businessId/matched-posts', verifyToken, async (req, res) => {
 });
 
 // ============ BUSINESS STRIPE CONNECT ============
+// A business account has no sign-in and so no wallet anyone can open: what it earns (invoices) is credited to its primary
+// owner's wallet and leaves it through that owner's own payout account (see getBusinessPrimaryOwnerId). So the business's
+// Payments screen sets up and shows that account, the same one the owner's Wallet withdraws to. Setting up a second,
+// business-level account would pay nobody.
+
+/**
+ * The primary owner of the business, when the caller is that owner and may manage its payments; otherwise a response is
+ * sent and null returned.
+ */
+async function requirePrimaryOwner(req, res, deniedMessage) {
+  const { businessId } = req.params;
+  const userId = req.user.id;
+
+  const access = await checkBusinessPermission(businessId, userId, 'payments.manage');
+  if (!access.hasAccess || !access.isOwner) {
+    res.status(403).json({ error: deniedMessage });
+    return null;
+  }
+  const primaryOwnerId = await getBusinessPrimaryOwnerId(businessId);
+  if (primaryOwnerId !== userId) {
+    res.status(403).json({
+      error: "This business's payments go to its primary owner's payout account.",
+      code: 'NOT_PRIMARY_OWNER',
+    });
+    return null;
+  }
+  return userId;
+}
 
 /**
  * POST /:businessId/stripe/connect
- * Create a Stripe Connect account linked to the business_user_id.
+ * Create the primary owner's Stripe Connect payout account (the one their Wallet withdraws to).
  */
 router.post('/:businessId/stripe/connect', verifyToken, async (req, res) => {
   try {
     const { businessId } = req.params;
-    const userId = req.user.id;
+    const ownerId = await requirePrimaryOwner(req, res, 'Only the business owner can connect a Stripe account');
+    if (!ownerId) return;
 
-    const access = await checkBusinessPermission(businessId, userId, 'payments.manage');
-    if (!access.hasAccess || !access.isOwner) {
-      return res.status(403).json({ error: 'Only the business owner can connect a Stripe account' });
-    }
-
-    // Get business user email
-    const { data: bizUser } = await supabaseAdmin
+    const { data: owner } = await supabaseAdmin
       .from('User')
       .select('email, name')
-      .eq('id', businessId)
-      .single();
+      .eq('id', ownerId)
+      .maybeSingle();
 
-    if (!bizUser) {
+    if (!owner) {
       return res.status(404).json({ error: 'Business not found' });
     }
 
-    const result = await stripeService.createConnectAccount(businessId, {
-      email: bizUser.email,
+    const result = await stripeService.createConnectAccount(ownerId, {
+      email: owner.email,
       country: req.body.country || 'US',
-      business_type: req.body.businessType || 'company',
+      business_type: req.body.businessType || 'individual',
     });
 
     if (!result.success) {
       return res.status(400).json({ error: result.error });
     }
 
-    await writeAuditLog(businessId, userId, 'stripe_connect', 'StripeAccount', result.account?.id, {});
+    await writeAuditLog(businessId, ownerId, 'stripe_connect', 'StripeAccount', result.account?.id, {});
 
     res.status(201).json({
-      message: 'Business Stripe Connect account created',
+      message: 'Stripe payout account created',
       account: result.account,
       stripeAccountId: result.stripeAccountId,
     });
@@ -4688,13 +4711,14 @@ router.post('/:businessId/stripe/connect', verifyToken, async (req, res) => {
         code: 'connect_not_enabled',
       });
     }
-    res.status(500).json({ error: 'Failed to create business Stripe account' });
+    res.status(500).json({ error: 'Failed to create the Stripe payout account' });
   }
 });
 
 /**
  * GET /:businessId/stripe/account
- * Get the business's Stripe Connect account status.
+ * The business's payout account status (its primary owner's). The owner sees the account; the rest of the crew see
+ * only whether it can take payments and pay out.
  */
 router.get('/:businessId/stripe/account', verifyToken, async (req, res) => {
   try {
@@ -4706,39 +4730,49 @@ router.get('/:businessId/stripe/account', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No access to this business' });
     }
 
-    const result = await stripeService.getConnectAccount(businessId);
+    const primaryOwnerId = await getBusinessPrimaryOwnerId(businessId);
+    if (!primaryOwnerId) {
+      return res.status(404).json({ error: 'No Stripe account found' });
+    }
+
+    const result = await stripeService.getConnectAccount(primaryOwnerId);
 
     if (!result.success) {
       return res.status(404).json({ error: result.error });
     }
 
-    res.json({ account: result.account });
+    const { account } = result;
+    res.json({
+      account: primaryOwnerId === userId
+        ? account
+        : {
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          details_submitted: account.details_submitted,
+        },
+    });
   } catch (err) {
     logger.error('Business Stripe account error', { error: err.message });
-    res.status(500).json({ error: 'Failed to get business Stripe account' });
+    res.status(500).json({ error: 'Failed to get the Stripe payout account' });
   }
 });
 
 /**
  * POST /:businessId/stripe/refresh-link
- * Refresh the onboarding link for the business's Stripe account.
+ * Refresh the onboarding link for the primary owner's Stripe payout account.
  */
 router.post('/:businessId/stripe/refresh-link', verifyToken, async (req, res) => {
   try {
     const { businessId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkBusinessPermission(businessId, userId, 'payments.manage');
-    if (!access.hasAccess || !access.isOwner) {
-      return res.status(403).json({ error: 'Only the business owner can manage Stripe' });
-    }
+    const ownerId = await requirePrimaryOwner(req, res, 'Only the business owner can manage Stripe');
+    if (!ownerId) return;
 
     const clientUrl = process.env.CLIENT_URL || process.env.APP_URL || 'http://localhost:3000';
     // The crew dashboard's Payments tab: /app/businesses/:id has no page of its own, so Stripe sent people to a 404.
     const returnUrl = `${clientUrl}/app/businesses/${businessId}/dashboard?tab=payments&onboarding=success`;
     const refreshUrl = `${clientUrl}/app/businesses/${businessId}/dashboard?tab=payments&onboarding=refresh`;
 
-    const result = await stripeService.createAccountLink(businessId, returnUrl, refreshUrl);
+    const result = await stripeService.createAccountLink(ownerId, returnUrl, refreshUrl);
 
     res.json({ accountLink: result.url, expiresAt: result.expiresAt });
   } catch (err) {
@@ -4749,19 +4783,14 @@ router.post('/:businessId/stripe/refresh-link', verifyToken, async (req, res) =>
 
 /**
  * POST /:businessId/stripe/dashboard-link
- * Create an Express dashboard link for the business's Stripe account.
+ * Create an Express dashboard link for the primary owner's Stripe payout account.
  */
 router.post('/:businessId/stripe/dashboard-link', verifyToken, async (req, res) => {
   try {
-    const { businessId } = req.params;
-    const userId = req.user.id;
+    const ownerId = await requirePrimaryOwner(req, res, 'Only the business owner can open the Stripe dashboard');
+    if (!ownerId) return;
 
-    const access = await checkBusinessPermission(businessId, userId);
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No access to this business' });
-    }
-
-    const result = await stripeService.createLoginLink(businessId);
+    const result = await stripeService.createLoginLink(ownerId);
 
     res.json({ dashboardUrl: result.url });
   } catch (err) {

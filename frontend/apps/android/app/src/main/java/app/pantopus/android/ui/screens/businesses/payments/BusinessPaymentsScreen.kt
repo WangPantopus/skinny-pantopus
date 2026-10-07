@@ -211,7 +211,7 @@ private fun PayoutCard(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "Set up Stripe to receive payments for business gigs and services.",
+                text = "Set up Stripe once to withdraw what your business earns.",
                 color = PantopusColors.appTextSecondary,
                 fontSize = 13.sp,
             )
@@ -365,8 +365,8 @@ private fun Footnote() {
         )
         Text(
             text =
-                "This payout account is linked to your business entity. " +
-                    "Payments from gigs and services are deposited to it.",
+                "This is your own payout account, the same one your Wallet withdraws to. " +
+                    "What the business earns reaches your wallet first.",
             color = PantopusColors.appTextSecondary,
             fontSize = 12.sp,
         )
