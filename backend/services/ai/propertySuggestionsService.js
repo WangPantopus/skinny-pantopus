@@ -15,17 +15,20 @@ const CANONICAL_HOME_TYPES = new Set([
   'house', 'apartment', 'condo', 'townhouse', 'studio', 'rv', 'mobile_home', 'trailer', 'multi_unit', 'other',
 ]);
 
+// Whole words only: ATTOM's land-use classes ("MUSEUM, LIBRARY, ART GALLERY
+// (RECREATIONAL)", "SERVICE STATION", "INDUSTRIAL") must not read as an RV or
+// a triplex. Anything not clearly residential leaves the type to the person.
 function mapAttomPropertyTypeToCanonical(raw) {
   if (!raw || typeof raw !== 'string') return null;
   const u = raw.toUpperCase();
-  if (u.includes('CONDO') || u.includes('CONDOMINIUM')) return 'condo';
-  if (u.includes('TOWNHOUSE') || u.includes('TOWN HOME')) return 'townhouse';
-  if (u.includes('APARTMENT') || /\bAPT\b/.test(u)) return 'apartment';
-  if (u.includes('SFR') || u.includes('SINGLE FAMILY') || (u.includes('RESIDENTIAL') && !u.includes('CONDO'))) return 'house';
-  if (u.includes('DUPLEX') || u.includes('TRI') || u.includes('MULTI FAMILY')) return 'multi_unit';
-  if (u.includes('MOBILE') || u.includes('MANUFACTURED')) return 'mobile_home';
-  if (u.includes('STUDIO')) return 'studio';
-  if (u.includes('RV') || u.includes('RECREATIONAL')) return 'rv';
+  if (/\bCONDO(MINIUM)?S?\b/.test(u)) return 'condo';
+  if (/\bTOWN ?HOUSES?\b|\bTOWN ?HOMES?\b/.test(u)) return 'townhouse';
+  if (/\bAPARTMENTS?\b|\bAPT\b/.test(u)) return 'apartment';
+  if (/\b(DUPLEX|TRIPLEX|QUADRUPLEX)\b|\bMULTI[ -]?FAMILY\b/.test(u)) return 'multi_unit';
+  if (/\bSFR\b|\bSINGLE[ -]FAMILY\b|\bRESIDENTIAL\b/.test(u)) return 'house';
+  if (/\bMOBILE\b|\bMANUFACTURED\b/.test(u)) return 'mobile_home';
+  if (/\bSTUDIO\b/.test(u)) return 'studio';
+  if (/\bRV\b|\bRECREATIONAL VEHICLES?\b/.test(u)) return 'rv';
   return null;
 }
 
