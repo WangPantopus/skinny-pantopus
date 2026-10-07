@@ -13,6 +13,7 @@ import SwiftUI
 
 struct AccessCodesView: View {
     @State private var viewModel: AccessCodesViewModel
+    @State private var appearedOnce = false
 
     init(viewModel: AccessCodesViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -21,6 +22,11 @@ struct AccessCodesView: View {
     var body: some View {
         ListOfRowsView(dataSource: viewModel)
             .accessibilityIdentifier(AccessCodesA11y.screen)
+            .onAppear {
+                // Back from adding, editing or deleting a code: read the list again.
+                if appearedOnce { Task { await viewModel.refresh() } }
+                appearedOnce = true
+            }
             .sensitiveScreen()
             .overlay(alignment: .bottom) {
                 if let message = viewModel.toastMessage {

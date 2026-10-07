@@ -305,12 +305,16 @@ private struct ValueField: View {
         if isRevealed {
             TextField("••••••••", text: $value)
                 .focused($isFocused)
+                // A household code, not this person's login: keeps iOS from offering to save it as a password.
+                .textContentType(.oneTimeCode)
                 .font(.system(.body, design: .monospaced))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
         } else {
             SecureField("••••••••", text: $value)
                 .focused($isFocused)
+                // A household code, not this person's login: keeps iOS from offering to save it as a password.
+                .textContentType(.oneTimeCode)
                 .font(.system(.body, design: .monospaced))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
