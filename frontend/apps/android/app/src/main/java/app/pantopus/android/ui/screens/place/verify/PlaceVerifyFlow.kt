@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -111,7 +114,7 @@ interface PlaceVerifySheetDeps {
 @Composable
 private fun rememberVerifyMethods(homeId: String?): List<PlaceVerifyMethod> {
     val context = LocalContext.current
-    var methods by remember(homeId) { mutableStateOf(listOf(PlaceVerifyMethod.DOCUMENT, PlaceVerifyMethod.MAIL)) }
+    var methods by remember(homeId) { mutableStateOf(listOf(PlaceVerifyMethod.MAIL, PlaceVerifyMethod.DOCUMENT)) }
     LaunchedEffect(homeId) {
         if (homeId == null) return@LaunchedEffect
         val repository =
@@ -120,7 +123,7 @@ private fun rememberVerifyMethods(homeId: String?): List<PlaceVerifyMethod> {
                 .tenantRepository()
         val status = (repository.homeStatus(homeId) as? NetworkResult.Success)?.data
         if (status != null && status.matches(homeId) && status.offersLandlordConfirmation) {
-            methods = PlaceVerifyMethod.entries
+            methods = listOf(PlaceVerifyMethod.MAIL, PlaceVerifyMethod.DOCUMENT, PlaceVerifyMethod.LANDLORD)
         }
     }
     return methods
@@ -134,7 +137,8 @@ fun PlaceVerifySheet(
     onStart: (PlaceVerifyMethod) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var selected by remember { mutableStateOf(PlaceVerifyMethod.DOCUMENT) }
+    // Mail leads: a postcard finishes on its own, while documents wait for a person to review them.
+    var selected by remember { mutableStateOf(PlaceVerifyMethod.MAIL) }
     val methods = rememberVerifyMethods(homeId)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -187,9 +191,10 @@ fun PlaceVerifySheet(
             Spacer(modifier = Modifier.height(18.dp))
 
             Overline("Choose how")
-            Column(modifier = Modifier.fillMaxWidth().placeCard()) {
+            Column(modifier = Modifier.fillMaxWidth().placeCard().selectableGroup()) {
                 methods.forEachIndexed { i, m ->
-                    Box(modifier = Modifier.clickable { selected = m }) {
+                    // A radio choice, so TalkBack says which method is selected.
+                    Box(modifier = Modifier.selectable(selected = selected == m, role = Role.RadioButton) { selected = m }) {
                         VerifyRow(m.icon, m.label, m.sub, PlaceTileTone.SKY, trailing = { Radio(selected == m) })
                     }
                     if (i < methods.lastIndex) Divider()
@@ -207,7 +212,7 @@ fun PlaceVerifySheet(
                     modifier = Modifier.padding(top = 1.dp),
                 )
                 Text(
-                    "Documents are reviewed by a person; postcards take about a week. " +
+                    "Postcards take about a week; documents are reviewed by a person. " +
                         "Everything you have now stays available while you wait.",
                     fontSize = 12.5.sp,
                     lineHeight = 18.sp,

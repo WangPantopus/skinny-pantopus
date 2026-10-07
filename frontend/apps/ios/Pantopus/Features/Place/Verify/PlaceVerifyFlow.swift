@@ -84,10 +84,11 @@ struct PlaceVerifySheet: View {
     var onStart: (PlaceVerifyMethod) -> Void
     var onClose: () -> Void
 
-    @State private var selected: PlaceVerifyMethod = .document
+    /// Mail leads: a postcard finishes on its own, while documents wait for a person to review them.
+    @State private var selected: PlaceVerifyMethod = .mail
     /// A landlord request can only be answered by a verified landlord, so that
     /// door joins once the Home has one (or the person already has a request).
-    @State private var doors: [PlaceVerifyMethod] = [.document, .mail]
+    @State private var doors: [PlaceVerifyMethod] = [.mail, .document]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -116,7 +117,7 @@ struct PlaceVerifySheet: View {
         guard let status: TenantHomeStatusResponse = try? await APIClient.shared.request(
             TenantEndpoints.homeStatus(homeId: homeId)
         ), status.matches(homeId: homeId), status.offersLandlordConfirmation else { return }
-        doors = PlaceVerifyMethod.allCases
+        doors = [.mail, .document, .landlord]
     }
 
     private var header: some View {
@@ -176,6 +177,8 @@ struct PlaceVerifySheet: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    // A radio choice, so VoiceOver says which method is selected.
+                    .accessibilityAddTraits(selected == m ? .isSelected : [])
                     if index < doors.count - 1 { divider }
                 }
             }
@@ -186,7 +189,7 @@ struct PlaceVerifySheet: View {
     private var calmNote: some View {
         HStack(alignment: .top, spacing: 9) {
             Icon(.clock, size: 15, strokeWidth: 2, color: Theme.Color.appTextMuted).padding(.top, 1)
-            Text("Documents are reviewed by a person; a postcard takes 3–7 days. "
+            Text("A postcard takes 3–7 days; documents are reviewed by a person. "
                 + "Everything you have now stays available while you wait.")
                 .font(.system(size: 12.5))
                 .lineSpacing(2)
