@@ -50,13 +50,14 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
             if let onBack {
                 Button(action: onBack) {
                     Icon(.chevronLeft, size: 22, color: Theme.Color.appText)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back")
                 .accessibilityIdentifier("groupedListBackButton")
             } else {
-                Spacer().frame(width: 36, height: 36)
+                Spacer().frame(width: 44, height: 44)
             }
             Spacer()
             Text(dataSource.title)
@@ -64,7 +65,7 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
-            Spacer().frame(width: 36, height: 36)
+            Spacer().frame(width: 44, height: 44)
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 52)
