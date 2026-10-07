@@ -824,7 +824,7 @@ private fun TopBar(
                 Box(
                     modifier =
                         Modifier
-                            .size(36.dp)
+                            .size(48.dp)
                             .clickable(onClick = onBack)
                             .testTag("pulseBackButton"),
                     contentAlignment = Alignment.Center,
@@ -854,7 +854,7 @@ private fun TopBar(
                 Box(
                     modifier =
                         Modifier
-                            .size(36.dp)
+                            .size(48.dp)
                             .clickable(onClick = onSearchTap)
                             .testTag("pulseSearchButton")
                             .semantics { contentDescription = "Search posts" },
@@ -872,7 +872,7 @@ private fun TopBar(
                 Box(
                     modifier =
                         Modifier
-                            .size(36.dp)
+                            .size(48.dp)
                             .clickable(onClick = onFilterTap)
                             .testTag("pulseFilterButton")
                             .semantics { contentDescription = "Filter by intent" },

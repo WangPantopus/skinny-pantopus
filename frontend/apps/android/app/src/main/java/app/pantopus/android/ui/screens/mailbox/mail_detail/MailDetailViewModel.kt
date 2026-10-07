@@ -1195,7 +1195,7 @@ class MailDetailViewModel
                     listOf("reference", "reference_number", "case_number", "tracking_number", "document_id")
                 return candidates
                     .firstNotNullOfOrNull { key -> (payload?.get(key) as? String)?.trim()?.takeIf { it.isNotEmpty() } }
-                    ?: "Ref ${itemId.uppercase(Locale.US)}"
+                    ?: "Ref ${itemId.take(PANTOPUS_REFERENCE_LENGTH).uppercase(Locale.US)}"
             }
 
             @JvmStatic

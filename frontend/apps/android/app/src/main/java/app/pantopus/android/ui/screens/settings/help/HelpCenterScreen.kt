@@ -46,7 +46,7 @@ fun HelpCenterScreen(
                 )
                 Text(
                     text =
-                        "Most questions about messages, mail, and gigs have answers below. " +
+                        "Most questions about messages and mail have answers below. " +
                             "If you don't see yours, reach out — we read every message.",
                     style = PantopusTextStyle.small,
                     color = PantopusColors.appTextSecondary,

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -91,7 +92,8 @@ private fun TimelineRow(
     tone: DateSpanTone,
 ) {
     Box(
-        modifier = Modifier.fillMaxWidth().height(StripHeight),
+        // At least the designed height; the pill's text grows with the font size and a fixed height cut it in half.
+        modifier = Modifier.fillMaxWidth().heightIn(min = StripHeight),
         contentAlignment = Alignment.Center,
     ) {
         // Soft underlay line.

@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -229,6 +230,9 @@ private fun DrawerChip(
 ) {
     val foreground = if (isActive) PantopusColors.appTextInverse else PantopusColors.appTextSecondary
     val background = if (isActive) drawer.accent else PantopusColors.appSurface
+    // The badge grows with the font size and hangs over the pill's end; with large text it sat on the label's last
+    // letters ("Home" read "Hom"). The pill's end padding makes room for it.
+    val badgeRoom = if (unread > 0 && LocalDensity.current.fontScale > 1.3f) 20.dp else 0.dp
     Box(
         modifier =
             Modifier
@@ -253,7 +257,7 @@ private fun DrawerChip(
                             Modifier.border(1.dp, PantopusColors.appBorder, CircleShape)
                         },
                     )
-                    .padding(start = Spacing.s3, end = 14.dp),
+                    .padding(start = Spacing.s3, end = 14.dp + badgeRoom),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
