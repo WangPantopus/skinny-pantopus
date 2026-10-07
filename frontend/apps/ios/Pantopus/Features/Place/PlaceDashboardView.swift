@@ -211,11 +211,15 @@ struct PlaceDashboardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Button { showSwitcher = true } label: {
-                if isVerified {
-                    PlaceVerifiedAvatar(initials: initials(intel.place.label), size: 40)
-                } else {
-                    PlaceClaimedAvatar(initials: initials(intel.place.label), size: 40)
+                Group {
+                    if isVerified {
+                        PlaceVerifiedAvatar(initials: initials(intel.place.label), size: 40)
+                    } else {
+                        PlaceClaimedAvatar(initials: initials(intel.place.label), size: 40)
+                    }
                 }
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Switch place")

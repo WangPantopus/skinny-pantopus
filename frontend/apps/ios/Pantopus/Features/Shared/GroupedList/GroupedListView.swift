@@ -408,6 +408,9 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
                                 Capsule()
                                     .stroke(isActive ? Theme.Color.primary600 : Theme.Color.appBorder, lineWidth: 1)
                             )
+                            // The capsule stays 29 pt tall; the tap area is the 44 pt minimum.
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("groupedListChipOption_\(rowId)_\(option)")
