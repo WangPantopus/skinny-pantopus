@@ -71,7 +71,10 @@ struct PlaceDashboardView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .task(id: isActive) {
-            if isActive { await viewModel.load() }
+            guard isActive else { return }
+            await viewModel.load()
+            // Also on coming back from the notifications list, so a read bell loses its dot.
+            await viewModel.refreshUnread()
         }
         .refreshable { await viewModel.refresh() }
         .refreshFailureToast($viewModel.refreshFailureMessage)
@@ -215,14 +218,18 @@ struct PlaceDashboardView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Switch place")
 
-            Button(action: onOpenMenu) {
-                Icon(.menu, size: 20, color: Theme.Color.appText)
-                    .frame(width: Spacing.s12, height: Spacing.s12)
-                    .contentShape(Rectangle())
+            // Bell + menu sit together, as on the Hub; the dot is the Hub bell's.
+            HStack(spacing: 0) {
+                PlaceBellButton(unreadCount: viewModel.unreadCount, action: viewModel.onOpenNotifications)
+                Button(action: onOpenMenu) {
+                    Icon(.menu, size: 20, color: Theme.Color.appText)
+                        .frame(width: Spacing.s12, height: Spacing.s12)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Menu")
+                .accessibilityIdentifier("place.menu")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Menu")
-            .accessibilityIdentifier("place.menu")
         }
     }
 

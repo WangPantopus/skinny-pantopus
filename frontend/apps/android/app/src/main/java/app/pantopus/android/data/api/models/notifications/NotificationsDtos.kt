@@ -53,6 +53,13 @@ data class NotificationUnreadCountResponse(
 )
 
 /**
+ * What a bell's dot counts: unread personal + platform notifications, like
+ * the web personal-zone bell. Older deployments only return the total.
+ */
+val NotificationUnreadCountResponse.personalBellCount: Int
+    get() = byContext?.let { it.personal + it.platform } ?: count
+
+/**
  * `POST /api/notifications/read-all` body. The handler accepts
  * `context` / `contexts` / `firewall`; we always send the plural form so
  * the Personal zone (`personal` + `platform`) sweeps in one call — see
