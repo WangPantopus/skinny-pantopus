@@ -223,6 +223,43 @@ class WalletService {
     return wallet;
   }
 
+  /**
+   * Income already credited to this wallet for a payment the payer's bank has since disputed. It leaves the wallet
+   * if the dispute is lost, so it stays put until the dispute is settled (a won dispute puts the payment back as
+   * released, and the money is free again). A dispute opened before the money reached the wallet holds nothing
+   * here: nothing was credited yet.
+   * @returns {Promise<{cents: number, count: number}>}
+   */
+  async getDisputeHold(userId) {
+    const { data: disputed, error } = await supabaseAdmin
+      .from('Payment')
+      .select('id')
+      .eq('payee_id', userId)
+      .eq('payment_status', 'disputed');
+    if (error) {
+      logger.error('Failed to read disputed payments', { userId, error: error.message });
+      throw new Error('Failed to check funds on hold');
+    }
+    if (!disputed || disputed.length === 0) return { cents: 0, count: 0 };
+
+    const { data: credits, error: creditError } = await supabaseAdmin
+      .from('WalletTransaction')
+      .select('payment_id, amount')
+      .eq('user_id', userId)
+      .eq('direction', 'credit')
+      .in('type', ['gig_income', 'tip_income'])
+      .in('payment_id', disputed.map((payment) => payment.id));
+    if (creditError) {
+      logger.error('Failed to read credits of disputed payments', { userId, error: creditError.message });
+      throw new Error('Failed to check funds on hold');
+    }
+    const held = new Map();
+    for (const credit of credits || []) {
+      held.set(credit.payment_id, (held.get(credit.payment_id) || 0) + Number(credit.amount || 0));
+    }
+    return { cents: [...held.values()].reduce((sum, cents) => sum + cents, 0), count: held.size };
+  }
+
   // ============ WITHDRAWALS (Earned funds → Bank) ============
 
   /**
@@ -271,6 +308,18 @@ class WalletService {
     // column is null), so a repeated key would hit the unique key and fail. Look the row up first.
     const earlier = await findWithdrawalByKey(idempotencyKey);
     if (earlier) return settleRepeatedWithdrawal(earlier, { userId, amount, stripe, stripeAccount, idempotencyKey });
+
+    // Money the payer's bank is disputing stays in the wallet until the dispute is settled.
+    const hold = await this.getDisputeHold(userId);
+    if (hold.cents > 0) {
+      const wallet = await this.getWallet(userId);
+      const availableCents = Math.max(0, Number(wallet?.balance || 0) - hold.cents);
+      if (amount > availableCents) {
+        throw Object.assign(new Error('Funds are on hold for a payment dispute'), {
+          code: 'FUNDS_ON_HOLD', holdCents: hold.cents, availableCents,
+        });
+      }
+    }
 
     // Debit wallet first (atomic, will throw if insufficient balance)
     const { data: tx, error } = await supabaseAdmin.rpc('wallet_debit', {
