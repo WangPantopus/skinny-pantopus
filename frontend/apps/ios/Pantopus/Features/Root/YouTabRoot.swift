@@ -1150,9 +1150,10 @@ public struct YouTabRoot: View {
         case .mailboxMap:
             MailboxMapView { Task { @MainActor in pop() } }
         case let .mailDay(variant):
-            MailDayView(viewModel: MailDayViewModel(variant: variant)) {
-                Task { @MainActor in pop() }
-            }
+            // Keep the `onClose:` label: as a trailing closure it binds to
+            // `onSeeHistory` and Back does nothing.
+            // swiftlint:disable:next trailing_closure
+            MailDayView(viewModel: MailDayViewModel(variant: variant), onClose: { Task { @MainActor in pop() } })
         case .mailboxSearch:
             MailboxSearchView(
                 viewModel: MailboxSearchViewModel(

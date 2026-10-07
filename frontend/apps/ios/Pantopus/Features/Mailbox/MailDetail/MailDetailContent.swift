@@ -57,6 +57,8 @@ public struct MailDetailContent: Sendable {
     public let packageDetail: PackageBodyContent?
     public let partyDetail: PartyDetailDTO?
     public let recordsDetail: RecordsDetailDTO?
+    /// Facts read off the item (`Mail.key_facts`), such as a bill's amount due.
+    public let extractedFacts: [MailKeyFact]
 
     public init(
         mailId: String,
@@ -92,7 +94,8 @@ public struct MailDetailContent: Sendable {
         memoryDetail: MemoryDetailDTO? = nil,
         packageDetail: PackageBodyContent? = nil,
         partyDetail: PartyDetailDTO? = nil,
-        recordsDetail: RecordsDetailDTO? = nil
+        recordsDetail: RecordsDetailDTO? = nil,
+        extractedFacts: [MailKeyFact] = []
     ) {
         self.mailId = mailId
         self.category = category
@@ -128,11 +131,15 @@ public struct MailDetailContent: Sendable {
         self.packageDetail = packageDetail
         self.partyDetail = partyDetail
         self.recordsDetail = recordsDetail
+        self.extractedFacts = extractedFacts
     }
 
     /// Build a `KeyFactRow` list from the projected fields.
     public func keyFacts() -> [MailDetailKeyFact] {
-        var rows: [MailDetailKeyFact] = []
+        // What the item itself says (a bill's amount and due date) comes first.
+        var rows = extractedFacts
+            .filter { !$0.field.isEmpty && !$0.value.isEmpty }
+            .map { MailDetailKeyFact(icon: Self.icon(forFact: $0.field), label: $0.field, value: $0.value) }
         if let createdAtLabel {
             rows.append(MailDetailKeyFact(icon: .calendar, label: "Received", value: createdAtLabel))
         }
@@ -146,6 +153,13 @@ public struct MailDetailContent: Sendable {
             MailDetailKeyFact(icon: category.icon, label: "Category", value: category.label)
         )
         return rows
+    }
+
+    private static func icon(forFact label: String) -> PantopusIcon {
+        let lower = label.lowercased()
+        if ["amount", "balance", "total", "fee"].contains(where: lower.contains) { return .dollarSign }
+        if lower.contains("date") || lower.contains("deadline") { return .calendar }
+        return .fileText
     }
 }
 
