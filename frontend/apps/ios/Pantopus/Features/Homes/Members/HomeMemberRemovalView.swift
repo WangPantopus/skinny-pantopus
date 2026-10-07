@@ -106,7 +106,7 @@ struct HomeMemberRemovalView: View {
                 Text("If it already went through, it stays. Discarding doesn't remove anyone.")
             } else if selected.isSelf {
                 Text("Leave \(HomeMemberRemovalValidation.homeLabel(selected.summary))? You'll lose access to this Home. "
-                    + "To come back later, someone in the household will need to invite you again.")
+                    + "To come back later, add this Home again or ask someone in the household to invite you.")
             } else {
                 Text("Remove \(HomeMemberRemovalValidation.targetLabel(selected.summary)) "
                     + "from \(HomeMemberRemovalValidation.homeLabel(selected.summary))? "
