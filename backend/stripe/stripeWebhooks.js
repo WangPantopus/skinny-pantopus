@@ -397,6 +397,11 @@ async function getGigInfo(gigId) {
 // CONNECT ACCOUNT HANDLERS
 // ============================================================
 
+// A payment for a business invoice: a gig_payment with no gig, tagged by the invoice route.
+function isInvoicePayment(payment) {
+  return payment?.payment_type === 'gig_payment' && !payment.gig_id && payment.metadata?.type === 'invoice_payment';
+}
+
 async function handleAccountUpdated(account) {
   logger.info('Account updated', { accountId: account.id });
 
@@ -727,6 +732,26 @@ async function handlePaymentIntentFailed(paymentIntent, req) {
   if (!payment) return;
   if (await reconcileLegacyAuthorization(payment, req)) return;
 
+  // An invoice is paid at a card form: the decline shows there, and the same payment goes on when the payer tries
+  // another card (the PaymentIntent stays open). charge.failed has already marked it authorization_failed by the time
+  // this event arrives, so the generic branch below would cancel it, and the next card would be charged against a
+  // canceled payment. Keep it recoverable; no notice, the payer is looking at the error.
+  if (isInvoicePayment(payment)
+    && [PAYMENT_STATES.AUTHORIZE_PENDING, PAYMENT_STATES.READY_TO_AUTHORIZE, PAYMENT_STATES.AUTHORIZATION_FAILED].includes(payment.payment_status)) {
+    const failureFields = {
+      failure_code: paymentIntent.last_payment_error?.code,
+      failure_message: paymentIntent.last_payment_error?.message,
+    };
+    if (payment.payment_status === PAYMENT_STATES.AUTHORIZATION_FAILED) {
+      assertSupabaseOk(await supabaseAdmin.from('Payment')
+        .update({ ...failureFields, updated_at: new Date().toISOString() })
+        .eq('id', payment.id), 'Invoice payment failure record failed', { paymentId: payment.id });
+    } else {
+      await transitionPaymentStatus(payment.id, PAYMENT_STATES.AUTHORIZATION_FAILED, failureFields);
+    }
+    return;
+  }
+
   // Check if this is an off-session auth failure
   const isAuthFailure = [
     PAYMENT_STATES.AUTHORIZE_PENDING,
@@ -999,6 +1024,13 @@ async function handleChargeFailed(charge) {
     PAYMENT_STATES.DISPUTED,
   ];
 
+  if (isInvoicePayment(payment) && payment.payment_status === PAYMENT_STATES.AUTHORIZATION_FAILED) {
+    // A second declined card on the same invoice payment: it stays recoverable, only the reason is recorded.
+    assertSupabaseOk(await supabaseAdmin.from('Payment').update({ ...failureFields, updated_at: nowIso })
+      .eq('id', payment.id), 'Invoice payment failure record failed', { paymentId: payment.id });
+    return;
+  }
+
   if ([PAYMENT_STATES.AUTHORIZE_PENDING, PAYMENT_STATES.READY_TO_AUTHORIZE].includes(payment.payment_status)) {
     // Auth-phase failure → authorization_failed
     try {
@@ -1154,12 +1186,16 @@ async function handleDisputeCreated(dispute) {
   const gig = await getGigInfo(payment.gig_id);
   const gigTitle = gig?.title || 'a gig';
 
+  // An invoice payment has no gig, so its notices name the invoice.
+  const invoiceId = payment.metadata?.type === 'invoice_payment' ? payment.metadata.invoice_id : null;
+
   // Notify requester (payer)
   notifyDisputeCreated({
     userId: payment.payer_id,
     gigId: payment.gig_id,
     gigTitle,
     role: 'requester',
+    invoiceId,
   });
 
   // Notify provider (payee)
@@ -1168,6 +1204,7 @@ async function handleDisputeCreated(dispute) {
     gigId: payment.gig_id,
     gigTitle,
     role: 'provider',
+    invoiceId,
   });
 
   // Auto-submit evidence if we have completion proof
@@ -1320,8 +1357,9 @@ async function handleDisputeClosed(dispute) {
     }
 
     // Notify both parties — dispute won
-    notifyDisputeResolved({ userId: payment.payer_id, gigId: payment.gig_id, gigTitle, won: false });
-    notifyDisputeResolved({ userId: payment.payee_id, gigId: payment.gig_id, gigTitle, won: true });
+    const wonInvoiceId = payment.metadata?.type === 'invoice_payment' ? payment.metadata.invoice_id : null;
+    notifyDisputeResolved({ userId: payment.payer_id, gigId: payment.gig_id, gigTitle, won: false, invoiceId: wonInvoiceId });
+    notifyDisputeResolved({ userId: payment.payee_id, gigId: payment.gig_id, gigTitle, won: true, invoiceId: wonInvoiceId, isProvider: true });
 
   } else if (status === 'lost') {
     logger.error('Dispute LOST — funds are gone', {
@@ -1364,6 +1402,10 @@ async function handleDisputeClosed(dispute) {
       throw new Error('Lost dispute wallet recovery failed');
     }
 
+    // The bank took the money back, so an invoice that was paid is not.
+    await require('../services/paymentRefundService')
+      .settleInvoiceAfterRefund({ ...payment, payment_status: PAYMENT_STATES.REFUNDED_FULL });
+
     // If we already paid the provider, they now owe us
     if (payment.stripe_transfer_id) {
       logger.error('ADMIN ACTION REQUIRED: Provider owes platform after lost dispute', {
@@ -1375,8 +1417,9 @@ async function handleDisputeClosed(dispute) {
     }
 
     // Notify both parties — dispute lost
-    notifyDisputeResolved({ userId: payment.payer_id, gigId: payment.gig_id, gigTitle, won: true });
-    notifyDisputeResolved({ userId: payment.payee_id, gigId: payment.gig_id, gigTitle, won: false });
+    const lostInvoiceId = payment.metadata?.type === 'invoice_payment' ? payment.metadata.invoice_id : null;
+    notifyDisputeResolved({ userId: payment.payer_id, gigId: payment.gig_id, gigTitle, won: true, invoiceId: lostInvoiceId });
+    notifyDisputeResolved({ userId: payment.payee_id, gigId: payment.gig_id, gigTitle, won: false, invoiceId: lostInvoiceId, isProvider: true });
 
   } else {
     // warning_closed or other status

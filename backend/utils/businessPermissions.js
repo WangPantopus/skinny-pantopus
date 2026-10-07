@@ -327,6 +327,27 @@ async function getBusinessMemberIdsByRole(businessUserId, roles = ['owner']) {
   return [...new Set((data || []).map((m) => String(m.user_id)))];
 }
 
+/**
+ * The owner a business's money goes to: its earliest active owner seat. A business account has no sign-in, so it has
+ * no wallet anyone can open; its owner's wallet and payout account receive what it earns (invoice payments).
+ *
+ * @param {string} businessUserId - The business user ID
+ * @returns {Promise<string|null>} - The owner's user ID, or null when the business has no active owner
+ */
+async function getBusinessPrimaryOwnerId(businessUserId) {
+  const { data, error } = await supabaseAdmin
+    .from('BusinessTeam')
+    .select('user_id')
+    .eq('business_user_id', businessUserId)
+    .eq('role_base', 'owner')
+    .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.user_id || null;
+}
+
 // ============================================================
 // Helpers
 // ============================================================
@@ -455,6 +476,7 @@ async function writeAuditLog(businessUserId, actorUserId, action, targetType, ta
 
 module.exports = {
   getBusinessMemberIdsByRole,
+  getBusinessPrimaryOwnerId,
   hasPermission,
   getUserAccess,
   checkBusinessPermission,
