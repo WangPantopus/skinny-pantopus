@@ -6,7 +6,7 @@ import { LayoutDashboard } from 'lucide-react';
 // Pantopus — /delete-account
 // How to delete an account, and what is deleted or kept (the "Delete account
 // URL" Google Play's Data safety form asks for). The text is the founder-
-// approved docs/compliance/account-deletion-page.md; keep the two in step.
+// approved docs/compliance/account-deletion-page.md (October 7); keep the two in step.
 // frontend/apps/web/src/app/delete-account/page.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
