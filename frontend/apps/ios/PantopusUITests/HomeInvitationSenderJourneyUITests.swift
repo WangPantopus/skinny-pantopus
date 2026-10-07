@@ -334,7 +334,7 @@ extension HomeInvitationSenderJourneyUITests {
     func openMembers() throws {
         try require(element("tab.place"))
         try app.open(XCTUnwrap(URL(string: "pantopus://homes/" + home + "/members?tab=requests")))
-        try require(element("membersListInvitationRecovery"))
+        try require(element("membersList"))
     }
 
     func confirmPrepared() throws {
@@ -344,7 +344,7 @@ extension HomeInvitationSenderJourneyUITests {
 
     func acknowledge() throws {
         try press("homeInvitationSenderAcknowledge")
-        try require(element("membersListInvitationRecovery"))
+        try require(element("membersList"))
     }
 
     func coldSwitch(_ index: Int) async throws {

@@ -16,6 +16,7 @@ struct MyHomesListView: View {
     @State private var viewModel: MyHomesListViewModel
     @State private var deleteTarget: DeleteTarget?
     @State private var showingRemovalRecovery = false
+    @State private var savedAttempts = SavedHouseholdAttempts()
 
     init(viewModel: MyHomesListViewModel = MyHomesListViewModel()) {
         _viewModel = State(initialValue: viewModel)
@@ -23,20 +24,25 @@ struct MyHomesListView: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            Button("Member removal recovery") { showingRemovalRecovery = true }
-                .frame(minHeight: 44).accessibilityIdentifier("myHomesRemovalRecovery")
+            if savedAttempts.removal {
+                Button("Check an unfinished removal") { showingRemovalRecovery = true }
+                    .frame(minHeight: 44)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .accessibilityIdentifier("myHomesRemovalRecovery")
+            }
             ListOfRowsView(dataSource: viewModel)
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityIdentifier("myHomesList")
         .accessibilityElement(children: .contain)
         .onChange(of: showingRemovalRecovery) { _, presented in
-            if presented { viewModel.suspend() }
+            if presented { viewModel.suspend() } else { savedAttempts = .current() }
         }
         .sheet(isPresented: $showingRemovalRecovery, onDismiss: { Task { await viewModel.refresh() } }, content: {
             HomeMemberRemovalView { _ in showingRemovalRecovery = false }
         })
         .onAppear { isVisible = true
+            savedAttempts = .current()
             Analytics.track(.screenMyHomesViewed)
         }
         .onDisappear { isVisible = false

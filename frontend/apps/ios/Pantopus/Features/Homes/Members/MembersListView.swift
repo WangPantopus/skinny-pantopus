@@ -19,6 +19,7 @@ public struct MembersListView: View {
     @State private var invitationResult: String?
     @State private var showingResidencyReview = false
     @State private var removalPresentation: HomeMemberRemovalPresentation?
+    @State private var savedAttempts = SavedHouseholdAttempts()
     @State private var removalResult: String?
     @State private var actionsTarget: MemberActionTarget?
     @State private var roleTarget: MemberActionTarget?
@@ -46,12 +47,18 @@ public struct MembersListView: View {
                     .padding(Spacing.s3)
                     .accessibilityIdentifier("membersListInvitationResult")
             }
-            if !viewModel.memberListRefused {
-                Button("Invitation recovery") { invitationTarget = .init(action: .create, invitationId: nil) }
-                    .frame(minHeight: 44).accessibilityIdentifier("membersListInvitationRecovery")
+            if !viewModel.memberListRefused, savedAttempts.invitation {
+                Button("Check an unfinished invitation") { invitationTarget = .init(action: .create, invitationId: nil) }
+                    .frame(minHeight: 44)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .accessibilityIdentifier("membersListInvitationRecovery")
             }
-            Button("Member removal recovery") { removalPresentation = .init(target: nil) }
-                .frame(minHeight: 44).accessibilityIdentifier("membersListRemovalRecovery")
+            if savedAttempts.removal {
+                Button("Check an unfinished removal") { removalPresentation = .init(target: nil) }
+                    .frame(minHeight: 44)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .accessibilityIdentifier("membersListRemovalRecovery")
+            }
             if let removalResult {
                 Text(removalResult)
                     .pantopusTextStyle(.caption)
@@ -65,10 +72,16 @@ public struct MembersListView: View {
         .accessibilityIdentifier("membersList")
         .onAppear { Analytics.track(.screenMembersListViewed) }
         .onChange(of: viewModel.isCurrent) { _, current in if !current { viewModel.retire() } }
-        .task { await viewModel.load() }
+        .task {
+            savedAttempts = .current()
+            await viewModel.load()
+        }
         .refreshable { await viewModel.refresh() }
         .onChange(of: viewModel.pendingEvent) { _, event in
             handle(event)
+        }
+        .onChange(of: invitationTarget?.id) { _, id in
+            if id == nil { savedAttempts = .current() }
         }
         .sheet(item: $invitationTarget) { target in
             InviteMemberWizardView(homeId: homeId, target: target) { original in
@@ -91,7 +104,7 @@ public struct MembersListView: View {
             }
         })
         .onChange(of: removalPresentation?.id) { _, id in
-            if id != nil { viewModel.suspend() }
+            if id != nil { viewModel.suspend() } else { savedAttempts = .current() }
         }
         .sheet(item: $removalPresentation, onDismiss: { Task { await viewModel.refresh() } }, content: { presentation in
             HomeMemberRemovalView(target: presentation.target) { original in

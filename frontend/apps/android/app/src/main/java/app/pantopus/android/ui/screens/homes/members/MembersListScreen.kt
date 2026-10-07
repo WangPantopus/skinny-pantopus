@@ -56,6 +56,9 @@ fun MembersListScreen(
 
     var inviting by remember { mutableStateOf<HomeInvitationSenderTarget?>(null) }
     var removeTarget by remember { mutableStateOf<HomeMemberRemovalTarget?>(null) }
+    val savedRemoval: SavedHomeMemberRemovalViewModel = hiltViewModel()
+    val hasSavedRemoval by savedRemoval.saved.collectAsStateWithLifecycle()
+    LaunchedEffect(removeTarget) { if (removeTarget == null) savedRemoval.refresh() }
     var actionsTarget by remember { mutableStateOf<MemberActionTarget?>(null) }
     var roleTarget by remember { mutableStateOf<MemberActionTarget?>(null) }
     var approveTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -105,13 +108,15 @@ fun MembersListScreen(
         ListOfRowsScreen(
             title = "Members",
             customHeader = {
-                TextButton(
-                    onClick = {
-                        viewModel.retireForRemovalRecovery()
-                        removeTarget = HomeMemberRemovalTarget(viewModel.homeId)
-                    },
-                    modifier = Modifier.testTag("membersList_removalRecovery"),
-                ) { Text("Recover a member removal") }
+                if (hasSavedRemoval) {
+                    TextButton(
+                        onClick = {
+                            viewModel.retireForRemovalRecovery()
+                            removeTarget = HomeMemberRemovalTarget(viewModel.homeId)
+                        },
+                        modifier = Modifier.testTag("membersList_removalRecovery"),
+                    ) { Text("Check an unfinished removal") }
+                }
             },
             state = state,
             onRefresh = { viewModel.refresh() },

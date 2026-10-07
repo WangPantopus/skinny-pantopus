@@ -28,6 +28,7 @@ import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalDialog
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalTarget
+import app.pantopus.android.ui.screens.homes.members.SavedHomeMemberRemovalViewModel
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
@@ -73,6 +74,9 @@ fun MyHomesListScreen(
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
 
     var removalRecovery by remember { mutableStateOf(false) }
+    val savedRemoval: SavedHomeMemberRemovalViewModel = hiltViewModel()
+    val hasSavedRemoval by savedRemoval.saved.collectAsStateWithLifecycle()
+    LaunchedEffect(removalRecovery) { if (!removalRecovery) savedRemoval.refresh() }
     var deleteTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     LaunchedEffect(Unit) {
@@ -125,8 +129,10 @@ fun MyHomesListScreen(
         ListOfRowsScreen(
             title = "My homes",
             customHeader = {
-                TextButton(onClick = { removalRecovery = true }, modifier = Modifier.testTag("myHomes_removalRecovery")) {
-                    Text("Recover a member removal")
+                if (hasSavedRemoval) {
+                    TextButton(onClick = { removalRecovery = true }, modifier = Modifier.testTag("myHomes_removalRecovery")) {
+                        Text("Check an unfinished removal")
+                    }
                 }
             },
             state = state,

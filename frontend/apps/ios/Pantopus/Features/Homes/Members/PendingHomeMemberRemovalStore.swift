@@ -43,3 +43,24 @@ struct PendingHomeMemberRemovalStore: PendingHomeMemberRemovalStoring {
         return SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }
+
+/// Whether this account has an unfinished invitation or member removal saved on this device. Household
+/// screens show their recovery links only then, or when the saved attempt can't be read, so the recovery
+/// screen can say why.
+@MainActor
+struct SavedHouseholdAttempts: Equatable {
+    var invitation = false
+    var removal = false
+
+    static func current(api: APIClient = .shared) -> Self {
+        let scope = HomeInvitationDecisionViewModel.scope(api: api)
+        return Self(
+            invitation: saved { try PendingHomeInvitationSenderStore().load(scope: scope) != nil },
+            removal: saved { try PendingHomeMemberRemovalStore().load(scope: scope) != nil }
+        )
+    }
+
+    private static func saved(_ check: () throws -> Bool) -> Bool {
+        (try? check()) ?? true
+    }
+}

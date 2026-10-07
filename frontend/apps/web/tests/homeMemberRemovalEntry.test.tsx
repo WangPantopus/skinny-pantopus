@@ -6,6 +6,8 @@ import WaitingRoomPage from '../src/app/(app)/app/homes/[id]/waiting-room/page';
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: '10000000-0000-4000-8000-000000000001' }),
   useRouter: () => ({ push: mockPush, back: jest.fn(), replace: jest.fn() }), useSearchParams: () => ({ get: () => null }) }));
+// A saved removal is waiting in this browser, so the recovery link shows.
+jest.mock('../src/components/home/member-removals/useSavedRemoval', () => ({ useSavedRemoval: () => true }));
 jest.mock('../src/hooks/useHomeAccess', () => ({ useHomeAccess: () => ({ loading: false, needsVerification: true,
   access: { verification_status: 'pending_approval' }, reload: jest.fn() }) }));
 jest.mock('@pantopus/api', () => ({ getApiBaseUrl: jest.fn(() => 'http://127.0.0.1:18080'), getAuthToken: jest.fn(() => 'synthetic'),

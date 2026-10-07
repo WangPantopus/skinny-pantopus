@@ -8,6 +8,7 @@ import app.pantopus.android.data.homes.PersistentPendingHomeMemberRemovalStore
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import retrofit2.Retrofit
 import javax.inject.Inject
@@ -25,6 +26,11 @@ class HomeMemberRemovalFactory
         private val transport = APIHomeMemberRemovalTransport(api, codec)
 
         fun session(scope: CoroutineScope): HomeClaimSessionScope = sessions.create(scope)
+
+        /** Whether [actorId] has a member removal saved on this device; storage that can't be read counts as saved. */
+        suspend fun hasSaved(actorId: String): Boolean =
+            runCatching { store.read(HomeCreationScope(retrofit.baseUrl().toString(), actorId.lowercase())) != null }
+                .getOrElse { error -> if (error is CancellationException) throw error else true }
 
         fun create(session: HomeClaimSessionScope) =
             HomeMemberRemovalCoordinator(
