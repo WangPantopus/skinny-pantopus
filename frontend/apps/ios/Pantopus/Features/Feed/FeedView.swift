@@ -264,6 +264,7 @@ public struct FeedView: View {
                 Button(action: onBack) {
                     Icon(.chevronLeft, size: 22, color: Theme.Color.appText)
                         .frame(width: 36, height: 36)
+                        .hitArea(horizontal: 4, vertical: 4)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back")
@@ -282,6 +283,7 @@ public struct FeedView: View {
             } label: {
                 Icon(.search, size: 19, color: Theme.Color.appText)
                     .frame(width: 36, height: 36)
+                    .hitArea(horizontal: 4, vertical: 4)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Search posts")
@@ -291,6 +293,7 @@ public struct FeedView: View {
             } label: {
                 Icon(.filter, size: 18, color: Theme.Color.appText)
                     .frame(width: 36, height: 36)
+                    .hitArea(horizontal: 4, vertical: 4)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Filter posts")
@@ -300,6 +303,7 @@ public struct FeedView: View {
             } label: {
                 Icon(.slidersHorizontal, size: 18, color: Theme.Color.appText)
                     .frame(width: 36, height: 36)
+                    .hitArea(horizontal: 4, vertical: 4)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Pulse preferences")

@@ -35,13 +35,17 @@ struct EditProfileSkillsBlock: View {
                     identifier: "field_skillDraft"
                 )
                 .onSubmit { onAdd() }
-                Button("Add") { onAdd() }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(canAdd ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
-                    .frame(minWidth: 56, minHeight: 44)
-                    .disabled(!canAdd)
-                    .accessibilityIdentifier("editProfileAddSkillButton")
-                    .padding(.top, Spacing.s5)
+                Button { onAdd() } label: {
+                    Text("Add")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(canAdd ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
+                        .frame(minWidth: 56, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canAdd)
+                .accessibilityIdentifier("editProfileAddSkillButton")
+                .padding(.top, Spacing.s5)
             }
             if skills.isEmpty {
                 Text("No skills yet. Neighbors browse these when they're looking for help.")

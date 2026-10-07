@@ -138,6 +138,7 @@ struct MailboxRootHeader: View {
 // MARK: - Drawer chip
 
 private struct MailboxDrawerChip: View {
+    @Environment(\.colorScheme) private var colorScheme
     let label: String
     let icon: PantopusIcon
     let accent: Color
@@ -175,8 +176,11 @@ private struct MailboxDrawerChip: View {
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
     }
 
+    /// The identity colours lighten in dark mode so they read on the dark page; white on the filled chip falls to 2.1:1
+    /// there, so the page colour is the ink.
     private var foreground: Color {
-        isActive ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary
+        guard isActive else { return Theme.Color.appTextSecondary }
+        return colorScheme == .dark ? Theme.Color.appBg : Theme.Color.appTextInverse
     }
 
     private var background: Color {
@@ -187,6 +191,7 @@ private struct MailboxDrawerChip: View {
 /// Top-right unread count badge on a drawer chip. Colours invert on the
 /// active (filled) chip so the count stays legible.
 private struct MailboxChipBadge: View {
+    @Environment(\.colorScheme) private var colorScheme
     let count: Int
     let onAccent: Bool
     let accent: Color
@@ -197,10 +202,16 @@ private struct MailboxChipBadge: View {
             .foregroundStyle(onAccent ? accent : Theme.Color.appTextInverse)
             .padding(.horizontal, 5)
             .frame(minWidth: 18, minHeight: 18)
-            .background(onAccent ? Theme.Color.appTextInverse : Theme.Color.primarySolid)
+            .background(fill)
             .clipShape(Capsule())
             .overlay(Capsule().stroke(Theme.Color.appSurface, lineWidth: 2))
             .accessibilityHidden(true)
+    }
+
+    /// On the filled chip the badge is the page colour in dark mode (white there would put the accent number at 2.1:1).
+    private var fill: Color {
+        guard onAccent else { return Theme.Color.primarySolid }
+        return colorScheme == .dark ? Theme.Color.appBg : Theme.Color.appTextInverse
     }
 }
 

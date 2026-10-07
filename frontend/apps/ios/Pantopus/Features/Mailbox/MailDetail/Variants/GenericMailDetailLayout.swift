@@ -509,6 +509,7 @@ private struct BodyCard: View {
 }
 
 private struct ActionsRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     let content: MailDetailContent
     let ackInFlight: Bool
     let categoryActions: [MailCategoryAction]
@@ -553,7 +554,10 @@ private struct ActionsRow: View {
 
     private func categoryActionTile(_ action: MailCategoryAction, isPrimary: Bool) -> some View {
         let isBusy = categoryActionInFlight == action
-        let foreground: Color = isPrimary ? Theme.Color.appTextInverse : Theme.Color.appText
+        // The category accents lighten in dark mode so they read on the dark page; white on them falls under 3:1
+        // (the bill's "File" was 2.77:1), so the page colour is the ink there.
+        let onAccent = colorScheme == .dark ? Theme.Color.appBg : Theme.Color.appTextInverse
+        let foreground: Color = isPrimary ? onAccent : Theme.Color.appText
         return Button(action: { onCategoryAction?(action) }) {
             HStack(spacing: Spacing.s2) {
                 Icon(action.icon, size: 14, color: foreground)
@@ -567,6 +571,7 @@ private struct ActionsRow: View {
             .background(isPrimary ? content.category.accent : Theme.Color.appSurfaceSunken)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .opacity(isBusy ? 0.5 : 1)
+            .hitArea(vertical: 4)
         }
         .buttonStyle(.plain)
         .disabled(categoryActionInFlight != nil)
@@ -591,7 +596,7 @@ private struct ActionsRow: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
-                content.isAcknowledged ? Theme.Color.appSurface : Theme.Color.primary600
+                content.isAcknowledged ? Theme.Color.appSurface : Theme.Color.primarySolid
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)

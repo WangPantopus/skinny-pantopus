@@ -500,6 +500,7 @@ struct PasswordField: View {
                 } label: {
                     Icon(.eye, size: 16, color: Theme.Color.appTextSecondary)
                         .frame(width: 28, height: 28)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
                 .accessibilityLabel(isVisible ? "Hide password" : "Show password")
                 .accessibilityIdentifier("loginPasswordVisibilityToggle")

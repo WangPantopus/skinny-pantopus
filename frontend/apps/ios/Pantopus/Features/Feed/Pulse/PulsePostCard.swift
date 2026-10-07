@@ -306,6 +306,7 @@ public struct PulsePostCard: View {
                 Button(action: onDismissSeeded) {
                     Icon(.x, size: 15, color: Theme.Color.appTextMuted)
                         .frame(width: 28, height: 28)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Dismiss this suggestion")
@@ -315,6 +316,7 @@ public struct PulsePostCard: View {
             Button(action: onOverflow) {
                 Icon(.moreHorizontal, size: 16, color: Theme.Color.appTextMuted)
                     .frame(width: 28, height: 28)
+                    .hitArea(horizontal: 8, vertical: 8)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Post options")
@@ -362,6 +364,7 @@ public struct PulsePostCard: View {
                         .frame(height: 26)
                         .background(Theme.Color.magicBg)
                         .clipShape(Capsule())
+                        .hitArea(vertical: 9)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(strip.userIsGoing ? "Going" : "RSVP")
@@ -389,6 +392,7 @@ public struct PulsePostCard: View {
                         color: content.actions.isSaved ? Theme.Color.primaryInk : Theme.Color.appTextSecondary
                     )
                     .frame(width: 24, height: 24)
+                    .hitArea(horizontal: 8, vertical: 10)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(content.actions.isSaved ? "Remove bookmark" : "Save post")
@@ -413,6 +417,7 @@ public struct PulsePostCard: View {
                         }
                     }
                     .frame(minWidth: 24, minHeight: 24)
+                    .hitArea(horizontal: 8, vertical: 10)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(content.actions.isReposted ? "Undo repost" : "Repost")
@@ -460,7 +465,7 @@ public struct PulsePostCard: View {
     private func reactionPill(_ reaction: PulseReaction) -> some View {
         let active = reaction.kind == content.reactions.first?.kind && content.userHasReacted
         if reaction.isInteractive {
-            Button(action: onPrimaryReaction) { reactionLabel(reaction, active: active) }
+            Button(action: onPrimaryReaction) { reactionLabel(reaction, active: active).hitArea(horizontal: 6, vertical: 12) }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(reaction.label.isEmpty ? "Heart reaction" : reaction.label), \(reaction.count)")
                 .accessibilityIdentifier("pulseReaction_\(content.id)_\(reaction.id.rawValue)")
