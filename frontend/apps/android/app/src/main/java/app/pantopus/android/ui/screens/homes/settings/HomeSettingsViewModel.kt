@@ -310,11 +310,13 @@ class HomeSettingsViewModel
             val verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
             val householdOnly =
                 verified && detail.ownershipStatus != "verified" && detail.residencySource == "household"
+            // A pending owner who verified the address by mail (founder option 4) reads as
+            // verified; the footer still says the claim is pending.
             val (label, tone) =
                 when {
-                    isPending -> "Verifying" to RowControl.ChipTone.Warning
                     householdOnly -> "Household access" to RowControl.ChipTone.Info
                     verified -> "Verified" to RowControl.ChipTone.Success
+                    isPending -> "Verifying" to RowControl.ChipTone.Warning
                     else -> "Unverified" to RowControl.ChipTone.Warning
                 }
             return HomeSettingsSampleData.Identity(homeName = homeName, addressChipLabel = label, addressChipTone = tone)

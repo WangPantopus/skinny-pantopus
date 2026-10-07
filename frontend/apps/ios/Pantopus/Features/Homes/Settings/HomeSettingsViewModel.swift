@@ -276,10 +276,12 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         // An invitation or a manager's approval gives household access, not a
         // verified address (F3b), so it doesn't read as "Verified".
         let householdOnly = verified && detail.ownershipStatus != "verified" && detail.residencySource == "household"
+        // A pending owner who verified the address by mail (founder option 4) reads as
+        // verified; the footer still says the claim is pending.
         identity = HomeSettingsSampleData.Identity(
             homeName: homeName,
-            addressChipLabel: isPending ? "Verifying" : householdOnly ? "Household access" : (verified ? "Verified" : "Unverified"),
-            addressChipTone: (isPending || !verified) ? .warning : householdOnly ? .info : .success
+            addressChipLabel: householdOnly ? "Household access" : verified ? "Verified" : (isPending ? "Verifying" : "Unverified"),
+            addressChipTone: householdOnly ? .info : verified ? .success : .warning
         )
         footerCaption = "\(homeName) · \(isPending ? "Claim pending" : Self.roleLabel(detail: detail, access: access))"
 
