@@ -197,13 +197,14 @@ router.get('/pending-release', verifyToken, async (req, res) => {
     // missed webhook delivery before the client-side reconcile path existed.
     await stripeService.reconcilePendingTipsForUser(userId, { payeeOnly: true });
 
-    // Payments where this user is the payee and funds are in hold
+    // Payments where this user is the payee and funds are in hold. A payment whose dispute was won is back in the
+    // release pipeline (processPendingTransfers admits it the same way), so it counts here again.
     const { data: holdPayments, error: holdErr } = await supabaseAdmin
       .from('Payment')
       .select('id, amount_total, amount_to_payee, cooling_off_ends_at, payment_status, payment_type, created_at, metadata')
       .eq('payee_id', userId)
       .in('payment_status', ['captured_hold', 'transfer_scheduled', 'transfer_pending'])
-      .is('dispute_id', null);
+      .or('dispute_id.is.null,dispute_status.eq.won');
 
     if (holdErr) {
       logger.error('Pending release query error', { error: holdErr.message, userId });
