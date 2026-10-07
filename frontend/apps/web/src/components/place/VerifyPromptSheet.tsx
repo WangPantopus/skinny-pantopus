@@ -57,18 +57,18 @@ interface Method {
 // /app/place (the success reveal) instead of the home dashboard.
 const METHODS: Method[] = [
   {
-    id: 'document',
-    icon: Upload,
-    label: 'Upload a document',
-    sub: 'A utility bill, lease, or ID. A person reviews it.',
-    href: (h) => `/app/homes/${h}/verify-residency?return=place`,
-  },
-  {
     id: 'mail',
     icon: Send,
     label: 'Mail a code to my address',
     sub: 'A postcard with a code, 3–7 days. Yours to keep.',
     href: (h) => `/app/homes/${h}/verify-postcard?return=place`,
+  },
+  {
+    id: 'document',
+    icon: Upload,
+    label: 'Upload a document',
+    sub: 'A utility bill, lease, or ID. A person reviews it.',
+    href: (h) => `/app/homes/${h}/verify-residency?return=place`,
   },
   {
     id: 'landlord',
@@ -111,7 +111,8 @@ function Radio({ selected }: { selected: boolean }) {
 
 export default function VerifyPromptSheet({ open, onClose, homeId, address }: VerifyPromptSheetProps) {
   const router = useRouter();
-  const [selected, setSelected] = useState<MethodId>('document');
+  // Mail leads: a postcard finishes on its own, while documents wait for a person to review them.
+  const [selected, setSelected] = useState<MethodId>('mail');
   // A landlord request can only be answered by a verified landlord, so that
   // door joins once the Home has one (or the person already has a request).
   const [landlordHomeId, setLandlordHomeId] = useState<string | null>(null);
@@ -222,7 +223,7 @@ export default function VerifyPromptSheet({ open, onClose, homeId, address }: Ve
       <div className="flex items-start gap-2 px-0.5">
         <Clock size={15} strokeWidth={2} className="shrink-0 mt-0.5 text-app-text-muted" />
         <span className="text-[12.5px] text-app-text-secondary leading-[18px]">
-          Documents are reviewed by a person; a postcard takes 3–7 days. Everything you have now stays available while you wait.
+          A postcard takes 3–7 days; documents are reviewed by a person. Everything you have now stays available while you wait.
         </span>
       </div>
     </BottomSheet>
