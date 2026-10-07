@@ -2,33 +2,25 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { WifiOff } from 'lucide-react';
+import { isOnline as verifiedOnline, subscribeConnectivity } from '@/lib/connectivity';
 
 /**
- * useOnlineStatus — tracks browser online/offline state.
+ * useOnlineStatus — tracks whether this device can reach the site. A browser
+ * offline report counts only once a request fails (lib/connectivity).
  * Returns { isOnline, lastOnlineAt }.
  */
 export function useOnlineStatus() {
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true,
-  );
+  const [isOnline, setIsOnline] = useState(true);
   const [lastOnlineAt, setLastOnlineAt] = useState<Date | null>(null);
 
   useEffect(() => {
-    const goOnline = () => {
-      setIsOnline(true);
-      setLastOnlineAt(null);
+    const update = (online: boolean) => {
+      setIsOnline(online);
+      setLastOnlineAt(online ? null : new Date());
     };
-    const goOffline = () => {
-      setIsOnline(false);
-      setLastOnlineAt(new Date());
-    };
-
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-    };
+    const unsubscribe = subscribeConnectivity(update);
+    if (!verifiedOnline()) update(false);
+    return unsubscribe;
   }, []);
 
   return { isOnline, lastOnlineAt };
