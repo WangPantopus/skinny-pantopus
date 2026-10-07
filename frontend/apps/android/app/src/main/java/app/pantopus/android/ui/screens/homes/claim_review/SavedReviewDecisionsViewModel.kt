@@ -1,3 +1,5 @@
+@file:Suppress("PackageNaming")
+
 package app.pantopus.android.ui.screens.homes.claim_review
 
 import androidx.compose.material3.Text
