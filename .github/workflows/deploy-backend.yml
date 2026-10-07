@@ -115,13 +115,26 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SUPABASE_SESSION_POOLER_HOST: ${{ vars.SUPABASE_SESSION_POOLER_HOST }}
           DB_MIGRATIONS_ENABLED: ${{ vars.DB_MIGRATIONS_ENABLED }}
         run: |
           [[ "$DB_MIGRATIONS_ENABLED" == true ]] || { echo '::error::Complete the database adoption runbook before enabling releases of the baselined stream.'; exit 1; }
           : "${SUPABASE_ACCESS_TOKEN:?}" "${SUPABASE_DB_PASSWORD:?}" "${SUPABASE_PROJECT_ID:?}"
           supabase link --project-ref "$SUPABASE_PROJECT_ID"
-          supabase db push --project-ref "$SUPABASE_PROJECT_ID" --dry-run
-          supabase db push --project-ref "$SUPABASE_PROJECT_ID" --yes
+          db_flags=(--project-ref "$SUPABASE_PROJECT_ID")
+          if [[ -n "$SUPABASE_SESSION_POOLER_HOST" ]]; then
+            [[ "$SUPABASE_PROJECT_ID" =~ ^[a-z]{20}$ &&
+               "$SUPABASE_SESSION_POOLER_HOST" =~ ^aws-[0-9]+-[a-z0-9-]+\.pooler\.supabase\.com$ ]] || {
+              echo '::error::Use the project ref and shared session-pooler host from Supabase Connect.'
+              exit 1
+            }
+            # The explicit session pooler supports IPv4. Keep the password out
+            # of the URL and process arguments; the CLI reads libpq's env var.
+            export PGPASSWORD="$SUPABASE_DB_PASSWORD"
+            db_flags=(--db-url "postgresql://postgres.${SUPABASE_PROJECT_ID}@${SUPABASE_SESSION_POOLER_HOST}:5432/postgres")
+          fi
+          supabase db push "${db_flags[@]}" --dry-run --skip-vault
+          supabase db push "${db_flags[@]}" --yes
       - name: Reject a superseded release before cutover
         if: steps.configuration.outputs.enabled == 'true'
         uses: actions/github-script@v8
