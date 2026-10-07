@@ -248,7 +248,10 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     }
 
     public func refresh() async {
-        await fetch()
+        // A fetch shows loading rows, which replaces the list whose
+        // pull-to-refresh started it, and SwiftUI then cancels that refresh.
+        // Finish the read outside the gesture so the list comes back.
+        await Task { await fetch() }.value
     }
 
     public func loadMoreIfNeeded() async {
