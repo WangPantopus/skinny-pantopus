@@ -949,6 +949,10 @@ class StripeService {
         amount,
         currency: String(currency || 'usd').toLowerCase(),
         customer: customerId,
+        // Cards only (Apple Pay, Google Pay and Link ride on them). The hold, the 48-hour release, refunds and
+        // disputes are built and tested for cards; without this every payment sheet also offered whatever the
+        // Stripe dashboard enables (Cash App Pay, Klarna, Affirm, Amazon Pay).
+        payment_method_types: ['card'],
         capture_method: 'manual', // Hold, don't capture
         metadata: piMetadata,
         description: description || `Pantopus Gig Payment - ${gigId || 'unknown'}`,
