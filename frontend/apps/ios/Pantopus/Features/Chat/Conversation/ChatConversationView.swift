@@ -411,6 +411,7 @@ public struct ChatConversationView: View {
                 Button { viewModel.dismissSendLimitNotice() } label: {
                     Icon(.x, size: 13, strokeWidth: 2.5, color: Theme.Color.appTextSecondary)
                         .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Dismiss message limit notice")
@@ -3561,6 +3562,7 @@ private struct ChatComposer: View {
                     .frame(width: 36, height: 36)
                     .background(Theme.Color.appSurfaceSunken, in: Circle())
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Attach")
@@ -3664,6 +3666,7 @@ private struct ChatComposer: View {
                     .frame(width: 11, height: 11)
             }
             .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Stop generating")
@@ -3714,6 +3717,7 @@ private struct ChatComposerContextBanner: View {
             Button(action: onCancel) {
                 Icon(.x, size: 14, strokeWidth: 2.5, color: Theme.Color.appTextSecondary)
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Cancel message action")

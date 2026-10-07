@@ -317,6 +317,7 @@ struct FeedContextBar: View {
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                     .stroke(Theme.Color.appBorder, lineWidth: 1)
             )
+            .hitArea(vertical: 3)
         }
         .buttonStyle(.plain)
         .padding(.horizontal, Spacing.s3)

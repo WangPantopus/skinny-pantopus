@@ -455,6 +455,7 @@ private struct OverflowButton: View {
         Button(action: action) {
             Icon(.moreHorizontal, size: 20, color: Theme.Color.appTextSecondary)
                 .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("More actions for \(label)")

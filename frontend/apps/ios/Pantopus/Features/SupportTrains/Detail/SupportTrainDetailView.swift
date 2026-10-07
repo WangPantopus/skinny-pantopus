@@ -498,6 +498,7 @@ public struct SupportTrainDetailView: View {
             Button(action: onBack) {
                 Icon(.chevronLeft, size: 22, color: Theme.Color.appText)
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
@@ -517,6 +518,7 @@ public struct SupportTrainDetailView: View {
                 Button(action: onShare) {
                     Icon(.share, size: 20, color: Theme.Color.appText)
                         .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Share train")

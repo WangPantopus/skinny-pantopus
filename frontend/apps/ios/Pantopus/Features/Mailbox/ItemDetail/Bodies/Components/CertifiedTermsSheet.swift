@@ -35,6 +35,7 @@ public struct CertifiedTermsSheet: View {
                 Button(action: { onDismiss() }) {
                     Icon(.x, size: 20, color: Theme.Color.appText)
                         .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close")

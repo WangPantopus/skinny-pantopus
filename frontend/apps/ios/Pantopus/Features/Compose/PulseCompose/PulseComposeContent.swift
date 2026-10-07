@@ -496,6 +496,7 @@ public struct PulseComposeContent: View {
                             color: value <= state.recommendRating ? Theme.Color.warning : Theme.Color.appTextMuted
                         )
                         .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(value) star\(value == 1 ? "" : "s")")
@@ -938,6 +939,7 @@ public struct PulseComposeContent: View {
             Button(action: actions.onClearLocation) {
                 Icon(.x, size: 16, strokeWidth: 2, color: Theme.Color.appTextSecondary)
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Remove location")

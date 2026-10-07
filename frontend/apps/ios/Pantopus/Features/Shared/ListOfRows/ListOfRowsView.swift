@@ -1382,6 +1382,7 @@ private struct TrailingView: View {
                 Button(action: handler) {
                     Icon(.moreHorizontal, size: 20, color: Theme.Color.appTextSecondary)
                         .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(rowTitle.isEmpty ? "More actions" : "More actions for \(rowTitle)")

@@ -99,6 +99,7 @@ public struct SlotEditorSheet: View {
             Button(action: onCancel) {
                 Icon(.x, size: 20, color: Theme.Color.appText)
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(isSubmitting)

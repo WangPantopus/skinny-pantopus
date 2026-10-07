@@ -216,6 +216,7 @@ private struct StoreBarcodeCard: View {
                     } label: {
                         Icon(.copy, size: 18, color: Theme.Color.primaryInk)
                             .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Copy coupon code \(code)")

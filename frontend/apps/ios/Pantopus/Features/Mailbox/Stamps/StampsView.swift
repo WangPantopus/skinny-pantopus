@@ -184,6 +184,7 @@ private struct StampsNav: View {
                     }
                     .padding(.horizontal, Spacing.s1)
                     .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back to Mailbox")

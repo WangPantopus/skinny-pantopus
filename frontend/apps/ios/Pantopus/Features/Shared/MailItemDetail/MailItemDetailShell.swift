@@ -236,6 +236,7 @@ public struct MailItemDetailTopBar: View {
                 }
                 .padding(.horizontal, Spacing.s1)
                 .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back to Mailbox")
@@ -295,7 +296,9 @@ public struct MailItemDetailTopBar: View {
                     Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
                         .frame(width: 34, height: 34)
                         .background(Circle().fill(Theme.Color.appSurfaceSunken))
-                        .hitArea(horizontal: 5, vertical: 5)
+                        // A Menu's button is as big as its label's frame: a real 44 pt frame around the 34 pt circle.
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("More actions")
                 .accessibilityIdentifier("mailItemDetail_overflow")
