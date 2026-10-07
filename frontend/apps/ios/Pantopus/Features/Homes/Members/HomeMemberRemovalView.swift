@@ -107,12 +107,12 @@ struct HomeMemberRemovalView: View {
             if selected.requestId != nil {
                 Text("This cancels the saved attempt only if removal has not already completed. A completed removal cannot be undone here.")
             } else if selected.isSelf {
-                Text("Leave \(HomeMemberRemovalValidation.homeLabel(selected.summary)) and end your reviewed household membership? "
-                    + "Current membership and ownership are checked again before leaving.")
+                Text("Leave \(HomeMemberRemovalValidation.homeLabel(selected.summary))? You'll lose access to this Home. "
+                    + "To come back later, someone in the household will need to invite you again.")
             } else {
                 Text("Remove \(HomeMemberRemovalValidation.targetLabel(selected.summary)) "
                     + "from \(HomeMemberRemovalValidation.homeLabel(selected.summary))? "
-                    + "Current permission and membership are checked again before removal.")
+                    + "They'll lose access to this Home. You can invite them again later.")
             }
         }
     }

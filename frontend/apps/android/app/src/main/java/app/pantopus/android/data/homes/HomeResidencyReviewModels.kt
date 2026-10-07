@@ -66,7 +66,8 @@ class HomeResidencyReviewFailure(val kind: HomeResidencyReviewFailureKind, code:
             "Your session changed. Reopen residency review to check access and recover the original."
         HomeResidencyReviewFailureKind.Refused ->
             if (code == "MEMBERSHIP_RENEWAL_REQUIRED") {
-                "This person’s household membership has ended, so this claim can’t be approved. You can reject it instead."
+                "This person’s household membership has ended, so this claim can’t be approved. " +
+                    "Reject it, then invite them again from Members."
             } else {
                 "The saved decision could not be applied to the current claim and membership limits. Review the current claim again."
             }

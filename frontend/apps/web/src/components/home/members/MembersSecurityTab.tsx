@@ -545,7 +545,7 @@ function MemberRow({
   const { config } = resolveRole(member);
   const profilePic = member.user?.avatarUrl || member.user?.profile_picture_url || member.user?.avatar_url;
   const handle = member.user?.handle || member.user?.username;
-  const joinedDate = member.created_at || member.start_at;
+  const joinedDate = member.start_at || member.created_at;
 
   return (
     <button

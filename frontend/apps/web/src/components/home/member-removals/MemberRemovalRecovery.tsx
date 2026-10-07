@@ -54,7 +54,7 @@ export default function MemberRemovalRecovery({ homeId, targetId, self = false }
             onKeyDown={event => { if (event.key === 'Escape' && !vm.busy) { event.preventDefault(); vm.cancelReview(); } }}>
             <h2 ref={reviewHeading} tabIndex={-1} className="text-lg font-semibold">{context.target.is_self ? 'Review leaving this Home' : 'Review member removal'}</h2>
             <ReviewSummary summary={context}/>
-            <p className="text-sm">{context.target.is_self ? 'End your household membership and its current Home access.' : 'End this member’s household membership and its current Home access.'} Returning requires a separate supported membership review.</p>
+            <p className="text-sm">{context.target.is_self ? 'You’ll lose access to this Home. To come back later, someone in the household will need to invite you again.' : 'They’ll lose access to this Home. You can invite them again later.'}</p>
             <div className="flex flex-wrap gap-2"><button className={button} disabled={vm.busy} onClick={vm.cancelReview}>Cancel</button>
               <button className={destructive} disabled={vm.busy} onClick={() => void vm.submit(context.decision_token)}>{vm.busy ? 'Saving…' : context.target.is_self ? 'Confirm leave' : 'Confirm removal'}</button></div>
           </section>

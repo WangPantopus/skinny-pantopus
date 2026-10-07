@@ -102,7 +102,8 @@ async function readMembers(homeId, { history = false } = {}) {
     }
     const user = userRef(member.user, member.user_id);
     return { ...pick(member, MEMBER_FIELDS), ...(!history && { role, role_base: role }), user, display_name: user.username, username: user.username,
-      avatar_url: user.profile_picture_url, joined_at: member.created_at };
+      // A membership restored by a new invitation starts again; its row keeps the original created_at.
+      avatar_url: user.profile_picture_url, joined_at: member.start_at || member.created_at };
   }));
   return projected.filter(Boolean);
 }

@@ -81,7 +81,7 @@ export const senderMessage = (code?: string) => ({
   MEMBERS_MANAGE_REQUIRED: 'You don’t have permission to send or manage invitations for this household.',
   INVITE_ALREADY_PENDING: 'This person already has a pending invitation. You can resend it from Current invitations.',
   MEMBER_ALREADY_EXISTS: 'This person is already in the household.',
-  MEMBERSHIP_RENEWAL_REQUIRED: 'This person’s earlier household membership has ended. An invitation can’t restore it.',
+  MEMBERSHIP_RENEWAL_REQUIRED: 'This person’s household access is under review, so an invitation can’t change it right now.',
 } as Record<string,string>)[code || ''] || 'This couldn’t be completed. Check the invitation and try again.';
 /** What happens next and what reached the invitee: "emailed" means the email service took the message, not that it arrived. */
 export function deliveryMessage(outcome: SenderOutcome): string {
