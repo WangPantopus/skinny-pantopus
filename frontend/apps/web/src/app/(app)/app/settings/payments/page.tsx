@@ -35,7 +35,8 @@ function PaymentSettingsPageContent() {
     "wallet" | "methods" | "payouts" | "history" | "scheduling"
   >("wallet");
   // W14: the scheduling earnings/payouts tab is gated by the paid flag.
-  const showScheduling = webFeatureFlags.schedulingPaid;
+  // Booking payments belong to public scheduling, which is off for the first launch.
+  const showScheduling = webFeatureFlags.schedulingPaid && launchFeatures.publicScheduling;
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletKey, setWalletKey] = useState(0); // for forcing re-render after withdraw
