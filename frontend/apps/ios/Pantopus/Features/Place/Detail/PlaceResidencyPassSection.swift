@@ -308,7 +308,9 @@ private struct PlaceResidencyClaimRow: View {
     }
 
     private var viewsLine: String {
-        let until = PlacePresentation.fmtMonthYear(claim.expiresAt) ?? ""
+        // Passes last 1 to 90 days, so a month alone doesn't say when one ends.
+        let until = PlacePresentation.parseISO(claim.expiresAt)
+            .map { $0.formatted(.dateTime.month(.abbreviated).day().year()) } ?? ""
         let views = claim.viewCount == 0
             ? "Not checked yet"
             : "Checked \(claim.viewCount) \(claim.viewCount == 1 ? "time" : "times")"
