@@ -11,7 +11,7 @@ const guidance = {
   address_verification: { title: 'Your address isn’t verified yet', body: 'Your request is saved. To finish, verify your address by mail: request a postcard, then enter the code printed on it.' },
   resubmit: { title: 'Send your request again', body: 'Check the street, apartment and how you live here, then send your request again.' },
   access_review: { title: 'You don’t have household access', body: 'To come back, add this Home again or ask someone in the household to invite you.' },
-  ownership_verification: { title: 'Continue ownership verification', body: 'Ownership has its own review. Verifying your address by mail doesn’t make you an owner.' },
+  ownership_verification: { title: 'Continue ownership verification', body: 'Ownership has its own review. Meanwhile, you can verify your address by mail to use this Home. That doesn’t make you an owner.' },
   unavailable: { title: 'This Home can’t be verified right now', body: 'This Home isn’t accepting changes right now. Your request is still saved.' },
 };
 
@@ -46,6 +46,8 @@ export default function ResidencyStatusPage() {
             {needsRequest && <Link href={`/app/homes/new?joinHome=${homeId}`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Check address</Link>}
             {progress.next_step === 'address_verification' && !needsRequest && <Link href={`/app/homes/${homeId}/verify-postcard`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Verify by mail</Link>}
             {progress.next_step === 'ownership_verification' && <Link href={`/app/homes/${homeId}/claim-owner/evidence`} className="rounded-lg bg-app-text px-4 py-2 font-semibold text-app-surface">Continue ownership verification</Link>}
+            {/* While ownership waits, a pending owner can still prove the address by mail (founder decision, 2026-10-06). */}
+            {progress.next_step === 'ownership_verification' && <Link href={`/app/homes/${homeId}/verify-postcard`} className="rounded-lg border border-app-border px-4 py-2 font-semibold text-app-text">Verify by mail</Link>}
             <button type="button" onClick={() => void refresh()} className="rounded-lg border border-app-border px-4 py-2 font-semibold text-app-text">Refresh status</button>
           </div>
         </section>
