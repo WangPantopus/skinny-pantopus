@@ -32,7 +32,7 @@ public enum StartSupportTrainStep: Int, CaseIterable, Sendable {
         }
     }
 
-    public static let progressTotal: Int = 5
+    public static let progressTotal: Int = 3
 }
 
 /// Step-1 reason picker values from A12.11. This is separate from
