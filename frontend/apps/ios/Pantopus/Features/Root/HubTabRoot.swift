@@ -1118,8 +1118,10 @@ public struct HubTabRoot: View {
             // now land on the participant detail. Organizers reach the
             // review queue via the dock overflow on the detail screen;
             // the explicit `support-trains/:id/manage` deep link is
-            // their shortcut to the queue.
-            path.append(.supportTrains)
+            // their shortcut to the queue. The list goes under a link
+            // opened from the stack root, so Back has somewhere known to
+            // land; opened from a screen (Notifications), Back returns there.
+            if path.isEmpty { path.append(.supportTrains) }
             if !id.isEmpty {
                 path.append(.supportTrainDetail(supportTrainId: id))
             }
@@ -1127,9 +1129,9 @@ public struct HubTabRoot: View {
         case let .supportTrainManage(id):
             // P4.3 / A13.13 — `pantopus://support-trains/:id/manage`
             // lands on the organizer Manage Train surface. Drop the
-            // user on the Support Trains list first so a back-tap
-            // pops to a known surface, then push manage.
-            path.append(.supportTrains)
+            // user on the Support Trains list first (from the stack root)
+            // so a back-tap pops to a known surface, then push manage.
+            if path.isEmpty { path.append(.supportTrains) }
             if !id.isEmpty {
                 path.append(.manageTrain(trainId: id))
             }
@@ -1282,7 +1284,7 @@ public struct HubTabRoot: View {
             case .openAudienceNotifications:
                 path.append(.notificationsZone(context: NotificationsZone.audience.rawValue))
             case .openMenu: showNavDrawer = true
-            case .startVerification: path.append(.addHome)
+            case .startVerification: Task { @MainActor in await startVerification() }
             case .action(.addHome): path.append(.addHome)
             case .action(.scanMail): path.append(.mailboxRoot)
             case .action(.postTask): path.append(.quickPostGig(category: GigsCategory.all.rawValue))
@@ -3254,9 +3256,10 @@ public struct HubTabRoot: View {
                 viewModel: VacationHoldViewModel(onBack: { pop() })
             )
         case let .mailDay(variant):
-            MailDayView(viewModel: MailDayViewModel(variant: variant)) {
-                pop()
-            }
+            // Keep the `onClose:` label: as a trailing closure it binds to
+            // `onSeeHistory` and Back does nothing.
+            // swiftlint:disable:next trailing_closure
+            MailDayView(viewModel: MailDayViewModel(variant: variant), onClose: { pop() })
         case .wallet:
             // Withdraw + payout setup (Block 3C) are handled inside WalletView
             // via the WalletViewModel (Stripe Connect onboarding / dashboard /
@@ -3463,7 +3466,8 @@ public struct HubTabRoot: View {
                     onOpenInbox: { push(.neighborInbox) },
                     onOpenPrivacyMirror: { push(.privacyMirror(homeId: homeId)) },
                     onOpenMailDay: { push(.mailDay(variant: .populated)) },
-                    onOpenHubHome: { push(.homeDashboard(homeId: homeId)) }
+                    onOpenHubHome: { push(.homeDashboard(homeId: homeId)) },
+                    onOpenNotifications: { push(.notifications) }
                 ),
                 isActive: path.last == route && rootTabs.selected == owningTab
             ) { showNavDrawer = true }
@@ -3580,6 +3584,28 @@ public struct HubTabRoot: View {
             placeResolutionError = (error as? APIError)?.errorDescription
                 ?? "Check your connection and try again."
         }
+    }
+
+    /// The setup banner's "Verify your address": a Home that already waits on
+    /// verification continues there, as My Homes does (a filed claim's Waiting
+    /// Room, residency status, or ownership evidence); with none, Add Home.
+    private func startVerification() async {
+        let response: MyHomesResponse? = try? await APIClient.shared.request(HomesEndpoints.myHomes())
+        guard rootTabs.selected == owningTab else { return }
+        path.append(Self.verificationRoute(response?.homes ?? []))
+    }
+
+    static func verificationRoute(_ homes: [MyHome]) -> HubRoute {
+        for entry in homes {
+            if entry.pendingClaimId != nil { return .waitingRoom(homeId: entry.id) }
+            if entry.accessKind == "private_setup" { return .residencyStatus(homeId: entry.id) }
+            switch MyHomesListViewModel.pendingVerification(for: entry) {
+            case .owner: return .claimOwnership(homeId: entry.id)
+            case .residency: return .residencyStatus(homeId: entry.id)
+            case nil: continue
+            }
+        }
+        return .addHome
     }
 
     private static func primaryHomeId() async throws -> String? {

@@ -400,13 +400,16 @@ class MailboxRootViewModel
                         MailboxListViewModel.makeRow(
                             id = dm.id,
                             categoryRaw = dm.mailType ?: dm.type,
-                            title = dm.displayTitle ?: dm.senderBusinessName ?: dm.senderDisplay,
-                            subtitle = dm.senderBusinessName ?: dm.senderAddress ?: dm.senderDisplay,
+                            // The row anatomy: what it is as the title, who it's from (server-resolved) below.
+                            title = dm.displayTitle ?: dm.subject ?: dm.senderBusinessName ?: dm.senderDisplay,
+                            subtitle = dm.senderDisplay,
                             body = dm.previewText,
                             createdAt = dm.createdAt,
                             viewed = dm.viewed,
                             trust = MailTrust.fromRaw(dm.senderTrust),
                             onOpenMail = { onOpenMail(it) },
+                            // Counter lists open mail with a due date, so its rows say when.
+                            dueDate = if (tab == MailboxTab.Counter) dm.dueDate else null,
                         )
                     }
                 _state.value =

@@ -12,7 +12,7 @@ export function usePostalVerification(homeId: string) {
   const publish = useCallback((current: PostalController, error = '') => {
     if (controller.current !== current) return;
     if (!current.current()) { setView({ ...empty, blocked: true, lifetime: generation.current,
-      error: 'Your session changed. Reopen recovery to check the original request.' }); return; }
+      error: 'Your sign-in changed. Reload to check your last attempt.' }); return; }
     setView({ ready: current.opened, busy: false, error, pending: current.pending, canAcknowledge: current.canAcknowledge,
       blocked: current.needsReload, status: current.status, progress: current.progress, lifetime: generation.current });
   }, []);
@@ -31,9 +31,9 @@ export function usePostalVerification(homeId: string) {
         publish(current);
       } catch (error) {
         if (disposed || revision !== generation.current) return;
-        if (current?.opened) publish(current, current.pending && error instanceof Error ? error.message : 'Mail status could not be checked. Retry to check current access and mailing.');
+        if (current?.opened) publish(current, current.pending && error instanceof Error ? error.message : 'Couldn’t check your postcard status. Reload to try again.');
         else setView({ ...empty, blocked: true, lifetime: generation.current,
-          error: 'Protected postal recovery could not be opened. Your saved request is kept. Reopen recovery to try again.' });
+          error: 'Couldn’t open mail verification. Anything unfinished is kept. Reload to try again.' });
       }
     };
     const visibility = () => { if (document.visibilityState === 'hidden') retire(); else void open(); };
@@ -49,7 +49,7 @@ export function usePostalVerification(homeId: string) {
     if (!current?.current()) return;
     setView(previous => ({ ...previous, busy: true, error: '', status: null, progress: null }));
     try { const result = await action(current); if (controller.current === current && current.current()) { publish(current); return result; } }
-    catch (error) { publish(current, error instanceof Error ? error.message : 'The postal request could not be confirmed. Reopen recovery.'); }
+    catch (error) { publish(current, error instanceof Error ? error.message : 'We couldn’t confirm the result. Check again, try again, or discard this attempt.'); }
   };
   return { ...view, reopen: () => setReload(value => value + 1),
     requestMail: (address: MailingAddress) => run(current => current.requestMail(address)), resumeMail: () => run(current => current.resumeMail()),

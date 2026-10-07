@@ -319,6 +319,7 @@ import app.pantopus.android.ui.screens.persona_dm.PersonaDmThreadScreen
 import app.pantopus.android.ui.screens.place.DeepLinkPlaceResolverViewModel
 import app.pantopus.android.ui.screens.place.HomeLanding
 import app.pantopus.android.ui.screens.place.HomeTabHostViewModel
+import app.pantopus.android.ui.screens.place.HubVerificationTarget
 import app.pantopus.android.ui.screens.place.PLACE_DASHBOARD_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.PlaceDashboardScreen
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_HOME_ID_KEY
@@ -2217,8 +2218,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // the review queue from the dock overflow on the
                 // detail screen, or via the explicit
                 // `support-trains/:id/manage` deep link
-                // (handled separately).
-                navController.navigate(ChildRoutes.SUPPORT_TRAINS)
+                // (handled separately). The list goes under a link opened
+                // from the tab root, so Back has somewhere known to land;
+                // opened from a screen (Notifications), Back returns there.
+                if (navController.previousBackStackEntry == null) navController.navigate(ChildRoutes.SUPPORT_TRAINS)
                 if (pending.id.isNotBlank()) {
                     navController.navigate(ChildRoutes.supportTrainDetail(pending.id))
                 }
@@ -2227,9 +2230,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             is DeepLinkRouter.Destination.SupportTrainManage -> {
                 // P4.3 / A13.13 — `pantopus://support-trains/:id/manage`
                 // lands on the organizer Manage Train surface. Drop the
-                // user on the Support Trains list first so a back-tap
-                // pops to a known surface, then push manage.
-                navController.navigate(ChildRoutes.SUPPORT_TRAINS)
+                // user on the Support Trains list first (from the tab root)
+                // so a back-tap pops to a known surface, then push manage.
+                if (navController.previousBackStackEntry == null) navController.navigate(ChildRoutes.SUPPORT_TRAINS)
                 if (pending.id.isNotBlank()) {
                     navController.navigate(ChildRoutes.manageTrain(pending.id))
                 }
@@ -2556,6 +2559,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     // parity with the iOS HubTabRoot auto-land.
                     val placeHostVm: HomeTabHostViewModel = hiltViewModel()
                     val placeLanding by placeHostVm.landing.collectAsStateWithLifecycle()
+                    val verifyScope = rememberCoroutineScope()
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
                     // Back on the Hub root (a child screen popped or the tab reselected):
                     // a home joined or added since the last check lands Place now. Coming
@@ -2643,7 +2647,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     HubNavigationIntent.OpenProfile ->
                                         navController.navigate(ChildRoutes.profile())
                                     HubNavigationIntent.StartVerification ->
-                                        navController.navigate(ChildRoutes.ADD_HOME)
+                                        verifyScope.launch {
+                                            val route =
+                                                when (val target = placeHostVm.verificationTarget()) {
+                                                    HubVerificationTarget.AddHome -> ChildRoutes.ADD_HOME
+                                                    is HubVerificationTarget.WaitingRoom -> ChildRoutes.waitingRoom(target.homeId)
+                                                    is HubVerificationTarget.Residency -> ChildRoutes.homeResidency(target.homeId)
+                                                    is HubVerificationTarget.ClaimOwnership -> ChildRoutes.claimOwnership(target.homeId)
+                                                }
+                                            if (navController.currentDestination?.route == PantopusRoute.Place.path) {
+                                                navController.navigate(route)
+                                            }
+                                        }
                                     is HubNavigationIntent.ActionTapped ->
                                         when (intent.kind) {
                                             ActionChipContent.Kind.AddHome ->
@@ -2947,6 +2962,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenPrivacyMirror = { navController.navigate(ChildRoutes.placePrivacyMirror(homeId)) },
                         onOpenHomeTools = { navController.navigate(ChildRoutes.homeDashboard(homeId)) },
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
+                        onOpenNotifications = { navController.navigate(ChildRoutes.NOTIFICATIONS) },
                         onPlaceUnavailable = { goneId ->
                             val host = placeHost ?: return@PlaceDashboardScreen
                             recoverScope.launch {

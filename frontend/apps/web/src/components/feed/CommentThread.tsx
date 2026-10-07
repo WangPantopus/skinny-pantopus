@@ -293,12 +293,14 @@ export default function CommentThread({
                 <Heart className={`h-3.5 w-3.5 ${comment.userHasLiked ? 'fill-current' : ''}`} />
                 {(comment.like_count || 0) > 0 && <span>{comment.like_count}</span>}
               </button>
-              <button
-                onClick={() => { draftRevision.current += 1; setReplyTo({ id: comment.id, name: authorName }); }}
-                className="text-[10px] font-semibold text-app-muted hover:text-primary-600 transition"
-              >
-                Reply
-              </button>
+              {canCompose && (
+                <button
+                  onClick={() => { draftRevision.current += 1; setReplyTo({ id: comment.id, name: authorName }); }}
+                  className="text-[10px] font-semibold text-app-muted hover:text-primary-600 transition"
+                >
+                  Reply
+                </button>
+              )}
               {isOwn && (
                 <button
                   onClick={async () => {

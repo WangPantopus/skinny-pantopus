@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { parseDisplayDate } from '@pantopus/ui-utils';
 import type { MailItemV2 } from '@/types/mailbox';
 import { useCounterItems } from '@/lib/mailbox-queries';
 import { UrgencyIndicator, DrawerBadge, TrustBadge } from '@/components/mailbox';
@@ -130,6 +131,12 @@ function CounterItemCard({ item, onClick }: { item: MailItemV2; onClick: () => v
           <TrustBadge trust={item.sender_trust} size="sm" />
           <DrawerBadge drawer={item.drawer} size="sm" />
           <UrgencyIndicator urgency={item.urgency} due_date={item.due_date} compact />
+          {/* Counter lists open mail with a due date, so each row says when. */}
+          {item.due_date && (
+            <span className="text-xs text-app-text-secondary whitespace-nowrap">
+              Due {parseDisplayDate(item.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </span>
+          )}
         </div>
       </div>
 

@@ -378,7 +378,7 @@ extension HomeInvitationSenderJourneyUITests {
                 $0["event"] as? String == "response" && $0["path"] as? String == "/api/homes/my-homes" && $0["status"] as? Int == 200
             }.count > count
         }
-        try require(label("Review recorded"))
+        try require(label("Approved"))
         XCTAssertFalse(app.staticTexts[context.homeName].exists)
         keepScreen("Fresh My Homes retains recorded history without a current Home card")
     }

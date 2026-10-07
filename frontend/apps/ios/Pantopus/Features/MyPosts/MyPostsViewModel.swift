@@ -75,11 +75,14 @@ public struct MyPostsKebabTarget: Identifiable, Sendable, Equatable {
     public let id: String
     public let postId: String
     public let isArchived: Bool
+    /// A moderator removed the post: the sheet offers no Restore.
+    public let isRemovedByModerator: Bool
 
-    public init(id: String, postId: String, isArchived: Bool) {
+    public init(id: String, postId: String, isArchived: Bool, isRemovedByModerator: Bool = false) {
         self.id = id
         self.postId = postId
         self.isArchived = isArchived
+        self.isRemovedByModerator = isRemovedByModerator
     }
 }
 
@@ -572,7 +575,8 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         kebabTarget = MyPostsKebabTarget(
             id: dto.id,
             postId: dto.id,
-            isArchived: isArchived(dto)
+            isArchived: isArchived(dto),
+            isRemovedByModerator: dto.isRemovedByModerator
         )
     }
 
@@ -715,19 +719,31 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         let dto = projection.dto
         let intent = PulseIntent.from(postType: dto.postType)
         let body = postBody(for: dto)
-        let chips = [intentChip(for: intent, isArchived: projection.isArchived)]
-            + (projection.isArchived ? [archivedChip()] : [])
-        let cta: RowEngagementCTA = projection.isArchived
-            ? RowEngagementCTA(
+        // A post a moderator removed can't be restored, so its row says so instead.
+        let isRemoved = projection.isArchived && dto.isRemovedByModerator
+        let statusChips: [RowChip] = if isRemoved {
+            [removedChip()]
+        } else if projection.isArchived {
+            [archivedChip()]
+        } else {
+            []
+        }
+        let chips = [intentChip(for: intent, isArchived: projection.isArchived)] + statusChips
+        let cta: RowEngagementCTA? = if isRemoved {
+            nil
+        } else if projection.isArchived {
+            RowEngagementCTA(
                 label: "Restore",
                 icon: .arrowsRepeat,
                 accessibilityLabel: "Restore post"
             ) { callbacks.onRestore() }
-            : RowEngagementCTA(
+        } else {
+            RowEngagementCTA(
                 label: "Edit",
                 icon: .pencil,
                 accessibilityLabel: "Edit post"
             ) { callbacks.onEdit() }
+        }
 
         return RowModel(
             id: dto.id,
@@ -769,6 +785,17 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             tint: .custom(
                 background: isArchived ? Theme.Color.appSurfaceSunken : palette.background,
                 foreground: isArchived ? Theme.Color.appTextSecondary : palette.foreground
+            )
+        )
+    }
+
+    private static func removedChip() -> RowChip {
+        RowChip(
+            text: "REMOVED",
+            icon: .shieldAlert,
+            tint: .custom(
+                background: Theme.Color.warningBg,
+                foreground: Theme.Color.warning
             )
         )
     }

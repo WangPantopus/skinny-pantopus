@@ -74,7 +74,7 @@ internal fun HomePostalCodeForm(
                     imeAction = ImeAction.Done,
                 ),
         )
-        PrimaryButton("Verify this code", {
+        PrimaryButton("Verify code", {
             focus.clearFocus()
             viewModel.verifyCode()
         }, Modifier.testTag("homePostalVerifyCode"), isEnabled = viewModel.canVerifyCode)

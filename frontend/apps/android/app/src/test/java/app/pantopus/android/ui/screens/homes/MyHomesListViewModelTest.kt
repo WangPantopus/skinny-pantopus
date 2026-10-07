@@ -221,7 +221,7 @@ class MyHomesListViewModelTest {
             val rows = (vm.state.value as ListOfRowsUiState.Loaded).sections.flatMap { it.rows }
             assertTrue(rows.any { it.id == "homes-retry" })
             val history = rows.single { it.id == "residency-request_${claim.id}" }
-            assertEquals("Review recorded", history.subtitle)
+            assertEquals("Approved", history.subtitle)
             history.onTap()
             assertEquals(listOf(home), opened)
             vm.suspendContent()
