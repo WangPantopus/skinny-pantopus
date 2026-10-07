@@ -92,3 +92,5 @@ async function stampAwarder() {
 }
 
 module.exports = stampAwarder;
+// The stamps this job can award; the gallery lists only these (plus any already earned).
+module.exports.AWARDED_STAMP_TYPES = new Set(MILESTONES.map((m) => m.stamp_type));

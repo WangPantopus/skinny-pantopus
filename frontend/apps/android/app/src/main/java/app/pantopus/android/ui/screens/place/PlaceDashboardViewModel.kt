@@ -75,6 +75,9 @@ class PlaceDashboardViewModel
                         PlaceDashboardUiState.Error(
                             intelligenceResult.error.displayMessage("Couldn't load your dashboard."),
                             denied = intelligenceResult.error is NetworkError.Forbidden,
+                            unavailable =
+                                intelligenceResult.error is NetworkError.Forbidden ||
+                                    intelligenceResult.error is NetworkError.NotFound,
                         )
                 }
         }
@@ -89,6 +92,13 @@ sealed interface PlaceDashboardUiState {
         val moveInDate: String? = null,
     ) : PlaceDashboardUiState
 
-    /** [denied]: the server refused this account the place (403), so a retry can't change it. */
-    data class Error(val message: String, val denied: Boolean = false) : PlaceDashboardUiState
+    /**
+     * [denied]: the server refused this account the place (403), so a retry can't change it.
+     * [unavailable]: refused or gone (403/404), e.g. after leaving the Home; the Place tab moves on.
+     */
+    data class Error(
+        val message: String,
+        val denied: Boolean = false,
+        val unavailable: Boolean = false,
+    ) : PlaceDashboardUiState
 }

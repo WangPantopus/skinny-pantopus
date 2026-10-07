@@ -45,6 +45,18 @@ export function formatTimeAgo(dateStr: string, style: 'compact' | 'full' = 'comp
   return sameYear ? `${month} ${day}` : `${month} ${day}, ${d.getFullYear()}`;
 }
 
+/**
+ * Parse a date string for display. A date-only value ("2026-10-20", such as a
+ * SQL `date` column like a mail item's due date) names a calendar day, not an
+ * instant: `new Date()` reads it as UTC midnight, which is the day before
+ * anywhere west of UTC. It becomes local midnight of that day instead.
+ */
+export function parseDisplayDate(dateStr: string): Date {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!dateOnly) return new Date(dateStr);
+  return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+}
+
 type DateFormat = 'short' | 'medium' | 'long';
 
 /**
@@ -55,7 +67,7 @@ type DateFormat = 'short' | 'medium' | 'long';
  * - long:   "January 15, 2025 at 3:45 PM"
  */
 export function formatDate(dateStr: string, format: DateFormat = 'medium'): string {
-  const d = new Date(dateStr);
+  const d = parseDisplayDate(dateStr);
   if (Number.isNaN(d.getTime())) return '';
 
   switch (format) {

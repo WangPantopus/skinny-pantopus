@@ -87,9 +87,14 @@ fun PlaceDashboardScreen(
     onOpenPrivacyMirror: () -> Unit = {},
     onOpenHomeTools: () -> Unit = {},
     onOpenMenu: () -> Unit = {},
+    onPlaceUnavailable: (homeId: String) -> Unit = {},
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // A Home this account can no longer read (left, removed, deleted): the Place tab moves on.
+    LaunchedEffect(state) {
+        if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
+    }
     LaunchedEffect(homeId) { viewModel.load(homeId) }
 
     var showSwitcher by remember { mutableStateOf(false) }
