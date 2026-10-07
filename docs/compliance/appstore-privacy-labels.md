@@ -3,7 +3,7 @@
 **Derived from:** `docs/compliance/privacy-data-inventory.md`
 **Mirrors:** `frontend/apps/ios/Pantopus/PrivacyInfo.xcprivacy`
 **Bundle:** `app.pantopus.ios`
-**Last reviewed:** 2026-10-06 (launch review: Health added for emergency info; location provider is wired)
+**Last reviewed:** 2026-10-07 (founder approved these answers; earlier: Health added for emergency info, location provider wired)
 
 These are the answers to enter in **App Store Connect → your app → App
 Privacy**. This is human/console work; this file is the script for it. Every
@@ -100,6 +100,12 @@ Apple groups by category → type. Enter each, then pick **purposes**,
 |------|-----------|------------|--------|----------|
 | Crash Data | Yes | App Functionality | Yes | No |
 | Performance Data | Yes | App Functionality | Yes | No |
+
+> Founder decision B (October 7): keep these declared while Sentry is off for
+> the pilot. Without a Sentry key the app sends no crash or performance data,
+> but the Sentry library ships in the app and its own privacy manifest lists
+> crash, performance and other diagnostic data, which Apple's privacy report
+> reads. Turning Sentry on later then needs no label change.
 
 ### Other Data
 | Type | Collected | Purpose(s) | Linked | Tracking |

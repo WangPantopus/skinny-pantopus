@@ -51,6 +51,17 @@ platform :android do
     )
   end
 
+  desc "Upload the approved store listing (text, icon, feature graphic, phone screenshots), no build"
+  lane :listing do
+    upload_to_play_store(
+      package_name: PACKAGE_NAME,
+      json_key: JSON_KEY_PATH,
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_changelogs: true
+    )
+  end
+
   desc "Promote latest internal build to the Production track"
   lane :release do
     upload_to_play_store(

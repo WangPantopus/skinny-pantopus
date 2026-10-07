@@ -491,18 +491,25 @@ app-link files, robots.txt).
 
 ### Listings (founder approves; L4 drafts)
 
-- [ ] Founder: approve or edit the listing text. iOS:
-  `frontend/apps/ios/fastlane/metadata/en-US/` (the `release` lane uploads these
-  files and submits for review, so approve them before running it). Android:
-  `frontend/apps/android/fastlane/metadata/android/en-US/` (paste into Play
-  Console; the Play lanes skip metadata). Both use the name "Pantopus Home"
-  per D2.
-- [ ] L4: screenshots from the simulator and emulator with test data in the
-  pilot area, after the release-candidate sweep.
-- [ ] Founder: approve the App Privacy and Data safety answers
-  (`docs/compliance/appstore-privacy-labels.md`, `play-data-safety.md`; L4
-  checks them against the current apps first) and create a review account for
-  each store. Nothing is submitted without your approval.
+- [x] Founder approved the listing text, screenshots, privacy answers and the
+  account-deletion page on October 7 (decisions A and B are written into the
+  privacy scripts). Both listings use the name "Pantopus Home" per D2.
+- [x] L4: the approved files are where the lanes read them. iOS: text in
+  `frontend/apps/ios/fastlane/metadata/en-US/` and 8 iPhone screenshots
+  (6.9-inch, 1320 × 2868) in `frontend/apps/ios/fastlane/screenshots/en-US/`;
+  the `release` lane uploads both and submits for review. Android: text and
+  images in `frontend/apps/android/fastlane/metadata/android/en-US/` (5 phone
+  screenshots at 1080 × 2160, the 512 × 512 icon and the 1024 × 500 feature
+  graphic Play requires). Once the app exists in Play Console, run
+  `bundle exec fastlane listing` from `frontend/apps/android` with the service
+  account file in `fastlane/play-service-account.json` (as the beta lane uses),
+  or upload the same files in the console; the beta and release lanes still
+  skip the listing.
+- [ ] Founder: enter the App Privacy and Data safety answers
+  (`docs/compliance/appstore-privacy-labels.md`, `play-data-safety.md`) and
+  create a review account for each store. Play's Delete account URL
+  (`https://pantopus.com/delete-account`) is live after the production web
+  deploy (P9). Nothing is submitted without you.
 
 ## 5. Go-live
 
