@@ -204,11 +204,16 @@ fun AuthNavHost() {
                         defaultValue = null
                     },
                 ),
-        ) {
+        ) { entry ->
+            // The same hand-off as "Already confirmed?" above: sign-in starts from the address that was just confirmed.
+            val loginEntry = remember(entry) { navController.getBackStackEntry(AuthRoutes.LOGIN) }
+            val loginViewModel: LoginViewModel = hiltViewModel(loginEntry)
+            val confirmedEmail = entry.arguments?.getString(VerifyEmailLandingViewModel.EMAIL_KEY)
             VerifyEmailLandingScreen(
                 // No session after verification (backend revokes it), so
                 // Continue drops back to login to sign in.
                 onContinue = {
+                    confirmedEmail?.takeIf { it.isNotBlank() }?.let(loginViewModel::onEmailChange)
                     navController.popBackStack(AuthRoutes.LOGIN, inclusive = false)
                 },
                 onUseDifferentEmail = {

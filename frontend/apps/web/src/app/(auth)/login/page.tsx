@@ -8,6 +8,7 @@ import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
 import AuthForm from '@/components/auth/AuthForm';
 import { toast } from '@/components/ui/toast-store';
+import { takeVerifiedEmail } from '@/lib/email-verified-handoff';
 import { ACCOUNT_DELETED_NOTICE_KEY, ACCOUNT_DELETED_NOTICE_MAX_AGE_MS } from '@/lib/session-refresh';
 import {
   authPageHref,
@@ -49,6 +50,14 @@ function LoginContent() {
     } else if (kind === 'unconfirmed') {
       setInfo("We couldn't confirm your account was deleted. If you can still sign in, try again from Settings.");
     }
+  }, []);
+
+  // Arriving from the confirmation link: sign-in starts from the address that was just confirmed.
+  useEffect(() => {
+    const confirmed = takeVerifiedEmail();
+    if (!confirmed) return;
+    setEmail(confirmed);
+    setInfo('Your email is confirmed. Sign in to continue.');
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
