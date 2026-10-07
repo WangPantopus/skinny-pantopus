@@ -59,11 +59,14 @@ router.get('/', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const wallet = await walletService.getOrCreateWallet(userId);
+    // `balance` is what can be withdrawn: money held for an open payment dispute is not in it.
+    const hold = await walletService.getDisputeHold(userId);
 
     res.json({
       wallet: {
         id: wallet.id,
-        balance: wallet.balance,
+        balance: Math.max(0, wallet.balance - hold.cents),
+        held_by_dispute: hold.cents,
         currency: wallet.currency,
         frozen: wallet.frozen,
         lifetime_withdrawals: wallet.lifetime_withdrawals,
@@ -98,6 +101,13 @@ router.post('/withdraw', verifyToken, validate(withdrawSchema), async (req, res)
   } catch (err) {
     logger.error('Withdrawal error', { error: err.message, userId: req.user.id });
 
+    if (err.code === 'FUNDS_ON_HOLD') {
+      return res.status(400).json({
+        error: `$${(err.holdCents / 100).toFixed(2)} of your balance is on hold while a payment dispute is open. `
+          + `You can withdraw up to $${(err.availableCents / 100).toFixed(2)}.`,
+        code: 'funds_on_hold',
+      });
+    }
     // wallet_debit raises 'Insufficient wallet balance. Available: <cents>, Required: <cents>'. A second
     // withdrawal racing the first, or a stale balance on another device, lands here.
     if (/insufficient (wallet )?balance/i.test(err.message || '')) {
@@ -231,11 +241,15 @@ router.get('/pending-release', verifyToken, async (req, res) => {
       }
     }
 
+    // Income held for an open payment dispute is under review too: it is out of the balance until that settles.
+    const disputeHold = await walletService.getDisputeHold(userId);
+    inReviewCents += disputeHold.cents;
+
     res.json({
       in_review_cents: inReviewCents,
       releasing_soon_cents: releasingSoonCents,
       total_pending_cents: inReviewCents + releasingSoonCents,
-      in_review_count: inReviewItems.length,
+      in_review_count: inReviewItems.length + disputeHold.count,
       releasing_soon_count: releasingSoonItems.length,
       // Don't include individual items by default (privacy + payload size)
       // Items can be seen via /api/payments?type=received&status=captured_hold
