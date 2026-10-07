@@ -1,9 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { purgeExpiredPlacePreviews } from '@/components/place/pendingPlace';
+import { subscribeConnectivity } from '@/lib/connectivity';
 import { AUTH_SESSION_CHANGE_KEY, onTokenChange } from '@pantopus/api';
+
+// Queries pause while offline. React Query's own detection believes the
+// browser's offline event, which can be wrong while requests still work.
+onlineManager.setEventListener((setOnline) => subscribeConnectivity(setOnline));
 
 function createQueryClient() {
   return new QueryClient({
