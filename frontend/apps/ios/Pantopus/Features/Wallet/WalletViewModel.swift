@@ -508,7 +508,7 @@ public final class WalletViewModel {
             day: dayLabel(date, calendar: calendar, now: now),
             dateLabel: timeLabel(date, calendar: calendar),
             description: tx.description ?? typeLabel(for: tx.type),
-            counterparty: counterpartyLabel(for: tx.type),
+            counterparty: counterpartyLabel(for: tx.type, description: tx.description),
             category: category(for: tx.type),
             direction: direction,
             status: status(for: tx, direction: direction),
@@ -571,10 +571,15 @@ public final class WalletViewModel {
         }
     }
 
-    static func counterpartyLabel(for type: String) -> String {
+    /// An invoice payment is booked as `gig_income` with an "Invoice …" description.
+    private static func isInvoiceIncome(_ type: String, _ description: String?) -> Bool {
+        type == "gig_income" && description?.hasPrefix("Invoice") == true
+    }
+
+    static func counterpartyLabel(for type: String, description: String? = nil) -> String {
         switch type {
         case "withdrawal", "deposit", "transfer_in", "transfer_out": "Bank"
-        case "gig_income", "gig_payment": "Gig"
+        case "gig_income", "gig_payment": isInvoiceIncome(type, description) ? "Invoice" : "Gig"
         case "tip_income", "tip_sent": "Tip"
         case "refund": "Refund"
         case "cancellation_fee": "Pantopus"

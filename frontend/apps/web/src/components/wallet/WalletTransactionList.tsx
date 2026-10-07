@@ -30,7 +30,7 @@ const TX_ICONS: Record<string, ReactNode> = {
 
 const FILTER_OPTIONS = [
   { value: '', label: 'All' },
-  { value: 'gig_income', label: 'Task Income' },
+  { value: 'gig_income', label: 'Earnings' },
   { value: 'tip_income', label: 'Tips Received' },
   { value: 'withdrawal', label: 'Withdrawals' },
   { value: 'refund', label: 'Refunds' },
@@ -125,6 +125,8 @@ export default function WalletTransactionList({ refreshKey = 0 }: { refreshKey?:
               const txStyle = WALLET_TX_TYPE_CONFIG[tx.type] || WALLET_TX_TYPE_CONFIG.adjustment;
               const config = { ...txStyle, icon: TX_ICONS[txStyle.iconName] || TX_ICONS.Settings };
               const isCredit = tx.direction === 'credit';
+              // An invoice payment is booked as `gig_income` with an "Invoice …" description.
+              const label = tx.type === 'gig_income' && tx.description?.startsWith('Invoice') ? 'Invoice Income' : config.label;
 
               return (
                 <div key={tx.id} className="px-4 py-3 flex items-center gap-3 hover:bg-app-hover transition">
@@ -136,7 +138,7 @@ export default function WalletTransactionList({ refreshKey = 0 }: { refreshKey?:
                   {/* Description */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-app-text">{config.label}</span>
+                      <span className="text-sm font-medium text-app-text">{label}</span>
                       {tx.status !== 'completed' && (
                         <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
                           tx.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
@@ -148,7 +150,7 @@ export default function WalletTransactionList({ refreshKey = 0 }: { refreshKey?:
                       )}
                     </div>
                     <p className="text-xs text-app-text-muted truncate">
-                      {tx.description || config.label}
+                      {tx.description || label}
                       {tx.counterparty && ` • ${tx.counterparty.name || tx.counterparty.username}`}
                     </p>
                     <p className="text-xs text-app-text-muted">
