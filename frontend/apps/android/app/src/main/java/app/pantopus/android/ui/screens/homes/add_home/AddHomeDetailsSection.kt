@@ -39,6 +39,7 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import java.text.NumberFormat
 
 /** 1 dp hairline — off the on-scale ramp, so not a token. */
 internal val ADD_HOME_HAIRLINE: Dp = 1.dp
@@ -343,8 +344,8 @@ private fun publicRecordRows(
         val text = if (it == Math.floor(it)) it.toInt().toString() else it.toString()
         rows.add(PublicRecordRow("Bathrooms", text, sources["bathrooms"]))
     }
-    fields.sqFt?.let { rows.add(PublicRecordRow("Home size", "$it sq ft", sources["sq_ft"])) }
-    fields.lotSqFt?.let { rows.add(PublicRecordRow("Lot size", "$it sq ft", sources["lot_sq_ft"])) }
+    fields.sqFt?.let { rows.add(PublicRecordRow("Home size", sqFtText(it), sources["sq_ft"])) }
+    fields.lotSqFt?.let { rows.add(PublicRecordRow("Lot size", sqFtText(it), sources["lot_sq_ft"])) }
     fields.yearBuilt?.let {
         rows.add(PublicRecordRow("Year built", it.toString(), sources["year_built"]))
     }
@@ -457,3 +458,6 @@ internal fun AddHomeTextField(
         }
     }
 }
+
+/** "45000 sq ft" with the locale's digit grouping ("45,000 sq ft"). */
+private fun sqFtText(value: Number): String = "${NumberFormat.getIntegerInstance().format(value)} sq ft"

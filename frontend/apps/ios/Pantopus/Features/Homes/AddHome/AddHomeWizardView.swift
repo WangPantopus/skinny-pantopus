@@ -435,10 +435,10 @@ private struct ReviewStep: View {
             rows.append(ReviewSummaryRow(label: "Size", value: size))
         }
         if !details.sqFt.isEmpty {
-            rows.append(ReviewSummaryRow(label: "Home size", value: "\(details.sqFt) sq ft"))
+            rows.append(ReviewSummaryRow(label: "Home size", value: "\(Self.grouped(details.sqFt)) sq ft"))
         }
         if !details.lotSqFt.isEmpty {
-            rows.append(ReviewSummaryRow(label: "Lot size", value: "\(details.lotSqFt) sq ft"))
+            rows.append(ReviewSummaryRow(label: "Lot size", value: "\(Self.grouped(details.lotSqFt)) sq ft"))
         }
         if !details.yearBuilt.isEmpty {
             rows.append(ReviewSummaryRow(label: "Year built", value: details.yearBuilt))
@@ -458,6 +458,11 @@ private struct ReviewStep: View {
         if !details.bedrooms.isEmpty { parts.append("\(details.bedrooms) bd") }
         if !details.bathrooms.isEmpty { parts.append("\(details.bathrooms) ba") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "45000" → "45,000"; text that isn't a whole number shows as typed.
+    private static func grouped(_ typed: String) -> String {
+        Int(typed.trimmingCharacters(in: .whitespaces)).map { $0.formatted() } ?? typed
     }
 
     private func composedAddress(_ fields: AddHomeAddressFields) -> String {

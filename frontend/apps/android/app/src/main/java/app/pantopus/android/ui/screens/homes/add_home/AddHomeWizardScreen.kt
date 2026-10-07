@@ -85,6 +85,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import java.text.NumberFormat
 import java.util.Locale
 
 /** Test tag applied to the AddHome screen container. */
@@ -557,10 +558,10 @@ private fun ReviewStep(state: AddHomeUiState) {
                 ).joinToString(" · ")
             if (size.isNotEmpty()) add(ReviewSummaryRow("Size", size))
             if (details.sqFt.isNotEmpty()) {
-                add(ReviewSummaryRow("Home size", "${details.sqFt} sq ft"))
+                add(ReviewSummaryRow("Home size", "${groupedNumber(details.sqFt)} sq ft"))
             }
             if (details.lotSqFt.isNotEmpty()) {
-                add(ReviewSummaryRow("Lot size", "${details.lotSqFt} sq ft"))
+                add(ReviewSummaryRow("Lot size", "${groupedNumber(details.lotSqFt)} sq ft"))
             }
             if (details.yearBuilt.isNotEmpty()) {
                 add(ReviewSummaryRow("Year built", details.yearBuilt))
@@ -1349,3 +1350,7 @@ private fun ErrorBanner(message: String) {
         )
     }
 }
+
+/** "45000" → "45,000"; text that isn't a whole number shows as typed. */
+private fun groupedNumber(typed: String): String =
+    typed.trim().toLongOrNull()?.let { NumberFormat.getIntegerInstance().format(it) } ?: typed
