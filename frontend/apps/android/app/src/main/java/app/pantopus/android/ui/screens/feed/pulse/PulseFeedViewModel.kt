@@ -878,7 +878,7 @@ class PulseFeedViewModel
                         is NetworkResult.Success -> {
                             val response = result.data
                             lastArea = area
-                            _fallbackAreaLabel.value = response.fallbackArea?.label
+                            updateFallbackAreaLabel(response.fallbackArea?.label, area)
                             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
                             loadedPosts = response.posts
                             postsLoaded = true
@@ -934,6 +934,19 @@ class PulseFeedViewModel
                 ?: viewingArea()
                 ?: (storedCoordinates() ?: awaitFreshCoordinates())?.let { (lat, lng) -> FeedArea(lat, lng) }
                 ?: FeedArea(null, null)
+
+        /**
+         * With no area chosen the server names the place it fell back to. When the feed looked around the device
+         * instead (location already allowed), the area bar says so rather than "Set an area".
+         */
+        private fun updateFallbackAreaLabel(
+            serverLabel: String?,
+            area: FeedArea,
+        ) {
+            val aroundDevice = area.viewingLocation == null && area.latitude != null && explicitCoordinates() == null
+            _fallbackAreaLabel.value =
+                serverLabel ?: "Near your location".takeIf { aroundDevice && _surface.value == FeedSurface.Pulse }
+        }
 
         /** A failed read is not an absent selection: never silently fall back to a different area. */
         private suspend fun viewingArea(): FeedArea? {
