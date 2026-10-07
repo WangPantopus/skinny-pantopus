@@ -198,6 +198,13 @@ app.use(cors(corsOptions));
 // Security headers (X-Content-Type-Options, X-Frame-Options, HSTS, etc.)
 app.use(helmet());
 
+// The answer to a write is never reusable, and sign-in, refresh, reset-password, OAuth and resume answers carry
+// tokens: without this, iOS's disk cache keeps them. A route that sets its own Cache-Control keeps it.
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 // Stripe webhooks must use raw body for signature verification.
 // Mount BEFORE JSON/urlencoded parsers and before 404/error handlers.
 app.use(
