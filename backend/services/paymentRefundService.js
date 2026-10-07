@@ -187,6 +187,13 @@ async function create({ paymentId, amount = null, reason, description = null, ac
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw fail('Invalid refund request ID.', 400);
     let payment = await paymentById(paymentId);
     await assertActor(payment, actorId, actorMode);
+    // An invoice is billed and paid as one amount, so it is refunded in full (which voids it), never in part: a
+    // partial refund would leave the rest stuck in the hold (the release job only takes a payment still held)
+    // and the invoice reading "paid" for an amount that was not.
+    if (payment.metadata?.type === 'invoice_payment' && amount !== null
+      && amount < (payment.amount_total || 0) - (payment.refunded_amount || 0)) {
+      throw fail('An invoice payment is refunded in full. To change the amount, refund it and send a new invoice.', 400, 'INVOICE_REFUND_IN_FULL');
+    }
     // A charged poster-fault fee belongs to the worker by policy; its payer
     // cannot refund it in the app. The SQL reservation refuses it as well.
     if (actorMode === 'payer' && capturedFeeCents(payment) !== null) throw fail(FEE_REFUND_MESSAGE, 403, 'SUPPORT_REQUIRED');
