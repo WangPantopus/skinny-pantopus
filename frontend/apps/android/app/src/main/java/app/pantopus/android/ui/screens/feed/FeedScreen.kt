@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -801,6 +802,9 @@ private fun ViewModeToggle(
     }
 }
 
+/** Above this font scale the Pulse bar's List / Map segment moves under the title. */
+private const val LARGE_TEXT_SCALE = 1.3f
+
 @Composable
 private fun TopBar(
     title: String,
@@ -812,97 +816,106 @@ private fun TopBar(
     viewMode: FeedViewMode? = null,
     onViewModeChange: (FeedViewMode) -> Unit = {},
 ) {
+    // With large text the title, the List / Map segment and three 48 dp buttons don't fit on one line.
+    val stackToggle = viewMode != null && LocalDensity.current.fontScale > LARGE_TEXT_SCALE
     Box(modifier = Modifier.fillMaxWidth().background(PantopusColors.appBg)) {
-        Row(
+        Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (onBack != null) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(36.dp)
-                            .clickable(onClick = onBack)
-                            .testTag("pulseBackButton"),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PantopusIconImage(
-                        icon = PantopusIcon.ChevronLeft,
-                        contentDescription = "Back",
-                        size = 22.dp,
-                        tint = PantopusColors.appText,
-                    )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (onBack != null) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(48.dp)
+                                .clickable(onClick = onBack)
+                                .testTag("pulseBackButton"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.ChevronLeft,
+                            contentDescription = "Back",
+                            size = 22.dp,
+                            tint = PantopusColors.appText,
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(8.dp))
                 }
-                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    text = title,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PantopusColors.appText,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                if (viewMode != null && !stackToggle) {
+                    ViewModeToggle(active = viewMode, onSelect = onViewModeChange)
+                    Spacer(modifier = Modifier.size(Spacing.s2))
+                }
+                if (onSearchTap != null) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(48.dp)
+                                .clickable(onClick = onSearchTap)
+                                .testTag("pulseSearchButton")
+                                .semantics { contentDescription = "Search posts" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Search,
+                            contentDescription = null,
+                            size = 20.dp,
+                            tint = PantopusColors.appText,
+                        )
+                    }
+                }
+                if (onFilterTap != null) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(48.dp)
+                                .clickable(onClick = onFilterTap)
+                                .testTag("pulseFilterButton")
+                                .semantics { contentDescription = "Filter by intent" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Filter,
+                            contentDescription = null,
+                            size = 20.dp,
+                            tint = PantopusColors.appText,
+                        )
+                    }
+                }
+                if (onPreferencesTap != null) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(48.dp)
+                                .clickable(onClick = onPreferencesTap)
+                                .testTag("pulsePreferencesButton")
+                                .semantics { contentDescription = "Pulse preferences" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.SlidersHorizontal,
+                            contentDescription = null,
+                            size = 20.dp,
+                            tint = PantopusColors.appText,
+                        )
+                    }
+                }
             }
-            Text(
-                text = title,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = PantopusColors.appText,
-                modifier = Modifier.semantics { heading() },
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            if (viewMode != null) {
+            if (viewMode != null && stackToggle) {
                 ViewModeToggle(active = viewMode, onSelect = onViewModeChange)
-                Spacer(modifier = Modifier.size(Spacing.s2))
-            }
-            if (onSearchTap != null) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(36.dp)
-                            .clickable(onClick = onSearchTap)
-                            .testTag("pulseSearchButton")
-                            .semantics { contentDescription = "Search posts" },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PantopusIconImage(
-                        icon = PantopusIcon.Search,
-                        contentDescription = null,
-                        size = 20.dp,
-                        tint = PantopusColors.appText,
-                    )
-                }
-            }
-            if (onFilterTap != null) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(36.dp)
-                            .clickable(onClick = onFilterTap)
-                            .testTag("pulseFilterButton")
-                            .semantics { contentDescription = "Filter by intent" },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PantopusIconImage(
-                        icon = PantopusIcon.Filter,
-                        contentDescription = null,
-                        size = 20.dp,
-                        tint = PantopusColors.appText,
-                    )
-                }
-            }
-            if (onPreferencesTap != null) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(36.dp)
-                            .clickable(onClick = onPreferencesTap)
-                            .testTag("pulsePreferencesButton")
-                            .semantics { contentDescription = "Pulse preferences" },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PantopusIconImage(
-                        icon = PantopusIcon.SlidersHorizontal,
-                        contentDescription = null,
-                        size = 20.dp,
-                        tint = PantopusColors.appText,
-                    )
-                }
             }
         }
         Box(

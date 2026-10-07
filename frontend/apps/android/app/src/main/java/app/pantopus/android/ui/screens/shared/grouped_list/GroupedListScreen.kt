@@ -512,11 +512,8 @@ private fun RowItem(
                     modifier =
                         Modifier
                             .testTag("groupedListToggle_${row.id}")
-                            .semantics {
-                                if (row.id == "addressPrecision") {
-                                    contentDescription = row.label
-                                }
-                            },
+                            // TalkBack reads a bare "Switch" without this: the label is a separate node beside it.
+                            .semantics { contentDescription = row.label },
                 )
             is RowControl.Radio ->
                 RadioGlyph(isSelected = control.isSelected, modifier = Modifier.testTag("groupedListRadio_${row.id}"))
