@@ -441,40 +441,21 @@ private fun LoadedBody(
 
             content.sections.forEach { section ->
                 val expanded = section.id in expandedSections
-                SectionOverline(
-                    section.overline,
-                    actionLabel = section.actionLabel?.let { if (expanded) "Show fewer" else it },
-                    onAction = {
+                SlotSectionBlock(
+                    section = section,
+                    expanded = expanded,
+                    onToggleExpanded = {
                         expandedSections = if (expanded) expandedSections - section.id else expandedSections + section.id
                     },
+                    signupsClosed = signupsClosed,
+                    viewerRole = content.viewerRole,
+                    isSubmitting = isSubmitting,
+                    onReserveSlot = onReserveSlot,
+                    onEditSlot = onEditSlot,
+                    onMarkDelivered = onMarkDelivered,
+                    onConfirmDelivery = onConfirmDelivery,
+                    onRequestLeave = onRequestLeave,
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    (if (expanded) section.rows + section.moreRows else section.rows).forEach { row ->
-                        SlotRow(
-                            content = row,
-                            onSignUp =
-                                if (row.state == SlotRowState.Open && !signupsClosed) {
-                                    { onReserveSlot(row.slotId) }
-                                } else {
-                                    null
-                                },
-                            onEdit =
-                                if (row.mine && onEditSlot != null) {
-                                    { onEditSlot(row) }
-                                } else {
-                                    null
-                                },
-                        )
-                        CommitmentActions(
-                            row = row,
-                            viewerRole = content.viewerRole,
-                            isSubmitting = isSubmitting,
-                            onMarkDelivered = onMarkDelivered,
-                            onConfirmDelivery = onConfirmDelivery,
-                            onRequestLeave = onRequestLeave,
-                        )
-                    }
-                }
             }
 
             content.exactAddress?.let { address ->
@@ -496,6 +477,55 @@ private fun LoadedBody(
                 onSignUp = onSignUp,
                 onSendCard = onSendCard ?: {},
                 onJoinAsBackup = onJoinAsBackup ?: {},
+            )
+        }
+    }
+}
+
+/** One stack of slot rows under its overline; "See all N" lists the rest of the section in place. */
+@Composable
+private fun SlotSectionBlock(
+    section: SlotSection,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    signupsClosed: Boolean,
+    viewerRole: SupportTrainViewerRole,
+    isSubmitting: Boolean,
+    onReserveSlot: (String?) -> Unit,
+    onEditSlot: ((SlotRowContent) -> Unit)?,
+    onMarkDelivered: (String) -> Unit,
+    onConfirmDelivery: (String) -> Unit,
+    onRequestLeave: (SlotRowContent) -> Unit,
+) {
+    SectionOverline(
+        section.overline,
+        actionLabel = section.actionLabel?.let { if (expanded) "Show fewer" else it },
+        onAction = onToggleExpanded,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        (if (expanded) section.rows + section.moreRows else section.rows).forEach { row ->
+            SlotRow(
+                content = row,
+                onSignUp =
+                    if (row.state == SlotRowState.Open && !signupsClosed) {
+                        { onReserveSlot(row.slotId) }
+                    } else {
+                        null
+                    },
+                onEdit =
+                    if (row.mine && onEditSlot != null) {
+                        { onEditSlot(row) }
+                    } else {
+                        null
+                    },
+            )
+            CommitmentActions(
+                row = row,
+                viewerRole = viewerRole,
+                isSubmitting = isSubmitting,
+                onMarkDelivered = onMarkDelivered,
+                onConfirmDelivery = onConfirmDelivery,
+                onRequestLeave = onRequestLeave,
             )
         }
     }
