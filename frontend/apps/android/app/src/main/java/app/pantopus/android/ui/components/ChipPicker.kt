@@ -5,7 +5,6 @@ package app.pantopus.android.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -13,6 +12,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,10 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.theme.PantopusColors
@@ -75,6 +73,7 @@ fun ChipPicker(
         modifier = modifier,
         style = style,
         testTag = testTag,
+        multiSelect = true,
         isSelected = { it in selectedIds },
         onToggle = { id ->
             onSelectionChange(if (id in selectedIds) selectedIds - id else selectedIds + id)
@@ -100,6 +99,7 @@ fun ChipPicker(
         modifier = modifier,
         style = style,
         testTag = testTag,
+        multiSelect = false,
         isSelected = { it == selectedId },
         onToggle = { id -> onSelectionChange(if (id == selectedId) null else id) },
     )
@@ -113,9 +113,13 @@ private fun ChipPickerImpl(
     modifier: Modifier,
     style: ChipPickerStyle,
     testTag: String?,
+    multiSelect: Boolean,
 ) {
     FlowRow(
-        modifier = modifier.then(if (testTag != null) Modifier.testTag(testTag) else Modifier),
+        modifier =
+            modifier
+                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+                .then(if (multiSelect) Modifier else Modifier.selectableGroup()),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
@@ -124,6 +128,7 @@ private fun ChipPickerImpl(
                 option = option,
                 isSelected = isSelected(option.id),
                 style = style,
+                multiSelect = multiSelect,
                 onClick = { onToggle(option.id) },
                 testTag = testTag?.let { "$it.${option.id}" } ?: option.id,
             )
@@ -136,6 +141,7 @@ private fun ChipPickerChip(
     option: ChipPickerOption,
     isSelected: Boolean,
     style: ChipPickerStyle,
+    multiSelect: Boolean,
     onClick: () -> Unit,
     testTag: String,
 ) {
@@ -178,14 +184,16 @@ private fun ChipPickerChip(
                     } else {
                         Modifier.border(1.dp, border, RoundedCornerShape(Radii.pill))
                     },
-                ).clickable(onClick = onClick)
-                .padding(horizontal = Spacing.s3, vertical = Spacing.s1)
-                .testTag(testTag)
-                .semantics {
-                    contentDescription = option.label
-                    role = Role.Button
-                    selected = isSelected
-                },
+                ).then(
+                    // A checkbox (multi-select) or radio (single-select) item, so screen readers say
+                    // whether the chip is on; the chip's own text labels it.
+                    if (multiSelect) {
+                        Modifier.toggleable(value = isSelected, role = Role.Checkbox, onValueChange = { onClick() })
+                    } else {
+                        Modifier.selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
+                    },
+                ).padding(horizontal = Spacing.s3, vertical = Spacing.s1)
+                .testTag(testTag),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
