@@ -143,6 +143,9 @@ public struct BodyReactionsBody: View {
     /// every other caller leaves it nil. Type-erased so adding the slot
     /// doesn't make this shared body generic.
     private let belowReactions: AnyView?
+    /// Shown in place of the composer when nobody can reply (a post a
+    /// moderator removed); nil keeps the composer and the empty-thread prompts.
+    private let repliesClosedNote: String?
 
     public init(
         body: String,
@@ -169,9 +172,11 @@ public struct BodyReactionsBody: View {
         onCommentLike: (@MainActor (String) -> Void)? = nil,
         onCommentDelete: (@MainActor (String) -> Void)? = nil,
         belowReactions: AnyView? = nil,
+        repliesClosedNote: String? = nil,
         onCommentAvatarTap: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.belowReactions = belowReactions
+        self.repliesClosedNote = repliesClosedNote
         bodyText = body
         self.media = media
         self.intent = intent
@@ -250,7 +255,7 @@ public struct BodyReactionsBody: View {
                     .padding(.horizontal, Spacing.s4)
             }
 
-            if let replyingToName {
+            if repliesClosedNote == nil, let replyingToName {
                 HStack(spacing: Spacing.s2) {
                     Icon(.reply, size: 12, color: Theme.Color.appTextSecondary)
                     Text("Replying to ")
@@ -279,16 +284,24 @@ public struct BodyReactionsBody: View {
                 .accessibilityIdentifier("pulsePostDetail-replyBanner")
             }
 
-            CommentComposer(
-                avatarName: composerAvatarName,
-                avatarURL: composerAvatarURL,
-                text: $composerText,
-                placeholder: composerPlaceholder,
-                isFocusedPresentation: comments.isEmpty,
-                isSending: isSending,
-                onSend: onSendTap
-            )
-            .padding(.horizontal, Spacing.s4)
+            if let repliesClosedNote {
+                Text(repliesClosedNote)
+                    .font(.system(size: PantopusTextStyle.small.size))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .padding(.horizontal, Spacing.s4)
+                    .accessibilityIdentifier("pulsePostDetail-repliesClosed")
+            } else {
+                CommentComposer(
+                    avatarName: composerAvatarName,
+                    avatarURL: composerAvatarURL,
+                    text: $composerText,
+                    placeholder: composerPlaceholder,
+                    isFocusedPresentation: comments.isEmpty,
+                    isSending: isSending,
+                    onSend: onSendTap
+                )
+                .padding(.horizontal, Spacing.s4)
+            }
 
             if !comments.isEmpty {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
@@ -318,7 +331,7 @@ public struct BodyReactionsBody: View {
                     }
                 }
                 .padding(.horizontal, Spacing.s4)
-            } else {
+            } else if repliesClosedNote == nil {
                 EmptyThreadState(
                     intent: intent,
                     prompts: intent.quickReplyPrompts

@@ -2,7 +2,7 @@
     androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
     androidx.compose.foundation.ExperimentalFoundationApi::class,
 )
-@file:Suppress("MagicNumber", "PackageNaming", "LongParameterList", "LongMethod", "TooManyFunctions")
+@file:Suppress("MagicNumber", "PackageNaming", "LongParameterList", "LongMethod", "TooManyFunctions", "CyclomaticComplexMethod")
 
 package app.pantopus.android.ui.screens.shared.content_detail.bodies
 
@@ -159,6 +159,11 @@ fun BodyReactionsBody(
      * every other caller leaves it null.
      */
     belowReactions: (@Composable () -> Unit)? = null,
+    /**
+     * Shown in place of the composer when nobody can reply (a post a
+     * moderator removed); null keeps the composer and the empty-thread prompts.
+     */
+    repliesClosedNote: String? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -202,7 +207,7 @@ fun BodyReactionsBody(
         belowReactions?.let { slot ->
             Box(modifier = Modifier.padding(horizontal = Spacing.s4)) { slot() }
         }
-        if (replyingToName != null) {
+        if (repliesClosedNote == null && replyingToName != null) {
             Row(
                 modifier =
                     Modifier
@@ -238,22 +243,34 @@ fun BodyReactionsBody(
                 }
             }
         }
-        CommentComposer(
-            avatarName = composerAvatarName,
-            avatarUrl = composerAvatarUrl,
-            text = composerText,
-            onTextChange = onComposerTextChange,
-            placeholder =
-                when {
-                    replyingToName != null -> "Reply to $replyingToName..."
-                    comments.isEmpty() -> "Be the first to reply..."
-                    else -> "Add a comment"
-                },
-            isFocusedPresentation = comments.isEmpty(),
-            isSending = isSending,
-            onSend = onSendTap,
-            modifier = Modifier.padding(horizontal = Spacing.s4),
-        )
+        if (repliesClosedNote != null) {
+            Text(
+                text = repliesClosedNote,
+                fontSize = 14.sp,
+                color = PantopusColors.appTextSecondary,
+                modifier =
+                    Modifier
+                        .padding(horizontal = Spacing.s4)
+                        .testTag("pulsePostDetail-repliesClosed"),
+            )
+        } else {
+            CommentComposer(
+                avatarName = composerAvatarName,
+                avatarUrl = composerAvatarUrl,
+                text = composerText,
+                onTextChange = onComposerTextChange,
+                placeholder =
+                    when {
+                        replyingToName != null -> "Reply to $replyingToName..."
+                        comments.isEmpty() -> "Be the first to reply..."
+                        else -> "Add a comment"
+                    },
+                isFocusedPresentation = comments.isEmpty(),
+                isSending = isSending,
+                onSend = onSendTap,
+                modifier = Modifier.padding(horizontal = Spacing.s4),
+            )
+        }
         if (comments.isNotEmpty()) {
             Column(
                 modifier = Modifier.padding(horizontal = Spacing.s4),
@@ -287,7 +304,7 @@ fun BodyReactionsBody(
                     )
                 }
             }
-        } else {
+        } else if (repliesClosedNote == null) {
             EmptyThreadState(
                 intent = intent,
                 prompts = intent.quickReplyPrompts,
