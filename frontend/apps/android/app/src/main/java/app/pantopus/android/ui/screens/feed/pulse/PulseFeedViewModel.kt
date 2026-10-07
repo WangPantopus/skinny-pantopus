@@ -103,6 +103,11 @@ class PulseFeedViewModel
         private val _state = MutableStateFlow<PulseFeedUiState>(PulseFeedUiState.Loading)
         val state: StateFlow<PulseFeedUiState> = _state.asStateFlow()
 
+        private val _fallbackAreaLabel = MutableStateFlow<String?>(null)
+
+        /** Where the server looked when no area was given ("Near Camas, WA"), or null. */
+        val fallbackAreaLabel: StateFlow<String?> = _fallbackAreaLabel.asStateFlow()
+
         private val _activeIntent = MutableStateFlow(PulseIntent.All)
         val activeIntent: StateFlow<PulseIntent> = _activeIntent.asStateFlow()
 
@@ -873,6 +878,7 @@ class PulseFeedViewModel
                         is NetworkResult.Success -> {
                             val response = result.data
                             lastArea = area
+                            _fallbackAreaLabel.value = response.fallbackArea?.label
                             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
                             loadedPosts = response.posts
                             postsLoaded = true

@@ -31,6 +31,15 @@ public protocol LocationProviding: AnyObject, Sendable {
     /// Acquisition is bounded after authorization; caller cancellation also
     /// releases an unanswered permission wait. Denial returns no coordinate.
     func requestCurrent(timeoutSeconds: TimeInterval) async -> UserCoordinate?
+    /// True when a fix can be requested without the system asking for permission first.
+    @MainActor var canLocateWithoutAsking: Bool { get }
+}
+
+public extension LocationProviding {
+    /// Fixed providers (previews, tests) never prompt.
+    @MainActor var canLocateWithoutAsking: Bool {
+        true
+    }
 }
 
 /// Fixed Manhattan anchor retained for existing previews and test fixtures.
