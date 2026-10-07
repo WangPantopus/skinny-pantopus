@@ -72,25 +72,24 @@ class HomeMemberRemovalCodec(moshi: Moshi) {
         intent: HomeMemberRemovalIntent,
         scope: HomeCreationScope,
     ): String {
-        val homeName = nullableText(home, "name")?.takeIf(String::isNotBlank) ?: "Household ${intent.homeId}"
+        val homeName = nullableText(home, "name")?.takeIf(String::isNotBlank) ?: "Selected Home"
         check(target.containsKey("name") && target["name"] == null)
         val username = nullableText(target, "username")?.takeIf(String::isNotBlank)?.let { "@$it" }
         check(target["is_self"] is Boolean && target["is_active"] is Boolean)
         check(target["is_self"] == (intent.targetUserId == scope.actorId))
         val role = nullableText(target, "role_base")
         check(role in ROLES || (role == null && target["is_self"] == true))
-        val status = nullableText(target, "verification_status", MAX_STATUS)
+        // Validated with the rest of the reply; the summary shows the role and dates, as on iOS and the web.
+        nullableText(target, "verification_status", MAX_STATUS)
         val dates = DATES.associateWith { nullableDate(target, it) }
         return listOfNotNull(
             homeName,
-            username ?: "Account: ${intent.targetUserId}",
+            username ?: "Selected household member",
             if (target["is_self"] == true) "Your household membership" else null,
-            "Role: ${role ?: "Unconfirmed historical role"}",
-            "Membership active: ${if (target["is_active"] == true) "Yes" else "No"}",
-            status?.let { "Membership status: $it" },
-            dates["start_at"]?.let { "Membership begins: ${reviewedDateLabel(it)}" },
+            "Role: ${role?.let(::invitationRoleLabel) ?: "Not recorded"}",
+            dates["start_at"]?.let { "Membership starts: ${reviewedDateLabel(it)}" },
             dates["end_at"]?.let { "Membership ends: ${reviewedDateLabel(it)}" },
-            dates["access_start_at"]?.let { "Access begins: ${reviewedDateLabel(it)}" },
+            dates["access_start_at"]?.let { "Access starts: ${reviewedDateLabel(it)}" },
             dates["access_end_at"]?.let { "Access ends: ${reviewedDateLabel(it)}" },
         ).joinToString("\n")
     }
