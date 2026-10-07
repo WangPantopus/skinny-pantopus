@@ -209,7 +209,8 @@ enum HomeInvitationDecisionError: LocalizedError {
         case "INVITER_ACCESS_CHANGED": "The sender can no longer grant this access. Ask the household for a new invitation."
         case "OWNERSHIP_FLOW_REQUIRED": "Use the separate ownership flow for this invitation."
         case "INVITE_POLICY_CHANGED": "The household permissions changed. Ask for a new invitation."
-        case "MEMBERSHIP_RENEWAL_REQUIRED": "Your previous household access needs a new review. This invitation cannot restore it."
+        case "MEMBERSHIP_RENEWAL_REQUIRED":
+            "This invitation can't restore your earlier household access. Ask someone in the household to send an invitation to you."
         default: "The decision could not continue. Review the invitation and current account before starting again."
         }
     }
