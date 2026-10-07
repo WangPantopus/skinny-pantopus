@@ -218,18 +218,21 @@ object WalletMapper {
 
     /**
      * Split the escrow total into RN's two named lines
-     * (`WalletTab.tsx:161-173`). Gated on `total_pending_cents > 0` — the
-     * same condition RN uses — so an empty escrow hides the section instead
-     * of rendering two `$0.00` rows. The server's own cents are formatted;
-     * nothing is re-derived. Mirrors iOS `WalletViewModel.pendingBreakdown`.
+     * (`WalletTab.tsx:161-173`), plus a third for income in dispute. Gated
+     * on `total_pending_cents > 0` or an open dispute — RN's condition, so
+     * an empty escrow hides the section instead of rendering `$0.00` rows.
+     * The server's own cents are formatted; nothing is re-derived. Mirrors
+     * iOS `WalletViewModel.pendingBreakdown`.
      */
     fun pendingBreakdown(pending: WalletPendingReleaseResponse?): WalletPendingBreakdown? {
-        if (pending == null || pending.totalPendingCents <= 0L) return null
+        if (pending == null || (pending.totalPendingCents <= 0L && pending.inDisputeCount <= 0)) return null
         return WalletPendingBreakdown(
             inReview = centsToCurrency(pending.inReviewCents),
             releasingSoon = centsToCurrency(pending.releasingSoonCents),
             inReviewCount = pending.inReviewCount,
             releasingSoonCount = pending.releasingSoonCount,
+            inDispute = if (pending.inDisputeCount > 0) centsToCurrency(pending.inDisputeCents) else null,
+            inDisputeCount = pending.inDisputeCount,
         )
     }
 
@@ -240,7 +243,7 @@ object WalletMapper {
         if (cents <= 0L) {
             "Nothing in escrow"
         } else {
-            "$count ${if (count == 1) "payment" else "payments"} · releases after review"
+            "$count ${if (count == 1) "payment" else "payments"} · clearing"
         }
 
     private fun monthMeta(count: Int): String = "$count ${if (count == 1) "credit" else "credits"} this month"

@@ -187,17 +187,27 @@ public struct WalletPendingBreakdown: Equatable, Sendable {
     public let inReviewCount: Int
     /// `releasing_soon_count`.
     public let releasingSoonCount: Int
+    /// `in_dispute_cents` — income held while the payer's bank reviews a
+    /// dispute. Not part of the pending figure; shown on its own line.
+    /// `nil` when nothing is in dispute.
+    public let inDispute: String?
+    /// `in_dispute_count`.
+    public let inDisputeCount: Int
 
     public init(
         inReview: String,
         releasingSoon: String,
         inReviewCount: Int = 0,
-        releasingSoonCount: Int = 0
+        releasingSoonCount: Int = 0,
+        inDispute: String? = nil,
+        inDisputeCount: Int = 0
     ) {
         self.inReview = inReview
         self.releasingSoon = releasingSoon
         self.inReviewCount = inReviewCount
         self.releasingSoonCount = releasingSoonCount
+        self.inDispute = inDispute
+        self.inDisputeCount = inDisputeCount
     }
 }
 

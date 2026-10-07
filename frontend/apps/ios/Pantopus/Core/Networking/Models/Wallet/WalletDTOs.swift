@@ -137,6 +137,10 @@ public struct WalletPendingReleaseResponse: Decodable, Sendable, Hashable {
     public let totalPendingCents: Int
     public let inReviewCount: Int
     public let releasingSoonCount: Int
+    /// Income under an open payment dispute; not part of the pending
+    /// totals. Older servers omit both.
+    public let inDisputeCents: Int?
+    public let inDisputeCount: Int?
 
     private enum CodingKeys: String, CodingKey {
         case inReviewCents = "in_review_cents"
@@ -144,5 +148,7 @@ public struct WalletPendingReleaseResponse: Decodable, Sendable, Hashable {
         case totalPendingCents = "total_pending_cents"
         case inReviewCount = "in_review_count"
         case releasingSoonCount = "releasing_soon_count"
+        case inDisputeCents = "in_dispute_cents"
+        case inDisputeCount = "in_dispute_count"
     }
 }
