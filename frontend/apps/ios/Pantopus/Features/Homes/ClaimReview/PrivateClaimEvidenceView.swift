@@ -34,7 +34,7 @@ struct PrivateClaimEvidenceView: View {
                             Button("Save or retry this document") { Task { await model.upload() } }
                         } else { Button("Choose private document") { showFilePicker = true } }
                     }
-                    if model.evidence.isEmpty, !model.busy { Text("No private documents are available.") }
+                    if model.evidence.isEmpty, !model.busy { Text("No documents on this claim yet.") }
                     ForEach(model.evidence) { record in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(record.fileName).font(.headline)

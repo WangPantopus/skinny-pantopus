@@ -26,7 +26,7 @@ class StatusWaitingContentTest {
         assertEquals("Claim submitted", content.headline)
         assertEquals("418 Linden Ave", content.addressChip)
         assertEquals(StatusPillTone.Success, content.statusPill?.tone)
-        assertEquals("Decision usually within 3 business days", content.statusPill?.text)
+        assertEquals("We'll notify you when it's decided", content.statusPill?.text)
         assertNull(content.timeline[0].sub)
         assertEquals(3, content.timeline.size)
         assertEquals(

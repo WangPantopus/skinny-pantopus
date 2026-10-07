@@ -56,7 +56,7 @@ fun HomePrivateEvidenceDialog(
                     Shimmer(modifier = Modifier.fillMaxWidth().height(Spacing.s10))
                 } else if (state.documents.isEmpty()) {
                     Text(
-                        "No private documents are available for this claim. Legacy uploads require a private re-upload.",
+                        "No documents on this claim yet.",
                         color = PantopusColors.appTextSecondary,
                     )
                 }

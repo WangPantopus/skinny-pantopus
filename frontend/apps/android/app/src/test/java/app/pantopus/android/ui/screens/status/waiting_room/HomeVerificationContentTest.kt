@@ -64,7 +64,7 @@ class HomeVerificationContentTest {
         val content = HomeVerificationContent.make(HomeVerificationStatus.PendingDoc)
         assertEquals("Document under review", content.headline)
         assertEquals(HaloCircleTone.Warning, content.halo.tone)
-        assertTrue(content.body.contains("1-2 business days"))
+        assertTrue(content.body.contains("Pantopus reviewer"))
     }
 
     @Test
