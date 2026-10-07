@@ -462,12 +462,15 @@ public struct ActivityEntry: Identifiable, Sendable {
 
 extension ActionChipContent {
     /// Launch cut #4 (Open gigs): "Post task" posts an open task. Launch
-    /// cut #3 (Marketplace): "Snap & sell" creates a listing.
+    /// cut #3 (Marketplace): "Snap & sell" creates a listing. Launch cut #7
+    /// (Household extras): mail scanning is cut, so "Scan mail" only opened
+    /// the Mailbox list, which the Mail tab already is.
     var isAvailableAtLaunch: Bool {
         switch kind {
         case .postTask: LaunchFeatures.openGigs
         case .snapAndSell: LaunchFeatures.marketplace
-        case .scanMail, .addHome: true
+        case .scanMail: LaunchFeatures.householdExtras
+        case .addHome: true
         }
     }
 }

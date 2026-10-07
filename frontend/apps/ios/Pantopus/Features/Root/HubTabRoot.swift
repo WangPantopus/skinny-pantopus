@@ -1284,7 +1284,7 @@ public struct HubTabRoot: View {
             case .openAudienceNotifications:
                 path.append(.notificationsZone(context: NotificationsZone.audience.rawValue))
             case .openMenu: showNavDrawer = true
-            case .startVerification: path.append(.addHome)
+            case .startVerification: Task { @MainActor in await startVerification() }
             case .action(.addHome): path.append(.addHome)
             case .action(.scanMail): path.append(.mailboxRoot)
             case .action(.postTask): path.append(.quickPostGig(category: GigsCategory.all.rawValue))
@@ -3466,7 +3466,8 @@ public struct HubTabRoot: View {
                     onOpenInbox: { push(.neighborInbox) },
                     onOpenPrivacyMirror: { push(.privacyMirror(homeId: homeId)) },
                     onOpenMailDay: { push(.mailDay(variant: .populated)) },
-                    onOpenHubHome: { push(.homeDashboard(homeId: homeId)) }
+                    onOpenHubHome: { push(.homeDashboard(homeId: homeId)) },
+                    onOpenNotifications: { push(.notifications) }
                 ),
                 isActive: path.last == route && rootTabs.selected == owningTab
             ) { showNavDrawer = true }
@@ -3583,6 +3584,28 @@ public struct HubTabRoot: View {
             placeResolutionError = (error as? APIError)?.errorDescription
                 ?? "Check your connection and try again."
         }
+    }
+
+    /// The setup banner's "Verify your address": a Home that already waits on
+    /// verification continues there, as My Homes does (a filed claim's Waiting
+    /// Room, residency status, or ownership evidence); with none, Add Home.
+    private func startVerification() async {
+        let response: MyHomesResponse? = try? await APIClient.shared.request(HomesEndpoints.myHomes())
+        guard rootTabs.selected == owningTab else { return }
+        path.append(Self.verificationRoute(response?.homes ?? []))
+    }
+
+    static func verificationRoute(_ homes: [MyHome]) -> HubRoute {
+        for entry in homes {
+            if entry.pendingClaimId != nil { return .waitingRoom(homeId: entry.id) }
+            if entry.accessKind == "private_setup" { return .residencyStatus(homeId: entry.id) }
+            switch MyHomesListViewModel.pendingVerification(for: entry) {
+            case .owner: return .claimOwnership(homeId: entry.id)
+            case .residency: return .residencyStatus(homeId: entry.id)
+            case nil: continue
+            }
+        }
+        return .addHome
     }
 
     private static func primaryHomeId() async throws -> String? {

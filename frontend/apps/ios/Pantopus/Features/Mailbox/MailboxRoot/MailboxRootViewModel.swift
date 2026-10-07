@@ -594,7 +594,10 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
                 MailboxListViewModel.makeRow(
                     for: mail.item,
                     trust: MailTrust.fromRaw(mail.senderTrust),
-                    viewed: viewedMailIds.contains(mail.id)
+                    viewed: viewedMailIds.contains(mail.id),
+                    sender: mail.senderDisplay,
+                    // Counter lists open mail with a due date, so its rows say when.
+                    dueDate: tab == .counter ? mail.dueDate : nil
                 ) { [weak self] mailId in
                     Task { @MainActor in self?.onOpenMail(mailId) }
                 }

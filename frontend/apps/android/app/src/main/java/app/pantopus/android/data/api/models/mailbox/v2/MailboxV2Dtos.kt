@@ -49,6 +49,8 @@ data class DrawerMail(
     @Json(name = "sender_display") val senderDisplay: String,
     @Json(name = "sender_trust") val senderTrust: String,
     val `package`: JsonValue?,
+    /** `Mail.due_date`: the calendar day a bill or notice is due ("2026-10-20"). */
+    @Json(name = "due_date") val dueDate: String? = null,
 ) {
     @JsonClass(generateAdapter = true)
     data class SenderRef(
