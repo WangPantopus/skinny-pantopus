@@ -98,7 +98,7 @@ The ordered steps, with exact values and checks, are in the [launch checklist](d
 - [ ] Production keys the backend reads; the database baseline adopted in production; TestFlight; a Play internal testing track.
   - [x] iOS release settings, privacy manifests and the production API host are on master (PR 1567).
   - [x] Android targets API 36 as Google Play requires (PR 1601, merged October 6; the main screens checked on an Android 16 emulator), and API dates now parse on Android 8–13 (PR 1650).
-  - [ ] Store listing drafts, privacy answers and the Play account-deletion page draft wait for your approval (PR 1635). Since October 7 they are on one page with the screenshots and two privacy-answer decisions: [store packet](https://claude.ai/artifact/1iACCevikKaWcHsYbmLhSf). The deletion page is ready to merge in PR 1744 once you approve its text.
+  - [x] October 7: you approved the store listing text, screenshots, privacy answers (Play: everything collected, not shared; crash data stays declared) and the account-deletion page. The files are where the release lanes read them (PR 1763), with the 1024 × 500 feature graphic Google Play requires; the deletion page is merged (PR 1744) and goes live with the next production web deploy. Entering the privacy answers and submitting stay your steps.
 - [ ] Confirm the Camas, Vancouver and Washougal pickup schedules and their holiday rules by hand for Thanksgiving (November 26), Christmas (December 25) and New Year's Day (January 1). Mark each official or unconfirmed. PR 1552 added draft holiday rows for the three cities; all stay unconfirmed and never push until you confirm them (FOUNDER.md).
   - [x] October 6: the founder confirmed the Vancouver, Washougal and Camas rules from the official sources; PR 1693 marks those rows official (Veterans Day moves Camas city garbage only).
   - [ ] Camas garbage on New Year's Day 2027: waiting on the founder's call to Camas Sanitation.
@@ -188,7 +188,7 @@ A checked subitem means the named implementation or local check is complete; a p
   - [x] October 7, iOS Release build signed in as a homeowner: every one of the 197 reachable routes opened as an app link with no crash.
   - [x] October 7, production web build: all 198 pages as a homeowner and as a new user with no crash or page error; the only two server errors came from the local database gateway resetting connections, not the app. Keyboard access unchanged; accessibility median 100 on the main pages.
   - [x] October 7 security re-check through the API as a stranger, a claimant and signed out (homes, chat, posts, profiles, Support Trains, mail, notifications): one access issue, a link-only household invitation could bring back a member the household removed (since PR 1725). Fix in PR 1743 with L2.
-  - [x] Store screenshots taken October 7 with test data in Camas: 8 for iPhone (6.9-inch) and 5 for Android. They wait for your approval with the listing text (section 2).
+  - [x] Store screenshots taken October 7 with test data in Camas: 8 for iPhone (6.9-inch) and 5 for Android. You approved them on October 7 (section 2).
 
 ## 4. The pilot
 
