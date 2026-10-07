@@ -418,7 +418,8 @@ final class DocumentsViewModel: ListOfRowsDataSource {
         guard let iso = dto.createdAt, let date = parseDate(iso) else { return nil }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        // The day it was uploaded where the person is: in UTC an evening upload showed tomorrow's date.
+        formatter.timeZone = .current
         formatter.dateFormat = "MMM d"
         return formatter.string(from: date)
     }
