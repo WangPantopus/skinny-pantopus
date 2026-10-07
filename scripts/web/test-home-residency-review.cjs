@@ -98,19 +98,19 @@ async function main() {
       if (await target.getByLabel('Reason for rejection (optional)', { exact: true }).count()) await target.getByLabel('Reason for rejection (optional)', { exact: true }).fill(reason);
       await target.getByRole('checkbox').check();
     };
-    const save = target => target.getByRole('button', { name: 'Save residency decision', exact: true });
-    const confirmed = target => target.getByRole('heading', { name: 'Original decision confirmed', exact: true });
-    const retry = target => target.getByRole('button', { name: 'Retry original decision', exact: true });
-    const ack = target => target.getByRole('button', { name: 'I reviewed this confirmation', exact: true });
+    const save = target => target.getByRole('button', { name: 'Save decision', exact: true });
+    const confirmed = target => target.getByRole('heading', { name: 'Decision saved', exact: true });
+    const retry = target => target.getByRole('button', { name: 'Try again', exact: true });
+    const ack = target => target.getByRole('button', { name: 'Done', exact: true });
     await page.goto(base + listPath + '?tab=residency', { waitUntil: 'domcontentloaded', timeout: 120000 });
     await page.getByRole('button', { name: 'Deny', exact: true }).first().click();
     await page.getByLabel('Reason for rejection (optional)', { exact: true }).fill('Cancelled reason');
     await page.getByRole('link', { name: 'Cancel', exact: true }).click();
     await page.getByRole('button', { name: 'Approve', exact: true }).first().click();
-    await page.getByRole('region', { name: 'Current residency claim' }).waitFor();
+    await page.getByRole('region', { name: 'Request' }).waitFor();
     assert.equal(posts.length, 0); assert.equal(rows(), 0); assert.equal((await stored()).length, 0); assert(await save(page).isDisabled());
-    await prepare(); await page.getByLabel('Role for an unverified membership', { exact: true }).selectOption('guest');
-    assert(await save(page).isDisabled()); await page.getByLabel('Role for an unverified membership', { exact: true }).selectOption('member');
+    await prepare(); await page.getByLabel('Their role', { exact: true }).selectOption('guest');
+    assert(await save(page).isDisabled()); await page.getByLabel('Their role', { exact: true }).selectOption('member');
     await prepare(); await screenshot('01-prepared-approval');
     await page.evaluate(() => { window.initialKeyPut = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function(value, key) {
       if (this.name === 'keys' && key === 'residency-review-v1') throw new DOMException('Synthetic key quota failure', 'QuotaExceededError');
@@ -123,9 +123,9 @@ async function main() {
     assert.equal(saved.draft.command.request_id, original.request_id); assert.equal(saved.draft.command.role, original.proposed_role);
     sql(`UPDATE public."HomeOccupancy" SET is_active=false,verification_status='moved_out' WHERE home_id=${q(home)} AND user_id=${q(f.users[1])};`);
     await page.goto(base + listPath + '?tab=residency', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('link', { name: 'Residency decisions and recovery', exact: true }).click();
+    await page.getByRole('link', { name: 'Your past decisions', exact: true }).click();
     await retry(page).click(); await confirmed(page).waitFor(); assert.deepEqual(posts[1], original); assert.equal(rows(), 1);
-    await page.getByText('Membership record: Inactive', { exact: true }).waitFor();
+    await page.getByText('Membership: Ended', { exact: true }).waitFor();
     await page.reload({ waitUntil: 'domcontentloaded' }); await confirmed(page).waitFor(); assert.equal(posts.length, 2);
     await screenshot('02-original-approval-current-move-out'); await ack(page).click();
     await page.getByText('No residency decision needs recovery on this browser. Choose a claim to review.', { exact: true }).waitFor();
@@ -136,7 +136,7 @@ async function main() {
     await page.getByRole('link', { name: 'Review rejection', exact: true }).first().click();
     await expect(page).toHaveURL(new RegExp(claims[1])); await prepare();
     sql(`UPDATE public."HomeResidencyClaim" SET updated_at=clock_timestamp() WHERE id=${q(claims[1])};`);
-    await save(page).click(); await page.getByRole('button', { name: 'Review current claim again', exact: true }).click();
+    await save(page).click(); await page.getByRole('button', { name: 'Start over', exact: true }).click();
     await expect.poll(async () => (await stored()).length).toBe(0);
     await page.getByRole('form', { name: 'Review residency decision' }).waitFor();
     assert.equal(rows(), 1); assert.equal((await stored()).length, 0); assert(!(await page.getByRole('checkbox').isChecked()));
@@ -147,7 +147,7 @@ async function main() {
     sql(`UPDATE public."HomeResidencyClaim" SET status='pending',reviewed_by=NULL,reviewed_at=NULL,review_note=NULL,updated_at=clock_timestamp() WHERE id=${q(claims[1])};`);
     await sibling.reload({ waitUntil: 'domcontentloaded' }); await retry(sibling).click(); await confirmed(sibling).waitFor();
     assert.equal(rows(), 2); assert.deepEqual(posts.at(-1), posts.at(-2));
-    await sibling.getByText('Claim status: pending', { exact: true }).waitFor(); await sibling.close();
+    await sibling.getByText('Status: Waiting for your decision', { exact: true }).waitFor(); await sibling.close();
     await page.reload({ waitUntil: 'domcontentloaded' }); await confirmed(page).waitFor();
     await screenshot('03-original-rejection-current-resubmission');
     console.log('PASS: household entry, stale review, competing tabs and original rejection/current resubmission separation');
@@ -155,7 +155,7 @@ async function main() {
     const prior = posts.length;
     sql(`UPDATE public."HomeOccupancy" SET is_active=false WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await page.getByRole('button', { name: 'Reload current access', exact: true }).waitFor();
-    assert.equal(await page.getByRole('region', { name: 'Current residency claim' }).count(), 0);
+    assert.equal(await page.getByRole('region', { name: 'Request' }).count(), 0);
     assert.equal(await page.getByText('Original reason: First competing original', { exact: true }).count(), 0);
     sql(`UPDATE public."HomeOccupancy" SET is_active=true WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     await page.getByRole('button', { name: 'Reload current access', exact: true }).click(); await confirmed(page).waitFor();
@@ -184,7 +184,7 @@ async function main() {
     await screenshot('04-narrow-recovered-rejection');
     await ack(page).click();
     // Acknowledging an old claim must open the claim named by the current URL.
-    await page.getByRole('region', { name: 'Current residency claim' }).getByText(/Claim reference: 00000204/).waitFor();
+    await page.getByRole('region', { name: 'Request' }).getByText(/Claim reference: 00000204/).waitFor();
     console.log('PASS: current authority/account change hides private review, corrupt ciphertext retained, original restored and requested next claim opened');
 
     await prepare();
@@ -195,7 +195,7 @@ async function main() {
     assert.equal(posts.length, prior); assert.equal((await stored()).length, 0);
     await page.evaluate(() => { IDBObjectStore.prototype.put = window.originalPut; delete window.originalPut; });
     const reached = holdNextRead(); await save(page).click(); await reached(); await visibility(true);
-    await expect(page.getByRole('region', { name: 'Current residency claim' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Request' })).toHaveCount(0);
     releaseRead(); releaseRead = null; await visibility(false); await retry(page).waitFor(); assert.equal(posts.length, prior);
     const heldOriginal = (await stored())[0].draft;
     const reachedAgain = holdNextRead(); await retry(page).click(); await reachedAgain();
@@ -210,15 +210,15 @@ async function main() {
     // A definite role ceiling denial is reviewable, not an unrecoverable saved draft.
     sql(`UPDATE public."HomeOccupancy" SET age_band='child' WHERE home_id=${q(home)} AND user_id=${q(f.users[4])};`);
     await page.goto(url(claims[3]), { waitUntil: 'domcontentloaded' }); await prepare(); await save(page).click();
-    await page.getByRole('button', { name: 'Review current claim again', exact: true }).click();
-    await page.getByLabel('Role for an unverified membership', { exact: true }).selectOption('guest'); await prepare();
+    await page.getByRole('button', { name: 'Start over', exact: true }).click();
+    await page.getByLabel('Their role', { exact: true }).selectOption('guest'); await prepare();
     await save(page).click(); await confirmed(page).waitFor(); assert.equal(rows(), 4);
     await screenshot('06-role-ceiling-reviewed-guest'); await ack(page).click();
     // Separate later claimant state is fixture-controlled; it creates no receipt.
     sql(`UPDATE public."HomeResidencyClaim" SET status='rejected' WHERE id=${q(claims[1])};`);
     await page.goto(base + membersPath, { waitUntil: 'domcontentloaded' });
     await page.getByText('No pending residency claims', { exact: true }).waitFor();
-    await page.getByRole('link', { name: 'Residency decisions and recovery', exact: true }).click();
+    await page.getByRole('link', { name: 'Your past decisions', exact: true }).click();
     await page.getByText('No residency decision needs recovery on this browser. Choose a claim to review.', { exact: true }).waitFor();
     await page.goto(base + membersPath, { waitUntil: 'domcontentloaded' });
     await page.getByText('No pending residency claims', { exact: true }).waitFor();
@@ -240,7 +240,7 @@ async function main() {
     await screenshot('08-owners-denied-list');
     sql(`UPDATE public."HomeOccupancy" SET is_active=true WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     await page.getByRole('button', { name: 'Reload claims', exact: true }).click();
-    await page.getByRole('link', { name: 'Residency decisions and recovery', exact: true }).click();
+    await page.getByRole('link', { name: 'Your past decisions', exact: true }).click();
     await page.getByText('No residency decision needs recovery on this browser. Choose a claim to review.', { exact: true }).waitFor();
     assert.equal((await stored()).length, 0); assert.equal(rows(), 4);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)); assert.deepEqual(errors, []);

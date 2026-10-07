@@ -23,41 +23,31 @@ internal fun HomeResidencyReviewCurrent(
     claimant: String?,
     recovering: Boolean,
 ) {
-    Text("Current residency claim", style = MaterialTheme.typography.titleMedium)
+    Text("Request", style = MaterialTheme.typography.titleMedium)
     claimant?.let { Text(it, style = MaterialTheme.typography.titleSmall) }
-    Text(
-        "Claim reference: ${review.claimId.takeLast(REFERENCE_SUFFIX_LENGTH)} · " +
-            "Applicant account: ${review.applicantId.takeLast(REFERENCE_SUFFIX_LENGTH)}",
-        style = MaterialTheme.typography.bodySmall,
-    )
-    Text("Claim status: ${review.status}", Modifier.testTag("homeResidencyReview.claimStatus"))
-    Text("Requested role: ${words(review.claim["claimed_role"])}")
-    (review.claim["claimed_address"] as? String)?.let { Text("Claimed address: $it") }
-    (review.claim["review_note"] as? String)?.takeIf(String::isNotEmpty)?.let { Text("Current review note: $it") }
+    Text("Reference: ${review.claimId.takeLast(REFERENCE_SUFFIX_LENGTH)}", style = MaterialTheme.typography.bodySmall)
+    Text("Status: ${claimStatus(review.status)}", Modifier.testTag("homeResidencyReview.claimStatus"))
+    Text("Asked to join as: ${joinedAs(review.claim["claimed_role"])}")
+    (review.claim["claimed_address"] as? String)?.let { Text("Address: $it") }
+    (review.claim["review_note"] as? String)?.takeIf(String::isNotEmpty)?.let { Text("Note: $it") }
     if (recovering) {
-        Text(
-            "This is the latest claim state. The saved decision below records the earlier request.",
-            style = MaterialTheme.typography.bodySmall,
-        )
+        Text("Your saved decision below was for an earlier request.", style = MaterialTheme.typography.bodySmall)
     }
     HorizontalDivider()
-    Text("Current membership", style = MaterialTheme.typography.titleMedium)
+    Text("Their access now", style = MaterialTheme.typography.titleMedium)
     val occupancy = review.occupancy
     if (occupancy == null) {
-        Text("No membership record exists for this applicant yet.")
+        Text("They don’t have access to this Home yet.")
     } else {
         Text(
-            "Membership record: ${if (occupancy["is_active"] == true) "Active" else "Inactive"}",
+            "Membership: ${if (occupancy["is_active"] == true) "Active" else "Ended"}",
             Modifier.testTag("homeResidencyReview.membershipStatus"),
         )
-        Text("Role: ${words(occupancy["role_base"] ?: occupancy["role"])}")
-        Text("Age band: ${words(occupancy["age_band"])}")
-        Text("Verification: ${words(occupancy["verification_status"])}")
+        Text("Role: ${roleLabel(occupancy["role_base"] ?: occupancy["role"])}")
+        Text("Age group: ${words(occupancy["age_band"])}")
+        Text("Verification: ${verificationLabel(occupancy["verification_status"])}")
         MEMBERSHIP_DATES.forEach { (key, title) -> Text("$title: ${residencyReviewDate(occupancy[key])}") }
-        Text(
-            "Access also depends on the current dates, verification and household permissions.",
-            style = MaterialTheme.typography.bodySmall,
-        )
+        Text("What they can do also depends on these dates and their permissions.", style = MaterialTheme.typography.bodySmall)
     }
     HorizontalDivider()
 }
@@ -71,45 +61,63 @@ internal fun HomeResidencyReviewRecovery(
     val body = viewModel.codec.objectFrom(pending.requestJson)
     val receipt = state.receiptJson?.let(viewModel.codec::objectFrom)
     Text(
-        if (receipt != null) "Original decision confirmed" else "Decision needs confirmation",
+        if (receipt != null) "Decision saved" else "Check your last decision",
         style = MaterialTheme.typography.titleMedium,
     )
-    Text(pending.action.title)
-    HomeResidencyReviewRole.entries.firstOrNull { it.wire == body["proposed_role"] }?.let { Text("Originally selected role: ${it.title}") }
-    (body["reason"] as? String)?.takeIf(String::isNotEmpty)?.let { Text("Original reason: $it") }
+    Text("You chose: ${pending.action.title}")
+    HomeResidencyReviewRole.entries.firstOrNull { it.wire == body["proposed_role"] }?.let { Text("Role: ${it.title}") }
+    (body["reason"] as? String)?.takeIf(String::isNotEmpty)?.let { Text("Reason: $it") }
     if (receipt != null) {
-        Text("Recorded ${residencyReviewDate(receipt["created_at"])}")
-        Text(
-            if (pending.action == HomeResidencyDecision.Approve) {
-                "The original residency claim was approved."
-            } else {
-                "The original residency claim was rejected."
-            },
-        )
-        Text(
-            "Later changes remain in effect. This confirmation does not restore access or decide a resubmitted claim.",
-            style = MaterialTheme.typography.bodySmall,
-        )
+        Text("Saved ${residencyReviewDate(receipt["created_at"])}")
+        Text(if (pending.action == HomeResidencyDecision.Approve) "You approved this request." else "You rejected this request.")
     } else {
         Text(
-            "The original decision is saved on this device. Retry it to confirm the outcome without submitting a second decision.",
+            "We couldn’t confirm your decision went through. Try again; it won’t be applied twice.",
             style = MaterialTheme.typography.bodySmall,
         )
     }
-    if (viewModel.recoveringAnotherClaim) Text("Finish this saved decision before reviewing another claim.")
+    if (viewModel.recoveringAnotherClaim) Text("Finish this before reviewing another request.")
     if (state.canRetry) {
         TextButton(onClick = viewModel::retry, modifier = Modifier.testTag("homeResidencyReview.retry")) {
-            Text(if (receipt != null) "Save confirmation again" else "Retry original decision")
+            Text(if (receipt != null) "Save again" else "Try again")
         }
     }
     if (state.canAcknowledge) {
         TextButton(onClick = viewModel::acknowledge, modifier = Modifier.testTag("homeResidencyReview.acknowledge")) {
-            Text(if (pending.receiptJson != null) "I reviewed this confirmation" else "Review current claim again")
+            Text(if (pending.receiptJson != null) "Done" else "Start over")
         }
     }
 }
 
-private fun words(value: Any?): String = (value as? String ?: "Unknown").replace('_', ' ')
+private fun words(value: Any?): String = (value as? String ?: "Not given").replace('_', ' ')
+
+private fun claimStatus(value: Any?): String =
+    when (value) {
+        "pending" -> "Waiting for your decision"
+        "verified" -> "Approved"
+        "rejected" -> "Rejected"
+        else -> words(value)
+    }
+
+private fun joinedAs(value: Any?): String =
+    when (value) {
+        "household", "member" -> "Household member"
+        "renter", "tenant" -> "Renter"
+        else -> words(value)
+    }
+
+private fun roleLabel(value: Any?): String = HomeResidencyReviewRole.entries.firstOrNull { it.wire == value }?.title ?: words(value)
+
+private fun verificationLabel(value: Any?): String =
+    when (value) {
+        "verified" -> "Verified"
+        "pending_approval" -> "Waiting for approval"
+        "pending_postcard" -> "Waiting for a postcard"
+        "provisional_bootstrap", "provisional" -> "Provisional"
+        "moved_out" -> "Left this Home"
+        "inactive" -> "Removed"
+        else -> words(value)
+    }
 
 private fun residencyReviewDate(value: Any?): String =
     if (value == null) {

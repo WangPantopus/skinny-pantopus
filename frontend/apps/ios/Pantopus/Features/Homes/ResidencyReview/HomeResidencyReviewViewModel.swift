@@ -88,8 +88,8 @@ final class HomeResidencyReviewViewModel: Identifiable {
     }
 
     var unavailableDecisionMessage: String {
-        if review?.applicantId == scope.actorId { return "You cannot approve or reject your own membership." }
-        return "This claim is no longer pending. Review its current membership and any saved original decision."
+        if review?.applicantId == scope.actorId { return "You can’t approve or reject your own request." }
+        return "This request was already decided."
     }
 
     var canDecide: Bool {
