@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
 import java.util.Locale
 import javax.inject.Inject
 
@@ -126,10 +127,10 @@ class PropertyDetailsViewModel
                             add(PropertyFactRow(id = "baths", label = "Bathrooms", value = formatBaths(it), mono = true))
                         }
                         home.sqFt?.let {
-                            add(PropertyFactRow(id = "interior", label = "Interior", value = "$it sq ft", mono = true))
+                            add(PropertyFactRow(id = "interior", label = "Interior", value = sqFtText(it), mono = true))
                         }
                         home.lotSqFt?.let {
-                            add(PropertyFactRow(id = "lot", label = "Lot", value = "$it sq ft", mono = true))
+                            add(PropertyFactRow(id = "lot", label = "Lot", value = sqFtText(it), mono = true))
                         }
                     }
 
@@ -157,3 +158,6 @@ class PropertyDetailsViewModel
             private fun String.nonBlank(): String? = trim().ifEmpty { null }
         }
     }
+
+/** "45000 sq ft" with the locale's digit grouping ("45,000 sq ft"). */
+private fun sqFtText(value: Number): String = "${NumberFormat.getIntegerInstance().format(value)} sq ft"

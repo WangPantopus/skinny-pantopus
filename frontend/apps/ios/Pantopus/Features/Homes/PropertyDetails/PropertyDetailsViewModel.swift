@@ -97,10 +97,10 @@ final class PropertyDetailsViewModel {
             facts.append(PropertyFactRow(id: "baths", label: "Bathrooms", value: Self.formatBaths(baths), mono: true))
         }
         if let sqft = home.sqFt {
-            facts.append(PropertyFactRow(id: "interior", label: "Interior", value: "\(sqft) sq ft", mono: true))
+            facts.append(PropertyFactRow(id: "interior", label: "Interior", value: "\(sqft.formatted()) sq ft", mono: true))
         }
         if let lot = home.lotSqFt {
-            facts.append(PropertyFactRow(id: "lot", label: "Lot", value: "\(lot) sq ft", mono: true))
+            facts.append(PropertyFactRow(id: "lot", label: "Lot", value: "\(lot.formatted()) sq ft", mono: true))
         }
 
         return PropertyDetailsContent(

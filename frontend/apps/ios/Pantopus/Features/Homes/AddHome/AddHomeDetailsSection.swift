@@ -306,12 +306,12 @@ private struct PublicRecordsCard: View {
             out.append(Row(label: "Bathrooms", value: text, source: sources["bathrooms"]))
         }
         if let sqFt = fields.sqFt {
-            out.append(Row(label: "Home size", value: "\(sqFt) sq ft", source: sources["sq_ft"]))
+            out.append(Row(label: "Home size", value: "\(sqFt.formatted()) sq ft", source: sources["sq_ft"]))
         }
         if let lotSqFt = fields.lotSqFt {
             out.append(Row(
                 label: "Lot size",
-                value: "\(lotSqFt) sq ft",
+                value: "\(lotSqFt.formatted()) sq ft",
                 source: sources["lot_sq_ft"]
             ))
         }
