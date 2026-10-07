@@ -109,6 +109,16 @@ For the future database activation, see
 [supabase-migration-automation-runbook.md](supabase-migration-automation-runbook.md).
 Do not point staging migration credentials at the production project.
 
+For IPv4 runners, set the environment **variable**
+`SUPABASE_SESSION_POOLER_HOST` to the shared session-pooler hostname shown in
+that project's Supabase **Connect** dialog (`aws-<index>-<region>.pooler.supabase.com`).
+Copy the exact hostname; the region alone does not determine the pooler index.
+The workflow uses port 5432 and the existing `SUPABASE_DB_PASSWORD` secret through
+`PGPASSWORD`, without putting the password in command arguments. This avoids
+depending on the CLI's automatic IPv6-to-pooler fallback. Leave the variable
+empty only when the runner can reach the linked project's default connection.
+The migration dry run skips Vault updates so it remains read-only.
+
 ## Rollback
 
 Run **Rollback Backend** from `master` for production or `dev` for staging.
