@@ -7,6 +7,7 @@
 //
 //    • empty      — dashed border + plus icon + label + hint
 //    • uploading  — filename + size + live progress bar
+//    • pending    — filename + size + a plain status line (nothing checked yet)
 //    • done       — filename + size + green check + "Address matches" line
 //    • warn       — filename + amber chip + "Address differs" block
 //
@@ -37,6 +38,8 @@ struct UploadSlotFile: Equatable {
 enum UploadSlotState: Equatable {
     case empty
     case uploading(file: UploadSlotFile, progress: Double)
+    /// A chosen, saved or unconfirmed private document that nobody has checked: no address verdict.
+    case pending(file: UploadSlotFile, detail: String)
     case done(file: UploadSlotFile, detail: String)
     case warn(file: UploadSlotFile, detail: String)
 
@@ -48,7 +51,7 @@ enum UploadSlotState: Equatable {
     /// Whether the slot holds a confirmed (uploaded + checked) document.
     var isAttached: Bool {
         switch self {
-        case .done, .warn: true
+        case .pending, .done, .warn: true
         case .empty, .uploading: false
         }
     }
@@ -72,6 +75,8 @@ struct UploadSlot: View {
                 emptyTile
             case let .uploading(file, progress):
                 uploadingTile(file: file, progress: progress)
+            case let .pending(file, detail):
+                pendingTile(file: file, detail: detail)
             case let .done(file, detail):
                 uploadedTile(file: file, detail: detail, isWarn: false)
             case let .warn(file, detail):
@@ -137,6 +142,38 @@ struct UploadSlot: View {
         .overlay {
             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                 .stroke(Theme.Color.primary200, lineWidth: 1)
+        }
+    }
+
+    // MARK: - Pending
+
+    private func pendingTile(file: UploadSlotFile, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            HStack(spacing: Spacing.s3) {
+                thumbnail(file: file)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(file.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.Color.appText)
+                        .lineLimit(1)
+                    Text(sizeAndPages(file))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
+                Spacer(minLength: Spacing.s0)
+                removeButton(icon: .trash2, background: .clear)
+            }
+            Text(detail)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(Spacing.s3)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                .stroke(Theme.Color.appBorder, lineWidth: 1)
         }
     }
 
@@ -281,6 +318,8 @@ struct UploadSlot: View {
             "\(label). Tap to upload. \(hint)"
         case let .uploading(file, progress):
             "\(label). Uploading \(file.name), \(Int((progress * 100).rounded())) percent."
+        case let .pending(file, detail):
+            "\(label). \(file.name). \(detail)"
         case let .done(file, detail):
             "\(label). \(file.name) uploaded. \(UploadSlotState.matchLead) \(detail)"
         case let .warn(file, detail):
