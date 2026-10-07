@@ -69,9 +69,8 @@ fun WaitingRoomRoute(
     val phase by viewModel.phase.collectAsStateWithLifecycle()
     val navEvent by viewModel.navEvent.collectAsStateWithLifecycle()
 
-    // Mirrors the iOS `.task` on `WaitingRoomView`: refetch on every
-    // appearance so returning from evidence upload shows fresh claim state.
-    // Also reloads on return from the postcard, evidence or Home screens, which can change the claim.
+    // Refetch on every resume, as iOS does on appear: returning from evidence
+    // upload, the postcard or the Home (or to the app) can change the claim.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
     LaunchedEffect(navEvent) {
