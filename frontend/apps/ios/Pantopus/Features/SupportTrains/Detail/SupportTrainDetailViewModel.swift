@@ -328,8 +328,12 @@ extension SupportTrainDetailViewModel {
         let isFull = typeDates.isFullyCovered
 
         let mineSlotIds = Set(reservations.compactMap(\.slotId))
+        let today = localToday()
         let openSlots = slots
-            .filter { !$0.isCovered && ($0.status ?? "open") == "open" && !mineSlotIds.contains($0.id) }
+            .filter {
+                !$0.isCovered && ($0.status ?? "open") == "open" && !mineSlotIds.contains($0.id)
+                    && !isBefore($0.slotDate, today)
+            }
             .sorted { ($0.slotDate ?? "") < ($1.slotDate ?? "") }
 
         return SupportTrainDetailContent(
@@ -468,7 +472,7 @@ extension SupportTrainDetailViewModel {
         reservations: [SupportTrainMyReservationDTO]
     ) -> [SlotCalendarDay] {
         let cal = utcCalendar()
-        let today = cal.startOfDay(for: Date())
+        let today = localToday()
         let slotDates = slots.compactMap { parseSlotDate($0.slotDate) }
         let earliest = slotDates.min().map { cal.startOfDay(for: $0) } ?? today
         let weekday = cal.component(.weekday, from: earliest) // 1 = Sunday
@@ -517,7 +521,10 @@ extension SupportTrainDetailViewModel {
             sections.append(SlotSection(id: "mine", overline: "Your commitment", rows: mineRows))
         }
 
-        let sortedOpen = slots.filter { !$0.isCovered }.sorted { ($0.slotDate ?? "") < ($1.slotDate ?? "") }
+        let today = localToday()
+        let sortedOpen = slots
+            .filter { !$0.isCovered && !isBefore($0.slotDate, today) }
+            .sorted { ($0.slotDate ?? "") < ($1.slotDate ?? "") }
         if !sortedOpen.isEmpty {
             let shown = Array(sortedOpen.prefix(4)).map { slotRow($0, covered: false) }
             sections.append(SlotSection(
@@ -609,7 +616,7 @@ extension SupportTrainDetailViewModel {
         let cal = utcCalendar()
         let dates = slots.compactMap { parseSlotDate($0.slotDate) }
         guard let max = dates.max() else { return 0 }
-        let days = cal.dateComponents([.day], from: cal.startOfDay(for: Date()), to: cal.startOfDay(for: max)).day ?? 0
+        let days = cal.dateComponents([.day], from: localToday(), to: cal.startOfDay(for: max)).day ?? 0
         return Swift.max(0, days)
     }
 
@@ -655,6 +662,19 @@ extension SupportTrainDetailViewModel {
         formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.dateFormat = pattern
         return formatter.string(from: date)
+    }
+
+    /// Today as the person sees it (their own calendar day), as that date at UTC midnight, which is how slot dates
+    /// are read. A UTC "today" runs ahead of a US evening and marked the day's own slot as over.
+    private nonisolated static func localToday() -> Date {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        return utcCalendar().date(from: parts) ?? utcCalendar().startOfDay(for: Date())
+    }
+
+    /// Whether a slot's date is before `day`; a slot without a readable date is never "over".
+    private nonisolated static func isBefore(_ slotDate: String?, _ day: Date) -> Bool {
+        guard let date = parseSlotDate(slotDate) else { return false }
+        return date < day
     }
 
     private nonisolated static func utcCalendar() -> Calendar {

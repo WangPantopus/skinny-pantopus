@@ -54,7 +54,9 @@ object SupportTrainDetailProjection {
         val mineSlotIds = reservations.mapNotNull { it.slotId }.toSet()
         val openSlots =
             slots
-                .filter { !it.isCovered && (it.status ?: "open") == "open" && it.id !in mineSlotIds }
+                .filter {
+                    !it.isCovered && (it.status ?: "open") == "open" && it.id !in mineSlotIds && !isOver(it.slotDate)
+                }
                 .sortedBy { it.slotDate ?: "" }
 
         return SupportTrainDetailContent(
@@ -251,7 +253,7 @@ object SupportTrainDetailProjection {
             out += SlotSection(id = "mine", overline = "Your commitment", rows = mineRows)
         }
 
-        val open = slots.filterNot { it.isCovered }.sortedBy { it.slotDate ?: "" }
+        val open = slots.filter { !it.isCovered && !isOver(it.slotDate) }.sortedBy { it.slotDate ?: "" }
         if (open.isNotEmpty()) {
             val shown = open.take(4).map { slotRow(it, covered = false) }
             val action = if (open.size > shown.size) "See all ${open.size}" else null
@@ -373,14 +375,18 @@ object SupportTrainDetailProjection {
     private fun utcFormatter(pattern: String): SimpleDateFormat =
         SimpleDateFormat(pattern, Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
+    // Today as the person sees it (their own calendar day), as that date at UTC midnight, which is how slot dates are
+    // read. A UTC "today" runs ahead of a US evening and marked the day's own slot as over.
     private fun startOfTodayUtc(): Date {
+        val local = Calendar.getInstance()
         val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
+        cal.clear()
+        cal.set(local.get(Calendar.YEAR), local.get(Calendar.MONTH), local.get(Calendar.DAY_OF_MONTH))
         return cal.time
     }
+
+    // A slot whose date is before today can't take a signup. One without a readable date is never over.
+    private fun isOver(slotDate: String?): Boolean = parseDate(slotDate)?.let { it.time < startOfTodayUtc().time } ?: false
 
     private fun initials(name: String): String {
         val words = name.trim().split(" ").filter { it.isNotEmpty() }.take(2)

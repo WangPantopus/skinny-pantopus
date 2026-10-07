@@ -269,11 +269,15 @@ export default function SupportTrainDetailPage() {
   );
   const myReservations = ((data.my_reservations || []) as any[]).filter((r) => r?.id && r?.slot_id);
   const slotsById = new Map(slots.map((s: any) => [s.id, s]));
+  // A slot that nobody took stays 'open' after its day; it can't take a signup any more.
+  const todayDate = new Date();
+  const todayKey = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
   const openSlots = slots.filter(
     (s: any) =>
       s.status === 'open' &&
       (s.filled_count ?? 0) < (s.capacity ?? 1) &&
-      !myReservationSlotIds.has(s.id)
+      !myReservationSlotIds.has(s.id) &&
+      !(s.slot_date && String(s.slot_date) < todayKey)
   );
   const updates = data.updates || [];
   const viewerLevel = data.viewer_level;
