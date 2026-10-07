@@ -138,7 +138,7 @@ struct HomeMemberRemovalView: View {
         default:
             if model.pending != nil { "Check your last removal" } else if model.context != nil {
                 isSelf ? "Leave this Home" : "Remove member"
-            } else { "Household membership" }
+            } else if model.transferRequired { "Leave this Home" } else { "Household membership" }
         }
     }
 
