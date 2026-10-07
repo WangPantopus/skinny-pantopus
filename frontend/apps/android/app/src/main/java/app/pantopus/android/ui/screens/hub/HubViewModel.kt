@@ -348,7 +348,9 @@ class HubViewModel
                                 // Launch cut #3 (Marketplace): no Snap & sell.
                                 ActionChipContent(ActionChipContent.Kind.SnapAndSell, "Snap & sell", PantopusIcon.Camera, active = false)
                                     .takeIf { LaunchFeatures.marketplace },
-                                ActionChipContent(ActionChipContent.Kind.ScanMail, "Scan mail", PantopusIcon.ScanLine, active = false),
+                                // Launch cut #7 (Household extras): mail scanning is cut, so this only opened the Mailbox list.
+                                ActionChipContent(ActionChipContent.Kind.ScanMail, "Scan mail", PantopusIcon.ScanLine, active = false)
+                                    .takeIf { LaunchFeatures.householdExtras },
                                 ActionChipContent(ActionChipContent.Kind.AddHome, "Add home", PantopusIcon.Home, active = false),
                             ),
                         statusItems =
