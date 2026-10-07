@@ -142,6 +142,8 @@ public final class PulseFeedViewModel {
 
     /// The context bar uses the same successful area read as the feed.
     var onAreaResolved: (@MainActor (ViewingLocationDTO?) -> Void)?
+    /// Where the server looked when no area was given ("Near Camas, WA"), or nil.
+    var onFallbackArea: (@MainActor (String?) -> Void)?
 
     /// Transient banner text — mirrors RN's `showToast` calls.
     public var toastMessage: String?
@@ -634,6 +636,7 @@ public final class PulseFeedViewModel {
             loadedItems = response.posts
             postsLoaded = true
             needsArea = response.requiresViewingLocation == true
+            onFallbackArea?(response.fallbackArea?.label)
             applyPagination(response.pagination)
             scopeLabel = response.posts.first?.locationName ?? scopeLabel
             recomputeRadiusSuggestion()
@@ -770,7 +773,10 @@ public final class PulseFeedViewModel {
             resolvedLongitude = cached.longitude
             return (FeedArea(latitude: cached.latitude, longitude: cached.longitude), nil)
         }
-        if let fresh = await locationProvider.requestCurrent(timeoutSeconds: 4) {
+        // Asking for location is "Use my location"'s job. Opening Pulse uses a fresh fix only
+        // when it needs no prompt; otherwise the server falls back to the person's own place.
+        if locationProvider.canLocateWithoutAsking,
+           let fresh = await locationProvider.requestCurrent(timeoutSeconds: 4) {
             resolvedLatitude = fresh.latitude
             resolvedLongitude = fresh.longitude
             return (FeedArea(latitude: fresh.latitude, longitude: fresh.longitude), nil)

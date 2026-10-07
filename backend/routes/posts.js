@@ -1626,6 +1626,7 @@ router.get('/feed', verifyToken, async (req, res) => {
 
     let feedLatitude = Number.isFinite(parseFloat(latitude)) ? parseFloat(latitude) : null;
     let feedLongitude = Number.isFinite(parseFloat(longitude)) ? parseFloat(longitude) : null;
+    let fallbackArea = null;
     // Place needs a location. With no area chosen and no device location, it looks around the
     // person's own place, as Today does: their home first, then a saved place.
     if (surface === 'place' && (feedLatitude == null || feedLongitude == null)) {
@@ -1640,6 +1641,8 @@ router.get('/feed', verifyToken, async (req, res) => {
       }
       feedLatitude = ownPlace.latitude;
       feedLongitude = ownPlace.longitude;
+      // The apps label the area with this ("Near Camas, WA"), so nobody reads posts under "Set an area".
+      fallbackArea = { label: ownPlace.label, source: ownPlace.source };
     }
 
     const result = await feedService.getListFeed({
@@ -1772,7 +1775,7 @@ router.get('/feed', verifyToken, async (req, res) => {
       }
     }
 
-    return res.json(result);
+    return res.json(fallbackArea ? { ...result, fallbackArea } : result);
   } catch (err) {
     logger.error('Feed fetch error', { error: err.message, userId: req.user?.id });
     res.status(500).json({ error: 'Failed to fetch feed' });

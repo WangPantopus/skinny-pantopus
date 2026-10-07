@@ -105,6 +105,15 @@ data class FeedResponse(
     val pagination: FeedPagination? = null,
     /** Place feed only: no area was given and the person has no home or saved place to fall back on. */
     val requiresViewingLocation: Boolean? = null,
+    /** Place feed only: no area was given, so the server looked around the person's own place. */
+    val fallbackArea: FeedFallbackArea? = null,
+)
+
+/** Where the place feed looked when no area was given, such as "Near Camas, WA". */
+@JsonClass(generateAdapter = true)
+data class FeedFallbackArea(
+    val label: String,
+    val source: String? = null,
 )
 
 /**

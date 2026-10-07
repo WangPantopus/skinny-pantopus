@@ -48,6 +48,10 @@ public final class DeviceLocationProvider: NSObject, LocationProviding, CLLocati
         manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse
     }
 
+    @MainActor public var canLocateWithoutAsking: Bool {
+        isAuthorized
+    }
+
     private func ensureAuthorization() async -> Bool {
         guard manager.authorizationStatus == .notDetermined else {
             if !isAuthorized { cached = nil }

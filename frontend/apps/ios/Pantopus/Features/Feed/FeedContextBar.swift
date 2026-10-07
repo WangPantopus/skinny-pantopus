@@ -83,8 +83,11 @@ public final class FeedContextBarViewModel {
         case error(message: String)
     }
 
-    /// Label rendered on the collapsed bar. `nil` shows "Set an area".
+    /// Label rendered on the collapsed bar. `nil` shows the fallback, then "Set an area".
     public private(set) var locationLabel: String?
+    /// With no area chosen, the place the feed fell back to ("Near Camas, WA"), so the bar
+    /// names what the posts are around instead of "Set an area".
+    public var fallbackLabel: String?
     /// Active radius in miles. Defaults to the RN default of 100.
     public private(set) var radiusMiles: Double = 100
     public private(set) var sheetState: SheetState = .loading
@@ -291,7 +294,7 @@ struct FeedContextBar: View {
         } label: {
             HStack(spacing: Spacing.s2) {
                 Icon(.mapPin, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
-                Text(viewModel.locationLabel ?? "Set an area")
+                Text(viewModel.locationLabel ?? viewModel.fallbackLabel ?? "Set an area")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
@@ -319,7 +322,7 @@ struct FeedContextBar: View {
         .padding(.horizontal, Spacing.s3)
         .padding(.top, Spacing.s2)
         .accessibilityIdentifier("pulseContextBar")
-        .accessibilityLabel("Viewing \(viewModel.locationLabel ?? "no area yet"). Change area")
+        .accessibilityLabel("Viewing \(viewModel.locationLabel ?? viewModel.fallbackLabel ?? "no area yet"). Change area")
         .sheet(isPresented: $viewModel.isSheetPresented) {
             FeedLocationSwitcherSheet(viewModel: viewModel)
         }

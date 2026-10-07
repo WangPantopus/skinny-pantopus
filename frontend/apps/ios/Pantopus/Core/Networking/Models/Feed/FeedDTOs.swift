@@ -149,4 +149,12 @@ public struct FeedResponse: Decodable, Sendable, Hashable {
     public let pagination: FeedPagination?
     /// Place feed only: no area was given and the person has no home or saved place to fall back on.
     public var requiresViewingLocation: Bool?
+    /// Place feed only: no area was given, so the server looked around the person's own place.
+    public var fallbackArea: FeedFallbackArea?
+}
+
+/// Where the place feed looked when no area was given, such as "Near Camas, WA".
+public struct FeedFallbackArea: Decodable, Sendable, Hashable {
+    public let label: String
+    public let source: String?
 }

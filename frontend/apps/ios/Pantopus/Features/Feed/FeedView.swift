@@ -165,6 +165,9 @@ public struct FeedView: View {
             viewModel.onAreaResolved = { [weak contextBarViewModel] in
                 contextBarViewModel?.applyCurrent($0)
             }
+            viewModel.onFallbackArea = { [weak contextBarViewModel] in
+                contextBarViewModel?.fallbackLabel = $0
+            }
             await viewModel.load()
         }
         .onReceive(NotificationCenter.default.publisher(for: .pulsePostsDidChange)) { _ in

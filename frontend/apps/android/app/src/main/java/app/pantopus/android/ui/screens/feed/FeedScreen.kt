@@ -133,7 +133,10 @@ fun FeedScreen(
     val sportsMode by viewModel.sportsMode.collectAsStateWithLifecycle()
     val primarySportsEvent by viewModel.primarySportsEvent.collectAsStateWithLifecycle()
     val radiusSuggestion by viewModel.radiusSuggestion.collectAsStateWithLifecycle()
-    val contextLabel by contextBarViewModel.locationLabel.collectAsStateWithLifecycle()
+    val chosenAreaLabel by contextBarViewModel.locationLabel.collectAsStateWithLifecycle()
+    val fallbackAreaLabel by viewModel.fallbackAreaLabel.collectAsStateWithLifecycle()
+    // With no area chosen, the bar names the place the feed fell back to instead of "Set an area".
+    val contextLabel = chosenAreaLabel ?: fallbackAreaLabel
     val contextRadius by contextBarViewModel.radiusMiles.collectAsStateWithLifecycle()
     val switcherState by contextBarViewModel.sheetState.collectAsStateWithLifecycle()
     val switcherOpen by contextBarViewModel.isSheetOpen.collectAsStateWithLifecycle()
@@ -392,7 +395,7 @@ fun FeedScreen(
         if (switcherOpen) {
             FeedLocationSwitcherSheet(
                 state = switcherState,
-                activeLabel = contextLabel,
+                activeLabel = chosenAreaLabel,
                 onSelect = { contextBarViewModel.select(it) },
                 onRetry = { contextBarViewModel.openSwitcher() },
                 onDismiss = { contextBarViewModel.closeSwitcher() },
