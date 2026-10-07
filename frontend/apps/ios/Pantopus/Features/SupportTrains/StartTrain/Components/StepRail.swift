@@ -2,30 +2,28 @@
 //  StepRail.swift
 //  Pantopus
 //
-//  A12.11 — Mini 5-segment preview of the support-train wizard, rendered
+//  A12.11 — Mini 3-segment preview of the support-train wizard, rendered
 //  at the bottom of step 1's body so the organizer can see the whole flow
-//  ahead (Recipient · Type · Dates · Invites · Review). Completed and
+//  ahead (Who & why · What & when · Review & launch). Completed and
 //  current nodes fill in the warm-amber identity accent.
 //
 
 import SwiftUI
 
-/// Five-node progress preview for the support-train wizard. `current` is
-/// 1-based (step 1 = `Recipient`).
+/// Three-node progress preview for the support-train wizard. `current` is
+/// 1-based (step 1 = `Who & why`).
 struct StepRail: View {
     let current: Int
 
     private let steps: [(Int, String)] = [
-        (1, "Recipient"),
-        (2, "Type"),
-        (3, "Dates"),
-        (4, "Invites"),
-        (5, "Review")
+        (1, "Who & why"),
+        (2, "What & when"),
+        (3, "Review")
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("YOU'RE ON STEP \(current) OF 5")
+            Text("YOU'RE ON STEP \(current) OF \(steps.count)")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .kerning(0.6)
@@ -50,7 +48,7 @@ struct StepRail: View {
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Step \(current) of 5")
+        .accessibilityLabel("Step \(current) of \(steps.count)")
         .accessibilityIdentifier("startSupportTrainStepRail")
     }
 

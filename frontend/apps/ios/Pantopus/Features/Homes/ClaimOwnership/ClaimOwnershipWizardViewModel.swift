@@ -121,7 +121,7 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
     /// so a lost response can recover the same immutable upload.
     private var pendingUploadIDs: [ClaimEvidenceSlot: String] = [:]
     private var attemptedUploadSlots: Set<ClaimEvidenceSlot> = []
-    private let evidenceClient: PrivateClaimEvidenceClient
+    private var evidenceClient: PrivateClaimEvidenceClient
     private let makeUploadId: () -> String
     private(set) var sessionReady = false
     private var canAct: Bool {
@@ -149,6 +149,38 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
         attemptedUploadSlots = []
         pendingClaimId = nil
         note = ""
+    }
+
+    /// When Add Home hands off to this screen by replacing its own route, SwiftUI shows the screen
+    /// twice for a moment and then takes one appearance away. Only the last disappearance means the
+    /// person left, and the load runs on its own task: a cancelled request retires the evidence client.
+    private var appearances = 0
+
+    func appeared() {
+        appearances += 1
+        guard appearances == 1 else { return }
+        Task { await load() }
+    }
+
+    func disappeared() {
+        appearances = max(appearances - 1, 0)
+        if appearances == 0 { retire() }
+    }
+
+    /// Why the start step can't continue (the claim session or the Home didn't load), or nil.
+    var startLoadError: String? {
+        sessionReady ? nil : submitError
+    }
+
+    /// A failed load can be retried while the session that opened the wizard is still current.
+    var canRetryLoad: Bool {
+        startLoadError != nil && evidenceClient.isCurrent && !isSubmitting
+    }
+
+    func retryLoad() {
+        guard canRetryLoad else { return }
+        submitError = nil
+        Task { await load() }
     }
 
     // MARK: - Init
@@ -325,19 +357,30 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
     /// decide whether to render the "ask a verified owner" option, and
     /// replace the sample home label with the real address.
     func load() async {
+        // Leaving retires the client. Coming back (from another tab, say) in the session that opened
+        // the screen continues with a fresh one; after a sign-out or account switch it stays retired.
+        if !evidenceClient.isCurrent, let renewed = evidenceClient.renewedInOpeningSession() {
+            evidenceClient = renewed
+        }
+        let client = evidenceClient
+        submitError = nil
         do {
-            _ = try await evidenceClient.claims()
-            try evidenceClient.requireCurrent()
+            _ = try await client.claims()
+            try client.requireCurrent()
             sessionReady = true
-            let response: HomePublicPreviewResponse = try await api.request(
-                HomeDiscoveryEndpoints.publicProfile(homeId: homeId)
-            )
-            try evidenceClient.requireCurrent()
-            guard response.home.id == homeId else { throw APIError.invalidResponse }
-            hasVerifiedOwner = response.hasVerifiedOwner
-            isMember = response.isMember
-            let label = response.home.displayAddress
-            if !label.isEmpty {
+            let preview: HomePublicPreviewResponse?
+            do {
+                preview = try await api.request(HomeDiscoveryEndpoints.publicProfile(homeId: homeId)) as HomePublicPreviewResponse
+            } catch APIError.forbidden {
+                // A private Home shows nobody outside its household a preview, and the claim
+                // doesn't need one: it starts on the ownership path under the generic label.
+                preview = nil
+            }
+            try client.requireCurrent()
+            if let preview, preview.home.id != homeId { throw APIError.invalidResponse }
+            hasVerifiedOwner = preview?.hasVerifiedOwner == true
+            isMember = preview?.isMember == true
+            if let label = preview?.home.displayAddress, !label.isEmpty {
                 startContent = ClaimOwnershipStartContent(
                     homeLabel: label,
                     contestedClaim: startContent.contestedClaim
@@ -347,11 +390,12 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
                 selectedStartMethod = .verifyOwnership
             }
         } catch {
-            // The picker degrades to the ownership-verification path
-            // when the preview can't be read — never invent the flag.
+            // A load for a client this screen has since replaced must not touch the new one.
+            guard client === evidenceClient else { return }
+            // Any other failure stops here with its reason and a retry — never invent the flag.
             sessionReady = false
             submitError = HomeClaimReviewError.message(for: error)
-            if !evidenceClient.isCurrent { retire() }
+            if !client.isCurrent { retire() }
         }
     }
 
@@ -463,11 +507,14 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
         guard isOnlineProvider() else { submitError = "You're offline. Try again when you're back online."
             return
         }
+        // The whole submission stays with the client it started with, so leaving mid-upload stops it
+        // even if the screen comes back with a renewed client.
+        let client = evidenceClient
         isSubmitting = true
         submitError = nil
         defer { isSubmitting = false }
         do {
-            let claims = try await evidenceClient.claims().claims
+            let claims = try await client.claims().claims
             if pendingClaimId == nil {
                 // A closed page or lost create reply can rediscover the exact
                 // user's existing open claim instead of duplicating it.
@@ -477,8 +524,15 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
                 pendingClaimId = existing.first?.id
             }
             if pendingClaimId == nil {
-                let result = try await evidenceClient.submit(homeId: homeId, type: verificationType.claimType)
-                guard let id = result.claim.id, UUID(uuidString: id) != nil else { throw HomeClaimReviewError.snapshotChanged }
+                let result = try await client.submit(homeId: homeId, type: verificationType.claimType)
+                // No claim id is the server's opaque refusal (another verification in progress, a rental Home):
+                // nothing was created, so say so as Android does rather than "the claim changed".
+                guard let id = result.claim.id else {
+                    blockedByOtherClaimPrompt = blockedByOtherClaimCopy
+                    Analytics.track(.ctaClaimOwnershipSubmit(result: .error))
+                    return
+                }
+                guard UUID(uuidString: id) != nil else { throw HomeClaimReviewError.snapshotChanged }
                 pendingClaimId = id
                 routingClassification = result.claim.routingClassification
             }
@@ -495,28 +549,30 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
                 storedSlots[slot] = .uploading(file: file, fraction: 0)
                 attemptedUploadSlots.insert(slot)
                 do {
-                    let record = try await evidenceClient.upload(
+                    let record = try await client.upload(
                         homeId: homeId,
                         claimId: claimId,
                         uploadId: uploadId,
                         type: evidenceType(for: slot),
                         file: file
                     )
-                    try evidenceClient.requireCurrent()
+                    try client.requireCurrent()
                     storedSlots[slot] = .uploaded(file: file, fileURL: record.id)
                 } catch {
-                    if evidenceClient.isCurrent { storedSlots[slot] = .failed(file: file, message: "Upload unconfirmed. Retry this file.") }
+                    if client.isCurrent { storedSlots[slot] = .failed(file: file, message: "Upload unconfirmed. Retry this file.") }
                     throw error
                 }
             }
-            try evidenceClient.requireCurrent()
+            try client.requireCurrent()
             submissionOutcomeNote = "Your private document is saved as pending evidence. "
                 + "A reviewer must inspect it before making a separate claim decision."
             currentStep = .success
             Analytics.track(.ctaClaimOwnershipSubmit(result: .success))
         } catch {
-            submitError = HomeClaimReviewError.message(for: error)
-            if !evidenceClient.isCurrent { retire() }
+            if client === evidenceClient {
+                submitError = HomeClaimReviewError.message(for: error)
+                if !client.isCurrent { retire() }
+            }
             Analytics.track(.ctaClaimOwnershipSubmit(result: .error))
         }
     }

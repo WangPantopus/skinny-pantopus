@@ -680,7 +680,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             ListOfRowsState.EmptyContent(
                 icon: .mailbox,
                 headline: "No mail yet",
-                subcopy: "New mail in this drawer shows up here."
+                subcopy: "When letters, bills or notices arrive, they show up here."
             )
         }
     }

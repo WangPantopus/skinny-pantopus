@@ -423,6 +423,8 @@ public final class ChatListViewModel {
         guard let date = parsers.lazy.compactMap({ $0.date(from: timestamp) }).first else {
             return timestamp
         }
+        // A message can be a hair ahead of the phone's clock; "in 0 sec." reads as a bug.
+        if Date().timeIntervalSince(date) < 60 { return "Just now" }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: Date())

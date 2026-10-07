@@ -210,6 +210,8 @@ public final class RecentActivityViewModel: ListOfRowsDataSource {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let parsed = formatter.date(from: timestamp) ?? ISO8601DateFormatter().date(from: timestamp)
         guard let date = parsed else { return timestamp }
+        // An event can be a hair ahead of the phone's clock; "in 0 sec." reads as a bug.
+        if now.timeIntervalSince(date) < 60 { return "Just now" }
         let relative = RelativeDateTimeFormatter()
         relative.unitsStyle = .short
         return relative.localizedString(for: date, relativeTo: now)

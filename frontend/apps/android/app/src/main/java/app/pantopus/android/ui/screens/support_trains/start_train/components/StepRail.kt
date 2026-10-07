@@ -29,16 +29,17 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 
 /**
- * A12.11 — Mini 5-segment preview of the support-train wizard, rendered at
- * the bottom of step 1 so the organizer sees the whole flow ahead.
- * Completed and current nodes fill in the warm-amber identity accent.
+ * A12.11 — Mini 3-segment preview of the support-train wizard (its steps are
+ * Who & why, What & when, Review & launch), rendered at the bottom of step 1
+ * so the organizer sees the whole flow ahead. Completed and current nodes fill
+ * in the warm-amber identity accent.
  */
 @Composable
 internal fun StepRail(current: Int) {
-    val steps = listOf("Recipient", "Type", "Dates", "Invites", "Review")
+    val steps = listOf("Who & why", "What & when", "Review")
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         Text(
-            text = "YOU'RE ON STEP $current OF 5",
+            text = "YOU'RE ON STEP $current OF ${steps.size}",
             style = PantopusTextStyle.overline,
             color = PantopusColors.appTextSecondary,
         )

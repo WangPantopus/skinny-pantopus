@@ -557,9 +557,10 @@ class HubViewModel
                     "Pulse",
                     PantopusIcon.Megaphone,
                     IdentityPillar.Personal,
-                    if (personal.unreadChats > 0) "${personal.unreadChats} new" else null,
+                    // The hub carries no count of new posts; unread chats belong to the strip above, not to Pulse.
+                    null,
                     false,
-                    if (personal.unreadChats > 0) "${personal.unreadChats} new in your feed" else "Neighborhood feed",
+                    "Neighborhood feed",
                     "Neighborhood feed",
                 ),
                 tile(
@@ -589,8 +590,8 @@ class HubViewModel
                     IdentityPillar.Home,
                     if (home != null && home.newMail > 0) "${home.newMail}" else null,
                     home == null,
-                    if (home != null) "${home.newMail} need pickup" else "Scan & forward",
-                    "Scan & forward",
+                    home?.let { if (it.newMail > 0) "${it.newMail} new" else "Nothing new" } ?: "Your mail in one place",
+                    "Your mail in one place",
                 ),
             ).filter { tile -> isLaunchAvailablePillar(tile.pillar) }
         }

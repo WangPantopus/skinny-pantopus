@@ -7,8 +7,11 @@
 //  (`backend/routes/wallet.js:160`) returns `in_review_cents` and
 //  `releasing_soon_cents` separately; RN renders both as named dollar
 //  lines (`WalletTab.tsx:161-173`) so a seller can tell money still inside
-//  the cooling-off window from money already queued for transfer. The
-//  amounts are the server's own cents, formatted — never re-derived.
+//  the cooling-off window from money already queued for transfer. A third
+//  line, "In dispute", lists income held while the payer's bank reviews a
+//  dispute (`in_dispute_cents`); it is not pending and only shows when
+//  there is some. The amounts are the server's own cents, formatted —
+//  never re-derived.
 //
 //  Mirrors the Android `PendingReleaseCard`.
 //
@@ -35,6 +38,18 @@ struct PendingReleaseCard: View {
                 amount: breakdown.releasingSoon,
                 identifier: "walletPendingReleasingSoon"
             )
+            if let inDispute = breakdown.inDispute, breakdown.inDisputeCount > 0 {
+                Rectangle()
+                    .fill(Theme.Color.successLight)
+                    .frame(height: 1)
+                line(
+                    label: "In dispute",
+                    caption: disputeCaption(count: breakdown.inDisputeCount),
+                    amount: inDispute,
+                    identifier: "walletPendingInDispute",
+                    amountColor: Theme.Color.warning
+                )
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, Spacing.s3)
@@ -53,7 +68,8 @@ struct PendingReleaseCard: View {
         label: String,
         caption: String?,
         amount: String,
-        identifier: String
+        identifier: String,
+        amountColor: Color = Theme.Color.success
     ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
             VStack(alignment: .leading, spacing: 1) {
@@ -69,10 +85,18 @@ struct PendingReleaseCard: View {
             Spacer(minLength: Spacing.s2)
             Text(amount)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.Color.success)
+                .foregroundStyle(amountColor)
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier(identifier)
+    }
+
+    /// "1 payment · held while the bank reviews it". The dispute amount isn't
+    /// pending: it stays out of the balance until the bank decides.
+    private func disputeCaption(count: Int) -> String {
+        count == 1
+            ? "1 payment · held while the bank reviews it"
+            : "\(count) payments · held while the banks review them"
     }
 
     /// "2 payments · clears after review" / "· transfer queued". Counts come

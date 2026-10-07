@@ -636,7 +636,10 @@ public final class PulseFeedViewModel {
             loadedItems = response.posts
             postsLoaded = true
             needsArea = response.requiresViewingLocation == true
-            onFallbackArea?(response.fallbackArea?.label)
+            // With no area chosen the server names the place it fell back to; when the feed looked around the
+            // device instead (location already allowed), say so rather than "Set an area".
+            let aroundDevice = surface == .pulse && viewingLocation == nil && latitude == nil && area.latitude != nil
+            onFallbackArea?(response.fallbackArea?.label ?? (aroundDevice ? "Near your location" : nil))
             applyPagination(response.pagination)
             scopeLabel = response.posts.first?.locationName ?? scopeLabel
             recomputeRadiusSuggestion()
@@ -898,6 +901,8 @@ public final class PulseFeedViewModel {
         let parser = ISO8601DateFormatter()
         parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let date = parser.date(from: timestamp) ?? ISO8601DateFormatter().date(from: timestamp) ?? Date()
+        // A fresh post can be a hair ahead of the phone's clock; "in 0 sec." reads as a bug.
+        if Date().timeIntervalSince(date) < 60 { return "Just now" }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: Date())

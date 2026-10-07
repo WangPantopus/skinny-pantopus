@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -34,8 +35,10 @@ import app.pantopus.android.ui.theme.Spacing
  * (`backend/routes/wallet.js:160`) returns `in_review_cents` and
  * `releasing_soon_cents` separately; RN renders both as named dollar lines
  * (`WalletTab.tsx:161-173`) so a seller can tell money still inside the
- * cooling-off window from money already queued for transfer. The amounts are
- * the server's own cents, formatted — never re-derived.
+ * cooling-off window from money already queued for transfer. A third line,
+ * "In dispute", lists income held while the payer's bank reviews a dispute
+ * (`in_dispute_cents`); it is not pending and only shows when there is some.
+ * The amounts are the server's own cents, formatted — never re-derived.
  *
  * Mirrors iOS `PendingReleaseCard`.
  */
@@ -75,6 +78,22 @@ fun PendingReleaseCard(
             amount = breakdown.releasingSoon,
             tag = "walletPendingReleasingSoon",
         )
+        if (breakdown.inDispute != null && breakdown.inDisputeCount > 0) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(PantopusColors.successLight),
+            )
+            BreakdownLine(
+                label = "In dispute",
+                caption = disputeCaption(breakdown.inDisputeCount),
+                amount = breakdown.inDispute,
+                tag = "walletPendingInDispute",
+                amountColor = PantopusColors.warning,
+            )
+        }
     }
 }
 
@@ -84,12 +103,14 @@ private fun BreakdownLine(
     caption: String?,
     amount: String,
     tag: String,
+    amountColor: Color = PantopusColors.success,
 ) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .semantics { contentDescription = "$label $amount" }
+                // Read as on iOS: label, caption ("1 payment · held while the bank reviews it"), amount.
+                .semantics { contentDescription = listOfNotNull(label, caption, amount).joinToString(", ") }
                 .testTag(tag),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -114,12 +135,23 @@ private fun BreakdownLine(
         }
         Text(
             text = amount,
-            color = PantopusColors.success,
+            color = amountColor,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
         )
     }
 }
+
+/**
+ * "1 payment · held while the bank reviews it". The dispute amount isn't
+ * pending: it stays out of the balance until the bank decides.
+ */
+private fun disputeCaption(count: Int): String =
+    if (count == 1) {
+        "1 payment · held while the bank reviews it"
+    } else {
+        "$count payments · held while the banks review them"
+    }
 
 /**
  * "2 payments · clears after review" / "· transfer queued". Counts come from

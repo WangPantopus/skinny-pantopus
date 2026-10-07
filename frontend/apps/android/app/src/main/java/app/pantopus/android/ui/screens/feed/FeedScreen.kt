@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -1076,6 +1077,17 @@ private fun PopulatedFrame(
     rowActions: PulseFeedRowActions = PulseFeedRowActions(),
 ) {
     val pullState = rememberPullRefreshState(refreshing = isRefreshing, onRefresh = onRefresh)
+    val listState = rememberLazyListState()
+    // A new first post (yours after posting, or one a refresh brought in) is inserted above the row the list is
+    // anchored to, so it would sit out of sight: show it when the person was at the top.
+    val firstRowId = state.rows.firstOrNull()?.id
+    var seenFirstRowId by remember { mutableStateOf(firstRowId) }
+    LaunchedEffect(firstRowId) {
+        val previous = seenFirstRowId
+        seenFirstRowId = firstRowId
+        if (previous == null || firstRowId == null || previous == firstRowId) return@LaunchedEffect
+        if (listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0)
+    }
     Box(modifier = Modifier.fillMaxSize().pullRefresh(pullState)) {
         if (state.rows.isEmpty() && searchActive) {
             Text(
@@ -1090,6 +1102,7 @@ private fun PopulatedFrame(
             )
         }
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize().testTag("pulseFeedList"),
             contentPadding = PaddingValues(Spacing.s3),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),

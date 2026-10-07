@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -56,6 +57,7 @@ import app.pantopus.android.ui.components.SlotCalendarDay
 import app.pantopus.android.ui.screens.support_trains.detail.components.RecipientCard
 import app.pantopus.android.ui.screens.support_trains.detail.components.SlotRow
 import app.pantopus.android.ui.screens.support_trains.detail.components.TypeDatesCard
+import app.pantopus.android.ui.screens.support_trains.reserve.ReserveSheetDraft
 import app.pantopus.android.ui.screens.support_trains.reserve.ReserveSlotSheet
 import app.pantopus.android.ui.screens.support_trains.reserve.rememberReserveSheetDraft
 import app.pantopus.android.ui.theme.PantopusColors
@@ -142,11 +144,7 @@ fun SupportTrainDetailScreen(
     // opening of the sheet starts a new draft.
     val reserveDraft = rememberReserveSheetDraft(reserveSheet?.slotId, sheetKey = reserveSheet)
     if (reserveSheet != null && loaded != null) {
-        ModalBottomSheet(
-            onDismissRequest = { viewModel.dismissReserve() },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = PantopusColors.appBg,
-        ) {
+        GuardedReserveSheet(draft = reserveDraft, onClose = { viewModel.dismissReserve() }) {
             ReserveSlotSheet(
                 preselectedSlotId = reserveSheet.slotId,
                 options = loaded.content.reserveOptions,
@@ -213,6 +211,59 @@ data class SupportTrainDetailActions(
     /** Opens a chat with the train's organizer. Null hides "Message the host". */
     val onMessageHost: ((HostedByFooter) -> Unit)? = null,
 )
+
+/**
+ * The helper sign-up sheet. Once the helper has chosen how they'll help or typed something, dragging the sheet down,
+ * tapping outside it or pressing Back asks "Discard your progress?" instead of dropping it; the sheet's own X closes it
+ * without asking, and so does a sheet with nothing entered or one that already signed up.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GuardedReserveSheet(
+    draft: ReserveSheetDraft,
+    onClose: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    var askDiscard by remember(draft) { mutableStateOf(false) }
+    val confirmValueChange =
+        remember(draft) {
+            { target: SheetValue ->
+                val keep = target == SheetValue.Hidden && draft.hasEnteredInput
+                if (keep) askDiscard = true
+                !keep
+            }
+        }
+    ModalBottomSheet(
+        onDismissRequest = { if (draft.hasEnteredInput) askDiscard = true else onClose() },
+        sheetState =
+            rememberModalBottomSheetState(
+                skipPartiallyExpanded = true,
+                confirmValueChange = confirmValueChange,
+            ),
+        containerColor = PantopusColors.appBg,
+    ) {
+        content()
+    }
+    if (askDiscard) {
+        AlertDialog(
+            onDismissRequest = { askDiscard = false },
+            title = { Text("Discard your progress?") },
+            text = { Text("You'll lose what you've entered so far.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        askDiscard = false
+                        onClose()
+                    },
+                ) {
+                    Text("Discard", color = PantopusColors.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { askDiscard = false }) { Text("Keep going") } },
+            modifier = Modifier.testTag("supportTrainReserveDiscardDialog"),
+        )
+    }
+}
 
 /**
  * Stateless layout. Used by previews + Paparazzi snapshot baselines —

@@ -75,6 +75,14 @@ public struct ReserveSlotSheet: View {
         options.first { $0.id == slotId }
     }
 
+    /// The helper has chosen how they'll help or typed something. Until the
+    /// signup succeeds, a swipe-down would drop that without asking.
+    private var hasEnteredInput: Bool {
+        guard step != .success else { return false }
+        return mode != nil || hasArrivalTime
+            || !dishTitle.isEmpty || !restaurantName.isEmpty || !noteToRecipient.isEmpty
+    }
+
     public var body: some View {
         VStack(spacing: Spacing.s0) {
             header
@@ -97,6 +105,7 @@ public struct ReserveSlotSheet: View {
         }
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("supportTrainReserveSheet")
+        .interactiveDismissDisabled(hasEnteredInput)
     }
 
     // MARK: - Chrome

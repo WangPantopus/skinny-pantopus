@@ -14,21 +14,21 @@ commands, and **check**: how to see that it worked.
   `~/.config/pantopus/hosted-secrets/staging.env` and `production.env` on the
   Mac (mode 600); provider keys come from each provider's console.
 
-Last checked: 2026-10-06 by L4.
+Last checked: 2026-10-07 by L4.
 
 ## 0. What's running today
 
-| Piece | State on October 6, 2026 |
+| Piece | State on October 7, 2026 (19:15Z) |
 |---|---|
 | Website `pantopus.com` | Up, on Vercel. The deployment is about four months old (June). Its JavaScript calls `https://api.pantopus.com`. |
 | Production API `api.pantopus.com` | Doesn't answer. The DNS record is proxied by Cloudflare to the server's old public address; the server's address changed when it restarted in September. |
-| September server (AWS, Oregon) | Running. nginx serves `https://staging-api.pantopus.com` (healthy, database connected, backend release from September 8) and `https://staging.pantopus.com`. The June production container and its env file are kept on the same server, unrouted. It costs money every hour it runs. |
+| Staging | `https://staging-api.pantopus.com` runs the October backend (API and worker) since the release at 19:00Z on October 7, on the September server's Elastic IP. `https://staging.pantopus.com` is the Vercel project `pantopus-staging`, whose production branch is `dev`. `scripts/staging/check-hosted.cjs` passes 9 of 10 (the Android app-links file waits for P10), and the staging Lambda stack runs in `us-west-2`. Not yet proven: sign-up and sign-in on staging, the apps on phones and the full journey (S9, S10). The June production container and its env file are kept on the same server, unrouted. The server costs money every hour it runs. |
 | `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
 | April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The live website links to both. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
-| Supabase | The April production project, a testing project, and the September `Pantopus-staging` project (Free). No project has adopted the canonical migration ledger. |
-| GitHub | Environments `production` and `staging` exist with no secrets; `BACKEND_DEPLOY_ENABLED` is unset, so each master push ends with "Backend deployment is disabled". There's no `dev` branch. `ios-release` and `android-release` have no secrets. |
-| AWS Lambdas | Unknown from here. The seeder stack (`pantopus-seeder/deploy/template.yaml`) also carries the briefing, home-reminder, weather-alert, mail and job-trigger functions. |
+| Supabase | The April production project, a testing project, and `Pantopus-staging` (Free), reset to the canonical migrations on October 7 (S2). No production project yet (P2A). |
+| GitHub | `staging` has its secrets and variables and releases from `dev` (S5, S6). `production` has `BACKEND_DEPLOY_ENABLED=false` and `DB_MIGRATIONS_ENABLED=false` and no secrets, so each master push ends with "Backend deployment is disabled". `ios-release` and `android-release` have no secrets. |
+| AWS Lambdas | Staging stack `pantopus-seeder-staging` (October 7). The stack (`pantopus-seeder/deploy/template.yaml`) carries the seeder and the briefing, home-reminder, weather-alert, mail and job-trigger functions. No production stack yet (P8). |
 
 **Reminders run on AWS Lambda.** Morning and evening briefings (the night-before
 pickup push rides the evening one), task and bill reminders, weather alerts and
@@ -201,7 +201,16 @@ data. Never copy the June production env file into staging.
 
 **Check:** `stat -c %a ~/pantopus/.env.staging` prints `600`, and
 `grep -E '^[A-Z_0-9]+=$' ~/pantopus/.env.staging` prints nothing (no empty
-values). The backend's own startup checks run in S6.
+values). Startup only checks that the provider keys exist, so test the Smarty
+keys, which must belong to an account with an active subscription (on October 7
+staging's didn't, and every Add Home said verification was unavailable). This
+prints `200`; `402` means no active subscription, `401` wrong keys:
+
+```bash
+id=$(grep '^SMARTY_AUTH_ID=' ~/pantopus/.env.staging | cut -d= -f2-); tok=$(grep '^SMARTY_AUTH_TOKEN=' ~/pantopus/.env.staging | cut -d= -f2-); curl -s -o /dev/null -w '%{http_code}\n' "https://us-street.api.smarty.com/street-address?auth-id=$id&auth-token=$tok&street=616+NE+4th+Ave&city=Camas&state=WA"
+```
+
+The backend's own startup checks run in S6.
 
 ### S5. GitHub `staging` environment (founder)
 
@@ -214,22 +223,40 @@ Repository → Settings → Environments → `staging`:
 | Secret | `EC2_USERNAME` | the server's SSH user |
 | Secret | `EC2_SSH_KEY` | private key for that user |
 | Secret | `EC2_KNOWN_HOSTS` | the verified host-key line (`ssh-keyscan` output checked against the console) |
+| Secret | `SUPABASE_ACCESS_TOKEN` | a Supabase access token (Account → Access Tokens) |
+| Secret | `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD` | the staging project's ref and database password |
 | Variable | `BACKEND_API_BIND` | `127.0.0.1:18001` |
+| Variable | `SUPABASE_SESSION_POOLER_HOST` | the session-pooler host from the staging project's **Connect** dialog (`aws-<n>-us-west-2.pooler.supabase.com`). GitHub's runners have no IPv6 and the project's direct address is IPv6-only. |
+| Variable | `DB_MIGRATIONS_ENABLED` | `true` (the database took the migrations in S2) |
 | Variable | `BACKEND_DEPLOY_ENABLED` | `true` (last, after everything above) |
 
-Leave `DB_MIGRATIONS_ENABLED` unset until the database steps are proven; the
-staging database already took the migrations in S2. Deployment branch rule:
-allow `master` and `dev` (see `docs/ci-cd.md`).
+Each release first applies any new migrations to the staging project, then swaps
+the containers; without the three Supabase secrets, the pooler host and
+`DB_MIGRATIONS_ENABLED=true` it stops before the swap. Deployment branch rule:
+allow `master` and `dev` (see `docs/ci-cd.md`). **Done October 7.**
 
-### S6. First staging release (founder starts, L4 watches)
+### S6. Staging releases (founder starts, L4 watches)
+
+The first release ran on October 7 (19:00Z). Release master to staging again
+whenever you want staging current:
 
 ```bash
+git fetch origin
 git push origin origin/master:refs/heads/dev
 ```
 
-CI runs on `dev`; when it passes, **Deploy Backend** builds the image, starts an
-unexposed candidate, checks its database connection, then swaps the API and
-worker together and keeps the previous containers for rollback.
+If Git rejects that as non-fast-forward, `dev` holds a commit master doesn't
+(on October 7, PR 1832's branch commit, which master took as a squash). When
+`git log --oneline origin/master..origin/dev` lists only work master already
+has, replace it: `git push --force-with-lease origin origin/master:refs/heads/dev`.
+
+CI runs on `dev`; when it passes, **Deploy Backend** builds the image, applies
+new migrations, starts an unexposed candidate, checks its database connection,
+then swaps the API and worker together and keeps the previous containers for
+rollback. GitHub lists the run under `master`; its name reads `Deploy Backend to
+staging (dev <commit>)`. It skips quietly when no backend file changed since
+staging's last release; to release anyway (for example after changing an
+environment setting), run `gh workflow run deploy-backend.yml --ref dev`.
 
 **Check:** the workflow summary shows the commit and image digest;
 `curl -s https://staging-api.pantopus.com/health` is healthy; on the server,
@@ -329,11 +356,13 @@ installed from this Mac, Android as a signed APK.
 
 ### S10. Staging journey (L4 with founder)
 
-L4 runs the pilot journey on staging with synthetic accounts: sign-up and email
-confirmation, Add Home (private setup), Today, pickup days, radon task, a
-household invitation, task done, a reminder push delivered to the founder's
-iPhone (TestFlight) and an Android phone, notification tap-through, and the
-web for the same account. Failures go to the owning stream.
+L4 runs the pilot journey on staging with a synthetic account the founder signs
+up and signs in (L4 creates no accounts on hosted hosts): email confirmation,
+Add Home (private setup), Today, pickup days, radon task, task done, a reminder
+push delivered to the founder's iPhone (TestFlight) and an Android phone,
+notification tap-through, and the web for the same account. Failures go to the
+owning stream. A household invitation needs a verified owner, so it waits for
+the identity decision (Stripe Identity or a photo-ID check).
 
 ## 3. Production
 
@@ -419,14 +448,27 @@ Write `~/pantopus/.env.prod` as in S4 from `hosted-secrets/production.env` and
 Appendix A's production column. **First move the June file aside**
 (`mv .env.prod .env.prod.june-2026`): the deploy reads `.env.prod` for the new
 containers, and none of the June settings (old database, old keys) may carry
-over.
+over. Then run S4's checks against `.env.prod`, including the Smarty lookup.
 
 ### P6. GitHub `production` environment and first release (founder)
 
-Same secrets as S5 (production values) plus `BACKEND_API_BIND=127.0.0.1:8000`;
-restrict the environment to `master`; set `BACKEND_DEPLOY_ENABLED=true` last.
-The next CI success on master deploys. If the June container is named
-`pantopus-backend`, the deploy stops it and keeps it as
+Only after P1 to P5: the release needs the server's address, a database with
+every migration, Auth, and `.env.prod` (production startup refuses to run
+without the live Lob settings, D5). Same secrets as S5 with production values
+(the production project's ref and database password); variables
+`BACKEND_API_BIND=127.0.0.1:8000`, `SUPABASE_SESSION_POOLER_HOST` from the
+production project's **Connect** dialog and `DB_MIGRATIONS_ENABLED=true` (P2A's
+dry run reports nothing to push); keep the environment restricted to `master`;
+set `BACKEND_DEPLOY_ENABLED=true` last. Then start the first release yourself
+rather than waiting for a backend merge:
+
+```bash
+gh workflow run deploy-backend.yml --ref master
+```
+
+The run reads `Deploy Backend to production (master <commit>)`; after it, every
+master merge that changes the backend releases automatically. If the June
+container is named `pantopus-backend`, the deploy stops it and keeps it as
 `pantopus-backend-previous`, the automatic fallback if the first start fails.
 
 **Check:** `curl -s https://api.pantopus.com/health` is healthy, and both
@@ -572,7 +614,7 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `INTERNAL_API_KEY`, `CSRF_SECRET`, `STEP_UP_SECRET`, `LOCATION_JITTER_SECRET`, `EMAIL_INBOUND_HMAC_SECRET`, `HOME_POSTCARD_CODE_KEYS_JSON`, `HOME_POSTCARD_CODE_ACTIVE_KEY` | gen | gen | `hosted-secrets/` |
 | `EDGE_PROXY_SECRET` | gen | gen | `hosted-secrets/`; the same value goes into Vercel (S7, P9) |
 | `GOOGLE_ADDRESS_VALIDATION_API_KEY`, `GOOGLE_PLACES_API_KEY` | required | required | Google Cloud (restrict to the server's IP) |
-| `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active) |
+| `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active; S4 checks it) |
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
 | `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
@@ -597,6 +639,7 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `LAMBDA_BACKED_CRON_ENABLED` | `false` | `false` | S8 |
 | `SLACK_ALERTS_WEBHOOK_URL` | optional | optional | D7 |
 | `LAUNCH_FEATURES` | empty | empty | launch cuts stay off |
+| `HOUSEHOLD_CLAIM_V2_READ_PATHS`, `HOUSEHOLD_CLAIM_PARALLEL_SUBMISSION`, `HOUSEHOLD_CLAIM_CHALLENGE_FLOW`, `HOUSEHOLD_CLAIM_ADMIN_COMPARE` | `true` | `true` | the ownership-claim behaviour the apps were verified against locally (a second claimant on a Home gets a parallel claim, not a refusal); unset, all four default to `false`, the older claim path |
 
 Startup refuses a production process without `CSRF_SECRET`, `STEP_UP_SECRET`,
 the Google, Smarty and Lob keys, `LOB_WEBHOOK_SECRET` and the right `LOB_ENV`,

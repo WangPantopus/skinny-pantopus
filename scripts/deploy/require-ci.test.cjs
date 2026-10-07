@@ -10,11 +10,17 @@ function fixture(overrides = {}) {
     github: { rest: {
       repos: {
         getBranch: async () => ({ data: { commit: { sha: overrides.head || sha } } }),
-        listDeployments: async () => ({ data: overrides.deployments || [] }),
-        listDeploymentStatuses: async () => ({ data: [{ state: 'success' }] }),
+        listDeployments: async () => ({ data: (overrides.deployments || []).map((deployment) => ({
+          performed_via_github_app: { slug: 'github-actions' }, ...deployment })) }),
+        listDeploymentStatuses: async () => ({ data: [{ state: 'success', log_url: 'https://github.com/example/app/actions/runs/5/job/6' }] }),
         compareCommitsWithBasehead: async () => ({ data: { status: 'ahead', files: (overrides.changed || []).map((filename) => ({ filename })) } }),
       },
-      actions: { listWorkflowRuns: async () => ({ data: { workflow_runs: overrides.runs || [{ id: 1, event: 'push', status: 'completed', conclusion: 'success' }] } }) },
+      actions: {
+        listWorkflowRuns: async () => ({ data: { workflow_runs: overrides.runs || [{ id: 1, event: 'push', status: 'completed', conclusion: 'success' }] } }),
+        getJobForWorkflowRun: async () => ({ data: { steps: [{ name: 'Deploy API and worker', conclusion: 'success' }] } }),
+        getWorkflowRun: async () => ({ data: { path: '.github/workflows/deploy-backend.yml',
+          display_title: `Deploy Backend to production (master ${'c'.repeat(40)})` } }),
+      },
     } },
   };
 }
@@ -41,14 +47,14 @@ test('a superseded commit skips quietly; feature branches cannot release', async
 });
 const pushRun = { head_branch: 'master', head_sha: sha, event: 'push', conclusion: 'success', head_repository: { full_name: 'example/app' } };
 test('an automatic deploy skips when no backend file changed since the last deployment', async () => {
-  const f = fixture({ context: { payload: { workflow_run: pushRun } }, deployments: [{ id: 7, sha: 'c'.repeat(40) }],
+  const f = fixture({ context: { payload: { workflow_run: pushRun } }, deployments: [{ id: 7 }],
     changed: ['docs/release/notes.md', 'frontend/apps/web/src/app/page.tsx'] });
   assert.equal((await requireCi(f)).skipped, 'unchanged');
   assert.equal(f.output.deploy, 'false');
 });
 test('an automatic deploy proceeds after a backend change or without an earlier deployment', async () => {
   for (const changed of [['backend/app.js'], ['pnpm-lock.yaml'], ['scripts/deploy/backend.sh']]) {
-    const f = fixture({ context: { payload: { workflow_run: pushRun } }, deployments: [{ id: 7, sha: 'c'.repeat(40) }], changed });
+    const f = fixture({ context: { payload: { workflow_run: pushRun } }, deployments: [{ id: 7 }], changed });
     await requireCi(f); assert.equal(f.output.deploy, 'true');
   }
   const first = fixture({ context: { payload: { workflow_run: pushRun } } });

@@ -85,6 +85,9 @@ data class WalletPendingReleaseResponse(
     @Json(name = "total_pending_cents") val totalPendingCents: Long = 0,
     @Json(name = "in_review_count") val inReviewCount: Int = 0,
     @Json(name = "releasing_soon_count") val releasingSoonCount: Int = 0,
+    /** Income under an open payment dispute, not part of the pending totals. Older servers omit it. */
+    @Json(name = "in_dispute_cents") val inDisputeCents: Long = 0,
+    @Json(name = "in_dispute_count") val inDisputeCount: Int = 0,
 )
 
 // POST /api/wallet/withdraw — backend/routes/wallet.js:84 (Block 3C)
