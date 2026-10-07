@@ -157,6 +157,7 @@ struct PulseTopicChipRow: View {
                                 lineWidth: 1
                             )
                         )
+                        .hitArea(vertical: 6)
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(active ? [.isSelected] : [])

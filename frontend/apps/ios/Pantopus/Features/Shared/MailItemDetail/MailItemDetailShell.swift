@@ -295,7 +295,9 @@ public struct MailItemDetailTopBar: View {
                     Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
                         .frame(width: 34, height: 34)
                         .background(Circle().fill(Theme.Color.appSurfaceSunken))
-                        .hitArea(horizontal: 5, vertical: 5)
+                        // A Menu's button is as big as its label's frame, so the 44 pt frame is real and the layout takes it back.
+                        .frame(width: 44, height: 44)
+                        .padding(-5)
                 }
                 .accessibilityLabel("More actions")
                 .accessibilityIdentifier("mailItemDetail_overflow")

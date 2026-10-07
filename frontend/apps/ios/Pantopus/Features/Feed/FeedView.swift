@@ -385,7 +385,7 @@ public struct FeedView: View {
                     .frame(height: 26)
                     .background(active ? Theme.Color.primarySolid : Color.clear)
                     .clipShape(Capsule())
-                    .contentShape(Capsule())
+                    .hitArea(vertical: 9)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("pulseViewModeSegment_\(mode.rawValue)")
