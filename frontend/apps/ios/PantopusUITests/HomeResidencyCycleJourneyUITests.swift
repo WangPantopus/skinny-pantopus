@@ -141,7 +141,7 @@ extension HomeResidencyHistoryJourneyUITests {
     private func cycleRemoveReviewedMember() async throws {
         try await switchAccount(0)
         try app.open(XCTUnwrap(URL(string: "pantopus://homes/" + home + "/members?tab=requests")))
-        try require(element("membersListRemovalRecovery"))
+        try require(element("membersList"))
         try press("tab.members")
         let actor = try cycleActor(2)
         let username = try XCTUnwrap(actor["username"] as? String)
@@ -153,7 +153,7 @@ extension HomeResidencyHistoryJourneyUITests {
         try require(element("homeMemberRemovalAcknowledge"))
         try await cycleCounts(submissions: 2, decisions: 2, removals: 1)
         try press("homeMemberRemovalAcknowledge")
-        try require(element("membersListRemovalRecovery"))
+        try require(element("membersList"))
         try await cycleEqual(cycleMembership()["is_active"] as? Bool, false)
         keepScreen("Protected native removal retires the admitted membership")
     }

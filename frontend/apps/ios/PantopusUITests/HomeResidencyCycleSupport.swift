@@ -79,7 +79,7 @@ extension HomeResidencyHistoryJourneyUITests {
 
     func cycleQueue() throws {
         try app.open(XCTUnwrap(URL(string: "pantopus://homes/" + home + "/members?tab=requests")))
-        try require(element("membersListInvitationRecovery"))
+        try require(element("membersList"))
         try cyclePress(app.buttons["Review residency claims"].firstMatch)
         try press("homeClaimReview_tab_residency")
     }

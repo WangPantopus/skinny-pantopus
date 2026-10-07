@@ -174,7 +174,7 @@ final class HomeResidencyHistoryJourneyUITests: XCTestCase {
 
     func openHistory() throws {
         try app.open(XCTUnwrap(URL(string: "pantopus://homes/" + home + "/members?tab=requests")))
-        try require(element("membersListInvitationRecovery"))
+        try require(element("membersList"))
         let review = app.buttons["Review residency claims"].firstMatch
         try reveal(review)
         review.tap()

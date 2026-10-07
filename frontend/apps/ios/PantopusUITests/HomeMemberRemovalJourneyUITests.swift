@@ -180,7 +180,7 @@ extension HomeInvitationSenderJourneyUITests {
 
     func acknowledgeRemoval() throws {
         try press("homeMemberRemovalAcknowledge")
-        try require(element("membersListRemovalRecovery"))
+        try require(element("membersList"))
     }
 
     func openGlobalRemovalRecovery() throws {
