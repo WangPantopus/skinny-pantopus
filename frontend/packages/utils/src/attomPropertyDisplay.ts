@@ -93,17 +93,8 @@ const BUILDING_SUBSECTIONS: { key: string; title: string }[] = [
 export function buildAttomDisplaySections(attom: AttomPayloadLike | null | undefined): AttomDisplaySection[] {
   if (!attom) return [];
 
+  // ATTOM's response envelope (status code, message, transaction id) isn't about the property; only its records show.
   const sections: AttomDisplaySection[] = [];
-  const fr = attom.full_response as Record<string, unknown> | undefined;
-  const status = (fr?.status ?? attom.status) as Record<string, unknown> | undefined;
-
-  if (status && typeof status === 'object' && !Array.isArray(status)) {
-    sections.push({
-      id: 'status',
-      title: 'Response & metadata',
-      rows: rowsFromNested(status),
-    });
-  }
 
   const prop = getFirstProperty(attom);
   if (!prop) return sections;
