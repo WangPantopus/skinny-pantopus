@@ -481,7 +481,7 @@ final class HubViewModel {
             ActionChipContent(kind: .snapAndSell, label: "Snap & sell", icon: .camera, active: false),
             ActionChipContent(kind: .scanMail, label: "Scan mail", icon: .scanLine, active: false),
             ActionChipContent(kind: .addHome, label: "Add home", icon: .home, active: false)
-        ].filter(\.isAvailableAtLaunch) // Launch cuts #4 / #3: no "Post task" / "Snap & sell".
+        ].filter(\.isAvailableAtLaunch) // Launch cuts #4 / #3 / #7: no "Post task" / "Snap & sell" / "Scan mail".
     }
 
     private static func pillarTint(for value: String) -> IdentityPillar {

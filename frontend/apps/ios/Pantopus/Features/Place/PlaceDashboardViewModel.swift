@@ -34,6 +34,9 @@ final class PlaceDashboardViewModel {
     /// A re-read of a loaded dashboard is in flight (pull to refresh or a
     /// section's "Try again").
     private(set) var isRefreshing = false
+    /// Unread personal notifications, the Hub bell's count; the header
+    /// bell shows a dot while it is above zero.
+    private(set) var unreadCount = 0
 
     private let api: APIClient
     private var reloadPending = false
@@ -56,6 +59,8 @@ final class PlaceDashboardViewModel {
     /// Movers first (Wedge v2 D5): "Send back the previous resident's mail" opens Mail Day.
     let onOpenMailDay: () -> Void
     let onOpenHubHome: () -> Void
+    /// The header bell opens the notifications list.
+    let onOpenNotifications: () -> Void
 
     init(
         homeId: String,
@@ -69,7 +74,8 @@ final class PlaceDashboardViewModel {
         onOpenInbox: @escaping () -> Void = {},
         onOpenPrivacyMirror: @escaping () -> Void = {},
         onOpenMailDay: @escaping () -> Void = {},
-        onOpenHubHome: @escaping () -> Void = {}
+        onOpenHubHome: @escaping () -> Void = {},
+        onOpenNotifications: @escaping () -> Void = {}
     ) {
         self.homeId = homeId
         self.api = api
@@ -83,6 +89,7 @@ final class PlaceDashboardViewModel {
         self.onOpenPrivacyMirror = onOpenPrivacyMirror
         self.onOpenMailDay = onOpenMailDay
         self.onOpenHubHome = onOpenHubHome
+        self.onOpenNotifications = onOpenNotifications
     }
 
     func load() async {
@@ -100,7 +107,18 @@ final class PlaceDashboardViewModel {
     func refresh() async {
         isRefreshing = true
         defer { isRefreshing = false }
+        async let unread: Void = refreshUnread()
         await fetch()
+        await unread
+    }
+
+    /// Re-read the bell's count whenever the dashboard shows again (for
+    /// example after the user read their notifications). A failed read
+    /// keeps the last count.
+    func refreshUnread() async {
+        guard let unread: NotificationUnreadCountResponse = try? await api.request(NotificationsEndpoints.unreadCount)
+        else { return }
+        unreadCount = unread.personalBellCount
     }
 
     private func fetch() async {
