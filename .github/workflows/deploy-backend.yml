@@ -120,8 +120,8 @@ jobs:
           [[ "$DB_MIGRATIONS_ENABLED" == true ]] || { echo '::error::Complete the database adoption runbook before enabling releases of the baselined stream.'; exit 1; }
           : "${SUPABASE_ACCESS_TOKEN:?}" "${SUPABASE_DB_PASSWORD:?}" "${SUPABASE_PROJECT_ID:?}"
           supabase link --project-ref "$SUPABASE_PROJECT_ID"
-          supabase db push --linked --dry-run
-          supabase db push --linked --yes
+          supabase db push --project-ref "$SUPABASE_PROJECT_ID" --dry-run
+          supabase db push --project-ref "$SUPABASE_PROJECT_ID" --yes
       - name: Reject a superseded release before cutover
         if: steps.configuration.outputs.enabled == 'true'
         uses: actions/github-script@v8
