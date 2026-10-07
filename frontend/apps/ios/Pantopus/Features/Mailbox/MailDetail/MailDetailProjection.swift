@@ -147,7 +147,7 @@ extension MailDetailViewModel {
             let value = dict?[key]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let value, !value.isEmpty { return value }
         }
-        return "Ref \(itemId.uppercased())"
+        return "Ref \(itemId.prefix(8).uppercased())"
     }
 
     static func carrierLabel(from object: JSONValue?) -> String {

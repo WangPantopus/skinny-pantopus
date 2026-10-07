@@ -38,7 +38,7 @@ public struct HelpCenterView: View {
                 .pantopusTextStyle(.h2)
                 .foregroundStyle(Theme.Color.appText)
             Text(
-                "Most questions about messages, mail, and gigs have answers below. " +
+                "Most questions about messages and mail have answers below. " +
                     "If you don't see yours, reach out — we read every message."
             )
             .pantopusTextStyle(.small)
