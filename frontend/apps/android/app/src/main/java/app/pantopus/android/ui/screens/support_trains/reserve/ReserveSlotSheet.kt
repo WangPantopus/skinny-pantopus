@@ -95,6 +95,12 @@ class ReserveSheetDraft(
     var noteToRecipient by mutableStateOf(noteToRecipient)
     var errorMessage by mutableStateOf(errorMessage)
 
+    /** The helper chose how they'll help or typed something that closing the sheet would drop (not once signed up). */
+    val hasEnteredInput: Boolean
+        get() =
+            step != ReserveStep.SUCCESS &&
+                (mode != null || listOf(dishTitle, restaurantName, noteToRecipient).any { it.isNotEmpty() })
+
     companion object {
         val Saver =
             listSaver<ReserveSheetDraft, String?>(
