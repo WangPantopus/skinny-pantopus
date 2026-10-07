@@ -8,6 +8,7 @@ import { getAuthToken } from '@pantopus/api';
 import type { Home } from '@pantopus/types';
 import { toast, toastStore } from '@/components/ui/toast-store';
 import { notifyHomesChanged } from '@/components/ProfileToggle';
+import { HomePermissionsProvider, useHomePermissions } from '@/components/home/useHomePermissions';
 
 const HOME_TYPES = [
   { value: 'house', label: 'House' },
@@ -47,9 +48,16 @@ function parseLocation(loc: Record<string, any> | string | null | undefined): { 
 }
 
 export default function EditHomePage() {
-  const router = useRouter();
   const params = useParams();
   const homeId = String((params as Record<string, any>)?.id || '');
+  return <HomePermissionsProvider homeId={homeId}><EditHomeForm homeId={homeId} /></HomePermissionsProvider>;
+}
+
+function EditHomeForm({ homeId }: { homeId: string }) {
+  const router = useRouter();
+  // Saving needs home.edit; everyone else sees the details read-only instead of a form that is refused.
+  const { can, loading: permissionsLoading, error: permissionsError } = useHomePermissions();
+  const canEdit = can('home.edit');
 
   const [home, setHome] = useState<Home | null>(null);
   const [loading, setLoading] = useState(true);
@@ -244,7 +252,14 @@ export default function EditHomePage() {
           </div>
         )}
 
-        <form onSubmit={save} className="space-y-6">
+        {!permissionsLoading && !canEdit && (
+          <div role="status" className="mb-4 rounded-lg border border-app-border bg-app-surface p-3 text-sm text-app-text-secondary">
+            {permissionsError || 'Only people who can edit this Home can change these details.'}
+          </div>
+        )}
+
+        <form onSubmit={save}>
+          <fieldset disabled={!canEdit} className="space-y-6 min-w-0">
           {/* ── Location / Coordinates ── */}
           <div className="rounded-xl border border-app-border bg-app-surface p-5">
             <h2 className="text-base font-semibold text-app-text mb-1">📍 Location</h2>
@@ -402,13 +417,16 @@ export default function EditHomePage() {
           </div>
 
           {/* Save */}
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full bg-gray-900 text-white py-3 rounded-lg hover:bg-gray-800 font-semibold disabled:opacity-50 transition"
-          >
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
+          {canEdit && (
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full bg-gray-900 text-white py-3 rounded-lg hover:bg-gray-800 font-semibold disabled:opacity-50 transition"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          )}
+          </fieldset>
         </form>
       </main>
     </div>
