@@ -98,8 +98,16 @@ router.post('/withdraw', verifyToken, validate(withdrawSchema), async (req, res)
   } catch (err) {
     logger.error('Withdrawal error', { error: err.message, userId: req.user.id });
 
-    if (err.message?.includes('Insufficient balance')) {
-      return res.status(400).json({ error: err.message });
+    // wallet_debit raises 'Insufficient wallet balance. Available: <cents>, Required: <cents>'. A second
+    // withdrawal racing the first, or a stale balance on another device, lands here.
+    if (/insufficient (wallet )?balance/i.test(err.message || '')) {
+      const available = Number((err.message.match(/Available:\s*(-?\d+)/) || [])[1]);
+      return res.status(400).json({
+        error: Number.isFinite(available)
+          ? `Your available balance is $${(Math.max(available, 0) / 100).toFixed(2)}.`
+          : 'Your available balance is lower than that.',
+        code: 'insufficient_balance',
+      });
     }
     if (err.message?.includes('payout account') || err.message?.includes('onboarding')) {
       return res.status(400).json({ error: err.message });
