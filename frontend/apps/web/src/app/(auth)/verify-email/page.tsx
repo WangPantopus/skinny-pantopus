@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import PantopusBadge from '@/components/PantopusBadge';
 import { authPageHref, readAuthRedirectQuery, safeRedirectPath, extractApiError, normalizeEmail } from '@/lib/auth-utils';
-import { rememberVerifiedEmail } from '@/lib/email-verified-handoff';
+import { rememberSignInHandoff } from '@/lib/email-verified-handoff';
 
 type VerifyState = 'verifying' | 'success' | 'error';
 
@@ -76,7 +76,7 @@ function VerifyEmailPageContent() {
         if (!cancelled) {
           setState('success');
           setMessage(res?.message || 'Email verified successfully. You can now sign in.');
-          rememberVerifiedEmail(email);
+          rememberSignInHandoff(email, 'email-confirmed');
           redirectTimeoutRef.current = setTimeout(() => router.push(loginHref), 1200);
         }
       } catch (err: unknown) {
