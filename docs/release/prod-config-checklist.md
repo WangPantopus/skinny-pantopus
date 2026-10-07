@@ -105,7 +105,24 @@ Default: reset the existing `Pantopus-staging` project to the canonical
 migrations (it holds only synthetic data). If you'd rather keep it, create a new
 Free project `pantopus-staging-2` in the same region and use it instead.
 
-On the Mac, from the repository root. Run the CLI version that
+**First stop everything connected to the staging database.** The September
+staging server still runs a backend and a worker against `Pantopus-staging`;
+while they are connected, `db reset` fails with "deadlock detected" (it did on
+October 7). On the server:
+
+```bash
+docker ps --format '{{.Names}}'                                 # find the staging containers
+docker stop pantopus-backend-staging pantopus-worker-staging    # use the names docker ps shows
+```
+
+Leave them stopped: S6's first release starts new ones on the reset database.
+If a September staging Lambda stack is running (CloudFormation
+`pantopus-seeder-staging`), disable its EventBridge schedules until S8 too; it
+writes through Supabase's API. If a reset already failed with "deadlock
+detected", stop them and run `sb db reset --linked` again; it starts from
+scratch.
+
+Then on the Mac, from the repository root. Run the CLI version that
 `supabase/migration-policy.json` pins (2.116.0) through `npx`; the first run
 downloads it once (about 40 MB). The Mac's own `supabase` command (Homebrew,
 2.98.2) runs the launch streams' local test databases, so leave it as it is.
@@ -125,7 +142,8 @@ and **public** `pantopus-uploads` (100 MB) for avatars and post photos. Under
 Storage → S3 Connection, create an access key for the backend (Appendix A,
 storage row).
 
-**Check:** `sb migration list --linked` shows every file in
+**Check:** before the reset, `docker ps` on the server lists no staging
+backend or worker. After it, `sb migration list --linked` shows every file in
 `supabase/migrations/` on both sides, and `sb db push --linked --dry-run`
 reports nothing to push. In the dashboard, `home-documents` and `gig-completion`
 show as private.
@@ -341,7 +359,9 @@ Same shape as staging, with live vendors where D4 and D5 say so.
 1. Supabase → New project `pantopus-production`, **Pro** plan, region
    `us-west-2` (Oregon, next to the server). Turn on daily backups (included in
    Pro); point-in-time recovery is optional.
-2. On the Mac, with the `sb` alias from S2:
+2. On the Mac, with the `sb` alias from S2. Nothing should be connected to a
+   new project yet; if a production backend or worker already points at it
+   (from an earlier attempt), stop it first as in S2.
    ```bash
    sb link --project-ref <production ref>
    sb db push --linked --dry-run   # lists every migration in supabase/migrations
@@ -368,7 +388,10 @@ Don't run any of this until L4 has rehearsed it on a copy:
    forward-upgrade SQL (retained in the private evidence archive under
    `baseline-adoption/`), compare catalogs with the canonical baseline, then
    apply every later migration, and write the exact ledger-repair commands.
-3. Founder, in a maintenance window: run the reviewed SQL and ledger repair, then
+3. Founder, in a maintenance window: first stop everything connected to the
+   April project, as in S2 (on the server, the June production container and
+   any worker: `docker ps`, then `docker stop` them; schema changes deadlock
+   with live connections). Then run the reviewed SQL and ledger repair, and
    `sb db push --linked`. See `docs/supabase-migration-automation-runbook.md`.
 
 ### P3. Production Auth (founder)
