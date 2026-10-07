@@ -18,6 +18,7 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.routing.HomeTaskNotificationRoute
 import app.pantopus.android.data.api.models.notifications.NotificationDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.notifications.NotificationsRepository
@@ -507,9 +508,11 @@ class NotificationsViewModel
             }
             applyState()
             viewModelScope.launch {
-                when (repo.delete(id)) {
+                when (val result = repo.delete(id)) {
                     is NetworkResult.Success -> Unit
                     is NetworkResult.Failure -> {
+                        // Already deleted (say on another device): the row stays gone.
+                        if (result.error == NetworkError.NotFound) return@launch
                         notifications = previous.toMutableList()
                         _unreadCount.value = previousCount
                         applyState()
