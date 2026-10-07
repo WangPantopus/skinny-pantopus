@@ -13,7 +13,7 @@ import { getAuthToken } from "@pantopus/api";
 import WalletBalanceCard from "@/components/wallet/WalletBalanceCard";
 import WalletTransactionList from "@/components/wallet/WalletTransactionList";
 import WithdrawModal from "@/components/wallet/WithdrawModal";
-import { webFeatureFlags } from "@/lib/featureFlags";
+import { launchFeatures, webFeatureFlags } from "@/lib/featureFlags";
 
 function WalletContent() {
   const router = useRouter();
@@ -58,7 +58,7 @@ function WalletContent() {
       </div>
 
       {/* Scheduling booking earnings (W14) — only the booking source goes violet. */}
-      {webFeatureFlags.schedulingPaid && (
+      {webFeatureFlags.schedulingPaid && launchFeatures.publicScheduling && (
         <Link
           href="/app/scheduling/payments"
           className="mb-6 flex items-center gap-3 rounded-2xl border border-app-border bg-app-surface px-4 py-3 shadow-sm transition hover:bg-app-hover"
