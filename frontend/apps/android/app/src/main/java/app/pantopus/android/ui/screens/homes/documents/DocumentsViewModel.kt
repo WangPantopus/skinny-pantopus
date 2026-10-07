@@ -520,7 +520,8 @@ class DocumentsViewModel
             @JvmStatic
             fun uploadedDayLabel(dto: HomeDocumentDto): String? {
                 val created = dto.createdAt?.let(::parseInstant) ?: return null
-                return DateTimeFormatter.ofPattern("MMM d", Locale.US).format(created.atZone(ZoneId.of("UTC")))
+                // The day it was uploaded where the person is: in UTC an evening upload showed tomorrow's date.
+                return DateTimeFormatter.ofPattern("MMM d", Locale.US).format(created.atZone(ZoneId.systemDefault()))
             }
 
             private data class ExpiresInfo(val label: String?, val urgent: Boolean)

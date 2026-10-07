@@ -27,7 +27,7 @@ public enum DocumentFileType: String, CaseIterable, Sendable {
     public var stamp: String {
         switch self {
         case .pdf: "PDF"
-        case .image: "JPG"
+        case .image: "IMG" // Any image type (PNG, HEIC, JPEG…), so not "JPG".
         case .doc: "DOC"
         case .sheet: "XLS"
         case .archive: "ZIP"
