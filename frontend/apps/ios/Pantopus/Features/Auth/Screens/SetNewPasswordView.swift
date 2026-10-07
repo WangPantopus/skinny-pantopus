@@ -307,6 +307,7 @@ private struct SecurePasswordField: View {
                 } label: {
                     Icon(isRevealed ? .eyeOff : .eye, size: 18, color: Theme.Color.appTextSecondary)
                         .frame(width: 28, height: 28)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
                 .accessibilityLabel(isRevealed ? "Hide password" : "Show password")
             }

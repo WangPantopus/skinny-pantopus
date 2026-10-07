@@ -129,6 +129,7 @@ public struct PasswordEntryField: View {
             } label: {
                 Icon(isRevealed ? .eyeOff : .eye, size: 17, color: Theme.Color.appTextSecondary)
                     .frame(width: 32, height: 32)
+                    .hitArea(horizontal: 6, vertical: 6)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isRevealed ? "Hide password" : "Show password")

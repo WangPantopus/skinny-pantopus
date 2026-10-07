@@ -1572,6 +1572,7 @@ private struct ChatConversationHeader: View {
             Button(action: onBack) {
                 Icon(.chevronLeft, size: 20, color: Theme.Color.appText)
                     .frame(width: 32, height: 32)
+                    .hitArea(horizontal: 6, vertical: 6)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
@@ -1695,6 +1696,7 @@ private struct ChatConversationHeader: View {
                 Button(action: onOpenDetails) {
                     Icon(.info, size: 20, color: Theme.Color.appTextStrong)
                         .frame(width: 34, height: 34)
+                        .hitArea(horizontal: 5, vertical: 5)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Conversation details")
@@ -3578,6 +3580,7 @@ private struct ChatComposer: View {
                 Button(action: onEmoji) {
                     Icon(.smile, size: 17, color: Theme.Color.appTextMuted)
                         .frame(width: 24, height: 20)
+                        .hitArea(horizontal: 10, vertical: 12)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Emoji")

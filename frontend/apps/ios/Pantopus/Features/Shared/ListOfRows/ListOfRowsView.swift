@@ -227,6 +227,7 @@ private struct TabStrip: View {
                                 .frame(height: 2)
                         }
                         .frame(minHeight: 44)
+                        .hitArea(horizontal: 8)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(tab.label)

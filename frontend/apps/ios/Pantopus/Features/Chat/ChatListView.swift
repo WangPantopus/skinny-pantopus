@@ -228,6 +228,7 @@ private struct ChatListTopBar: View {
             Button(action: onCompose) {
                 Icon(.edit2, size: 20, color: Theme.Color.appText)
                     .frame(width: 36, height: 36)
+                    .hitArea(horizontal: 4, vertical: 4)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("New message")
@@ -331,6 +332,7 @@ private struct ChatListFilterTabs: View {
                         .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
                 }
             }
+            .hitArea(horizontal: 10, vertical: 8)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(filter.label)

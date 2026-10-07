@@ -55,10 +55,10 @@ struct EditProfileAvatarBlock: View {
                 .accessibilityLabel("Profile photo")
                 .accessibilityHint("Opens your photo library to pick a new profile photo")
 
-            Button { showsPicker = true } label: { changePhotoLabel }
+            // The 44 pt frame is inside the label: outside it only sized the layout, and the tap area was the text.
+            Button { showsPicker = true } label: { changePhotoLabel.frame(minHeight: 44).contentShape(Rectangle()) }
                 .buttonStyle(.plain)
                 .disabled(isUploading)
-                .frame(minHeight: 44)
                 .accessibilityIdentifier("editProfileChangePhotoButton")
 
             if let errorMessage {

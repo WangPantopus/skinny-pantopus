@@ -261,9 +261,10 @@ extension EditProfileView {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(tint)
             }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(minHeight: 44)
         .disabled(!viewModel.canGenerateBio)
         .accessibilityIdentifier("editProfileGenerateBioButton")
         .accessibilityHint("Drafts a bio from your name, skills, tagline and city")

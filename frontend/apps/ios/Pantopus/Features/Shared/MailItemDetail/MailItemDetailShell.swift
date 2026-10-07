@@ -276,6 +276,7 @@ public struct MailItemDetailTopBar: View {
                             trailing.isActive ? Theme.Color.primary100 : Theme.Color.appSurfaceSunken
                         )
                     )
+                    .hitArea(horizontal: 5, vertical: 5)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(trailing.accessibilityLabel)
@@ -294,6 +295,7 @@ public struct MailItemDetailTopBar: View {
                     Icon(.moreHorizontal, size: 18, color: Theme.Color.appTextStrong)
                         .frame(width: 34, height: 34)
                         .background(Circle().fill(Theme.Color.appSurfaceSunken))
+                        .hitArea(horizontal: 5, vertical: 5)
                 }
                 .accessibilityLabel("More actions")
                 .accessibilityIdentifier("mailItemDetail_overflow")
