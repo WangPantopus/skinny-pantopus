@@ -11,10 +11,10 @@ struct HomeResidencyReviewView: View {
         NavigationStack {
             Form {
                 if !model.isCurrent {
-                    Text("Your session changed. Reopen residency review to check access.")
+                    Text("Your account changed. Close this and open it again to continue.")
                 } else {
-                    Text("Review the current claim and membership before approving or rejecting residency.")
-                    if model.isWorking { ProgressView("Checking residency review…").accessibilityIdentifier("homeResidencyReview.loading") }
+                    Text("Check who’s asking to join and the access they have now, then approve or reject.")
+                    if model.isWorking { ProgressView("Loading…").accessibilityIdentifier("homeResidencyReview.loading") }
                     if let error = model.error {
                         Text(error).foregroundStyle(Theme.Color.error).accessibilityIdentifier("homeResidencyReview.error")
                     }
@@ -30,7 +30,7 @@ struct HomeResidencyReviewView: View {
                                 .accessibilityIdentifier("homeResidencyReview.noPendingClaim")
                         }
                     } else if model.opened, model.error == nil, !model.isWorking {
-                        Text("No residency decision needs recovery on this device. Choose a claim to review.")
+                        Text("Nothing to finish here. Choose a request to review.")
                             .accessibilityIdentifier("homeResidencyReview.empty")
                     }
                 }
@@ -49,7 +49,7 @@ struct HomeResidencyReviewView: View {
                     } else {
                         Button("Reload") { Task { await model.open() } }
                             .disabled(model.isWorking || !model.isCurrent)
-                            .accessibilityLabel("Reload current access")
+                            .accessibilityLabel("Reload")
                             .accessibilityIdentifier("homeResidencyReview.reload")
                     }
                 }
@@ -76,87 +76,78 @@ struct HomeResidencyReviewView: View {
     }
 
     private func currentClaim(_ review: HomeResidencyCurrentReview) -> some View {
-        Section("Current residency claim") {
+        Section("Request") {
             if let claimant = model.claimant { Text(claimant).font(.headline) }
-            Text("Claim reference: \(review.claimId.suffix(8)) · Applicant account: \(review.applicantId.suffix(8))").font(.caption)
-            Text("Claim status: \(words(review.claim["status"]))").accessibilityIdentifier("homeResidencyReview.claimStatus")
-            Text("Requested role: \(words(review.claim["claimed_role"]))")
-            if let address = review.claim["claimed_address"]?.stringValue { Text("Claimed address: \(address)") }
-            if let note = review.claim["review_note"]?.stringValue, !note.isEmpty { Text("Current review note: \(note)") }
-            if model
-                .pending !=
-                nil { Text("This is the latest claim state. The saved decision below records the earlier request.").font(.caption) }
+            Text("Reference: \(review.claimId.suffix(8))").font(.caption)
+            Text("Status: \(claimStatus(review.claim["status"]))").accessibilityIdentifier("homeResidencyReview.claimStatus")
+            Text("Asked to join as: \(joinedAs(review.claim["claimed_role"]))")
+            if let address = review.claim["claimed_address"]?.stringValue { Text("Address: \(address)") }
+            if let note = review.claim["review_note"]?.stringValue, !note.isEmpty { Text("Note: \(note)") }
+            if model.pending != nil { Text("Above is how the request looks now. Your saved decision is below.").font(.caption) }
         }
     }
 
     private func currentMembership(_ review: HomeResidencyCurrentReview) -> some View {
-        Section("Current membership") {
+        Section("Their access now") {
             if let occupancy = review.occupancy {
-                Text("Membership record: \(occupancy["is_active"] == .bool(true) ? "Active" : "Inactive")")
+                Text("Membership: \(occupancy["is_active"] == .bool(true) ? "Active" : "Ended")")
                     .accessibilityIdentifier("homeResidencyReview.membershipStatus")
-                Text("Role: \(words(occupancy["role_base"] == .null ? occupancy["role"] : occupancy["role_base"]))")
-                Text("Age band: \(words(occupancy["age_band"]))")
-                Text("Verification: \(words(occupancy["verification_status"]))")
+                Text("Role: \(roleLabel(occupancy["role_base"] == .null ? occupancy["role"] : occupancy["role_base"]))")
+                Text("Age group: \(words(occupancy["age_band"]))")
+                Text("Verification: \(verification(occupancy["verification_status"]))")
                 ForEach(["start_at", "end_at", "access_start_at", "access_end_at", "verification_expires_at"], id: \.self) { key in
                     LabeledContent(dateTitle(key), value: dateLabel(occupancy[key]))
                 }
-                Text("Access also depends on the current dates, verification and household permissions.").font(.caption)
-            } else { Text("No membership record exists for this applicant yet.") }
+                Text("What they can do also depends on these dates and their permissions.").font(.caption)
+            } else { Text("They don’t have access to this Home yet.") }
         }
     }
 
     private var controls: some View {
-        Section("Review your decision") {
-            Picker("Residency decision", selection: $model.action) {
+        Section("Your decision") {
+            Picker("Your decision", selection: $model.action) {
                 ForEach(HomeResidencyDecision.allCases, id: \.self) { Text($0.label).tag($0) }
             }.accessibilityIdentifier("homeResidencyReview.action")
             if model.action == .approve {
-                Text(
-                    "Confirm residency within the existing role, age and access limits. " +
-                        "Existing verified memberships keep their role and restrictions. " +
-                        "Ownership has its own flow, and approving can’t restore access that has ended or expired."
-                )
-                .font(.caption)
-                Picker("Role for an unverified membership", selection: $model.role) {
+                Text("Approving lets them into this Home with the role you choose. It doesn’t make them an owner.")
+                    .font(.caption)
+                Picker("Their role", selection: $model.role) {
                     ForEach(HomeResidencyReviewRole.allCases, id: \.self) { Text($0.label).tag($0) }
                 }.accessibilityIdentifier("homeResidencyReview.role")
             } else {
-                Text("Reject this pending residency claim. Existing membership access stays unchanged.").font(.caption)
+                Text("Rejecting declines this request. It doesn’t change anyone’s current access.").font(.caption)
                 Text("Reason for rejection (optional)").font(.caption)
                 TextField("Reason for rejection (optional)", text: $model.reason, axis: .vertical)
                     .lineLimit(3...8).focused($reasonFocused).accessibilityIdentifier("homeResidencyReview.reason")
                 Text("\(model.reason.utf16.count)/2000").font(.caption)
             }
-            Toggle("I reviewed the current claim, membership limits and selected decision.", isOn: $model.reviewed)
+            Toggle("I’ve checked this request and my decision.", isOn: $model.reviewed)
                 .accessibilityIdentifier("homeResidencyReview.reviewed")
-            Button("Save residency decision") { reasonFocused = false
+            Button("Save decision") { reasonFocused = false
                 Task { await model.submit() }
             }.disabled(!model.canSubmit).accessibilityIdentifier("homeResidencyReview.submit")
         }.disabled(!model.canDecide)
     }
 
     private func recovery(_ pending: PendingHomeResidencyReview) -> some View {
-        Section(model.receipt != nil ? "Original decision confirmed" : "Decision needs confirmation") {
-            Text(pending.action.label)
-            if let role = pending.role { Text("Originally selected role: \(role.label)") }
-            if let reason = pending.reason, !reason.isEmpty { Text("Original reason: \(reason)") }
+        Section(model.receipt != nil ? "Decision saved" : "Check your last decision") {
+            Text("You chose: \(pending.action.label)")
+            if let role = pending.role { Text("Role: \(role.label)") }
+            if let reason = pending.reason, !reason.isEmpty { Text("Reason: \(reason)") }
             if let receipt = model.receipt {
-                Text("Recorded \(dateLabel(.string(receipt.recordedAt)))")
-                Text(pending
-                    .action == .approve ? "The original residency claim was approved." : "The original residency claim was rejected.")
-                Text("Later changes remain in effect. This confirmation does not restore access or decide a resubmitted claim.")
-                    .font(.caption)
+                Text("Saved \(dateLabel(.string(receipt.recordedAt)))")
+                Text(pending.action == .approve ? "You approved this request." : "You rejected this request.")
             } else {
-                Text("The original decision is saved on this device. Retry it to confirm the outcome without submitting a second decision.")
+                Text("We couldn’t confirm your decision went through. Try again; it won’t be applied twice.")
                     .font(.caption)
             }
-            if model.isRecoveringAnotherClaim { Text("Finish this saved decision before reviewing another claim.").font(.caption) }
+            if model.isRecoveringAnotherClaim { Text("Finish this before reviewing another request.").font(.caption) }
             if model.canRetry {
-                Button(model.receipt != nil ? "Save confirmation again" : "Retry original decision") { Task { await model.retry() } }
+                Button(model.receipt != nil ? "Save again" : "Try again") { Task { await model.retry() } }
                     .accessibilityIdentifier("homeResidencyReview.retry")
             }
             if model.canAcknowledge {
-                Button(pending.receipt != nil ? "I reviewed this confirmation" : "Review current claim again") {
+                Button(pending.receipt != nil ? "Done" : "Start over") {
                     Task { await model.acknowledge() }
                 }
                 .accessibilityIdentifier("homeResidencyReview.acknowledge")
@@ -165,7 +156,40 @@ struct HomeResidencyReviewView: View {
     }
 
     private func words(_ value: JSONValue?) -> String {
-        (value?.stringValue ?? "Unknown").replacingOccurrences(of: "_", with: " ")
+        (value?.stringValue ?? "Not given").replacingOccurrences(of: "_", with: " ")
+    }
+
+    private func claimStatus(_ value: JSONValue?) -> String {
+        switch value?.stringValue {
+        case "pending": "Waiting for your decision"
+        case "verified": "Approved"
+        case "rejected": "Rejected"
+        default: words(value)
+        }
+    }
+
+    private func joinedAs(_ value: JSONValue?) -> String {
+        switch value?.stringValue {
+        case "household", "member": "Household member"
+        case "renter", "tenant": "Renter"
+        default: words(value)
+        }
+    }
+
+    private func roleLabel(_ value: JSONValue?) -> String {
+        value?.stringValue.flatMap(HomeResidencyReviewRole.init(rawValue:))?.label ?? words(value)
+    }
+
+    private func verification(_ value: JSONValue?) -> String {
+        switch value?.stringValue {
+        case "verified": "Verified"
+        case "pending_approval": "Waiting for approval"
+        case "pending_postcard": "Waiting for a postcard"
+        case "provisional_bootstrap", "provisional": "Provisional"
+        case "moved_out": "Left this Home"
+        case "inactive": "Removed"
+        default: words(value)
+        }
     }
 
     private func dateTitle(_ key: String) -> String {
