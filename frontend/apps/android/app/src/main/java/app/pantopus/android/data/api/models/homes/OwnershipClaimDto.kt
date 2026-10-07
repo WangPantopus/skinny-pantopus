@@ -24,6 +24,8 @@ data class OwnershipClaimDto(
     @Json(name = "updated_at") val updatedAt: String,
     /** The address the person claimed (their own entry), when the server sends it. */
     val home: ClaimedHome? = null,
+    /** Whether any documents are attached; null when the server didn't say. */
+    @Json(name = "has_evidence") val hasEvidence: Boolean? = null,
 ) {
     /** The claimed Home's address lines. */
     @JsonClass(generateAdapter = true)

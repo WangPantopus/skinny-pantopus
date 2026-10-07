@@ -38,6 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.HaloCircle
 import app.pantopus.android.ui.components.Shimmer
@@ -69,7 +71,8 @@ fun WaitingRoomRoute(
 
     // Mirrors the iOS `.task` on `WaitingRoomView`: refetch on every
     // appearance so returning from evidence upload shows fresh claim state.
-    LaunchedEffect(Unit) { viewModel.refresh() }
+    // Also reloads on return from the postcard, evidence or Home screens, which can change the claim.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
     LaunchedEffect(navEvent) {
         navEvent?.let {

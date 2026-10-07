@@ -134,7 +134,7 @@ class WaitingRoomViewModel
                     _phase.value =
                         WaitingRoomPhase.Approved(
                             StatusWaitingContent.claimSubmitted(
-                                homeName = resolvedAddress(claim.home),
+                                homeName = homeContext(claim.home).address,
                                 approved = true,
                                 submittedOn = dayCaption(claim.createdAt),
                                 decidedOn = dayCaption(claim.updatedAt),
@@ -146,20 +146,22 @@ class WaitingRoomViewModel
                 return
             }
             val ref = claim.id.take(CLAIM_REF_LENGTH).uppercase()
-            val address = resolvedAddress(claim.home)
+            val home = homeContext(claim.home)
             _content.value =
                 if (seedState == WaitingRoomState.MoreInfoRequested) {
                     WaitingRoomContent.moreInfoRequested(
-                        address = address,
+                        address = home.address,
                         claimRef = ref,
                         submittedOn = dayCaption(claim.createdAt),
                     )
                 } else {
                     WaitingRoomContent.active(
-                        address = address,
+                        address = home.address,
                         claimRef = ref,
                         submittedOn = dayCaption(claim.createdAt),
                         reviewCaption = null,
+                        needsDocuments = claim.hasEvidence == false,
+                        addressVerified = home.addressVerified,
                     )
                 }
             _phase.value = WaitingRoomPhase.Loaded
@@ -224,24 +226,34 @@ class WaitingRoomViewModel
                 }
         }
 
+        /** The Home's street line, and whether the person has verified their address there. */
+        private data class HomeContext(val address: String, val addressVerified: Boolean)
+
         /**
-         * Best-effort street address for this home. Falls back to the generic
-         * "Your home" label rather than inventing an address.
+         * A pending claimant can't read the Home yet, so their own claim's address
+         * comes next; the generic "Your home" label is the last resort.
          */
-        // A pending claimant can't read the Home yet, so their own claim's
-        // address comes next; "Your home" is the last resort.
-        private suspend fun resolvedAddress(claimed: OwnershipClaimDto.ClaimedHome? = null): String =
-            when (val addressResult = homesRepo.detail(homeId)) {
+        private suspend fun homeContext(claimed: OwnershipClaimDto.ClaimedHome? = null): HomeContext =
+            when (val detail = homesRepo.detail(homeId)) {
                 is NetworkResult.Success ->
-                    listOfNotNull(
-                        addressResult.data.home.address,
-                        addressResult.data.home.city,
-                        addressResult.data.home.state,
-                    ).joinToString(" · ").ifBlank { "Your home" }
+                    HomeContext(
+                        address =
+                            listOfNotNull(detail.data.home.address, detail.data.home.city, detail.data.home.state)
+                                .joinToString(" · ")
+                                .ifBlank { "Your home" },
+                        // Household-verified members (an invitation) can still verify the address by mail.
+                        addressVerified =
+                            detail.data.home.residencyStatus == "verified" &&
+                                detail.data.home.residencySource != "household",
+                    )
                 is NetworkResult.Failure ->
-                    listOfNotNull(claimed?.address, claimed?.city, claimed?.state)
-                        .joinToString(" · ")
-                        .ifBlank { "Your home" }
+                    HomeContext(
+                        address =
+                            listOfNotNull(claimed?.address, claimed?.city, claimed?.state)
+                                .joinToString(" · ")
+                                .ifBlank { "Your home" },
+                        addressVerified = false,
+                    )
             }
 
         fun openNotifications() {

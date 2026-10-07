@@ -197,6 +197,22 @@ router.get('/my-ownership-claims', verifyToken, async (req, res) => {
 
     if (error) throw error;
 
+    // Whether each claim has documents, so a claim started from Add Home isn't
+    // described as documents waiting for review. Unknown (null) if unreadable.
+    let withEvidence = null;
+    const claimIds = (claims || []).map(c => c.id);
+    if (claimIds.length) {
+      const { data: evidence, error: evidenceError } = await supabaseAdmin
+        .from('HomeVerificationEvidence')
+        .select('claim_id')
+        .in('claim_id', claimIds);
+      if (evidenceError) {
+        logger.warn('Failed to read claim evidence presence', { error: evidenceError.message });
+      } else {
+        withEvidence = new Set((evidence || []).map(e => e.claim_id));
+      }
+    }
+
     // Opaque handshake: mask internal states for the claimant. The claimed
     // address is the one they entered, so their own claim can name it.
     const maskedClaims = (claims || []).map(c => ({
@@ -205,6 +221,7 @@ router.get('/my-ownership-claims', verifyToken, async (req, res) => {
       claim_type: c.claim_type,
       method: c.method,
       status: maskClaimState(c.state, c.claim_phase_v2),
+      has_evidence: withEvidence ? withEvidence.has(c.id) : null,
       created_at: c.created_at,
       updated_at: c.updated_at,
       home: c.home ? {

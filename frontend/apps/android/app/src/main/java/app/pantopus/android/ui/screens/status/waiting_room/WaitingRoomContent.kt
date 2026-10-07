@@ -174,54 +174,88 @@ data class WaitingRoomContent(
          * Active wait — `Under review`, info-toned pulsing halo, the Submitted
          * → Under review → Approved timeline with "Under review" current, and
          * the "We'll notify you when it's decided" pill (no review time is promised).
+         * A claim started from Add Home has no documents yet ([needsDocuments]),
+         * so the room asks for them instead. Mail verification is offered until
+         * the person's address is verified.
          */
         fun active(
             address: String = SAMPLE_ADDRESS,
             claimRef: String = SAMPLE_CLAIM_REF,
             submittedOn: String? = "Oct 24",
             reviewCaption: String? = "Started 9h ago",
-        ): WaitingRoomContent =
-            WaitingRoomContent(
+            needsDocuments: Boolean = false,
+            addressVerified: Boolean = false,
+        ): WaitingRoomContent {
+            // A person reviews ownership documents (no county-records check), and no
+            // review time is promised while identity confirmation is undecided.
+            val wait =
+                if (needsDocuments) {
+                    "Upload a deed, closing disclosure or property tax bill so a Pantopus reviewer can check ownership."
+                } else {
+                    "Your documents are waiting for a Pantopus reviewer."
+                }
+            val meanwhile =
+                if (addressVerified) {
+                    "Your address is verified, so you can use your Home meanwhile."
+                } else {
+                    "Meanwhile, you can verify your address by mail."
+                }
+            return WaitingRoomContent(
                 title = ROOM_TITLE,
-                halo = StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.Hourglass, isPulsing = true),
-                headline = "Under review",
-                // A person reviews ownership documents (no county-records check), and no
-                // review time is promised while identity confirmation is undecided.
-                subcopy =
-                    "Your documents are waiting for a Pantopus reviewer. " +
-                        "Meanwhile, you can verify your address by mail.",
+                halo =
+                    if (needsDocuments) {
+                        StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.FilePlus2)
+                    } else {
+                        StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.Hourglass, isPulsing = true)
+                    },
+                headline = if (needsDocuments) "Add your documents" else "Under review",
+                subcopy = "$wait $meanwhile",
                 address = address,
                 claimRef = claimRef,
                 reviewerNote = null,
                 timeline =
                     listOf(
                         StatusTimelineStage("submitted", "Submitted", submittedOn, StatusStepState.Done),
-                        StatusTimelineStage("review", "Under review", reviewCaption, StatusStepState.Current),
+                        StatusTimelineStage(
+                            "review",
+                            "Under review",
+                            if (needsDocuments) "Waiting for documents" else reviewCaption,
+                            StatusStepState.Current,
+                        ),
                         StatusTimelineStage("approved", "Approved", state = StatusStepState.Pending),
                     ),
                 timelinePaused = false,
                 etaPill =
-                    StatusWaitingPill(
-                        text = "We'll notify you when it's decided",
-                        icon = PantopusIcon.Bell,
-                        tone = StatusPillTone.Primary,
-                    ),
+                    if (needsDocuments) {
+                        StatusWaitingPill(
+                            text = "The review starts after you upload documents",
+                            icon = PantopusIcon.FilePlus2,
+                            tone = StatusPillTone.Primary,
+                        )
+                    } else {
+                        StatusWaitingPill(
+                            text = "We'll notify you when it's decided",
+                            icon = PantopusIcon.Bell,
+                            tone = StatusPillTone.Primary,
+                        )
+                    },
                 manageSectionTitle = MANAGE_TITLE,
                 inlineActions =
-                    listOf(
+                    listOfNotNull(
                         WaitingRoomInlineAction(
                             id = "updateEvidence",
-                            label = "Update evidence",
+                            label = if (needsDocuments) "Upload documents" else "Update evidence",
                             icon = PantopusIcon.FilePlus2,
-                            tone = WaitingRoomActionTone.Standard,
+                            tone = if (needsDocuments) WaitingRoomActionTone.Primary else WaitingRoomActionTone.Standard,
                             actionKey = "update_evidence",
                         ),
+                        verifyByMailAction().takeUnless { addressVerified },
                         cancelClaimAction(),
-                        verifyByMailAction(),
                     ),
                 primaryCta = viewClaim,
                 secondaryCta = backToHome,
             )
+        }
 
         /**
          * More info requested · review paused — `We need one more thing`,
