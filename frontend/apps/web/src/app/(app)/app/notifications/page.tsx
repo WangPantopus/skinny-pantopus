@@ -507,7 +507,7 @@ export default function NotificationsPage() {
       ) : displayedNotifications.length === 0 && !loadError ? (
         <div className="text-center py-16 bg-app-surface rounded-xl border border-app-border">
           <div className="text-5xl mb-3">🔔</div>
-          <h3 className="text-lg font-semibold text-app-text mb-1">{filter === 'unread' ? 'No unread notifications' : filter === 'read' ? 'No read notifications' : 'No notifications yet'}</h3>
+          <h2 className="text-lg font-semibold text-app-text mb-1">{filter === 'unread' ? 'No unread notifications' : filter === 'read' ? 'No read notifications' : 'No notifications yet'}</h2>
           <p className="text-sm text-app-text-secondary">{filter === 'all' ? "We'll notify you when something happens." : 'Try a different filter.'}</p>
         </div>
       ) : (
@@ -536,7 +536,7 @@ export default function NotificationsPage() {
                     }}
                   >
                     {item.type === 'header' ? (
-                      <h3 className="text-xs font-semibold text-app-text-muted uppercase tracking-wider mb-2 px-1 pt-4 first:pt-0">{item.label}</h3>
+                      <h2 className="text-xs font-semibold text-app-text-muted uppercase tracking-wider mb-2 px-1 pt-4 first:pt-0">{item.label}</h2>
                     ) : (
                       <div className={`bg-app-surface border-l border-r border-app-border ${item.isFirst ? 'rounded-t-xl border-t' : ''} ${item.isLast ? 'rounded-b-xl border-b mb-4' : 'border-b border-b-app-border-subtle'} overflow-hidden`}>
                         <NotificationRow notif={item.notif} isSelected={selectedNotif?.id === item.notif.id} onClick={handleNotificationClick} onDelete={handleDelete} deleting={pendingKeys.includes(item.notif.id)} />

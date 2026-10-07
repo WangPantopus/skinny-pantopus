@@ -185,17 +185,17 @@ export default function SettingsPage() {
   if (loadError) {
     return (
       <div className="bg-app">
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <h1 className="text-xl font-semibold text-app mb-6">Settings</h1>
           <ErrorState message={loadError} onRetry={loadSettings} />
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="bg-app">
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <h1 className="text-xl font-semibold text-app mb-6">Settings</h1>
         <div className="space-y-6">
           {/* Notifications */}
@@ -445,7 +445,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
 
       {deleteConfirmation && <StepUpPasswordModal
         request={{ purpose: 'delete_account', title: 'Confirm account deletion',

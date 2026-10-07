@@ -320,14 +320,14 @@ export default function SecuritySettingsPage() {
   if (loading) {
     return (
       <div className="bg-app min-h-screen">
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto" />
               <p className="mt-4 text-app-secondary">Loading security settings…</p>
             </div>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
@@ -339,7 +339,7 @@ export default function SecuritySettingsPage() {
 
   return (
     <div className="bg-app min-h-screen">
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => router.push('/app/profile/settings')}
@@ -522,7 +522,7 @@ export default function SecuritySettingsPage() {
             )}
           </section>
         </div>
-      </main>
+      </div>
 
       <StepUpPasswordModal
         request={pendingStepUp?.request ?? null}

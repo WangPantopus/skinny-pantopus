@@ -710,7 +710,7 @@ export default function SupportTrainDetailPage() {
         {isOrganizer && (
           <div className="lg:col-span-3 space-y-4">
             <div className="bg-app-surface border border-app-border rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-app-text mb-4">Quick Stats</h3>
+              <h2 className="text-sm font-semibold text-app-text mb-4">Quick Stats</h2>
               <div className="grid grid-cols-2 gap-3">
                 <StatBox label="Dates" value={totalDateCount} />
                 <StatBox label="Open" value={openDateCount} />
@@ -747,7 +747,7 @@ export default function SupportTrainDetailPage() {
 
             {/* Organizers */}
             <div className="bg-app-surface border border-app-border rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-app-text mb-3">Organizers</h3>
+              <h2 className="text-sm font-semibold text-app-text mb-3">Organizers</h2>
               {(data.organizers || []).map((o: any) => (
                 <OrganizerListItem
                   key={o.id || o.user?.id || o.user?.username || o.role}

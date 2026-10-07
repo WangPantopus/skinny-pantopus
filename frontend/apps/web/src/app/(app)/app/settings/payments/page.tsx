@@ -93,7 +93,7 @@ function PaymentSettingsPageContent() {
 
   return (
     <div className="bg-app-surface-raised min-h-screen">
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -169,7 +169,7 @@ function PaymentSettingsPageContent() {
 
             {/* Quick info */}
             <div className="bg-app-surface rounded-xl border border-app-border p-5">
-              <h3 className="font-semibold text-app-text mb-3">How it works</h3>
+              <h2 className="font-semibold text-app-text mb-3">How it works</h2>
               <div className="space-y-3">
                 {/* Launch cut #4 (Open Gigs): no task income to describe, so the steps stay general. */}
                 {launchFeatures.openGigs ? (
@@ -427,7 +427,7 @@ function PaymentSettingsPageContent() {
             </button>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

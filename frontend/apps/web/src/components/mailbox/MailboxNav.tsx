@@ -100,7 +100,7 @@ export default function MailboxNav({ composeSlot }: MailboxNavProps) {
       )}
 
       {/* Scrollable nav */}
-      <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+      <nav aria-label="Mailbox drawers" className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
         {/* ── INBOX (chat) ─────────────────────────────── */}
         <SectionLabel>Inbox</SectionLabel>
         {inboxSection.map((e) => (

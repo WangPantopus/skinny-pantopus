@@ -167,7 +167,7 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* ── Content area ─────────────────────────────────── */}
-      <main className="flex-1 min-w-0 flex flex-col overflow-hidden" role="main">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Mail Day banner */}
         {showMailDayBanner && (
           <div
@@ -211,7 +211,7 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
             {children}
           </MailboxErrorBoundary>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

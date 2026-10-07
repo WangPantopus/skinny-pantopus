@@ -335,7 +335,7 @@ export default function ChatListPage() {
         </PageHeader>
       </div>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
@@ -511,7 +511,7 @@ export default function ChatListPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
 
       {/* On document.body: AppShell's <main> is its own stacking context, so from inside it this dialog's backdrop
           could not cover the header and sidebar, which stayed clickable behind it. */}
