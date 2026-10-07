@@ -165,6 +165,8 @@ final class MailboxListViewModel: ListOfRowsDataSource {
         for mail: MailItem,
         trust trustOverride: MailTrust? = nil,
         viewed viewedOverride: Bool = false,
+        sender: String? = nil,
+        dueDate: String? = nil,
         onOpenMail: @escaping @Sendable (String) -> Void
     ) -> RowModel {
         let category = MailItemCategory.fromRaw(mail.mailType ?? mail.type)
@@ -188,7 +190,8 @@ final class MailboxListViewModel: ListOfRowsDataSource {
         return RowModel(
             id: mail.id,
             title: mail.displayTitle ?? mail.subject ?? "Mail",
-            subtitle: mail.senderBusinessName ?? mail.senderAddress,
+            // The server-resolved sender (`sender_display` first) when the list has it.
+            subtitle: sender ?? mail.senderBusinessName ?? mail.senderAddress,
             template: .statusChip,
             leading: .typeIcon(
                 category.icon,
@@ -199,9 +202,24 @@ final class MailboxListViewModel: ListOfRowsDataSource {
             onTap: { onOpenMail(mailId) },
             body: mail.previewText,
             chips: chips,
-            timeMeta: formatRelativeTime(mail.createdAt),
+            timeMeta: dueDate.flatMap(formatDueDate) ?? formatRelativeTime(mail.createdAt),
             highlight: mail.viewed || viewedOverride ? nil : .unread
         )
+    }
+
+    /// "Due Oct 20" for a `due_date`. It is a calendar day ("2026-10-20"), read
+    /// in the device's time zone so it never shows the day before.
+    static func formatDueDate(_ value: String) -> String? {
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.timeZone = .current
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let date = parser.date(from: String(value.prefix(10))) else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "MMM d"
+        return "Due \(formatter.string(from: date))"
     }
 
     /// Lightweight relative-time formatter for the mail-row meta. Matches

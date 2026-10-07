@@ -46,6 +46,8 @@ public struct DrawerItemsResponse: Decodable, Sendable, Hashable {
         public let senderDisplay: String
         public let senderTrust: String
         public let package: JSONValue?
+        /// `Mail.due_date`: the calendar day a bill or notice is due ("2026-10-20").
+        public let dueDate: String?
 
         public var id: String {
             item.id
@@ -58,6 +60,7 @@ public struct DrawerItemsResponse: Decodable, Sendable, Hashable {
             senderDisplay = try c.decode(String.self, forKey: .senderDisplay)
             senderTrust = try c.decode(String.self, forKey: .senderTrust)
             package = try c.decodeIfPresent(JSONValue.self, forKey: .package)
+            dueDate = try c.decodeIfPresent(String.self, forKey: .dueDate)
         }
 
         private enum Keys: String, CodingKey {
@@ -65,6 +68,7 @@ public struct DrawerItemsResponse: Decodable, Sendable, Hashable {
             case senderDisplay = "sender_display"
             case senderTrust = "sender_trust"
             case package
+            case dueDate = "due_date"
         }
 
         public struct SenderRef: Decodable, Sendable, Hashable {
