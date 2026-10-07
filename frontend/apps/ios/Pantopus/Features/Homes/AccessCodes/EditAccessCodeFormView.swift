@@ -94,6 +94,8 @@ public struct EditAccessCodeFormView: View {
                 text: labelBinding,
                 placeholder: "Main network",
                 state: fieldState(for: viewModel.fields[.label]),
+                // Not a username: with the code field, iOS otherwise reads the form as a login it can save.
+                contentType: .oneTimeCode,
                 identifier: EditAccessCodeA11y.labelField
             )
             ValueField(
@@ -305,12 +307,16 @@ private struct ValueField: View {
         if isRevealed {
             TextField("••••••••", text: $value)
                 .focused($isFocused)
+                // A household code, not this person's login: keeps iOS from offering to save it as a password.
+                .textContentType(.oneTimeCode)
                 .font(.system(.body, design: .monospaced))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
         } else {
             SecureField("••••••••", text: $value)
                 .focused($isFocused)
+                // A household code, not this person's login: keeps iOS from offering to save it as a password.
+                .textContentType(.oneTimeCode)
                 .font(.system(.body, design: .monospaced))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
