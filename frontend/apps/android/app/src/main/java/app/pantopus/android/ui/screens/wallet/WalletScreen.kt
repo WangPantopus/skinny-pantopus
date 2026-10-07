@@ -160,10 +160,14 @@ fun WalletScreen(
         when (val current = action) {
             is WalletAction.WithdrawSucceeded -> {
                 showWithdrawSheet = false
+                withdrawAmount = ""
                 toastController.success(current.message)
             }
             is WalletAction.WithdrawFailed -> {
                 showWithdrawSheet = false
+                // Like iOS: the next attempt starts empty, not with the amount that was just refused or sent.
+                // A withdrawal still unsettled refills its own amount when the sheet opens (onWithdraw).
+                withdrawAmount = ""
                 toastController.error(current.message)
             }
             is WalletAction.ActionFailed -> toastController.error(current.message)
