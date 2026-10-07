@@ -29,6 +29,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -407,6 +410,8 @@ private fun LoadedBody(
     onConfirmDelivery: (String) -> Unit = {},
     onRequestLeave: (SlotRowContent) -> Unit = {},
 ) {
+    // Sections whose "See all N" was tapped.
+    var expandedSections by remember { mutableStateOf(setOf<String>()) }
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier =
@@ -435,9 +440,16 @@ private fun LoadedBody(
             CalendarCard(content.calendarDays, onSelectDate = { if (!signupsClosed) onSignUp() })
 
             content.sections.forEach { section ->
-                SectionOverline(section.overline, actionLabel = section.actionLabel)
+                val expanded = section.id in expandedSections
+                SectionOverline(
+                    section.overline,
+                    actionLabel = section.actionLabel?.let { if (expanded) "Show fewer" else it },
+                    onAction = {
+                        expandedSections = if (expanded) expandedSections - section.id else expandedSections + section.id
+                    },
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    section.rows.forEach { row ->
+                    (if (expanded) section.rows + section.moreRows else section.rows).forEach { row ->
                         SlotRow(
                             content = row,
                             onSignUp =
@@ -629,6 +641,7 @@ private fun ExactAddressCard(
 private fun SectionOverline(
     label: String,
     actionLabel: String? = null,
+    onAction: () -> Unit = {},
 ) {
     Row(
         modifier =
@@ -653,7 +666,7 @@ private fun SectionOverline(
                 fontWeight = FontWeight.SemiBold,
                 modifier =
                     Modifier
-                        .clickable { /* See-all wiring is a follow-up */ }
+                        .clickable(onClick = onAction)
                         .padding(Spacing.s1)
                         .testTag("supportTrainSeeAll-$label"),
             )

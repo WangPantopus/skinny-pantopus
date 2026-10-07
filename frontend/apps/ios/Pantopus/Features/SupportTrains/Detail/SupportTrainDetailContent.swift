@@ -329,12 +329,21 @@ public struct SlotSection: Equatable, Sendable, Identifiable {
     public let overline: String
     public let actionLabel: String?
     public let rows: [SlotRowContent]
+    /// The rows past the first few: "See all N" shows them.
+    public let moreRows: [SlotRowContent]
 
-    public init(id: String, overline: String, actionLabel: String? = nil, rows: [SlotRowContent]) {
+    public init(
+        id: String,
+        overline: String,
+        actionLabel: String? = nil,
+        rows: [SlotRowContent],
+        moreRows: [SlotRowContent] = []
+    ) {
         self.id = id
         self.overline = overline
         self.actionLabel = actionLabel
         self.rows = rows
+        self.moreRows = moreRows
     }
 }
 

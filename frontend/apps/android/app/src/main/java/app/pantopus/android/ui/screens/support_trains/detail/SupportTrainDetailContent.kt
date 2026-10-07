@@ -175,6 +175,8 @@ data class SlotSection(
     val overline: String,
     val actionLabel: String? = null,
     val rows: List<SlotRowContent>,
+    /** The rows past the first few: `See all N` shows them. */
+    val moreRows: List<SlotRowContent> = emptyList(),
 )
 
 /** Celebration banner shown above the body in the fully-covered variant. */
