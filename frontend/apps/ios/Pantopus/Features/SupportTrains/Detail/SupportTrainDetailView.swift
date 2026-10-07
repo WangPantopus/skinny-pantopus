@@ -371,7 +371,12 @@ public struct SupportTrainDetailView: View {
                     Text(action)
                         .font(.system(size: 11.5, weight: .semibold))
                         .foregroundStyle(Theme.Color.primaryInk)
-                        .hitArea(horizontal: 8, vertical: 15)
+                        // Tap area 44 pt tall without moving the header row: pad the hit shape out, take the padding back.
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 15)
+                        .contentShape(Rectangle())
+                        .padding(.horizontal, -8)
+                        .padding(.vertical, -15)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(action) \(label)")
