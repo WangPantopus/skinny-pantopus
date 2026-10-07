@@ -407,11 +407,10 @@ final class HubViewModel {
                     label: "Pulse",
                     icon: .megaphone,
                     tint: .personal,
-                    chip: personal.unreadChats > 0 ? "\(personal.unreadChats) new" : nil,
+                    // The hub carries no count of new posts; unread chats belong to the strip above, not to Pulse.
+                    chip: nil,
                     chipSetupState: false,
-                    populatedCaption: personal.unreadChats > 0
-                        ? "\(personal.unreadChats) new in your feed"
-                        : "Neighborhood feed",
+                    populatedCaption: "Neighborhood feed",
                     setupCaption: "Neighborhood feed"
                 )
             ),
@@ -449,8 +448,8 @@ final class HubViewModel {
                     tint: .home,
                     chip: home.flatMap { $0.newMail > 0 ? "\($0.newMail)" : nil },
                     chipSetupState: home == nil,
-                    populatedCaption: home.map { "\($0.newMail) need pickup" } ?? "Scan & forward",
-                    setupCaption: "Scan & forward"
+                    populatedCaption: home.map { $0.newMail > 0 ? "\($0.newMail) new" : "Nothing new" } ?? "Your mail in one place",
+                    setupCaption: "Your mail in one place"
                 )
             )
         ].filter(\.isAvailableAtLaunch) // Launch cuts #3 / #4: no Marketplace / Gigs tiles.
