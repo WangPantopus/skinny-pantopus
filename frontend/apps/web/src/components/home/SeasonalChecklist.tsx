@@ -226,6 +226,11 @@ export default function SeasonalChecklist({
         />
       </div>
 
+      {/* Checking items off needs home.edit; say so instead of showing dead checkboxes. */}
+      {!canEdit && items.some((item) => item.status === 'pending') && (
+        <p className="text-xs text-app-text-secondary">Only people who can edit this Home can check these off.</p>
+      )}
+
       {/* Current season items */}
       <div className="space-y-0.5">
         {items.map((item) => (
