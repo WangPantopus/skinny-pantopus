@@ -21,6 +21,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
+const { AWARDED_STAMP_TYPES } = require('../jobs/stampAwarder');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -1328,8 +1329,12 @@ router.get('/stamps', verifyToken, async (req, res) => {
       { stamp_type: 'collector', name: 'Collector', description: 'Earned 10 stamps', rarity: 'legendary' },
     ];
 
+    // Only stamps the stamp awarder can grant: the others (a gig, community
+    // mail, signing certified mail, streaks) have no award path, and some
+    // belong to features cut for launch, so they'd be goals nobody can reach.
+    const available = ALL_STAMPS.filter(s => AWARDED_STAMP_TYPES.has(s.stamp_type));
     const earnedTypes = new Set((earned || []).map(s => s.stamp_type));
-    const locked = ALL_STAMPS
+    const locked = available
       .filter(s => !earnedTypes.has(s.stamp_type))
       .map(s => ({ ...s, progress: 0, target: 1 }));
 
@@ -1337,7 +1342,7 @@ router.get('/stamps', verifyToken, async (req, res) => {
       earned: earned || [],
       locked,
       total_earned: (earned || []).length,
-      total_available: ALL_STAMPS.length,
+      total_available: available.length,
     });
   } catch (err) {
     logger.error('[P3] GET /stamps failed', { error: err.message });

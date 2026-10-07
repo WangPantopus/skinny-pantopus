@@ -100,7 +100,7 @@ struct EditProfileStickyBar: View {
         .background(Theme.Color.warningBg)
         .overlay(Capsule().stroke(Theme.Color.warningLight, lineWidth: 1))
         .clipShape(Capsule())
-        .accessibilityLabel("\(dirtyCount) unsaved changes")
+        .accessibilityLabel(dirtyCount == 1 ? "1 unsaved change" : "\(dirtyCount) unsaved changes")
         .accessibilityIdentifier("editProfileDirtyCountPill")
     }
 

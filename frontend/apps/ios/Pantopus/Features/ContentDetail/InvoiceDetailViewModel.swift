@@ -83,6 +83,10 @@ public final class InvoiceDetailViewModel {
                 message: (error as? APIError)?.errorDescription
                     ?? "Couldn't start this payment. Please try again."
             )
+            // A refused Pay (say, the invoice turned out to be paid already) re-reads the invoice.
+            if case let .clientError(status, _) = error as? APIError, status == 400 || status == 409 {
+                await fetch(showLoading: false)
+            }
             return
         }
         let outcome = await checkout.present(payment.sheetParams)

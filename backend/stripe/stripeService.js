@@ -446,6 +446,11 @@ class StripeService {
     }
   }
 
+  /** A PaymentIntent as Stripe has it now (status, amount, client_secret). */
+  async retrievePaymentIntent(paymentIntentId) {
+    return stripe.paymentIntents.retrieve(paymentIntentId);
+  }
+
   /**
    * Retrieve the client_secret for an existing PaymentIntent so the frontend
    * can resume an in-progress on-session authorization flow.

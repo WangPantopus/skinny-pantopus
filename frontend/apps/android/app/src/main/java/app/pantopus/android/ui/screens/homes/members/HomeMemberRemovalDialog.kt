@@ -67,16 +67,7 @@ fun HomeMemberRemovalDialog(
                 verticalArrangement = Arrangement.spacedBy(Spacing.s3),
             ) {
                 TextButton(onClick = onClose, modifier = Modifier.testTag("homeMemberRemovalClose")) { Text("Close") }
-                Text(
-                    if (state.pending != null) {
-                        "Saved member removal"
-                    } else if (target.self) {
-                        "Review leaving this Home"
-                    } else {
-                        "Review member removal"
-                    },
-                    color = PantopusColors.appText,
-                )
+                Text(removalHeading(state, target.self), color = PantopusColors.appText)
                 Text(state.accountLabel, color = PantopusColors.appTextSecondary)
                 if (state.working) CircularProgressIndicator()
                 state.error?.let { Text(it, color = PantopusColors.error, modifier = Modifier.testTag("homeMemberRemovalError")) }
@@ -88,39 +79,42 @@ fun HomeMemberRemovalDialog(
                     state.context != null -> {
                         Text(checkNotNull(state.context).summary, modifier = Modifier.testTag("homeMemberRemovalPreparedSummary"))
                         Text(
-                            "End this member’s current household access. Their historical residency decisions remain saved. " +
-                                "Ownership rules are checked again before removal.",
+                            if (target.self) {
+                                "You'll lose access to this Home. " +
+                                    "To come back later, add this Home again or ask someone in the household to invite you."
+                            } else {
+                                "They'll lose access to this Home. You can invite them again later."
+                            },
                         )
                         TextButton(
                             onClick = { confirmation = RemovalConfirmation(state.context?.decisionToken, null, state.generation) },
                             enabled = state.canSubmit && !state.working,
                             modifier = Modifier.testTag("homeMemberRemovalSubmit"),
-                        ) { Text(if (target.self) "Leave reviewed Home" else "Remove reviewed member") }
+                        ) { Text(if (target.self) "Leave Home" else "Remove member") }
                         TextButton(
                             onClick = { viewModel.resume(target) },
                             enabled = !state.working,
-                        ) { Text("Review current details again") }
+                        ) { Text("Refresh details") }
                     }
                     !state.working -> {
                         if (state.opened && state.error == null) {
-                            Text(
-                                "No member removal needs recovery on this device. Choose a current member to review a removal.",
-                            )
+                            Text("Nothing to finish here.")
                         }
                         TextButton(onClick = { viewModel.resume(target) }, modifier = Modifier.testTag("homeMemberRemovalReload")) {
-                            Text("Check removal recovery")
+                            Text("Reload")
                         }
                     }
                 }
             }
         }
     }
-    RemovalConfirmDialog(confirmation, viewModel) { confirmation = null }
+    RemovalConfirmDialog(confirmation, target.self, viewModel) { confirmation = null }
 }
 
 @Composable
 private fun RemovalConfirmDialog(
     confirmation: RemovalConfirmation?,
+    leaving: Boolean,
     viewModel: HomeMemberRemovalViewModel,
     onDismiss: () -> Unit,
 ) {
@@ -128,15 +122,23 @@ private fun RemovalConfirmDialog(
         AlertDialog(
             onDismissRequest = { onDismiss() },
             properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn),
-            title = { Text(if (selected.requestId == null) "Confirm reviewed removal?" else "Cancel original removal attempt?") },
+            title = {
+                Text(
+                    when {
+                        selected.requestId != null -> "Discard this attempt?"
+                        leaving -> "Leave this Home?"
+                        else -> "Remove this member?"
+                    },
+                )
+            },
             text = {
                 Text(
-                    if (selected.requestId == null) {
-                        "Submit exactly the member and household details you reviewed. If the reply is lost, " +
-                            "recover this saved original before starting another removal."
-                    } else {
-                        "This cancels an unseen original attempt. If removal already completed, its saved result wins. " +
-                            "Cancellation does not restore membership."
+                    when {
+                        selected.requestId != null -> "If it already went through, it stays. Discarding doesn't remove anyone."
+                        leaving ->
+                            "You'll lose access to this Home. " +
+                                "To come back later, add this Home again or ask someone in the household to invite you."
+                        else -> "They'll lose access to this Home. You can invite them again later."
                     },
                 )
             },
@@ -149,7 +151,13 @@ private fun RemovalConfirmDialog(
                         viewModel.recover(HomeMemberRemovalRecovery.Cancel, selected.requestId, selected.generation)
                     }
                 }, modifier = Modifier.testTag("homeMemberRemovalConfirm")) {
-                    Text(if (selected.requestId == null) "Confirm removal" else "Cancel original attempt")
+                    Text(
+                        when {
+                            selected.requestId != null -> "Discard"
+                            leaving -> "Leave"
+                            else -> "Remove"
+                        },
+                    )
                 }
             },
             dismissButton = { TextButton(onClick = { onDismiss() }) { Text("Keep reviewing") } },
@@ -167,62 +175,89 @@ private fun RemovalOriginal(
 ) {
     val original = checkNotNull(state.pending)
     val requestId = original.request.requestId
-    Text("Saved original action: Remove member")
+    Text("Action: " + if (target.self) "Leave Home" else "Remove member")
     if (target.homeId != null && target.homeId != original.request.intent.homeId) {
-        Text("This saved original belongs to another Home. Review its saved details before continuing.")
+        Text("This is for another of your Homes. Finish it before starting another removal.")
     }
     Text(original.summary, modifier = Modifier.testTag("homeMemberRemovalOriginalSummary"))
-    Text("Finish this saved original before starting another removal.")
     val outcome = state.outcome
     if (outcome?.isTerminal == true) {
-        Text(
-            when (outcome.state) {
-                "completed" -> "Removal saved"
-                "cancelled" -> "Original attempt cancelled"
-                else -> "Removal not completed"
-            },
-            modifier = Modifier.testTag("homeMemberRemovalTerminal"),
-        )
+        Text(removalTerminalText(outcome.state, target.self), modifier = Modifier.testTag("homeMemberRemovalTerminal"))
         if (outcome.state == "rejected") Text(memberRemovalRefusalMessage(outcome.code))
-        if (outcome.state == "completed") Text("Original removal completed: ${outcome.completedAt?.let(::reviewedDateLabel)}")
-        if (outcome.state == "cancelled") Text("This result did not restore membership or undo a completed removal.")
-        Text("This is the historical result of the saved original. Current membership is checked separately.")
+        if (outcome.state == "completed") outcome.completedAt?.let { Text("Finished ${reviewedDateLabel(it)}") }
         TextButton(
             onClick = { viewModel.acknowledge(requestId, state.generation, onAcknowledged) },
             enabled = state.canAcknowledge && !state.working,
             modifier = Modifier.testTag("homeMemberRemovalAcknowledge"),
-        ) { Text("Acknowledge removal result") }
+        ) { Text("Done") }
     } else {
-        Text("The original result is not confirmed. Keep it until the server proves its outcome.")
+        Text("We couldn't confirm whether this went through. Check again, or try again.")
         TextButton(
             onClick = { viewModel.recover(HomeMemberRemovalRecovery.Check, requestId, state.generation) },
             enabled = !state.working,
             modifier = Modifier.testTag("homeMemberRemovalCheck"),
-        ) { Text("Check original removal result") }
+        ) { Text("Check again") }
         TextButton(
             onClick = { viewModel.recover(HomeMemberRemovalRecovery.Retry, requestId, state.generation) },
             enabled = !state.working,
             modifier = Modifier.testTag("homeMemberRemovalRetry"),
-        ) { Text("Retry original removal") }
+        ) { Text("Try again") }
         TextButton(
             onClick = { onCancel(requestId) },
             enabled = !state.working,
             modifier = Modifier.testTag("homeMemberRemovalCancel"),
-        ) { Text("Cancel original removal attempt") }
+        ) { Text("Discard attempt") }
     }
-    Text(
-        when (state.currentRoster) {
-            HomeMemberRemovalCurrent.Unchecked -> "Current household roster has not been confirmed in this view."
-            HomeMemberRemovalCurrent.Listed ->
-                "This account is listed in the current household roster. The historical removal result stays unchanged."
-            HomeMemberRemovalCurrent.NotListed ->
-                "This account is not listed in the current household roster. Historical residency records and other access are separate."
-        },
-        modifier = Modifier.testTag("homeMemberRemovalCurrentRoster"),
-    )
+    // Someone who has left can no longer read that Home's member list, so there is nothing to check.
+    if (!(target.self && outcome?.state == "completed")) RemovalRosterCheck(state, requestId, target.self, viewModel)
+}
+
+@Composable
+private fun RemovalRosterCheck(
+    state: HomeMemberRemovalUiState,
+    requestId: String,
+    leaving: Boolean,
+    viewModel: HomeMemberRemovalViewModel,
+) {
+    Text(removalRosterText(state.currentRoster, leaving), modifier = Modifier.testTag("homeMemberRemovalCurrentRoster"))
     TextButton(
         onClick = { viewModel.checkCurrentRoster(requestId, state.generation) },
         enabled = !state.working,
         modifier = Modifier.testTag("homeMemberRemovalCheckCurrent"),
-    ) { Text("Check current household roster") }
+    ) { Text("Check member list") }
 }
+
+private fun removalTerminalText(
+    outcomeState: String,
+    leaving: Boolean,
+): String =
+    when (outcomeState) {
+        "completed" -> if (leaving) "You left this Home." else "They no longer have access to this Home."
+        "cancelled" -> "Nothing changed. This attempt was discarded before it took effect."
+        else -> "This couldn't be completed."
+    }
+
+private fun removalRosterText(
+    roster: HomeMemberRemovalCurrent,
+    leaving: Boolean,
+): String =
+    when (roster) {
+        HomeMemberRemovalCurrent.Unchecked -> "Check the member list to see who's in the household now."
+        HomeMemberRemovalCurrent.Listed ->
+            if (leaving) "You're still in the household's member list." else "They're still in the household's member list."
+        HomeMemberRemovalCurrent.NotListed ->
+            if (leaving) "You're no longer in the household's member list." else "They're no longer in the household's member list."
+    }
+
+/** What the removal sheet is about: the reviewed action, or what happened to the saved one. */
+private fun removalHeading(
+    state: HomeMemberRemovalUiState,
+    leaving: Boolean,
+): String =
+    when {
+        state.pending == null -> if (leaving) "Leave this Home" else "Remove member"
+        state.outcome?.state == "completed" -> if (leaving) "You left this Home" else "Member removed"
+        state.outcome?.state == "cancelled" -> "Attempt discarded"
+        state.outcome?.state == "rejected" -> "Couldn't finish this"
+        else -> "Check your last removal"
+    }

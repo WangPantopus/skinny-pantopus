@@ -58,13 +58,13 @@ enum class HomeMemberRemovalFailureKind { Storage, Changed, Unknown, Unavailable
 class HomeMemberRemovalFailure(val kind: HomeMemberRemovalFailureKind) : IllegalStateException(
     when (kind) {
         HomeMemberRemovalFailureKind.Storage ->
-            "The protected removal could not be read or saved. Keep it and reopen recovery before starting another removal."
-        HomeMemberRemovalFailureKind.Changed -> "The removal changed. Reopen recovery to review the saved original."
+            "This removal couldn't be read or saved on this device. Reload before starting another."
+        HomeMemberRemovalFailureKind.Changed -> "The member or Home changed. Reload to see the latest."
         HomeMemberRemovalFailureKind.Unknown ->
-            "The removal result is not confirmed. Check the original, retry it, or cancel its unconfirmed attempt."
-        HomeMemberRemovalFailureKind.Unavailable -> "Current membership could not be checked. Retry before reviewing a new removal."
-        HomeMemberRemovalFailureKind.SessionChanged -> "Your session changed. Reopen removal recovery in the original account."
-        HomeMemberRemovalFailureKind.Busy -> "Wait for the saved removal to finish being checked."
+            "We couldn't confirm the result. Check again, try again, or discard this attempt."
+        HomeMemberRemovalFailureKind.Unavailable -> "Couldn't load the member list. Reload to try again."
+        HomeMemberRemovalFailureKind.SessionChanged -> "Your sign-in changed. Reload in the account that started this."
+        HomeMemberRemovalFailureKind.Busy -> "This removal is already being checked. Try again when it finishes."
     },
 )
 
@@ -72,12 +72,12 @@ class HomeMemberRemovalRefusal(code: String?) : IllegalStateException(memberRemo
 
 fun memberRemovalRefusalMessage(code: String?): String =
     when (code) {
-        "MEMBERS_MANAGE_REQUIRED", "TARGET_RANK_FORBIDDEN" -> "Your current household authority does not allow this removal."
-        "MEMBER_REMOVAL_CHANGED" -> "The reviewed member or household changed. Keep this result, then review current details."
-        "MEMBER_ALREADY_REMOVED" -> "There is no current household removal to perform for this member."
-        "TRANSFER_REQUIRED" -> "Transfer primary ownership before leaving this household."
-        "OWNERSHIP_FLOW_REQUIRED" -> "This person’s ownership must be resolved through the ownership process."
-        "MEMBER_ROLE_UNKNOWN" -> "This member’s current role could not be confirmed."
-        "MEMBER_NOT_FOUND", "HOME_NOT_FOUND" -> "The member or household is no longer available for this removal."
-        else -> "This removal was not completed. Review current membership and authority before starting another removal."
+        "MEMBERS_MANAGE_REQUIRED", "TARGET_RANK_FORBIDDEN" -> "You don't have permission to remove this member."
+        "MEMBER_REMOVAL_CHANGED" -> "The member or Home changed, so nobody was removed. Check the details again."
+        "MEMBER_ALREADY_REMOVED" -> "This person is no longer a member."
+        "TRANSFER_REQUIRED" -> "Transfer this Home's ownership before leaving."
+        "OWNERSHIP_FLOW_REQUIRED" -> "Owners can't be removed here. Ownership changes go through Owners."
+        "MEMBER_ROLE_UNKNOWN" -> "Couldn't check this member's role. Reload to try again."
+        "MEMBER_NOT_FOUND", "HOME_NOT_FOUND" -> "This member or Home is no longer available."
+        else -> "This couldn't be completed. Check the details and try again."
     }

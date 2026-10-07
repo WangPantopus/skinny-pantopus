@@ -128,10 +128,10 @@ private extension HomeInvitationSenderJourneyUITests {
         // Do not select or rewrite the role. The shipped form must issue its
         // ordinary Member default, and the reviewed intent must say so.
         try press("homeInvitationSenderPrepare")
-        try require(label("Role: member"))
+        try require(label("Role: Member"))
         keepScreen("Shipped native Member invitation reviewed without a preset or role override")
         try confirmPrepared()
-        try require(label("Invitation saved"))
+        try require(label("Invitation created"))
         let issued = try await fixture("state")
         let command = try XCTUnwrap((issued["sender_commands"] as? [[String: Any]])?.first)
         XCTAssertEqual(command["action"] as? String, "create")
@@ -150,7 +150,7 @@ private extension HomeInvitationSenderJourneyUITests {
         try require(element("homeInvitationAccept"))
         try press("homeInvitationAccept")
         try press("homeInvitationConfirmDecision")
-        try require(label("Acceptance saved"))
+        try require(label("Invitation accepted"))
         try press("homeInvitationAccess")
         try require(element("homeInvitationOpenHome"))
         keepScreen("Actual recipient acceptance has current shared Home access")

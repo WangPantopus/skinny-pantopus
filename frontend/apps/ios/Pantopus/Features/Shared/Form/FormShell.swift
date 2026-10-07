@@ -45,6 +45,7 @@ public struct FormShell<Content: View>: View {
     private let isValid: Bool
     private let isDirty: Bool
     private let isSaving: Bool
+    private let asksBeforeDiscarding: Bool
     private let onClose: () -> Void
     private let onCommit: () -> Void
     private let scrollsToTopOnChange: AnyHashable?
@@ -82,6 +83,9 @@ public struct FormShell<Content: View>: View {
     ///     form starts empty).
     ///   - isSaving: Render a spinner in place of the right-action label
     ///     while a commit is in flight.
+    ///   - asksBeforeDiscarding: Whether close on a dirty form asks first.
+    ///     A screen that saves as it goes but keeps `isDirty` on for its
+    ///     top-right action passes false.
     ///   - onClose: Invoked when the user taps X on a clean form, or
     ///     confirms discard on a dirty one.
     ///   - onCommit: Invoked when the user taps the top-right action or
@@ -108,6 +112,7 @@ public struct FormShell<Content: View>: View {
         isValid: Bool,
         isDirty: Bool,
         isSaving: Bool = false,
+        asksBeforeDiscarding: Bool = true,
         onClose: @escaping () -> Void,
         onCommit: @escaping () -> Void,
         scrollsToTopOnChange: AnyHashable? = nil,
@@ -125,6 +130,7 @@ public struct FormShell<Content: View>: View {
         self.isValid = isValid
         self.isDirty = isDirty
         self.isSaving = isSaving
+        self.asksBeforeDiscarding = asksBeforeDiscarding
         self.onClose = onClose
         self.onCommit = onCommit
         self.scrollsToTopOnChange = scrollsToTopOnChange
@@ -193,7 +199,7 @@ public struct FormShell<Content: View>: View {
 
     private func handleClose() {
         dismissKeyboard()
-        if isDirty {
+        if isDirty, asksBeforeDiscarding {
             showsDiscardConfirm = true
         } else {
             onClose()

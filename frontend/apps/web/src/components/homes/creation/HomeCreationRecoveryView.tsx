@@ -40,7 +40,7 @@ export default function HomeCreationRecoveryView({ recovery, onContinue }: {
     </div>}
     {joining && pending?.outcome?.code && <p role="status" className="text-app-text-secondary">{
       ({ RESIDENCY_ADDRESS_CHANGED: 'This Home’s address changed. Check the street and apartment again before sending a new request.',
-        MEMBERSHIP_RENEWAL_REQUIRED: 'Previous access cannot be restored by submitting again. Ask the household to review your access.',
+        MEMBERSHIP_RENEWAL_REQUIRED: 'You were removed from this household. Ask someone in the household to invite you again.',
         OWNERSHIP_FLOW_REQUIRED: 'Continue through ownership verification for this Home.',
         RESIDENCY_ALREADY_VERIFIED: 'Residency was previously verified. Open My Homes to check current access.',
         RESIDENCY_EXISTING_REQUEST: 'An existing request has different details. Check its current status in My Homes.',

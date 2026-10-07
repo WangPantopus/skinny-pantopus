@@ -129,18 +129,21 @@ struct HomeInvitationSenderOutcome: Codable, Equatable {
         return Self(value: .object(row))
     }
 
+    /// What reached the invitee: "sent" means the email service took the message, not that it arrived.
     var deliveryMessage: String {
-        let email = switch delivery["email"]?.stringValue {
-        case "provider_accepted": "Email provider accepted the message; inbox delivery is not confirmed."
-        case "not_requested": "No email delivery was requested."
-        default: "Email delivery is unconfirmed."
+        var lines: [String] = []
+        switch delivery["email"]?.stringValue {
+        case "provider_accepted": lines.append("We emailed the invitation.")
+        case "not_requested": break
+        default: lines.append("We couldn't confirm the invitation email went out. You can share the invitation link instead.")
         }
-        let notification = switch delivery["in_app"]?.stringValue {
-        case "saved": "An in-app notification was saved; push delivery is not confirmed."
-        case "not_requested": "No in-app notification was requested."
-        default: "In-app notification delivery is unconfirmed."
+        switch delivery["in_app"]?.stringValue {
+        case "saved": lines.append(lines.isEmpty ? "It's in their Pantopus notifications." : "It's also in their Pantopus notifications.")
+        case "not_requested": break
+        default: lines.append("We couldn't confirm their Pantopus notification.")
         }
-        return email + " " + notification
+        if lines.isEmpty { return "No email or notification was sent. Share the invitation link so they can accept." }
+        return lines.joined(separator: " ")
     }
 }
 
@@ -196,7 +199,16 @@ enum HomeInvitationSenderValidation {
     static func presetLabel(_ key: String?) -> String {
         guard let key else { return "Household role defaults" }
         if key.hasPrefix("access_request:") { return "Household approval" }
-        return key.replacingOccurrences(of: "_", with: " ").capitalized
+        // The web's names for the relationships it offers.
+        let named = [
+            "tenant": "Tenant / Roommate",
+            "spouse": "Spouse / Partner",
+            "extended_family": "Extended family",
+            "child": "Child",
+            "airbnb_guest": "Short-stay guest",
+            "cleaner_vendor": "Cleaner / Vendor"
+        ]
+        return named[key] ?? key.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     static func profileLabel(_ profile: [String: JSONValue]) -> String {
@@ -240,11 +252,11 @@ enum HomeInvitationSenderError: LocalizedError {
     case refusal(String?)
     var errorDescription: String? {
         switch self {
-        case .storage: "The protected original could not be read or saved. Reopen invitation recovery before starting another action."
-        case .changed: "The saved action or reviewed invitation changed. Reopen recovery to review the original."
-        case .unknown: "The result is not confirmed. Check the saved original, retry it, or cancel its attempt."
-        case .unavailable: "Current invitation details are unavailable. Reopen to check again."
-        case .sessionChanged: "Your session changed. Reopen invitation recovery under the original account."
+        case .storage: "This invitation couldn't be read or saved on this device. Reload before starting another."
+        case .changed: "This invitation changed. Reload to see the latest."
+        case .unknown: "We couldn't confirm the result. Check again, try again, or discard this attempt."
+        case .unavailable: "Couldn't load the invitation details. Reload to try again."
+        case .sessionChanged: "Your sign-in changed. Reload in the account that started this invitation."
         case let .refusal(code): Self.message(code)
         }
     }
@@ -252,15 +264,15 @@ enum HomeInvitationSenderError: LocalizedError {
     static func message(_ code: String?) -> String {
         switch code {
         case "INVITE_SENDER_CHANGED":
-            "The invitation or permission changed after review. Acknowledge this result and review the current details."
+            "The invitation or your permissions changed. Tap Done, then check the details again."
         case "MEMBERS_MANAGE_REQUIRED", "INVITER_ACCESS_CHANGED":
-            "Current permission to manage invitations is unavailable. Your saved result remains recoverable."
-        case "INVITE_ALREADY_USED": "This invitation was already resolved. Its existing membership has not been changed."
-        case "INVITE_EXPIRED": "This invitation expired. Resending does not extend its expiry or access dates."
-        case "INVITE_ALREADY_PENDING": "A pending invitation already exists. Review that invitation to resend it."
-        case "MEMBER_ALREADY_EXISTS": "This person is already a member. Their existing membership has not been changed."
-        case "MEMBERSHIP_RENEWAL_REQUIRED": "This person’s earlier household membership has ended. An invitation cannot restore it."
-        default: "This action could not continue. Review the current invitation and account before starting again."
+            "You don't have permission to manage this household's invitations."
+        case "INVITE_ALREADY_USED": "This invitation was already answered. Nobody's membership changed."
+        case "INVITE_EXPIRED": "This invitation has expired. Send a new invitation instead."
+        case "INVITE_ALREADY_PENDING": "This person already has a pending invitation. You can resend it from Pending in Members."
+        case "MEMBER_ALREADY_EXISTS": "This person is already in the household."
+        case "MEMBERSHIP_RENEWAL_REQUIRED": "This person’s household access is under review, so an invitation can't change it right now."
+        default: "This couldn't be completed. Check the invitation and try again."
         }
     }
 }

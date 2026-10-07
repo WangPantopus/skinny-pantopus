@@ -40,7 +40,7 @@ test('named review cancellation makes no command or original; failed original pe
 });
 test('lost reply survives a new login and retries exact original bytes without re-preparing', async () => {
   const { store, c } = await prepared(); jest.mocked(api.apiClient.request).mockRejectedValueOnce(Error('Lost reply'));
-  await expect(c.submit(decision)).rejects.toThrow('result is not confirmed'); const original = c.pending!;
+  await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result'); const original = c.pending!;
   expect(validRemovalDraft(original, c.origin, actor)).toBe(true); c.retire();
   const nextSession = { ...session, session_scope: 'c'.repeat(64) };
   jest.mocked(api.apiClient.get).mockResolvedValue({ data: { session: nextSession } } as never);
@@ -65,9 +65,9 @@ test('receipt persistence retry never repeats removal; acknowledgement cannot er
 });
 test('unseen cancellation sends the original intent and cannot treat unknown404 as cancellation', async () => {
   const { c } = await prepared(); jest.mocked(api.apiClient.request).mockRejectedValueOnce(Error('Lost reply'));
-  await expect(c.submit(decision)).rejects.toThrow('result is not confirmed'); const original = c.pending!;
+  await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result'); const original = c.pending!;
   jest.mocked(api.apiClient.request).mockRejectedValueOnce({ statusCode: 404, data: { state: 'unknown', code: 'MEMBER_REMOVAL_NOT_FOUND', session } });
-  await expect(c.recover('status')).rejects.toThrow('result is not confirmed'); expect(c.canAcknowledge).toBe(false);
+  await expect(c.recover('status')).rejects.toThrow('couldn’t confirm the result'); expect(c.canAcknowledge).toBe(false);
   jest.mocked(api.apiClient.request).mockResolvedValueOnce({ status: 200, data: { ...result(original), state: 'cancelled', completed_at: null } } as never);
   await c.recover('cancel', original.request_id);
   const request = jest.mocked(api.apiClient.request).mock.calls[2][0];
@@ -78,7 +78,7 @@ test('unseen cancellation sends the original intent and cannot treat unknown404 
 });
 test('a completed removal wins cancellation and authoritative rejection requires its exact status', async () => {
   const { c } = await prepared(); jest.mocked(api.apiClient.request).mockRejectedValueOnce(Error('Lost reply'));
-  await expect(c.submit(decision)).rejects.toThrow('result is not confirmed'); const original = c.pending!;
+  await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result'); const original = c.pending!;
   jest.mocked(api.apiClient.request).mockResolvedValueOnce({ status: 200, data: result(original) } as never);
   await c.recover('cancel'); expect(c.pending?.outcome?.state).toBe('completed');
   const rejection = { ...result(original), state: 'rejected', completed_at: null, code: 'MEMBERS_MANAGE_REQUIRED', status: 403 };
@@ -89,9 +89,9 @@ test('a completed removal wins cancellation and authoritative rejection requires
 });
 test('a result read cannot accept a mutation replay envelope as historical proof', async () => {
   const { c } = await prepared(); jest.mocked(api.apiClient.request).mockRejectedValueOnce(Error('Lost reply'));
-  await expect(c.submit(decision)).rejects.toThrow('result is not confirmed'); const original = c.pending!;
+  await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result'); const original = c.pending!;
   jest.mocked(api.apiClient.request).mockResolvedValueOnce({ status: 200, data: { ...result(original), replayed: true } } as never);
-  await expect(c.recover('status')).rejects.toThrow('result is not confirmed');
+  await expect(c.recover('status')).rejects.toThrow('couldn’t confirm the result');
   expect(c.pending?.request_json).toBe(original.request_json); expect(c.pending?.outcome).toBeUndefined();
   jest.mocked(api.apiClient.request).mockResolvedValueOnce({ status: 200, data: result(original) } as never);
   await c.recover('status'); expect(c.pending?.outcome?.state).toBe('completed');
@@ -101,11 +101,11 @@ test.each(['home_id', 'target_user_id', 'occupancy_id', 'decision_token', 'state
   const corrupt: Record<string, unknown> = { home_id: actor, target_user_id: actor, occupancy_id: actor, decision_token: 'c'.repeat(64),
     state: ['completed'], completed_at: '2026-02-31T12:00:00Z', command: { actor_id: target }, session: { ...session, actor_id: target } };
   jest.mocked(api.apiClient.request).mockImplementation(async () => ({ status: 200, data: { ...result(c.pending!), [field]: corrupt[field] } } as never));
-  await expect(c.submit(decision)).rejects.toThrow('result is not confirmed'); expect(c.pending?.outcome).toBeUndefined(); expect(c.canAcknowledge).toBe(false);
+  await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result'); expect(c.pending?.outcome).toBeUndefined(); expect(c.canAcknowledge).toBe(false);
 });
 test.each(['token', 'marker', 'origin', 'hidden', 'scope', 'unauthorized'])('%s lifetime change prevents another removal request and keeps its original', async change => {
   const { c, store } = await prepared(); jest.mocked(api.apiClient.request).mockRejectedValueOnce(Error('Lost reply'));
-  await expect(c.submit(decision)).rejects.toThrow('result is not confirmed'); const original = c.pending!.request_json;
+  await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result'); const original = c.pending!.request_json;
   if (change === 'token') jest.mocked(api.getAuthToken).mockReturnValue('other-account');
   if (change === 'marker') localStorage.setItem(api.AUTH_SESSION_CHANGE_KEY, 'changed');
   if (change === 'origin') jest.mocked(api.getApiBaseUrl).mockReturnValue('https://other.invalid');
@@ -136,7 +136,7 @@ test('current roster confirmation validates Home/target identity and rechecks th
   jest.mocked(api.apiClient.get).mockResolvedValueOnce({ data: { session } } as never)
     .mockResolvedValueOnce({ data: { occupants: [] } } as never)
     .mockResolvedValueOnce({ data: { session: { ...session, actor_id: target } } } as never);
-  await expect(c.checkCurrentRoster(input)).rejects.toThrow('session changed'); expect(c.current()).toBe(false);
+  await expect(c.checkCurrentRoster(input)).rejects.toThrow('sign-in changed'); expect(c.current()).toBe(false);
 });
 test('review rejects malformed nullable fields, booleans, dates and unrelated identities', () => {
   for (const targetChange of [{ is_self: true }, { is_active: 'true' }, { name: 'Raw account name' }, { username: [] }, { role_base: null },

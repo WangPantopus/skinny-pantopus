@@ -14,7 +14,7 @@ export function useSender(homeId:string){
   const [listDenied,setListDenied]=useState(false);
   const publish=useCallback((current:SenderController,error='')=>{
     if(controller.current!==current)return;
-    if(!current.current()){setView({...empty,blocked:true,lifetime:generation.current,error:'Your session changed. Reopen recovery to check the original invitation action.'});return;}
+    if(!current.current()){setView({...empty,blocked:true,lifetime:generation.current,error:'Your sign-in changed. Reload to check your last invitation.'});return;}
     setView({ready:current.opened,busy:false,error,pending:current.pending,canAcknowledge:current.canAcknowledge,blocked:current.needsReload,
       context:current.context,review:current.review,lifetime:generation.current,accountLabel:current.accountLabel,shareToken:current.shareToken,shareUntil:current.shareUntil});
   },[]);
@@ -34,7 +34,7 @@ export function useSender(homeId:string){
       current.clearShare();setView(previous=>({...previous,shareToken:null,shareUntil:null}));
       const refused=(error as {statusCode?:number;code?:string}|null);
       if(refused?.statusCode===403&&refused.code==='MEMBERS_MANAGE_REQUIRED'){setListDenied(true);setListError(senderMessage(refused.code));return;}
-      setListError('Current invitations could not be loaded. Your saved result is kept. Retry to check your current household authority and invitations.');
+      setListError('Couldn’t load current invitations. Your last result is kept. Use Refresh invitations to try again.');
     }}
   },[homeId]);
   useEffect(()=>{
@@ -45,8 +45,8 @@ export function useSender(homeId:string){
       try{current=new SenderController();controller.current=current;await current.open();if(disposed||revision!==generation.current)return;
         if(current.pending)await current.recover('status');publish(current);
       }catch(error){if(disposed||revision!==generation.current)return;
-        if(current?.opened)publish(current,error instanceof Error?error.message:'The original invitation action could not be checked.');
-        else setView({...empty,blocked:true,lifetime:generation.current,error:'Protected invitation recovery could not be opened. Your saved action is kept. Reopen recovery to try again.'});
+        if(current?.opened)publish(current,error instanceof Error?error.message:'Couldn’t check your last invitation.');
+        else setView({...empty,blocked:true,lifetime:generation.current,error:'Couldn’t open your invitations. Anything unfinished is kept. Reload to try again.'});
       }
       if(current?.opened&&current.current()&&controller.current===current)void list(current,revision);
     };
@@ -68,7 +68,7 @@ export function useSender(homeId:string){
     const current=controller.current;if(generation.current!==view.lifetime||!current?.current())return;
     setView(previous=>({...previous,busy:true,error:''}));
     try{const result=await action(current);if(controller.current===current&&current.current()){publish(current);return result;}}
-    catch(error){publish(current,error instanceof Error?error.message:'The invitation action could not be confirmed. Reopen recovery.');}
+    catch(error){publish(current,error instanceof Error?error.message:'We couldn’t confirm the result. Check again, try again, or discard this attempt.');}
   };
   return {...view,invitations,listError,listDenied,reopen:()=>setReload(v=>v+1),
     refreshList:()=>{const c=controller.current;if(c?.current())void list(c,generation.current);},

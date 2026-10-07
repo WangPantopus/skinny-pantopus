@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -34,6 +36,7 @@ import app.pantopus.android.data.api.models.location.ViewingLocationDto
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.ui.components.EmptyState
@@ -62,6 +65,9 @@ import javax.inject.Inject
  * `GET /api/saved-places` (`backend/routes/savedPlaces.js:8`).
  */
 
+/** How long "Use my location" waits for a position. */
+private const val LOCATE_TIMEOUT_MILLIS = 8_000L
+
 /** Which list a switcher row came from. */
 enum class FeedLocationKind(
     /** `type` value accepted by `setLocationSchema`. */
@@ -72,6 +78,9 @@ enum class FeedLocationKind(
     Home("home", PantopusIcon.Home, "Your homes"),
     SavedPlace("searched", PantopusIcon.Bookmark, "Saved places"),
     Recent("recent", PantopusIcon.History, "Recent"),
+
+    /** The device's own position ("Use my location"). */
+    Current("gps", PantopusIcon.Navigation, "Where you are"),
 }
 
 /** One selectable place in the switcher sheet. */
@@ -109,6 +118,7 @@ class FeedContextBarViewModel
     constructor(
         private val repo: ViewingLocationRepository,
         private val savedPlaces: SavedPlacesRepository,
+        private val locationProvider: LocationProvider,
     ) : ViewModel() {
         private val _locationLabel = MutableStateFlow<String?>(null)
 
@@ -130,6 +140,16 @@ class FeedContextBarViewModel
         private val _toast = MutableStateFlow<String?>(null)
         val toast: StateFlow<String?> = _toast.asStateFlow()
 
+        private val _sheetNotice = MutableStateFlow<String?>(null)
+
+        /** Shown inside the switcher: why "Use my location" or a switch didn't work. */
+        val sheetNotice: StateFlow<String?> = _sheetNotice.asStateFlow()
+
+        private val _isLocating = MutableStateFlow(false)
+
+        /** True while "Use my location" waits for a position. */
+        val isLocating: StateFlow<Boolean> = _isLocating.asStateFlow()
+
         /** Raised after a successful switch so the feed refetches. */
         var onChange: () -> Unit = {}
 
@@ -144,6 +164,7 @@ class FeedContextBarViewModel
         /** Open the switcher and (re)load its three source lists. */
         fun openSwitcher() {
             _isSheetOpen.value = true
+            _sheetNotice.value = null
             _sheetState.value = FeedLocationSwitcherUiState.Loading
             viewModelScope.launch {
                 when (val result = repo.current()) {
@@ -200,9 +221,45 @@ class FeedContextBarViewModel
                         _isSheetOpen.value = false
                         onChange()
                     }
-                    is NetworkResult.Failure -> _toast.value = result.error.message
+                    is NetworkResult.Failure -> {
+                        _toast.value = result.error.message
+                        _sheetNotice.value = result.error.message
+                    }
                 }
             }
+        }
+
+        /** "Use my location" (permission granted): the device's position becomes the viewing area. */
+        fun useMyLocation() {
+            if (_isLocating.value) return
+            _isLocating.value = true
+            _sheetNotice.value = null
+            viewModelScope.launch {
+                val coordinate = locationProvider.requestCurrent(timeoutMillis = LOCATE_TIMEOUT_MILLIS)
+                _isLocating.value = false
+                if (coordinate == null) {
+                    _sheetNotice.value = "Couldn't find where you are. Try again, or add a home or save a place."
+                    return@launch
+                }
+                select(
+                    FeedLocationOption(
+                        id = "current",
+                        kind = FeedLocationKind.Current,
+                        label = "Current location",
+                        subtitle = null,
+                        latitude = coordinate.latitude,
+                        longitude = coordinate.longitude,
+                        sourceId = null,
+                        city = null,
+                        state = null,
+                    ),
+                )
+            }
+        }
+
+        /** "Use my location" with the permission refused. */
+        fun locationPermissionDenied() {
+            _sheetNotice.value = "Location is off for Pantopus. Turn it on in Settings, or add a home or save a place."
         }
 
         /**
@@ -363,6 +420,7 @@ fun FeedContextBar(
  * Home / saved-place / recent picker. Four render states per the
  * project's state rule.
  */
+@Suppress("LongParameterList")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedLocationSwitcherSheet(
@@ -371,6 +429,9 @@ fun FeedLocationSwitcherSheet(
     onSelect: (FeedLocationOption) -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
+    onUseMyLocation: () -> Unit = {},
+    notice: String? = null,
+    isLocating: Boolean = false,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -391,6 +452,20 @@ fun FeedLocationSwitcherSheet(
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appText,
             )
+            notice?.let {
+                Text(
+                    text = it,
+                    fontSize = 13.sp,
+                    color = PantopusColors.appText,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(Radii.md))
+                            .background(PantopusColors.warningBg)
+                            .padding(Spacing.s3)
+                            .testTag("pulseLocationSwitcherNotice"),
+                )
+            }
             when (state) {
                 FeedLocationSwitcherUiState.Loading ->
                     Column(
@@ -403,8 +478,10 @@ fun FeedLocationSwitcherSheet(
                     EmptyState(
                         icon = PantopusIcon.MapPinOff,
                         headline = "No places to switch to",
-                        subcopy = "Add a home or save a place and it will show up here.",
+                        subcopy = "Use where you are, or add a home or save a place and it will show up here.",
                         modifier = Modifier.testTag("pulseLocationSwitcherEmpty"),
+                        ctaTitle = "Use my location",
+                        onCta = onUseMyLocation,
                     )
                 is FeedLocationSwitcherUiState.Error ->
                     EmptyState(
@@ -420,6 +497,9 @@ fun FeedLocationSwitcherSheet(
                         modifier = Modifier.fillMaxWidth().testTag("pulseLocationSwitcherList"),
                         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
                     ) {
+                        item(key = "use-my-location") {
+                            UseMyLocationRow(isLocating = isLocating, onClick = onUseMyLocation)
+                        }
                         FeedLocationKind.entries.forEach { kind ->
                             val rows = state.options.filter { it.kind == kind }
                             if (rows.isEmpty()) return@forEach
@@ -442,6 +522,45 @@ fun FeedLocationSwitcherSheet(
                         }
                     }
             }
+        }
+    }
+}
+
+@Composable
+private fun UseMyLocationRow(
+    isLocating: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.md))
+                .clickable(enabled = !isLocating, onClick = onClick)
+                .padding(vertical = Spacing.s2)
+                .testTag("pulseLocationUseMine"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PantopusIconImage(
+            icon = FeedLocationKind.Current.icon,
+            contentDescription = null,
+            size = 18.dp,
+            tint = PantopusColors.primary600,
+        )
+        Text(
+            text = "Use my location",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appText,
+            modifier = Modifier.weight(1f),
+        )
+        if (isLocating) {
+            CircularProgressIndicator(
+                color = PantopusColors.primary600,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

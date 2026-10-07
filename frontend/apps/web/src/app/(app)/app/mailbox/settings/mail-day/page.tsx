@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
+import { parseDisplayDate } from '@pantopus/ui-utils';
 import type { MailItemV2, MailDaySettings } from '@/types/mailbox';
 import {
   useMailDaySummary,
@@ -251,7 +252,7 @@ export default function MailDayPage() {
                           </span>
                           {item.due_date && (
                             <span className="text-xs text-amber-600 dark:text-amber-400 ml-auto flex-shrink-0">
-                              Due {new Date(item.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                              Due {parseDisplayDate(item.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             </span>
                           )}
                         </a>
