@@ -108,7 +108,7 @@ object WalletMapper {
             day = dayLabel(instant, zone, now),
             dateLabel = timeLabel(instant, zone),
             description = tx.description ?: typeLabel(tx.type),
-            counterparty = counterpartyLabel(tx.type),
+            counterparty = counterpartyLabel(tx.type, tx.description),
             category = category(tx.type),
             direction = direction,
             status = transactionStatus(tx, direction),
@@ -165,10 +165,19 @@ object WalletMapper {
             else -> if (direction == ActivityDirection.Out) ActivityStatus.Complete else ActivityStatus.Available
         }
 
-    private fun counterpartyLabel(type: String): String =
+    /** An invoice payment is booked as `gig_income` with an "Invoice …" description. */
+    private fun isInvoiceIncome(
+        type: String,
+        description: String?,
+    ): Boolean = type == "gig_income" && description?.startsWith("Invoice") == true
+
+    private fun counterpartyLabel(
+        type: String,
+        description: String?,
+    ): String =
         when (type) {
             "withdrawal", "deposit", "transfer_in", "transfer_out" -> "Bank"
-            "gig_income", "gig_payment" -> "Gig"
+            "gig_income", "gig_payment" -> if (isInvoiceIncome(type, description)) "Invoice" else "Gig"
             "tip_income", "tip_sent" -> "Tip"
             "refund" -> "Refund"
             "cancellation_fee" -> "Pantopus"
