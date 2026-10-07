@@ -38,8 +38,10 @@ export default function ChatAttachmentMenu({ onAction, disabled = false }: ChatA
     { action: 'documents', icon: '📄', label: 'Documents', color: 'bg-blue-50 text-blue-700' },
     { action: 'gig', icon: '💼', label: 'Share a Task', color: 'bg-purple-50 text-purple-700' },
     { action: 'listing', icon: '🏷️', label: 'Share a Listing', color: 'bg-emerald-50 text-emerald-700' },
-  // Launch cut #3 (Marketplace): no "Share a Listing".
-  ] satisfies { action: AttachAction; icon: string; label: string; color: string }[]).filter((item) => item.action !== 'listing' || launchFeatures.marketplace);
+  // Launch cut #3 (Marketplace): no "Share a Listing". Launch cut #4 (Open Gigs): no "Share a Task".
+  ] satisfies { action: AttachAction; icon: string; label: string; color: string }[]).filter((item) => (
+    (item.action !== 'listing' || launchFeatures.marketplace) && (item.action !== 'gig' || launchFeatures.openGigs)
+  ));
 
   return (
     <div className="relative" ref={menuRef}>
