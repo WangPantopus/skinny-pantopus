@@ -450,10 +450,10 @@ module.exports = (io) => {
         });
         
         // Notify room that user joined
+        // Ids only: the first part of the person's email address is not for the other members to see.
         socket.to(roomId).emit('user:joined', { 
           userId, 
-          roomId,
-          username: socket.userEmail.split('@')[0]
+          roomId
         });
         
       } catch (err) {
@@ -491,8 +491,7 @@ module.exports = (io) => {
         // Broadcast to room (except sender)
         socket.to(roomId).emit('typing:user', {
           userId,
-          roomId,
-          username: socket.userEmail.split('@')[0]
+          roomId
         });
 
       } catch (err) {
