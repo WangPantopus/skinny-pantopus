@@ -356,18 +356,21 @@ open class ClaimOwnershipWizardViewModel
                 val preview =
                     when (response) {
                         is NetworkResult.Success -> response.data
-                        is NetworkResult.Failure -> throw response.error
+                        // A private Home shows nobody outside its household a preview (403). The claim does not
+                        // need one: it starts on the ownership path under a generic label, without the owner flag.
+                        is NetworkResult.Failure -> if (response.error is NetworkError.Forbidden) null else throw response.error
                     }
-                check(preview.home.id == homeId) { "Verification Home changed" }
+                check(preview == null || preview.home.id == homeId) { "Verification Home changed" }
                 _state.update {
                     it.copy(
                         contextReady = true,
                         isLoadingContext = false,
                         contextError = null,
                         submitError = null,
-                        hasVerifiedOwner = preview.hasVerifiedOwner,
-                        isMember = preview.isMember,
-                        startContent = ClaimOwnershipStartContent(preview.home.displayAddress.ifBlank { "This home" }),
+                        hasVerifiedOwner = preview?.hasVerifiedOwner == true,
+                        isMember = preview?.isMember == true,
+                        startContent =
+                            ClaimOwnershipStartContent(preview?.home?.displayAddress?.takeIf { a -> a.isNotBlank() } ?: "This home"),
                         selectedStartMethod = ClaimStartMethod.VerifyOwnership,
                     )
                 }
