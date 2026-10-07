@@ -39,6 +39,8 @@ data class HomeMemberRemovalUiState(
     val canAcknowledge: Boolean = false,
     val currentRoster: HomeMemberRemovalCurrent = HomeMemberRemovalCurrent.Unchecked,
     val error: String? = null,
+    /** The server refused because the primary owner must transfer ownership before leaving. */
+    val transferRequired: Boolean = false,
 )
 
 @HiltViewModel
@@ -151,7 +153,9 @@ class HomeMemberRemovalViewModel
             val revision = generation
             val session = session ?: return
             val coordinator = coordinator ?: return
-            _state.update { it.copy(working = true, error = null, currentRoster = HomeMemberRemovalCurrent.Unchecked) }
+            _state.update {
+                it.copy(working = true, error = null, transferRequired = false, currentRoster = HomeMemberRemovalCurrent.Unchecked)
+            }
             scope?.launch {
                 try {
                     session.requireCurrent()
@@ -168,6 +172,7 @@ class HomeMemberRemovalViewModel
                     }
                 } catch (error: HomeMemberRemovalRefusal) {
                     reportFailure(revision, error.message)
+                    if (error.code == "TRANSFER_REQUIRED" && current(revision)) _state.update { it.copy(transferRequired = true) }
                 } catch (_: Exception) {
                     reportFailure(revision, HomeMemberRemovalFailure(HomeMemberRemovalFailureKind.Storage).message)
                 } finally {

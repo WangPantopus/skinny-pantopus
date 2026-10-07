@@ -2956,7 +2956,8 @@ public struct YouTabRoot: View {
                         default: false
                         }
                     }
-                }
+                },
+                onTransfer: { path.append(.homeOwners(homeId: homeId)) }
             )
         case .ceremonialMail:
             CeremonialMailWizardView(

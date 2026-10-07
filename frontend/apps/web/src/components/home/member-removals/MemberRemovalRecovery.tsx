@@ -28,6 +28,8 @@ export default function MemberRemovalRecovery({ homeId, targetId, self = false }
   return <div className="space-y-5">
     {vm.accountLabel && <p className="text-sm text-app-text-secondary">Signed in as {vm.accountLabel}</p>}
     {vm.error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{vm.error}</p>}
+    {self && homeId && vm.error === removalMessage('TRANSFER_REQUIRED')
+      && <Link href={`/app/homes/${homeId}/owners`} className={primary}>Transfer ownership</Link>}
     {vm.blocked ? <button className={button} onClick={vm.reopen}>Reload</button>
       : !vm.ready ? <p role="status">Loading…</p>
         : draft ? <section aria-label="Your last removal" className="space-y-4 rounded-xl border border-app-border p-4">
