@@ -8,7 +8,7 @@ import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
 import AuthForm from '@/components/auth/AuthForm';
 import { toast } from '@/components/ui/toast-store';
-import { takeVerifiedEmail } from '@/lib/email-verified-handoff';
+import { takeSignInHandoff } from '@/lib/email-verified-handoff';
 import { ACCOUNT_DELETED_NOTICE_KEY, ACCOUNT_DELETED_NOTICE_MAX_AGE_MS } from '@/lib/session-refresh';
 import {
   authPageHref,
@@ -52,12 +52,14 @@ function LoginContent() {
     }
   }, []);
 
-  // Arriving from the confirmation link: sign-in starts from the address that was just confirmed.
+  // Arriving from the confirmation link or from a password reset: sign-in starts from that address.
   useEffect(() => {
-    const confirmed = takeVerifiedEmail();
-    if (!confirmed) return;
-    setEmail(confirmed);
-    setInfo('Your email is confirmed. Sign in to continue.');
+    const handoff = takeSignInHandoff();
+    if (!handoff) return;
+    setEmail(handoff.email);
+    setInfo(handoff.reason === 'password-updated'
+      ? 'Your password was updated. Sign in with your new password.'
+      : 'Your email is confirmed. Sign in to continue.');
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

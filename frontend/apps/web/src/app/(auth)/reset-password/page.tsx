@@ -7,6 +7,7 @@ import PantopusBadge from '@/components/PantopusBadge';
 import AuthForm from '@/components/auth/AuthForm';
 import * as api from '@pantopus/api';
 import { authPageHref, readAuthRedirectQuery, safeRedirectPath, extractApiError } from '@/lib/auth-utils';
+import { rememberSignInHandoff } from '@/lib/email-verified-handoff';
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -75,6 +76,7 @@ function ResetPasswordPageContent() {
     try {
       const response = await api.auth.resetPassword(token, newPassword, email || undefined);
       setSuccess(response?.message || 'Password reset successful.');
+      rememberSignInHandoff(email, 'password-updated');
       redirectTimeoutRef.current = setTimeout(() => router.push(loginHref), 1200);
     } catch (err: unknown) {
       setError(extractApiError(err, 'Failed to reset password.'));
