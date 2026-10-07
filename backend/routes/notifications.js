@@ -480,16 +480,19 @@ router.delete('/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const { error } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('Notification')
       .delete()
       .eq('id', id)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .select('id');
 
     if (error) {
       logger.error('Error deleting notification', { error: error.message, id });
       return res.status(500).json({ error: 'Failed to delete notification' });
     }
+    // Not this person's, or already deleted elsewhere: nothing was deleted, as mark-read answers.
+    if (!data || data.length === 0) return res.status(404).json({ error: 'Notification not found' });
 
     res.json({ message: 'Notification deleted' });
   } catch (err) {
