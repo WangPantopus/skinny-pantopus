@@ -33,7 +33,6 @@ struct HomeInvitationDecisionView: View {
                 }
                 Button("Use another account") { accountSwitchLifetime = model.generation }
                     .frame(minHeight: 44).disabled(model.isWorking).accessibilityIdentifier("homeInvitationSwitchAccount")
-                Button("Close", action: onClose).frame(minHeight: 44).accessibilityIdentifier("homeInvitationClose")
             }
             .padding(Spacing.s5).frame(maxWidth: .infinity, alignment: .leading)
         }

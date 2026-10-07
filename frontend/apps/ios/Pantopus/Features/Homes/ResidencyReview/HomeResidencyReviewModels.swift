@@ -13,7 +13,7 @@ struct HomeResidencyReviewScope: Codable, Equatable, Hashable {
 enum HomeResidencyDecision: String, Codable, CaseIterable {
     case approve, reject
     var label: String {
-        self == .approve ? "Approve residency" : "Reject residency"
+        self == .approve ? "Approve" : "Reject"
     }
 }
 
@@ -203,15 +203,15 @@ enum HomeResidencyReviewError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .storage: "Your original residency decision could not be read or saved. Retry recovery before choosing another decision."
-        case .changed: "Another residency decision is saved for this Home. Reopen review to recover the original."
-        case .busy: "Your original decision is still being checked. Try again shortly."
-        case .unknown: "The decision is not confirmed. Retry the saved original to check its result."
-        case .unavailable: "Current residency access could not be verified. Reload to check again."
-        case .sessionChanged: "Your session changed. Reopen residency review to check access and recover the original."
+        case .storage: "Your last decision couldn’t be read or saved on this device. Try again before choosing another."
+        case .changed: "Another decision for this Home is saved on this device. Open the review again to finish it."
+        case .busy: "Your last decision is still being checked. Try again in a moment."
+        case .unknown: "We couldn’t confirm your decision. Try again; it won’t be applied twice."
+        case .unavailable: "Couldn’t load this request. Reload to try again."
+        case .sessionChanged: "Your account changed. Close this and open it again to continue."
         case .refusal("MEMBERSHIP_RENEWAL_REQUIRED"):
             "This person’s household membership has ended, so this claim can’t be approved. Reject it, then invite them again from Members."
-        case .refusal: "The saved decision could not be applied to the current claim and membership limits. Review the current claim again."
+        case .refusal: "Your decision couldn’t be applied because the request or their access changed. Review it again."
         }
     }
 }

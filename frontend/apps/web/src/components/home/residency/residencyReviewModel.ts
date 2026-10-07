@@ -8,7 +8,7 @@ const nullableDate = (v: unknown) => v === null || date(v);
 export const residencyRoles: Record<ResidencyReviewRole, string> = {
   member: 'Member', lease_resident: 'Lease resident', restricted_member: 'Restricted member', guest: 'Guest', service_provider: 'Service provider',
 };
-export const actionLabel = (action: ResidencyReviewAction) => action === 'approve' ? 'Approve residency' : 'Reject residency';
+export const actionLabel = (action: ResidencyReviewAction) => action === 'approve' ? 'Approve' : 'Reject';
 export interface PendingResidencyReview {
   version: 1; origin: string; actor_id: string; home_id: string; claim_id: string;
   command: ResidencyReviewCommand; confirmed?: ResidencyReviewReceipt;

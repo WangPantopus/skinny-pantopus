@@ -4528,6 +4528,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     LeaveHomeScreen(
                         onBack = { navController.popBackStack() },
+                        onTransfer = { homeId -> navController.navigate(ChildRoutes.homeOwners(homeId)) },
                         onLeft = {
                             // Acknowledgement leaves the historical-removal view.
                             // Navigation changes no membership; destination readers
