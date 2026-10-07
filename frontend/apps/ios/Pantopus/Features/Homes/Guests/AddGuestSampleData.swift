@@ -66,7 +66,7 @@ public enum AddGuestSampleData {
     /// FILLED frame — Sasha, Weekend, WiFi + Entry Instructions + Parking, welcome note.
     public enum Filled {
         public static let name = "Sasha Petrov"
-        public static let contact = "sasha@petrov.co"
+        public static let contact = "sasha@example.com"
         public static let durationId = "weekend"
         public static let sectionIds: Set<String> = ["wifi", "entry_instructions", "parking"]
         public static let welcome =
