@@ -151,7 +151,8 @@ fun AddGuestFormScreen(
                 viewModel.acknowledgeShare()
             },
             title = { Text("Guest pass created") },
-            text = { Text("Share this pass now?") },
+            // The pass link is returned once, so this is the only chance to share it.
+            text = { Text("Share the link now. It's shown only this once: to send it later, revoke this pass and create a new one.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -160,7 +161,7 @@ fun AddGuestFormScreen(
                         viewModel.acknowledgeShare()
                     },
                     modifier = Modifier.testTag("addGuest_shareNow"),
-                ) { Text("Share") }
+                ) { Text("Share link") }
             },
             dismissButton = {
                 TextButton(
@@ -169,7 +170,7 @@ fun AddGuestFormScreen(
                         viewModel.acknowledgeShare()
                     },
                     modifier = Modifier.testTag("addGuest_shareLater"),
-                ) { Text("Later") }
+                ) { Text("Don't share") }
             },
         )
     }
