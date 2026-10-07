@@ -1,10 +1,11 @@
-# Account deletion page (draft for the founder's approval)
+# Account deletion page (approved by the founder on October 7, 2026)
 
 Google Play's Data safety form asks for a **Delete account URL**: a public web page, reachable
 without the app, that names the app, gives the steps to delete an account, and says which data is
-deleted or kept. Draft text for `https://pantopus.com/delete-account` follows. Once it is approved, L4
-adds the page to the web app and puts its URL in the Play form (`play-data-safety.md`). The facts
-below come from `DELETE /api/users/account` in `backend/routes/users.js` (checked October 6, 2026).
+deleted or kept. The text below is the page at `https://pantopus.com/delete-account`
+(`frontend/apps/web/src/app/delete-account/page.tsx`; keep the two in step). It is live after the
+next production web deploy (checklist P9), and its URL goes in the Play form (`play-data-safety.md`).
+The facts come from `DELETE /api/users/account` in `backend/routes/users.js` (checked October 6, 2026).
 
 ---
 
