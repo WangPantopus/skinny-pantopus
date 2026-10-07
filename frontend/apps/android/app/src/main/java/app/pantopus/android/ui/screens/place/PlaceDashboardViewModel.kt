@@ -2,11 +2,13 @@ package app.pantopus.android.ui.screens.place
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.notifications.personalBellCount
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.place.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -29,9 +31,15 @@ class PlaceDashboardViewModel
     constructor(
         private val repo: PlaceRepository,
         private val homesRepository: HomesRepository,
+        private val notificationsRepo: NotificationsRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PlaceDashboardUiState>(PlaceDashboardUiState.Loading)
         val state: StateFlow<PlaceDashboardUiState> = _state.asStateFlow()
+
+        private val _unreadCount = MutableStateFlow(0)
+
+        /** Unread personal notifications, the Hub bell's count; the header bell shows a dot above zero. */
+        val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
 
         private var homeId: String? = null
 
@@ -58,6 +66,18 @@ class PlaceDashboardViewModel
             val id = homeId ?: return
             _state.value = PlaceDashboardUiState.Loading
             viewModelScope.launch { fetch(id) }
+        }
+
+        /**
+         * Re-read the bell's count whenever the dashboard shows again (for
+         * example after the user read their notifications). A failed read
+         * keeps the last count.
+         */
+        fun refreshUnread() {
+            viewModelScope.launch {
+                val unread = (notificationsRepo.unreadCount() as? NetworkResult.Success)?.data ?: return@launch
+                _unreadCount.value = unread.personalBellCount
+            }
         }
 
         private suspend fun fetch(id: String) {

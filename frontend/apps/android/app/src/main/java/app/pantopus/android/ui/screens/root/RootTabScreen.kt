@@ -2947,6 +2947,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenPrivacyMirror = { navController.navigate(ChildRoutes.placePrivacyMirror(homeId)) },
                         onOpenHomeTools = { navController.navigate(ChildRoutes.homeDashboard(homeId)) },
                         onOpenMenu = { navDrawerScope.launch { navDrawerState.open() } },
+                        onOpenNotifications = { navController.navigate(ChildRoutes.NOTIFICATIONS) },
                         onPlaceUnavailable = { goneId ->
                             val host = placeHost ?: return@PlaceDashboardScreen
                             recoverScope.launch {

@@ -208,6 +208,34 @@ struct PlaceTextButton: View {
     }
 }
 
+// MARK: - Notifications bell
+
+/// The header bell: a 48pt target with a 20pt icon, and the Hub bell's red dot while anything is unread.
+struct PlaceBellButton: View {
+    let unreadCount: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Icon(.bell, size: 20, color: Theme.Color.appText)
+                .overlay(alignment: .topTrailing) {
+                    if unreadCount > 0 {
+                        Circle()
+                            .fill(Theme.Color.errorSolid)
+                            .frame(width: 8, height: 8)
+                            .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
+                    }
+                }
+                .frame(width: Spacing.s12, height: Spacing.s12)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Notifications")
+        .accessibilityValue(unreadCount > 0 ? "\(unreadCount) unread" : "")
+        .accessibilityIdentifier("place.notifications")
+    }
+}
+
 // MARK: - Shimmer skeleton (`Skel` / `.pl-skel`)
 
 /// Shimmering placeholder bar. Static under Reduce Motion.

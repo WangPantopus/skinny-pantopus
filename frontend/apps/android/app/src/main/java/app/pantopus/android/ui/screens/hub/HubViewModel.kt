@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubStatusItem
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
+import app.pantopus.android.data.api.models.notifications.personalBellCount
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigExtrasRepository
 import app.pantopus.android.data.hub.HubRepository
@@ -604,17 +605,8 @@ class HubViewModel
         private fun audienceUnread(unread: NotificationUnreadCountResponse?): Int =
             if (LaunchFeatures.beacon && LaunchFeatures.personas) unread?.byContext?.audience ?: 0 else 0
 
-        /**
-         * The bell's dot counts unread personal notifications (personal +
-         * platform, like the web personal-zone bell); the megaphone counts the
-         * audience zone. Older deployments only return the total.
-         */
-        private fun personalUnread(unread: NotificationUnreadCountResponse?): Int =
-            when {
-                unread == null -> 0
-                unread.byContext == null -> unread.count
-                else -> unread.byContext.personal + unread.byContext.platform
-            }
+        /** The bell's dot counts unread personal notifications; the megaphone counts the audience zone. */
+        private fun personalUnread(unread: NotificationUnreadCountResponse?): Int = unread?.personalBellCount ?: 0
 
         /** Which identity tints the avatar ring. Defaults to home when
          *  the user has any claimed home; else personal. */

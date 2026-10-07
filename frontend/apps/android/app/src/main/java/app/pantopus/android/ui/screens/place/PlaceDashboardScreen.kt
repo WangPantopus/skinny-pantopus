@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -87,15 +90,21 @@ fun PlaceDashboardScreen(
     onOpenPrivacyMirror: () -> Unit = {},
     onOpenHomeTools: () -> Unit = {},
     onOpenMenu: () -> Unit = {},
+    onOpenNotifications: () -> Unit = {},
     onPlaceUnavailable: (homeId: String) -> Unit = {},
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val unreadCount by viewModel.unreadCount.collectAsStateWithLifecycle()
     // A Home this account can no longer read (left, removed, deleted): the Place tab moves on.
     LaunchedEffect(state) {
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
     }
-    LaunchedEffect(homeId) { viewModel.load(homeId) }
+    LaunchedEffect(homeId) {
+        viewModel.load(homeId)
+        // Also on coming back from the notifications list, so a read bell loses its dot.
+        viewModel.refreshUnread()
+    }
 
     var showSwitcher by remember { mutableStateOf(false) }
     var showVerify by remember { mutableStateOf(false) }
@@ -109,6 +118,7 @@ fun PlaceDashboardScreen(
         onRefresh = {
             pulled = true
             viewModel.refresh()
+            viewModel.refreshUnread()
         },
         modifier = modifier.fillMaxSize().background(PantopusColors.appBg),
     ) {
@@ -132,6 +142,8 @@ fun PlaceDashboardScreen(
                         onOpenHomeTools()
                     },
                     onOpenMenu = onOpenMenu,
+                    onOpenNotifications = onOpenNotifications,
+                    unreadCount = unreadCount,
                     onOpenAvatar = { showSwitcher = true },
                     onVerify = { showVerify = true },
                     onOpenDetail = { group -> onOpenSection(homeId, group.slug) },
@@ -188,6 +200,8 @@ internal fun PlaceDashboardContent(
     onOpenPrivacyMirror: () -> Unit = {},
     onOpenHomeTools: () -> Unit = {},
     onOpenMenu: () -> Unit = {},
+    onOpenNotifications: () -> Unit = {},
+    unreadCount: Int = 0,
     homeId: String = "",
     onRetry: (() -> Unit)? = null,
 ) {
@@ -203,6 +217,8 @@ internal fun PlaceDashboardContent(
                 isVerified = isVerified,
                 onOpenAvatar = onOpenAvatar,
                 onOpenMenu = onOpenMenu,
+                onOpenNotifications = onOpenNotifications,
+                unreadCount = unreadCount,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
             )
         }
@@ -418,11 +434,14 @@ private fun PlaceVerifyLockedGroup(
 // MARK: - Header
 
 @Composable
+@Suppress("LongParameterList")
 private fun PlaceDashboardHeader(
     label: String,
     isVerified: Boolean,
     onOpenMenu: () -> Unit,
     onOpenAvatar: () -> Unit,
+    onOpenNotifications: () -> Unit,
+    unreadCount: Int,
     modifier: Modifier = Modifier,
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -464,13 +483,45 @@ private fun PlaceDashboardHeader(
                 PlaceClaimedAvatar(initials = placeMonogram(label), size = 40.dp)
             }
         }
-        IconButton(onClick = onOpenMenu, modifier = Modifier.size(Spacing.s12).testTag("place.menu")) {
-            PantopusIconImage(
-                icon = PantopusIcon.Menu,
-                contentDescription = "Menu",
-                size = Spacing.s5,
-                tint = PantopusColors.appText,
-            )
+        // Bell + menu sit together, as on the Hub; the dot is the Hub bell's.
+        Row {
+            IconButton(
+                onClick = onOpenNotifications,
+                modifier =
+                    Modifier
+                        .size(Spacing.s12)
+                        .testTag("place.notifications")
+                        .semantics { if (unreadCount > 0) stateDescription = "$unreadCount unread" },
+            ) {
+                Box {
+                    PantopusIconImage(
+                        icon = PantopusIcon.Bell,
+                        contentDescription = "Notifications",
+                        size = Spacing.s5,
+                        tint = PantopusColors.appText,
+                    )
+                    if (unreadCount > 0) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 2.dp, y = (-2).dp)
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(PantopusColors.error)
+                                    .border(2.dp, PantopusColors.appSurface, CircleShape),
+                        )
+                    }
+                }
+            }
+            IconButton(onClick = onOpenMenu, modifier = Modifier.size(Spacing.s12).testTag("place.menu")) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Menu,
+                    contentDescription = "Menu",
+                    size = Spacing.s5,
+                    tint = PantopusColors.appText,
+                )
+            }
         }
     }
 }
