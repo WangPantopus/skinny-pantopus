@@ -26,7 +26,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.Locale
 import javax.inject.Inject
 
 /** Tabs surfaced by the V1 mailbox list. */
@@ -219,6 +222,7 @@ class MailboxListViewModel
                 viewed: Boolean,
                 trust: MailTrust,
                 onOpenMail: (String) -> Unit,
+                dueDate: String? = null,
             ): RowModel {
                 val category = MailItemCategory.fromRaw(categoryRaw)
                 val chips =
@@ -249,10 +253,17 @@ class MailboxListViewModel
                     onTap = { onOpenMail(id) },
                     body = body,
                     chips = chips,
-                    timeMeta = formatRelativeTime(createdAt),
+                    timeMeta = dueDate?.let { formatDueDate(it) } ?: formatRelativeTime(createdAt),
                     highlight = if (!viewed) RowHighlight.Unread else null,
                 )
             }
+
+            /** "Due Oct 20" for a `due_date`, a calendar day ("2026-10-20"); null when it doesn't parse. */
+            @JvmStatic
+            fun formatDueDate(value: String): String? =
+                runCatching { LocalDate.parse(value.take(10)) }.getOrNull()?.let {
+                    "Due " + it.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
+                }
 
             /**
              * Mirrors iOS `MailboxListViewModel.formatRelativeTime`:

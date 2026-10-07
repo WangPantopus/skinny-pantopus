@@ -82,7 +82,16 @@ public struct EmptyState: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Color.appBg)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(headline). \(subcopy)")
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    /// One VoiceOver element: the combined element takes the CTA's button trait and action, so
+    /// its label names the action too ("… Try again, button"), not just the message.
+    private var accessibilitySummary: String {
+        var summary = "\(headline). \(subcopy)"
+        guard let cta else { return summary }
+        if let last = summary.last, !".!?".contains(last) { summary += "." }
+        return summary + " \(cta.title)"
     }
 }
 
