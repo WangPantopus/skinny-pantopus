@@ -51,7 +51,11 @@ class PlaceDashboardViewModel
          * unless a verification flow started from here since.
          */
         fun load(homeId: String) {
-            if (this.homeId == homeId && _state.value is PlaceDashboardUiState.Loaded && !reloadPending) return
+            if (this.homeId == homeId && _state.value is PlaceDashboardUiState.Loaded && !reloadPending) {
+                // Shown again (for example back from the notifications list): only the bell's count may have changed.
+                refreshUnread()
+                return
+            }
             reloadPending = false
             this.homeId = homeId
             refresh()
@@ -66,14 +70,11 @@ class PlaceDashboardViewModel
             val id = homeId ?: return
             _state.value = PlaceDashboardUiState.Loading
             viewModelScope.launch { fetch(id) }
+            refreshUnread()
         }
 
-        /**
-         * Re-read the bell's count whenever the dashboard shows again (for
-         * example after the user read their notifications). A failed read
-         * keeps the last count.
-         */
-        fun refreshUnread() {
+        /** Re-read the bell's count with every load and refresh. A failed read keeps the last count. */
+        private fun refreshUnread() {
             viewModelScope.launch {
                 val unread = (notificationsRepo.unreadCount() as? NetworkResult.Success)?.data ?: return@launch
                 _unreadCount.value = unread.personalBellCount

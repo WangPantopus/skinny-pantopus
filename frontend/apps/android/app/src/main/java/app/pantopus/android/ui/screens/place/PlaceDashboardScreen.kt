@@ -100,11 +100,7 @@ fun PlaceDashboardScreen(
     LaunchedEffect(state) {
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
     }
-    LaunchedEffect(homeId) {
-        viewModel.load(homeId)
-        // Also on coming back from the notifications list, so a read bell loses its dot.
-        viewModel.refreshUnread()
-    }
+    LaunchedEffect(homeId) { viewModel.load(homeId) }
 
     var showSwitcher by remember { mutableStateOf(false) }
     var showVerify by remember { mutableStateOf(false) }
@@ -118,7 +114,6 @@ fun PlaceDashboardScreen(
         onRefresh = {
             pulled = true
             viewModel.refresh()
-            viewModel.refreshUnread()
         },
         modifier = modifier.fillMaxSize().background(PantopusColors.appBg),
     ) {
