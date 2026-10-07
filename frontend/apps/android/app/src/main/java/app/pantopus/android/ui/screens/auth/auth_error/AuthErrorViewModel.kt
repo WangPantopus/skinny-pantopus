@@ -47,7 +47,7 @@ class AuthErrorViewModel
                     is AuthError.RateLimited ->
                         AuthErrorCopy(
                             headline = "Too many attempts",
-                            body = "Take a breath and try again in a moment.",
+                            body = "Take a breath and try again in a few minutes.",
                         )
                     is AuthError.ServerError ->
                         AuthErrorCopy(

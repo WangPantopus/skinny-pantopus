@@ -67,7 +67,7 @@ public enum AuthError: Error, LocalizedError, Hashable, Sendable {
         case .emailAlreadyExists: "An account with this email already exists."
         case .weakPassword: "Choose a stronger password."
         case .networkError: "Can't reach Pantopus. Check your connection."
-        case .rateLimited: "Too many attempts. Try again in a moment."
+        case .rateLimited: "Too many attempts. Please wait a few minutes and try again."
         case let .serverError(message): message
         case .unknown: "Something went wrong. Please try again."
         }
