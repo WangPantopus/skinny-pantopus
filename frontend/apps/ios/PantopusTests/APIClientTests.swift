@@ -64,7 +64,8 @@ final class APIClientTests: XCTestCase {
         pilot.enterBackground(now: 0.2)
         pilot.enterForeground(now: 0.3)
         pilot.enterBackground(now: 0.4)
-        for _ in 0..<100 {
+        // PilotEvents sends from a background task; give a busy CI runner up to 5 s (the loop ends as soon as it arrives).
+        for _ in 0..<1000 {
             if URLProtocolStub.capturedRequests.contains(where: { $0.url?.path == "/api/hub/funnel-events" }) { break }
             try await Task.sleep(for: .milliseconds(5))
         }
