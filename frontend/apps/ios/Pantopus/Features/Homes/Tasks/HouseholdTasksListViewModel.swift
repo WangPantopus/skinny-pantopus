@@ -367,8 +367,10 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     }
 
     private func emptyContent(for tab: HouseholdTasksTab) -> ListOfRowsState.EmptyContent {
+        // Tasks that are all finished aren't "no tasks yet".
+        let noneOpen = tab == .active && tasks?.isEmpty == false
         let headline: String = switch tab {
-        case .active: "No tasks yet"
+        case .active: noneOpen ? "No open tasks" : "No tasks yet"
         case .done: "Nothing done yet"
         case .recurring: "No recurring chores"
         }
@@ -382,7 +384,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
         return ListOfRowsState.EmptyContent(
             icon: .listChecks,
             headline: headline,
-            subcopy: "Tasks shared with you will appear here.",
+            subcopy: noneOpen ? "Tasks you finish move to Done." : "Tasks shared with you will appear here.",
             ctaTitle: visible && canCreate && isCurrent ? "Add a task" : nil,
             onCTA: onCreate
         )
