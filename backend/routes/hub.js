@@ -105,7 +105,7 @@ router.get('/', verifyToken, async (req, res) => {
         Promise.resolve(
           supabaseAdmin
             .from('StripeAccount')
-            .select('id')
+            .select('id, payouts_enabled')
             .eq('user_id', userId)
             .maybeSingle()
         ).catch(() => ({ data: null })),
@@ -214,7 +214,9 @@ router.get('/', verifyToken, async (req, res) => {
       }));
 
     const hasSkills = (skillsResult.count || 0) > 0;
-    const hasPayoutMethod = !!stripeResult.data;
+    // An account row exists from the moment onboarding starts; the step is done only once Stripe can pay out.
+    const hasPayoutAccount = !!stripeResult.data;
+    const hasPayoutMethod = !!stripeResult.data?.payouts_enabled;
 
     // ── Personal profile completeness ──────────────────────────
     const profileChecks = {
@@ -233,7 +235,7 @@ router.get('/', verifyToken, async (req, res) => {
     // gig-worker items (skills, payout) leave the new-user path and only
     // appear once the person is already on the earning side.
     const hasVerifiedHome = homes.some((h) => h.verified) || ownerHomeIds.length > 0;
-    const onEarningPath = hasSkills || hasPayoutMethod || businesses.length > 0;
+    const onEarningPath = hasSkills || hasPayoutAccount || businesses.length > 0;
     const setupSteps = [
       { key: 'home', done: homes.length > 0 },
       { key: 'verify', done: hasVerifiedHome },
