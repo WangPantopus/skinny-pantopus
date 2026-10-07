@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -676,13 +678,26 @@ private fun ManageSection(
             color = PantopusColors.appTextMuted,
             letterSpacing = 0.6.sp,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.fillMaxWidth()) {
-            content.inlineActions.forEach { action ->
-                InlineActionButton(
-                    action = action,
-                    onTap = { onInlineAction(action) },
-                    modifier = Modifier.weight(1f),
-                )
+        // Large text stacks the actions so each label reads in full instead of clipping.
+        if (LocalDensity.current.fontScale >= LARGE_TEXT_SCALE) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.fillMaxWidth()) {
+                content.inlineActions.forEach { action ->
+                    InlineActionButton(
+                        action = action,
+                        onTap = { onInlineAction(action) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.fillMaxWidth()) {
+                content.inlineActions.forEach { action ->
+                    InlineActionButton(
+                        action = action,
+                        onTap = { onInlineAction(action) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }
@@ -705,7 +720,7 @@ private fun InlineActionButton(
     Box(
         modifier =
             modifier
-                .height(44.dp)
+                .heightIn(min = 44.dp)
                 .clip(RoundedCornerShape(Radii.md))
                 .background(PantopusColors.appSurface)
                 .border(1.dp, palette.border, RoundedCornerShape(Radii.md))
@@ -797,3 +812,6 @@ private fun StickyDock(
         }
     }
 }
+
+/** Font scale at which the claim actions stack (Android "Largest" text is 1.3 and up). */
+private const val LARGE_TEXT_SCALE = 1.3f
