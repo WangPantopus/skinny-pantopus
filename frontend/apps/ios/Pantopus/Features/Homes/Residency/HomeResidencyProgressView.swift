@@ -55,6 +55,8 @@ struct HomeResidencyProgressView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Theme.Color.appBg)
+        // Most of this screen uses fixed-size styles; capping keeps its buttons from outgrowing them.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .navigationTitle("Residency status")
         .accessibilityIdentifier("homeResidencyStatus")
         .task { visible = true
