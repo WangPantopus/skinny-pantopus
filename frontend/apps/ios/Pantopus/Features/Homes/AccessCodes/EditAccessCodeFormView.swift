@@ -24,12 +24,14 @@ public enum EditAccessCodeA11y {
     public static let notesField = "editAccessCode_notesField"
     public static let sharedWithOption = "editAccessCode_sharedWithOption"
     public static let toast = "editAccessCode_toast"
+    public static let deleteButton = "editAccessCode_delete"
 }
 
 /// Single-page form for adding or editing a home access code.
 @MainActor
 public struct EditAccessCodeFormView: View {
     @State private var viewModel: EditAccessCodeFormViewModel
+    @State private var confirmingDelete = false
     private let onClose: @MainActor () -> Void
 
     init(
@@ -62,6 +64,7 @@ public struct EditAccessCodeFormView: View {
                 detailsSection
                 notesSection
                 sharedWithSection
+                if viewModel.isEditing { deleteButton }
             }
         )
         .accessibilityIdentifier(EditAccessCodeA11y.screen)
@@ -78,6 +81,19 @@ public struct EditAccessCodeFormView: View {
     }
 
     // MARK: - Sections
+
+    /// Removing a code takes it away from everyone it's shared with, so it asks first.
+    private var deleteButton: some View {
+        Button("Delete code", role: .destructive) { confirmingDelete = true }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .disabled(viewModel.isSaving)
+            .accessibilityIdentifier(EditAccessCodeA11y.deleteButton)
+            .confirmationDialog("Delete this code?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                Button("Delete code", role: .destructive) { Task { await viewModel.delete() } }
+            } message: {
+                Text("Everyone it's shared with loses it, including guests with a pass.")
+            }
+    }
 
     private var categorySection: some View {
         FormFieldGroup("Category") {

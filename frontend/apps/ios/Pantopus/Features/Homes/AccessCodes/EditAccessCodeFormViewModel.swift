@@ -261,42 +261,6 @@ final class EditAccessCodeFormViewModel {
         return !label.isEmpty && !value.isEmpty
     }
 
-    /// Household-roster summary string used by the visibility picker
-    /// ("All 4 members"). Empty until the roster loads.
-    func rosterSummary(for scope: AccessVisibility) -> String {
-        let count = roster.count
-        switch scope {
-        case .everyone:
-            return count == 0 ? scope.headline : "Everyone (\(count) members + guests)"
-        case .members:
-            return count == 0 ? scope.headline : "All household members (\(count))"
-        case .managers:
-            let managers = roster.filter(\.canManageAccess)
-            return managers.isEmpty
-                ? scope.headline
-                : "Owners & managers (\(managers.count))"
-        case .sensitive:
-            let owners = roster.filter { $0.role?.lowercased() == "owner" }
-            return owners.isEmpty
-                ? scope.headline
-                : "Owners only (\(owners.count))"
-        }
-    }
-
-    /// Names of members the selected visibility scope grants access to.
-    /// Drives the "Shared with" preview strip — keeps the picker visibly
-    /// tied to the actual roster rather than abstract scope labels.
-    func sharedWithNames() -> [String] {
-        switch visibility {
-        case .everyone, .members:
-            roster.map(\.displayName)
-        case .managers:
-            roster.filter(\.canManageAccess).map(\.displayName)
-        case .sensitive:
-            roster.filter { $0.role?.lowercased() == "owner" }.map(\.displayName)
-        }
-    }
-
     // MARK: - Submit
 
     /// POST or PUT depending on whether `secretId` is set.
@@ -331,6 +295,32 @@ final class EditAccessCodeFormViewModel {
                     ?? (isEditing ? "Couldn't save code." : "Couldn't add code."),
                 kind: .error
             )
+            return false
+        }
+    }
+
+    // MARK: - Delete
+
+    /// Removes this code for everyone it was shared with, guest pass pages included.
+    @discardableResult
+    func delete() async -> Bool {
+        guard let secretId else { return false }
+        if !NetworkMonitor.shared.isOnline {
+            toast = ToastMessage(text: "You're offline. Try again when you're back online.", kind: .error)
+            return false
+        }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            let _: EmptyResponse = try await api.request(
+                HomesEndpoints.deleteAccessSecret(homeId: homeId, secretId: secretId)
+            )
+            toast = ToastMessage(text: "Code deleted.", kind: .success)
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            shouldDismiss = true
+            return true
+        } catch {
+            toast = ToastMessage(text: (error as? APIError)?.errorDescription ?? "Couldn't delete code.", kind: .error)
             return false
         }
     }
