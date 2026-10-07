@@ -4804,13 +4804,18 @@ router.post('/:businessId/stripe/dashboard-link', verifyToken, async (req, res) 
 // must be defined BEFORE parameterized routes (/:businessId/invoices) to prevent
 // Express from matching "invoices" as a businessId parameter.
 
+// A card payment of one invoice: Stripe takes at least $0.50 and at most $999,999.99 per charge in USD. An invoice
+// outside that could be sent but never paid, so it is refused when it is created.
+const MIN_INVOICE_CENTS = 50;
+const MAX_INVOICE_CENTS = 99_999_999;
+
 const createInvoiceSchema = Joi.object({
   recipient_user_id: Joi.string().uuid().required(),
   gig_id: Joi.string().uuid().allow(null).optional(),
   line_items: Joi.array().items(Joi.object({
     description: Joi.string().max(255).required(),
     amount_cents: Joi.number().integer().positive().required(),
-    quantity: Joi.number().integer().min(1).default(1),
+    quantity: Joi.number().integer().min(1).max(10_000).default(1),
   })).min(1).max(50).required(),
   due_date: Joi.date().iso().allow(null).optional(),
   memo: Joi.string().max(1000).allow('', null).optional(),
@@ -4964,6 +4969,14 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
         });
       }
       // Canceled, or the total changed since it started: a new payment below.
+    }
+
+    // Invoices sent before the limits existed can sit outside what a card can pay; Stripe would refuse the charge.
+    if (invoice.total_cents < MIN_INVOICE_CENTS || invoice.total_cents > MAX_INVOICE_CENTS) {
+      return res.status(409).json({
+        error: "This invoice's amount is outside what a card payment can cover. Ask the business to send a new invoice.",
+        code: 'INVOICE_AMOUNT_UNPAYABLE',
+      });
     }
 
     // A business account has no wallet anyone can open, so its owner receives the money (see getBusinessPrimaryOwnerId);
@@ -5356,6 +5369,12 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
     const subtotal_cents = line_items.reduce(
       (sum, item) => sum + item.amount_cents * (item.quantity || 1), 0
     );
+    if (subtotal_cents < MIN_INVOICE_CENTS) {
+      return res.status(400).json({ error: 'An invoice must come to at least $0.50.', code: 'INVOICE_TOO_SMALL' });
+    }
+    if (subtotal_cents > MAX_INVOICE_CENTS) {
+      return res.status(400).json({ error: "An invoice can't come to more than $999,999.99.", code: 'INVOICE_TOO_LARGE' });
+    }
 
     const feeRate = await stripeService.getEffectiveFeeRate(businessId);
     const fees = stripeService.calculateFees(subtotal_cents, feeRate);
