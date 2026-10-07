@@ -107,6 +107,10 @@ public final class AppLockManager {
     /// the last *successful* sensitive-action check. Feeds
     /// `isWithinSensitiveGracePeriod(_:)`.
     private var lastSensitiveAuthAt: Date?
+    /// When a sensitive action was last verified on this account. The one-time
+    /// app-lock offer follows the first one: right after sign-in it was the
+    /// third prompt in a row (notifications, Save Password, then this).
+    public private(set) var sensitiveActionVerifiedAt: Date?
 
     /// Set by `appDidEnterBackground()`, consumed by `appDidBecomeActive()`.
     /// Mirrors Android's `onStop` → `onStart` pairing so a foreground pass
@@ -138,6 +142,7 @@ public final class AppLockManager {
         guard self.userID != userID else { return }
         identityGeneration &+= 1
         lastSensitiveAuthAt = nil
+        sensitiveActionVerifiedAt = nil
         isPrompting = false
         backgroundedWhilePrompting = false
         self.userID = userID
@@ -300,6 +305,7 @@ public final class AppLockManager {
         }
         if verified {
             lastSensitiveAuthAt = Date()
+            sensitiveActionVerifiedAt = lastSensitiveAuthAt
             return .verified
         }
         let message = lastError ?? "We couldn't verify your identity. Please try again."
