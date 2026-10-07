@@ -245,7 +245,12 @@ export default async function PublicSupportTrainPage({
     .filter(([, enabled]) => !!enabled)
     .map(([key]) => supportModeLabel(key));
   const trainSlots = Array.isArray(train.slots) ? (train.slots as SupportTrainSlot[]) : [];
-  const visibleSlots = trainSlots.filter((slot) => slot?.status !== 'canceled');
+  // Dates that are over aren't "upcoming": a slot that nobody took stays 'open' after its day.
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const visibleSlots = trainSlots.filter(
+    (slot) => slot?.status !== 'canceled' && !(slot?.slot_date && String(slot.slot_date) < todayKey)
+  );
   const openSlots = visibleSlots.filter(
     (slot) => slot?.status === 'open' && (slot?.filled_count ?? 0) < (slot?.capacity ?? 1)
   );

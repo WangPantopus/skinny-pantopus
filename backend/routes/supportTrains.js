@@ -138,6 +138,24 @@ function formatSupportTrainSlotDate(raw) {
   });
 }
 
+/** Today's date (YYYY-MM-DD) where the train is, so "already passed" means the same day for everyone on it. */
+function todayWhereTrainIs(timezone) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone || 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/** Whether a slot's date is before today where the train is (the train's timezone lives on its Activity). */
+async function slotDateHasPassed(st, slot) {
+  const { data: activity } = await supabaseAdmin
+    .from('Activity').select('timezone').eq('id', st.activity_id).maybeSingle();
+  return String(slot.slot_date) < todayWhereTrainIs(activity?.timezone);
+}
+
 function formatAddressLabel(address) {
   if (!address) return '';
   const firstLine = [address.address, address.unit_number].filter(Boolean).join(' ');
@@ -965,14 +983,20 @@ router.post(
     const start = new Date(start_date + 'T00:00:00Z');
     const end = new Date(end_date + 'T00:00:00Z');
     let sortOrder = 0;
+    // A date that is over can't take a signup, so no slot is made for it.
+    const { data: scheduleActivity } = await supabaseAdmin
+      .from('Activity').select('timezone').eq('id', st.activity_id).maybeSingle();
+    const today = todayWhereTrainIs(scheduleActivity?.timezone);
 
     for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
       const dow = d.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
       if (config.days !== null && !config.days.includes(dow)) continue;
+      const slotDate = d.toISOString().split('T')[0];
+      if (slotDate < today) continue;
 
       slots.push({
         support_train_id: st.id,
-        slot_date: d.toISOString().split('T')[0],
+        slot_date: slotDate,
         slot_label: config.label,
         support_mode: config.mode,
         start_time: config.start,
@@ -1033,6 +1057,10 @@ router.post(
   asyncHandler(async (req, res) => {
     const st = req.supportTrain;
     const { slot_date, slot_label, support_mode, start_time, end_time, capacity, notes, client_request_id } = req.body;
+    // A date that is over can't take a signup.
+    if (await slotDateHasPassed(st, { slot_date })) {
+      return res.status(400).json({ error: 'SLOT_PASSED', message: 'Pick a date that has not passed.' });
+    }
     // One editor keeps its command identity through an uncertain response.
     // The existing primary key arbitrates concurrent retries, scoped to actor/train.
     const slotId = client_request_id ? createHash('sha256')
@@ -2721,6 +2749,11 @@ router.post(
     const existing = await readExisting();
     if (existing) return acknowledgeExisting(existing);
 
+    // A day that is over can't take a signup (an unfilled slot stays 'open' after its date).
+    if (await slotDateHasPassed(st, slot)) {
+      return res.status(409).json({ error: 'SLOT_PASSED', message: 'That date has already passed.' });
+    }
+
     let activeReservationCount;
     try {
       activeReservationCount = await countActiveReservationsForSlot(slotId);
@@ -2893,6 +2926,11 @@ router.post(
       return res
         .status(409)
         .json({ error: 'SLOT_NOT_OPEN', message: 'This slot is no longer open.' });
+    }
+
+    // A day that is over can't take a signup (an unfilled slot stays 'open' after its date).
+    if (await slotDateHasPassed(st, slot)) {
+      return res.status(409).json({ error: 'SLOT_PASSED', message: 'That date has already passed.' });
     }
 
     let activeReservationCount;
