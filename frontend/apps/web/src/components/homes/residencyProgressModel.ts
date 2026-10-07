@@ -32,5 +32,5 @@ export function validateResidencyProgress(value: unknown, homeId: string): asser
 }
 export const residencyRequestLabel = (r: PersonalResidencyRequest) => r.submitted_address?.trim() || `Residency request · ${r.id.slice(-8)}`;
 export const residencyReviewLabel = (status: PersonalResidencyRequest['status']) => ({
-  pending: 'Request pending', verified: 'Review recorded', rejected: 'Request not approved',
+  pending: 'Request pending', verified: 'Approved', rejected: 'Request not approved',
 })[status];

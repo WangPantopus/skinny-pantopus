@@ -34,7 +34,7 @@ struct PersonalHomeResidencyRequest: Decodable, Identifiable, Equatable {
 
     var reviewLabel: String {
         switch status {
-        case "verified": "Review recorded"
+        case "verified": "Approved"
         case "rejected": "Request not approved"
         default: "Request pending"
         }
@@ -106,36 +106,32 @@ struct PersonalHomeResidencyProgress: Decodable, Equatable {
 
     var title: String {
         switch nextStep {
-        case .home: "Household access is available"
+        case .home: "You're part of this household"
         case .householdReview: "Waiting for household review"
-        case .addressVerification: needsResidencyRequest ? "Request residency review" : "Address verification is required"
-        case .resubmit: "Review your request"
-        case .accessReview: "Household access needs review"
+        case .addressVerification: needsResidencyRequest ? "Confirm your address" : "Your address isn't verified yet"
+        case .resubmit: "Send your request again"
+        case .accessReview: "You don't have household access"
         case .ownershipVerification: "Continue ownership verification"
-        case .unavailable: "Verification is unavailable for this Home"
+        case .unavailable: "This Home can't be verified right now"
         }
     }
 
     var explanation: String {
         switch nextStep {
-        case .home: "Your current access allows you to open this Home. Your role and permissions still apply."
+        case .home: "Open the Home to see your household. What you can see and change depends on your role."
         case .householdReview:
-            "Your request is saved for a household reviewer. You do not need to upload an ownership "
-                + "document for this step. Refresh to check for a decision."
+            "Someone in the household will review your request. You don't need to upload any documents. "
+                + "Check back here for their answer."
         case .addressVerification:
             needsResidencyRequest
-                ? "Confirm this Home’s address, apartment and your relationship before submitting a residency request. "
-                + "Checking an address does not grant household access or send mail."
-                : "Saving a request does not request a postcard or verify residency. Review mail verification "
-                + "to check for an existing request and its delivery status."
-        case .resubmit:
-            "Check your street, apartment and relationship before submitting again. A new request does "
-                + "not restore previous household access."
-        case .accessReview:
-            "A saved residency record does not grant current household access. A household reviewer must "
-                + "resolve your access before it can be restored."
-        case .ownershipVerification: "Ownership has a separate review. Residency verification cannot grant or restore ownership."
-        case .unavailable: "Your personal request remains visible. This Home cannot continue the verification flow right now."
+                ? "Check this Home’s address, apartment and how you live here, then send your request. "
+                + "We don't mail anything until you ask for a postcard."
+                : "Your request is saved. To finish, verify your address by mail: request a postcard, "
+                + "then enter the code printed on it."
+        case .resubmit: "Check the street, apartment and how you live here, then send your request again."
+        case .accessReview: "To come back, add this Home again or ask someone in the household to invite you."
+        case .ownershipVerification: "Ownership has its own review. Verifying your address by mail doesn't make you an owner."
+        case .unavailable: "This Home isn't accepting changes right now. Your request is still saved."
         }
     }
 }

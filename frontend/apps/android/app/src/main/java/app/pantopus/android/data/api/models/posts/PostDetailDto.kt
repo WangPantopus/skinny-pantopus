@@ -118,4 +118,9 @@ data class PostDetailDto(
     @Json(name = "lost_found_contact_pref") val lostFoundContactPref: String? = null,
     @Json(name = "service_category") val serviceCategory: String? = null,
     @Json(name = "deal_business_name") val dealBusinessName: String? = null,
-)
+    /** `moderation` when a moderator removed the post. Only its author can still open it then. */
+    @Json(name = "archive_reason") val archiveReason: String? = null,
+) {
+    /** A moderator removed the post: neighbors can't see it or reply. */
+    val isRemovedByModerator: Boolean get() = archiveReason == "moderation"
+}

@@ -144,13 +144,12 @@ enum HomePostalError: LocalizedError {
     case storage, changed, busy, unknown, unavailable, sessionChanged
     var errorDescription: String? {
         switch self {
-        case .storage: "The original postal request could not be read or saved. Keep it and retry recovery before starting another."
-        case .changed: "A different postal request is saved. Reopen mail verification to recover that request."
-        case .busy: "Your original postal request is still being checked. Try again shortly."
-        case .unknown: "The result is not confirmed. Your original details are kept. " +
-            "Check again, retry the same request, or confirm cancellation."
-        case .unavailable: "Mail verification status could not be checked. Please retry."
-        case .sessionChanged: "Your session changed. Reopen mail verification to recover your saved request."
+        case .storage: "Your last attempt couldn't be read or saved on this device. Reload before starting another."
+        case .changed: "Another postcard attempt is unfinished. Reload to finish it first."
+        case .busy: "Your last attempt is still being checked. Try again shortly."
+        case .unknown: "We couldn't confirm the result. Check again, try again, or discard this attempt."
+        case .unavailable: "Couldn't check your postcard status. Try again."
+        case .sessionChanged: "Your sign-in changed. Reload to check your last attempt."
         }
     }
 }

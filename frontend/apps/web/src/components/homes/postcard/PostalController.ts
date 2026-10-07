@@ -5,7 +5,7 @@ import { postalUUID, validMailingAddress, validPostalOutcome, projectPostalOutco
   type MailingAddress, type PostalDraft, type PostalOutcome, type PostalStatus } from './postcardModel';
 
 type Store = Pick<PendingPostalStore, 'load' | 'save' | 'clear'>;
-const UNKNOWN = 'The result is not confirmed. Your original details are kept. Check the result, retry the same request, or confirm cancellation.';
+const UNKNOWN = 'We couldn’t confirm the result. Your last attempt is kept: check again, try again, or discard it.';
 export class PostalController {
   readonly origin = api.getApiBaseUrl();
   private readonly token = api.getAuthToken();
@@ -30,7 +30,7 @@ export class PostalController {
       && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker && document.visibilityState !== 'hidden'; }
     catch { return false; }
   }
-  requireCurrent() { if (!this.current()) throw new Error('This mail verification page is no longer current. Reopen it to recover your saved request.'); }
+  requireCurrent() { if (!this.current()) throw new Error('This page is out of date. Reload to check your last attempt.'); }
   async open(storeForActor: (actor: string) => Store = actor => new PendingPostalStore(this.origin, actor, this.homeId)) {
     this.requireCurrent();
     if (!postalUUID(this.homeId)) throw new Error('The selected Home could not be checked.');
@@ -46,7 +46,7 @@ export class PostalController {
       this.status = null; this.progress = null;
       let status: unknown, progress: unknown;
       try { [status, progress] = await Promise.all([api.homeOwnership.getCurrentPostcardStatus(this.homeId), api.homes.getMyResidencyProgress(this.homeId)]); }
-      catch { this.requireCurrent(); throw new Error('Mail status could not be checked. Retry to check current access and mailing.'); }
+      catch { this.requireCurrent(); throw new Error('Couldn’t check your postcard status. Reload to try again.'); }
       this.requireCurrent();
       validatePostalStatus(status, this.actorId!, this.homeId); validateResidencyProgress(progress, this.homeId);
       this.status = status; this.progress = progress;
@@ -54,14 +54,14 @@ export class PostalController {
   }
   async requestMail(address: MailingAddress) {
     return this.action(async () => {
-      if (!this.status?.can_request || !validMailingAddress(address)) throw new Error('Refresh mail status and confirm the complete mailing address first.');
+      if (!this.status?.can_request || !validMailingAddress(address)) throw new Error('Check the address and try again.');
       await this.begin('mail', { request_id: crypto.randomUUID(), address }, null);
     });
   }
   async resumeMail() {
     return this.action(async () => {
       const saved = this.status?.request;
-      if (!this.status?.can_resume || !saved) throw new Error('Refresh status to check whether mailing can resume.');
+      if (!this.status?.can_resume || !saved) throw new Error('Reload to check whether the postcard can be sent.');
       // This is the server's original actor-confirmed address and UUID, never
       // a replacement postcard. Only the server dispatch claim can send mail.
       await this.begin('mail', { request_id: saved.command.request_id, address: saved.address }, null);
@@ -69,12 +69,12 @@ export class PostalController {
   }
   async verify(code: string) {
     return this.action(async () => {
-      if (!this.status?.can_verify || !this.status.postcard || !/^[a-z0-9]{6,8}$/i.test(code)) throw new Error('Refresh status and enter the code from this postcard.');
+      if (!this.status?.can_verify || !this.status.postcard || !/^[a-z0-9]{6,8}$/i.test(code)) throw new Error('Reload and enter the code from your postcard.');
       await this.begin('code', { request_id: crypto.randomUUID(), code }, this.status.postcard.id);
     });
   }
   private async begin(kind: PostalDraft['kind'], input: { request_id: string; address?: MailingAddress; code?: string }, postcardId: string | null) {
-    if (this.snapshot || this.attempted || !this.store || !this.actorId) throw new Error('Recover the original postal request before starting another.');
+    if (this.snapshot || this.attempted || !this.store || !this.actorId) throw new Error('Finish your last attempt first.');
     const draft: PostalDraft = { version: 1, origin: this.origin, actor_id: this.actorId, home_id: this.homeId,
       request_id: input.request_id, kind, postcard_id: postcardId, request_json: JSON.stringify(input) };
     this.attempted = true;
@@ -85,10 +85,10 @@ export class PostalController {
   async recover(action: 'status' | 'retry' | 'cancel') { return this.action(() => this.resolve(action)); }
   private async resolve(action: 'status' | 'retry' | 'cancel') {
     const original = this.snapshot;
-    if (!original || !this.store) throw new Error('Reopen recovery to check the original request.');
+    if (!original || !this.store) throw new Error('Reload to check your last attempt.');
     const saved = await this.store.load(); this.requireCurrent();
     if (!saved || saved.revision !== original.revision || saved.draft.request_json !== original.draft.request_json) {
-      throw new Error('Another tab changed this saved request. Reopen recovery to check it.');
+      throw new Error('Another tab changed this. Reload to see the latest.');
     }
     const known = this.observed || original.draft.outcome;
     if (known && known.state !== 'pending') {
@@ -133,7 +133,7 @@ export class PostalController {
   }
   private async action<T>(run: () => Promise<T>): Promise<T> {
     this.requireCurrent();
-    if (!this.opened || this.busy) throw new Error('Wait for mail recovery to finish.');
+    if (!this.opened || this.busy) throw new Error('Wait for the check to finish.');
     this.busy = true;
     try { return await run(); } finally { this.busy = false; }
   }

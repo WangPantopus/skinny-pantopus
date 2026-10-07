@@ -204,7 +204,7 @@ class HomePostalCoordinator(
 
     companion object {
         private val activeScopes = ConcurrentHashMap.newKeySet<HomePostalScope>()
-        const val CHANGED = "The saved postal request or your session changed. Reopen mail verification to recover the original."
-        const val STORAGE = "The original postal request could not be read or saved. Keep it and retry recovery before starting another."
+        const val CHANGED = "Your last postcard attempt or your sign-in changed. Reload to see the latest."
+        const val STORAGE = "Your last attempt couldn't be read or saved on this device. Reload before starting another."
     }
 }

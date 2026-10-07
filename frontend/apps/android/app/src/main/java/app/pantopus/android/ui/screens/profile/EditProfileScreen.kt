@@ -1023,7 +1023,7 @@ private fun EditProfileDirtyPill(dirtyCount: Int) {
                 .border(1.dp, PantopusColors.warningLight, CircleShape)
                 .padding(horizontal = Spacing.s3)
                 .testTag("editProfileDirtyCountPill")
-                .semantics { contentDescription = "$dirtyCount unsaved changes" },
+                .semantics { contentDescription = if (dirtyCount == 1) "1 unsaved change" else "$dirtyCount unsaved changes" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
