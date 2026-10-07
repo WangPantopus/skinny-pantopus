@@ -263,11 +263,12 @@ public extension StatusWaitingContent {
         return StatusWaitingContent(
             halo: StatusHalo(tone: .success, icon: .check),
             headline: "Claim submitted",
-            subcopy: "We'll review your deed and address match within 3 business days and send you a decision.",
+            // No review time is promised while document review is undecided (founder, 2026-10-06).
+            subcopy: "A Pantopus reviewer will check your document against this address. We'll notify you when it's decided.",
             addressChip: chip,
             statusPill: StatusWaitingPill(
-                text: "Decision usually within 3 business days",
-                icon: .calendarClock,
+                text: "We'll notify you when it's decided",
+                icon: .bell,
                 tone: .success
             ),
             timeline: [

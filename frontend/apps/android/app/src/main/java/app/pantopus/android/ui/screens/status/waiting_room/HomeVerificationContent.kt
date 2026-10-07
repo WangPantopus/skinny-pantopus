@@ -184,8 +184,8 @@ data class HomeVerificationContent(
                     "A household member needs to approve your request. " +
                         "Reopen this screen to check for updates."
                 HomeVerificationStatus.PendingDoc ->
-                    "Your uploaded documents are being reviewed. " +
-                        "This usually takes 1-2 business days."
+                    "Your uploaded documents are waiting for a Pantopus reviewer. " +
+                        "Meanwhile, you can verify your address by mail."
                 HomeVerificationStatus.Provisional ->
                     if (isInChallengeWindow) {
                         "Your access is provisional while existing members can review. " +

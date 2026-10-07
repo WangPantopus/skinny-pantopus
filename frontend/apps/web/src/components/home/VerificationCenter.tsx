@@ -340,7 +340,8 @@ function getStatusConfig(
         icon: '\uD83D\uDCC4',
         iconBg: 'bg-amber-100',
         title: 'Your document is under review',
-        body: 'Usually reviewed within 24 hours. We\u2019ll notify you when it\u2019s complete.',
+        // No review time is promised while document review is undecided (founder, 2026-10-06).
+        body: 'Your uploaded documents are waiting for a Pantopus reviewer. Meanwhile, you can verify your address by mail.',
       };
     case 'provisional':
       if (access?.is_in_challenge_window) {

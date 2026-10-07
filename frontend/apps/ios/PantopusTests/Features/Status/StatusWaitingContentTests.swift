@@ -20,7 +20,7 @@ final class StatusWaitingContentTests: XCTestCase {
         XCTAssertEqual(content.headline, "Claim submitted")
         XCTAssertEqual(content.addressChip, "418 Linden Ave")
         XCTAssertEqual(content.statusPill?.tone, .success)
-        XCTAssertEqual(content.statusPill?.text, "Decision usually within 3 business days")
+        XCTAssertEqual(content.statusPill?.text, "We'll notify you when it's decided")
         XCTAssertNil(content.timeline[0].sub, "no submitted date supplied → no caption")
         XCTAssertEqual(content.timeline.count, 3)
         XCTAssertEqual(content.timeline.map(\.state), [.done, .pending, .pending])

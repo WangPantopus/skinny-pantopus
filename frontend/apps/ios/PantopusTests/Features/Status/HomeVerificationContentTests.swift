@@ -51,7 +51,7 @@ final class HomeVerificationContentTests: XCTestCase {
         let content = HomeVerificationContent.make(status: .pendingDoc)
         XCTAssertEqual(content.headline, "Document under review")
         XCTAssertEqual(content.halo.tone, .warning)
-        XCTAssertTrue(content.body.contains("1-2 business days"))
+        XCTAssertTrue(content.body.contains("Pantopus reviewer"))
     }
 
     func testProvisionalSplitsOnChallengeWindow() {
