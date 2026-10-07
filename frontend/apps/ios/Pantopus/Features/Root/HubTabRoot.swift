@@ -507,6 +507,7 @@ public enum HubStackMode: Sendable {
 public struct HubTabRoot: View {
     @Environment(AuthManager.self) private var auth
     @Environment(RootTabModel.self) private var rootTabs
+    @Environment(\.scenePhase) private var scenePhase
     @State private var path = RouteStack<HubRoute>()
     @State private var navigationReady = false
     @Binding private var addHomeRequest: UUID?
@@ -516,6 +517,9 @@ public struct HubTabRoot: View {
     /// The landing found no home yet (or Add Home opened first). A home joined
     /// or added later in this session lands Place when the Hub root reappears.
     @State private var placeLandingNeedsHome = false
+    /// A landing cut off mid-request (see `placeLandingDropped`); it runs again
+    /// at the next chance.
+    @State private var placeLandingOwed = false
     @State private var placeResolutionError: String?
     @State private var isResolvingPlace = false
     @State private var placeResolutionGeneration = 0
@@ -687,6 +691,10 @@ public struct HubTabRoot: View {
         .onChange(of: router.pending) { _, pending in
             consumeDeepLinkIfNeeded(pending: pending)
         }
+        .onChange(of: scenePhase) { _, phase in
+            // A system sheet (such as "Save Password?") or prompt has closed.
+            if phase == .active, placeLandingOwed { Task { await resolvePlaceLanding() } }
+        }
         .onChange(of: addHomeRequest) { _, _ in
             consumeAddHomeRequestIfNeeded()
         }
@@ -694,12 +702,15 @@ public struct HubTabRoot: View {
         .onChange(of: path.isEmpty, initial: true) { _, atRoot in
             if mode == .mailbox { MailTabStore.shared.mailboxAtRoot = atRoot }
             if mode == .hub { rootTabs.placeAtRoot = atRoot }
-            if atRoot, placeLandingNeedsHome { Task { await resolvePlaceLanding() } }
+            // Somewhere opened on top (a tap or a link): that navigation wins over an owed landing.
+            if !atRoot { placeLandingOwed = false }
+            if atRoot, placeLandingNeedsHome || placeLandingOwed { Task { await resolvePlaceLanding() } }
         }
         // Tapping Place again on the Hub root lands on Your Place again (a tap
-        // on Your Place still opens the Hub, which keeps its bell and tools).
+        // on Your Place still opens the Hub, which keeps its bell and tools),
+        // also when an earlier landing never finished.
         .onChange(of: rootTabs.placeReselectedAtRoot) { _, token in
-            guard token != nil, mode == .hub, path.isEmpty, didAutoLandPlace || placeLandingNeedsHome else { return }
+            guard token != nil, mode == .hub, path.isEmpty else { return }
             didAutoLandPlace = false
             Task { await resolvePlaceLanding() }
         }
@@ -3553,6 +3564,7 @@ public struct HubTabRoot: View {
 
     private func resolvePlaceLanding() async {
         guard canResolvePlaceLanding else { return }
+        placeLandingOwed = false
         placeResolutionGeneration += 1
         let generation = placeResolutionGeneration
         placeResolutionError = nil
@@ -3568,7 +3580,8 @@ public struct HubTabRoot: View {
         do {
             let homeId = try await Self.primaryHomeId()
             // A tab change, link, or newer retry must win over this response.
-            guard !Task.isCancelled, generation == placeResolutionGeneration, canResolvePlaceLanding else { return }
+            guard generation == placeResolutionGeneration else { return }
+            guard !Task.isCancelled, canResolvePlaceLanding else { return placeLandingDropped() }
             if PlacePendingStore.bind(to: currentUserId) != nil {
                 didAutoLandPlace = true
                 path.append(.placeArrival)
@@ -3580,10 +3593,35 @@ public struct HubTabRoot: View {
                 placeLandingNeedsHome = true
             }
         } catch {
-            guard !Task.isCancelled, generation == placeResolutionGeneration, canResolvePlaceLanding else { return }
+            guard generation == placeResolutionGeneration else { return }
+            guard !Task.isCancelled, canResolvePlaceLanding else { return placeLandingDropped() }
             placeResolutionError = (error as? APIError)?.errorDescription
                 ?? "Check your connection and try again."
         }
+    }
+
+    /// The landing's answer came back but couldn't be used. A tab, screen or
+    /// link that took over wins. A landing whose task ended mid-request (the
+    /// first sign-in covers the shell with the Face ID offer and the "Save
+    /// Password?" sheet) is owed: it runs again when the app is active, or
+    /// shortly if the view's task doesn't restart on its own. Opening anything
+    /// on top cancels it. The breadcrumb names the reason for crash reports.
+    private func placeLandingDropped() {
+        let cancelled = Task.isCancelled
+        Observability.shared.track("place.landing_dropped", properties: ["reason": placeLandingDropReason(cancelled: cancelled)])
+        guard cancelled, mode == .hub, !didAutoLandPlace, rootTabs.selected == owningTab, path.isEmpty else { return }
+        placeLandingOwed = true
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            if placeLandingOwed { await resolvePlaceLanding() }
+        }
+    }
+
+    private func placeLandingDropReason(cancelled: Bool) -> String {
+        if cancelled { return "cancelled" }
+        if didAutoLandPlace { return "landed" }
+        if !path.isEmpty { return "navigated" }
+        return rootTabs.selected == owningTab ? "link" : "other_tab"
     }
 
     /// The setup banner's "Verify your address": a Home that already waits on
