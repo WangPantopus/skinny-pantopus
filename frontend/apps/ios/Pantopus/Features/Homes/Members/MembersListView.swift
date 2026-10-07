@@ -76,7 +76,6 @@ public struct MembersListView: View {
             savedAttempts = .current()
             await viewModel.load()
         }
-        .refreshable { await viewModel.refresh() }
         .onChange(of: viewModel.pendingEvent) { _, event in
             handle(event)
         }
