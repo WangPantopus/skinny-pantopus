@@ -94,6 +94,8 @@ public struct EditAccessCodeFormView: View {
                 text: labelBinding,
                 placeholder: "Main network",
                 state: fieldState(for: viewModel.fields[.label]),
+                // Not a username: with the code field, iOS otherwise reads the form as a login it can save.
+                contentType: .oneTimeCode,
                 identifier: EditAccessCodeA11y.labelField
             )
             ValueField(
