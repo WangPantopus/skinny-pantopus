@@ -12,7 +12,7 @@ async function api(p,body){const r=await fetch(fixture+p,{method:body===undefine
 const control=(name,body)=>api('/fixture/'+name,body);
 const heading=async name=>expect(page.getByRole('heading',{name,exact:true})).toBeVisible();
 const click=async name=>page.getByRole('button',{name,exact:true}).click();
-const acknowledge=async()=>click('Review current mail status');
+const acknowledge=async()=>click('Done');
 async function save(name){await page.screenshot({path:path.join(evidence,name+'.png'),fullPage:true});fs.writeFileSync(path.join(evidence,name+'.json'),JSON.stringify(await control('state'),null,2),{mode:0o600});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
 async function fillAddress(unit='602'){
  for(const [label,value] of [['Street address','Private residency fixture'],['Apartment, suite or unit (optional)',unit],['City','Test'],['State','WA'],['ZIP code','98607']])await page.getByLabel(label,{exact:true}).fill(value);
@@ -40,31 +40,31 @@ async function main(){try{
  await page.goto(base+`/app/homes/${home}/verify-postcard?return=place`,{waitUntil:'domcontentloaded',timeout:120000});
  await expect(page.locator('main p[role="alert"]')).toBeVisible();await expect(page.getByRole('button',{name:'Request postcard',exact:true})).toHaveCount(0);assert.equal((await control('state')).provider_calls,0);
  await save('unavailable-initial-read');await click('Retry mail status');await heading('Confirm your mailing address');assert.equal((await control('state')).cards.length,0);
- await fillAddress('603');await save('explicit-mailing-address');await click('Request postcard');await heading('Original attempt was not accepted');assert.equal((await control('state')).cards.length,0);
+ await fillAddress('603');await save('explicit-mailing-address');await click('Request postcard');await heading('Couldn’t finish this');assert.equal((await control('state')).cards.length,0);
  await expect(page.getByText('The Home address changed.',{exact:false})).toBeVisible();await save('wrong-apartment-refused');await acknowledge();await heading('Confirm your mailing address');
- await fillAddress();await control('fault',{name:'begin_home_postcard_request',kind:'lost'});await click('Request postcard');await heading('Recover your original attempt');await expect(page.locator('main p[role="alert"]')).toBeVisible();
+ await fillAddress();await control('fault',{name:'begin_home_postcard_request',kind:'lost'});await click('Request postcard');await heading('Check your last attempt');await expect(page.locator('main p[role="alert"]')).toBeVisible();
  assert.equal((await control('state')).cards.length,1);assert.equal((await control('state')).provider_calls,0);await save('lost-request-keeps-original');
- await page.reload();await heading('Postcard request saved');await acknowledge();await heading('Your postcard request');await expect(page.getByRole('heading',{name:'Enter your postcard code',exact:true})).toHaveCount(0);
- await control('keys',{enabled:false});await click('Resume saved mailing request');await heading('Postcard request saved');await acknowledge();await expect(page.getByRole('button',{name:'Resume saved mailing request',exact:true})).toBeVisible();assert.equal((await control('state')).provider_calls,0);await save('missing-key-preserves-mail');
- await control('keys',{enabled:true});await click('Resume saved mailing request');await heading('Postcard request saved');await acknowledge();await heading('Enter your postcard code');
+ await page.reload();await heading('Postcard requested');await acknowledge();await heading('Your postcard');await expect(page.getByRole('heading',{name:'Enter your postcard code',exact:true})).toHaveCount(0);
+ await control('keys',{enabled:false});await click('Send the postcard');await heading('Postcard requested');await acknowledge();await expect(page.getByRole('button',{name:'Send the postcard',exact:true})).toBeVisible();assert.equal((await control('state')).provider_calls,0);await save('missing-key-preserves-mail');
+ await control('keys',{enabled:true});await click('Send the postcard');await heading('Postcard requested');await acknowledge();await heading('Enter your postcard code');
  await expect(page.getByText('The mailing outcome is unknown.',{exact:false})).toBeVisible();assert.equal((await control('state')).provider_calls,1);await click('Refresh mail status');await heading('Enter your postcard code');assert.equal((await control('state')).provider_calls,1);await save('unknown-delivery-no-resend');
  const secret=(await control('code')).code;assert.match(secret,/^\d{6}$/);const wrong=secret==='111111'?'222222':'111111';
- dropCode=true;await page.getByLabel('Postcard code',{exact:true}).fill(wrong);await click('Record code verification');await heading('Recover your original attempt');assert.equal(await attempts(),0);
- await click('Cancel original attempt');await click('Confirm cancellation');await heading('Original attempt cancelled');assert.equal(await attempts(),0);await save('cancel-before-arrival');await acknowledge();await heading('Enter your postcard code');
- await control('fault',{name:'verify_home_postcard_current',kind:'lost'});await page.getByLabel('Postcard code',{exact:true}).fill(wrong);await click('Record code verification');await heading('Recover your original attempt');assert.equal(await attempts(),1);
- await page.reload();await heading('Original attempt was not accepted');assert.equal(await attempts(),1);await save('lost-wrong-code-recovers-once');await acknowledge();await heading('Enter your postcard code');
+ dropCode=true;await page.getByLabel('Postcard code',{exact:true}).fill(wrong);await click('Verify code');await heading('Check your last attempt');assert.equal(await attempts(),0);
+ await click('Discard attempt');await click('Discard');await heading('Attempt discarded');assert.equal(await attempts(),0);await save('cancel-before-arrival');await acknowledge();await heading('Enter your postcard code');
+ await control('fault',{name:'verify_home_postcard_current',kind:'lost'});await page.getByLabel('Postcard code',{exact:true}).fill(wrong);await click('Verify code');await heading('Check your last attempt');assert.equal(await attempts(),1);
+ await page.reload();await heading('Couldn’t finish this');assert.equal(await attempts(),1);await save('lost-wrong-code-recovers-once');await acknowledge();await heading('Enter your postcard code');
  // Fail the proof write after the server's reply. The next retry repairs that
  // protected write without another verification POST or guess.
  await page.evaluate(()=>{const original=IDBObjectStore.prototype.put;let n=0;IDBObjectStore.prototype.put=function(value,key){if(typeof key==='string'&&key.includes('home-postcard-v1')&&++n===2){IDBObjectStore.prototype.put=original;throw new DOMException('Synthetic private write failure','QuotaExceededError');}return original.call(this,value,key);};});
- const beforeProof=codeRequests();await page.getByLabel('Postcard code',{exact:true}).fill(wrong);await click('Record code verification');await heading('Recover your original attempt');assert.equal(await attempts(),2);await expect(page.locator('main p[role="alert"]')).toBeVisible();
- await click('Retry original attempt');await heading('Original attempt was not accepted');assert.equal(await attempts(),2);assert.equal(codeRequests(),beforeProof+1);await save('proof-write-repaired-without-post');await acknowledge();await heading('Enter your postcard code');
- await control('fault',{name:'verify_home_postcard_current',kind:'lost'});await page.getByLabel('Postcard code',{exact:true}).fill(secret);await click('Record code verification');await heading('Recover your original attempt');assert.equal(await attempts(),3);
- await page.reload();await heading('Code verification recorded');assert.equal(await attempts(),3);await expect(page.getByRole('link',{name:'Return to Place',exact:true})).toHaveCount(0);await save('lost-success-is-proof-not-access');
- await acknowledge();await heading('Postal proof recorded');await expect(page.getByText('Your residency is waiting for household review.',{exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'Return to Place',exact:true})).toHaveCount(0);await save('household-review-next');
+ const beforeProof=codeRequests();await page.getByLabel('Postcard code',{exact:true}).fill(wrong);await click('Verify code');await heading('Check your last attempt');assert.equal(await attempts(),2);await expect(page.locator('main p[role="alert"]')).toBeVisible();
+ await click('Try again');await heading('Couldn’t finish this');assert.equal(await attempts(),2);assert.equal(codeRequests(),beforeProof+1);await save('proof-write-repaired-without-post');await acknowledge();await heading('Enter your postcard code');
+ await control('fault',{name:'verify_home_postcard_current',kind:'lost'});await page.getByLabel('Postcard code',{exact:true}).fill(secret);await click('Verify code');await heading('Check your last attempt');assert.equal(await attempts(),3);
+ await page.reload();await heading('Code accepted');assert.equal(await attempts(),3);await expect(page.getByRole('link',{name:'Return to Place',exact:true})).toHaveCount(0);await save('lost-success-is-proof-not-access');
+ await acknowledge();await heading('Address verified by mail');await expect(page.getByText('Your residency is waiting for household review.',{exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'Return to Place',exact:true})).toHaveCount(0);await save('household-review-next');
  await control('access',{state:'verified'});await click('Refresh mail status');await expect(page.getByRole('link',{name:'Return to Place',exact:true})).toBeVisible();
  await control('hold',{name:'get_home_postcard_current_status'});await click('Refresh mail status');await expect.poll(async()=>(await control('state')).held).toBe(true);
  await control('access',{state:'removed'});await page.evaluate(()=>{dispatchEvent(new PageTransitionEvent('pagehide'));dispatchEvent(new PageTransitionEvent('pageshow'));});
- await heading('Postal proof recorded');await expect(page.getByRole('link',{name:'Return to Place',exact:true})).toHaveCount(0);await control('release',{});await page.waitForTimeout(300);
+ await heading('Address verified by mail');await expect(page.getByRole('link',{name:'Return to Place',exact:true})).toHaveCount(0);await control('release',{});await page.waitForTimeout(300);
  await expect(page.getByRole('link',{name:'Return to Place',exact:true})).toHaveCount(0);await expect(page.getByRole('heading',{name:'Enter your postcard code',exact:true})).toHaveCount(0);await save('retired-reply-cannot-restore-access');
  await control('access',{state:'frozen'});await click('Refresh mail status');await expect(page.getByRole('button',{name:'Request postcard',exact:true})).toHaveCount(0);await save('frozen-home-safe-status');
  assert.equal((await control('state')).provider_calls,1);assert.deepEqual(errors,[]);

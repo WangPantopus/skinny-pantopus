@@ -113,10 +113,16 @@ data class MailDetailContent(
     val packageDetail: PackageBodyContent? = null,
     val partyDetail: PartyDetailDto? = null,
     val recordsDetail: RecordsDetailDto? = null,
+    /** Facts read off the item (`Mail.key_facts`), such as a bill's amount due, as label to value. */
+    val extractedFacts: List<Pair<String, String>> = emptyList(),
 ) {
     /** Build a typed key-facts row list for the shell's KeyFacts slot. */
     fun keyFacts(): List<MailDetailKeyFact> =
         buildList {
+            // What the item itself says (a bill's amount and due date) comes first.
+            extractedFacts.forEach { (label, value) ->
+                add(MailDetailKeyFact(icon = factIcon(label), label = label, value = value))
+            }
             createdAtLabel?.let {
                 add(MailDetailKeyFact(icon = PantopusIcon.Calendar, label = "Received", value = it))
             }
@@ -134,6 +140,15 @@ data class MailDetailContent(
                 ),
             )
         }
+}
+
+private fun factIcon(label: String): PantopusIcon {
+    val lower = label.lowercase()
+    return when {
+        listOf("amount", "balance", "total", "fee").any { it in lower } -> PantopusIcon.DollarSign
+        "date" in lower || "deadline" in lower -> PantopusIcon.Calendar
+        else -> PantopusIcon.FileText
+    }
 }
 
 /** Lightweight key/value/icon triple for the generic detail's key facts panel. */
@@ -963,11 +978,7 @@ class MailDetailViewModel
                     if (detail.certified) MailItemCategory.Certified else MailItemCategory.fromRaw(detail.mailType ?: detail.type)
                 // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
                 val trust = MailTrust.fromRaw(detail.senderTrust)
-                val senderDisplayName =
-                    detail.sender?.name
-                        ?: detail.senderBusinessName
-                        ?: detail.senderAddress
-                        ?: "Unknown sender"
+                val senderDisplayName = resolveSenderName(detail)
                 val senderMeta = detail.sender?.username?.let { "@$it" } ?: detail.senderAddress
                 val senderTypeLabel =
                     senderTypeLabel(
@@ -1023,8 +1034,17 @@ class MailDetailViewModel
                     packageDetail = variants.packageDetail,
                     partyDetail = variants.party,
                     recordsDetail = variants.records,
+                    extractedFacts = detail.extractedFacts,
                 )
             }
+
+            /** Same order as the server's resolveSenderDisplay and the web: the name printed on the item first. */
+            private fun resolveSenderName(detail: MailDetail): String =
+                detail.printedSender
+                    ?: detail.sender?.name
+                    ?: detail.senderBusinessName
+                    ?: detail.senderAddress
+                    ?: "Unknown sender"
 
             /** Pantopus certified mail (`Mail.certified`): Received → Read → Signed from the letter's timestamps. */
             private fun pantopusCertified(detail: MailDetail): CertifiedDetailDto? =

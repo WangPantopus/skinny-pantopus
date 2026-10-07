@@ -129,6 +129,8 @@ public struct MailDayView: View {
             isValid: true,
             // This opens settings; it is available even without an edited draft.
             isDirty: true,
+            // Triage decisions save as they're made, so Back has nothing to discard.
+            asksBeforeDiscarding: false,
             onClose: onClose,
             onCommit: { Task { await viewModel.openSettings() } },
             content: { body() },

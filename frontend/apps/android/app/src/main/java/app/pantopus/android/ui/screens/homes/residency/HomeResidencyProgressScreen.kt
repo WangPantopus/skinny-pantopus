@@ -95,7 +95,7 @@ fun HomeResidencyProgressScreen(
                                 ).background(PantopusColors.appSurface).padding(Spacing.s4),
                                 verticalArrangement = Arrangement.spacedBy(Spacing.s2),
                             ) {
-                                Text("Your submitted residency address", style = PantopusTextStyle.caption)
+                                Text("Your request", style = PantopusTextStyle.caption)
                                 Text(request.label, style = PantopusTextStyle.body, modifier = Modifier.testTag("homeResidencyAddress"))
                                 Text(request.reviewLabel, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
                             }
@@ -104,10 +104,10 @@ fun HomeResidencyProgressScreen(
                         Text(progress.explanation, style = PantopusTextStyle.body, color = PantopusColors.appTextSecondary)
                         listOf(
                             HomeResidencyNavigation.Home to "Open Home",
-                            HomeResidencyNavigation.Mail to "Review mail verification",
+                            HomeResidencyNavigation.Mail to "Verify by mail",
                             HomeResidencyNavigation.Ownership to "Continue ownership verification",
                             HomeResidencyNavigation.AddHome to
-                                if (progress.needsResidencyRequest) "Check address and request residency" else "Check address and resubmit",
+                                if (progress.needsResidencyRequest) "Check address" else "Check address and send again",
                         ).forEach { (destination, label) ->
                             if (viewModel.permits(destination)) {
                                 TextButton(onClick = {
