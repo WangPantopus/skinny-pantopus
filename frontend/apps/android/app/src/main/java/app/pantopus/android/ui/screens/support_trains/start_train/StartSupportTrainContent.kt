@@ -36,7 +36,7 @@ enum class StartSupportTrainStep {
             }
 
     companion object {
-        const val PROGRESS_TOTAL: Int = 5
+        const val PROGRESS_TOTAL: Int = 3
     }
 }
 
