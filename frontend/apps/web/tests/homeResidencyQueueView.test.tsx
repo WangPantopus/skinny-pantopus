@@ -57,7 +57,7 @@ test.each(['members', 'review page'])('%s uses the private queue and keeps missi
   await screen.findByRole('article', { name: 'Residency request from @public_applicant' });
   expect(screen.getByText('Date unavailable')).toBeVisible();
   expect(screen.getByText('Requesting: Requested relationship unspecified')).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Your past residency decisions' })).toHaveAttribute('href', `/app/homes/${home}/owners/review-claim/history`);
+  expect(screen.getByRole('link', { name: 'Your past decisions' })).toHaveAttribute('href', `/app/homes/${home}/owners/review-claim/history`);
   expect(screen.getByRole('link', { name: consumer === 'members' ? 'Review approval' : 'Approve: review approval' })).toHaveAttribute('href',
     `/app/homes/${home}/owners/review-claim/residency?claimId=${claimId}&action=approve${consumer === 'members' ? '&from=members' : ''}`);
   expect(api.homes.getHomeClaims).not.toHaveBeenCalled();

@@ -71,9 +71,8 @@ extension HomeResidencyHistoryJourneyUITests {
         let ids = ["homeResidencyReview.empty", "homeResidencyReview.noPendingClaim"]
         try reveal(app.descendants(matching: .any).matching(NSPredicate(format: "identifier IN %@", ids)).firstMatch)
         try press("homeResidencyReview.close")
-        try press("homeClaimReview.residencyRecovery")
-        try require(element("homeResidencyReview.empty"))
-        try press("homeResidencyReview.close")
+        // Nothing is saved any more, so Review claims no longer offers the residency recovery link.
+        XCTAssertFalse(element("homeClaimReview.residencyRecovery").waitForExistence(timeout: 2))
         try press("homeClaimReview.residencyHistory")
     }
 

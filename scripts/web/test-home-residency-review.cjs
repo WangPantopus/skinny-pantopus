@@ -123,12 +123,12 @@ async function main() {
     assert.equal(saved.draft.command.request_id, original.request_id); assert.equal(saved.draft.command.role, original.proposed_role);
     sql(`UPDATE public."HomeOccupancy" SET is_active=false,verification_status='moved_out' WHERE home_id=${q(home)} AND user_id=${q(f.users[1])};`);
     await page.goto(base + listPath + '?tab=residency', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('link', { name: 'Residency decisions and recovery', exact: true }).click();
+    await page.getByRole('link', { name: 'Check an unfinished residency decision', exact: true }).click();
     await retry(page).click(); await confirmed(page).waitFor(); assert.deepEqual(posts[1], original); assert.equal(rows(), 1);
     await page.getByText('Membership: Ended', { exact: true }).waitFor();
     await page.reload({ waitUntil: 'domcontentloaded' }); await confirmed(page).waitFor(); assert.equal(posts.length, 2);
     await screenshot('02-original-approval-current-move-out'); await ack(page).click();
-    await page.getByText('No residency decision needs recovery on this browser. Choose a claim to review.', { exact: true }).waitFor();
+    await page.getByText('Nothing to finish here. Choose a request to review.', { exact: true }).waitFor();
     assert.equal((await stored()).length, 0);
     console.log('PASS: owners entry cancellation, reviewed role, key failure, encrypted lost approval reply, current move-out and cold confirmation');
 
@@ -138,7 +138,7 @@ async function main() {
     sql(`UPDATE public."HomeResidencyClaim" SET updated_at=clock_timestamp() WHERE id=${q(claims[1])};`);
     await save(page).click(); await page.getByRole('button', { name: 'Start over', exact: true }).click();
     await expect.poll(async () => (await stored()).length).toBe(0);
-    await page.getByRole('form', { name: 'Review residency decision' }).waitFor();
+    await page.getByRole('form', { name: 'Your decision' }).waitFor();
     assert.equal(rows(), 1); assert.equal((await stored()).length, 0); assert(!(await page.getByRole('checkbox').isChecked()));
     await prepare(page, 'First competing original');
     const sibling = await context.newPage(); await sibling.goto(url(claims[1], 'reject'), { waitUntil: 'domcontentloaded' }); await prepare(sibling, 'Second competing original');
@@ -156,7 +156,7 @@ async function main() {
     sql(`UPDATE public."HomeOccupancy" SET is_active=false WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await page.getByRole('button', { name: 'Reload current access', exact: true }).waitFor();
     assert.equal(await page.getByRole('region', { name: 'Request' }).count(), 0);
-    assert.equal(await page.getByText('Original reason: First competing original', { exact: true }).count(), 0);
+    assert.equal(await page.getByText('Reason: First competing original', { exact: true }).count(), 0);
     sql(`UPDATE public."HomeOccupancy" SET is_active=true WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     await page.getByRole('button', { name: 'Reload current access', exact: true }).click(); await confirmed(page).waitFor();
     currentActor = f.users[5]; await page.evaluate(() => { localStorage.setItem('pantopus_auth_session_change', 'changed'); window.dispatchEvent(new Event('focus')); });
@@ -178,7 +178,7 @@ async function main() {
       await new Promise((resolve, reject) => { t.oncomplete = resolve; t.onerror = reject; }); db.close();
     }, { slot, envelope });
     await page.goto(url(claims[2]), { waitUntil: 'domcontentloaded' }); await confirmed(page).waitFor();
-    await page.getByText('Finish this saved decision before reviewing another claim.', { exact: true }).waitFor();
+    await page.getByText('Finish this before reviewing another request.', { exact: true }).waitFor();
     await page.setViewportSize({ width: 390, height: 844 });
     await expect.poll(() => page.getByRole('main', { name: 'Residency review' }).evaluate(e => e.getBoundingClientRect().width)).toBeGreaterThan(360);
     await screenshot('04-narrow-recovered-rejection');
@@ -218,8 +218,8 @@ async function main() {
     sql(`UPDATE public."HomeResidencyClaim" SET status='rejected' WHERE id=${q(claims[1])};`);
     await page.goto(base + membersPath, { waitUntil: 'domcontentloaded' });
     await page.getByText('No pending residency claims', { exact: true }).waitFor();
-    await page.getByRole('link', { name: 'Residency decisions and recovery', exact: true }).click();
-    await page.getByText('No residency decision needs recovery on this browser. Choose a claim to review.', { exact: true }).waitFor();
+    await page.getByRole('link', { name: 'Your past decisions', exact: true }).waitFor(); await page.waitForTimeout(1000);
+    assert.equal(await page.getByRole('link', { name: 'Check an unfinished residency decision', exact: true }).count(), 0);
     await page.goto(base + membersPath, { waitUntil: 'domcontentloaded' });
     await page.getByText('No pending residency claims', { exact: true }).waitFor();
     sql(`UPDATE public."HomeOccupancy" SET is_active=false WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
@@ -240,11 +240,11 @@ async function main() {
     await screenshot('08-owners-denied-list');
     sql(`UPDATE public."HomeOccupancy" SET is_active=true WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     await page.getByRole('button', { name: 'Reload claims', exact: true }).click();
-    await page.getByRole('link', { name: 'Residency decisions and recovery', exact: true }).click();
-    await page.getByText('No residency decision needs recovery on this browser. Choose a claim to review.', { exact: true }).waitFor();
+    await page.getByText('No pending residency claims', { exact: true }).waitFor(); await page.waitForTimeout(1000);
+    assert.equal(await page.getByRole('link', { name: 'Check an unfinished residency decision', exact: true }).count(), 0);
     assert.equal((await stored()).length, 0); assert.equal(rows(), 4);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)); assert.deepEqual(errors, []);
-    console.log('PASS: role-ceiling recovery, both empty-list permanent recovery links, both denied-list states and restored authority');
+    console.log('PASS: role-ceiling recovery, no recovery link on either empty list once nothing is saved, both denied-list states and restored authority');
     fs.writeFileSync(path.join(evidence, 'console-diagnostics.json'), JSON.stringify(consoleDiagnostics));
     fs.writeFileSync(path.join(evidence, 'result.json'), JSON.stringify({ result: 'pass', posts: posts.length, receipts: rows(), pageErrors: errors,
       limits: 'Synthetic auth/public profiles/list/dashboard shell and deterministic lifecycle; actual Chrome, production review HTTP/services and PostgreSQL' }, null, 2));

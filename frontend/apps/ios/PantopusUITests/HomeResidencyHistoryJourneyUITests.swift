@@ -66,9 +66,8 @@ final class HomeResidencyHistoryJourneyUITests: XCTestCase {
         try press("homeResidencyHistory.retry")
         try expectCount(20)
         try press("homeResidencyHistory.close")
-        try press("homeClaimReview.residencyRecovery")
-        try require(element("homeResidencyReview.empty"))
-        try press("homeResidencyReview.close")
+        // Nothing is saved, so there is no residency recovery link.
+        XCTAssertFalse(element("homeClaimReview.residencyRecovery").waitForExistence(timeout: 2))
         try await switchAccount(1)
         try openHistory()
         try expectCount(1)

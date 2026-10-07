@@ -94,6 +94,9 @@ fun HomeClaimReviewScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val residencyReviewState by residencyModel.state.collectAsStateWithLifecycle()
     val relationshipPanel by relationshipModel.panel.collectAsStateWithLifecycle()
+    val savedDecisionsModel: SavedReviewDecisionsViewModel = hiltViewModel()
+    val savedDecisions by savedDecisionsModel.saved.collectAsStateWithLifecycle()
+    LaunchedEffect(relationshipPanel == null, residencyReviewState.presented) { savedDecisionsModel.refresh() }
     val evidencePanel by viewModel.evidencePanel.collectAsStateWithLifecycle()
     HomeClaimEvidencePanel(viewModel)
     HomeRelationshipPanel(relationshipModel, viewModel::refresh)
@@ -127,25 +130,21 @@ fun HomeClaimReviewScreen(
                 queueModel.pause()
                 onBack()
             })
-            TextButton(onClick = {
-                queueModel.pause()
-                relationshipModel.open()
-            }, modifier = Modifier.testTag("homeClaimReview.relationshipRecovery")) {
-                Text("Relationship decisions and recovery")
-            }
-            TextButton(onClick = {
-                queueModel.pause()
-                residencyModel.show()
-            }, modifier = Modifier.testTag("homeClaimReview.residencyRecovery")) {
-                Text("Residency decisions and recovery")
-            }
-            TextButton(
-                onClick = {
+            ReviewDecisionLinks(
+                saved = savedDecisions,
+                onRelationship = {
+                    queueModel.pause()
+                    relationshipModel.open()
+                },
+                onResidency = {
+                    queueModel.pause()
+                    residencyModel.show()
+                },
+                onHistory = {
                     queueModel.pause()
                     historyTarget = HomeResidencyHistoryTarget(viewModel.homeId.lowercase())
                 },
-                modifier = Modifier.testTag("homeClaimReview.residencyHistory"),
-            ) { Text("Your saved residency decisions") }
+            )
             val loaded = state as? HomeClaimReviewUiState.Loaded
             HomeClaimReviewTabStrip(
                 tabs = tabItems(loaded?.data),

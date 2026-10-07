@@ -142,10 +142,12 @@ final class HomeClaimRelationshipJourneyUITests: XCTestCase {
         try press(element("homeRelationship.acknowledge"))
         XCTAssertFalse(element("homeRelationship.submit").exists)
         try press(element("homeRelationship.close"))
-        try press(element("homeClaimReview.relationshipRecovery"))
-        try require(element("homeRelationship.empty").waitForExistence(timeout: 20))
+        // Nothing is saved any more, so Review claims no longer offers the relationship recovery link.
+        XCTAssertFalse(element("homeClaimReview.relationshipRecovery").waitForExistence(timeout: 2))
         _ = try await fixture("revoke", method: "POST")
-        try press(element("homeRelationship.close"))
+        // Closing a review sheet refreshes the lists; the history sheet is always available.
+        try press(element("homeClaimReview.residencyHistory"))
+        try press(element("homeResidencyHistory.close"))
         try require(element("homeClaimReview_ownershipUnavailable").waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts["No pending ownership claims"].exists)
         keepScreenshot("Denied ownership list is unavailable rather than falsely empty")
@@ -176,7 +178,7 @@ final class HomeClaimRelationshipJourneyUITests: XCTestCase {
         try press(homeIdentity)
         try press(element("meSectionRow_household_owners"))
         try press(app.buttons["Review claims on this home"].firstMatch)
-        try require(element("homeClaimReview.relationshipRecovery").waitForExistence(timeout: 20))
+        try require(element("homeClaimReview.residencyHistory").waitForExistence(timeout: 20))
     }
 
     private func signIn() async throws {

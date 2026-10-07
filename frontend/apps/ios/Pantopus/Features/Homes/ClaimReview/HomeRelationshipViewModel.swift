@@ -62,7 +62,11 @@ final class HomeRelationshipViewModel: Identifiable {
         session = HomeClaimSessionScope(api: api)
         if case let .signedIn(user) = (api.authProvider ?? AuthManager.shared).state { actor = user.id } else { actor = "" }
         origin = api.apiBaseURL.absoluteString
-        scope = "relationship-v1|\(origin)|\(actor)|\(homeId)"
+        scope = Self.storeScope(origin: origin, actor: actor, homeId: homeId)
+    }
+
+    static func storeScope(origin: String, actor: String, homeId: String) -> String {
+        "relationship-v1|\(origin)|\(actor)|\(homeId)"
     }
 
     var isCurrent: Bool {
