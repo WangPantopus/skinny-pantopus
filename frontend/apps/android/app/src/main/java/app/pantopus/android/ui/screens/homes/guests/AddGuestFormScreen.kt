@@ -247,7 +247,7 @@ internal fun AddGuestFormLoaded(
                     label = "Email or phone",
                     value = state.contactField.value,
                     onValueChange = onContactChange,
-                    placeholder = "sasha@petrov.co or (415) 555-…",
+                    placeholder = "sasha@example.com or (415) 555-…",
                     state = contactVisualState(state),
                     isRequired = true,
                     keyboardType = KeyboardType.Email,

@@ -60,7 +60,7 @@ object AddGuestSampleData {
     /** FILLED frame — Sasha, Weekend, WiFi + Entry Instructions + Parking, welcome note. */
     object Filled {
         const val NAME = "Sasha Petrov"
-        const val CONTACT = "sasha@petrov.co"
+        const val CONTACT = "sasha@example.com"
         const val DURATION_ID = "weekend"
         val SECTION_IDS = setOf("wifi", "entry_instructions", "parking")
         const val WELCOME =

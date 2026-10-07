@@ -40,7 +40,7 @@ struct AddGuestFormContent: View {
                         get: { viewModel.contactField.value },
                         set: { viewModel.updateContact($0) }
                     ),
-                    placeholder: "sasha@petrov.co or (415) 555-…",
+                    placeholder: "sasha@example.com or (415) 555-…",
                     state: viewModel.contactFieldState,
                     isRequired: true,
                     keyboardType: .emailAddress,
