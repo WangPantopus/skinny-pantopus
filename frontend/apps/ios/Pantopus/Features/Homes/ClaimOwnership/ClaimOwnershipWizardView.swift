@@ -50,11 +50,12 @@ public struct ClaimOwnershipWizardView: View {
         .onChange(of: viewModel.currentStep) { _, step in
             Analytics.track(.screenClaimOwnershipStepViewed(stepName: step.rawValue))
         }
+        // Not `.task`: the view model counts appearances and loads on its own task (see `appeared()`).
         .onAppear {
+            viewModel.appeared()
             Analytics.track(.screenClaimOwnershipStepViewed(stepName: viewModel.currentStep.rawValue))
         }
-        .task { await viewModel.load() }
-        .onDisappear { viewModel.retire() }
+        .onDisappear { viewModel.disappeared() }
         .onChange(of: viewModel.hasCurrentSession) { _, current in if !current { viewModel.retire() } }
         .alert(
             "Request sent",
@@ -109,6 +110,12 @@ public struct ClaimOwnershipWizardView: View {
     private var stepContent: some View {
         switch viewModel.currentStep {
         case .start:
+            if let error = viewModel.startLoadError {
+                ClaimUploadErrorBanner(message: error)
+                if viewModel.canRetryLoad {
+                    ClaimRetryLoadButton { viewModel.retryLoad() }
+                }
+            }
             ClaimStartStep(
                 content: viewModel.startContent,
                 showsAskVerifiedOwner: viewModel.showsAskVerifiedOwner,
