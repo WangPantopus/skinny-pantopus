@@ -82,7 +82,7 @@ enum HomePostalMessages {
         case "POSTCARD_ADDRESS_LIMIT": "Too many postcards have been requested for this address. Try again later."
         case "POSTCARD_USER_LIMIT": "You've asked for too many postcards in the last hour. Try again later."
         case "POSTCARD_NOT_DISPATCHED": "Your postcard hasn't been sent yet. Send it first."
-        case "OWNERSHIP_FLOW_REQUIRED": "Continue ownership verification for this Home."
+        case "OWNERSHIP_FLOW_REQUIRED": "Mail verification isn't available to this Home's owners, admins or managers."
         case "HOME_NOT_FOUND": "This Home is no longer available. Check your residency status."
         default: "This couldn't be completed. Check your status and try again."
         }

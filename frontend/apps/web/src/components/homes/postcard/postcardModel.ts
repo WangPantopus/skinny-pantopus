@@ -82,6 +82,6 @@ export const postalMessage = (code?: string) => ({
   POSTCARD_ADDRESS_LIMIT: 'Too many postcards have been requested for this address. Try again later.',
   POSTCARD_USER_LIMIT: 'You’ve asked for too many postcards in the last hour. Try again later.',
   POSTCARD_NOT_DISPATCHED: 'This postcard hasn’t been sent yet. Send it first.',
-  OWNERSHIP_FLOW_REQUIRED: 'Continue ownership verification for this Home.',
+  OWNERSHIP_FLOW_REQUIRED: 'Mail verification isn’t available to this Home’s owners, admins or managers.',
   HOME_NOT_FOUND: 'This Home is no longer available. Check your residency status.',
 } as Record<string, string>)[code || ''] || 'This couldn’t be completed. Check your status and try again.';
