@@ -58,16 +58,19 @@ fun HomePostalScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.s4),
         ) {
             Text("Verify your address by mail", style = PantopusTextStyle.h2)
-            Text("A saved mailing request or code result is separate from your current household access.", style = PantopusTextStyle.body)
+            Text(
+                "We'll mail a postcard with a code to this Home's address. Enter the code when it arrives to verify that you live here.",
+                style = PantopusTextStyle.body,
+            )
             state.error?.let { Text(it, style = PantopusTextStyle.body, modifier = Modifier.testTag("homePostalError")) }
             when {
                 state.pending != null -> HomePostalRecovery(state, viewModel)
                 state.working -> {
                     CircularProgressIndicator(modifier = Modifier.testTag("homePostalLoading"))
-                    Text("Checking mail verification…", style = PantopusTextStyle.body)
+                    Text("Checking…", style = PantopusTextStyle.body)
                 }
                 state.status != null -> HomePostalCurrentStatus(state, viewModel, onNavigate)
-                else -> HomePostalButton("Retry mail status", "homePostalRetry", onClick = viewModel::open)
+                else -> HomePostalButton("Try again", "homePostalRetry", onClick = viewModel::open)
             }
         }
     }
@@ -110,30 +113,32 @@ private fun HomePostalCurrentStatus(
     val postcard = status.postcard
     if (postcard != null) {
         Text(
-            HomePostalMessages.delivery(postcard.delivery),
+            HomePostalMessages.postcardHeadline(postcard.status, postcard.delivery, postcard.attemptsRemaining),
             style = PantopusTextStyle.h3,
             modifier = Modifier.testTag("homePostalDelivery"),
         )
-        Text("Postcard status: ${postcard.status}", style = PantopusTextStyle.body)
+        if (!postcardEnded(postcard.status)) {
+            Text(HomePostalMessages.postcardStatus(postcard.status), style = PantopusTextStyle.body)
+        }
         if (postcard.status == "pending") {
             Text(
-                "${postcard.attemptsRemaining} code attempts remaining",
+                triesLeft(postcard.attemptsRemaining),
                 style = PantopusTextStyle.caption,
                 modifier = Modifier.testTag("homePostalAttemptsRemaining"),
             )
         }
     } else {
-        Text("No postcard request is recorded.", style = PantopusTextStyle.body)
+        Text("You haven't requested a postcard yet.", style = PantopusTextStyle.body)
     }
     status.restriction?.let {
         Text(HomePostalMessages.restriction(it), style = PantopusTextStyle.body, modifier = Modifier.testTag("homePostalRestriction"))
     }
     if (status.canResume) {
-        Text("Continue the original mailing request", style = PantopusTextStyle.h3)
+        Text("Your postcard isn't sent yet", style = PantopusTextStyle.h3)
         status.request?.address?.let {
             Text(HomePostalMessages.address(it), style = PantopusTextStyle.body, modifier = Modifier.testTag("homePostalResumeAddress"))
         }
-        HomePostalButton("Continue this original request", "homePostalResume", viewModel.canResumeMail, viewModel::resumeMail)
+        HomePostalButton("Send the postcard", "homePostalResume", viewModel.canResumeMail, viewModel::resumeMail)
     }
     if (status.canRequest) HomePostalMailForm(state, viewModel)
     if (status.canVerify) HomePostalCodeForm(state, viewModel)
@@ -153,7 +158,7 @@ private fun HomePostalCurrentStatus(
             }
         }
     }
-    HomePostalButton("Refresh mail status", "homePostalRefresh", onClick = viewModel::open)
+    HomePostalButton("Refresh", "homePostalRefresh", onClick = viewModel::open)
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -167,19 +172,19 @@ private fun HomePostalConfirmations(
     AlertDialog(
         modifier = Modifier.semantics { testTagsAsResourceId = true },
         onDismissRequest = viewModel::dismissConfirmation,
-        title = { Text(if (mail) "Request a postcard to this address?" else "Cancel the original request?") },
+        title = { Text(if (mail) "Request a postcard to this address?" else "Discard this attempt?") },
         text = {
             Text(
                 if (mail) {
                     HomePostalMessages.address(state.address.snapshot)
                 } else {
-                    "We will check the original result. Cancellation cannot undo a recorded verification or an already admitted mailing."
+                    "If it already went through, it stays. Discarding can't recall a postcard that's already been mailed."
                 },
             )
         },
         confirmButton = {
             HomePostalButton(
-                if (mail) "Request postcard" else "Confirm cancellation",
+                if (mail) "Request postcard" else "Discard",
                 if (mail) "homePostalConfirmMail" else "homePostalConfirmCancel",
             ) { if (mail) viewModel.requestMail() else viewModel.confirmCancellation() }
         },
@@ -196,3 +201,8 @@ internal fun HomePostalButton(
 ) {
     TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp).testTag(tag)) { Text(title) }
 }
+
+/** Once a postcard is verified, expired or replaced, how it travelled no longer matters. */
+private fun postcardEnded(status: String?): Boolean = status in setOf("verified", "expired", "cancelled")
+
+private fun triesLeft(count: Int): String = if (count == 1) "1 try left" else "$count tries left"
