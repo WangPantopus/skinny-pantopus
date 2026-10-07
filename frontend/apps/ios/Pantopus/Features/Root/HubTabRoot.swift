@@ -1118,8 +1118,10 @@ public struct HubTabRoot: View {
             // now land on the participant detail. Organizers reach the
             // review queue via the dock overflow on the detail screen;
             // the explicit `support-trains/:id/manage` deep link is
-            // their shortcut to the queue.
-            path.append(.supportTrains)
+            // their shortcut to the queue. The list goes under a link
+            // opened from the stack root, so Back has somewhere known to
+            // land; opened from a screen (Notifications), Back returns there.
+            if path.isEmpty { path.append(.supportTrains) }
             if !id.isEmpty {
                 path.append(.supportTrainDetail(supportTrainId: id))
             }
@@ -1127,9 +1129,9 @@ public struct HubTabRoot: View {
         case let .supportTrainManage(id):
             // P4.3 / A13.13 — `pantopus://support-trains/:id/manage`
             // lands on the organizer Manage Train surface. Drop the
-            // user on the Support Trains list first so a back-tap
-            // pops to a known surface, then push manage.
-            path.append(.supportTrains)
+            // user on the Support Trains list first (from the stack root)
+            // so a back-tap pops to a known surface, then push manage.
+            if path.isEmpty { path.append(.supportTrains) }
             if !id.isEmpty {
                 path.append(.manageTrain(trainId: id))
             }

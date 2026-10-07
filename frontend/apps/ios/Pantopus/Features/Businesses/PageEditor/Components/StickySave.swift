@@ -135,7 +135,7 @@ public struct EditBusinessStickySave: View {
         .overlay(
             Capsule().stroke(Theme.Color.warningLight, lineWidth: 1)
         )
-        .accessibilityLabel("\(count) unsaved changes")
+        .accessibilityLabel(count == 1 ? "1 unsaved change" : "\(count) unsaved changes")
     }
 
     @ViewBuilder private func publishLabel(remaining: Int) -> some View {
