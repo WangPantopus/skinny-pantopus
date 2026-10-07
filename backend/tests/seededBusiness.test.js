@@ -178,6 +178,14 @@ describe('SeededBusinessService', () => {
 // ── Signal builder tests ───────────────────────────────────────────────────
 
 describe('buildLocalServicesSignal', () => {
+  // These cases cover the cut features' signals (open gigs and the business directory); production keeps them off.
+  const launchFeatures = process.env.LAUNCH_FEATURES;
+  beforeAll(() => { process.env.LAUNCH_FEATURES = 'open_gigs,business_directory'; });
+  afterAll(() => {
+    if (launchFeatures === undefined) delete process.env.LAUNCH_FEATURES;
+    else process.env.LAUNCH_FEATURES = launchFeatures;
+  });
+
   it('returns null when no business counts', () => {
     expect(buildLocalServicesSignal(null)).toBeNull();
   });

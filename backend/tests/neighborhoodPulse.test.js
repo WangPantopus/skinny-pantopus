@@ -208,6 +208,14 @@ describe('NeighborhoodPulseComposer', () => {
   });
 
   describe('buildSeasonalSignal', () => {
+    // These cases cover the cut features' signals (open gigs and the business directory); production keeps them off.
+    const launchFeatures = process.env.LAUNCH_FEATURES;
+    beforeAll(() => { process.env.LAUNCH_FEATURES = 'open_gigs,business_directory'; });
+    afterAll(() => {
+      if (launchFeatures === undefined) delete process.env.LAUNCH_FEATURES;
+      else process.env.LAUNCH_FEATURES = launchFeatures;
+    });
+
     it('builds a seasonal signal with action', () => {
       const ctx = {
         primary_season: 'fall_prep',
@@ -270,6 +278,14 @@ describe('NeighborhoodPulseComposer', () => {
   });
 
   describe('compose — full flow', () => {
+    // These cases cover the cut features' signals (open gigs and the business directory); production keeps them off.
+    const launchFeatures = process.env.LAUNCH_FEATURES;
+    beforeAll(() => { process.env.LAUNCH_FEATURES = 'open_gigs,business_directory'; });
+    afterAll(() => {
+      if (launchFeatures === undefined) delete process.env.LAUNCH_FEATURES;
+      else process.env.LAUNCH_FEATURES = launchFeatures;
+    });
+
     function setupSupabaseMock(homeResult) {
       supabaseAdmin.from = jest.fn().mockReturnValue({
         select: jest.fn().mockReturnValue({
