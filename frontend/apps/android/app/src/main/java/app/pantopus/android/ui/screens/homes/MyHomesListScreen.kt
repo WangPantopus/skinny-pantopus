@@ -28,6 +28,7 @@ import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalDialog
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalTarget
+import app.pantopus.android.ui.screens.homes.members.SavedRemovalLink
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
@@ -125,9 +126,7 @@ fun MyHomesListScreen(
         ListOfRowsScreen(
             title = "My homes",
             customHeader = {
-                TextButton(onClick = { removalRecovery = true }, modifier = Modifier.testTag("myHomes_removalRecovery")) {
-                    Text("Recover a member removal")
-                }
+                SavedRemovalLink(dialogOpen = removalRecovery, testTag = "myHomes_removalRecovery") { removalRecovery = true }
             },
             state = state,
             onRefresh = { viewModel.refresh() },

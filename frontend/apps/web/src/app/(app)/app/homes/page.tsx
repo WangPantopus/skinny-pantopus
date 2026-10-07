@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { removalLink } from '@/components/home/member-removals/removalModel';
+import { useSavedRemoval } from '@/components/home/member-removals/useSavedRemoval';
 type MyHome = Awaited<ReturnType<typeof api.homes.getMyHomes>>['homes'][number];
 type Claim = Awaited<ReturnType<typeof api.homeOwnership.getMyOwnershipClaims>>['claims'][number];
 import { toast } from '@/components/ui/toast-store';
@@ -22,6 +23,7 @@ function claimInProgress(status: string) {
 export default function HomesPage() {
   const router = useRouter();
   const [homes, setHomes] = useState<MyHome[]>([]);
+  const savedRemoval = useSavedRemoval();
   const [pendingClaims, setPendingClaims] = useState<Array<{ claim: Claim; addressLine: string; cityLine: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -181,7 +183,7 @@ export default function HomesPage() {
             Add home
           </Link>
         </div>
-        <div className="mb-5"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 dark:text-blue-400 underline">Check an unfinished removal</Link></div>
+        {savedRemoval && <div className="mb-5"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 dark:text-blue-400 underline">Check an unfinished removal</Link></div>}
         {loading ? (
           <div className="text-app-text-secondary">Loading…</div>
         ) : error ? (

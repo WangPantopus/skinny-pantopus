@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { removalLink } from '@/components/home/member-removals/removalModel';
+import { useSavedRemoval } from '@/components/home/member-removals/useSavedRemoval';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, UserPlus, ShieldCheck, Shield, Key, User, Lock, Clock, ArrowLeftRight, UserMinus, Users, Mail } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -74,6 +75,7 @@ function MembersContent() {
   const { id: homeId } = useParams<{ id: string }>();
 
   const [members, setMembers] = useState<any[]>([]);
+  const savedRemoval = useSavedRemoval();
   const [auditLog, setAuditLog] = useState<any[]>([]);
   const [myAccess, setMyAccess] = useState<any>(null);
   const [accessRequests, setAccessRequests] = useState<HouseholdAccessRequestRow[]>([]);
@@ -276,7 +278,7 @@ function MembersContent() {
         )}
       </div>
 
-      <div className="mb-4"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 dark:text-blue-400 underline">Check an unfinished removal</Link></div>
+      {savedRemoval && <div className="mb-4"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 dark:text-blue-400 underline">Check an unfinished removal</Link></div>}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button type="button" onClick={() => void fetchData()} className="rounded-lg border border-app-border px-3 py-2 text-sm">Refresh members</button>

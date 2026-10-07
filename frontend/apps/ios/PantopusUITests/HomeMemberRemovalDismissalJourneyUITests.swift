@@ -20,7 +20,7 @@ extension HomeInvitationSenderJourneyUITests {
         XCTAssertEqual(try removalRows(committed, "removal_commands").first?["state"] as? String, "completed")
         let readCount = try removalRequestCount(committed, path: "/api/homes/" + context.homeId + "/occupants")
         try press("homeMemberRemovalClose")
-        try require(element("membersListRemovalRecovery"))
+        try require(element("membersList"))
         try press("tab.guests")
         try press("tab.members")
         try require(removalMoreActions(context, index: 1))

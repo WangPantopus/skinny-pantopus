@@ -72,7 +72,10 @@ extension HomeInvitationSenderJourneyUITests {
         XCTAssertFalse(label("Residency fixture (@residency_http_02)").exists)
         XCTAssertFalse(element("tab.pending").label.contains("0"), "An unconfirmed queue must not show zero invitations")
         keepScreen("Newer list failure survives old success and tab changes")
-        try press("membersListInvitationRecovery")
+        // Nothing is saved yet, so the recovery link is hidden; start from the invite button.
+        let invite = app.buttons["Invite member"].firstMatch
+        try reveal(invite)
+        invite.tap()
         try require(element("homeInvitationSenderPrepare"))
         try press("homeInvitationSenderClose")
         _ = try await fault("sender_list", "clear")

@@ -105,13 +105,10 @@ fun MembersListScreen(
         ListOfRowsScreen(
             title = "Members",
             customHeader = {
-                TextButton(
-                    onClick = {
-                        viewModel.retireForRemovalRecovery()
-                        removeTarget = HomeMemberRemovalTarget(viewModel.homeId)
-                    },
-                    modifier = Modifier.testTag("membersList_removalRecovery"),
-                ) { Text("Recover a member removal") }
+                SavedRemovalLink(dialogOpen = removeTarget != null, testTag = "membersList_removalRecovery") {
+                    viewModel.retireForRemovalRecovery()
+                    removeTarget = HomeMemberRemovalTarget(viewModel.homeId)
+                }
             },
             state = state,
             onRefresh = { viewModel.refresh() },
