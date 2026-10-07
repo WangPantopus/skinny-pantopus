@@ -29,47 +29,44 @@ public struct BusinessInvoicesView: View {
     }
 
     public var body: some View {
-        VStack(spacing: Spacing.s0) {
-            filterRail
-            content
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Theme.Color.appBg)
-        .navigationTitle("Invoices")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showsCreateSheet = true } label: {
-                    Icon(.plus, size: 18, strokeWidth: 2.4, color: Theme.Color.business)
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Theme.Color.appBg)
+            .navigationTitle("Invoices")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showsCreateSheet = true } label: {
+                        Icon(.plus, size: 18, strokeWidth: 2.4, color: Theme.Color.business)
+                    }
+                    .accessibilityLabel("New invoice")
+                    .accessibilityIdentifier("businessInvoices.new")
                 }
-                .accessibilityLabel("New invoice")
-                .accessibilityIdentifier("businessInvoices.new")
             }
-        }
-        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        .accessibilityIdentifier("businessInvoices.screen")
-        .task { await viewModel.load() }
-        .refreshable { await viewModel.refresh() }
-        .sheet(isPresented: $showsCreateSheet) {
-            CreateBusinessInvoiceSheet(viewModel: viewModel) { showsCreateSheet = false }
-        }
-        .confirmationDialog(
-            "Void invoice?",
-            isPresented: voidBinding,
-            titleVisibility: .visible,
-            presenting: voidTarget
-        ) { row in
-            Button("Void \(row.totalLabel) invoice", role: .destructive) {
-                let id = row.id
-                voidTarget = nil
-                Task { await viewModel.voidInvoice(id: id) }
+            .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+            .accessibilityIdentifier("businessInvoices.screen")
+            .task { await viewModel.load() }
+            .refreshable { await viewModel.refresh() }
+            .sheet(isPresented: $showsCreateSheet) {
+                CreateBusinessInvoiceSheet(viewModel: viewModel) { showsCreateSheet = false }
             }
-            .accessibilityIdentifier("businessInvoices_voidConfirm")
-            Button("Keep invoice", role: .cancel) { voidTarget = nil }
-        } message: { row in
-            Text("The \(row.totalLabel) invoice to \(row.recipientName) can't be collected once voided. This cannot be undone.")
-        }
-        .overlay(alignment: .bottom) { actionToast }
+            .confirmationDialog(
+                "Void invoice?",
+                isPresented: voidBinding,
+                titleVisibility: .visible,
+                presenting: voidTarget
+            ) { row in
+                Button("Void \(row.totalLabel) invoice", role: .destructive) {
+                    let id = row.id
+                    voidTarget = nil
+                    Task { await viewModel.voidInvoice(id: id) }
+                }
+                .accessibilityIdentifier("businessInvoices_voidConfirm")
+                Button("Keep invoice", role: .cancel) { voidTarget = nil }
+            } message: { row in
+                Text("The \(row.totalLabel) invoice to \(row.recipientName) can't be collected once voided. This cannot be undone.")
+            }
+            .overlay(alignment: .bottom) { actionToast }
     }
 
     private var voidBinding: Binding<Bool> {
@@ -120,26 +117,36 @@ public struct BusinessInvoicesView: View {
 
     // MARK: - States
 
-    @ViewBuilder private var content: some View {
+    /// The chips and every state sit in one vertical scroll view, so the chips scroll with the list. Pinned above the
+    /// list in a horizontal scroll view of their own they were the first scroll view under the navigation bar and
+    /// were laid out (the accessibility tree lists them) but never painted on iOS 26.
+    private var content: some View {
+        ScrollView {
+            VStack(spacing: Spacing.s3) {
+                filterRail
+                stateBody
+            }
+            .padding(.bottom, Spacing.s10)
+        }
+        .accessibilityIdentifier("businessInvoices.list")
+    }
+
+    @ViewBuilder private var stateBody: some View {
         switch viewModel.state {
         case .loading:
             loadingSkeleton
         case let .loaded(rows):
-            ScrollView {
-                LazyVStack(spacing: Spacing.s3) {
-                    ForEach(rows) { row in
-                        invoiceCard(row)
-                            .onAppear {
-                                if row.id == rows.last?.id {
-                                    Task { await viewModel.loadMoreIfNeeded() }
-                                }
+            LazyVStack(spacing: Spacing.s3) {
+                ForEach(rows) { row in
+                    invoiceCard(row)
+                        .onAppear {
+                            if row.id == rows.last?.id {
+                                Task { await viewModel.loadMoreIfNeeded() }
                             }
-                    }
+                        }
                 }
-                .padding(.horizontal, Spacing.s4)
-                .padding(.bottom, Spacing.s10)
             }
-            .accessibilityIdentifier("businessInvoices.list")
+            .padding(.horizontal, Spacing.s4)
         case .empty:
             EmptyState(
                 icon: .receiptText,
