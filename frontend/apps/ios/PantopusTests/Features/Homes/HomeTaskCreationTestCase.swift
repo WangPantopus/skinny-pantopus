@@ -122,7 +122,8 @@ class HomeTaskCreationTestCase: XCTestCase {
     }
 
     func waitForRequests(_ count: Int) async throws {
-        for _ in 0..<100 {
+        // Up to 5 s for a busy CI runner; returns as soon as the requests have started.
+        for _ in 0..<1000 {
             if SequencedURLProtocol.capturedRequests.count >= count { return }
             try await Task.sleep(for: .milliseconds(5))
         }
