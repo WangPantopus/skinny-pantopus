@@ -48,14 +48,27 @@ not enforced yet. SwiftLint, SwiftFormat and the icon guard are enforced.
    An automatic run skips quietly (no failure, no notification) when a newer merge
    has superseded its commit, or when nothing in `backend/`, `scripts/deploy/`, the
    root package files or this workflow changed since the environment's last
-   successful deployment: each rollout restarts the API for about half a minute. A
-   manual dispatch always deploys the head.
+   release: each rollout restarts the API for about half a minute. A manual
+   dispatch always deploys the head.
+
+   GitHub lists every automatic run under `master`, because a `workflow_run` runs
+   in the default branch's context; the run's name says what it releases, for
+   example `Deploy Backend to staging (dev <commit>)`. The last release is the
+   newest job for that environment whose **Deploy API and worker** step ran, and
+   its commit comes from the run's name. GitHub's deployment records can't
+   serve: they hold the default branch head instead of the released `dev` commit,
+   they include jobs that stopped before the rollout (disabled, failed migration,
+   superseded), and Vercel's web deployments land in `Production`, which GitHub
+   treats as `production`. After a rollback, a failed rollout, or a release whose
+   run predates these names, the next automatic run deploys.
 3. The environment must explicitly enable deployment and provide all secrets.
 4. Build a frozen-lockfile image, push a commit tag, and use its immutable digest
    for the API and worker. No `prod`, `staging`, or `latest` tag is used at runtime.
 5. After database adoption, apply validated migrations **before** the application
    rollout. A migration failure stops deployment. Before adoption, migration
-   files are frozen and no hosted SQL executes.
+   files are frozen and no hosted SQL executes. If a newer commit reaches the
+   branch while the release builds, the release stops before cutover and the newer
+   commit's run releases it.
 6. On EC2, start an unexposed API candidate with background jobs disabled. Its
    `/health` probe must reach Supabase successfully before cutover.
 7. Preserve the old containers; replace API and worker together. If startup,
@@ -85,6 +98,17 @@ database projects where applicable:
 | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | Image repository credentials |
 | `EC2_HOST`, `EC2_USERNAME`, `EC2_SSH_KEY` | SSH host, account and private key |
 | `EC2_KNOWN_HOSTS` | Verified OpenSSH known_hosts entry for that host |
+| `SUPABASE_ACCESS_TOKEN` | Supabase access token for the CLI |
+| `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD` | That environment's project ref (20 letters) and database password |
+
+And these environment **variables**:
+
+| Variable | Value |
+|---|---|
+| `BACKEND_API_BIND` | `127.0.0.1:8000` (production) or `127.0.0.1:18001` (staging) |
+| `SUPABASE_SESSION_POOLER_HOST` | The project's session-pooler host (below) |
+| `DB_MIGRATIONS_ENABLED` | `true` once the project's database has every migration in `supabase/migrations` (`supabase db push --dry-run` reports nothing to push); until then each release stops at **Require database releases in this environment** |
+| `BACKEND_DEPLOY_ENABLED` | `true`, last |
 
 Verify host keys through a trusted channel (for example the EC2 console). Do
 not blindly accept a key obtained over the same untrusted network connection.
@@ -105,7 +129,9 @@ Set environment variable `BACKEND_DEPLOY_ENABLED=true` only after configuring
 all secrets and the host. Missing secrets then fail clearly; a disabled
 environment produces a notice and no release notification.
 
-For the future database activation, see
+Staging's database took the migrations on October 7, 2026. A new production
+project takes them the same way (launch checklist P2A); adopting an older
+project follows
 [supabase-migration-automation-runbook.md](supabase-migration-automation-runbook.md).
 Do not point staging migration credentials at the production project.
 

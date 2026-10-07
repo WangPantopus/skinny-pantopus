@@ -1,4 +1,10 @@
 name: Deploy Backend
+# A workflow_run job runs in the default branch's context, so GitHub lists every
+# automatic run under master. The name says what the run releases;
+# scripts/deploy/require-ci.cjs reads the commit back from it.
+run-name: >-
+  Deploy Backend to ${{ (github.event.workflow_run.head_branch || github.ref_name) == 'master' && 'production' || 'staging' }}
+  (${{ github.event.workflow_run.head_branch || github.ref_name }} ${{ github.event.workflow_run.head_sha || github.sha }})
 
 on:
   workflow_run:
@@ -78,7 +84,8 @@ jobs:
         if: steps.configuration.outputs.enabled == 'true'
         uses: actions/github-script@v8
         with:
-          script: await require('./scripts/deploy/require-ci.cjs')({github, context, core})
+          script: |
+            await require('./scripts/deploy/require-ci.cjs')({github, context, core}, {recheck: true})
       - uses: docker/login-action@v4
         if: steps.configuration.outputs.enabled == 'true'
         with:
@@ -105,6 +112,13 @@ jobs:
         run: |
           node scripts/db/check-migrations.cjs
           node -e 'const p=require("./supabase/migration-policy.json"); console.log("mode="+p.mode); console.log("cli="+p.cliVersion)' >> "$GITHUB_OUTPUT"
+      # Its own step, so a failed migration push isn't mistaken for this switch.
+      - name: Require database releases in this environment
+        if: steps.database.outputs.mode == 'baselined'
+        env:
+          DB_MIGRATIONS_ENABLED: ${{ vars.DB_MIGRATIONS_ENABLED }}
+        run: |
+          [[ "$DB_MIGRATIONS_ENABLED" == true ]] || { echo "::error::Set DB_MIGRATIONS_ENABLED=true once this environment's database has the canonical migrations (docs/ci-cd.md)."; exit 1; }
       - uses: supabase/setup-cli@v3
         if: steps.database.outputs.mode == 'baselined'
         with:
@@ -116,9 +130,7 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
           SUPABASE_SESSION_POOLER_HOST: ${{ vars.SUPABASE_SESSION_POOLER_HOST }}
-          DB_MIGRATIONS_ENABLED: ${{ vars.DB_MIGRATIONS_ENABLED }}
         run: |
-          [[ "$DB_MIGRATIONS_ENABLED" == true ]] || { echo '::error::Complete the database adoption runbook before enabling releases of the baselined stream.'; exit 1; }
           : "${SUPABASE_ACCESS_TOKEN:?}" "${SUPABASE_DB_PASSWORD:?}" "${SUPABASE_PROJECT_ID:?}"
           supabase link --project-ref "$SUPABASE_PROJECT_ID"
           db_flags=(--project-ref "$SUPABASE_PROJECT_ID")
@@ -136,12 +148,14 @@ jobs:
           supabase db push "${db_flags[@]}" --dry-run --skip-vault
           supabase db push "${db_flags[@]}" --yes
       - name: Reject a superseded release before cutover
+        id: cutover
         if: steps.configuration.outputs.enabled == 'true'
         uses: actions/github-script@v8
         with:
-          script: await require('./scripts/deploy/require-ci.cjs')({github, context, core})
+          script: |
+            await require('./scripts/deploy/require-ci.cjs')({github, context, core}, {recheck: true})
       - name: Deploy API and worker
-        if: steps.configuration.outputs.enabled == 'true'
+        if: steps.cutover.outputs.deploy == 'true'
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
@@ -154,7 +168,7 @@ jobs:
           DEPLOY_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/pantopus-backend@${{ steps.image.outputs.digest }}
         run: bash scripts/deploy/remote.sh
       - name: Record release
-        if: steps.configuration.outputs.enabled == 'true' && success()
+        if: steps.cutover.outputs.deploy == 'true' && success()
         env:
           IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/pantopus-backend@${{ steps.image.outputs.digest }}
           SHA: ${{ needs.preflight.outputs.sha }}
