@@ -9,6 +9,7 @@ const STATUSES = new Set(['pending', 'requires_action', 'succeeded', 'failed', '
 const REASONS = new Set(['duplicate', 'fraudulent', 'requested_by_customer', 'work_not_completed', 'other']);
 const fail = (message, statusCode = 409, code = 'refund_conflict') => Object.assign(new Error(message), { statusCode, code });
 const { snapshot, readProjection } = require('./walletSettlementService');
+const logger = require('../utils/logger');
 const FEE_REFUND_MESSAGE = "Cancellation and no-show fees can't be refunded in the app. Contact support.";
 async function rpc(name, args) {
   const { data, error } = await db.rpc(name, args);
@@ -150,6 +151,16 @@ async function discover(payment, requests) {
   }
   throw fail('Provider refund history requires reconciliation.', 503);
 }
+// An invoice whose payment was refunded in full is no longer paid: the customer got their money back and the
+// business received none. It is marked void (the status a refunded invoice can honestly have). The refund itself is
+// already done at the provider, so a failure here is logged, not raised.
+async function settleInvoiceAfterRefund(payment) {
+  const invoiceId = payment?.metadata?.invoice_id;
+  if (payment?.payment_status !== 'refunded_full' || payment.metadata?.type !== 'invoice_payment' || !invoiceId) return;
+  const { error } = await db.from('BusinessInvoice').update({ status: 'void' })
+    .eq('id', invoiceId).eq('payment_id', payment.id).eq('status', 'paid');
+  if (error) logger.warn('Refunded invoice could not be voided', { paymentId: payment.id, invoiceId, error: error.message });
+}
 async function reconcile(paymentId) {
   let payment = await paymentById(paymentId);
   await verifyProvider(payment);
@@ -158,6 +169,7 @@ async function reconcile(paymentId) {
   const result = await rpc('record_payment_refund_receipts', { p_payment_id: payment.id,
     p_expected: snapshot(payment), p_receipts: receipts });
   payment = result.payment;
+  await settleInvoiceAfterRefund(payment);
   return { payment, receipts };
 }
 function legacyRequestId(paymentId, amount, reason, actorId, actorMode) {
@@ -221,7 +233,8 @@ async function create({ paymentId, amount = null, reason, description = null, ac
         reason: ['duplicate', 'fraudulent'].includes(reason) ? reason : 'requested_by_customer',
         metadata: { payment_id: payment.id, refund_request_id: request.id } }, { idempotencyKey: `pantopus-refund:${request.id}` });
       const receipt = verifiedReceipt(payment, refund, [request]);
-      await rpc('record_payment_refund_receipts', { p_payment_id: payment.id, p_expected: snapshot(payment), p_receipts: [receipt] });
+      const recorded = await rpc('record_payment_refund_receipts', { p_payment_id: payment.id, p_expected: snapshot(payment), p_receipts: [receipt] });
+      await settleInvoiceAfterRefund(recorded.payment);
     }
     return response(paymentId, request.id);
   } catch (error) {
@@ -258,5 +271,5 @@ async function recoverRequest(request) {
   return create({ paymentId: request.payment_id, requestId: request.id, actorId: request.actor_id,
     actorMode: request.actor_mode, amount: request.requested_amount, reason: request.reason, description: request.description });
 }
-module.exports = { create, history, reconcile, reconcileEvent, recoverRequest, snapshot, publicRequest,
+module.exports = { create, history, reconcile, reconcileEvent, recoverRequest, snapshot, publicRequest, settleInvoiceAfterRefund,
   _test: { assertIntent, verifiedReceipt, discover, legacyRequestId } };

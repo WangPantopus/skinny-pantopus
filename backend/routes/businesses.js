@@ -72,6 +72,7 @@ const {
   checkBusinessPermission,
   hasPermission,
   getUserAccess,
+  getBusinessPrimaryOwnerId,
   writeAuditLog,
   BUSINESS_ROLE_RANK,
 } = require('../utils/businessPermissions');
@@ -4936,16 +4937,29 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
       // Canceled, or the total changed since it started: a new payment below.
     }
 
+    // A business account has no wallet anyone can open, so its owner receives the money (see getBusinessPrimaryOwnerId);
+    // with nobody to receive it, nothing is charged.
+    const payeeUserId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
+    if (!payeeUserId) {
+      return res.status(409).json({ error: "This business can't take payments right now.", code: 'BUSINESS_CANNOT_RECEIVE' });
+    }
+    if (payeeUserId === userId) {
+      return res.status(400).json({ error: "You can't pay an invoice from your own business.", code: 'OWN_BUSINESS' });
+    }
+
     // Create payment intent. The key ties it to the payment it replaces, so a double tap makes one.
     const result = await stripeService.createPaymentIntentForGig({
       payerId: userId,
-      payeeId: invoice.business_user_id,
+      payeeId: payeeUserId,
+      // The invoice's fee was priced for the business (createInvoice), so the payment is too.
+      feeRateSubjectId: invoice.business_user_id,
       gigId: invoice.gig_id || null,
       amount: invoice.total_cents,
       paymentMethodId: payment_method_id || undefined,
       metadata: {
         type: 'invoice_payment',
         invoice_id: invoiceId,
+        business_user_id: invoice.business_user_id,
       },
       idempotencyKey: `invoice-pay:${invoiceId}:${invoice.stripe_payment_intent_id || 'first'}`,
     });
@@ -4990,6 +5004,15 @@ const INVOICE_PAID_PAYMENT_STATES = new Set([
   PAYMENT_STATES.TRANSFER_PENDING,
   PAYMENT_STATES.TRANSFERRED,
 ]);
+
+// A payment that has not reached its held state yet (its card was just accepted, perhaps after 3-D Secure).
+const INVOICE_SETTLING_PAYMENT_STATES = new Set([
+  PAYMENT_STATES.AUTHORIZE_PENDING,
+  PAYMENT_STATES.AUTHORIZATION_FAILED,
+  PAYMENT_STATES.CAPTURE_PENDING,
+]);
+const INVOICE_CONFIRM_RECHECKS = 4;
+const INVOICE_CONFIRM_RECHECK_MS = 1000;
 
 // A PaymentIntent the payer hasn't completed yet; Pay hands the same one back.
 const RESUMABLE_INTENT_STATUSES = new Set(['requires_payment_method', 'requires_confirmation', 'requires_action']);
@@ -5064,6 +5087,12 @@ router.post('/invoices/:invoiceId/confirm', verifyToken, async (req, res) => {
     let paymentStatus;
     try {
       paymentStatus = await captureInvoicePayment(invoice.payment_id);
+      // The app confirms the moment the card is accepted, and after 3-D Secure Stripe can take a second to move the
+      // PaymentIntent to its held state. Look again for a few seconds before saying it hasn't gone through.
+      for (let check = 0; check < INVOICE_CONFIRM_RECHECKS && INVOICE_SETTLING_PAYMENT_STATES.has(paymentStatus); check++) {
+        await new Promise((resolve) => setTimeout(resolve, INVOICE_CONFIRM_RECHECK_MS));
+        paymentStatus = await captureInvoicePayment(invoice.payment_id);
+      }
     } catch (err) {
       logger.warn('Invoice confirm: payment check failed', { invoiceId, error: err.message });
       return res.status(503).json({

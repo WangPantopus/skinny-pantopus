@@ -356,16 +356,17 @@ class WalletService {
    * @param {string} gigId
    * @param {string} paymentId
    * @param {string} payerId - For counterparty tracking
+   * @param {{ description?: string }} [options] - Wording for the wallet history line (an invoice says so)
    * @returns {WalletTransaction}
    */
-  async creditGigIncome(payeeId, amount, gigId, paymentId, payerId) {
+  async creditGigIncome(payeeId, amount, gigId, paymentId, payerId, { description } = {}) {
     const idempotencyKey = `gig_income:${paymentId}`;
 
     const { data: tx, error } = await supabaseAdmin.rpc('wallet_credit', {
       p_user_id: payeeId,
       p_amount: amount,
       p_type: 'gig_income',
-      p_description: `Income from completed gig`,
+      p_description: description || `Income from completed gig`,
       p_payment_id: paymentId,
       p_gig_id: gigId,
       p_counterparty_id: payerId,
