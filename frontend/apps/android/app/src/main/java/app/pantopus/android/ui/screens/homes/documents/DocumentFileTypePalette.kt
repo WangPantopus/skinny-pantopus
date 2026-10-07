@@ -30,7 +30,8 @@ enum class DocumentFileType(
     ),
     Image(
         id = "image",
-        stamp = "JPG",
+        // Any image type (PNG, HEIC, JPEG…), so not "JPG".
+        stamp = "IMG",
         icon = PantopusIcon.Image,
         background = Color(0xFFDBEAFE),
         foreground = Color(0xFF1D4ED8),
