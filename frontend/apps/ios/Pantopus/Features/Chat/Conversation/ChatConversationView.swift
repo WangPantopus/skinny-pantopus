@@ -2912,7 +2912,8 @@ private struct ChatBubbleRow: View {
 
     private func attachmentFileRow(filename: String, sizeLabel: String?) -> some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.file, size: 18, color: Theme.Color.primaryInk)
+            // primaryInk is the outgoing bubble's own colour: on your own file the icon vanished.
+            Icon(.file, size: 18, color: content.side == .outgoing ? Theme.Color.appTextInverse : Theme.Color.primaryInk)
             VStack(alignment: .leading, spacing: 1) {
                 Text(filename)
                     .font(.system(size: 13, weight: .semibold))
