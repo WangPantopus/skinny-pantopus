@@ -45,6 +45,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -367,6 +368,8 @@ private fun AddressStep(
     vm: AddHomeWizardViewModel,
 ) {
     val context = LocalContext.current
+    // Picking an address ends typing: the keyboard closes and Continue shows below the filled address.
+    val focusManager = LocalFocusManager.current
     val locationPermission =
         if (LocalActivityResultRegistryOwner.current != null) {
             rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
@@ -390,7 +393,10 @@ private fun AddressStep(
             }
         }
         state.searchResults.forEach { suggestion ->
-            TextButton(onClick = { vm.selectSearchResult(suggestion) }, modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = {
+                focusManager.clearFocus()
+                vm.selectSearchResult(suggestion)
+            }, modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(suggestion.primaryText, style = PantopusTextStyle.body)
                     Text(suggestion.secondaryText ?: suggestion.label, style = PantopusTextStyle.small)
@@ -398,6 +404,7 @@ private fun AddressStep(
             }
         }
         UseCurrentLocationPill(onClick = {
+            focusManager.clearFocus()
             if (!state.isFindingAddress && state.isSessionCurrent) {
                 val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
                 val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)

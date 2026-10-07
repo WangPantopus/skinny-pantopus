@@ -119,6 +119,8 @@ private struct AccessItemCard: View {
                 placeholder: item.accessType.labelPlaceholder,
                 text: Binding(get: { item.label }, set: onLabelChange),
                 errorText: item.labelError,
+                // A label beside a secure field reads as a login to iOS AutoFill.
+                contentType: .oneTimeCode,
                 identifier: "addHome_accessLabel"
             )
 
@@ -141,6 +143,7 @@ private struct AccessItemCard: View {
                     .accessibilityLabel(item.isRevealed ? "Hide value" : "Show value")
                     .accessibilityIdentifier("addHome_toggleAccessSecret")
                 ),
+                contentType: .oneTimeCode,
                 identifier: "addHome_accessSecret"
             )
         }

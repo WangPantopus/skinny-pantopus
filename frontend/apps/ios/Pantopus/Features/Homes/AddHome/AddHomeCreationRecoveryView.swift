@@ -45,9 +45,16 @@ struct AddHomeCreationRecoveryView: View {
                     .disabled(viewModel.isSubmitting)
                     .accessibilityIdentifier("addHomeRecoveryCancel")
             }
-            Text("The original details are saved securely on this device. You can close this screen and return to Add Home.")
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.appTextSecondary)
+            // A saved Home needs no recovery note; unavailable storage can't promise one.
+            if viewModel.creationStorageUnavailable {
+                Text("Keep this screen open and retry recovery before starting another request.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            } else if viewModel.creationOutcome?.state != .completed {
+                Text("The original details are saved securely on this device. You can close this screen and return to Add Home.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("addHomeCreationRecovery")

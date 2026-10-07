@@ -364,6 +364,8 @@ struct AddHomeTextField: View {
     var isSecure = false
     var errorText: String?
     var trailing: AnyView?
+    /// Codes set `.oneTimeCode` so iOS doesn't offer to save them as a login.
+    var contentType: UITextContentType?
     let identifier: String
 
     var body: some View {
@@ -418,6 +420,7 @@ struct AddHomeTextField: View {
                 .foregroundStyle(Theme.Color.appText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .textContentType(contentType)
                 .accessibilityIdentifier(identifier)
         } else {
             TextField(placeholder, text: $text)
@@ -425,6 +428,7 @@ struct AddHomeTextField: View {
                 .foregroundStyle(Theme.Color.appText)
                 .keyboardType(keyboard)
                 .autocorrectionDisabled(keyboard != .default)
+                .textContentType(contentType)
                 .accessibilityIdentifier(identifier)
         }
     }

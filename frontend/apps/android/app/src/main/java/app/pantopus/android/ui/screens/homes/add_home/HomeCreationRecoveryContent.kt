@@ -86,15 +86,18 @@ fun HomeCreationRecoveryContent(
                 Text("Cancel request", color = PantopusColors.error)
             }
         }
-        Text(
-            if (state.creationStorageUnavailable) {
-                "Keep this screen open and retry recovery before starting another request."
-            } else {
-                "The original details are saved securely on this device. You can close this screen and return to Add Home."
-            },
-            style = PantopusTextStyle.caption,
-            color = PantopusColors.appTextSecondary,
-        )
+        // A saved Home needs no recovery note.
+        if (state.creationStorageUnavailable || state.creationOutcome?.state != "completed") {
+            Text(
+                if (state.creationStorageUnavailable) {
+                    "Keep this screen open and retry recovery before starting another request."
+                } else {
+                    "The original details are saved securely on this device. You can close this screen and return to Add Home."
+                },
+                style = PantopusTextStyle.caption,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
     }
     if (confirmsCancellation) {
         AlertDialog(
