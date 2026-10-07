@@ -120,12 +120,6 @@ object DeepLinkRouter {
         data class HomeClaimReview(val id: String) : Destination
 
         /**
-         * `pantopus://homes/:id/claim-owner/evidence?claimId=` — the viewer's
-         * claims, where that claim's row opens its documents.
-         */
-        data class ClaimEvidence(val claimId: String) : Destination
-
-        /**
          * `pantopus://homes/:id/owners/transfer` — A13.4 Transfer
          * Ownership form. Lands on the populated state; the form owns
          * its own biometric bottom sheet.
@@ -821,14 +815,10 @@ object DeepLinkRouter {
                             null -> Destination.HomeOwners(id)
                             else -> Destination.HomeDetail(id)
                         }
-                    "claim-owner" -> {
-                        val claimId = HomeTaskNotificationRoute.canonicalId(Paths.queryParam(queryPart, "claimId"))
-                        if (trailing.getOrNull(1) == "evidence" && claimId != null) {
-                            Destination.ClaimEvidence(claimId)
-                        } else {
-                            Destination.HomeDetail(id)
-                        }
-                    }
+                    // Ownership pushes link the web's evidence page; the app opens the
+                    // claim's Waiting Room, which offers both upload and verify-by-mail.
+                    "claim-owner" ->
+                        if (trailing.getOrNull(1) == "evidence") Destination.WaitingRoom(id) else Destination.HomeDetail(id)
                     "verify-landlord", "verify_landlord" -> Destination.VerifyLandlord(id)
                     "verify-postcard", "verify_postcard" -> Destination.PostcardVerification(id)
                     // B1.6 — A18.4 persistent waiting room.

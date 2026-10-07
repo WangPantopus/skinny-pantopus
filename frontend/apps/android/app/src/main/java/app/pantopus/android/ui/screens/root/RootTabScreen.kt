@@ -2286,11 +2286,6 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.homeClaimReview(pending.id, residency = true))
                 DeepLinkRouter.consume()
             }
-            is DeepLinkRouter.Destination.ClaimEvidence -> {
-                // My claims lists the claim; its row opens the claim's documents.
-                navController.navigate(ChildRoutes.MY_CLAIMS)
-                DeepLinkRouter.consume()
-            }
             is DeepLinkRouter.Destination.HomeOwnersTransfer -> {
                 // Push the home's dashboard underneath so a back-tap from
                 // the transfer form lands somewhere useful rather than at

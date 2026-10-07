@@ -239,7 +239,7 @@ public struct RootTabView: View {
         case .supportTrain, .supportTrainManage, .user, .beaconProfile,
              .connections, .beacons, .discoverHub,
              .homeDetail, .homeDashboard, .homeTask, .homeMemberRequests, .homeResidency,
-             .homeMembers, .homeOwners, .homeClaimReview, .claimStatus,
+             .homeMembers, .homeOwners, .homeClaimReview,
              .homeOwnersTransfer,
              .verifyLandlord, .postcardVerification,
              .notifications, .createBusiness, .businessProfile, .businessPage,

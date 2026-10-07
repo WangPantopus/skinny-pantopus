@@ -589,6 +589,7 @@ private fun AddressRow(
             strokeWidth = 2.2f,
             tint = PantopusColors.primary600,
         )
+        // A long address shortens with an ellipsis; the claim reference stays on one line.
         Text(
             text = address,
             fontSize = 12.sp,
@@ -596,6 +597,7 @@ private fun AddressRow(
             color = PantopusColors.appText,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
         )
         Box(modifier = Modifier.size(width = 1.dp, height = 12.dp).background(PantopusColors.appBorder))
         Text(
@@ -604,6 +606,8 @@ private fun AddressRow(
             fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.Monospace,
             color = PantopusColors.appTextSecondary,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
