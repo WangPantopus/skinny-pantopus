@@ -739,35 +739,38 @@ async function notifyTransferCompleted({ userId, gigId, gigTitle, amount }) {
 /**
  * Notify user about a dispute on their payment.
  */
-async function notifyDisputeCreated({ userId, gigId, gigTitle, role }) {
+async function notifyDisputeCreated({ userId, gigId, gigTitle, role, invoiceId }) {
   const isProvider = role === 'provider';
+  // An invoice payment has no gig: the notice names the invoice and opens it (the payer) or the wallet (the owner).
+  const subject = invoiceId ? 'an invoice' : `"${gigTitle || 'a gig'}"`;
   return createNotification({
     userId,
     type: 'dispute_created',
     title: 'Payment dispute opened',
     body: isProvider
-      ? `A dispute has been filed for "${gigTitle || 'a gig'}". Funds are frozen while we investigate.`
-      : `Your payment for "${gigTitle || 'a gig'}" is under dispute. We'll keep you updated.`,
+      ? `A dispute has been filed for ${subject}. Funds are frozen while we investigate.`
+      : `Your payment for ${subject} is under dispute. We'll keep you updated.`,
     icon: '⚖️',
-    link: `/gigs/${gigId}`,
-    metadata: { gig_id: gigId, role },
+    link: invoiceId ? (isProvider ? '/app/wallet' : `/app/invoice/${invoiceId}`) : `/gigs/${gigId}`,
+    metadata: invoiceId ? { invoice_id: invoiceId, role } : { gig_id: gigId, role },
   });
 }
 
 /**
  * Notify user about a dispute resolution.
  */
-async function notifyDisputeResolved({ userId, gigId, gigTitle, won }) {
+async function notifyDisputeResolved({ userId, gigId, gigTitle, won, invoiceId, isProvider }) {
+  const subject = invoiceId ? 'an invoice' : `"${gigTitle || 'a gig'}"`;
   return createNotification({
     userId,
     type: 'dispute_resolved',
     title: won ? 'Dispute resolved in your favor' : 'Dispute resolved',
     body: won
-      ? `The dispute for "${gigTitle || 'a gig'}" was resolved in your favor.`
-      : `The dispute for "${gigTitle || 'a gig'}" has been resolved. Funds have been adjusted.`,
+      ? `The dispute for ${subject} was resolved in your favor.`
+      : `The dispute for ${subject} has been resolved. Funds have been adjusted.`,
     icon: won ? '✅' : '📋',
-    link: `/gigs/${gigId}`,
-    metadata: { gig_id: gigId, won },
+    link: invoiceId ? (isProvider ? '/app/wallet' : `/app/invoice/${invoiceId}`) : `/gigs/${gigId}`,
+    metadata: invoiceId ? { invoice_id: invoiceId, won } : { gig_id: gigId, won },
   });
 }
 

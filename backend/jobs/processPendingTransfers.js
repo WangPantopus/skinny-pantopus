@@ -19,6 +19,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const walletService = require('../services/walletService');
 const walletSettlement = require('../services/walletSettlementService');
+const { getBusinessPrimaryOwnerId } = require('../utils/businessPermissions');
 const { capturedFeeCents } = require('../stripe/gigPaymentProof');
 const { PAYMENT_STATES, transitionPaymentStatus } = require('../stripe/paymentStateMachine');
 const { createNotification } = require('../services/notificationService');
@@ -40,6 +41,52 @@ async function recoverStrandedTransfers() {
     try { await reconcileWalletRelease(payment.id); }
     catch (err) { logger.error('Wallet release remains pending', { paymentId: payment.id, error: err.message }); }
   }
+}
+
+// A payment for a business invoice: a gig_payment with no gig, tagged by the invoice route.
+function isInvoicePayment(payment) {
+  return payment.payment_type === 'gig_payment' && !payment.gig_id && payment.metadata?.type === 'invoice_payment';
+}
+
+// The invoice behind an invoice payment must be this payer's, linked to this payment, and not voided. A capture the
+// payer's app never confirmed leaves the invoice unpaid; the money is theirs to give, so it is marked paid here.
+async function confirmInvoiceForRelease(payment) {
+  const invoiceId = payment.metadata?.invoice_id;
+  const { data: invoice, error } = invoiceId ? await supabaseAdmin
+    .from('BusinessInvoice')
+    .select('id, status, payment_id, recipient_user_id')
+    .eq('id', invoiceId)
+    .maybeSingle() : { data: null, error: null };
+  if (error || !invoice || invoice.payment_id !== payment.id || invoice.recipient_user_id !== payment.payer_id
+    || invoice.status === 'void') {
+    logger.warn('processPendingTransfers: invoice payment does not match its invoice; not released', {
+      paymentId: payment.id, invoiceId: invoiceId || null, error: error?.message,
+    });
+    return false;
+  }
+  // Paid before invoices went to the owner: the payee is the business account, which has no sign-in and so no
+  // wallet anyone can open. Its owner receives the money, never a wallet nobody can reach.
+  const { data: payee } = await supabaseAdmin.from('User').select('account_type').eq('id', payment.payee_id).maybeSingle();
+  if (payee?.account_type === 'business') {
+    const ownerId = await getBusinessPrimaryOwnerId(payment.payee_id);
+    const { data: moved, error: moveError } = ownerId ? await supabaseAdmin.from('Payment')
+      .update({ payee_id: ownerId, updated_at: new Date().toISOString() })
+      .eq('id', payment.id).eq('payee_id', payment.payee_id).eq('payment_status', PAYMENT_STATES.CAPTURED_HOLD)
+      .select('id').maybeSingle() : { data: null, error: null };
+    if (moveError || !moved) {
+      logger.warn('processPendingTransfers: invoice payment has no owner to receive it; not released', {
+        paymentId: payment.id, error: moveError?.message,
+      });
+      return false;
+    }
+    payment.payee_id = ownerId;
+  }
+  if (invoice.status !== 'paid') {
+    await supabaseAdmin.from('BusinessInvoice')
+      .update({ status: 'paid', paid_at: payment.captured_at || new Date().toISOString() })
+      .eq('id', invoice.id).neq('status', 'paid').neq('status', 'void');
+  }
+  return true;
 }
 
 async function processPendingTransfers() {
@@ -136,7 +183,10 @@ async function processPendingTransfers() {
           .eq('id', payment.id)
           .single();
 
-        const protectedWalletPayment = ['gig_payment', 'tip'].includes(payment.payment_type);
+        // An invoice payment has no task behind it, so the task-bound settlement below (which proves the task was
+        // completed and confirmed) can never apply; it is released straight into the owner's wallet.
+        const invoicePayment = isInvoicePayment(payment);
+        const protectedWalletPayment = ['gig_payment', 'tip'].includes(payment.payment_type) && !invoicePayment;
         const admittedStates = protectedWalletPayment ? ['captured_hold', 'refunded_partial', 'refunded_full'] : ['captured_hold'];
         if (!fresh || !admittedStates.includes(fresh.payment_status) || (fresh.dispute_id && fresh.dispute_status !== 'won')) {
           logger.info('processPendingTransfers: skipping (state changed)', {
@@ -170,6 +220,7 @@ async function processPendingTransfers() {
           successCount++;
           continue;
         } else {
+          if (invoicePayment && !(await confirmInvoiceForRelease(payment))) { skipCount++; continue; }
           // ─── Transition to transfer_scheduled (concurrency guard) ───
           try {
             await transitionPaymentStatus(payment.id, PAYMENT_STATES.TRANSFER_SCHEDULED);
@@ -195,6 +246,15 @@ async function processPendingTransfers() {
               payment.id,
               payment.payer_id,
             );
+          } else if (invoicePayment) {
+            await walletService.creditGigIncome(
+              payment.payee_id,
+              transferAmount,
+              payment.gig_id,
+              payment.id,
+              payment.payer_id,
+              { description: 'Invoice payment received' },
+            );
           } else {
             await walletService.creditGigIncome(
               payment.payee_id,
@@ -216,7 +276,8 @@ async function processPendingTransfers() {
         successCount++;
 
         // Booking payments have no gig. Keep their notices on invitee-accessible
-        // booking pages instead of producing a /gigs/null destination.
+        // booking pages instead of producing a /gigs/null destination. An invoice's notices point at the invoice
+        // and the wallet.
         const isBooking = payment.payment_type === 'booking_payment';
         const { data: gig } = payment.gig_id ? await supabaseAdmin
           .from('Gig')
@@ -226,20 +287,27 @@ async function processPendingTransfers() {
 
         const gigTitle = gig?.title || 'a gig';
         const amountFormatted = `$${(transferAmount / 100).toFixed(2)}`;
-        const subjectMetadata = isBooking
-          ? { booking_id: payment.booking_id }
-          : { gig_id: payment.gig_id };
+        // What the payer paid, not what the provider keeps after the platform fee.
+        const paidFormatted = `$${(payment.amount_total / 100).toFixed(2)}`;
+        const invoiceId = invoicePayment ? payment.metadata?.invoice_id : null;
+        const subjectMetadata = invoicePayment
+          ? { invoice_id: invoiceId }
+          : isBooking
+            ? { booking_id: payment.booking_id }
+            : { gig_id: payment.gig_id };
 
         // Notify provider: funds added to wallet
         createNotification({
           userId: payment.payee_id,
           type: 'payout_sent',
           title: `${amountFormatted} added to your wallet`,
-          body: isBooking
-            ? 'Your booking payment has been added to your Pantopus wallet. You can withdraw to your bank anytime.'
-            : `Your payment for "${gigTitle}" has been added to your Pantopus wallet. You can withdraw to your bank anytime.`,
+          body: invoicePayment
+            ? 'An invoice payment has been added to your Pantopus wallet. You can withdraw to your bank anytime.'
+            : isBooking
+              ? 'Your booking payment has been added to your Pantopus wallet. You can withdraw to your bank anytime.'
+              : `Your payment for "${gigTitle}" has been added to your Pantopus wallet. You can withdraw to your bank anytime.`,
           icon: '💰',
-          link: '/app/settings/payments',
+          link: invoicePayment ? '/app/wallet' : '/app/settings/payments',
           metadata: {
             ...subjectMetadata,
             payment_id: payment.id,
@@ -251,10 +319,14 @@ async function processPendingTransfers() {
         createNotification({
           userId: payment.payer_id,
           type: 'payment_completed',
-          title: isBooking ? 'Booking payment complete' : `Payment complete for "${gigTitle}"`,
-          body: `Your payment of ${amountFormatted} has been sent to the provider.`,
+          title: invoicePayment
+            ? 'Invoice payment complete'
+            : isBooking ? 'Booking payment complete' : `Payment complete for "${gigTitle}"`,
+          body: invoicePayment
+            ? `Your payment of ${paidFormatted} has been sent to the business.`
+            : `Your payment of ${paidFormatted} has been sent to the provider.`,
           icon: '✅',
-          link: isBooking ? '/app/scheduling/my-bookings' : `/gigs/${payment.gig_id}`,
+          link: invoicePayment ? `/app/invoice/${invoiceId}` : isBooking ? '/app/scheduling/my-bookings' : `/gigs/${payment.gig_id}`,
           metadata: {
             ...subjectMetadata,
             payment_id: payment.id,

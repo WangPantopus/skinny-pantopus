@@ -910,6 +910,9 @@ class StripeService {
     metadata = {},
     description,
     idempotencyKey,
+    // Whose platform fee rate prices this payment, when that is not the payee (an invoice is priced for its business
+    // but paid to the business's owner).
+    feeRateSubjectId,
   }) {
     try {
       if (existingPaymentId) {
@@ -926,7 +929,7 @@ class StripeService {
       }
       const payeeAccount = await this._getPayeeAccountOptional(payeeId);
       const customerId = await this.getOrCreateCustomer(payerId);
-      const feeRate = await this.getEffectiveFeeRate(payeeId);
+      const feeRate = await this.getEffectiveFeeRate(feeRateSubjectId || payeeId);
       const fees = this.calculateFees(amount, feeRate);
 
       // Build PaymentIntent params — Separate Charges and Transfers
