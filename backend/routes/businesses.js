@@ -2800,8 +2800,18 @@ const donateSchema = Joi.object({
   donor_user_id: Joi.string().uuid().optional(),
 });
 
+// Nobody can receive what these two routes would charge: a business account has no sign-in and so no wallet, and no
+// screen starts a catalog payment. Until a checkout exists that pays the business's owner (as invoices do), they refuse
+// instead of taking a card payment that can never be released.
+const CATALOG_CHECKOUT_ENABLED = false;
+const refuseCatalogCheckout = (res) => res.status(409).json({
+  error: "Paying for catalog items isn't available yet.",
+  code: 'CATALOG_CHECKOUT_UNAVAILABLE',
+});
+
 router.post('/:businessId/catalog/:itemId/donate', verifyToken, validate(donateSchema), async (req, res) => {
   try {
+    if (!CATALOG_CHECKOUT_ENABLED) return refuseCatalogCheckout(res);
     const { businessId, itemId } = req.params;
     const userId = req.user.id;
     const { amount_cents, donor_user_id } = req.body;
@@ -2871,6 +2881,7 @@ const purchaseSchema = Joi.object({
 
 router.post('/:businessId/catalog/:itemId/purchase', verifyToken, validate(purchaseSchema), async (req, res) => {
   try {
+    if (!CATALOG_CHECKOUT_ENABLED) return refuseCatalogCheckout(res);
     const { businessId, itemId } = req.params;
     const userId = req.user.id;
     const { payment_method_id } = req.body;
