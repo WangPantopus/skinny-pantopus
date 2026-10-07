@@ -201,7 +201,16 @@ data. Never copy the June production env file into staging.
 
 **Check:** `stat -c %a ~/pantopus/.env.staging` prints `600`, and
 `grep -E '^[A-Z_0-9]+=$' ~/pantopus/.env.staging` prints nothing (no empty
-values). The backend's own startup checks run in S6.
+values). Startup only checks that the provider keys exist, so test the Smarty
+keys, which must belong to an account with an active subscription (on October 7
+staging's didn't, and every Add Home said verification was unavailable). This
+prints `200`; `402` means no active subscription, `401` wrong keys:
+
+```bash
+id=$(grep '^SMARTY_AUTH_ID=' ~/pantopus/.env.staging | cut -d= -f2-); tok=$(grep '^SMARTY_AUTH_TOKEN=' ~/pantopus/.env.staging | cut -d= -f2-); curl -s -o /dev/null -w '%{http_code}\n' "https://us-street.api.smarty.com/street-address?auth-id=$id&auth-token=$tok&street=616+NE+4th+Ave&city=Camas&state=WA"
+```
+
+The backend's own startup checks run in S6.
 
 ### S5. GitHub `staging` environment (founder)
 
@@ -439,7 +448,7 @@ Write `~/pantopus/.env.prod` as in S4 from `hosted-secrets/production.env` and
 Appendix A's production column. **First move the June file aside**
 (`mv .env.prod .env.prod.june-2026`): the deploy reads `.env.prod` for the new
 containers, and none of the June settings (old database, old keys) may carry
-over.
+over. Then run S4's checks against `.env.prod`, including the Smarty lookup.
 
 ### P6. GitHub `production` environment and first release (founder)
 
@@ -605,7 +614,7 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `INTERNAL_API_KEY`, `CSRF_SECRET`, `STEP_UP_SECRET`, `LOCATION_JITTER_SECRET`, `EMAIL_INBOUND_HMAC_SECRET`, `HOME_POSTCARD_CODE_KEYS_JSON`, `HOME_POSTCARD_CODE_ACTIVE_KEY` | gen | gen | `hosted-secrets/` |
 | `EDGE_PROXY_SECRET` | gen | gen | `hosted-secrets/`; the same value goes into Vercel (S7, P9) |
 | `GOOGLE_ADDRESS_VALIDATION_API_KEY`, `GOOGLE_PLACES_API_KEY` | required | required | Google Cloud (restrict to the server's IP) |
-| `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active) |
+| `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active; S4 checks it) |
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
 | `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
@@ -630,6 +639,7 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `LAMBDA_BACKED_CRON_ENABLED` | `false` | `false` | S8 |
 | `SLACK_ALERTS_WEBHOOK_URL` | optional | optional | D7 |
 | `LAUNCH_FEATURES` | empty | empty | launch cuts stay off |
+| `HOUSEHOLD_CLAIM_V2_READ_PATHS`, `HOUSEHOLD_CLAIM_PARALLEL_SUBMISSION`, `HOUSEHOLD_CLAIM_CHALLENGE_FLOW`, `HOUSEHOLD_CLAIM_ADMIN_COMPARE` | `true` | `true` | the ownership-claim behaviour the apps were verified against locally (a second claimant on a Home gets a parallel claim, not a refusal); unset, all four default to `false`, the older claim path |
 
 Startup refuses a production process without `CSRF_SECRET`, `STEP_UP_SECRET`,
 the Google, Smarty and Lob keys, `LOB_WEBHOOK_SECRET` and the right `LOB_ENV`,
