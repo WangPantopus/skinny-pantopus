@@ -804,28 +804,24 @@ function getRegistrationConflictResponse(error) {
   }
 }
 
-function buildOAuthUsername(email) {
-  const emailPrefix = String(email || '')
-    .split('@')[0]
-    .replace(/[^a-zA-Z0-9_]/g, '')
-    .slice(0, 20) || 'user';
-  const randomSuffix = randomBytes(3).toString('hex');
-  return `${emailPrefix}_${randomSuffix}`;
+// A generated handle says nothing about the person. Handles are shown to neighbors (feed authors, the invoice
+// recipient picker, a public profile link), and the first part of an email address is often a real name.
+function buildGeneratedUsername() {
+  return `user_${randomBytes(6).toString('hex')}`;
 }
 
 /**
- * Generate a username that is actually free. buildOAuthUsername alone does
- * not retry on collision; the register path (which now auto-generates when
- * the client omits a username) needs the availability check. Falls back to
- * a 12-hex-char random handle if the email-derived shape keeps colliding.
+ * Generate a username that is actually free. buildGeneratedUsername alone does
+ * not retry on collision; the register path (which auto-generates when the
+ * client omits a username) needs the availability check.
  */
-async function generateAvailableUsername(email) {
+async function generateAvailableUsername() {
   for (let attempt = 0; attempt < 5; attempt++) {
-    const candidate = buildOAuthUsername(email);
+    const candidate = buildGeneratedUsername();
     // eslint-disable-next-line no-await-in-loop
     if (await isUsernameAvailable(candidate)) return candidate;
   }
-  return `user_${randomBytes(6).toString('hex')}`;
+  return `user_${randomBytes(10).toString('hex')}`;
 }
 
 async function getOAuthProfileById(userId) {
@@ -857,11 +853,12 @@ async function ensureOAuthUserProfile({ userId, email, meta, source }) {
   // Apple only sends name on the FIRST sign-in; subsequent logins omit it.
   const rawFirst = (meta.given_name || meta.first_name || meta.name?.split(' ')[0] || '').trim();
   const rawLast = (meta.family_name || meta.last_name || meta.name?.split(' ').slice(1).join(' ') || '').trim();
-  // Fallback: use email prefix as first name if OAuth didn't provide one
-  const firstName = rawFirst || email.split('@')[0];
+  // No name from the provider: leave it empty, as an email sign-up does (the apps say "Pantopus user" until the
+  // person adds one). Never show the first part of their email address as their name.
+  const firstName = rawFirst || null;
   const lastName = rawLast;
-  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || email.split('@')[0];
-  const username = buildOAuthUsername(email);
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || null;
+  const username = await generateAvailableUsername();
 
   const { data: newUser, error: insertError } = await supabaseAdmin
     .from('User')
@@ -1568,7 +1565,7 @@ router.post(
           return res.status(400).json({ error: 'Username already taken' });
         }
       } else {
-        finalUsername = await generateAvailableUsername(email);
+        finalUsername = await generateAvailableUsername();
         logger.info('Auto-generated username for slim signup', { username: finalUsername });
       }
 
