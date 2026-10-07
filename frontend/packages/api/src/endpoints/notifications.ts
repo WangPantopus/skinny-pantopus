@@ -80,7 +80,13 @@ export async function markAllAsRead(scope?: NotificationReadScope): Promise<{ me
  * Delete a notification
  */
 export async function deleteNotification(notificationId: string): Promise<{ message: string }> {
-  return del(`/api/notifications/${notificationId}`);
+  try {
+    return await del(`/api/notifications/${notificationId}`);
+  } catch (err) {
+    // 404: already deleted (say on another device), so there is nothing left to remove.
+    if ((err as { statusCode?: number })?.statusCode === 404) return { message: 'Notification already deleted' };
+    throw err;
+  }
 }
 
 /**
