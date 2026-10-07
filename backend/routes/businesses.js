@@ -5035,6 +5035,36 @@ async function captureInvoicePayment(paymentId) {
   return payment?.payment_status || null;
 }
 
+/**
+ * Tells the business's owner that an invoice was paid, when it is: the money reaches their wallet after the 48-hour
+ * review (processPendingTransfers says so again then), but they should not have to open the app to find out.
+ */
+async function notifyInvoicePaid(invoice) {
+  const ownerId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
+  if (!ownerId) return;
+  const [{ data: payer }, { data: payment }] = await Promise.all([
+    supabaseAdmin.from('User').select('name, username').eq('id', invoice.recipient_user_id).maybeSingle(),
+    invoice.payment_id
+      ? supabaseAdmin.from('Payment').select('amount_to_payee').eq('id', invoice.payment_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const total = `$${(invoice.total_cents / 100).toFixed(2)}`;
+  const payerName = payer?.name || payer?.username || 'A customer';
+  const net = payment?.amount_to_payee ? `$${(payment.amount_to_payee / 100).toFixed(2)}` : null;
+  await require('../services/notificationService').createNotification({
+    userId: ownerId,
+    type: 'invoice_paid',
+    title: `Invoice paid: ${total}`,
+    body: net
+      ? `${payerName} paid your invoice. ${net} will reach your wallet after a short review.`
+      : `${payerName} paid your invoice.`,
+    link: '/app/wallet',
+    metadata: { invoice_id: invoice.id, business_id: invoice.business_user_id, amount_cents: invoice.total_cents },
+    context: 'personal',
+    idempotencyKey: `invoice-paid:${invoice.id}`,
+  });
+}
+
 /** Marks the invoice paid (once) and returns it. */
 async function markInvoicePaid(invoiceId) {
   const { data: updatedRows, error } = await supabaseAdmin
@@ -5044,7 +5074,13 @@ async function markInvoicePaid(invoiceId) {
     .neq('status', 'paid')
     .select();
   if (error) throw error;
-  if (updatedRows?.[0]) return updatedRows[0];
+  if (updatedRows?.[0]) {
+    // Only the request that marked it paid says so; a notice that fails never fails the payment.
+    notifyInvoicePaid(updatedRows[0]).catch((err) => {
+      logger.warn('Invoice paid notice skipped', { invoiceId, error: err.message });
+    });
+    return updatedRows[0];
+  }
   // Another request marked it paid first.
   const { data: invoice } = await supabaseAdmin.from('BusinessInvoice').select('*').eq('id', invoiceId).maybeSingle();
   return invoice;
