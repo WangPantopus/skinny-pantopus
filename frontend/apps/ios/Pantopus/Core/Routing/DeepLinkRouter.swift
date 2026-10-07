@@ -51,8 +51,6 @@ final class DeepLinkRouter {
         /// `pantopus://homes/:id/owners/review-claim` — the owner's claim review
         /// on its Residency tab (`residency_claim`).
         case homeClaimReview(id: String)
-        /// `pantopus://homes/:id/claim-owner/evidence?claimId=` — that claim's status.
-        case claimStatus(claimId: String)
         /// `pantopus://homes/:id/owners/transfer` — A13.4 Transfer Ownership
         /// form. Lands on the populated state; the form owns the Face ID
         /// bottom sheet.
@@ -561,12 +559,7 @@ final class DeepLinkRouter {
             if rest.count == 3, rest[0] == "membership", rest[2] == "inbox" { return .fanInbox(personaId: rest[1]) }
             return .unknown(url)
         case "homes":
-            return homeDestination(
-                url: url,
-                segments: segments,
-                tabQuery: tabQuery,
-                claimIdQuery: queryValue("claimId", in: comps)
-            )
+            return homeDestination(url: url, segments: segments, tabQuery: tabQuery)
         case "landlord":
             // `/app/landlord/properties/:homeId?tab=requests` (tenant_request).
             // The apps have no landlord requests screen, so the tap opens the
@@ -750,9 +743,7 @@ final class DeepLinkRouter {
         }
     }
 
-    private func homeDestination(
-        url: URL, segments: [String], tabQuery: String?, claimIdQuery: String?
-    ) -> Destination {
+    private func homeDestination(url: URL, segments: [String], tabQuery: String?) -> Destination {
         guard let id = segments.dropFirst().first else { return .unknown(url) }
         let trailing = Array(segments.dropFirst(2))
         if trailing.first == "tasks" {
@@ -784,9 +775,10 @@ final class DeepLinkRouter {
             default: break
             }
         }
-        if trailing.first == "claim-owner", trailing.dropFirst().first == "evidence",
-           let claimIdQuery, UUID(uuidString: claimIdQuery) != nil {
-            return .claimStatus(claimId: claimIdQuery.lowercased())
+        // Ownership pushes link the web's evidence page; the app opens the claim's
+        // Waiting Room, which offers both upload and verify-by-mail.
+        if trailing.first == "claim-owner", trailing.dropFirst().first == "evidence" {
+            return .waitingRoom(id: id)
         }
         if trailing.first == "verify-landlord" || trailing.first == "verify_landlord" {
             return .verifyLandlord(id: id)

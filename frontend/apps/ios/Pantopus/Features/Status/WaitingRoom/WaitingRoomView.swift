@@ -17,6 +17,7 @@ import SwiftUI
 
 public struct WaitingRoomView: View {
     @State private var viewModel: WaitingRoomViewModel
+    @State private var appearedOnce = false
     private let onBack: @MainActor () -> Void
     private let onNav: @MainActor (WaitingRoomNav) -> Void
 
@@ -76,6 +77,11 @@ public struct WaitingRoomView: View {
         .toolbar(.hidden, for: .navigationBar)
         .accessibilityIdentifier("waitingRoom")
         .task { await viewModel.refresh() }
+        // Coming back from the postcard, evidence or Home screens can change the claim.
+        .onAppear {
+            if appearedOnce { Task { await viewModel.refresh() } }
+            appearedOnce = true
+        }
         .onChange(of: viewModel.pendingNav) { _, nav in
             guard let nav else { return }
             onNav(nav)

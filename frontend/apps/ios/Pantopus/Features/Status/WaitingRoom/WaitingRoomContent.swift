@@ -231,46 +231,59 @@ public extension WaitingRoomContent {
     /// Active wait — `Under review`, info-toned pulsing halo, the Submitted →
     /// Under review → Approved timeline with "Under review" current, and the
     /// "We'll notify you when it's decided" pill (no review time is promised).
+    /// A claim started from Add Home has no documents yet (`needsDocuments`),
+    /// so the room asks for them instead. Mail verification is offered until
+    /// the person's address is verified.
     static func active(
         address: String = sampleAddress,
         claimRef: String = sampleClaimRef,
         submittedOn: String? = "Oct 24",
-        reviewCaption: String? = "Started 9h ago"
+        reviewCaption: String? = "Started 9h ago",
+        needsDocuments: Bool = false,
+        addressVerified: Bool = false
     ) -> WaitingRoomContent {
-        WaitingRoomContent(
+        // A person reviews ownership documents (no county-records check), and no
+        // review time is promised while identity confirmation is undecided.
+        let wait = needsDocuments
+            ? "Upload a deed, closing disclosure or property tax bill so a Pantopus reviewer can check ownership."
+            : "Your documents are waiting for a Pantopus reviewer."
+        let meanwhile = addressVerified
+            ? "Your address is verified, so you can use your Home meanwhile."
+            : "Meanwhile, you can verify your address by mail."
+        return WaitingRoomContent(
             title: roomTitle,
-            halo: StatusHalo(tone: .info, icon: .hourglass, isPulsing: true),
-            headline: "Under review",
-            // A person reviews ownership documents (no county-records check), and no
-            // review time is promised while identity confirmation is undecided.
-            subcopy: "Your documents are waiting for a Pantopus reviewer. " +
-                "Meanwhile, you can verify your address by mail.",
+            halo: needsDocuments
+                ? StatusHalo(tone: .info, icon: .filePlus2)
+                : StatusHalo(tone: .info, icon: .hourglass, isPulsing: true),
+            headline: needsDocuments ? "Add your documents" : "Under review",
+            subcopy: "\(wait) \(meanwhile)",
             address: address,
             claimRef: claimRef,
             reviewerNote: nil,
             timeline: [
                 StatusTimelineStage(id: "submitted", label: "Submitted", sub: submittedOn, state: .done),
-                StatusTimelineStage(id: "review", label: "Under review", sub: reviewCaption, state: .current),
+                StatusTimelineStage(
+                    id: "review",
+                    label: "Under review",
+                    sub: needsDocuments ? "Waiting for documents" : reviewCaption,
+                    state: .current
+                ),
                 StatusTimelineStage(id: "approved", label: "Approved", state: .pending)
             ],
             timelinePaused: false,
-            etaPill: StatusWaitingPill(
-                text: "We'll notify you when it's decided",
-                icon: .bell,
-                tone: .primary
-            ),
+            etaPill: needsDocuments
+                ? StatusWaitingPill(text: "The review starts after you upload documents", icon: .filePlus2, tone: .primary)
+                : StatusWaitingPill(text: "We'll notify you when it's decided", icon: .bell, tone: .primary),
             manageSectionTitle: manageTitle,
             inlineActions: [
                 WaitingRoomInlineAction(
                     id: "updateEvidence",
-                    label: "Update evidence",
+                    label: needsDocuments ? "Upload documents" : "Update evidence",
                     icon: .filePlus2,
-                    tone: .standard,
+                    tone: needsDocuments ? .primary : .standard,
                     actionKey: "update_evidence"
-                ),
-                cancelClaimAction(),
-                verifyByMailAction()
-            ],
+                )
+            ] + (addressVerified ? [] : [verifyByMailAction()]) + [cancelClaimAction()],
             primaryCta: viewClaim,
             secondaryCta: backToHome
         )

@@ -24,6 +24,8 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
     public let updatedAt: String
     /// The address the person claimed (their own entry), when the server sends it.
     public var home: ClaimedHome?
+    /// Whether any documents are attached; nil when the server didn't say.
+    public var hasEvidence: Bool?
 
     /// The claimed Home's address lines.
     public struct ClaimedHome: Decodable, Sendable, Hashable {
@@ -52,6 +54,7 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case home
+        case hasEvidence = "has_evidence"
     }
 }
 

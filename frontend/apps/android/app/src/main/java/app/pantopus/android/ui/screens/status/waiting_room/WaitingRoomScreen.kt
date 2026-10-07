@@ -38,6 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.HaloCircle
 import app.pantopus.android.ui.components.Shimmer
@@ -67,9 +69,9 @@ fun WaitingRoomRoute(
     val phase by viewModel.phase.collectAsStateWithLifecycle()
     val navEvent by viewModel.navEvent.collectAsStateWithLifecycle()
 
-    // Mirrors the iOS `.task` on `WaitingRoomView`: refetch on every
-    // appearance so returning from evidence upload shows fresh claim state.
-    LaunchedEffect(Unit) { viewModel.refresh() }
+    // Refetch on every resume, as iOS does on appear: returning from evidence
+    // upload, the postcard or the Home (or to the app) can change the claim.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
     LaunchedEffect(navEvent) {
         navEvent?.let {
@@ -587,6 +589,7 @@ private fun AddressRow(
             strokeWidth = 2.2f,
             tint = PantopusColors.primary600,
         )
+        // A long address shortens with an ellipsis; the claim reference stays on one line.
         Text(
             text = address,
             fontSize = 12.sp,
@@ -594,6 +597,7 @@ private fun AddressRow(
             color = PantopusColors.appText,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
         )
         Box(modifier = Modifier.size(width = 1.dp, height = 12.dp).background(PantopusColors.appBorder))
         Text(
@@ -602,6 +606,8 @@ private fun AddressRow(
             fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.Monospace,
             color = PantopusColors.appTextSecondary,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }

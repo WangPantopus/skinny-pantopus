@@ -106,7 +106,7 @@ public final class WaitingRoomViewModel {
                 if Self.approvedStatuses.contains(claim.status) {
                     // A18.2 "You're the owner". Dates come straight off the
                     // claim row — never the design's sample dates.
-                    let approvedAddress = await resolvedAddress(claimed: claim.home)
+                    let approvedAddress = await homeContext(claimed: claim.home).address
                     let approvedContent = StatusWaitingContent.claimSubmitted(
                         homeName: approvedAddress,
                         approved: true,
@@ -121,20 +121,22 @@ public final class WaitingRoomViewModel {
             }
             let ref = String(claim.id.prefix(Self.claimRefLength)).uppercased()
 
-            let address = await resolvedAddress(claimed: claim.home)
+            let home = await homeContext(claimed: claim.home)
 
             content =
                 seedState == .moreInfoRequested
                     ? .moreInfoRequested(
-                        address: address,
+                        address: home.address,
                         claimRef: ref,
                         submittedOn: Self.dayCaption(claim.createdAt)
                     )
                     : .active(
-                        address: address,
+                        address: home.address,
                         claimRef: ref,
                         submittedOn: Self.dayCaption(claim.createdAt),
-                        reviewCaption: nil
+                        reviewCaption: nil,
+                        needsDocuments: claim.hasEvidence == false,
+                        addressVerified: home.addressVerified
                     )
             phase = .loaded
         } catch {
@@ -188,21 +190,24 @@ public final class WaitingRoomViewModel {
         }
     }
 
-    /// Best-effort street address for this home. A pending claimant can't
-    /// read the Home yet, so their own claim's address comes next; the
-    /// generic "Your home" label is the last resort, never an invented one.
-    private func resolvedAddress(claimed: OwnershipClaimDTO.ClaimedHome? = nil) async -> String {
+    /// Best-effort street address for this home, and whether the person has
+    /// verified their address there. A pending claimant can't read the Home
+    /// yet, so their own claim's address comes next; the generic "Your home"
+    /// label is the last resort, never an invented one.
+    private func homeContext(claimed: OwnershipClaimDTO.ClaimedHome? = nil) async -> (address: String, addressVerified: Bool) {
         guard let detail: HomeDetailResponse = try? await api.request(HomesEndpoints.detail(homeId: homeId)) else {
             let claimedLine = [claimed?.address, claimed?.city, claimed?.state]
                 .compactMap { $0 }
                 .joined(separator: " · ")
-            return claimedLine.isEmpty ? "Your home" : claimedLine
+            return (claimedLine.isEmpty ? "Your home" : claimedLine, false)
         }
         let home = detail.home.base
         let joined = [home.address, home.city, home.state]
             .compactMap { $0 }
             .joined(separator: " · ")
-        return joined.isEmpty ? "Your home" : joined
+        // Household-verified members (an invitation) can still verify the address by mail.
+        let verified = detail.home.residencyStatus == "verified" && detail.home.residencySource != "household"
+        return (joined.isEmpty ? "Your home" : joined, verified)
     }
 
     /// "Oct 14"-style caption for an ISO-8601 backend timestamp. Returns nil

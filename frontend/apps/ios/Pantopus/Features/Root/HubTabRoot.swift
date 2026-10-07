@@ -1070,9 +1070,6 @@ public struct HubTabRoot: View {
         case let .homeClaimReview(id):
             path.append(.homeClaimReview(homeId: id, initialTab: .residency))
             _ = router.consume()
-        case let .claimStatus(claimId):
-            path.append(.claimStatus(claimId: claimId))
-            _ = router.consume()
         case let .homeOwnersTransfer(id):
             // Push the home's dashboard underneath so a back-tap from the
             // transfer form lands somewhere useful rather than at the
