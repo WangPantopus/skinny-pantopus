@@ -234,8 +234,6 @@ internal fun PlaceDashboardContent(
                 modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp).testTag("place.homeTools"),
             )
         }
-        // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
-        item { PrivacyMirrorRow(onOpen = onOpenPrivacyMirror) }
         // Movers first (Wedge v2 D5): the first-week checklist for a recent move-in.
         item {
             // Per-home ticks and dismissal are keyed by id; never let the
@@ -269,6 +267,14 @@ internal fun PlaceDashboardContent(
             )
         }
         item { Spacer(modifier = Modifier.height(20.dp)) }
+        // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does. It follows
+        // Today's Pulse, as on iOS: verify, Home tools, movers, the Pulse, then this line.
+        item {
+            PrivacyMirrorRow(
+                onOpen = onOpenPrivacyMirror,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+            )
+        }
         if (isVerified) {
             item {
                 PlaceMessagesEntry(
@@ -308,12 +314,13 @@ internal fun PlaceDashboardContent(
 
 /** "Private by default. See what neighbors see of this address." (Wedge v2 §2). */
 @Composable
-private fun PrivacyMirrorRow(onOpen: () -> Unit) {
+private fun PrivacyMirrorRow(
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier =
-            Modifier
-                .padding(horizontal = 16.dp)
-                .padding(top = 12.dp)
+            modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .background(PantopusColors.appSurfaceSunken)
