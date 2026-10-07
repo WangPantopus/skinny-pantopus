@@ -107,7 +107,7 @@ export function ResidencyReviewPanel({ homeId, claimId, initialAction, fromMembe
       <p className="text-sm">Asked to join as: {joinedAs[claim.claimed_role ?? ''] ?? words(claim.claimed_role)}</p>
       {claim.claimed_address && <p className="break-words text-sm">Address: {claim.claimed_address}</p>}
       {claim.review_note && <p className="whitespace-pre-wrap break-words text-sm">Note: {claim.review_note}</p>}
-      {pending && <p className="text-xs text-app-text-secondary">Your saved decision below was for an earlier request.</p>}
+      {pending && <p className="text-xs text-app-text-secondary">Above is how the request looks now. Your saved decision is below.</p>}
     </section>}
     {controller && claim && <section aria-label="Their access now" className="space-y-2 rounded-xl border border-app-border p-4">
       <h2 className="font-semibold">Their access now</h2>

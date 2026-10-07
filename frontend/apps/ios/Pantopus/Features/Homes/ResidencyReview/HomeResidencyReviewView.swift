@@ -83,7 +83,7 @@ struct HomeResidencyReviewView: View {
             Text("Asked to join as: \(joinedAs(review.claim["claimed_role"]))")
             if let address = review.claim["claimed_address"]?.stringValue { Text("Address: \(address)") }
             if let note = review.claim["review_note"]?.stringValue, !note.isEmpty { Text("Note: \(note)") }
-            if model.pending != nil { Text("Your saved decision below was for an earlier request.").font(.caption) }
+            if model.pending != nil { Text("Above is how the request looks now. Your saved decision is below.").font(.caption) }
         }
     }
 

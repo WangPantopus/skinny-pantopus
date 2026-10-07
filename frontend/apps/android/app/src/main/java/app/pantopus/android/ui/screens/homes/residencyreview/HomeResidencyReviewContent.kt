@@ -31,7 +31,7 @@ internal fun HomeResidencyReviewCurrent(
     (review.claim["claimed_address"] as? String)?.let { Text("Address: $it") }
     (review.claim["review_note"] as? String)?.takeIf(String::isNotEmpty)?.let { Text("Note: $it") }
     if (recovering) {
-        Text("Your saved decision below was for an earlier request.", style = MaterialTheme.typography.bodySmall)
+        Text("Above is how the request looks now. Your saved decision is below.", style = MaterialTheme.typography.bodySmall)
     }
     HorizontalDivider()
     Text("Their access now", style = MaterialTheme.typography.titleMedium)
