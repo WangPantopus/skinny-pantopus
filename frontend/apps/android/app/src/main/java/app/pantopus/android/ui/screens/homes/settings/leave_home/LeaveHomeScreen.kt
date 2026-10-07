@@ -28,6 +28,7 @@ class LeaveHomeViewModel
 fun LeaveHomeScreen(
     onBack: () -> Unit,
     onLeft: () -> Unit,
+    onTransfer: (String) -> Unit,
     viewModel: LeaveHomeViewModel = hiltViewModel(),
     removal: HomeMemberRemovalViewModel = hiltViewModel(),
 ) {
@@ -37,5 +38,6 @@ fun LeaveHomeScreen(
         onClose = onBack,
         onAcknowledged = { if (state.outcome?.state == "completed") onLeft() else onBack() },
         viewModel = removal,
+        onTransfer = { onTransfer(viewModel.homeId) },
     )
 }

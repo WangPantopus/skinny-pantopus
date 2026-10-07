@@ -42,6 +42,8 @@ fun HomeMemberRemovalDialog(
     onClose: () -> Unit,
     onAcknowledged: () -> Unit,
     viewModel: HomeMemberRemovalViewModel = hiltViewModel(),
+    /** Opens Owners when a primary owner tries to leave before transferring ownership. */
+    onTransfer: (() -> Unit)? = null,
 ) {
     SecureScreenEffect()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -100,9 +102,7 @@ fun HomeMemberRemovalDialog(
                         if (state.opened && state.error == null) {
                             Text("Nothing to finish here.")
                         }
-                        TextButton(onClick = { viewModel.resume(target) }, modifier = Modifier.testTag("homeMemberRemovalReload")) {
-                            Text("Reload")
-                        }
+                        RemovalReloadOrTransfer(state.transferRequired, onTransfer) { viewModel.resume(target) }
                     }
                 }
             }
@@ -261,3 +261,17 @@ private fun removalHeading(
         state.outcome?.state == "rejected" -> "Couldn't finish this"
         else -> "Check your last removal"
     }
+
+/** A primary owner who tries to leave is sent to the ownership transfer instead of reloading the same refusal. */
+@Composable
+private fun RemovalReloadOrTransfer(
+    transferRequired: Boolean,
+    onTransfer: (() -> Unit)?,
+    onReload: () -> Unit,
+) {
+    if (transferRequired && onTransfer != null) {
+        TextButton(onClick = onTransfer, modifier = Modifier.testTag("homeMemberRemovalTransfer")) { Text("Transfer ownership") }
+    } else {
+        TextButton(onClick = onReload, modifier = Modifier.testTag("homeMemberRemovalReload")) { Text("Reload") }
+    }
+}
