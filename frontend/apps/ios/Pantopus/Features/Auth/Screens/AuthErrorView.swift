@@ -106,7 +106,7 @@ public final class AuthErrorViewModel {
         case .rateLimited:
             AuthErrorCopy(
                 headline: "Too many attempts",
-                body: "Take a breath and try again in a moment."
+                body: "Take a breath and try again in a few minutes."
             )
         case .serverError:
             AuthErrorCopy(

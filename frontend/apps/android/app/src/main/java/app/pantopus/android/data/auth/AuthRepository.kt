@@ -99,7 +99,7 @@ sealed class AuthError(
 
     data object NetworkError : AuthError("Can't reach Pantopus. Check your connection.")
 
-    data object RateLimited : AuthError("Too many attempts. Try again in a moment.")
+    data object RateLimited : AuthError("Too many attempts. Please wait a few minutes and try again.")
 
     data class ServerError(
         val detail: String,
