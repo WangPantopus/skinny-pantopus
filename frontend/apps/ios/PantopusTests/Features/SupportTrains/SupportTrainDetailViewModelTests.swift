@@ -202,26 +202,36 @@ final class SupportTrainDetailViewModelTests: XCTestCase {
 
     // MARK: - Live detail fetch + projection
 
-    private static let detailJSON = """
-    {
-      "id":"t1","title":"Meals for the Reyes family","story":"Baby arrived Nov 18 — thank you.",
-      "status":"active",
-      "support_modes":{"home_cooked_meals":true,"takeout":true,"groceries":false,"gift_funds":false},
-      "recipient_summary":"Household of 4","household_size":4,
-      "slots":[
-        {"id":"s1","slot_date":"2025-12-02","slot_label":"Dinner","support_mode":"meal","status":"open","filled_count":0,"capacity":1},
-        {"id":"s2","slot_date":"2025-12-03","slot_label":"Dinner","support_mode":"meal","status":"full","filled_count":1,"capacity":1}
-      ],
-      "my_reservations":[
-        {"id":"r1","slot_id":"s2","status":"reserved","contribution_mode":"cook","dish_title":"Lentil soup",
-         "created_at":"2025-11-20T00:00:00Z"}
-      ],
-      "updates":[],
-      "organizers":[{"id":"o1","role":"primary","User":{"id":"u1","username":"diane","name":"Diane K."}}],
-      "viewer_level":"viewer","exact_address_shared":false,
-      "coarse_location":{"city":"Portland","state":"OR"}
+    /// A slot date that is over no longer reads as open, so the dates here are relative to today.
+    private static func dayKey(plusDays days: Int) -> String {
+        let date = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
-    """
+
+    private static var detailJSON: String {
+        let (first, second) = (dayKey(plusDays: 3), dayKey(plusDays: 4))
+        return """
+        {
+          "id":"t1","title":"Meals for the Reyes family","story":"Baby arrived Nov 18 — thank you.",
+          "status":"active",
+          "support_modes":{"home_cooked_meals":true,"takeout":true,"groceries":false,"gift_funds":false},
+          "recipient_summary":"Household of 4","household_size":4,
+          "slots":[
+            {"id":"s1","slot_date":"\(first)","slot_label":"Dinner","support_mode":"meal","status":"open","filled_count":0,"capacity":1},
+            {"id":"s2","slot_date":"\(second)","slot_label":"Dinner","support_mode":"meal","status":"full","filled_count":1,"capacity":1}
+          ],
+          "my_reservations":[
+            {"id":"r1","slot_id":"s2","status":"reserved","contribution_mode":"cook","dish_title":"Lentil soup",
+             "created_at":"2025-11-20T00:00:00Z"}
+          ],
+          "updates":[],
+          "organizers":[{"id":"o1","role":"primary","User":{"id":"u1","username":"diane","name":"Diane K."}}],
+          "viewer_level":"viewer","exact_address_shared":false,
+          "coarse_location":{"city":"Portland","state":"OR"}
+        }
+        """
+    }
 
     func testLoadFetchesDetailAndProjects() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.detailJSON)]

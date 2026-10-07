@@ -29,6 +29,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.LocalDate
 
 /**
  * A10.9 (P3.1) — Covers the Android Support Train detail VM. Parity with
@@ -53,6 +54,9 @@ class SupportTrainDetailViewModelTest {
         val handle = SavedStateHandle(mapOf(SupportTrainDetailViewModel.SUPPORT_TRAIN_ID_KEY to trainId))
         return SupportTrainDetailViewModel(repo, handle)
     }
+
+    /** A slot date that is over no longer reads as open, so the dates here are relative to today. */
+    private fun dayFromToday(days: Long): String = LocalDate.now().plusDays(days).toString()
 
     private fun slot(
         id: String,
@@ -88,7 +92,7 @@ class SupportTrainDetailViewModelTest {
                     status = "active",
                     supportModes = SupportTrainModesDto(homeCookedMeals = true, takeout = true),
                     recipientSummary = "Household of 4",
-                    slots = listOf(slot("s1", "2025-12-02", covered = false), slot("s2", "2025-12-03", covered = true)),
+                    slots = listOf(slot("s1", dayFromToday(3), covered = false), slot("s2", dayFromToday(4), covered = true)),
                     myReservations =
                         listOf(
                             SupportTrainMyReservationDto(
