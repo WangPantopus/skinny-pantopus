@@ -152,6 +152,7 @@ public struct ManageTrainView: View {
             Button(action: onClose) {
                 Icon(.chevronLeft, size: 22, color: Theme.Color.appText)
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")

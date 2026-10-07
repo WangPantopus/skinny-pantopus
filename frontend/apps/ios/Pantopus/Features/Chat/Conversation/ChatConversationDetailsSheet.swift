@@ -72,6 +72,7 @@ struct ChatConversationDetailsSheet: View {
             Button { dismiss() } label: {
                 Icon(.x, size: 16, strokeWidth: 2.5, color: Theme.Color.appTextSecondary)
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
@@ -258,6 +259,7 @@ struct ChatReportUserSheet: View {
             Button { dismiss() } label: {
                 Icon(.x, size: 16, strokeWidth: 2.5, color: Theme.Color.appTextSecondary)
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
