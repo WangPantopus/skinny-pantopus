@@ -259,6 +259,14 @@ function alertBody(a) {
 // The verdict engine wants the provider's richer hourly rows — wind and,
 // where the provider supplies it, per-hour feels-like — which the narrower
 // contract strip drops. Same source array, one extra projection.
+/** Sunrise and sunset per local date, so a run window keeps to daylight. */
+function engineSun(daily) {
+  if (!Array.isArray(daily)) return [];
+  return daily
+    .filter((d) => d && d.date && d.sunrise_utc && d.sunset_utc)
+    .map((d) => ({ date: d.date, sunrise_utc: d.sunrise_utc, sunset_utc: d.sunset_utc }));
+}
+
 function engineHours(hourly) {
   if (!Array.isArray(hourly)) return [];
   const out = [];
@@ -378,6 +386,7 @@ function buildTodayEnvelopes({ weather, aqi, aqiMissing = null, alerts, weatherP
       weather: {
         hourly: engineHours(hub.weather.hourly),
         daily: mapWeatherDays(hub.weather.daily),
+        sun: engineSun(hub.weather.daily),
       },
       aqi: hub.aqi
         ? {

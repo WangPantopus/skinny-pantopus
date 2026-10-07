@@ -35,9 +35,12 @@ const AQI_SENSITIVE = 100;
 const RUN_MIN_F = 35;
 const RUN_MAX_F = 78;
 // A run is a daytime thing: only 5am–9pm local counts, so an overnight
-// stretch of mild hours never reads as "Run 5pm–5am".
+// stretch of mild hours never reads as "Run 5pm–5am". Where the forecast
+// carries sunrise and sunset, an hour also needs some daylight, so an
+// October evening never reads as "Run 7pm–9pm" after a 6:40pm sunset.
 const RUN_FIRST_HOUR = 5;
 const RUN_LAST_HOUR = 21;
+const HOUR_MS = 3600000;
 // Precip probability at which we call it "likely", %.
 const PRECIP_LIKELY = 50;
 const PRECIP_POSSIBLE = 30;
@@ -74,6 +77,16 @@ function localHourAndDate(iso, timezone) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Whether the hour starting at `iso` has any daylight, given that local
+ * day's sun times. True when they are unknown, so the clock window stands.
+ */
+function hasDaylight(iso, sun) {
+  if (!sun || !isNum(sun.rise) || !isNum(sun.set)) return true;
+  const start = Date.parse(iso);
+  return start < sun.set && start + HOUR_MS > sun.rise;
 }
 
 /** "3pm" / "midnight" in the place's timezone. */
@@ -181,13 +194,15 @@ function openWindowsTile({ aqi, hours, timezone }) {
   };
 }
 
-function runTile({ hours, timezone, now }) {
+function runTile({ hours, timezone, now, sun = [] }) {
   if (hours.length === 0) return null;
 
+  const sunByDate = new Map(sun.map((s) => [s.date, { rise: Date.parse(s.sunrise_utc), set: Date.parse(s.sunset_utc) }]));
   const comfortable = (h) => {
     const feels = isNum(h.feels_like_f) ? h.feels_like_f : h.temp_f;
     const local = localHourAndDate(h.time, timezone);
-    const daytime = local && local.hour >= RUN_FIRST_HOUR && local.hour <= RUN_LAST_HOUR;
+    const daytime = local && local.hour >= RUN_FIRST_HOUR && local.hour <= RUN_LAST_HOUR
+      && hasDaylight(h.time, sunByDate.get(local.date));
     return daytime && feels >= RUN_MIN_F && feels <= RUN_MAX_F && (h.precip_chance ?? 0) < PRECIP_LIKELY;
   };
 
@@ -330,7 +345,8 @@ function grillTile({ hours, timezone }) {
  * Build the tile row.
  *
  * @param {object}  input
- * @param {object}  [input.weather]   PlaceWeatherData-shaped (hourly/daily).
+ * @param {object}  [input.weather]   PlaceWeatherData-shaped (hourly/daily), plus `sun`:
+ *                                    [{ date, sunrise_utc, sunset_utc }] for the run window.
  * @param {object}  [input.aqi]       PlaceAirQualityData-shaped.
  * @param {string}  [input.timezone]  IANA zone for the place.
  * @param {string}  [input.homeType]  Home.home_type, for tile relevance.
@@ -340,11 +356,12 @@ function grillTile({ hours, timezone }) {
 function buildGoodDayTiles({ weather, aqi, timezone, homeType, now = new Date() } = {}) {
   const hours = upcomingHours(weather && weather.hourly, now);
   const days = Array.isArray(weather && weather.daily) ? weather.daily : [];
+  const sun = Array.isArray(weather && weather.sun) ? weather.sun : [];
   const todayStr = days[0] ? days[0].date : null;
 
   const tiles = [
     openWindowsTile({ aqi, hours, timezone }),
-    runTile({ hours, timezone, now }),
+    runTile({ hours, timezone, now, sun }),
     washCarTile({ days, todayStr }),
     waterLawnTile({ days, todayStr, homeType }),
     grillTile({ hours, timezone }),
