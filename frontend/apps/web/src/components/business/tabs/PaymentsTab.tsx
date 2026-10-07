@@ -65,7 +65,7 @@ export default function PaymentsTab() {
       <div className="bg-surface rounded-xl border border-app p-6">
         <h3 className="text-lg font-semibold text-app mb-1">Business Payout Account</h3>
         <p className="text-sm text-app-secondary mb-4">
-          Set up Stripe to receive payments for business gigs and services
+          Set up Stripe once to withdraw what your business earns
         </p>
 
         {isOnboarded ? (
