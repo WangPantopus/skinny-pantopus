@@ -82,6 +82,7 @@ struct HomeSettingsIdentityCard: View {
                 } label: {
                     Icon(.edit2, size: 16, color: Theme.Color.appTextMuted)
                         .frame(width: 44, height: 44, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Rename home")

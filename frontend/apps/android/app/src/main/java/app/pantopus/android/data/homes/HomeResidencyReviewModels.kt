@@ -9,8 +9,8 @@ data class HomeResidencyReviewScope(val origin: String, val actorId: String, val
 
 @JsonClass(generateAdapter = false)
 enum class HomeResidencyDecision(val wire: String, val title: String) {
-    Approve("approve", "Approve residency"),
-    Reject("reject", "Reject residency"),
+    Approve("approve", "Approve"),
+    Reject("reject", "Reject"),
 }
 
 enum class HomeResidencyReviewRole(val wire: String, val title: String) {
@@ -57,19 +57,19 @@ enum class HomeResidencyReviewFailureKind { Storage, Changed, Busy, Unknown, Una
 class HomeResidencyReviewFailure(val kind: HomeResidencyReviewFailureKind, code: String? = null) : IllegalStateException(
     when (kind) {
         HomeResidencyReviewFailureKind.Storage ->
-            "Your original residency decision could not be read or saved. Retry recovery before choosing another decision."
-        HomeResidencyReviewFailureKind.Changed -> "The saved decision or session changed. Reopen residency review to recover the original."
-        HomeResidencyReviewFailureKind.Busy -> "Your original decision is still being checked. Try again shortly."
-        HomeResidencyReviewFailureKind.Unknown -> "The decision is not confirmed. Retry the saved original to check its result."
-        HomeResidencyReviewFailureKind.Unavailable -> "Current residency access could not be verified. Reload to check again."
+            "Your last decision couldn’t be read or saved on this device. Try again before choosing another."
+        HomeResidencyReviewFailureKind.Changed -> "Your saved decision or account changed. Open the review again to finish it."
+        HomeResidencyReviewFailureKind.Busy -> "Your last decision is still being checked. Try again in a moment."
+        HomeResidencyReviewFailureKind.Unknown -> "We couldn’t confirm your decision. Try again; it won’t be applied twice."
+        HomeResidencyReviewFailureKind.Unavailable -> "Couldn’t load this request. Reload to try again."
         HomeResidencyReviewFailureKind.SessionChanged ->
-            "Your session changed. Reopen residency review to check access and recover the original."
+            "Your account changed. Close this and open it again to continue."
         HomeResidencyReviewFailureKind.Refused ->
             if (code == "MEMBERSHIP_RENEWAL_REQUIRED") {
                 "This person’s household membership has ended, so this claim can’t be approved. " +
                     "Reject it, then invite them again from Members."
             } else {
-                "The saved decision could not be applied to the current claim and membership limits. Review the current claim again."
+                "Your decision couldn’t be applied because the request or their access changed. Review it again."
             }
     },
 )

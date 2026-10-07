@@ -2077,7 +2077,8 @@ public struct HubTabRoot: View {
                         default: false
                         }
                     }
-                }
+                },
+                onTransfer: { path.append(.homeOwners(homeId: homeId)) }
             )
         case let .cancelClaim(homeId):
             CancelClaimView(

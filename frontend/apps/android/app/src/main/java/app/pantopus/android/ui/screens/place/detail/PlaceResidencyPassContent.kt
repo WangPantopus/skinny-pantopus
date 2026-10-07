@@ -36,13 +36,16 @@ import app.pantopus.android.data.api.models.place.ResidencyClaim
 import app.pantopus.android.data.api.models.place.ResidencyClaimScope
 import app.pantopus.android.data.api.models.place.ResidencyClaimStatus
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
 import app.pantopus.android.ui.theme.PantopusColors
 import kotlinx.coroutines.delay
 import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 // ─── Residency Pass (Wave 1) — Identity detail, T4 ───────────
 // Pick ONE fact to share, pick a lifetime, issue — the verify link is
@@ -287,7 +290,7 @@ private fun ResidencyClaimRow(
                 PlaceChip(chip)
             }
             Text(claim.statement, fontSize = 13.sp, lineHeight = 18.sp, color = PantopusColors.appTextStrong)
-            val until = PlacePresentation.fmtMonthYear(claim.expiresAt) ?: ""
+            val until = passEndDay(claim.expiresAt) ?: ""
             val views =
                 when {
                     claim.viewCount == 0 -> "Not checked yet"
@@ -343,3 +346,9 @@ private fun RevokePassConfirmation(
         onDismiss = onDismiss,
     )
 }
+
+/** "Oct 7, 2026": passes last 1 to 90 days, so a month alone doesn't say when one ends. */
+private fun passEndDay(iso: String?): String? =
+    iso
+        ?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() ?: runCatching { Instant.parse(it) }.getOrNull() }
+        ?.let { DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US).withZone(ZoneId.systemDefault()).format(it) }

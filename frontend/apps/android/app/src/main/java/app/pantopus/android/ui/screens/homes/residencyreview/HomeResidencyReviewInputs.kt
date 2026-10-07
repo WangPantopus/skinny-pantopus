@@ -33,9 +33,9 @@ internal fun HomeResidencyReviewInputs(
     viewModel: HomeResidencyReviewViewModel,
 ) {
     val focus = LocalFocusManager.current
-    Text("Review your decision", style = MaterialTheme.typography.titleMedium)
+    Text("Your decision", style = MaterialTheme.typography.titleMedium)
     ReviewChoice(
-        "Residency decision",
+        "Your decision",
         state.action.title,
         "homeResidencyReview.action",
         state.canEdit,
@@ -43,20 +43,18 @@ internal fun HomeResidencyReviewInputs(
     )
     if (state.action == HomeResidencyDecision.Approve) {
         Text(
-            "Confirm residency within the existing role, age and access limits. " +
-                "Existing verified memberships keep their role and restrictions. " +
-                "Ownership has its own flow, and approving can’t restore access that has ended or expired.",
+            "Approving lets them into this Home with the role you choose. It doesn’t make them an owner.",
             style = MaterialTheme.typography.bodySmall,
         )
         ReviewChoice(
-            "Role for an unverified membership",
+            "Their role",
             state.role.title,
             "homeResidencyReview.role",
             state.canEdit,
             HomeResidencyReviewRole.entries.map { it.title to { viewModel.changeRole(it) } },
         )
     } else {
-        Text("Reject this pending residency claim. Existing membership access stays unchanged.", style = MaterialTheme.typography.bodySmall)
+        Text("Rejecting declines this request. It doesn’t change anyone’s current access.", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(
             value = state.reason,
             onValueChange = viewModel::changeReason,
@@ -75,13 +73,13 @@ internal fun HomeResidencyReviewInputs(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = state.reviewed, onCheckedChange = null, enabled = state.canEdit)
-        Text("I reviewed the current claim, membership limits and selected decision.", Modifier.weight(1f))
+        Text("I’ve checked this request and my decision.", Modifier.weight(1f))
     }
     TextButton(onClick = {
         focus.clearFocus()
         viewModel.submit()
     }, enabled = state.canSubmit, modifier = Modifier.testTag("homeResidencyReview.submit")) {
-        Text("Save residency decision")
+        Text("Save decision")
     }
 }
 

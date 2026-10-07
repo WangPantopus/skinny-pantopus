@@ -1285,6 +1285,8 @@ private fun ContentColumn(
             // At large font scales the inline chip goes under the title, so it
             // can't take the title's whole width ("Household member" at 2x).
             val stackInlineChip = row.inlineChip != null && LocalDensity.current.fontScale >= LARGE_FONT_SCALE
+            // A chip repeating the subtitle (Members: an "Owner" chip over an "Owner" line) is read once by TalkBack.
+            val inlineChipSemantics = if (row.inlineChip?.text == row.subtitle) Modifier.clearAndSetSemantics {} else Modifier
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
@@ -1304,7 +1306,7 @@ private fun ContentColumn(
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 if (row.inlineChip != null && !stackInlineChip) {
-                    ChipPill(row.inlineChip)
+                    Box(inlineChipSemantics) { ChipPill(row.inlineChip) }
                 }
                 if (row.highlight is RowHighlight.Unread) {
                     Spacer(Modifier.weight(1f))
@@ -1319,7 +1321,7 @@ private fun ContentColumn(
             }
             if (stackInlineChip && row.inlineChip != null) {
                 Spacer(Modifier.height(2.dp))
-                ChipPill(row.inlineChip)
+                Box(inlineChipSemantics) { ChipPill(row.inlineChip) }
             }
         }
         if (row.subtitle != null) {

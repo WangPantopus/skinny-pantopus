@@ -12,6 +12,7 @@ struct HomeMemberRemovalView: View {
     @State private var visible = false
     @State private var confirmation: Confirmation?
     private let onClose: (PendingHomeMemberRemoval?) -> Void
+    private let onTransfer: (() -> Void)?
     private struct Confirmation: Identifiable {
         let id = UUID()
         let token: String
@@ -26,11 +27,18 @@ struct HomeMemberRemovalView: View {
     init(target: HomeMemberRemovalTarget? = nil, onClose: @escaping (PendingHomeMemberRemoval?) -> Void) {
         _model = State(initialValue: HomeMemberRemovalViewModel(target: target))
         self.onClose = onClose
+        onTransfer = nil
     }
 
-    init(model: HomeMemberRemovalViewModel, onClose: @escaping (PendingHomeMemberRemoval?) -> Void) {
+    /// `onTransfer` opens Owners when a primary owner tries to leave before transferring ownership.
+    init(
+        model: HomeMemberRemovalViewModel,
+        onTransfer: (() -> Void)? = nil,
+        onClose: @escaping (PendingHomeMemberRemoval?) -> Void
+    ) {
         _model = State(initialValue: model)
         self.onClose = onClose
+        self.onTransfer = onTransfer
     }
 
     var body: some View {
@@ -59,6 +67,8 @@ struct HomeMemberRemovalView: View {
                 if !model.isCurrent {
                     Text("Close this screen and sign in to the account that started this. Nothing was lost.")
                         .accessibilityIdentifier("homeMemberRemovalSessionGuidance")
+                } else if model.transferRequired, let onTransfer {
+                    control("Transfer ownership", "homeMemberRemovalTransfer") { onTransfer() }
                 } else if !model.opened || model.errorMessage != nil {
                     control("Reload", "homeMemberRemovalReopen") { await model.open() }
                 }

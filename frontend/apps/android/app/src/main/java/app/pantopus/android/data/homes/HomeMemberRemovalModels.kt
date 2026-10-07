@@ -68,7 +68,9 @@ class HomeMemberRemovalFailure(val kind: HomeMemberRemovalFailureKind) : Illegal
     },
 )
 
-class HomeMemberRemovalRefusal(code: String?) : IllegalStateException(memberRemovalRefusalMessage(code))
+class HomeMemberRemovalRefusal(
+    val code: String?,
+) : IllegalStateException(memberRemovalRefusalMessage(code))
 
 fun memberRemovalRefusalMessage(code: String?): String =
     when (code) {

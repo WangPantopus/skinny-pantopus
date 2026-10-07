@@ -47,7 +47,10 @@ public struct TokenAcceptView: View {
 
     private var topBar: some View {
         HStack {
-            Button("Close") { viewModel.close() }.frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("tokenAcceptClose")
+            // Capped like the fixed-size title beside it, so the bar keeps its shape at the largest text sizes.
+            Button("Close") { viewModel.close() }.frame(minWidth: 44, minHeight: 44)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .accessibilityIdentifier("tokenAcceptClose")
             Spacer()
             Text("Invitation")
                 .font(.system(size: 16, weight: .semibold))

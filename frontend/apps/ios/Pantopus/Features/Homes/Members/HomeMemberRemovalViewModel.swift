@@ -23,6 +23,8 @@ final class HomeMemberRemovalViewModel {
     private(set) var isWorking = false
     private(set) var opened = false
     private(set) var errorMessage: String?
+    /// The server refused because the primary owner must transfer ownership before leaving.
+    private(set) var transferRequired = false
     private var preparedContext: HomeMemberRemovalContext?
     var context: HomeMemberRemovalContext? {
         visible && isCurrent ? preparedContext : nil
@@ -173,6 +175,7 @@ final class HomeMemberRemovalViewModel {
         let revision = generation
         isWorking = true
         errorMessage = nil
+        transferRequired = false
         defer { isWorking = false
             Self.activeScopes.remove(key)
         }
@@ -187,6 +190,7 @@ final class HomeMemberRemovalViewModel {
             } else {
                 errorMessage = (error as? HomeMemberRemovalError)?.localizedDescription ?? HomeMemberRemovalError.storage
                     .localizedDescription
+                if case .refusal("TRANSFER_REQUIRED")? = error as? HomeMemberRemovalError { transferRequired = true }
             }
         }
     }

@@ -72,14 +72,14 @@ fun HomeResidencyReviewDialog(
                             modifier =
                                 Modifier.testTag(
                                     "homeResidencyReview.reload",
-                                ).semantics { contentDescription = "Reload current access" },
+                                ).semantics { contentDescription = "Reload" },
                         ) { Text("Reload") }
                     }
                     Column(
                         Modifier.weight(1f).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
                     ) {
-                        Text("Review the current claim and membership before approving or rejecting residency.")
+                        Text("Check who’s asking to join and the access they have now, then approve or reject.")
                         state.error?.let { Text(it, Modifier.testTag("homeResidencyReview.error"), color = PantopusColors.error) }
                         HomeResidencyReviewBody(state, viewModel)
                         if (state.acknowledgedHistory != null && !state.working && onHistory != null) {
@@ -119,16 +119,16 @@ private fun HomeResidencyReviewBody(
         } else {
             Text(
                 if (review.applicantId == review.actorId) {
-                    "You cannot approve or reject your own membership."
+                    "You can’t approve or reject your own request."
                 } else {
-                    "This claim is no longer pending. Review its current membership and any saved original decision."
+                    "This request was already decided."
                 },
                 Modifier.testTag("homeResidencyReview.noPendingClaim"),
             )
         }
     } else if (state.opened && state.error == null) {
         Text(
-            "No residency decision needs recovery on this device. Choose a claim to review.",
+            "Nothing to finish here. Choose a request to review.",
             Modifier.testTag("homeResidencyReview.empty"),
         )
     }
