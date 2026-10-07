@@ -89,7 +89,7 @@ public struct AddGuestFormView: View {
             titleVisibility: .visible,
             presenting: shareOffer
         ) { offer in
-            Button("Share") {
+            Button("Share link") {
                 shareOffer = nil
                 // Let the dialog finish dismissing before the activity
                 // controller presents — chaining them in the same runloop
@@ -100,13 +100,13 @@ public struct AddGuestFormView: View {
                 }
             }
             .accessibilityIdentifier("addGuest_shareNow")
-            Button("Later", role: .cancel) {
+            Button("Don't share", role: .cancel) {
                 shareOffer = nil
                 viewModel.acknowledgeShare()
             }
             .accessibilityIdentifier("addGuest_shareLater")
         } message: { _ in
-            Text("Share this pass now?")
+            Text("Share the link now. It's shown only this once: to send it later, revoke this pass and create a new one.")
         }
         // Hosted on a zero-size background so it doesn't collide with the
         // custom-range `.sheet` attached to the same view below — SwiftUI
