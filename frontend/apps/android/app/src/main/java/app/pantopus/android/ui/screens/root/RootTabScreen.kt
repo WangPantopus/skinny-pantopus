@@ -319,6 +319,7 @@ import app.pantopus.android.ui.screens.persona_dm.PersonaDmThreadScreen
 import app.pantopus.android.ui.screens.place.DeepLinkPlaceResolverViewModel
 import app.pantopus.android.ui.screens.place.HomeLanding
 import app.pantopus.android.ui.screens.place.HomeTabHostViewModel
+import app.pantopus.android.ui.screens.place.HubVerificationTarget
 import app.pantopus.android.ui.screens.place.PLACE_DASHBOARD_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.PlaceDashboardScreen
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_HOME_ID_KEY
@@ -2558,6 +2559,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     // parity with the iOS HubTabRoot auto-land.
                     val placeHostVm: HomeTabHostViewModel = hiltViewModel()
                     val placeLanding by placeHostVm.landing.collectAsStateWithLifecycle()
+                    val verifyScope = rememberCoroutineScope()
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
                     // Back on the Hub root (a child screen popped or the tab reselected):
                     // a home joined or added since the last check lands Place now. Coming
@@ -2645,7 +2647,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     HubNavigationIntent.OpenProfile ->
                                         navController.navigate(ChildRoutes.profile())
                                     HubNavigationIntent.StartVerification ->
-                                        navController.navigate(ChildRoutes.ADD_HOME)
+                                        verifyScope.launch {
+                                            val route =
+                                                when (val target = placeHostVm.verificationTarget()) {
+                                                    HubVerificationTarget.AddHome -> ChildRoutes.ADD_HOME
+                                                    is HubVerificationTarget.WaitingRoom -> ChildRoutes.waitingRoom(target.homeId)
+                                                    is HubVerificationTarget.Residency -> ChildRoutes.homeResidency(target.homeId)
+                                                    is HubVerificationTarget.ClaimOwnership -> ChildRoutes.claimOwnership(target.homeId)
+                                                }
+                                            if (navController.currentDestination?.route == PantopusRoute.Place.path) {
+                                                navController.navigate(route)
+                                            }
+                                        }
                                     is HubNavigationIntent.ActionTapped ->
                                         when (intent.kind) {
                                             ActionChipContent.Kind.AddHome ->

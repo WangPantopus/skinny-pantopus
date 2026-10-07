@@ -3,6 +3,7 @@ package app.pantopus.android.ui.screens.place
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.routing.PlacePendingStore
+import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
@@ -12,6 +13,8 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.ui.screens.homes.PendingVerification
+import app.pantopus.android.ui.screens.homes.pendingVerificationFor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +67,16 @@ class HomeTabHostViewModel
                                 HomeLanding.Error(result.error.displayMessage("Couldn't load your place. Please try again."))
                         }
                 }
+        }
+
+        /**
+         * Where the Hub's "Verify your address" goes: a Home that already waits on
+         * verification continues there, as My Homes does (a filed claim's Waiting
+         * Room, residency status, or ownership evidence); with none, Add Home.
+         */
+        suspend fun verificationTarget(): HubVerificationTarget {
+            val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.homes.orEmpty()
+            return homes.firstNotNullOfOrNull(::hubVerificationTargetFor) ?: HubVerificationTarget.AddHome
         }
 
         /**
@@ -190,4 +203,31 @@ sealed interface HomeLanding {
     data class PlaceDashboard(val homeId: String) : HomeLanding
 
     data object Hub : HomeLanding
+}
+
+/** My Homes' choice for one Home, or null when it isn't waiting on verification. */
+private fun hubVerificationTargetFor(home: MyHome): HubVerificationTarget? =
+    when {
+        home.pendingClaimId != null -> HubVerificationTarget.WaitingRoom(home.id)
+        home.accessKind == "private_setup" -> HubVerificationTarget.Residency(home.id)
+        pendingVerificationFor(home) == PendingVerification.Owner -> HubVerificationTarget.ClaimOwnership(home.id)
+        pendingVerificationFor(home) == PendingVerification.Residency -> HubVerificationTarget.Residency(home.id)
+        else -> null
+    }
+
+/** The screen the Hub's "Verify your address" opens. */
+sealed interface HubVerificationTarget {
+    data object AddHome : HubVerificationTarget
+
+    data class WaitingRoom(
+        val homeId: String,
+    ) : HubVerificationTarget
+
+    data class Residency(
+        val homeId: String,
+    ) : HubVerificationTarget
+
+    data class ClaimOwnership(
+        val homeId: String,
+    ) : HubVerificationTarget
 }
