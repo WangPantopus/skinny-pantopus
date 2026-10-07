@@ -177,6 +177,8 @@ struct PlaceVerifySheet: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    // A radio choice, so VoiceOver says which method is selected.
+                    .accessibilityAddTraits(selected == m ? .isSelected : [])
                     if index < doors.count - 1 { divider }
                 }
             }
