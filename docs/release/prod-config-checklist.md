@@ -329,11 +329,13 @@ installed from this Mac, Android as a signed APK.
 
 ### S10. Staging journey (L4 with founder)
 
-L4 runs the pilot journey on staging with synthetic accounts: sign-up and email
-confirmation, Add Home (private setup), Today, pickup days, radon task, a
-household invitation, task done, a reminder push delivered to the founder's
-iPhone (TestFlight) and an Android phone, notification tap-through, and the
-web for the same account. Failures go to the owning stream.
+L4 runs the pilot journey on staging with a synthetic account the founder signs
+up and signs in (L4 creates no accounts on hosted hosts): email confirmation,
+Add Home (private setup), Today, pickup days, radon task, task done, a reminder
+push delivered to the founder's iPhone (TestFlight) and an Android phone,
+notification tap-through, and the web for the same account. Failures go to the
+owning stream. A household invitation needs a verified owner, so it waits for
+the identity decision (Stripe Identity or a photo-ID check).
 
 ## 3. Production
 
