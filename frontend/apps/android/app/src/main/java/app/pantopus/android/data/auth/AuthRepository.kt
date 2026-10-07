@@ -40,6 +40,7 @@ import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.push.FcmTokenProvider
 import app.pantopus.android.push.NotificationDispatcher
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -51,6 +52,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.Cache
 import retrofit2.HttpException
 import timber.log.Timber
 import java.io.IOException
@@ -204,6 +206,8 @@ class AuthRepository
         private val presenceVerifier: PresenceVerifier,
         private val fcmTokenProvider: FcmTokenProvider,
         private val notifications: NotificationDispatcher,
+        /** The on-disk HTTP cache holds the last account's reads (chats, hub); sign-out empties it, as iOS does. */
+        private val httpCache: Cache,
     ) {
         /**
          * Outcome of a token refresh. The distinction matters: only
@@ -1246,6 +1250,7 @@ class AuthRepository
                     tokenStorage.clear()
                     // The next person on this device must not read the last account's notifications.
                     notifications.clearDelivered()
+                    withContext(Dispatchers.IO) { runCatching { httpCache.evictAll() } }
                     deviceIdentity.clearRegistration()
                     observability.identify(userId = null)
                     Analytics.identify(userId = null)
