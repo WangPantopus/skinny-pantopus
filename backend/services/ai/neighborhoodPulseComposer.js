@@ -16,6 +16,7 @@
  */
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
+const { isLaunchFeatureEnabled, areLaunchFeaturesEnabled } = require('../../utils/featureFlags');
 const propertyIntelligenceService = require('./propertyIntelligenceService');
 const neighborhoodProfileService = require('./neighborhoodProfileService');
 const seededBusinessService = require('./seededBusinessService');
@@ -103,7 +104,8 @@ function buildSeasonalSignal(seasonalCtx) {
     detail: seasonalCtx.home_specific_tip || seasonalCtx.seasonal_tip || '',
     icon: 'leaf',
     color: 'amber',
-    actions: seasonalCtx.first_action_nudge ? [
+    // Its one action posts a gig: hidden while open gigs is a launch cut.
+    actions: seasonalCtx.first_action_nudge && isLaunchFeatureEnabled('open_gigs') ? [
       {
         type: 'create_gig',
         label: seasonalCtx.first_action_nudge.prompt.split('?')[0] + '?',
@@ -119,6 +121,8 @@ function buildSeasonalSignal(seasonalCtx) {
  * @returns {object|null}
  */
 function buildLocalServicesSignal(bizCounts) {
+  // It advertises the business directory and asks for a gig post; both are launch cuts.
+  if (!areLaunchFeaturesEnabled(['open_gigs', 'business_directory'])) return null;
   if (!bizCounts || bizCounts.total === 0) return null;
 
   // Build a "top categories" string from the top 2-3 categories
@@ -379,7 +383,7 @@ async function compose({ homeId, userId }) {
       seasonal_context: {
         season: seasonalCtx.primary_season,
         tip: seasonalCtx.seasonal_tip,
-        first_action_nudge: seasonalCtx.first_action_nudge ? {
+        first_action_nudge: seasonalCtx.first_action_nudge && isLaunchFeatureEnabled('open_gigs') ? {
           prompt: seasonalCtx.first_action_nudge.prompt,
           route: '/gig-v2/new',
           gig_category: seasonalCtx.first_action_nudge.gig_category || null,
