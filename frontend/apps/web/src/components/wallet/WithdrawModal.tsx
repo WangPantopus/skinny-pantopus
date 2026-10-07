@@ -164,7 +164,7 @@ export default function WithdrawModal({ balance, onClose, onSuccess, onUnsettled
       setTimeout(() => onSuccess(), 2000);
     } catch (err: unknown) {
       const code = (err as { code?: string } | null)?.code;
-      const terminal = code === 'withdrawal_not_completed' || code === 'withdrawal_key_reused';
+      const terminal = code === 'withdrawal_not_completed' || code === 'withdrawal_key_reused' || code === 'funds_clearing';
       if (terminal && intent?.key) { clearPendingWithdrawal(intent.key); setPendingWithdrawal(null); }
       const message = getErrorMessage(err).trim();
       setError(message || 'Withdrawal failed. Please try again.');

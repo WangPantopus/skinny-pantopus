@@ -37,6 +37,9 @@ function getStripeClient() {
 // A withdrawal's outcome is final: nothing moved, or the request can't go ahead. The client
 // should start a new withdrawal (with a new key) next time.
 const WITHDRAWAL_NOT_COMPLETED = "The withdrawal didn't go through, and your balance wasn't charged. Please try again later or contact support if it keeps happening.";
+// Stripe moves a payment's money into the platform's available balance a few days after the charge (longer for a new
+// account); a transfer made before then is refused. The wallet credit comes sooner than that, so say what is going on.
+const WITHDRAWAL_FUNDS_CLEARING = "Funds from recent payments are still clearing, so this withdrawal can't go through yet, and your balance wasn't charged. Please try again in a day or two.";
 
 function withdrawalError(code, message) {
   return Object.assign(new Error(message), { code });
@@ -89,7 +92,8 @@ async function settleFailedTransfer(tx, stripeErr, { userId, amount, idempotency
     p_user_id: userId,
     p_amount: amount,
     p_type: 'withdrawal_reversal',
-    p_description: `Reversal: withdrawal failed — ${stripeErr.message}`,
+    // Stripe's own wording stays in the metadata for support; the person sees a plain line in their history.
+    p_description: "Reversal: the withdrawal didn't go through",
     p_idempotency_key: reversalKey,
     p_metadata: { original_tx_id: tx.id, error: stripeErr.message },
   });
@@ -112,6 +116,9 @@ async function settleFailedTransfer(tx, stripeErr, { userId, amount, idempotency
     .eq('id', tx.id);
   if (reverseUpdateErr) {
     logger.error('Failed to mark WalletTransaction as reversed', { txId: tx.id, error: reverseUpdateErr.message });
+  }
+  if (stripeErr?.code === 'balance_insufficient') {
+    throw withdrawalError('FUNDS_CLEARING', WITHDRAWAL_FUNDS_CLEARING);
   }
   throw withdrawalError('WITHDRAWAL_NOT_COMPLETED', WITHDRAWAL_NOT_COMPLETED);
 }
