@@ -60,7 +60,7 @@ function VerifyPostcardContent() {
         : outcome?.state === 'cancelled' ? 'Nothing changed. This attempt was discarded before it took effect.'
           : outcome?.state === 'rejected' ? postalMessage(outcome.code)
             : 'We couldn’t confirm whether this went through. Check again, or try again.'}</p>
-      {outcome?.code === 'POSTCARD_WRONG_CODE' && <p className="text-sm font-semibold">That code didn’t match. {outcome.attempts_remaining} tries left.</p>}
+      {outcome?.code === 'POSTCARD_WRONG_CODE' && <p className="text-sm font-semibold">{outcome.attempts_remaining ? `${outcome.attempts_remaining} tries left.` : 'No tries left. Request a new postcard.'}</p>}
       {flow.canAcknowledge ? <button className={primary} disabled={busy} onClick={() => { setCode(''); setConfirmed(false); void flow.acknowledge(); }}>Done</button>
         : <div className="grid gap-3 sm:grid-cols-2">
           <button className={button} disabled={busy} onClick={() => void flow.recover('status')}>Check again</button>
