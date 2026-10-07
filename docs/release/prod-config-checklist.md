@@ -105,15 +105,18 @@ Default: reset the existing `Pantopus-staging` project to the canonical
 migrations (it holds only synthetic data). If you'd rather keep it, create a new
 Free project `pantopus-staging-2` in the same region and use it instead.
 
-On the Mac, from the repository root, with the Supabase CLI pinned in
-`supabase/migration-policy.json` (2.116.0):
+On the Mac, from the repository root. Run the CLI version that
+`supabase/migration-policy.json` pins (2.116.0) through `npx`; the first run
+downloads it once (about 40 MB). The Mac's own `supabase` command (Homebrew,
+2.98.2) runs the launch streams' local test databases, so leave it as it is.
 
 ```bash
-supabase login
-supabase link --project-ref <staging project ref>
-supabase db reset --linked        # existing project: drops its objects, replays every migration
+alias sb='npx --yes supabase@2.116.0'   # used again in P2
+sb login
+sb link --project-ref <staging project ref>
+sb db reset --linked        # existing project: drops its objects, replays every migration
 # or, for a brand-new empty project:
-supabase db push --linked
+sb db push --linked
 ```
 
 Then in the Supabase dashboard → Storage, create three buckets: **private**
@@ -122,8 +125,8 @@ and **public** `pantopus-uploads` (100 MB) for avatars and post photos. Under
 Storage → S3 Connection, create an access key for the backend (Appendix A,
 storage row).
 
-**Check:** `supabase migration list --linked` shows every file in
-`supabase/migrations/` on both sides, and `supabase db push --linked --dry-run`
+**Check:** `sb migration list --linked` shows every file in
+`supabase/migrations/` on both sides, and `sb db push --linked --dry-run`
 reports nothing to push. In the dashboard, `home-documents` and `gig-completion`
 show as private.
 
@@ -338,18 +341,18 @@ Same shape as staging, with live vendors where D4 and D5 say so.
 1. Supabase → New project `pantopus-production`, **Pro** plan, region
    `us-west-2` (Oregon, next to the server). Turn on daily backups (included in
    Pro); point-in-time recovery is optional.
-2. On the Mac:
+2. On the Mac, with the `sb` alias from S2:
    ```bash
-   supabase link --project-ref <production ref>
-   supabase db push --linked --dry-run   # lists every migration in supabase/migrations
-   supabase db push --linked
+   sb link --project-ref <production ref>
+   sb db push --linked --dry-run   # lists every migration in supabase/migrations
+   sb db push --linked
    ```
 3. Storage buckets and the S3 access key as in S2.
 4. Keep the April project as it is (pause it; don't delete it).
 5. Supabase's daily backups cover the database only, not uploaded files. Set
    up the file backup in Appendix C before the first household signs up.
 
-**Check:** as in S2: `supabase db push --linked --dry-run` reports nothing to
+**Check:** as in S2: `sb db push --linked --dry-run` reports nothing to
 push, and the three buckets exist with the right privacy.
 
 ### P2B. Production database: adopt the April project (only if D3 says so)
@@ -357,16 +360,16 @@ push, and the three buckets exist with the right privacy.
 Don't run any of this until L4 has rehearsed it on a copy:
 
 1. Founder: take a full backup outside the repository:
-   `supabase db dump --linked -f <private>/schema.sql`,
-   `supabase db dump --linked --data-only --use-copy -f <private>/data.sql`, and
-   the ledger with `supabase migration list --linked`. Hand L4 the files
+   `sb db dump --linked -f <private>/schema.sql`,
+   `sb db dump --linked --data-only --use-copy -f <private>/data.sql`, and
+   the ledger with `sb migration list --linked` (the `sb` alias from S2). Hand L4 the files
    privately (they contain real users' data).
 2. L4: restore them into a disposable local database, apply the September
    forward-upgrade SQL (retained in the private evidence archive under
    `baseline-adoption/`), compare catalogs with the canonical baseline, then
    apply every later migration, and write the exact ledger-repair commands.
 3. Founder, in a maintenance window: run the reviewed SQL and ledger repair, then
-   `supabase db push --linked`. See `docs/supabase-migration-automation-runbook.md`.
+   `sb db push --linked`. See `docs/supabase-migration-automation-runbook.md`.
 
 ### P3. Production Auth (founder)
 
@@ -619,7 +622,7 @@ scripts/db/restore-project.sh ~/PantopusBackups/production-<date>
 It restores roles, schema, data and the migration ledger in one transaction,
 then uploads every file with its original content type. It refuses a project
 that already has tables. Then repeat P3–P5 (Auth settings, push, server env with
-the new project's URL and keys) and run a release. `supabase db push --dry-run`
+the new project's URL and keys) and run a release. `sb db push --linked --dry-run`
 afterwards should list only migrations added since the backup.
 
 What the script handles (found in the October 6 rehearsal): the postgres role
