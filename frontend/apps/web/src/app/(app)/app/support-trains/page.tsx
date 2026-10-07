@@ -144,9 +144,9 @@ export default function SupportTrainsPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-semibold text-app-text group-hover:text-primary-600 transition truncate">
+                  <h2 className="text-base font-semibold text-app-text group-hover:text-primary-600 transition truncate">
                     {train.title || 'Untitled Support Train'}
-                  </h3>
+                  </h2>
                   <div className="flex items-center gap-3 mt-2">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClasses(train.status)}`}>
                       {train.status}

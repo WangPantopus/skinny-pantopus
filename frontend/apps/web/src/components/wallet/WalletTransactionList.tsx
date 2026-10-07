@@ -151,7 +151,7 @@ export default function WalletTransactionList({ refreshKey = 0 }: { refreshKey?:
                       {tx.description || config.label}
                       {tx.counterparty && ` • ${tx.counterparty.name || tx.counterparty.username}`}
                     </p>
-                    <p className="text-xs text-gray-300">
+                    <p className="text-xs text-app-text-muted">
                       {new Date(tx.created_at).toLocaleDateString(undefined, {
                         month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
                       })}

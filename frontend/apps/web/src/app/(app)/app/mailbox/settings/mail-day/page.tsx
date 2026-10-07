@@ -160,6 +160,7 @@ export default function MailDayPage() {
   return (
     <div className="h-full overflow-y-auto bg-app-surface">
       <div className="max-w-5xl mx-auto p-6">
+        <h1 className="sr-only">Mail Day</h1>
         {/* Save toast */}
         {saveToast && (
           <div className="mb-4 px-4 py-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">

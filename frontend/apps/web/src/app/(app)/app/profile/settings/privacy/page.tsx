@@ -75,14 +75,14 @@ export default function PrivacySettingsPage() {
   if (loading) {
     return (
       <div className="bg-app min-h-screen">
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto" />
               <p className="mt-4 text-app-secondary">Loading privacy settings…</p>
             </div>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
@@ -90,7 +90,7 @@ export default function PrivacySettingsPage() {
   if (loadError) {
     return (
       <div className="bg-app min-h-screen">
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <button
             onClick={() => router.push('/app/profile/settings')}
             className="flex items-center gap-1.5 text-sm text-app-secondary hover:text-app mb-4 transition"
@@ -99,14 +99,14 @@ export default function PrivacySettingsPage() {
             Back to Settings
           </button>
           <ErrorState message={loadError} onRetry={loadSettings} />
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="bg-app min-h-screen">
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Back link */}
         <button
           onClick={() => router.push('/app/profile/settings')}
@@ -214,7 +214,7 @@ export default function PrivacySettingsPage() {
             </button>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -380,13 +380,15 @@ export default function ChatRoomView({
                 {getInitials(chatTitle)}
               </div>
               <div className="min-w-0">
-                {otherProfileHref ? (
-                  <Link href={otherProfileHref} className="block font-semibold text-app truncate">
-                    {chatTitle}
-                  </Link>
-                ) : (
-                  <div className="font-semibold text-app truncate">{chatTitle}</div>
-                )}
+                <h1 className="text-base font-normal">
+                  {otherProfileHref ? (
+                    <Link href={otherProfileHref} className="block font-semibold text-app truncate">
+                      {chatTitle}
+                    </Link>
+                  ) : (
+                    <span className="block font-semibold text-app truncate">{chatTitle}</span>
+                  )}
+                </h1>
                 {roomInfo?.type === 'gig' && chatTitle !== 'Conversation' && (
                   <div className="text-xs text-app-muted">Task Chat</div>
                 )}

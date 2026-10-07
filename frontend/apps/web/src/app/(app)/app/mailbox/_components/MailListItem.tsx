@@ -26,15 +26,11 @@ export default function MailListItem({
   const priorityBorder = PRIORITY_COLORS[item.priority] || '';
 
   return (
+    // The whole card takes a click for mouse users; the keyboard and screen-reader way in is the button holding the
+    // subject below. The Open link and the star are siblings of that button, not inside it: a button's content is
+    // flattened for screen readers, so controls nested in it can't be reached.
     <div
-      role="button"
-      tabIndex={0}
       onClick={() => onClick(item)}
-      onKeyDown={(e) => {
-        // Keys pressed on the Open link or the Star button inside the row are theirs.
-        if (e.target !== e.currentTarget) return;
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(item); }
-      }}
       className={`w-full text-left px-4 py-3 rounded-lg border transition group cursor-pointer ${
         isSelected
           ? 'bg-blue-50 border-blue-200'
@@ -61,17 +57,25 @@ export default function MailListItem({
               </Link>
             </div>
           </div>
-          <p className={`text-sm truncate mt-0.5 ${!item.viewed ? 'text-app-text' : 'text-app-text-secondary'}`}>
-            {getDisplayTitle(item)}
-          </p>
-          <p className="text-xs text-app-text-muted truncate mt-0.5">
-            {getPreviewText(item).slice(0, 120)}
-          </p>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onClick(item); }}
+            className="block w-full text-left"
+          >
+            <span className={`block text-sm truncate mt-0.5 ${!item.viewed ? 'text-app-text' : 'text-app-text-secondary'}`}>
+              {getDisplayTitle(item)}
+            </span>
+            <span className="block text-xs text-app-text-muted truncate mt-0.5">
+              {getPreviewText(item).slice(0, 120)}
+            </span>
+          </button>
         </div>
         <button
+          type="button"
           onClick={(e) => onStar(e, item)}
           className="flex-shrink-0 p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition"
           title={item.starred ? 'Unstar' : 'Star'}
+          aria-label={item.starred ? 'Unstar' : 'Star'}
         >
           <Star className={`w-4 h-4 ${item.starred ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />
         </button>

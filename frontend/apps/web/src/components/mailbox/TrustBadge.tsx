@@ -42,6 +42,7 @@ export default function TrustBadge({ trust, size = 'md', showLabel }: TrustBadge
   if (size === 'sm') {
     return (
       <span
+        role="img"
         className={`inline-block w-3 h-3 rounded-full ${c.bg}`}
         title={c.label}
         aria-label={c.label}

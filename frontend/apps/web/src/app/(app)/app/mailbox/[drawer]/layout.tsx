@@ -295,20 +295,22 @@ export default function DrawerLayout({
               <EmptyState section={drawer} />
             )
           ) : (
-            <div role="list" aria-label={`${DRAWER_LABELS[drawer] || drawer} mail items`}>
+            <div>
+              <div role="list" aria-label={`${DRAWER_LABELS[drawer] || drawer} mail items`}>
               {/* Unread items */}
               {unreadItems.map((item) => (
-                <DrawerItemRenderer
-                  key={item.id}
-                  item={item}
-                  drawer={drawer}
-                  isSelected={selectedItemId === item.id}
-                  expandedBundles={expandedBundles}
-                  setExpandedBundles={setExpandedBundles}
-                  openingOffers={openingOffers}
-                  setOpeningOffers={setOpeningOffers}
-                  onClick={() => handleItemClick(item)}
-                />
+                <div role="listitem" key={item.id}>
+                  <DrawerItemRenderer
+                    item={item}
+                    drawer={drawer}
+                    isSelected={selectedItemId === item.id}
+                    expandedBundles={expandedBundles}
+                    setExpandedBundles={setExpandedBundles}
+                    openingOffers={openingOffers}
+                    setOpeningOffers={setOpeningOffers}
+                    onClick={() => handleItemClick(item)}
+                  />
+                </div>
               ))}
 
               {/* Earlier divider */}
@@ -322,21 +324,23 @@ export default function DrawerLayout({
 
               {/* Read items */}
               {readItems.map((item) => (
-                <DrawerItemRenderer
-                  key={item.id}
-                  item={item}
-                  drawer={drawer}
-                  isSelected={selectedItemId === item.id}
-                  expandedBundles={expandedBundles}
-                  setExpandedBundles={setExpandedBundles}
-                  openingOffers={openingOffers}
-                  setOpeningOffers={setOpeningOffers}
-                  onClick={() => handleItemClick(item)}
-                />
+                <div role="listitem" key={item.id}>
+                  <DrawerItemRenderer
+                    item={item}
+                    drawer={drawer}
+                    isSelected={selectedItemId === item.id}
+                    expandedBundles={expandedBundles}
+                    setExpandedBundles={setExpandedBundles}
+                    openingOffers={openingOffers}
+                    setOpeningOffers={setOpeningOffers}
+                    onClick={() => handleItemClick(item)}
+                  />
+                </div>
               ))}
 
               {/* Infinite scroll sentinel */}
               <div ref={sentinelRef} className="h-4" />
+              </div>
 
               {/* A later page failed: keep the rows, retry that same page */}
               {isError && page > 1 && (

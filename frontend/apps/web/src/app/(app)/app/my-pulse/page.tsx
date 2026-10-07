@@ -266,7 +266,7 @@ export default function MyPulsePage() {
 
   return (
     <div className="min-h-[calc(100vh-64px)]">
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
         <ListArchetype<Post>
           title="My pulse"
           // No count when loading failed; while older posts are unloaded the
@@ -354,7 +354,7 @@ export default function MyPulsePage() {
             </>
           ) : undefined}
         />
-      </main>
+      </div>
 
       {/* ── Post detail panel ───────────────────────────────── */}
       <PostDetailPanel

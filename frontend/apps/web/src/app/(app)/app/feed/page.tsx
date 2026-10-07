@@ -230,6 +230,7 @@ export default function FeedPage() {
 
   return (
     <div className={rootClassName}>
+      <h1 className="sr-only">Pulse</h1>
       <div className={viewMode === 'map' ? 'flex-1 min-h-0 flex flex-col' : ''}>
         {/* Header: View Toggle + Surface Tabs */}
         <div className="bg-surface border-b border-app/60 dark:backdrop-blur-sm">
