@@ -3643,6 +3643,8 @@ private struct ChatComposer: View {
                         .offset(x: 7, y: -6)
                 }
             }
+            // The 44 pt frame only counts as tappable with a content shape (the disc alone is 36 pt).
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!canSend)
