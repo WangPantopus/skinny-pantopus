@@ -36,7 +36,6 @@ import app.pantopus.android.data.api.models.place.ResidencyClaim
 import app.pantopus.android.data.api.models.place.ResidencyClaimScope
 import app.pantopus.android.data.api.models.place.ResidencyClaimStatus
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
