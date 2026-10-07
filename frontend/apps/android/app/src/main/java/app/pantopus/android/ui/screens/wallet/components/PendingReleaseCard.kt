@@ -109,7 +109,8 @@ private fun BreakdownLine(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .semantics { contentDescription = "$label $amount" }
+                // Read as on iOS: label, caption ("1 payment · held while the bank reviews it"), amount.
+                .semantics { contentDescription = listOfNotNull(label, caption, amount).joinToString(", ") }
                 .testTag(tag),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
