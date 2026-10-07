@@ -222,12 +222,16 @@ struct ClaimUploadStep: View {
     private func viewState(for slot: ClaimEvidenceSlot) -> UploadSlotState {
         switch viewModel.slots[slot] ?? .empty {
         case .empty:
-            return .empty
+            .empty
         case let .uploading(file, fraction):
-            return .uploading(file: displayFile(file), progress: fraction)
-        case .picked, .uploaded, .failed:
-            guard let file = viewModel.slots[slot]?.pickedFile else { return .empty }
-            return .done(file: displayFile(file), detail: "Selected for private upload. Not verified.")
+            .uploading(file: displayFile(file), progress: fraction)
+        // Nothing checks the document here, so no address verdict (same copy as Android).
+        case let .picked(file):
+            .pending(file: displayFile(file), detail: "Selected. Submit to save for review.")
+        case let .uploaded(file, _):
+            .pending(file: displayFile(file), detail: "Saved pending review. No access has been granted.")
+        case let .failed(file, message):
+            .pending(file: displayFile(file), detail: message)
         }
     }
 
