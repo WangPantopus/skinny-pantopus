@@ -117,12 +117,12 @@ private fun HomePostalCurrentStatus(
             style = PantopusTextStyle.h3,
             modifier = Modifier.testTag("homePostalDelivery"),
         )
-        if (!HomePostalMessages.postcardEnded(postcard.status)) {
+        if (!postcardEnded(postcard.status)) {
             Text(HomePostalMessages.postcardStatus(postcard.status), style = PantopusTextStyle.body)
         }
         if (postcard.status == "pending") {
             Text(
-                HomePostalMessages.triesLeft(postcard.attemptsRemaining),
+                triesLeft(postcard.attemptsRemaining),
                 style = PantopusTextStyle.caption,
                 modifier = Modifier.testTag("homePostalAttemptsRemaining"),
             )
@@ -201,3 +201,8 @@ internal fun HomePostalButton(
 ) {
     TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp).testTag(tag)) { Text(title) }
 }
+
+/** Once a postcard is verified, expired or replaced, how it travelled no longer matters. */
+private fun postcardEnded(status: String?): Boolean = status in setOf("verified", "expired", "cancelled")
+
+private fun triesLeft(count: Int): String = if (count == 1) "1 try left" else "$count tries left"

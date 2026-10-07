@@ -54,9 +54,6 @@ object HomePostalMessages {
             else -> "We couldn't confirm whether this went through. Check again, or try again."
         }
 
-    /** Once a postcard is verified, expired or replaced, how it travelled no longer matters. */
-    fun postcardEnded(status: String?): Boolean = status in setOf("verified", "expired", "cancelled")
-
     fun postcardHeadline(
         status: String?,
         deliveryState: String?,
@@ -70,8 +67,6 @@ object HomePostalMessages {
             status == "cancelled" -> "Postcard no longer active"
             else -> delivery(deliveryState)
         }
-
-    fun triesLeft(count: Int): String = if (count == 1) "1 try left" else "$count tries left"
 
     fun delivery(state: String?): String =
         when (state) {
