@@ -731,6 +731,24 @@ router.get('/briefings/:id', verifyToken, async (req, res) => {
 // GET /api/hub/preferences
 // Returns the user's notification preferences (or defaults).
 // ============================================================
+// Postgres `time` columns read back as HH:MM:SS, but the apps offer, send
+// (the PUT schema below) and compare HH:MM, so a saved briefing time never
+// showed as the selected chip. Answer in the form the apps use.
+const PREFERENCE_TIME_FIELDS = [
+  'daily_briefing_time_local',
+  'evening_briefing_time_local',
+  'quiet_hours_start_local',
+  'quiet_hours_end_local',
+];
+
+function withHhmmTimes(prefs) {
+  const out = { ...prefs };
+  for (const key of PREFERENCE_TIME_FIELDS) {
+    if (typeof out[key] === 'string') out[key] = out[key].slice(0, 5);
+  }
+  return out;
+}
+
 router.get('/preferences', verifyToken, async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
@@ -772,7 +790,7 @@ router.get('/preferences', verifyToken, async (req, res) => {
       custom_label: null,
     };
 
-    res.json({ preferences: prefs });
+    res.json({ preferences: withHhmmTimes(prefs) });
   } catch (err) {
     logger.error('Hub preferences error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to fetch preferences' });
@@ -860,7 +878,7 @@ router.put('/preferences', verifyToken, validate(preferencesSchema), async (req,
 
     // The briefing location mode feeds Hub Today; drop this user's cached copy.
     clearHubTodayCache(userId);
-    res.json({ preferences: data });
+    res.json({ preferences: withHhmmTimes(data) });
   } catch (err) {
     logger.error('Hub preferences update error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to update preferences' });

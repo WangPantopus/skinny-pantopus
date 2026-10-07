@@ -21,11 +21,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -671,6 +675,7 @@ private fun ChipStrip(
                 .fillMaxWidth()
                 .padding(top = Spacing.s2)
                 .horizontalScroll(rememberScrollState())
+                .selectableGroup()
                 .testTag("groupedListChipStrip_$rowId"),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
         verticalAlignment = Alignment.CenterVertically,
@@ -680,6 +685,8 @@ private fun ChipStrip(
             Box(
                 modifier =
                     Modifier
+                        // A 48 dp touch target around the same-sized pill.
+                        .minimumInteractiveComponentSize()
                         .clip(RoundedCornerShape(Radii.pill))
                         .background(if (isActive) PantopusColors.primary50 else PantopusColors.appSurfaceSunken)
                         .border(
@@ -687,7 +694,8 @@ private fun ChipStrip(
                             if (isActive) PantopusColors.primary600 else PantopusColors.appBorder,
                             RoundedCornerShape(Radii.pill),
                         )
-                        .clickable { onSelect(option) }
+                        // TalkBack hears which time is chosen ("selected"), not just a button.
+                        .selectable(selected = isActive, role = Role.RadioButton) { onSelect(option) }
                         .padding(horizontal = Spacing.s3, vertical = 6.dp)
                         .semantics { this.contentDescription = option }
                         .testTag("groupedListChipOption_${rowId}_$option"),
