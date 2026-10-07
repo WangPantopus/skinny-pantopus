@@ -20,7 +20,7 @@ spec = importlib.util.spec_from_file_location('gig_journey', Path(__file__).with
 gig = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gig)
 base = gig.base
-RECOVERY = 'Relationship decisions and recovery'
+RECOVERY = 'Check an unfinished ownership decision'
 REVIEW = 'I reviewed the current claim, evidence eligibility and this response.'
 DECLINE = 'Continue independent review'
 FLAG = 'Flag unknown claimant'

@@ -30,6 +30,7 @@ public struct HomeClaimReviewView: View {
     @State private var showingResidencyHistory = false
     @State private var evidenceTarget: PrivateClaimEvidenceViewModel?
     @State private var relationshipTarget: HomeRelationshipViewModel?
+    @State private var savedDecisions = SavedReviewDecisions()
 
     private let onBack: @MainActor () -> Void
 
@@ -44,25 +45,28 @@ public struct HomeClaimReviewView: View {
     public var body: some View {
         VStack(spacing: Spacing.s0) {
             topBar
-            Button("Relationship decisions and recovery") {
-                queue.suspend()
-                relationshipTarget = HomeRelationshipViewModel(homeId: viewModel.homeId)
+            if savedDecisions.relationship {
+                Button("Check an unfinished ownership decision") {
+                    queue.suspend()
+                    relationshipTarget = HomeRelationshipViewModel(homeId: viewModel.homeId)
+                }
+                .frame(minHeight: 44)
+                .padding(Spacing.s3)
+                .accessibilityIdentifier("homeClaimReview.relationshipRecovery")
+                // Above this size the links split the screen with the queue and cut their own labels.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             }
-            .frame(minHeight: 44)
-            .padding(Spacing.s3)
-            .accessibilityIdentifier("homeClaimReview.relationshipRecovery")
-            // Above this size the three links split the screen with the
-            // queue and cut their own labels ("Residency decisions and r…").
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            Button("Residency decisions and recovery") {
-                queue.suspend()
-                residencyTarget = .live(homeId: viewModel.homeId)
+            if savedDecisions.residency {
+                Button("Check an unfinished residency decision") {
+                    queue.suspend()
+                    residencyTarget = .live(homeId: viewModel.homeId)
+                }
+                .frame(minHeight: 44)
+                .padding(Spacing.s3)
+                .accessibilityIdentifier("homeClaimReview.residencyRecovery")
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             }
-            .frame(minHeight: 44)
-            .padding(Spacing.s3)
-            .accessibilityIdentifier("homeClaimReview.residencyRecovery")
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            Button("Your past residency decisions") { queue.suspend()
+            Button("Your past decisions") { queue.suspend()
                 showingResidencyHistory = true
             }
             .frame(minHeight: 44)
@@ -82,7 +86,12 @@ public struct HomeClaimReviewView: View {
         .accessibilityIdentifier("homeClaimReview")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
-        .onAppear { visible = true }
+        .onAppear { visible = true
+            savedDecisions = .current(homeId: viewModel.homeId)
+        }
+        .onChange(of: [relationshipTarget == nil, residencyTarget == nil]) { _, _ in
+            savedDecisions = .current(homeId: viewModel.homeId)
+        }
         .onDisappear { visible = false
             queue.suspend()
         }

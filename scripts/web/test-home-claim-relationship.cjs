@@ -119,7 +119,7 @@ async function main() {
     await screenshot('02-unknown-original-retained');
     await page.goto(base + listPath, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Continue review', exact: true })).toHaveCount(2);
-    await page.getByRole('link', { name: 'Relationship decisions and recovery', exact: true }).click();
+    await page.getByRole('link', { name: 'Check an unfinished ownership decision', exact: true }).click();
     await retry(page).click(); await confirmed(page).waitFor(); assert.deepEqual(posts[1], original); assert.equal(rows(), 1);
     await page.getByRole('region', { name: 'Current claim' }).getByText('owner claim · rejected', { exact: true }).waitFor();
     await page.reload({ waitUntil: 'domcontentloaded' }); await confirmed(page).waitFor(); assert.equal(posts.length, 2);
@@ -215,7 +215,7 @@ async function main() {
     sql(`UPDATE public."HomeOccupancy" SET is_active=true WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     await page.getByRole('button', { name: 'Reload claims', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Continue review', exact: true })).toHaveCount(1);
-    await page.getByRole('link', { name: 'Relationship decisions and recovery', exact: true }).click();
+    await page.getByRole('link', { name: 'Check an unfinished ownership decision', exact: true }).click();
     await page.getByText('No relationship decision needs recovery on this browser. Choose a claim to review.', { exact: true }).waitFor();
     console.log('PASS: claims list current denial clears old rows, reports failure and reloads after restored authority; acknowledged recovery inbox is empty');
     console.log('PASS: unwritable storage blocks POST; held preflight background/account changes preserve original without POST; keyboard recovery enters verified dispute review without freezing Home');

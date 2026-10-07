@@ -197,8 +197,8 @@ final class HomeResidencyReviewJourneyUITests: XCTestCase {
         try press("homeResidencyReview.reload")
         try reveal(element("homeResidencyReview.submit"))
         try press("homeResidencyReview.close")
-        try press("homeClaimReview.residencyRecovery")
-        try require(element("homeResidencyReview.empty"))
+        // Nothing is saved, so there is no residency recovery link.
+        XCTAssertFalse(element("homeClaimReview.residencyRecovery").waitForExistence(timeout: 2))
         state = try await fixture("state")
         XCTAssertEqual((state["receipts"] as? [[String: Any]])?.count, 3)
         XCTAssertEqual((state["commands"] as? [[String: Any]])?.count, 6)

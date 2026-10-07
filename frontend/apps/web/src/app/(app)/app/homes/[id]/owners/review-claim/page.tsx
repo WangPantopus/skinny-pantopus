@@ -10,6 +10,7 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { useResidencyQueue } from '@/components/home/residency/queue/useResidencyQueue';
 import { ResidencyQueueContent } from '@/components/home/residency/queue/ResidencyQueueContent';
+import { useSavedReviewDecisions } from '@/components/home/residency/useSavedReviewDecisions';
 
 type ClaimTab = 'ownership' | 'residency';
 
@@ -18,6 +19,7 @@ function ReviewClaimContent() {
   const { id: homeId } = useParams<{ id: string }>();
 
   const [claims, setClaims] = useState<any[]>([]);
+  const savedDecisions = useSavedReviewDecisions(homeId);
   const [comparison, setComparison] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -137,12 +139,12 @@ function ReviewClaimContent() {
       </div>
 
       <div className="mb-5 flex flex-wrap gap-x-4 gap-y-2">
-        <Link href={`/app/homes/${homeId}/owners/review-claim/relationship`} prefetch={false}
-          className="inline-flex min-h-11 items-center text-sm underline">Relationship decisions and recovery</Link>
-        <Link href={`/app/homes/${homeId}/owners/review-claim/residency`} prefetch={false}
-          className="inline-flex min-h-11 items-center text-sm underline">Residency decisions and recovery</Link>
+        {savedDecisions.relationship && <Link href={`/app/homes/${homeId}/owners/review-claim/relationship`} prefetch={false}
+          className="inline-flex min-h-11 items-center text-sm underline">Check an unfinished ownership decision</Link>}
+        {savedDecisions.residency && <Link href={`/app/homes/${homeId}/owners/review-claim/residency`} prefetch={false}
+          className="inline-flex min-h-11 items-center text-sm underline">Check an unfinished residency decision</Link>}
         <Link href={`/app/homes/${homeId}/owners/review-claim/history`} prefetch={false}
-          className="inline-flex min-h-11 items-center text-sm underline">Your past residency decisions</Link>
+          className="inline-flex min-h-11 items-center text-sm underline">Your past decisions</Link>
       </div>
 
       {/* Tabs */}
