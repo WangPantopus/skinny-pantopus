@@ -130,7 +130,7 @@ router.post('/withdraw', verifyToken, validate(withdrawSchema), async (req, res)
     }
     // A repeated request settles on the first attempt's outcome. Final outcomes are 409 (start a new
     // withdrawal); a first attempt still settling is 503 (retry with the same key).
-    if (err.code === 'WITHDRAWAL_NOT_COMPLETED' || err.code === 'WITHDRAWAL_KEY_REUSED') {
+    if (err.code === 'WITHDRAWAL_NOT_COMPLETED' || err.code === 'WITHDRAWAL_KEY_REUSED' || err.code === 'FUNDS_CLEARING') {
       return res.status(409).json({ error: err.message, code: err.code.toLowerCase() });
     }
     if (err.code === 'WITHDRAWAL_PENDING') {
