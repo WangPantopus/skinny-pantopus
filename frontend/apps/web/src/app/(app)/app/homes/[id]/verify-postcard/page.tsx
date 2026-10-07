@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Mail, ShieldCheck } from 'lucide-react';
 import { usePostalVerification } from '@/components/homes/postcard/usePostalVerification';
-import { postalMessage, validMailingAddress, type MailingAddress } from '@/components/homes/postcard/postcardModel';
+import { postalMessage, triesLeft, validMailingAddress, type MailingAddress } from '@/components/homes/postcard/postcardModel';
 import { residencyRequestLabel } from '@/components/homes/residencyProgressModel';
 
 const emptyAddress = (): MailingAddress => ({ line1: '', line2: '', city: '', state: '', postal_code: '', country: 'US' });
@@ -42,68 +42,67 @@ function VerifyPostcardContent() {
     <header className="flex items-start gap-3">
       <Mail className="mt-1 h-7 w-7 shrink-0 text-emerald-700" aria-hidden="true" />
       <div><h1 className="text-2xl font-semibold">Verify by mail</h1>
-        <p className="mt-2 text-sm text-app-text-secondary">Confirm your mailing address, follow your postcard request and enter its code when it arrives.</p></div>
+        <p className="mt-2 text-sm text-app-text-secondary">We’ll mail a postcard with a code to this Home’s address. Enter the code when it arrives to verify that you live here.</p></div>
     </header>
     {flow.error && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">{flow.error}</p>}
-    {busy && <p role="status">Checking mail verification…</p>}
+    {busy && <p role="status">Checking…</p>}
     {unavailable ? <section className={panel}>
-      <h2 className="font-semibold">{flow.error ? 'Recovery is unavailable' : 'Checking saved mail verification'}</h2>
-      <p className="text-sm text-app-text-secondary">Your account and saved request must be checked before a postcard or code attempt can be submitted.</p>
-      {flow.error && <button className={button} onClick={flow.reopen}>Reopen recovery</button>}
+      <h2 className="font-semibold">{flow.error ? 'Couldn’t load this page' : 'Loading…'}</h2>
+      {flow.error && <button className={button} onClick={flow.reopen}>Reload</button>}
     </section> : pending ? <section className={panel}>
-      <h2 className="text-lg font-semibold">{outcome?.state === 'completed' ? pending.kind === 'code' ? 'Code verification recorded' : 'Postcard request saved'
-        : outcome?.state === 'cancelled' ? 'Original attempt cancelled' : outcome?.state === 'rejected' ? 'Original attempt was not accepted' : 'Recover your original attempt'}</h2>
-      {retainedAddress && <><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Original mailing address</p><Address address={retainedAddress} /></>}
-      {pending.kind === 'code' && <p className="text-sm text-app-text-secondary">Postcard reference: {pending.postcard_id?.slice(-8)}. Your original code attempt is kept securely; it is not displayed here.</p>}
+      <h2 className="text-lg font-semibold">{outcome?.state === 'completed' ? pending.kind === 'code' ? 'Code accepted' : 'Postcard requested'
+        : outcome?.state === 'cancelled' ? 'Attempt discarded' : outcome?.state === 'rejected' ? 'Couldn’t finish this' : 'Check your last attempt'}</h2>
+      {retainedAddress && <><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Mailing address</p><Address address={retainedAddress} /></>}
+      {pending.kind === 'code' && <p className="text-sm text-app-text-secondary">Postcard reference: {pending.postcard_id?.slice(-8)}. For your security, the code you entered isn’t shown.</p>}
       <p className="text-sm text-app-text-secondary">{outcome?.state === 'completed'
-        ? pending.kind === 'code' ? 'The code result is saved. Household review may still be required. Check residency status for current Home access.'
-          : 'Saving a request does not confirm mailing or physical delivery. Check current mail status for its outcome.'
-        : outcome?.state === 'cancelled' ? 'The server confirmed cancellation of this attempt. It cannot request a postcard or consume a code attempt.'
+        ? pending.kind === 'code' ? 'Your code was accepted. Residency status shows your access and anything still waiting on the household.'
+          : 'We’ll mail it to this address. When it arrives, enter the code here.'
+        : outcome?.state === 'cancelled' ? 'Nothing changed. This attempt was discarded before it took effect.'
           : outcome?.state === 'rejected' ? postalMessage(outcome.code)
-            : 'The result is not confirmed. Check it or retry the same saved details. Confirm cancellation before entering different details.'}</p>
-      {outcome?.code === 'POSTCARD_WRONG_CODE' && <p className="text-sm font-semibold">After this attempt: {outcome.attempts_remaining} code attempts remaining.</p>}
-      {flow.canAcknowledge ? <button className={primary} disabled={busy} onClick={() => { setCode(''); setConfirmed(false); void flow.acknowledge(); }}>Review current mail status</button>
+            : 'We couldn’t confirm whether this went through. Check again, or try again.'}</p>
+      {outcome?.code === 'POSTCARD_WRONG_CODE' && <p className="text-sm font-semibold">{outcome.attempts_remaining ? triesLeft(outcome.attempts_remaining) : 'No tries left. Request a new postcard.'}</p>}
+      {flow.canAcknowledge ? <button className={primary} disabled={busy} onClick={() => { setCode(''); setConfirmed(false); void flow.acknowledge(); }}>Done</button>
         : <div className="grid gap-3 sm:grid-cols-2">
-          <button className={button} disabled={busy} onClick={() => void flow.recover('status')}>Check original result</button>
-          <button className={button} disabled={busy} onClick={() => void flow.recover('retry')}>Retry original attempt</button>
-          <button className={`${button} sm:col-span-2`} disabled={busy} onClick={() => setCancel(true)}>Cancel original attempt</button>
+          <button className={button} disabled={busy} onClick={() => void flow.recover('status')}>Check again</button>
+          <button className={button} disabled={busy} onClick={() => void flow.recover('retry')}>Try again</button>
+          <button className={`${button} sm:col-span-2`} disabled={busy} onClick={() => setCancel(true)}>Discard attempt</button>
         </div>}
       {cancel && !flow.canAcknowledge && <section role="group" aria-labelledby="postal-cancel-title" className="space-y-3 border-t border-app-border pt-4">
-        <h3 id="postal-cancel-title" className="font-semibold">Cancel this attempt?</h3>
-        <p className="text-sm text-app-text-secondary">If it already completed, the recorded result will be recovered. Cancellation does not recall mail or undo recorded verification.</p>
-        <div className="flex flex-wrap gap-3"><button className={button} autoFocus disabled={busy} onClick={() => setCancel(false)}>Keep attempt</button>
-          <button className={button} disabled={busy} onClick={() => { setCancel(false); void flow.recover('cancel'); }}>Confirm cancellation</button></div>
+        <h3 id="postal-cancel-title" className="font-semibold">Discard this attempt?</h3>
+        <p className="text-sm text-app-text-secondary">If it already went through, it stays. Discarding can’t recall a postcard that’s already been mailed.</p>
+        <div className="flex flex-wrap gap-3"><button className={button} autoFocus disabled={busy} onClick={() => setCancel(false)}>Keep it</button>
+          <button className={button} disabled={busy} onClick={() => { setCancel(false); void flow.recover('cancel'); }}>Discard</button></div>
       </section>}
-      <button className={button} disabled={busy} onClick={flow.reopen}>Reopen recovery</button>
+      <button className={button} disabled={busy} onClick={flow.reopen}>Reload</button>
     </section> : status ? <>
-      {progress?.request && <section className={panel}><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Your submitted residency address</p>
+      {progress?.request && <section className={panel}><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Your Home’s address</p>
         <p className="break-words text-sm">{residencyRequestLabel(progress.request)}</p></section>}
       {status.postcard && <section className={panel}>
-        <h2 className="text-lg font-semibold">{status.postcard.status === 'verified' ? 'Postal proof recorded' : status.postcard.status === 'expired' ? 'Postcard code expired'
-          : status.postcard.status === 'cancelled' ? 'Postcard no longer active' : 'Your postcard request'}</h2>
-        {status.request && <><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Previously confirmed mailing address</p><Address address={status.request.address} /></>}
-        <p className="text-sm text-app-text-secondary">{({ not_started: 'Mailing has not started. Resume the saved request when available.',
-          accepted: 'The mailing provider accepted this request. Physical delivery has not been confirmed.',
-          unknown: 'The mailing outcome is unknown. The postcard may already be on its way; checking status does not send another.',
-          rejected: 'The mailing provider did not accept this request. Confirm the address before requesting another postcard.' })[status.postcard.delivery]}</p>
+        <h2 className="text-lg font-semibold">{status.postcard.status === 'verified' ? 'Address verified by mail' : status.postcard.status === 'expired' ? status.postcard.attempts_remaining === 0 ? 'No tries left for this postcard' : 'Postcard code expired'
+          : status.postcard.status === 'cancelled' ? 'Postcard no longer active' : 'Your postcard'}</h2>
+        {status.request && <><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Mailing address</p><Address address={status.request.address} /></>}
+        {!['verified', 'expired', 'cancelled'].includes(status.postcard.status) && <p className="text-sm text-app-text-secondary">{({ not_started: 'This postcard hasn’t been sent yet.',
+          accepted: 'Your postcard is on its way.',
+          unknown: 'We couldn’t confirm the postcard was sent. It may already be on its way; checking again won’t send another.',
+          rejected: 'The mail service couldn’t send this postcard. Check the address and request another.' })[status.postcard.delivery]}</p>}
         <p className="text-sm text-app-text-secondary">Postcard reference: {status.postcard.id.slice(-8)} · Code expiry: {new Date(status.postcard.expires_at).toLocaleDateString()}</p>
-        {status.can_resume && <button className={primary} disabled={busy} onClick={() => void flow.resumeMail()}>Resume saved mailing request</button>}
+        {status.can_resume && <button className={primary} disabled={busy} onClick={() => void flow.resumeMail()}>Send the postcard</button>}
       </section>}
       {status.restriction && <p role="status" className="rounded-xl border border-app-border p-4 text-sm">{postalMessage(status.restriction)}</p>}
       {status.can_verify && <form className={panel} onSubmit={event => { event.preventDefault(); void flow.verify(code); }}>
         <h2 className="text-lg font-semibold">Enter your postcard code</h2>
-        <p className="text-sm text-app-text-secondary">Use the code from this postcard. Verification records address proof; your current household permissions still apply.</p>
+        <p className="text-sm text-app-text-secondary">Enter the code printed on the postcard.</p>
         <label className="block text-sm font-medium" htmlFor="postal-code">Postcard code</label>
         <input id="postal-code" type="text" autoComplete="one-time-code" autoCapitalize="characters" spellCheck={false}
           value={code} maxLength={8} onChange={event => setCode(event.target.value.replace(/[^a-z0-9]/gi, '').toUpperCase())}
           disabled={busy} className={`${inputStyle} text-center text-2xl tracking-widest`} />
-        <p className="text-sm text-app-text-secondary">{status.postcard?.attempts_remaining} code attempts remaining.</p>
-        <button className={primary} disabled={busy || !/^[a-z0-9]{6,8}$/i.test(code)}>Record code verification</button>
+        <p className="text-sm text-app-text-secondary">{triesLeft(status.postcard?.attempts_remaining ?? 0)}</p>
+        <button className={primary} disabled={busy || !/^[a-z0-9]{6,8}$/i.test(code)}>Verify code</button>
       </form>}
       {status.can_request && <form className={panel} onSubmit={event => { event.preventDefault(); if (confirmed) void flow.requestMail(address); }}>
         <h2 className="text-lg font-semibold">Confirm your mailing address</h2>
-        <p className="text-sm text-app-text-secondary">Enter the exact street and apartment for the Home you requested to join. We will check it before accepting the postcard request.</p>
-        {status.request && <button type="button" className={button} onClick={() => { setAddress({ ...status.request!.address }); setConfirmed(false); }}>Use previously confirmed address</button>}
+        <p className="text-sm text-app-text-secondary">Enter the street and apartment exactly as they are for this Home. We check the address before mailing.</p>
+        {status.request && <button type="button" className={button} onClick={() => { setAddress({ ...status.request!.address }); setConfirmed(false); }}>Use the saved address</button>}
         {([{ key: 'line1', label: 'Street address', max: 255, auto: 'address-line1' }, { key: 'line2', label: 'Apartment, suite or unit (optional)', max: 255, auto: 'address-line2' },
           { key: 'city', label: 'City', max: 100, auto: 'address-level2' }, { key: 'state', label: 'State', max: 50, auto: 'address-level1' },
           { key: 'postal_code', label: 'ZIP code', max: 20, auto: 'postal-code' }] as const).map(field => <label key={field.key} className="block text-sm font-medium">
@@ -116,8 +115,8 @@ function VerifyPostcardContent() {
       </form>}
       <section className={panel}>
         <div className="flex items-start gap-2"><ShieldCheck className="h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
-          <p className="text-sm">{progress?.current_access === 'shared' ? 'Current household access is available. Your role and permissions still apply.'
-            : progress?.next_step === 'household_review' ? 'Your residency is waiting for household review.' : 'Check residency status for your current access and next step.'}</p></div>
+          <p className="text-sm">{progress?.current_access === 'shared' ? 'You can open this Home. What you can do depends on your role.'
+            : progress?.next_step === 'household_review' ? 'Your residency is waiting for household review.' : 'Residency status shows your access and next step.'}</p></div>
         <Link className={`${button} block text-center`} href={`/app/homes/${homeId}/residency`}>Check residency status</Link>
         {progress?.current_access === 'shared' && <Link className={`${button} block text-center`} href={search.get('return') === 'place' ? '/app/place' : `/app/homes/${homeId}/dashboard`}>
           {search.get('return') === 'place' ? 'Return to Place' : 'Open Home'}</Link>}

@@ -204,9 +204,9 @@ class Journey(residency.Journey):
         self.await_database(lambda s: s['held'])
         self.fixture('access', 'POST', {'state': 'removed'})
         self.background_and_return()
-        self.wait('Household access needs review', scroll=True)
+        self.wait("You don't have household access", scroll=True)
         self.fixture('release', 'POST')
-        self.wait('Household access needs review', scroll=True)
+        self.wait("You don't have household access", scroll=True)
         self.no_controls('Open Home', 'homePostalVerifyCode', 'homePostalAttemptsRemaining')
         state = self.fixture('state')
         assert state['provider_calls'] == 1 and len(state['cards']) == 1 and len(state['verifications']) == 3

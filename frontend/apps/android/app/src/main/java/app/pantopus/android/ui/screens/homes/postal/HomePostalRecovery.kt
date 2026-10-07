@@ -36,31 +36,31 @@ internal fun HomePostalRecovery(
         if (address != null) {
             Text(HomePostalMessages.address(address), style = PantopusTextStyle.body, modifier = Modifier.testTag("homePostalSavedAddress"))
         } else {
-            Text("Your original code attempt is saved securely. Its code is hidden here.", style = PantopusTextStyle.body)
+            Text("For your security, the code you entered isn't shown.", style = PantopusTextStyle.body)
         }
         Text(HomePostalMessages.explanation(draft.kind, state.outcome), style = PantopusTextStyle.body)
         if (state.working) CircularProgressIndicator()
         when {
             viewModel.canAcknowledge ->
                 HomePostalButton(
-                    if (state.outcome?.state == "completed") "Check current status" else "Edit after recorded result",
+                    if (state.outcome?.state == "completed") "Done" else "Start over",
                     "homePostalAcknowledge",
                     onClick = viewModel::acknowledge,
                 )
             state.outcome?.isTerminal == true ->
                 HomePostalButton(
-                    "Retry saving the result",
+                    "Try again",
                     "homePostalSaveProof",
                     enabled = !state.working,
                 ) { viewModel.recover(HomePostalAction.Check) }
             else -> {
-                HomePostalButton("Check original result", "homePostalCheckOriginal", !state.working) {
+                HomePostalButton("Check again", "homePostalCheckOriginal", !state.working) {
                     viewModel.recover(HomePostalAction.Check)
                 }
-                HomePostalButton("Retry the same request", "homePostalRetryOriginal", !state.working) {
+                HomePostalButton("Try again", "homePostalRetryOriginal", !state.working) {
                     viewModel.recover(HomePostalAction.Submit)
                 }
-                HomePostalButton("Cancel request", "homePostalCancel", !state.working, viewModel::reviewCancellation)
+                HomePostalButton("Discard attempt", "homePostalCancel", !state.working, viewModel::reviewCancellation)
             }
         }
     }

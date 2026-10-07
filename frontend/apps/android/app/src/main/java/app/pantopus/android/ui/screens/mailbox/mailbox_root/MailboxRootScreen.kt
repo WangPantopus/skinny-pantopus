@@ -278,7 +278,12 @@ private fun MailboxInboxEntry(onOpenInbox: () -> Unit) {
         Column(modifier = Modifier.weight(1f)) {
             Text("Messages", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
             Text(
-                "Your inbox — neighbors, businesses, and the people you follow",
+                // Launch cut #1 (Beacon): following people comes with Beacon.
+                if (LaunchFeatures.beacon) {
+                    "Your inbox — neighbors, businesses, and the people you follow"
+                } else {
+                    "Your inbox — neighbors, businesses, and people you know"
+                },
                 fontSize = 12.5.sp,
                 color = PantopusColors.appTextSecondary,
             )

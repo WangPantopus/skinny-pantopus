@@ -78,6 +78,8 @@ data class MailDetail(
     val content: String? = null,
     @Json(name = "sender_business_name") val senderBusinessName: String? = null,
     @Json(name = "sender_address") val senderAddress: String? = null,
+    /** Who it's from as printed on the item. The server names the sender from it first (`resolveSenderDisplay`). */
+    @Json(name = "sender_display") val senderDisplay: String? = null,
     @Json(name = "sender_user_id") val senderUserId: String? = null,
     /**
      * `Mail.sender_trust` — `verified_gov` / `verified_utility` /
@@ -124,7 +126,28 @@ data class MailDetail(
      * who could see it open it from the notice and restore it.
      */
     val removed: MailRemovedDto? = null,
+    /** `Mail.key_facts`: facts read off the item, such as a bill's amount due (`[{field, value}]`). */
+    @Json(name = "key_facts") val keyFacts: Any? = null,
 ) {
+    /** [senderDisplay] when it says something. */
+    val printedSender: String?
+        get() = senderDisplay?.trim()?.takeIf { it.isNotEmpty() }
+
+    /** [keyFacts] entries that have a field and a value, as label to value; anything else reads as none. */
+    val extractedFacts: List<Pair<String, String>>
+        get() =
+            (keyFacts as? List<*>).orEmpty().mapNotNull { entry ->
+                val fact = entry as? Map<*, *>
+                val field = (fact?.get("field") as? String)?.trim().orEmpty()
+                val value =
+                    when (val raw = fact?.get("value")) {
+                        is String -> raw.trim()
+                        is Number -> raw.toString()
+                        else -> ""
+                    }
+                if (field.isEmpty() || value.isEmpty()) null else field to value
+            }
+
     /**
      * Stationery theme when this mail came out of the Ceremonial Mail
      * compose flow — the signal RN uses to redirect the generic detail into

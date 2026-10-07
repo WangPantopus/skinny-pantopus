@@ -33,7 +33,7 @@ final class HomeResidencyProgressTests: XCTestCase {
         let history = try XCTUnwrap(sections.first { $0.id == "residency-history" })
         let row = try XCTUnwrap(history.rows.first)
         XCTAssertEqual(row.title, "12 Example St, 3B")
-        XCTAssertEqual(row.subtitle, "Review recorded")
+        XCTAssertEqual(row.subtitle, "Approved")
         XCTAssertEqual(row.footer?.actions.first?.title, "Check residency status")
         XCTAssertNil(model.banner)
         row.onTap()

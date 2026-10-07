@@ -137,11 +137,10 @@ purpose is **App functionality / Account management**; analytics where noted.
 | Committed to Play Families Policy | As applicable to target audience (set in Console) |
 | Independent security review | Optional — leave per current status |
 
-> **Note on `usesCleartextTraffic="true"`** in `AndroidManifest.xml`: present
-> for local-dev (`10.0.2.2`) HTTP. Production traffic is HTTPS. Confirm the
-> release build does not actually use cleartext to a production host before
-> attesting "encrypted in transit"; if needed, gate cleartext to debug via a
-> network-security-config so the attestation is unambiguous.
+> **Cleartext (checked 2026-10-07):** `usesCleartextTraffic="true"` is set only in
+> `app/src/debug/AndroidManifest.xml` (local `10.0.2.2` HTTP). The main manifest
+> doesn't allow it, so release builds can't send cleartext, and their API host is
+> `https://api.pantopus.com`. "Encrypted in transit: Yes" stands.
 
 ---
 

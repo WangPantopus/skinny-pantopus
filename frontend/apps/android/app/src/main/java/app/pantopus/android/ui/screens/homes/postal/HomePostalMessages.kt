@@ -5,16 +5,26 @@ import app.pantopus.android.data.homes.HomePostalKind
 import app.pantopus.android.data.homes.HomePostalOutcome
 
 object HomePostalMessages {
+    fun postcardStatus(raw: String?): String =
+        when (raw) {
+            "pending" -> "Waiting for your code"
+            "verified" -> "Verified"
+            "expired" -> "Code expired"
+            "cancelled" -> "No longer active"
+            "locked" -> "No tries left"
+            else -> "Status unavailable"
+        }
+
     fun recovery(
         sessionCurrent: Boolean,
         storageFailed: Boolean,
         hasOriginal: Boolean,
     ): String =
         when {
-            !sessionCurrent -> "Your session changed. Reopen mail verification to recover the original request."
+            !sessionCurrent -> "Your sign-in changed. Reload to check your last attempt."
             storageFailed -> HomePostalCoordinator.STORAGE
-            hasOriginal -> "The result is not confirmed. Keep the original and check again, retry it, or confirm cancellation."
-            else -> "Mail verification status could not be checked. Please retry."
+            hasOriginal -> "We couldn't confirm the result. Check again, try again, or discard this attempt."
+            else -> "Couldn't check your postcard status. Try again."
         }
 
     fun headline(
@@ -22,10 +32,10 @@ object HomePostalMessages {
         outcome: HomePostalOutcome?,
     ): String =
         when (outcome?.state) {
-            "completed" -> if (kind == HomePostalKind.Code) "Address proof recorded" else "Mailing request recorded"
-            "cancelled" -> "Original request cancelled"
-            "rejected" -> "Review the recorded result"
-            else -> "Recover your original request"
+            "completed" -> if (kind == HomePostalKind.Code) "Code accepted" else "Postcard requested"
+            "cancelled" -> "Attempt discarded"
+            "rejected" -> "Couldn't finish this"
+            else -> "Check your last attempt"
         }
 
     fun explanation(
@@ -35,32 +45,47 @@ object HomePostalMessages {
         when (outcome?.state) {
             "completed" ->
                 if (kind == HomePostalKind.Code) {
-                    "Check residency status for household review and access. This result does not change current permissions."
+                    "Your code was accepted. Residency status shows your access and anything still waiting on the household."
                 } else {
-                    "Check current mailing status for delivery and any remaining steps. A saved request alone does not confirm mailing."
+                    "We'll mail it to this address. When it arrives, enter the code here."
                 }
-            "cancelled" -> "This original request can no longer submit a new result. Review your details before starting another."
+            "cancelled" -> "Nothing changed. This attempt was discarded before it took effect."
             "rejected" -> restriction(outcome.code.orEmpty())
-            else -> "Your details are saved securely. Check the result, retry the same request, or confirm cancellation before editing."
+            else -> "We couldn't confirm whether this went through. Check again, or try again."
+        }
+
+    fun postcardHeadline(
+        status: String?,
+        deliveryState: String?,
+        attemptsRemaining: Int? = null,
+    ): String =
+        when {
+            status == "verified" -> "Address verified by mail"
+            // A code also expires when its tries are used up.
+            status == "expired" && attemptsRemaining == 0 -> "No tries left for this postcard"
+            status == "expired" -> "Postcard code expired"
+            status == "cancelled" -> "Postcard no longer active"
+            else -> delivery(deliveryState)
         }
 
     fun delivery(state: String?): String =
         when (state) {
-            "not_started" -> "Mailing has not started"
-            "accepted" -> "Mail provider accepted the postcard"
-            "unknown" -> "Mailing outcome is unknown"
-            "rejected" -> "Mail provider did not accept the postcard"
-            else -> "Mailing status is unavailable"
+            "not_started" -> "Your postcard hasn't been sent yet"
+            "accepted" -> "Your postcard is on its way"
+            "unknown" -> "We couldn't confirm your postcard was sent"
+            "rejected" -> "The mail service couldn't send your postcard"
+            else -> "Postcard status unavailable"
         }
 
     fun restriction(code: String): String =
         when (code) {
-            "POSTCARD_WRONG_CODE" -> "That code did not match. Review the recorded attempt before entering a corrected code."
+            "POSTCARD_WRONG_CODE" -> "That code didn't match this postcard. Check it and try again."
             "POSTCARD_ADDRESS_CHANGED" -> "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP."
-            "POSTCARD_EXPIRED" -> "This postcard code expired. Confirm your mailing address before requesting another."
-            "POSTCARD_LOCKED" -> "This postcard has no code attempts remaining. Confirm your address before requesting another."
-            "POSTCARD_ACCESS_REVIEW_REQUIRED" -> "Household access needs review. A mail code cannot restore removed or expired access."
-            "POSTCARD_REVIEW_ALREADY_RECORDED" -> "Your verification is already recorded. Check residency status for current access."
+            "POSTCARD_EXPIRED" -> "This postcard's code has expired. Request a new postcard."
+            "POSTCARD_LOCKED" -> "No tries left for this postcard. Request a new one."
+            "POSTCARD_ACCESS_REVIEW_REQUIRED" ->
+                "A mail code can't restore access that was removed or has ended. Ask someone in the household to invite you again."
+            "POSTCARD_REVIEW_ALREADY_RECORDED" -> "You're already verified. Residency status shows your access."
             "POSTCARD_HOME_UNAVAILABLE" -> "Mail verification is unavailable for this Home right now."
             "POSTCARD_RESIDENCY_REQUEST_REQUIRED" -> "Submit your residency request before requesting a postcard."
             else -> availability(code)
@@ -69,12 +94,12 @@ object HomePostalMessages {
     private fun availability(code: String): String =
         when (code) {
             "POSTCARD_COUNTRY_UNAVAILABLE" -> "Mail verification is currently available for US addresses."
-            "POSTCARD_ADDRESS_LIMIT" -> "The request limit for this address has been reached. Try again later."
-            "POSTCARD_USER_LIMIT" -> "Your mail request limit has been reached. Try again later."
-            "POSTCARD_NOT_DISPATCHED" -> "Mailing has not started. Continue the original request first."
+            "POSTCARD_ADDRESS_LIMIT" -> "Too many postcards have been requested for this address. Try again later."
+            "POSTCARD_USER_LIMIT" -> "You've asked for too many postcards in the last hour. Try again later."
+            "POSTCARD_NOT_DISPATCHED" -> "Your postcard hasn't been sent yet. Send it first."
             "OWNERSHIP_FLOW_REQUIRED" -> "Continue ownership verification for this Home."
             "HOME_NOT_FOUND" -> "This Home is no longer available. Check your residency status."
-            else -> "Mail verification cannot continue right now. Refresh to check your current status before trying again."
+            else -> "This couldn't be completed. Check your status and try again."
         }
 
     fun address(value: HomeResidencyAddressSnapshot): String =

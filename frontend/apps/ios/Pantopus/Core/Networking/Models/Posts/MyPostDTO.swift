@@ -32,6 +32,9 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
     /// `GET /api/posts/me?status=archived` lands, the decoder will start
     /// populating this field automatically.
     public let archivedAt: String?
+    /// `moderation` when a moderator removed the post; the author can't
+    /// restore it then.
+    public let archiveReason: String?
     /// Who wrote it (`author.displayName`); the Saved tab's rows name the author.
     public let authorName: String?
 
@@ -50,6 +53,7 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         eventVenue: String? = nil,
         lostFoundType: String? = nil,
         archivedAt: String? = nil,
+        archiveReason: String? = nil,
         authorName: String? = nil
     ) {
         self.id = id
@@ -66,7 +70,13 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         self.eventVenue = eventVenue
         self.lostFoundType = lostFoundType
         self.archivedAt = archivedAt
+        self.archiveReason = archiveReason
         self.authorName = authorName
+    }
+
+    /// A moderator removed the post, so it can't be restored.
+    public var isRemovedByModerator: Bool {
+        archiveReason == "moderation"
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -83,6 +93,7 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case eventVenue = "event_venue"
         case lostFoundType = "lost_found_type"
         case archivedAt = "archived_at"
+        case archiveReason = "archive_reason"
         case author
     }
 
@@ -106,6 +117,7 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         eventVenue = try c.decodeIfPresent(String.self, forKey: .eventVenue)
         lostFoundType = try c.decodeIfPresent(String.self, forKey: .lostFoundType)
         archivedAt = try c.decodeIfPresent(String.self, forKey: .archivedAt)
+        archiveReason = try c.decodeIfPresent(String.self, forKey: .archiveReason)
         authorName = (try? c.decodeIfPresent(AuthorBrief.self, forKey: .author))?.displayName
     }
 }

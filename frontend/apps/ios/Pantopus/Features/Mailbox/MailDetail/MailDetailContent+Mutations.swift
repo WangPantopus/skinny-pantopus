@@ -166,7 +166,8 @@ extension MailDetailContent {
             memoryDetail: memoryDetail ?? content.memoryDetail,
             packageDetail: packageDetail ?? content.packageDetail,
             partyDetail: partyDetail ?? content.partyDetail,
-            recordsDetail: recordsDetail ?? content.recordsDetail
+            recordsDetail: recordsDetail ?? content.recordsDetail,
+            extractedFacts: content.extractedFacts
         )
     }
 }
