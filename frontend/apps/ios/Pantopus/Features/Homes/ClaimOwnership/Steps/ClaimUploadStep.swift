@@ -165,6 +165,13 @@ struct ClaimUploadStep: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
+            // Residency opens on this step: a failed load shows on top, above the form it disables.
+            if let loadError = viewModel.startLoadError {
+                ClaimUploadErrorBanner(message: loadError)
+                if viewModel.canRetryLoad {
+                    ClaimRetryLoadButton { viewModel.retryLoad() }
+                }
+            }
             if viewModel.needsUploadRecovery {
                 Text("This file may already be saved. Retry the same upload, or open My claims to inspect and remove its private record.")
                 Button("Manage saved documents") { viewModel.manageSavedDocuments() }
@@ -176,7 +183,7 @@ struct ClaimUploadStep: View {
                 verificationType: viewModel.verificationType,
                 documentOptions: viewModel.documentOptions,
                 selectedDocumentType: viewModel.selectedDocumentType,
-                submitError: viewModel.submitError,
+                submitError: viewModel.startLoadError == nil ? viewModel.submitError : nil,
                 onPick: { id in
                     if viewModel.canPick, let slot = ClaimEvidenceSlot(rawValue: id) { pickerSlot = slot
                         showPicker = true
@@ -252,7 +259,7 @@ private struct EncryptionFooter: View {
     }
 }
 
-private struct ClaimUploadErrorBanner: View {
+struct ClaimUploadErrorBanner: View {
     let message: String
 
     var body: some View {
@@ -267,6 +274,18 @@ private struct ClaimUploadErrorBanner: View {
         .background(Theme.Color.errorBg)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         .accessibilityIdentifier("claimOwnership_errorBanner")
+    }
+}
+
+/// "Try again" after the wizard couldn't load its claim session or Home.
+struct ClaimRetryLoadButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("Try again").frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("claimOwnership_retryLoad")
     }
 }
 

@@ -139,7 +139,7 @@ final class ClaimOwnershipWizardViewModelTests: XCTestCase {
         SequencedURLProtocol.routeResponses["/api/homes/\(f.home)/ownership-claims"] = [
             .status(
                 200,
-                body: "{\"message\":\"Saved\",\"claim\":{\"id\":null,\"status\":\"under_review\"}}"
+                body: "{\"message\":\"Saved\",\"claim\":{\"id\":\"not-a-claim-id\",\"status\":\"under_review\"}}"
             )
         ]
         await vm.submit()

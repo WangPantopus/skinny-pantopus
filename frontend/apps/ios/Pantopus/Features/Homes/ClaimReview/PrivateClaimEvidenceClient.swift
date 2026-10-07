@@ -9,6 +9,7 @@ final class PrivateClaimEvidenceClient {
     nonisolated static let allowedTypes: Set<String> = ["deed", "closing_disclosure", "tax_bill", "utility_bill", "lease"]
     private let api: APIClient
     private let uploader: MultipartUploader
+    private let identity: (() -> String?)?
     private let scope: HomeClaimSessionScope
     private let actorId: String?
     private var serverSession: String?
@@ -22,6 +23,7 @@ final class PrivateClaimEvidenceClient {
     ) {
         self.api = api
         self.uploader = uploader
+        self.identity = identity
         scope = HomeClaimSessionScope(api: api, identity: identity)
         if let actorId {
             self.actorId = actorId
@@ -43,6 +45,13 @@ final class PrivateClaimEvidenceClient {
     func retire() {
         retired = true
         serverSession = nil
+    }
+
+    /// A retired client stays retired. A screen the person left and came back to (another tab and back)
+    /// may continue with a fresh client, but only for the account and session that opened it.
+    func renewedInOpeningSession() -> PrivateClaimEvidenceClient? {
+        guard retired, actorId != nil, scope.isCurrent, api.apiBaseURL == uploader.apiBaseURL else { return nil }
+        return PrivateClaimEvidenceClient(api: api, uploader: uploader, actorId: actorId, identity: identity)
     }
 
     func requireCurrent() throws {
