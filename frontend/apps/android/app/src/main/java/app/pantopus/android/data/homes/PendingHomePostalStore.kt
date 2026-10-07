@@ -49,7 +49,7 @@ class PersistentPendingHomePostalStore
             next: PendingHomePostalCommand?,
         ) {
             locked { prefs ->
-                check(read(prefs, scope) == expected) { "Another postal request is saved. Reopen mail verification to recover it." }
+                check(read(prefs, scope) == expected) { "Another postcard attempt is unfinished. Reload to finish it first." }
                 check(next == null || codec.valid(next, scope)) { "The original postal request could not be verified." }
                 val key = key(scope)
                 val edit = prefs.edit()
@@ -67,7 +67,7 @@ class PersistentPendingHomePostalStore
             prefs: SharedPreferences,
             scope: HomePostalScope,
         ): PendingHomePostalCommand? {
-            check(scope.isValid()) { "Your session changed. Reopen mail verification to recover the original request." }
+            check(scope.isValid()) { "Your sign-in changed. Reload to check your last attempt." }
             val key = key(scope)
             val raw = (if (uncertainValues.containsKey(key)) uncertainValues[key] else prefs.getString(key, null)) ?: return null
             val value = adapter.fromJson(raw)

@@ -78,8 +78,10 @@ public struct PulsePostDetailView: View {
             Button(viewModel.isSaved ? "Remove bookmark" : "Save post") {
                 Task { await viewModel.toggleSave() }
             }
-            Button(viewModel.isReposted ? "Undo repost" : "Repost") {
-                Task { await viewModel.toggleRepost() }
+            if !isRemovedByModerator {
+                Button(viewModel.isReposted ? "Undo repost" : "Repost") {
+                    Task { await viewModel.toggleRepost() }
+                }
             }
             if viewModel.isOwner {
                 Button("Edit post") {
@@ -164,7 +166,7 @@ public struct PulsePostDetailView: View {
             replyingToName: viewModel.replyTarget?.authorName,
             selectedReactionEmoji: viewModel.selectedReactionEmoji,
             topBarAction: overflowAction,
-            topBarSecondaryAction: shareAction,
+            topBarSecondaryAction: detail.post.isRemovedByModerator ? nil : shareAction,
             nearbyProviders: viewModel.nearbyProviders,
             onOpenBusiness: onOpenBusiness,
             onBack: onBack,
@@ -179,6 +181,13 @@ public struct PulsePostDetailView: View {
             onCommentDelete: { id in commentPendingDelete = id },
             onRefresh: { [viewModel] in await viewModel.refresh() }
         )
+    }
+
+    /// A moderator removed the post: only its author still sees it, so
+    /// nothing here offers to spread it.
+    private var isRemovedByModerator: Bool {
+        if case let .loaded(detail) = viewModel.state { return detail.post.isRemovedByModerator }
+        return false
     }
 
     private var overflowAction: ContentDetailTopBarAction {
@@ -282,14 +291,20 @@ public struct PulsePostDetailLoadedContent: View {
             topBarSecondaryAction: topBarSecondaryAction,
             onRefresh: onRefresh,
             header: {
-                PostAuthorHeader(
-                    displayName: detail.authorDisplayName,
-                    avatarURL: detail.authorAvatarURL,
-                    isVerified: detail.authorVerified,
-                    identity: detail.authorIdentity,
-                    timeAndLocality: detail.timeAndLocality,
-                    intent: detail.intent
-                ) { onOpenProfile(detail.post.userId) }
+                VStack(alignment: .leading, spacing: Spacing.s4) {
+                    if detail.post.isRemovedByModerator {
+                        RemovedPostNotice()
+                            .padding(.horizontal, Spacing.s4)
+                    }
+                    PostAuthorHeader(
+                        displayName: detail.authorDisplayName,
+                        avatarURL: detail.authorAvatarURL,
+                        isVerified: detail.authorVerified,
+                        identity: detail.authorIdentity,
+                        timeAndLocality: detail.timeAndLocality,
+                        intent: detail.intent
+                    ) { onOpenProfile(detail.post.userId) }
+                }
             },
             body: {
                 BodyReactionsBody(
@@ -313,7 +328,7 @@ public struct PulsePostDetailLoadedContent: View {
                     onShowMoreReplies: onShowMoreReplies,
                     replyingToName: replyingToName,
                     onCancelReply: onCancelReply,
-                    onCommentReply: onCommentReply,
+                    onCommentReply: detail.post.isRemovedByModerator ? nil : onCommentReply,
                     onCommentLike: onCommentLike,
                     onCommentDelete: onCommentDelete,
                     belowReactions: nearbyProviders.isEmpty
@@ -323,13 +338,44 @@ public struct PulsePostDetailLoadedContent: View {
                                 rows: nearbyProviders,
                                 onOpenBusiness: onOpenBusiness
                             )
-                        )
+                        ),
+                    repliesClosedNote: detail.post.isRemovedByModerator ? "Replies are off for this post." : nil
                 ) { userId in
                     onOpenProfile(userId)
                 }
             },
             cta: { InlineReplyCTA() }
         )
+    }
+}
+
+/// Says why the author still sees a post that a moderator removed.
+private struct RemovedPostNotice: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.s2) {
+            Icon(.shieldAlert, size: 16, color: Theme.Color.warning)
+                .padding(.top, 1)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Spacing.s1) {
+                Text("Removed by a moderator")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.warning)
+                Text("Only you can see this post. Neighbors can't see it or reply.")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(Spacing.s3)
+        .background(Theme.Color.warningBg)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                .stroke(Theme.Color.warningLight, lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("pulsePostDetail-removedNotice")
     }
 }
 

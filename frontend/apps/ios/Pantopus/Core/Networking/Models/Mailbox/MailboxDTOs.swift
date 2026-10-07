@@ -33,6 +33,9 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
     public let senderUserId: String?
     public let senderBusinessName: String?
     public let senderAddress: String?
+    /// Who it's from as printed on the item (`Mail.sender_display`). The
+    /// server names the sender from it first (`resolveSenderDisplay`).
+    public let senderDisplay: String?
     /// `Mail.sender_trust` — `verified_gov` / `verified_utility` /
     /// `verified_business` / `pantopus_user` / `unknown`
     /// (`backend/database/schema.sql:7207`).
@@ -55,6 +58,8 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
     public let attachments: [String]?
     public let expiresAt: String?
     public let createdAt: String
+    /// Facts read off the item (`Mail.key_facts`), such as "Amount due".
+    public let keyFacts: [MailKeyFact]
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -77,6 +82,7 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         case senderUserId = "sender_user_id"
         case senderBusinessName = "sender_business_name"
         case senderAddress = "sender_address"
+        case senderDisplay = "sender_display"
         case senderTrust = "sender_trust"
         case viewed
         case viewedAt = "viewed_at"
@@ -89,6 +95,7 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         case category, tags, priority, attachments
         case expiresAt = "expires_at"
         case createdAt = "created_at"
+        case keyFacts = "key_facts"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -115,6 +122,7 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         senderUserId = try c.decodeIfPresent(String.self, forKey: .senderUserId)
         senderBusinessName = try c.decodeIfPresent(String.self, forKey: .senderBusinessName)
         senderAddress = try c.decodeIfPresent(String.self, forKey: .senderAddress)
+        senderDisplay = try c.decodeIfPresent(String.self, forKey: .senderDisplay)
         senderTrust = try c.decodeIfPresent(String.self, forKey: .senderTrust)
         viewed = try c.decodeIfPresent(Bool.self, forKey: .viewed) ?? false
         viewedAt = try c.decodeIfPresent(String.self, forKey: .viewedAt)
@@ -131,6 +139,44 @@ public struct MailItem: Decodable, Sendable, Hashable, Identifiable {
         attachments = try c.decodeIfPresent([String].self, forKey: .attachments)
         expiresAt = try c.decodeIfPresent(String.self, forKey: .expiresAt)
         createdAt = try c.decode(String.self, forKey: .createdAt)
+        keyFacts = MailKeyFact.list(in: c, forKey: .keyFacts)
+    }
+}
+
+/// One fact read off a mail item: an entry of `Mail.key_facts`.
+public struct MailKeyFact: Decodable, Sendable, Hashable {
+    public let field: String
+    public let value: String
+
+    private enum CodingKeys: String, CodingKey {
+        case field, value
+    }
+
+    public init(field: String, value: String) {
+        self.field = field
+        self.value = value
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        field = try c.decode(String.self, forKey: .field)
+        if let text = try? c.decode(String.self, forKey: .value) {
+            value = text
+        } else {
+            value = try String(describing: c.decode(Double.self, forKey: .value))
+        }
+    }
+
+    /// `key_facts` is a JSON array, but some rows hold that array as a JSON
+    /// string; anything else reads as no facts.
+    static func list<Key: CodingKey>(in container: KeyedDecodingContainer<Key>, forKey key: Key) -> [MailKeyFact] {
+        if let facts = try? container.decodeIfPresent([MailKeyFact].self, forKey: key) {
+            return facts
+        }
+        guard let text = try? container.decodeIfPresent(String.self, forKey: key),
+              let data = text.data(using: .utf8),
+              let facts = try? JSONDecoder().decode([MailKeyFact].self, from: data) else { return [] }
+        return facts
     }
 }
 

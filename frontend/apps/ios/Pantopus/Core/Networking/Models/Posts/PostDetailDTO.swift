@@ -214,6 +214,14 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     /// Post-level place label ("Camas, WA") — preferred over the
     /// creator's locality for the header meta line.
     public let locationName: String?
+    /// `moderation` when a moderator removed the post. Only its author can
+    /// still open it then.
+    public let archiveReason: String?
+
+    /// A moderator removed the post: neighbors can't see it or reply.
+    public var isRemovedByModerator: Bool {
+        archiveReason == "moderation"
+    }
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -244,6 +252,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case serviceCategory = "service_category"
         case dealBusinessName = "deal_business_name"
         case locationName = "location_name"
+        case archiveReason = "archive_reason"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -280,6 +289,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         serviceCategory = try c.decodeIfPresent(String.self, forKey: .serviceCategory)
         dealBusinessName = try c.decodeIfPresent(String.self, forKey: .dealBusinessName)
         locationName = try c.decodeIfPresent(String.self, forKey: .locationName)
+        archiveReason = try c.decodeIfPresent(String.self, forKey: .archiveReason)
     }
 }
 

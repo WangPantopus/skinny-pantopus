@@ -6,6 +6,7 @@ export interface PostalDraft {
   version: 1; origin: string; actor_id: string; home_id: string; request_id: string;
   kind: 'mail' | 'code'; postcard_id: string | null; request_json: string; outcome?: PostalOutcome;
 }
+export const triesLeft = (count: number) => count === 1 ? '1 try left.' : `${count} tries left.`;
 export const postalUUID = (v: unknown): v is string => typeof v === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(v);
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const date = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse(v));
@@ -69,18 +70,18 @@ export function validatePostalStatus(value: unknown, actor: string, home: string
     || (r.can_request && (r.can_verify || r.can_resume))) return unavailable();
 }
 export const postalMessage = (code?: string) => ({
-  POSTCARD_WRONG_CODE: 'That code did not match this postcard. Review the recorded attempt before entering a corrected code.',
+  POSTCARD_WRONG_CODE: 'That code didn’t match this postcard. Check it and try again.',
   POSTCARD_ADDRESS_CHANGED: "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP.",
-  POSTCARD_EXPIRED: 'This postcard code has expired. Confirm your mailing address before requesting another.',
-  POSTCARD_LOCKED: 'This postcard has no code attempts remaining. Confirm your address before requesting another.',
-  POSTCARD_ACCESS_REVIEW_REQUIRED: 'Household access needs review. A mail code cannot restore removed or expired access.',
-  POSTCARD_REVIEW_ALREADY_RECORDED: 'Your verification is already recorded. Check residency status for current access.',
+  POSTCARD_EXPIRED: 'This postcard’s code has expired. Request a new postcard.',
+  POSTCARD_LOCKED: 'No tries left for this postcard. Request a new one.',
+  POSTCARD_ACCESS_REVIEW_REQUIRED: 'A mail code can’t restore access that was removed or has ended. Ask someone in the household to invite you again.',
+  POSTCARD_REVIEW_ALREADY_RECORDED: 'You’re already verified. Residency status shows your access.',
   POSTCARD_HOME_UNAVAILABLE: 'Mail verification is unavailable for this Home right now.',
   POSTCARD_RESIDENCY_REQUEST_REQUIRED: 'Submit your residency request before requesting a postcard.',
   POSTCARD_COUNTRY_UNAVAILABLE: 'Mail verification is currently available for US addresses.',
-  POSTCARD_ADDRESS_LIMIT: 'The request limit for this address has been reached. Try again later.',
-  POSTCARD_USER_LIMIT: 'Your mail request limit has been reached. Try again later.',
-  POSTCARD_NOT_DISPATCHED: 'Mailing has not started. Resume the saved request first.',
+  POSTCARD_ADDRESS_LIMIT: 'Too many postcards have been requested for this address. Try again later.',
+  POSTCARD_USER_LIMIT: 'You’ve asked for too many postcards in the last hour. Try again later.',
+  POSTCARD_NOT_DISPATCHED: 'This postcard hasn’t been sent yet. Send it first.',
   OWNERSHIP_FLOW_REQUIRED: 'Continue ownership verification for this Home.',
   HOME_NOT_FOUND: 'This Home is no longer available. Check your residency status.',
-} as Record<string, string>)[code || ''] || 'This request could not continue. Check your current status before trying again.';
+} as Record<string, string>)[code || ''] || 'This couldn’t be completed. Check your status and try again.';

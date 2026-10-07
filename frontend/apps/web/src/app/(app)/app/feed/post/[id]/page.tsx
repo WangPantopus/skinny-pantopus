@@ -10,7 +10,7 @@ import type { Post, PostComment, MatchedBusiness } from '@pantopus/api';
 import type { User } from '@pantopus/types';
 import {
   MessageCircle, Star, CalendarDays, Search as SearchIcon, Megaphone, AlertTriangle,
-  Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User as UserIcon,
+  Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User as UserIcon, ShieldAlert,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { CommentThread, EditPostDialog } from '@/components/feed';
@@ -363,6 +363,8 @@ export default function PostDetailPage() {
   const config = getPostTypeConfig(post?.post_type || 'general');
   const TypeIcon = getTypeIcon(post?.post_type || 'general');
   const isOwn = post?.user_id === user?.id;
+  // A moderator removed it: only its author still sees it, so nothing offers to spread it or reply.
+  const isRemovedByModerator = post?.archive_reason === 'moderation';
   // P0.4 audit follow-up: prefer post.author (typed identity).
   const publicAuthor = post?.author || null;
   const creatorName =
@@ -497,6 +499,16 @@ export default function PostDetailPage() {
               <span className="text-xs font-bold text-red-700 uppercase tracking-wide">
                 Safety Alert{post.safety_alert_kind ? ` · ${post.safety_alert_kind}` : ''}
               </span>
+            </div>
+          )}
+
+          {isRemovedByModerator && (
+            <div className="mx-5 mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3" data-testid="post-removed-notice">
+              <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-medium text-amber-900">Removed by a moderator</p>
+                <p className="text-sm text-amber-800">Only you can see this post. Neighbors can&apos;t see it or reply.</p>
+              </div>
             </div>
           )}
 
@@ -766,26 +778,30 @@ export default function PostDetailPage() {
               <span>{post.userHasSaved ? 'Saved' : 'Save'}</span>
             </button>
 
-            <button
-              onClick={handleRepost}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                post.userHasReposted ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' : 'text-app-muted hover-bg-app'
-              }`}
-            >
-              <span className="text-sm">🔁</span>
-              <span>{post.userHasReposted ? 'Reposted' : 'Repost'}</span>
-            </button>
+            {!isRemovedByModerator && (
+              <button
+                onClick={handleRepost}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                  post.userHasReposted ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' : 'text-app-muted hover-bg-app'
+                }`}
+              >
+                <span className="text-sm">🔁</span>
+                <span>{post.userHasReposted ? 'Reposted' : 'Repost'}</span>
+              </button>
+            )}
 
             <div className="flex-1" />
 
             {/* Share */}
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-app-muted hover-bg-app transition"
-            >
-              <span className="text-sm">↗️</span>
-              <span>Share · {post.share_count || 0}</span>
-            </button>
+            {!isRemovedByModerator && (
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-app-muted hover-bg-app transition"
+              >
+                <span className="text-sm">↗️</span>
+                <span>Share · {post.share_count || 0}</span>
+              </button>
+            )}
           </div>
         </article>
 
@@ -875,7 +891,9 @@ export default function PostDetailPage() {
               onLikeComment={handleCommentLike}
               currentUserId={user?.id}
               isPosting={commentPosting}
-              emptyText={commentsFailed ? null : undefined}
+              canCompose={!isRemovedByModerator}
+              composeDisabledMessage="Replies are off for this post."
+              emptyText={commentsFailed || isRemovedByModerator ? null : undefined}
             />
           </div>
         </div>
