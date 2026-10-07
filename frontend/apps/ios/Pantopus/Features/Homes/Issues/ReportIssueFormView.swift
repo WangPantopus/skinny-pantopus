@@ -41,7 +41,7 @@ public struct ReportIssueFormView: View {
                     }
                     titleGroup
                     descriptionGroup
-                    Text("Everyone with access to this home can see reported issues and their status.")
+                    Text("Owners and people with maintenance access to this home can see reported issues and their status.")
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)

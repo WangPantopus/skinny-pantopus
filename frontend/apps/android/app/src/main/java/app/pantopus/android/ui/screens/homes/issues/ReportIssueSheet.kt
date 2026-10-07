@@ -100,7 +100,7 @@ fun ReportIssueSheet(
                 )
             }
             Text(
-                text = "Everyone with access to this home can see reported issues and their status.",
+                text = "Owners and people with maintenance access to this home can see reported issues and their status.",
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
