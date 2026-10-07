@@ -632,24 +632,28 @@ public final class WalletViewModel {
     }
 
     /// Split the escrow total into RN's two named lines
-    /// (`WalletTab.tsx:161-173`). Gated on `total_pending_cents > 0` — same
-    /// condition RN uses — so an empty escrow hides the section instead of
-    /// rendering two `$0.00` rows. The server's own cents are formatted;
-    /// nothing is re-derived client-side.
+    /// (`WalletTab.tsx:161-173`), plus a third for income in dispute. Gated
+    /// on `total_pending_cents > 0` or an open dispute — RN's condition, so
+    /// an empty escrow hides the section instead of rendering `$0.00` rows.
+    /// The server's own cents are formatted; nothing is re-derived
+    /// client-side.
     static func pendingBreakdown(from pending: WalletPendingReleaseResponse?) -> WalletPendingBreakdown? {
-        guard let pending, pending.totalPendingCents > 0 else { return nil }
+        let disputeCount = pending?.inDisputeCount ?? 0
+        guard let pending, pending.totalPendingCents > 0 || disputeCount > 0 else { return nil }
         return WalletPendingBreakdown(
             inReview: centsToCurrency(pending.inReviewCents),
             releasingSoon: centsToCurrency(pending.releasingSoonCents),
             inReviewCount: pending.inReviewCount,
-            releasingSoonCount: pending.releasingSoonCount
+            releasingSoonCount: pending.releasingSoonCount,
+            inDispute: disputeCount > 0 ? centsToCurrency(pending.inDisputeCents ?? 0) : nil,
+            inDisputeCount: disputeCount
         )
     }
 
     private static func pendingMeta(count: Int, cents: Int) -> String {
         guard cents > 0 else { return "Nothing in escrow" }
         let noun = count == 1 ? "payment" : "payments"
-        return "\(count) \(noun) · releases after review"
+        return "\(count) \(noun) · clearing"
     }
 
     private static func monthMeta(count: Int) -> String {

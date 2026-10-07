@@ -29,7 +29,13 @@ export default function WalletBalanceCard({
   onLoad,
 }: WalletBalanceCardProps) {
   const [walletData, setWalletData] = useState<WalletData | null>(null);
-  const [pendingRelease, setPendingRelease] = useState<{ in_review_cents: number; releasing_soon_cents: number; total_pending_cents: number } | null>(null);
+  const [pendingRelease, setPendingRelease] = useState<{
+    in_review_cents: number;
+    releasing_soon_cents: number;
+    total_pending_cents: number;
+    in_dispute_cents?: number;
+    in_dispute_count?: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -128,7 +134,7 @@ export default function WalletBalanceCard({
       </div>
 
       {/* Pending release breakdown */}
-      {pendingRelease && pendingRelease.total_pending_cents > 0 && (
+      {pendingRelease && (pendingRelease.total_pending_cents > 0 || (pendingRelease.in_dispute_count ?? 0) > 0) && (
         <div className="mt-4 bg-emerald-500 bg-opacity-20 rounded-lg px-3 py-2.5">
           <p className="text-emerald-100 text-xs font-medium mb-1.5">Pending Release</p>
           <div className="flex justify-between text-xs">
@@ -139,6 +145,14 @@ export default function WalletBalanceCard({
             <span className="text-emerald-200">Releasing soon</span>
             <span className="font-medium">${(pendingRelease.releasing_soon_cents / 100).toFixed(2)}</span>
           </div>
+          {(pendingRelease.in_dispute_count ?? 0) > 0 && (
+            <div className="flex justify-between text-xs mt-0.5" data-testid="wallet-in-dispute">
+              <span className="text-amber-200">
+                In dispute ({pendingRelease.in_dispute_count} payment{pendingRelease.in_dispute_count === 1 ? '' : 's'}), held while the bank reviews
+              </span>
+              <span className="font-medium">${((pendingRelease.in_dispute_cents ?? 0) / 100).toFixed(2)}</span>
+            </div>
+          )}
         </div>
       )}
 

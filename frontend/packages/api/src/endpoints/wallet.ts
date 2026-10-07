@@ -116,12 +116,16 @@ export interface PendingRelease {
   total_pending_cents: number;
   in_review_count: number;
   releasing_soon_count: number;
+  /** Income under an open payment dispute; not part of the pending totals. Older servers omit these. */
+  in_dispute_cents?: number;
+  in_dispute_count?: number;
 }
 
 /**
  * Get breakdown of pending funds not yet in wallet:
  * - in_review: still in cooling-off period
  * - releasing_soon: past cooling-off, awaiting next transfer job run
+ * - in_dispute: held while the payer's bank reviews a dispute
  */
 export async function getPendingRelease(): Promise<PendingRelease> {
   return get<PendingRelease>('/api/wallet/pending-release');

@@ -56,7 +56,9 @@ final class WalletMappingTests: XCTestCase {
         releasingSoonCents: 6600,
         totalPendingCents: 18600,
         inReviewCount: 2,
-        releasingSoonCount: 1
+        releasingSoonCount: 1,
+        inDisputeCents: nil,
+        inDisputeCount: nil
     )
 
     private var utcCalendar: Calendar {

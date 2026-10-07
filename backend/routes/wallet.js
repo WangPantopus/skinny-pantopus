@@ -183,6 +183,7 @@ router.get('/transactions', verifyToken, walletReadLimiter, async (req, res) => 
  *   - in_review: captured_hold payments (within cooling-off)
  *   - releasing_soon: captured_hold payments (past cooling-off, awaiting next job run)
  *   - total_pending: sum of above
+ *   - in_dispute: income under an open payment dispute, held until the bank decides (not part of pending)
  *
  * This helps users understand why wallet balance differs from total earned.
  */
@@ -241,16 +242,18 @@ router.get('/pending-release', verifyToken, async (req, res) => {
       }
     }
 
-    // Income held for an open payment dispute is under review too: it is out of the balance until that settles.
-    const disputeHold = await walletService.getDisputeHold(userId);
-    inReviewCents += disputeHold.cents;
+    // Income under an open payment dispute (credited to the wallet and held there, or stopped before release) is
+    // neither pending nor withdrawable; it waits for the bank's decision, so it gets its own line.
+    const disputed = await walletService.getDisputedIncome(userId);
 
     res.json({
       in_review_cents: inReviewCents,
       releasing_soon_cents: releasingSoonCents,
       total_pending_cents: inReviewCents + releasingSoonCents,
-      in_review_count: inReviewItems.length + disputeHold.count,
+      in_review_count: inReviewItems.length,
       releasing_soon_count: releasingSoonItems.length,
+      in_dispute_cents: disputed.cents,
+      in_dispute_count: disputed.count,
       // Don't include individual items by default (privacy + payload size)
       // Items can be seen via /api/payments?type=received&status=captured_hold
     });

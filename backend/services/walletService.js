@@ -238,16 +238,43 @@ class WalletService {
    * @returns {Promise<{cents: number, count: number}>}
    */
   async getDisputeHold(userId) {
-    const { data: disputed, error } = await supabaseAdmin
+    const { held } = await this.getDisputedPayments(userId);
+    return { cents: [...held.values()].reduce((sum, cents) => sum + cents, 0), count: held.size };
+  }
+
+  /**
+   * Income under an open payment dispute wherever it sits: already credited to this wallet (the hold above) or still
+   * waiting for release, which the dispute stops. Neither is pending or withdrawable; the wallet lists it on its own
+   * line until the bank decides.
+   * @returns {Promise<{cents: number, count: number}>}
+   */
+  async getDisputedIncome(userId) {
+    const { disputed, held } = await this.getDisputedPayments(userId);
+    let cents = 0;
+    for (const payment of disputed) {
+      cents += held.has(payment.id) ? held.get(payment.id) : Number(payment.amount_to_payee || 0);
+    }
+    return { cents, count: disputed.length };
+  }
+
+  /**
+   * The payments this user is owed that are under an open dispute, and (per payment id) what was already credited to
+   * their wallet for each.
+   * @returns {Promise<{disputed: Array<{id: string, amount_to_payee: number}>, held: Map<string, number>}>}
+   */
+  async getDisputedPayments(userId) {
+    const { data, error } = await supabaseAdmin
       .from('Payment')
-      .select('id')
+      .select('id, amount_to_payee')
       .eq('payee_id', userId)
       .eq('payment_status', 'disputed');
     if (error) {
       logger.error('Failed to read disputed payments', { userId, error: error.message });
       throw new Error('Failed to check funds on hold');
     }
-    if (!disputed || disputed.length === 0) return { cents: 0, count: 0 };
+    const disputed = data || [];
+    const held = new Map();
+    if (disputed.length === 0) return { disputed, held };
 
     const { data: credits, error: creditError } = await supabaseAdmin
       .from('WalletTransaction')
@@ -260,11 +287,10 @@ class WalletService {
       logger.error('Failed to read credits of disputed payments', { userId, error: creditError.message });
       throw new Error('Failed to check funds on hold');
     }
-    const held = new Map();
     for (const credit of credits || []) {
       held.set(credit.payment_id, (held.get(credit.payment_id) || 0) + Number(credit.amount || 0));
     }
-    return { cents: [...held.values()].reduce((sum, cents) => sum + cents, 0), count: held.size };
+    return { disputed, held };
   }
 
   // ============ WITHDRAWALS (Earned funds → Bank) ============

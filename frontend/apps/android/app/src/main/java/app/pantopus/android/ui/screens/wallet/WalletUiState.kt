@@ -164,6 +164,14 @@ data class WalletPendingBreakdown(
     val inReviewCount: Int = 0,
     /** `releasing_soon_count`. */
     val releasingSoonCount: Int = 0,
+    /**
+     * `in_dispute_cents` — income held while the payer's bank reviews a
+     * dispute. Not part of the pending figure; shown on its own line.
+     * `null` when nothing is in dispute.
+     */
+    val inDispute: String? = null,
+    /** `in_dispute_count`. */
+    val inDisputeCount: Int = 0,
 )
 
 /**
