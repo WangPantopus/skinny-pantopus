@@ -124,6 +124,14 @@ struct PlaceDashboardView: View {
                     .padding(.horizontal, 18)
                     .padding(.top, Spacing.s2)
 
+                // One order on both apps: verify (the claimed resident's next step), Home tools,
+                // movers, Today's Pulse, then the privacy line.
+                if isClaimed {
+                    PlaceVerifyBanner { showVerify = true }
+                        .padding(.horizontal, 16)
+                        .padding(.top, Spacing.s3)
+                }
+
                 PlaceMessagesActionRow(
                     icon: .house,
                     title: "Home tools",
@@ -135,12 +143,6 @@ struct PlaceDashboardView: View {
                 .padding(.horizontal, Spacing.s4)
                 .padding(.top, Spacing.s3)
                 .accessibilityIdentifier("place.homeTools")
-
-                if isClaimed {
-                    PlaceVerifyBanner { showVerify = true }
-                        .padding(.horizontal, 16)
-                        .padding(.top, Spacing.s4)
-                }
 
                 // Movers first (Wedge v2 D5): the first-week card leads for a recent move-in.
                 JustMovedCard(
