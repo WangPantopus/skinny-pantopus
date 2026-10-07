@@ -244,17 +244,18 @@ fun AppLockHost(
  *
  * iOS mirrors this with `AppLockSetupPromptModifier`.
  *
- * @param lastInteractiveSignInAt `AuthRepository.lastInteractiveSignInAt`.
- *   Each distinct stamp is offered at most once, so recomposition can't
- *   re-raise the dialog.
+ * It follows the first sensitive action the person verifies (wallet, payments,
+ * account changes), keyed on [AppLockManager.sensitiveActionVerifiedAt], not
+ * the sign-in, where it stacked on the notification permission prompt. Each
+ * stamp is offered at most once, so recomposition can't re-raise the dialog.
  */
 @Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun AppLockSetupPromptDialog(
     manager: AppLockManager,
     isSignedIn: Boolean,
-    lastInteractiveSignInAt: Long?,
 ) {
+    val verifiedAt by manager.sensitiveActionVerifiedAt.collectAsStateWithLifecycle()
     val setupPromptState by manager.setupPromptState.collectAsStateWithLifecycle()
     val preferenceEnabled by manager.preferenceEnabled.collectAsStateWithLifecycle()
     val capability by manager.capability.collectAsStateWithLifecycle()
@@ -263,7 +264,7 @@ fun AppLockSetupPromptDialog(
     val activity = context.findFragmentActivity()
     val scope = rememberCoroutineScope()
 
-    var promptedSignInAt by remember { mutableStateOf<Long?>(null) }
+    var promptedVerifiedAt by remember { mutableStateOf<Long?>(null) }
     var showOffer by remember { mutableStateOf(false) }
     var showFailure by remember { mutableStateOf(false) }
 
@@ -272,21 +273,21 @@ fun AppLockSetupPromptDialog(
 
     LaunchedEffect(
         isSignedIn,
-        lastInteractiveSignInAt,
+        verifiedAt,
         setupPromptState,
         preferenceEnabled,
         capability,
     ) {
         if (!isSignedIn ||
-            lastInteractiveSignInAt == null ||
+            verifiedAt == null ||
             setupPromptState != AppLockManager.SetupPromptState.Pending ||
             preferenceEnabled ||
             capability != AppLockManager.Capability.Available ||
-            promptedSignInAt == lastInteractiveSignInAt
+            promptedVerifiedAt == verifiedAt
         ) {
             return@LaunchedEffect
         }
-        promptedSignInAt = lastInteractiveSignInAt
+        promptedVerifiedAt = verifiedAt
         showOffer = true
     }
 

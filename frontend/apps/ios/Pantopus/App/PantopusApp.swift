@@ -179,13 +179,9 @@ struct RootView: View {
             appLock.clearTransientState()
             await auth.signOut()
         }
-        // One-time post-login offer to turn app lock on (RN
-        // `AppLockSetupPromptLayer`, `src/app/_layout.tsx:132`).
-        .appLockSetupPrompt(
-            manager: appLock,
-            isSignedIn: isSignedInState,
-            lastInteractiveSignInAt: auth.lastInteractiveSignInAt
-        )
+        // One-time offer to turn app lock on, after the first sensitive action
+        // the person verifies (RN raised it right after sign-in).
+        .appLockSetupPrompt(manager: appLock, isSignedIn: isSignedInState)
         .onAppear {
             syncAppLock()
             installStepUpPrompt()

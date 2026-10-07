@@ -2,7 +2,10 @@
 //  AppLockSetupPrompt.swift
 //  Pantopus
 //
-//  The one-time post-login offer to turn on biometric app lock.
+//  The one-time offer to turn on biometric app lock. It follows the first
+//  sensitive action the person verifies (Wallet, payments, account changes),
+//  not the sign-in itself, where it stacked on the notification and Save
+//  Password prompts.
 //
 //  RN raises this from `AppLockSetupPromptLayer` (`src/app/_layout.tsx:132`)
 //  once per account: after an *interactive* sign-in (never a silent session
@@ -22,12 +25,11 @@ public struct AppLockSetupPromptModifier: ViewModifier {
     let manager: AppLockManager
     /// Signed-in gate — the offer never appears over the auth screens.
     let isSignedIn: Bool
-    /// `AuthManager.lastInteractiveSignInAt`. Each distinct stamp is offered
-    /// at most once, so re-rendering the root can't re-raise the alert.
-    let lastInteractiveSignInAt: Date?
 
     @State private var isPresented = false
-    @State private var promptedSignInAt: Date?
+    /// `manager.sensitiveActionVerifiedAt` already offered on, so
+    /// re-rendering the root can't re-raise the alert.
+    @State private var promptedVerifiedAt: Date?
     @State private var failureMessage: String?
 
     public func body(content: Content) -> some View {
@@ -69,7 +71,7 @@ public struct AppLockSetupPromptModifier: ViewModifier {
     /// Recomputed whenever any gate input changes, so the evaluation re-runs
     /// on sign-in, on capability refresh, and after the answer is recorded.
     private var promptKey: String {
-        let stamp = lastInteractiveSignInAt.map { String($0.timeIntervalSince1970) } ?? "-"
+        let stamp = manager.sensitiveActionVerifiedAt.map { String($0.timeIntervalSince1970) } ?? "-"
         return [
             isSignedIn ? "in" : "out",
             stamp,
@@ -89,11 +91,11 @@ public struct AppLockSetupPromptModifier: ViewModifier {
     @MainActor
     private func evaluate() async {
         guard isSignedIn,
-              let signInAt = lastInteractiveSignInAt,
+              let verifiedAt = manager.sensitiveActionVerifiedAt,
               manager.setupPromptState == .pending,
               !manager.preferenceEnabled,
               manager.capability == .available,
-              promptedSignInAt != signInAt
+              promptedVerifiedAt != verifiedAt
         else { return }
         // A link opened before sign-in replays right after it. Showing the
         // offer at the same time made UIKit refuse the destination's sheet,
@@ -103,7 +105,7 @@ public struct AppLockSetupPromptModifier: ViewModifier {
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
         }
-        promptedSignInAt = signInAt
+        promptedVerifiedAt = verifiedAt
         isPresented = true
     }
 
@@ -138,17 +140,7 @@ public struct AppLockSetupPromptModifier: ViewModifier {
 public extension View {
     /// Raises the one-time post-login app-lock offer. No-op once the user has
     /// answered it (per account).
-    func appLockSetupPrompt(
-        manager: AppLockManager,
-        isSignedIn: Bool,
-        lastInteractiveSignInAt: Date?
-    ) -> some View {
-        modifier(
-            AppLockSetupPromptModifier(
-                manager: manager,
-                isSignedIn: isSignedIn,
-                lastInteractiveSignInAt: lastInteractiveSignInAt
-            )
-        )
+    func appLockSetupPrompt(manager: AppLockManager, isSignedIn: Bool) -> some View {
+        modifier(AppLockSetupPromptModifier(manager: manager, isSignedIn: isSignedIn))
     }
 }
