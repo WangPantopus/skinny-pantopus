@@ -123,7 +123,7 @@ async function main() {
     assert.equal(saved.draft.command.request_id, original.request_id); assert.equal(saved.draft.command.role, original.proposed_role);
     sql(`UPDATE public."HomeOccupancy" SET is_active=false,verification_status='moved_out' WHERE home_id=${q(home)} AND user_id=${q(f.users[1])};`);
     await page.goto(base + listPath + '?tab=residency', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('link', { name: 'Your past decisions', exact: true }).click();
+    await page.getByRole('link', { name: 'Residency decisions and recovery', exact: true }).click();
     await retry(page).click(); await confirmed(page).waitFor(); assert.deepEqual(posts[1], original); assert.equal(rows(), 1);
     await page.getByText('Membership: Ended', { exact: true }).waitFor();
     await page.reload({ waitUntil: 'domcontentloaded' }); await confirmed(page).waitFor(); assert.equal(posts.length, 2);
@@ -218,7 +218,7 @@ async function main() {
     sql(`UPDATE public."HomeResidencyClaim" SET status='rejected' WHERE id=${q(claims[1])};`);
     await page.goto(base + membersPath, { waitUntil: 'domcontentloaded' });
     await page.getByText('No pending residency claims', { exact: true }).waitFor();
-    await page.getByRole('link', { name: 'Your past decisions', exact: true }).click();
+    await page.getByRole('link', { name: 'Residency decisions and recovery', exact: true }).click();
     await page.getByText('No residency decision needs recovery on this browser. Choose a claim to review.', { exact: true }).waitFor();
     await page.goto(base + membersPath, { waitUntil: 'domcontentloaded' });
     await page.getByText('No pending residency claims', { exact: true }).waitFor();
@@ -240,7 +240,7 @@ async function main() {
     await screenshot('08-owners-denied-list');
     sql(`UPDATE public."HomeOccupancy" SET is_active=true WHERE home_id=${q(home)} AND user_id=${q(actor)};`);
     await page.getByRole('button', { name: 'Reload claims', exact: true }).click();
-    await page.getByRole('link', { name: 'Your past decisions', exact: true }).click();
+    await page.getByRole('link', { name: 'Residency decisions and recovery', exact: true }).click();
     await page.getByText('No residency decision needs recovery on this browser. Choose a claim to review.', { exact: true }).waitFor();
     assert.equal((await stored()).length, 0); assert.equal(rows(), 4);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)); assert.deepEqual(errors, []);
