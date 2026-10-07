@@ -302,18 +302,16 @@ struct LoginView: View {
                             // §2; today we restart signup with the new value.
                             path = [.signUp(inviteCode: nil)]
                         },
-                        onConfirmed: { email in
-                            if let email, !email.isEmpty { viewModel.email = email }
-                            path = []
-                        }
+                        onConfirmed: continueToLogin(confirmedEmail:)
                     )
                 case let .verifyEmailLanding(token, email):
                     VerifyEmailLandingView(
                         email: email,
                         token: token,
                         // No session after verification (backend revokes it),
-                        // so Continue drops back to login to sign in.
-                        onContinue: { path = [] },
+                        // so Continue drops back to login to sign in, from the
+                        // address that was just confirmed.
+                        onContinue: { continueToLogin(confirmedEmail: email) },
                         onUseDifferentEmail: { path = [.signUp(inviteCode: nil)] }
                     )
                 case let .error(authError):
@@ -329,6 +327,12 @@ struct LoginView: View {
             }
             .onChange(of: deepLink.pending) { _, _ in consumeAuthDeepLinkIfNeeded() }
         }
+    }
+
+    /// After a confirmed email, back to the login screen: sign-in starts from that address.
+    private func continueToLogin(confirmedEmail: String?) {
+        viewModel.prefill(confirmedEmail: confirmedEmail)
+        path = []
     }
 
     /// Pulls the `auth/reset-password` / `auth/verify-email` / `join/:code`
@@ -750,6 +754,12 @@ final class LoginViewModel {
 
     var canSubmit: Bool {
         !isLoading && AuthValidation.email(email) == nil && password.count >= 6
+    }
+
+    /// The address a person just confirmed: sign-in starts from it.
+    func prefill(confirmedEmail: String?) {
+        guard let confirmedEmail, !confirmedEmail.isEmpty else { return }
+        email = confirmedEmail
     }
 
     /// Read the remembered account + the reason the last session ended.
