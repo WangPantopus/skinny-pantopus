@@ -58,7 +58,6 @@ import androidx.compose.material.icons.filled.Checkroom
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ChildCare
-import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudOff
@@ -238,6 +237,7 @@ import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.filled.ZoomOutMap
+import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -775,7 +775,8 @@ internal fun PantopusIcon.source(): IconSource =
         PantopusIcon.Lock -> IconSource.Material(Icons.Filled.Lock)
         PantopusIcon.CheckCircle -> IconSource.Material(Icons.Filled.CheckCircle)
         PantopusIcon.AlertCircle -> IconSource.Material(Icons.Filled.Error)
-        PantopusIcon.Circle -> IconSource.Material(Icons.Filled.Circle)
+        // An outline ring, as on iOS ("circle"): it marks "not done" and "not selected", so a filled dot read as selected.
+        PantopusIcon.Circle -> IconSource.Material(Icons.Outlined.Circle)
         PantopusIcon.Info -> IconSource.Material(Icons.Filled.Info)
         PantopusIcon.WifiOff -> IconSource.Material(Icons.Filled.WifiOff)
         PantopusIcon.Heart -> IconSource.Material(Icons.Filled.Favorite)
