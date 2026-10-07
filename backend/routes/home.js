@@ -2980,11 +2980,15 @@ router.get('/:id/maintenance', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId);
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
 
+    // Upcoming work by due date, soonest first. Logged work usually has no due date, so among
+    // those the newest comes first, which is the order the Completed tab reads in.
     let query = supabaseAdmin
       .from('HomeMaintenanceLog')
       .select('*')
       .eq('home_id', homeId)
-      .order('due_date', { ascending: true });
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .order('performed_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false });
 
     if (status) {
       if (!MAINTENANCE_STATUS_VALUES.has(status)) {
