@@ -73,6 +73,10 @@ public struct WizardShell<Content: View>: View {
                 { saver.saveDraftConfirmed() }
             }
         )
+        // A wizard shown as a sheet must not be swiped away once it holds input or is past
+        // step 1: its leading control, with the discard confirm, is the way out. A wizard
+        // that is pushed on a navigation stack is unaffected.
+        .interactiveDismissDisabled(chrome.dirty || chrome.leading == .back)
     }
 
     @ViewBuilder
