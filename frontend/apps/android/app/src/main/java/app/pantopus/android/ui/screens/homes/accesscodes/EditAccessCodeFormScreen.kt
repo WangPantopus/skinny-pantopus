@@ -28,11 +28,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,6 +80,7 @@ object EditAccessCodeA11y {
     const val NOTES_FIELD = "editAccessCode_notesField"
     const val SHARED_WITH_OPTION = "editAccessCode_sharedWithOption"
     const val TOAST = "editAccessCode_toast"
+    const val DELETE = "editAccessCode_delete"
 }
 
 /**
@@ -121,6 +126,7 @@ fun EditAccessCodeFormScreen(
         onCopy = viewModel::copyValue,
         rosterSummary = viewModel::rosterSummary,
         sharedWithNames = viewModel::sharedWithNames,
+        onDelete = viewModel::delete,
     )
 }
 
@@ -136,6 +142,7 @@ internal fun EditAccessCodeFormContent(
     onCopy: () -> Unit,
     rosterSummary: (AccessVisibility) -> String,
     sharedWithNames: () -> List<String>,
+    onDelete: (() -> Unit)? = null,
 ) {
     Box(
         modifier =
@@ -194,6 +201,9 @@ internal fun EditAccessCodeFormContent(
                     }
                 }
             }
+            if (state.isEditing && onDelete != null) {
+                DeleteCodeButton(enabled = !state.isSaving, onDelete = onDelete)
+            }
         }
 
         val reduceMotion = rememberReduceMotion()
@@ -223,6 +233,34 @@ internal fun EditAccessCodeFormContent(
                 }
             }
         }
+    }
+}
+
+/** Removing a code takes it away from everyone it's shared with, so it asks first. */
+@Composable
+private fun DeleteCodeButton(
+    enabled: Boolean,
+    onDelete: () -> Unit,
+) {
+    var confirming by remember { mutableStateOf(false) }
+    TextButton(
+        onClick = { confirming = true },
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth().testTag(EditAccessCodeA11y.DELETE),
+    ) { Text("Delete code", color = PantopusColors.error) }
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text("Delete this code?") },
+            text = { Text("Everyone it's shared with loses it, including guests with a pass.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirming = false
+                    onDelete()
+                }) { Text("Delete", color = PantopusColors.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel") } },
+        )
     }
 }
 

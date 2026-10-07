@@ -220,7 +220,7 @@ class EditAccessCodeFormViewModel
                     current.fields[field]?.copy(
                         value = value,
                         touched = true,
-                        error = validator(field).validate(value),
+                        error = accessCodeValidator(field).validate(value),
                     ) ?: FormFieldState(id = field.key, value = value, touched = true)
                 current.copy(fields = current.fields + (field to snapshot))
             }
@@ -392,24 +392,29 @@ class EditAccessCodeFormViewModel
             }
         }
 
-        // ─── Validation ─────────────────────────────────────────────
-
-        private fun validator(field: EditAccessCodeField): FormValidator =
-            when (field) {
-                EditAccessCodeField.Category ->
-                    FormValidator { v ->
-                        if (AccessCategory.entries.any { it.wire == v }) null else "Pick a category."
+        /** Removes this code for everyone it was shared with, guest pass pages included. */
+        fun delete() {
+            val id = secretId ?: return
+            _state.update { it.copy(isSaving = true) }
+            viewModelScope.launch {
+                when (val result = homes.deleteHomeAccessSecret(homeId = homeId, secretId = id)) {
+                    is NetworkResult.Success -> {
+                        _state.update {
+                            it.copy(isSaving = false, toast = EditAccessCodeToast(text = "Code deleted.", isError = false))
+                        }
+                        // Hold the toast briefly before dismissing, as after a save.
+                        delay(800)
+                        _state.update { it.copy(shouldDismiss = true) }
                     }
-                EditAccessCodeField.Label ->
-                    FormValidator.all(listOf(FormValidator.required("Label"), FormValidator.maxLength(120)))
-                EditAccessCodeField.Value ->
-                    FormValidator.all(listOf(FormValidator.required("Code"), FormValidator.maxLength(512)))
-                EditAccessCodeField.Notes -> FormValidator.maxLength(2000)
-                EditAccessCodeField.SharedWith ->
-                    FormValidator { v ->
-                        if (AccessVisibility.fromWire(v) != null) null else "Pick a visibility scope."
-                    }
+                    is NetworkResult.Failure ->
+                        _state.update {
+                            it.copy(isSaving = false, toast = EditAccessCodeToast(text = result.error.message, isError = true))
+                        }
+                }
             }
+        }
+
+        // ─── Validation ─────────────────────────────────────────────
 
         @Suppress("ReturnCount")
         fun validateAll(): EditAccessCodeField? {
@@ -417,7 +422,7 @@ class EditAccessCodeFormViewModel
             _state.update { current ->
                 val updated =
                     current.fields.mapValues { (field, snapshot) ->
-                        val message = validator(field).validate(snapshot.value)
+                        val message = accessCodeValidator(field).validate(snapshot.value)
                         if (firstInvalid == null && message != null) firstInvalid = field
                         snapshot.copy(error = message, touched = true)
                     }
@@ -536,7 +541,7 @@ class EditAccessCodeFormViewModel
             value = value,
             originalValue = value,
             touched = false,
-            error = validator(field).validate(value),
+            error = accessCodeValidator(field).validate(value),
         )
 
         private fun showToast(
@@ -555,4 +560,22 @@ class EditAccessCodeFormViewModel
         companion object {
             private const val TOAST_DURATION_MS = 1_800L
         }
+    }
+
+/** Per-field validation for the access code form (no view-model state involved). */
+private fun accessCodeValidator(field: EditAccessCodeField): FormValidator =
+    when (field) {
+        EditAccessCodeField.Category ->
+            FormValidator { v ->
+                if (AccessCategory.entries.any { it.wire == v }) null else "Pick a category."
+            }
+        EditAccessCodeField.Label ->
+            FormValidator.all(listOf(FormValidator.required("Label"), FormValidator.maxLength(120)))
+        EditAccessCodeField.Value ->
+            FormValidator.all(listOf(FormValidator.required("Code"), FormValidator.maxLength(512)))
+        EditAccessCodeField.Notes -> FormValidator.maxLength(2000)
+        EditAccessCodeField.SharedWith ->
+            FormValidator { v ->
+                if (AccessVisibility.fromWire(v) != null) null else "Pick a visibility scope."
+            }
     }
