@@ -495,6 +495,8 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             let _: NotificationActionEcho = try await api.request(
                 NotificationsEndpoints.delete(id: id)
             )
+        } catch APIError.notFound {
+            // Already deleted (say on another device): the row stays gone.
         } catch {
             notifications = previous
             unreadCount = previousUnread
