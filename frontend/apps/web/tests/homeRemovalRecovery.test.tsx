@@ -75,19 +75,19 @@ test('a held roster reply cannot survive account retirement', async () => {
 });
 test('a named review cancels without a removal request and a lost reply exposes explicit recovery', async () => {
   render(<MemberRemovalRecovery homeId={home} targetId={target}/>);
-  fireEvent.click(await screen.findByRole('button', { name: 'Review removal' }));
-  await screen.findByRole('alertdialog', { name: 'Review member removal' });
-  expect(screen.getByRole('heading', { name: 'Review member removal' })).toHaveFocus();
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove this member' }));
+  await screen.findByRole('alertdialog', { name: 'Remove member' });
+  expect(screen.getByRole('heading', { name: 'Remove member' })).toHaveFocus();
   expect(screen.getByText('@fixture_member')).toBeVisible(); expect(screen.getByText('Fixture household')).toBeVisible();
-  fireEvent.keyDown(screen.getByRole('heading', { name: 'Review member removal' }), { key: 'Escape' });
+  fireEvent.keyDown(screen.getByRole('heading', { name: 'Remove member' }), { key: 'Escape' });
   expect(api.apiClient.request).not.toHaveBeenCalled(); expect(mockSaved).toBeNull();
-  expect(screen.getByRole('button', { name: 'Review removal' })).toHaveFocus();
-  fireEvent.click(screen.getByRole('button', { name: 'Review removal' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirm removal' }));
-  await screen.findByRole('heading', { name: 'Recover your removal' });
-  expect(screen.getByRole('button', { name: 'Check saved result' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Retry original removal' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Cancel this attempt' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Remove this member' })).toHaveFocus();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove this member' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove member' }));
+  await screen.findByRole('heading', { name: 'Check your last removal' });
+  expect(screen.getByRole('button', { name: 'Check again' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Discard attempt' })).toBeVisible();
   expect(api.apiClient.request).toHaveBeenCalledTimes(1); expect(mockSaved?.draft.outcome).toBeUndefined();
   expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
 });
@@ -102,15 +102,15 @@ test('cold recovery without a Home selection keeps historical success separate f
     action: 'remove', decision_token: decision, completed_at: '2026-09-13T12:00:00Z', code: null, status: null,
     command: { actor_id: actor, request_id: original.request_id, created_at: '2026-09-13T12:00:00Z', updated_at: '2026-09-13T12:00:00Z' }, session } } as never);
   render(<MemberRemovalRecovery/>);
-  await screen.findByRole('heading', { name: 'Removal recorded' });
-  expect(screen.getByText('Current membership has not been checked.')).toBeVisible();
+  await screen.findByRole('heading', { name: 'Member removed' });
+  expect(screen.getByText('Check the member list to see who’s in the household now.')).toBeVisible();
   jest.mocked(api.apiClient.get).mockImplementation(async url => {
     if (String(url).endsWith('/occupants')) throw Object.assign(Error('Denied'), { statusCode: 403 });
     return { data: { session } } as never;
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Check current roster' }));
-  await screen.findByText(/Current membership is unknown; your saved removal result is kept/);
-  expect(screen.getByRole('heading', { name: 'Removal recorded' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Check member list' }));
+  await screen.findByText(/Couldn’t check the member list/);
+  expect(screen.getByRole('heading', { name: 'Member removed' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
   expect(jest.mocked(api.apiClient.request).mock.calls[1][0].method).toBe('GET');
   expect(api.apiClient.request).toHaveBeenCalledTimes(2);

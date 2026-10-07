@@ -143,7 +143,7 @@ export default function MemberDetail({
   const memberUsername = member?.user?.handle || member?.user?.username;
   const profilePic = member?.user?.avatarUrl || member?.user?.profile_picture_url || member?.user?.avatar_url;
   const isTargetOwner = member?.role === 'owner' || member?.role_base === 'owner';
-  const joinedDate = member?.created_at || member?.start_at;
+  const joinedDate = member?.start_at || member?.created_at;
 
   const loadPermissions = useCallback(async (revision: number) => {
     if (!member) return;

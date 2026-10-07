@@ -181,7 +181,7 @@ export default function HomesPage() {
             Add home
           </Link>
         </div>
-        <div className="mb-5"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 dark:text-blue-400 underline">Recover a member removal or leave attempt</Link></div>
+        <div className="mb-5"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 dark:text-blue-400 underline">Check an unfinished removal</Link></div>
         {loading ? (
           <div className="text-app-text-secondary">Loading…</div>
         ) : error ? (

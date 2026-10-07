@@ -74,6 +74,7 @@ public struct MembersListView: View {
             InviteMemberWizardView(homeId: homeId, target: target) { original in
                 invitationTarget = nil
                 if let original {
+                    removalResult = nil
                     invitationResult = switch (original.outcome?.state, original.action) {
                     case ("completed", .withdraw): "Invitation withdrawn."
                     case ("completed", .resend): "Resend requested."
@@ -95,8 +96,11 @@ public struct MembersListView: View {
         .sheet(item: $removalPresentation, onDismiss: { Task { await viewModel.refresh() } }, content: { presentation in
             HomeMemberRemovalView(target: presentation.target) { original in
                 removalPresentation = nil
-                if original != nil {
-                    removalResult = "Original removal result acknowledged. The list checks current membership separately."
+                if let original {
+                    let left = original.review.dictValue?["target"]?.dictValue?["is_self"] == .bool(true)
+                    invitationResult = nil
+                    removalResult = original.outcome?.state == "completed"
+                        ? (left ? "You left this Home." : "Member removed.") : "Nothing changed."
                 }
             }
         })

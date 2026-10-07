@@ -271,7 +271,7 @@ enum HomeInvitationSenderError: LocalizedError {
         case "INVITE_EXPIRED": "This invitation has expired. Send a new invitation instead."
         case "INVITE_ALREADY_PENDING": "This person already has a pending invitation. You can resend it from Pending in Members."
         case "MEMBER_ALREADY_EXISTS": "This person is already in the household."
-        case "MEMBERSHIP_RENEWAL_REQUIRED": "This person’s earlier household membership has ended. An invitation can't restore it."
+        case "MEMBERSHIP_RENEWAL_REQUIRED": "This person’s household access is under review, so an invitation can't change it right now."
         default: "This couldn't be completed. Check the invitation and try again."
         }
     }
