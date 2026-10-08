@@ -81,7 +81,7 @@ final class UsernameAvailabilityChecker {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled, let self else { return }
             do {
-                let answer: UsernameAvailabilityDTO = try await api.request(
+                let answer: PersonalUsernameAvailabilityDTO = try await api.request(
                     UsersEndpoints.usernameAvailability(desired)
                 )
                 guard !Task.isCancelled else { return }

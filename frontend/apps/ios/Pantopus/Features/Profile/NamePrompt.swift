@@ -97,8 +97,13 @@ final class NamePromptViewModel {
             || (profile.lastName ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    func clearErrors() {
+    /// Typing in a field clears that field's error (and a failed save's).
+    func clearFirstNameError() {
         firstNameError = nil
+        saveError = nil
+    }
+
+    func clearLastNameError() {
         lastNameError = nil
         saveError = nil
     }
@@ -184,8 +189,8 @@ struct NamePromptSheet: View {
             .padding(Spacing.s4)
         }
         .background(Theme.Color.appBg)
-        .onChange(of: model.firstName) { _, _ in model.clearErrors() }
-        .onChange(of: model.lastName) { _, _ in model.clearErrors() }
+        .onChange(of: model.firstName) { _, _ in model.clearFirstNameError() }
+        .onChange(of: model.lastName) { _, _ in model.clearLastNameError() }
         .interactiveDismissDisabled(model.isSaving)
         .presentationDetents([.large])
     }

@@ -256,7 +256,7 @@ public struct ProfileUpdateResponse: Decodable, Sendable, Hashable {
 /// `backend/routes/users.js` (`router.get('/username-availability'`).
 /// `reason` is `invalid`, `reserved`, `taken` or `current` (already theirs);
 /// `message` is a sentence to show when the name can't be used.
-public struct UsernameAvailabilityDTO: Decodable, Sendable, Hashable {
+public struct PersonalUsernameAvailabilityDTO: Decodable, Sendable, Hashable {
     public let username: String
     public let available: Bool
     public let reason: String?

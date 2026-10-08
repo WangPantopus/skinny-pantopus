@@ -667,8 +667,12 @@ public final class PublicProfileViewModel {
 
     /// UUIDs resolve by id; handles resolve by username. Mirrors RN's
     /// `fetchPublicProfileByIdentifier` (`src/app/user/[id].tsx:53-58`).
+    /// Once loaded, a refresh goes by id: the owner may have just changed
+    /// the username the route was opened with.
     private var profileEndpoint: Endpoint {
-        let identifier = routeIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        let identifier = UserSocialEndpoints.isUUID(resolvedUserId)
+            ? resolvedUserId
+            : routeIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
         if UserSocialEndpoints.isUUID(identifier) {
             return PublicProfileEndpoints.profile(id: identifier)
         }
