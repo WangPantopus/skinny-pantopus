@@ -145,16 +145,16 @@ export function HubTodayCard({ today, loading }: HubTodayCardProps) {
         onClick={display_mode === 'full' ? () => setExpanded(!expanded) : undefined}
         className={`w-full flex items-center justify-between px-4 pt-3 pb-1 text-left ${display_mode === 'full' ? 'cursor-pointer' : ''}`}
       >
-        <div className="flex items-center gap-1.5 text-[11px] text-gray-400 dark:text-gray-500">
+        <div className="flex items-center gap-1.5 text-[11px] text-app-text-muted">
           <MapPin className="w-3 h-3" />
           <span>{location.label}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-400 dark:text-gray-500">{freshnessLabel(today.fetched_at)}</span>
+          <span className="text-[10px] text-app-text-muted">{freshnessLabel(today.fetched_at)}</span>
           {display_mode === 'full' && (
             expanded
-              ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
-              : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+              ? <ChevronUp className="w-3.5 h-3.5 text-app-text-muted" />
+              : <ChevronDown className="w-3.5 h-3.5 text-app-text-muted" />
           )}
         </div>
       </div>
@@ -168,7 +168,7 @@ export function HubTodayCard({ today, loading }: HubTodayCardProps) {
               <span className="text-xl font-bold text-gray-900 dark:text-white">{weather.current_temp_f}°</span>
             )}
             {weather.high_f != null && weather.low_f != null && (
-              <span className="text-[10px] text-gray-400 dark:text-gray-500">
+              <span className="text-[10px] text-app-text-muted">
                 H:{weather.high_f}° L:{weather.low_f}°
               </span>
             )}
@@ -177,7 +177,7 @@ export function HubTodayCard({ today, loading }: HubTodayCardProps) {
         <div className="flex-1 min-w-0">
           <p className="text-sm text-gray-800 dark:text-gray-200 leading-snug">{summary}</p>
           {weather && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{weather.condition_label}</p>
+            <p className="text-xs text-app-text-muted mt-0.5">{weather.condition_label}</p>
           )}
         </div>
       </div>
