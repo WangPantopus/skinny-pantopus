@@ -21,6 +21,9 @@
  *      (section-level degradation, never all-or-nothing).
  *   4. `fetch()` throws with nothing cached → the error propagates to the
  *      caller (composers map it to an `error`/`unavailable` envelope).
+ *   5. A provider that timed out is left alone for TIMEOUT_COOLDOWN_MS:
+ *      steps 2–4 answer at once (stale row, or the error) instead of
+ *      waiting out the timeout again on every Place load while it's down.
  *
  * A `null`/`undefined` fetch result is treated as "provider had nothing"
  * and is NOT cached, so a transient empty answer can't mask data for a
@@ -38,6 +41,18 @@ const TABLE = 'PlaceSectionCache';
 
 // Log the missing-table condition once per process, not once per request.
 let warnedMissingTable = false;
+
+// A section's provider that just timed out (EPA ECHO answering nothing for
+// minutes, say) is most likely down for every address. Until the cooldown
+// ends, misses for that section don't call it again: each would hold the
+// whole Place response for the provider's full timeout. Successes and other
+// failures don't start a cooldown; the first request after it tries again.
+const TIMEOUT_COOLDOWN_MS = 2 * 60 * 1000;
+const timedOutUntil = new Map(); // sectionId → epoch ms
+
+function isTimeout(err) {
+  return Boolean(err) && err.name === 'AbortError';
+}
 
 function isMissingTableError(error) {
   const msg = String((error && error.message) || '');
@@ -112,6 +127,14 @@ async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = tru
     return { payload: row.payload, fetchedAt: row.fetched_at, hit: true, stale: false };
   }
 
+  const coolingUntil = timedOutUntil.get(sectionId);
+  if (coolingUntil > now) {
+    if (row && allowStale) {
+      return { payload: row.payload, fetchedAt: row.fetched_at, hit: true, stale: true };
+    }
+    throw new Error(`provider timed out; next try after ${new Date(coolingUntil).toISOString()}`);
+  }
+
   try {
     const payload = await fetch();
     if (payload == null) {
@@ -122,6 +145,13 @@ async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = tru
     await writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso);
     return { payload, fetchedAt: fetchedAtIso, hit: false, stale: false };
   } catch (err) {
+    if (isTimeout(err)) {
+      timedOutUntil.set(sectionId, Date.now() + TIMEOUT_COOLDOWN_MS);
+      logger.warn('placeSectionCache: provider timed out — skipping it for a while', {
+        sectionId,
+        cooldown_ms: TIMEOUT_COOLDOWN_MS,
+      });
+    }
     if (row && allowStale) {
       logger.warn('placeSectionCache: fetch failed — serving stale', {
         cacheKey,
