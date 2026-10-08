@@ -43,8 +43,11 @@ struct HomeResidencyQueueClaim: Equatable, Identifiable {
     let username: String?
     let claimedRole: String?
     let createdAt: String?
+    /// The name the applicant shows neighbors, when the server sent it.
+    var displayName: String?
 
     var applicantLabel: String {
+        if let name = HomeResidencyQueueValidation.personName(displayName) { return name }
         if let handle = MadeUpUsername.handle(username) { return handle }
         // A made-up username (user_…) says nothing about the applicant.
         return username?.isEmpty == false ? "Applicant" : "Applicant identity unavailable"
@@ -80,21 +83,26 @@ struct HomeResidencyQueueClaim: Equatable, Identifiable {
               fields["claimed_role"] == .null || ["renter", "household"].contains(fields["claimed_role"]?.stringValue ?? "") else {
             throw HomeResidencyQueueError.unavailable
         }
-        var username: String?
+        var username: String?, displayName: String?
         if fields["claimant"] != .null {
-            let person = try HomeResidencyQueueValidation.fields(fields["claimant"], keys: ["id", "username", "name"])
+            let person = try HomeResidencyQueueValidation.fields(
+                fields["claimant"], keys: ["id", "username", "name"], optional: ["display_name"]
+            )
             guard person["id"] == .string(userId), person["name"] == .null,
-                  person["username"] == .null || person["username"]?.stringValue.map({ $0.utf16.count <= 100 }) == true else {
+                  person["username"] == .null || person["username"]?.stringValue.map({ $0.utf16.count <= 100 }) == true,
+                  HomeResidencyQueueValidation.optionalText(person["display_name"]) else {
                 throw HomeResidencyQueueError.unavailable
             }
             username = person["username"]?.stringValue
+            displayName = person["display_name"]?.stringValue
         }
         return Self(
             id: id,
             userId: userId,
             username: username,
             claimedRole: fields["claimed_role"]?.stringValue,
-            createdAt: fields["created_at"]?.stringValue
+            createdAt: fields["created_at"]?.stringValue,
+            displayName: displayName
         )
     }
 }
@@ -129,6 +137,26 @@ enum HomeResidencyQueueValidation {
     static func fields(_ value: JSONValue?, keys: Set<String>) throws -> [String: JSONValue] {
         guard case let .object(fields) = value, Set(fields.keys) == keys else { throw HomeResidencyQueueError.unavailable }
         return fields
+    }
+
+    /// Exact keys, plus `optional` keys a newer server may add.
+    static func fields(_ value: JSONValue?, keys: Set<String>, optional: Set<String>) throws -> [String: JSONValue] {
+        guard case let .object(fields) = value, keys.isSubset(of: fields.keys),
+              Set(fields.keys).isSubset(of: keys.union(optional)) else { throw HomeResidencyQueueError.unavailable }
+        return fields
+    }
+
+    /// Absent, null or a short string.
+    static func optionalText(_ value: JSONValue?) -> Bool {
+        value == nil || value == .null || value?.stringValue.map { $0.utf16.count <= 200 } == true
+    }
+
+    /// A person's name worth showing: not empty and never a made-up username.
+    static func personName(_ value: String?) -> String? {
+        guard let name = value?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty, !MadeUpUsername.isMadeUp(name) else {
+            return nil
+        }
+        return name
     }
 
     static func uuid(_ value: String) -> Bool {

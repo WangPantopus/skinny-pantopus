@@ -63,7 +63,11 @@ struct APIHomeResidencyHistoryTransport: HomeResidencyHistoryTransport {
 
     private func read(path: String, session: HomeResidencyHistorySession? = nil, query: [String: String] = [:]) async throws -> JSONValue {
         var headers = ["Cache-Control": "no-cache, no-store"]
-        if let session { headers["X-Pantopus-Session-Scope"] = session.scope }
+        if let session {
+            headers["X-Pantopus-Session-Scope"] = session.scope
+            // The server names each applicant (display_name) only when asked: older builds check these keys exactly.
+            headers["X-Pantopus-Display-Names"] = "1"
+        }
         let endpoint = Endpoint(method: .get, path: path, query: query, headers: headers, cachePolicy: .reloadIgnoringLocalCacheData)
         do {
             let result = try await api.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true)
