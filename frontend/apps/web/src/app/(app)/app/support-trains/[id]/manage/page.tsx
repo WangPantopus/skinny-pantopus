@@ -449,6 +449,10 @@ export default function ManageSupportTrainPage() {
                     </td>
                     <td className="px-4 py-3 text-app-text-secondary">
                       {r.dish_title || r.restaurant_name || '—'}
+                      {/* The helper's note to the recipient, which the organizer reads on their behalf. */}
+                      {typeof r.note_to_recipient === 'string' && r.note_to_recipient.trim() && (
+                        <div className="text-xs text-app-text-muted mt-0.5">“{r.note_to_recipient.trim()}”</div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span
