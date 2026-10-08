@@ -94,6 +94,23 @@ function _buildSeededItem(fact, timestamp, systemAuthor) {
   };
 }
 
+/**
+ * The seeded fact IDs a user dismissed. Empty when the lookup fails, so all facts show.
+ */
+async function loadDismissedSeededFactIds(userId) {
+  try {
+    const { data: userData } = await supabaseAdmin
+      .from('User')
+      .select('dismissed_seeded_facts')
+      .eq('id', userId)
+      .maybeSingle();
+    if (Array.isArray(userData?.dismissed_seeded_facts)) {
+      return new Set(userData.dismissed_seeded_facts);
+    }
+  } catch { /* ignore — show all facts if lookup fails */ }
+  return new Set();
+}
+
 const DISMISSED_FACTS_CAP = 50;
 const notificationService = require('../services/notificationService');
 const { isFanBlockedFromPersona } = require('../services/personaBlockService');
@@ -104,7 +121,7 @@ const {
   normalizeAlignedMediaUrls,
   getMuteAndHideFilters,
   applyMuteHideFilters,
-  enrichWithUserStatus,
+  enrichFeedPosts,
   attachIdentityAuthors,
   applyPostLocationPrivacy,
   applyPostLocationPrivacyBatch,
@@ -550,10 +567,6 @@ async function serializePostForViewer(post, viewerUserId) {
   if (!post) return null;
   const [serialized] = await attachIdentityAuthors([post], viewerUserId);
   return serialized || post;
-}
-
-async function serializePostsForViewer(posts, viewerUserId) {
-  return attachIdentityAuthors(posts || [], viewerUserId);
 }
 
 
@@ -1671,20 +1684,11 @@ router.get('/feed', verifyToken, async (req, res) => {
     if (isColdStart && realPostCount < 5) {
       try {
         const geohash = _encodeGeohash6(feedLatitude, feedLongitude);
-        const facts = await generateNeighborhoodFacts(geohash);
-
-        // Load user's dismissed fact IDs
-        let dismissedIds = new Set();
-        try {
-          const { data: userData } = await supabaseAdmin
-            .from('User')
-            .select('dismissed_seeded_facts')
-            .eq('id', userId)
-            .maybeSingle();
-          if (Array.isArray(userData?.dismissed_seeded_facts)) {
-            dismissedIds = new Set(userData.dismissed_seeded_facts);
-          }
-        } catch { /* ignore — show all facts if lookup fails */ }
+        // The facts and the user's dismissed fact IDs are read together.
+        const [facts, dismissedIds] = await Promise.all([
+          generateNeighborhoodFacts(geohash),
+          loadDismissedSeededFactIds(userId),
+        ]);
 
         // Filter out dismissed facts
         const eligibleFacts = facts.filter((f) => !dismissedIds.has(f.id));
@@ -2078,8 +2082,7 @@ router.get('/saved', verifyToken, async (req, res) => {
       userId
     );
     // The viewer's like/save/repost state, as every feed lane returns it (the cards draw it).
-    const withStatus = await enrichWithUserStatus(privacySafePosts, userId);
-    const serializedPosts = await serializePostsForViewer(withStatus, userId);
+    const serializedPosts = await enrichFeedPosts(privacySafePosts, userId);
 
     // Offsets count saves, not the posts left after the visibility check, so a short page isn't the end.
     const savesRead = (saves || []).length;
@@ -2193,11 +2196,10 @@ router.get('/feed/home', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch home feed' });
     }
 
-    const enriched = await enrichWithUserStatus(
+    const serialized = await enrichFeedPosts(
       (posts || []).map(r => normalizeFeedPostRow(r, new Set(), new Set())),
       userId
     );
-    const serialized = await serializePostsForViewer(enriched, userId);
 
     res.json({
       posts: serialized,
@@ -3558,8 +3560,7 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     }
 
     const normalized = filtered.map(r => normalizeFeedPostRow(r, new Set(), new Set()));
-    const enriched = await enrichWithUserStatus(normalized, requestingUserId);
-    const serialized = await serializePostsForViewer(enriched, requestingUserId);
+    const serialized = await enrichFeedPosts(normalized, requestingUserId);
 
     res.json({
       posts: serialized,
