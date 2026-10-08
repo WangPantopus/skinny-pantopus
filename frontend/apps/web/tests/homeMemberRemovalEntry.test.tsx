@@ -50,7 +50,8 @@ test('a held old success cannot restore members after a newer failed current rea
     .mockRejectedValueOnce(Error('Current roster unavailable'));
   render(<MembersPage/>);
   await waitFor(() => expect(api.homeIam.getHomeMembers).toHaveBeenCalledTimes(1));
-  fireEvent.focus(window);
+  // An account change starts the newer read (coming back to the page never starts one while a read is pending).
+  act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'session-marker' })); });
   await screen.findByRole('button', { name: 'Members (unavailable)' });
   expect(screen.queryByText('No members yet')).not.toBeInTheDocument();
   await act(async () => { resolve({ occupants: [row('member')] }); await old; });

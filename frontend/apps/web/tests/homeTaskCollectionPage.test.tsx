@@ -50,12 +50,19 @@ test('malformed success cannot establish an empty collection', async () => {
   await screen.findByRole('alert'); expectNoCollectionClaims();
 });
 
-test('a failed foreground refresh retires the old tasks and their counts', async () => {
+test('coming back keeps the tasks, and only a refused re-check retires them and their counts', async () => {
   get.mockResolvedValueOnce(collection([task])); render(<TasksPage />);
   await screen.findByText(task.title);
-  get.mockRejectedValueOnce({ statusCode: 503 });
-  act(() => visibility('hidden')); expectNoCollectionClaims();
-  act(() => visibility('visible')); await screen.findByRole('alert'); expectNoCollectionClaims();
+  act(() => visibility('hidden')); expect(screen.getByText(task.title)).toBeInTheDocument();
+  act(() => visibility('visible')); expect(get).toHaveBeenCalledTimes(1);
+  const start = Date.now(), now = jest.spyOn(Date, 'now');
+  try {
+    now.mockReturnValue(start + 31_000); get.mockRejectedValueOnce({ statusCode: 503 });
+    act(() => visibility('visible')); await waitFor(() => expect(get).toHaveBeenCalledTimes(2)); await act(async () => {});
+    expect(screen.getByText(task.title)).toBeInTheDocument(); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    now.mockReturnValue(start + 62_000); get.mockRejectedValueOnce({ statusCode: 403 });
+    act(() => visibility('visible')); await screen.findByRole('alert'); expectNoCollectionClaims();
+  } finally { now.mockRestore(); }
 });
 
 test('an account change during a pending read cannot establish an empty list', async () => {
