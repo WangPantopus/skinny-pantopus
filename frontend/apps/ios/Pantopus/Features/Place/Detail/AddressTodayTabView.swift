@@ -259,6 +259,10 @@ private struct AddressTodayLoaded: View {
                         .padding(.bottom, Spacing.s10)
                     }
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { scrollFrame = $0 }
+                    // The home-screen widget shows what Today just showed for this place.
+                    .task(id: WidgetSource(intel: intel, fallback: viewModel.fallbackCalendar)) {
+                        WidgetSnapshotStore.shared.writeToday(TodayWidgetSnapshot(intel: intel, viewModel: viewModel))
+                    }
                     .onChange(of: morningVisible) { _, visible in
                         if visible { Task { await markPromptDisplayed() } }
                     }
@@ -484,4 +488,10 @@ private struct AddressTodayLoaded: View {
         guard lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
               !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
     }
+}
+
+/// What the Today widget's snapshot is built from; a change rewrites it.
+private struct WidgetSource: Equatable {
+    let intel: PlaceIntelligence
+    let fallback: PlaceAddressCalendarData?
 }
