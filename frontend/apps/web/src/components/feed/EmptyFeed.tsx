@@ -100,7 +100,8 @@ export default function EmptyFeed({
       title: 'Nothing here yet',
       sub: surface === 'personas'
         ? 'Beacon posts from people you follow will appear here.'
-        : 'Connect with neighbors to see their posts.',
+        // Also shown to people who have connections that haven't posted yet.
+        : 'Posts from your connections will appear here.',
     },
     personal_update: { icon: <User className="w-5 h-5" />, title: 'No updates', sub: 'No personal updates from your network yet.' },
     ask_local: { icon: <MessageCircle className="w-5 h-5" />, title: 'No questions yet', sub: 'Your network hasn\'t asked any questions yet.' },
