@@ -137,9 +137,14 @@ async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = tru
     return { payload: row.payload, fetchedAt: row.fetched_at, hit: true, stale: false };
   }
 
+  // Past maxStaleMs an expired row is never served, whether the provider just
+  // failed or is cooling down after a timeout.
+  const staleAgeOk = !Number.isFinite(maxStaleMs)
+    || (row && now - Date.parse(row.fetched_at) <= maxStaleMs);
+
   const coolingUntil = timedOutUntil.get(sectionId);
   if (coolingUntil > now) {
-    if (row && allowStale) {
+    if (row && allowStale && staleAgeOk) {
       return { payload: row.payload, fetchedAt: row.fetched_at, hit: true, stale: true };
     }
     throw new Error(`provider timed out; next try after ${new Date(coolingUntil).toISOString()}`);
@@ -162,8 +167,6 @@ async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = tru
         cooldown_ms: TIMEOUT_COOLDOWN_MS,
       });
     }
-    const staleAgeOk = !Number.isFinite(maxStaleMs)
-      || (row && now - Date.parse(row.fetched_at) <= maxStaleMs);
     if (row && allowStale && staleAgeOk) {
       logger.warn('placeSectionCache: fetch failed — serving stale', {
         cacheKey: logKey(cacheKey),
