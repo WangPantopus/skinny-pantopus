@@ -124,7 +124,7 @@ purpose is **App functionality / Account management**; analytics where noted.
   the prompt result and a Keystore signature — **no biometric data is
   collected or leaves the OS**, so biometrics add nothing under *Health & fitness*.
 - **Google Play services Block Store** (`play-services-auth-blockstore`)
-  keeps the account hint (display name, avatar URL, masked email) and a
+  keeps the account hint (display name, avatar URL, email for the login form) and a
   single-use resume grant **on the device only** (`setShouldBackupToCloud
   (false)`, so same-device reinstall + device-to-device transfer, no cloud
   copy). It is neither collected by us nor "shared" with Google in a

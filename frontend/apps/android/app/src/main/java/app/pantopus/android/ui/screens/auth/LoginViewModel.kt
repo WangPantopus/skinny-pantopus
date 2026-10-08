@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -53,10 +54,9 @@ class LoginViewModel
             val isResendingVerification: Boolean = false,
             /**
              * Persistent login (design §3 state **C**, §9): the most recent
-             * remembered account — non-secret display hint only (name,
-             * avatar, *masked* email, last method). Drives the "Welcome back"
-             * header + "Not you?"; the real address comes from autofill, so
-             * the email field itself is never prefilled with the mask.
+             * remembered account (name, avatar, masked email, address, last
+             * method). Drives the "Welcome back" header + "Not you?", and its
+             * address is filled into [email] so only the password is left.
              */
             val rememberedAccount: AccountHint? = null,
             /**
@@ -113,14 +113,19 @@ class LoginViewModel
         private var cancelJob: Job? = null
         private var rememberedHintDismissed = false
 
+        /** The address filled in from the remembered account (once per screen), so "Not you?" can take it back out. */
+        private var prefilledEmail: String? = null
+
         init {
             // Persistent login — mirror the repository's remembered-account
-            // hint + session-end banner into the screen state.
+            // hint + session-end banner into the screen state. After "Use a
+            // different account" the form starts blank.
             viewModelScope.launch {
-                authRepository.rememberedAccounts.collect { accounts ->
-                    _uiState.update {
-                        it.copy(rememberedAccount = if (rememberedHintDismissed) null else accounts.firstOrNull())
-                    }
+                combine(authRepository.rememberedAccounts, authRepository.loginStartsBlank) { accounts, blank ->
+                    if (blank || rememberedHintDismissed) null else accounts.firstOrNull()
+                }.collect { hint ->
+                    _uiState.update { it.copy(rememberedAccount = hint) }
+                    prefillRememberedEmail(hint)
                 }
             }
             viewModelScope.launch {
@@ -128,6 +133,19 @@ class LoginViewModel
                     _uiState.update { it.copy(sessionEndReason = reason) }
                 }
             }
+        }
+
+        /**
+         * Put the remembered account's address in the email field so only the
+         * password is left. Once per screen, only into an empty field, and not
+         * for a Google / Apple account (its "Last used" button is the way back).
+         */
+        private fun prefillRememberedEmail(hint: AccountHint?) {
+            if (hint == null || prefilledEmail != null || _uiState.value.email.isNotEmpty()) return
+            if (hint.lastMethod == AccountHint.METHOD_GOOGLE || hint.lastMethod == AccountHint.METHOD_APPLE) return
+            val address = hint.email?.trim()?.takeIf { it.isNotEmpty() } ?: return
+            prefilledEmail = address
+            _uiState.update { it.copy(email = address) }
         }
 
         /** The session-end banner's dismiss affordance. */
@@ -141,7 +159,14 @@ class LoginViewModel
             val targetId = userId ?: _uiState.value.rememberedAccount?.userId ?: return
             if (_uiState.value.isLoading || _uiState.value.rememberedAccount?.userId != targetId) return
             rememberedHintDismissed = true
-            _uiState.update { it.copy(rememberedAccount = null, isLoading = true) }
+            // Whatever the user typed stays; the address the hint filled in goes with it.
+            _uiState.update {
+                it.copy(
+                    rememberedAccount = null,
+                    email = if (it.email == prefilledEmail) "" else it.email,
+                    isLoading = true,
+                )
+            }
             viewModelScope.launch {
                 try {
                     authRepository.removeRememberedAccount(targetId)

@@ -317,6 +317,14 @@ class AuthRepository
         private val _rememberedAccounts = MutableStateFlow<List<AccountHint>>(emptyList())
         val rememberedAccounts: StateFlow<List<AccountHint>> = _rememberedAccounts.asStateFlow()
 
+        /**
+         * Set by *Use a different account* on the continue-as card: the login
+         * screen starts blank instead of offering that account again. Cleared
+         * by the next sign-in.
+         */
+        private val _loginStartsBlank = MutableStateFlow(false)
+        val loginStartsBlank: StateFlow<Boolean> = _loginStartsBlank.asStateFlow()
+
         private val userAdapter = Moshi.Builder().build().adapter(UserDto::class.java)
 
         /** Single-flight guard for the network refresh (see [refreshTokens]). */
@@ -496,9 +504,11 @@ class AuthRepository
             }
         }
 
-        /** "Use a different account" from the continue-as card: keep the hint + grant, show login. */
+        /** "Use a different account" from the continue-as card: keep the hint + grant, show a blank login. */
         fun useDifferentAccount() {
-            if (_state.value is State.Resumable) _state.value = State.SignedOut
+            if (_state.value !is State.Resumable) return
+            _loginStartsBlank.value = true
+            _state.value = State.SignedOut
         }
 
         /**
@@ -527,6 +537,7 @@ class AuthRepository
             observability.identify(userId = user.id, email = user.email)
             Analytics.identify(userId = user.id)
             socketManager.connect(token)
+            _loginStartsBlank.value = false
             _state.value = State.SignedIn(user)
         }
 
@@ -714,6 +725,7 @@ class AuthRepository
                         displayName = user.displayName ?: existing?.displayName,
                         avatarUrl = user.avatarUrl ?: existing?.avatarUrl,
                         maskedEmail = AccountHint.maskEmail(user.email) ?: existing?.maskedEmail,
+                        email = user.email.trim().ifEmpty { null } ?: existing?.email,
                         lastMethod = method ?: existing?.lastMethod,
                         lastSeenAt = System.currentTimeMillis(),
                     )

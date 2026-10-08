@@ -480,7 +480,8 @@ is presented once (which flips the session to `interactive`).
   (Secure Enclave `dataRepresentation`), `stepUpKey`, `installId`,
   `expiresAt`, `sessionId`, `sessionContext`, `accountHints` (JSON array,
   most-recent-first, max 3: `{userId, displayName, avatarUrl, maskedEmail,
-  lastMethod, lastSeenAt}`), `appLockEnabled.<uid>`. Install marker file
+  email?, lastMethod, lastSeenAt}`; `email` only fills in the login form),
+  `appLockEnabled.<uid>`. Install marker file
   `Library/Application Support/.pantopus-install` (contains `installId`,
   excluded from backup).
 - Android: `TokenStorage` adds `expires_at`, `session_id`,

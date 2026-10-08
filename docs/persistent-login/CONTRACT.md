@@ -79,7 +79,7 @@ Step-up purposes: `delete_account`, `revoke_device`, `revoke_sessions`, `change_
 `AUTH_DEVICE_BINDING=off|optional|required` (default `optional`), `AUTH_RESUME_GRANTS=on|off` (default `on`), `DPOP_CUTOVER` (ISO; default `9999-01-01`), `PUBLIC_API_BASE_URL` (optional), `STEP_UP_SECRET` (required in production, else falls back to `CSRF_SECRET` with a warning), `AUTH_INACTIVITY_DAYS_TRUSTED=90`, `AUTH_INACTIVITY_DAYS_UNVERIFIED=30`, `AUTH_RESUME_GRANT_DAYS=90`.
 
 ## Client storage keys
-iOS Keychain (`KeychainStore`, same service): `deviceId`, `deviceKey` (SE dataRepresentation, Data), `stepUpKey`, `installId`, `expiresAt`, `sessionId`, `sessionContext`, `accountHints` (JSON array, most-recent-first, max 3: `{userId, displayName, avatarUrl, maskedEmail, lastMethod, lastSeenAt}`), `appLockEnabled.<uid>`.
+iOS Keychain (`KeychainStore`, same service): `deviceId`, `deviceKey` (SE dataRepresentation, Data), `stepUpKey`, `installId`, `expiresAt`, `sessionId`, `sessionContext`, `accountHints` (JSON array, most-recent-first, max 3: `{userId, displayName, avatarUrl, maskedEmail, email?, lastMethod, lastSeenAt}`; cards show `maskedEmail`, `email` only fills in the login form — added 2026-10-08, older hints lack it), `appLockEnabled.<uid>`.
 iOS install marker file: `Library/Application Support/.pantopus-install` (contains installId; excluded from backup).
 Android: `TokenStorage` adds `expires_at`, `session_id`, `session_context`; `device_identity` prefs (`device_id`, `install_id`) excluded from backup; Block Store entry key `pantopus.account_hint` JSON `{ v:1, accounts:[…max 3…], resumeGrant?, grantUserId?, issuedAt }`, `setShouldBackupToCloud(false)`.
 

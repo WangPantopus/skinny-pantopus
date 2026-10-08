@@ -32,6 +32,7 @@ class LoginScreenTest {
         val repo = mockk<AuthRepository>(relaxed = true)
         coEvery { repo.state } returns MutableStateFlow(AuthRepository.State.SignedOut)
         coEvery { repo.rememberedAccounts } returns MutableStateFlow(emptyList<AccountHint>())
+        coEvery { repo.loginStartsBlank } returns MutableStateFlow(false)
         coEvery { repo.sessionEndReason } returns MutableStateFlow<SessionEndReason?>(null)
         coEvery { repo.signIn(any(), any()) } returns signInResult
         return repo

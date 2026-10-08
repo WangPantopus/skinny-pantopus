@@ -23,16 +23,23 @@ import javax.inject.Singleton
 
 /**
  * Non-secret display hint for one remembered account (CONTRACT §"Client
- * storage keys": `{userId, displayName, avatarUrl, maskedEmail, lastMethod,
- * lastSeenAt}`). Drives the "Continue as Ying" card and login prefill.
+ * storage keys": `{userId, displayName, avatarUrl, maskedEmail, email,
+ * lastMethod, lastSeenAt}`). Drives the "Continue as Ying" card and login prefill.
  */
 @JsonClass(generateAdapter = true)
 data class AccountHint(
     val userId: String,
     val displayName: String? = null,
     val avatarUrl: String? = null,
-    /** `y•••@gmail.com` — never the full address. */
+    /** `y•••@gmail.com` — what the cards show. */
     val maskedEmail: String? = null,
+    /**
+     * The account's sign-in address, so the login form is filled in instead
+     * of asking the person to retype what the card hides. Kept only in this
+     * device's Block Store entry (no cloud copy) and forgotten with the hint
+     * ("Not you?"). `null` in hints written before the address was kept.
+     */
+    val email: String? = null,
     /** `password` | `google` | `apple` | `resume` — picks the L3 affordance. */
     val lastMethod: String? = null,
     /** Unix millis of the last sign-in / resume with this account. */
