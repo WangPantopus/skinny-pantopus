@@ -129,7 +129,8 @@ public final class BusinessInboxViewModel {
     // MARK: - Projection (pure; testable)
 
     static func project(room: BusinessInboxRoomDTO) -> BusinessInboxRoom {
-        let handle = (room.otherParticipantUsername ?? "").trimmingCharacters(in: .whitespaces)
+        // A made-up username (user_…) is never shown.
+        let handle = MadeUpUsername.chosen(room.otherParticipantUsername) ?? ""
         let name = nonEmpty(room.otherParticipantName)
             ?? nonEmpty(room.roomName)
             ?? (handle.isEmpty ? "Conversation" : "@\(handle)")
@@ -152,7 +153,7 @@ public final class BusinessInboxViewModel {
         return BusinessInboxMention(
             id: post.id,
             authorName: nonEmpty(post.creator?.name)
-                ?? nonEmpty(post.creator?.username)
+                ?? MadeUpUsername.chosen(post.creator?.username)
                 ?? "Someone",
             avatarURL: post.creator?.profilePictureUrl.flatMap(URL.init(string:)),
             body: nonEmpty(post.title) ?? post.content ?? "",

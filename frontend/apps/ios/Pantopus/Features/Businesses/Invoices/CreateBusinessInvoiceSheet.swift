@@ -97,10 +97,12 @@ struct CreateBusinessInvoiceSheet: View {
                             .font(.system(size: 13.5, weight: .semibold))
                             .foregroundStyle(Theme.Color.appText)
                             .lineLimit(1)
-                        Text("@\(person.username)")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                            .lineLimit(1)
+                        if let handle = MadeUpUsername.handle(person.username) {
+                            Text(handle)
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Theme.Color.appTextSecondary)
+                                .lineLimit(1)
+                        }
                     }
                     Spacer(minLength: Spacing.s0)
                     Button { viewModel.clearRecipient() } label: {
@@ -161,7 +163,8 @@ struct CreateBusinessInvoiceSheet: View {
                                     .font(.system(size: 13.5, weight: .semibold))
                                     .foregroundStyle(Theme.Color.appText)
                                     .lineLimit(1)
-                                Text("@\(person.username) · \(person.relationLabel)")
+                                Text([MadeUpUsername.handle(person.username), person.relationLabel]
+                                    .compactMap { $0 }.joined(separator: " · "))
                                     .font(.system(size: 11.5))
                                     .foregroundStyle(Theme.Color.appTextSecondary)
                                     .lineLimit(1)

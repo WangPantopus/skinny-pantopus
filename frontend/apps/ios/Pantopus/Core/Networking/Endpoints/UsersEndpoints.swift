@@ -17,6 +17,13 @@ public enum UsersEndpoints {
         Endpoint(method: .patch, path: "/api/users/profile", body: update)
     }
 
+    /// `GET /api/users/username-availability?username=` — route
+    /// `backend/routes/users.js` (`router.get('/username-availability'`).
+    /// Can the signed-in person change their username to this one?
+    public static func usernameAvailability(_ username: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/users/username-availability", query: ["username": username])
+    }
+
     /// `GET /api/users/:id/stats` — route `backend/routes/users.js:2787`.
     /// Returns `{total_gigs_posted, total_gigs_completed, total_earnings,
     /// average_rating, total_ratings}`.

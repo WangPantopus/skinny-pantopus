@@ -303,7 +303,8 @@ private extension MeViewModel {
             identity: .personal,
             displayName: displayName,
             initials: initials(from: displayName),
-            handle: "@\(profile.username)",
+            // A made-up username (user_…) is never shown as the handle.
+            handle: MadeUpUsername.handle(profile.username) ?? "",
             locality: locality,
             tagline: tagline,
             verified: residencyVerified,

@@ -235,7 +235,13 @@ extension HomeDashboardProjection {
         let namesByUserId = Dictionary(
             dashboard.members.compactMap { member -> (String, String)? in
                 guard let id = member.user?.id ?? member.userId else { return nil }
-                guard let name = firstNonEmpty(member.user?.displayName, member.user?.handle, member.user?.name, member.user?.username)
+                // A made-up username (user_…) is never the member's name.
+                guard let name = firstNonEmpty(
+                    member.user?.displayName,
+                    MadeUpUsername.chosen(member.user?.handle),
+                    member.user?.name,
+                    MadeUpUsername.chosen(member.user?.username)
+                )
                 else { return nil }
                 return (id, name)
             }

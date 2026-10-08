@@ -173,9 +173,10 @@ public struct HouseholdTaskAssignableMember: Sendable, Hashable, Identifiable {
     public static func from(_ occupant: OccupantDTO) -> HouseholdTaskAssignableMember? {
         // Guests can't see household tasks, so the server refuses them as assignees.
         guard occupant.isActive, occupant.role != "guest" else { return nil }
-        let name = occupant.displayName?.trimmingCharacters(in: .whitespaces)
-            ?? occupant.username?.trimmingCharacters(in: .whitespaces)
-            ?? ""
+        // A made-up username (user_…) is never shown as the member's name.
+        let name = (occupant.displayName.flatMap { MadeUpUsername.isMadeUp($0) ? nil : $0 }
+            ?? MadeUpUsername.chosen(occupant.username))?
+            .trimmingCharacters(in: .whitespaces) ?? ""
         let display = name.isEmpty ? "Member \(occupant.userId.prefix(4).uppercased())" : name
         let initials = display
             .split(separator: " ")

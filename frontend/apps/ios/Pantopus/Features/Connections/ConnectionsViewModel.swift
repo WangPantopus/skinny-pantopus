@@ -728,8 +728,8 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             }
             return first
         }
-        if let username = user.username, !username.isEmpty { return username }
-        return nil
+        // Only a username the person chose stands in for a name.
+        return MadeUpUsername.chosen(user.username)
     }
 
     static func initials(for user: RelationshipUserDTO?, displayName: String) -> String {

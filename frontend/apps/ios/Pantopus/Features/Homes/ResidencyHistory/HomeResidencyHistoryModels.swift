@@ -75,7 +75,7 @@ struct HomeResidencyHistoryItem: Equatable, Identifiable {
     }
 
     var applicantLabel: String {
-        if let currentUsername, !currentUsername.isEmpty { return "Current applicant: @" + currentUsername }
+        if let handle = MadeUpUsername.handle(currentUsername) { return "Current applicant: " + handle }
         return "Current applicant identity unavailable"
     }
 

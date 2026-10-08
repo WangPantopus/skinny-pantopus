@@ -30,7 +30,7 @@ final class HomeInvitationDecisionViewModel {
         session = HomeClaimSessionScope(api: api)
         let auth = api.authProvider ?? AuthManager.shared
         if case let .signedIn(user) = auth.state {
-            accountLabel = user.displayName ?? user.username ?? user.email
+            accountLabel = user.displayName ?? MadeUpUsername.chosen(user.username) ?? user.email
         } else {
             accountLabel = "Sign in to review this invitation"
         }
