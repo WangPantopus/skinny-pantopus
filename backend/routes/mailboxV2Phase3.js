@@ -21,7 +21,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
-const { AWARDED_STAMP_TYPES } = require('../jobs/stampAwarder');
+const { AWARDED_STAMP_TYPES, STAMP_GOALS } = require('../jobs/stampAwarder');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -1301,6 +1301,28 @@ router.patch('/mailday/settings', verifyToken, validate(updateMailDaySchema), as
 //                      STAMP ENDPOINTS
 // ====================================================================
 
+// The count a stamp goal measures, read the way the stamp awarder reads it. null when the read fails,
+// so the gallery shows the stamp without a progress bar rather than failing or showing a wrong number.
+async function countStampMetric(userId, metric) {
+  let query;
+  if (metric === 'totalMail' || metric === 'vaultFiled') {
+    query = supabaseAdmin.from('Mail').select('*', { count: 'exact', head: true })
+      .eq('recipient_user_id', userId).is('deleted_at', null);
+    if (metric === 'vaultFiled') query = query.not('vault_folder_id', 'is', null);
+  } else if (metric === 'packages') {
+    query = supabaseAdmin.from('MailPackage').select('id, mail:Mail!inner(recipient_user_id)', { count: 'exact', head: true })
+      .eq('mail.recipient_user_id', userId);
+  } else {
+    return null;
+  }
+  const { count, error } = await query;
+  if (error) {
+    logger.warn('[P3] stamp progress count failed', { metric, error: error.message });
+    return null;
+  }
+  return count || 0;
+}
+
 // GET /stamps — user's stamp gallery
 router.get('/stamps', verifyToken, async (req, res) => {
   try {
@@ -1334,9 +1356,18 @@ router.get('/stamps', verifyToken, async (req, res) => {
     // belong to features cut for launch, so they'd be goals nobody can reach.
     const available = ALL_STAMPS.filter(s => AWARDED_STAMP_TYPES.has(s.stamp_type));
     const earnedTypes = new Set((earned || []).map(s => s.stamp_type));
-    const locked = available
-      .filter(s => !earnedTypes.has(s.stamp_type))
-      .map(s => ({ ...s, progress: 0, target: 1 }));
+    const lockedStamps = available.filter(s => !earnedTypes.has(s.stamp_type));
+    // Real progress toward each locked stamp ("Received 10 mail items" with 9 received reads 9 of 10;
+    // it used to say 0 of 1 for every stamp). One count per measured metric, read together.
+    const metrics = [...new Set(lockedStamps.map(s => STAMP_GOALS[s.stamp_type]?.metric).filter(Boolean))];
+    const counts = Object.fromEntries(await Promise.all(
+      metrics.map(async metric => [metric, await countStampMetric(userId, metric)]),
+    ));
+    const locked = lockedStamps.map((s) => {
+      const goal = STAMP_GOALS[s.stamp_type];
+      const count = goal ? counts[goal.metric] : null;
+      return { ...s, progress: typeof count === 'number' ? Math.min(count, goal.target) : null, target: goal ? goal.target : null };
+    });
 
     res.json({
       earned: earned || [],
