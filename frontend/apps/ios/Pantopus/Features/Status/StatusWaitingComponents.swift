@@ -210,7 +210,11 @@ struct StatusTimelineView: View {
     private var accessibilityLabel: String {
         let states = resolvedStates
         let current = stages.indices.first { states[$0] == .current }
-        if let current { return "Verification timeline. Current stage: \(stages[current].label)." }
+        // The stage's line under it ("Waiting for documents") is part of where things stand.
+        if let current {
+            let stage = stages[current]
+            return "Verification timeline. Current stage: \(stage.label)\(stage.sub.map { ", \($0)" } ?? "")."
+        }
         return "Verification timeline."
     }
 
