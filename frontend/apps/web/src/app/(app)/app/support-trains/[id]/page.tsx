@@ -518,7 +518,7 @@ export default function SupportTrainDetailPage() {
               disabled={!isOrganizer && Boolean(closedReason)}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition disabled:cursor-not-allowed disabled:bg-app-border-strong disabled:text-app-text-secondary disabled:hover:bg-app-border-strong"
             >
-              {isOrganizer ? 'View signups' : closedReason ?? 'Take a slot'}
+              {isOrganizer ? 'View signups' : closedReason ?? 'Sign up for a slot'}
             </button>
             <button
               onClick={handleCopyLink}
