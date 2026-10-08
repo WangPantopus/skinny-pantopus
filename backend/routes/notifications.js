@@ -122,14 +122,7 @@ router.get('/', verifyToken, async (req, res) => {
     // Launch cuts: notifications that only a hidden feature produces are left out.
     query = excludeHiddenLaunchNotifications(query);
 
-    const { data: notifications, error } = await query;
-
-    if (error) {
-      logger.error('Error fetching notifications', { error: error.message, userId });
-      return res.status(500).json({ error: 'Failed to fetch notifications' });
-    }
-
-    // Get unread count (always, for the badge)
+    // Get unread count (always, for the badge), read alongside the page
     let countQuery = supabaseAdmin
       .from('Notification')
       .select('id', { count: 'exact', head: true })
@@ -139,7 +132,12 @@ router.get('/', verifyToken, async (req, res) => {
     countQuery = applyNotificationFilters(countQuery, { contextType, contextId, contexts });
     countQuery = excludeHiddenLaunchNotifications(countQuery);
 
-    const { count: unreadCount, error: countErr } = await countQuery;
+    const [{ data: notifications, error }, { count: unreadCount, error: countErr }] = await Promise.all([query, countQuery]);
+
+    if (error) {
+      logger.error('Error fetching notifications', { error: error.message, userId });
+      return res.status(500).json({ error: 'Failed to fetch notifications' });
+    }
 
     if (countErr) {
       logger.error('Error counting unread notifications', { error: countErr.message });

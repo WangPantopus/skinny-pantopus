@@ -2584,32 +2584,39 @@ router.get('/profile', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { data: userData, error } = await supabaseAdmin
-      .from('User')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
-    if (error || !userData) {
-      logger.warn('Profile not found', { userId });
-      return res.status(404).json({ error: 'User profile not found' });
-    }
-
-    // Fetch skills and invite progress in parallel
-    const [skillsResult, inviteProgress, mailPrefs] = await Promise.all([
+    // The profile's parts are read alongside the User row. Mail preferences a person doesn't have
+    // yet are created only once the row is known to exist.
+    const [{ data: userData, error }, skillsResult, inviteProgress, residency, mailPrefsRead] = await Promise.all([
+      supabaseAdmin
+        .from('User')
+        .select('*')
+        .eq('id', userId)
+        .single(),
       supabaseAdmin
         .from('UserSkill')
         .select('skill_name')
         .eq('user_id', userId)
         .order('display_order', { ascending: true }),
       inviteRewardService.getInviteProgress(userId),
-      getOrCreateMailPreferences(userId),
+      getPublicResidencySummary(userId, req.user?.id || null),
+      supabaseAdmin
+        .from('MailPreferences')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle(),
     ]);
+
+    if (error || !userData) {
+      logger.warn('Profile not found', { userId });
+      return res.status(404).json({ error: 'User profile not found' });
+    }
+
+    const mailPrefs = mailPrefsRead.data && !mailPrefsRead.error
+      ? mailPrefsRead.data
+      : await getOrCreateMailPreferences(userId);
     const userSkills = skillsResult.data;
 
     logger.info('Profile fetched', { userId });
-
-    const residency = await getPublicResidencySummary(userId, req.user?.id || null);
 
     res.json({
       user: {
