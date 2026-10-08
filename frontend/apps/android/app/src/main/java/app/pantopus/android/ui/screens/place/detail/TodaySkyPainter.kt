@@ -210,26 +210,24 @@ class TodaySkyPainter(
         }
     }
 
+    /**
+     * Soft puffs of fog drifting along the ground, in front of the house and below the reading:
+     * stretched radial glows, so no band ever shows an edge.
+     */
     private fun DrawScope.paintFog(scene: SkyScene) {
         if (weather != SkyPalette.Weather.FOG) return
         val tint = if (night) SkyPalette.fogNight else SkyPalette.fogDay
-        repeat(4) { index ->
-            val y = scene.horizon - 18 + index * 12
-            val width = scene.width * 1.3f
-            val speed = if (index % 2 == 0) 6.0 else -6.0
-            val x = scene.drift(index * 90.0, speed, width.toDouble(), still) - scene.width * 0.3f
-            drawRect(
-                brush =
-                    Brush.verticalGradient(
-                        0f to tint.copy(alpha = 0f),
-                        0.5f to tint.copy(alpha = if (night) 0.2f else 0.42f),
-                        1f to tint.copy(alpha = 0f),
-                        startY = y - 9,
-                        endY = y + 9,
-                    ),
-                topLeft = Offset(x, y - 9),
-                size = Size(width, 18f),
-            )
+        val glow = Brush.radialGradient(listOf(tint.copy(alpha = if (night) 0.22f else 0.45f), tint.copy(alpha = 0f)), Offset.Zero, 13f)
+        val span = scene.width * 1.6
+        repeat(6) { index ->
+            val speed = if (index % 2 == 0) 7.0 else -5.0
+            val x = scene.drift(index * span / 6.0, speed, span.toDouble(), still) - scene.width * 0.3f
+            withTransform({
+                translate(x, scene.horizon - 12 + (index % 3) * 12)
+                scale(9f, 1f, pivot = Offset.Zero)
+            }) {
+                drawCircle(glow, radius = 13f, center = Offset.Zero)
+            }
         }
     }
 

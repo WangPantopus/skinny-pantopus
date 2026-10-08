@@ -196,10 +196,10 @@ struct TodaySkyHero: View {
     private var reading: some View {
         VStack(alignment: .leading, spacing: 6) {
             VStack(alignment: .leading, spacing: 0) {
+                // 14 pt bold (large text) in full white: it sits over the cloud deck on grey days.
                 Text("NOW")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .kerning(0.9)
-                    .opacity(0.86)
                 HStack(alignment: .top, spacing: 1) {
                     Text("\(Int(data.currentTempF.rounded()))")
                         .font(.system(size: 64, weight: .light))

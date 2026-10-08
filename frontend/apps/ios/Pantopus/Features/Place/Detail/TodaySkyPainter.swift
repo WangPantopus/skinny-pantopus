@@ -216,22 +216,20 @@ struct TodaySkyPainter {
         }
     }
 
+    /// Soft puffs of fog drifting along the ground, in front of the house and
+    /// below the reading: stretched radial glows, so no band ever shows an edge.
     private func paintFog(_ context: GraphicsContext, _ scene: Scene) {
         guard weather == .fog else { return }
         let tint = night ? SkyPalette.fogNight : SkyPalette.fogDay
-        for index in 0..<4 {
-            let y = scene.horizon - 18 + Double(index) * 12
-            let width = scene.width * 1.3
-            let x = scene.drift(Double(index) * 90, speed: index.isMultiple(of: 2) ? 6 : -6, span: width, still: still) - scene.width * 0.3
-            let band = Gradient(stops: [
-                .init(color: tint.color(opacity: 0), location: 0),
-                .init(color: tint.color(opacity: night ? 0.2 : 0.42), location: 0.5),
-                .init(color: tint.color(opacity: 0), location: 1)
-            ])
-            context.fill(
-                Path(CGRect(x: x, y: y - 9, width: width, height: 18)),
-                with: .linearGradient(band, startPoint: CGPoint(x: 0, y: y - 9), endPoint: CGPoint(x: 0, y: y + 9))
-            )
+        let glow = Gradient(colors: [tint.color(opacity: night ? 0.22 : 0.45), tint.color(opacity: 0)])
+        let span = scene.width * 1.6
+        for index in 0..<6 {
+            let speed: Double = index.isMultiple(of: 2) ? 7 : -5
+            let x = scene.drift(Double(index) * span / 6, speed: speed, span: span, still: still) - scene.width * 0.3
+            var puff = context
+            puff.translateBy(x: x, y: scene.horizon - 12 + Double(index % 3) * 12)
+            puff.scaleBy(x: 9, y: 1)
+            puff.fill(Self.circle(0, 0, 13), with: .radialGradient(glow, center: .zero, startRadius: 0, endRadius: 13))
         }
     }
 

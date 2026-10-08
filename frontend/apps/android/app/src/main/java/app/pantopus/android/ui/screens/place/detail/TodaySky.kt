@@ -144,12 +144,13 @@ private fun SkyReading(data: PlaceWeatherData) {
     val shadow = TextStyle(shadow = Shadow(SkyPalette.black.copy(alpha = 0.28f), Offset(0f, 2f), 6f))
     Column(modifier = Modifier.padding(start = 18.dp, top = 14.dp, end = 110.dp, bottom = 36.dp)) {
         Column(modifier = Modifier.clearAndSetSemantics { contentDescription = nowLabel }) {
+            // 14 sp bold (large text) in full white: it sits over the cloud deck on grey days.
             Text(
                 "NOW",
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.9.sp,
-                color = SkyPalette.white.copy(alpha = 0.86f),
+                color = SkyPalette.white,
                 style = shadow,
             )
             Row(verticalAlignment = Alignment.Top) {
