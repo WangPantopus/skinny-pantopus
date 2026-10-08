@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -96,6 +97,13 @@ private const val GOOD_DAY_TILE_CAP = 5
 
 /** Up to this many tiles share the row; more scroll sideways. */
 private const val GOOD_DAY_SHARED_ROW = 3
+
+/** From this font scale the tiles always scroll, widening up to [GOOD_DAY_MAX_WIDEN] times. */
+private const val GOOD_DAY_LARGE_FONT = 1.3f
+private const val GOOD_DAY_MAX_WIDEN = 1.6f
+
+/** A scrolling tile's width in dp at the default font size. */
+private const val GOOD_DAY_TILE_WIDTH = 128f
 private const val RADON_MORNING_HOUR = 9
 private const val RADON_REMINDER_DAYS = 14L
 private const val RADON_DISMISS_DAYS = 30L
@@ -176,12 +184,15 @@ private fun GoodDayRow(tiles: List<PlaceGoodDayTile>) {
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Up to three tiles share the row; more scroll, with the next one peeking in.
-        val shared = shown.size <= GOOD_DAY_SHARED_ROW
+        // At large font sizes the tiles scroll and widen with the text, so answers wrap by word.
+        val fontScale = LocalDensity.current.fontScale
+        val shared = shown.size <= GOOD_DAY_SHARED_ROW && fontScale < GOOD_DAY_LARGE_FONT
+        val tileWidth = (GOOD_DAY_TILE_WIDTH * fontScale.coerceIn(1f, GOOD_DAY_MAX_WIDEN)).dp
         val row = if (shared) Modifier.fillMaxWidth() else Modifier.horizontalScroll(rememberScrollState())
         Row(modifier = row.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             shown.forEachIndexed { index, tile ->
                 val pop = rememberPopIn(tile.id, index, animate = !reduced && !appeared)
-                val size = if (shared) Modifier.weight(1f) else Modifier.width(128.dp)
+                val size = if (shared) Modifier.weight(1f) else Modifier.width(tileWidth)
                 TodayGoodDayTile(
                     tile = tile,
                     open = openId == tile.id,
