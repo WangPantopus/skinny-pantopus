@@ -14,8 +14,9 @@ interface HomeResidencyReviewHistoryApi {
     @Headers("Cache-Control: no-cache, no-store")
     suspend fun session(): Response<ResponseBody>
 
+    // The server names each applicant (display_name) only when asked: older builds check these keys exactly.
     @GET("api/homes/residency-review-history/{home}")
-    @Headers("Cache-Control: no-cache, no-store")
+    @Headers("Cache-Control: no-cache, no-store", "X-Pantopus-Display-Names: 1")
     suspend fun list(
         @Path("home") home: String,
         @Header("X-Pantopus-Session-Scope") session: String,
@@ -23,7 +24,7 @@ interface HomeResidencyReviewHistoryApi {
     ): Response<ResponseBody>
 
     @GET("api/homes/residency-review-history/{home}/{receipt}")
-    @Headers("Cache-Control: no-cache, no-store")
+    @Headers("Cache-Control: no-cache, no-store", "X-Pantopus-Display-Names: 1")
     suspend fun read(
         @Path("home") home: String,
         @Path("receipt") receipt: String,

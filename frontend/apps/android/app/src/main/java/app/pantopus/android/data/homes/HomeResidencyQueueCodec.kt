@@ -56,15 +56,30 @@ class HomeResidencyQueueCodec(moshi: Moshi) {
         check(created == null || created is String && timestamp(created))
         val role = row["claimed_role"]
         check(role == null || role in setOf("household", "renter"))
-        val username =
-            row["claimant"]?.let {
-                val person = fields(it, setOf("id", "username", "name"))
-                check(person["id"] == userId && person["name"] == null)
-                val name = person["username"]
-                check(name == null || name is String && name.length <= MAX_USERNAME)
-                name as? String
-            }
-        return HomeResidencyQueueClaim(checkNotNull(id), checkNotNull(userId), username, role as? String, created as? String)
+        val claimant = row["claimant"]?.let { claimant(it, userId) }
+        return HomeResidencyQueueClaim(
+            checkNotNull(id),
+            checkNotNull(userId),
+            claimant?.first,
+            role as? String,
+            created as? String,
+            claimant?.second,
+        )
+    }
+
+    /** The applicant's username and, from a server that was asked for it, display_name. */
+    private fun claimant(
+        value: Any,
+        userId: String?,
+    ): Pair<String?, String?> {
+        val person = value as? Map<*, *> ?: error("Expected exact fields")
+        check(person.keys == CLAIMANT_KEYS || person.keys == CLAIMANT_KEYS + "display_name")
+        check(person["id"] == userId && person["name"] == null)
+        val name = person["username"]
+        check(name == null || name is String && name.length <= MAX_USERNAME)
+        val shown = person["display_name"]
+        check(shown == null || shown is String && shown.length <= MAX_NAME)
+        return name as? String to shown as? String
     }
 
     private fun fields(
@@ -74,6 +89,8 @@ class HomeResidencyQueueCodec(moshi: Moshi) {
 
     companion object {
         private const val MAX_USERNAME = 100
+        private const val MAX_NAME = 200
+        private val CLAIMANT_KEYS = setOf("id", "username", "name")
         private val UUID = Regex("^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$")
         private val SESSION = Regex("^[a-f0-9]{64}$")
         private val DATE = Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$")
