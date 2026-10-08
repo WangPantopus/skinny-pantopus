@@ -630,9 +630,10 @@ extension SupportTrainDetailViewModel {
         parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
         guard let date else { return nil }
+        // An arrival is an instant (the sign-up sheets send one), so it reads in the helper's own
+        // time zone, as the Edit signup form shows it; in UTC a 5:30 pm drop-off read 12:30 AM.
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
     }
