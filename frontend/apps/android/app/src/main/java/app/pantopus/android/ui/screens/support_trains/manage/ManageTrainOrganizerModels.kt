@@ -29,6 +29,8 @@ data class ManageHelperRow(
     val status: String,
     val isGuest: Boolean,
     val exactAddressShared: Boolean,
+    /** The helper's "Note to recipient", which the organizer reads here on the recipient's behalf. */
+    val note: String? = null,
 ) {
     /** Only `reserved` signups can be pulled off a slot (`supportTrains.js:3013`). */
     val canRemove: Boolean get() = status == "reserved"
@@ -140,6 +142,7 @@ object ManageOrganizerProjection {
                 status = reservation.status ?: "reserved",
                 isGuest = reservation.isGuestSignup,
                 exactAddressShared = reservation.exactAddressShared == true,
+                note = reservation.noteToRecipient?.trim()?.takeIf { it.isNotEmpty() },
             )
         }
     }

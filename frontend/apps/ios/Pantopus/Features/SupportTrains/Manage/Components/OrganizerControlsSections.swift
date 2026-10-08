@@ -218,6 +218,12 @@ struct ManageHelpersSection: View {
                                     .pantopusTextStyle(.caption)
                                     .foregroundStyle(Theme.Color.appTextMuted)
                             }
+                            if let note = row.note {
+                                Text("\u{201C}\(note)\u{201D}")
+                                    .pantopusTextStyle(.caption)
+                                    .foregroundStyle(Theme.Color.appTextSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         Spacer(minLength: Spacing.s2)
                         Text(row.status.capitalized)

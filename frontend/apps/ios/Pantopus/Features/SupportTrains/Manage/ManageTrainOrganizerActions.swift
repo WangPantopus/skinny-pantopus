@@ -28,6 +28,8 @@ public struct ManageHelperRow: Sendable, Hashable, Identifiable {
     public let status: String
     public let isGuest: Bool
     public let exactAddressShared: Bool
+    /// The helper's "Note to recipient", which the organizer reads here on the recipient's behalf.
+    public let note: String?
 
     public init(
         id: String,
@@ -36,7 +38,8 @@ public struct ManageHelperRow: Sendable, Hashable, Identifiable {
         contribution: String,
         status: String,
         isGuest: Bool,
-        exactAddressShared: Bool
+        exactAddressShared: Bool,
+        note: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -45,6 +48,7 @@ public struct ManageHelperRow: Sendable, Hashable, Identifiable {
         self.status = status
         self.isGuest = isGuest
         self.exactAddressShared = exactAddressShared
+        self.note = note
     }
 
     /// Only `reserved` signups can be pulled off a slot
@@ -616,7 +620,10 @@ public extension ManageTrainViewModel {
                 contribution: contribution,
                 status: reservation.status ?? "reserved",
                 isGuest: reservation.isGuestSignup,
-                exactAddressShared: reservation.exactAddressShared ?? false
+                exactAddressShared: reservation.exactAddressShared ?? false,
+                note: reservation.noteToRecipient
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .flatMap { $0.isEmpty ? nil : $0 }
             )
         }
     }

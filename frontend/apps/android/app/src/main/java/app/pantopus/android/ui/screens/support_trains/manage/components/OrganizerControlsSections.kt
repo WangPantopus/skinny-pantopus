@@ -265,6 +265,13 @@ fun ManageHelpersSection(
                                 fontSize = 12.sp,
                             )
                         }
+                        row.note?.let { note ->
+                            Text(
+                                text = "\u201C$note\u201D",
+                                color = PantopusColors.appTextSecondary,
+                                fontSize = 12.sp,
+                            )
+                        }
                     }
                     Text(
                         text = row.status.replaceFirstChar { it.uppercase() },
