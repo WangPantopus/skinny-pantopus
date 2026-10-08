@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Check, CheckCircle, User, X } from 'lucide-react';
+import { chosenUsername } from '@pantopus/utils';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { queueApplicant, queueDate, queueRelationship } from './queueModel';
 import type { useResidencyQueue } from './useResidencyQueue';
@@ -21,7 +22,7 @@ export function ResidencyQueueContent({ homeId, queue, fromMembers = false }: Pr
     {queue.phase === 'ready' && queue.claims.map(claim => {
       const identity = <>
         {fromMembers ? <div aria-hidden="true" className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-          {claim.claimant?.username?.[0]?.toUpperCase() || '?'}
+          {(claim.claimant?.display_name || chosenUsername(claim.claimant?.username))?.[0]?.toUpperCase() || <User className="w-4 h-4" />}
         </div> : <div className="w-9 h-9 rounded-full bg-app-surface-sunken flex items-center justify-center flex-shrink-0">
           <User className="w-4 h-4 text-app-text-secondary" />
         </div>}

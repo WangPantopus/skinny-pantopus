@@ -22,7 +22,7 @@ const { recordFunnelEvent } = require('../services/funnelEvents');
 const {
   buildGeneratedUsername,
   chosenUsernameOrNull,
-  isGeneratedUsername,
+  forgetLegacyMadeUpUsername, isKnownMadeUpUsername,
   isMadeUpUsername,
   normalizePersonalUsername,
   personalUsernameProblem,
@@ -312,7 +312,7 @@ function serializeCompatibilitySearchUser(profile, user = {}) {
     id: profile.user_id,
     username: profile.handle,
     // A made-up username is never shown as the person's name (utils/personalUsername.js).
-    name: (isGeneratedUsername(profile.display_name) ? null : profile.display_name)
+    name: (isKnownMadeUpUsername(profile.display_name) ? null : profile.display_name)
       || chosenUsernameOrNull(profile.handle) || 'Pantopus member',
     profilePicture: profile.avatar_url || null,
     city: showLocality ? (profile.public_city || null) : null,
@@ -370,7 +370,7 @@ function applyLocalProfilePublicOverlay(userData, localProfile) {
     ...userData,
     username: publicUsername,
     // A Local Profile made before its account had a name holds the made-up username as its display name.
-    name: (isGeneratedUsername(localProfile.display_name) ? null : localProfile.display_name) || userData.name,
+    name: (isKnownMadeUpUsername(localProfile.display_name) ? null : localProfile.display_name) || userData.name,
     bio: localProfile.bio ?? userData.bio,
     tagline: localProfile.tagline ?? userData.tagline,
     profile_picture_url: localProfile.avatar_url || userData.profile_picture_url,
@@ -2857,6 +2857,7 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
         logger.error('Profile update local profile handle error', { error: handleErr.message, userId });
         return res.status(500).json({ error: 'Failed to update profile' });
       }
+      forgetLegacyMadeUpUsername(previousUsername);
       logger.info('Username changed', { userId });
     }
 
@@ -3467,9 +3468,9 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
           ...r,
           reviewer_name: reviewerMap[r.reviewer_id]?.name ||
                          reviewerMap[r.reviewer_id]?.first_name ||
-                         reviewerMap[r.reviewer_id]?.username || 'Anonymous',
+                         chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username) || 'Anonymous',
           reviewer_avatar: reviewerMap[r.reviewer_id]?.profile_picture_url || null,
-          reviewer_username: reviewerMap[r.reviewer_id]?.username || null,
+          reviewer_username: chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username),
         }));
 
         const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
@@ -3485,6 +3486,7 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
     res.json({
       id: publicUserData.id,
       username: publicUserData.username,
+      usernameIsGenerated: isMadeUpUsername(publicUserData.username, publicUserData.email),
       firstName: publicUserData.first_name,
       lastName: publicUserData.last_name,
       email: isOwnProfile || publicUserData.show_email ? publicUserData.email : null,
@@ -4301,9 +4303,9 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
           ...r,
           reviewer_name: reviewerMap[r.reviewer_id]?.name ||
                          reviewerMap[r.reviewer_id]?.first_name ||
-                         reviewerMap[r.reviewer_id]?.username || 'Anonymous',
+                         chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username) || 'Anonymous',
           reviewer_avatar: reviewerMap[r.reviewer_id]?.profile_picture_url || null,
-          reviewer_username: reviewerMap[r.reviewer_id]?.username || null,
+          reviewer_username: chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username),
         }));
 
         const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
@@ -4320,6 +4322,7 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
     res.json({
       id: publicUserData.id,
       username: publicUserData.username,
+      usernameIsGenerated: isMadeUpUsername(publicUserData.username, publicUserData.email),
       firstName: publicUserData.first_name,
       lastName: publicUserData.last_name,
       email: isOwnProfile || publicUserData.show_email ? publicUserData.email : null,

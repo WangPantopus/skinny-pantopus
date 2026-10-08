@@ -3844,7 +3844,7 @@ router.get('/:businessId/reviews', verifyToken, async (req, res) => {
       reviewer: reviewerMap[r.reviewer_id] || null,
       reviewer_name: reviewerMap[r.reviewer_id]?.name ||
                      reviewerMap[r.reviewer_id]?.first_name ||
-                     reviewerMap[r.reviewer_id]?.username || 'Anonymous',
+                     chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username) || 'Anonymous',
       reviewer_avatar: reviewerMap[r.reviewer_id]?.profile_picture_url || null,
       gig_title: gigMap[r.gig_id]?.title || null,
     }));

@@ -327,7 +327,7 @@ function bidderInitialsFromUser(user) {
     if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
     return name.slice(0, 2).toUpperCase();
   }
-  const username = (user.username || '').trim();
+  const username = chosenUsernameOrNull(user.username) || '';
   if (username) {
     return username.slice(0, 2).toUpperCase();
   }
@@ -2303,7 +2303,7 @@ router.get('/search', verifyToken, async (req, res) => {
         const posterDisplayName =
           poster?.name ||
           [poster?.first_name, poster?.last_name].filter(Boolean).join(' ') ||
-          poster?.username ||
+          chosenUsernameOrNull(poster?.username) ||
           'Anonymous';
 
         const title = String(g.title || '').toLowerCase();
@@ -2872,7 +2872,7 @@ router.get('/', optionalAuth, async (req, res) => {
       const posterDisplayName =
         poster?.name ||
         [poster?.first_name, poster?.last_name].filter(Boolean).join(' ') ||
-        poster?.username ||
+        chosenUsernameOrNull(poster?.username) ||
         'Anonymous';
 
       return {
@@ -3157,7 +3157,7 @@ router.get('/saved', verifyToken, async (req, res) => {
         const posterDisplayName =
           poster?.name ||
           [poster?.first_name, poster?.last_name].filter(Boolean).join(' ') ||
-          poster?.username ||
+          chosenUsernameOrNull(poster?.username) ||
           'Anonymous';
 
         return {

@@ -622,9 +622,12 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   // ── Derived state ──
 
   const isOwnProfile = currentUser?.id === profile.id || currentUser?.username === profile.username;
-  const fullName = profile.firstName && profile.lastName
+  // The server says when the username was made up (user_…, or the pre-October-7 kind built from the email).
+  const chosenHandle = profile.usernameIsGenerated ? null : chosenUsername(profile.username);
+  const realName = profile.firstName && profile.lastName
     ? `${profile.firstName} ${profile.lastName}`
-    : profile.name || chosenUsername(profile.username) || 'Pantopus member';
+    : profile.name || chosenHandle;
+  const fullName = realName || 'Pantopus member';
 
   const displayRating = reviewStats.average || profile.average_rating || 0;
   const displayReviewCount = reviewStats.total || profile.review_count || 0;
@@ -690,6 +693,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       <ProfileHeader
         profile={profile}
         fullName={fullName}
+        hasName={Boolean(realName)}
+        handle={chosenHandle}
         residency={residency}
         showOwnerOnly={showOwnerOnly}
         ownerPreviewContext={ownerPreviewContext}

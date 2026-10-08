@@ -23,6 +23,7 @@ const logger = require('../utils/logger');
 const { getHubToday, clearHubTodayCache } = require('../services/context/providerOrchestrator');
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { recordFunnelEvent, APP_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // Authenticated pilot beacons: account identity comes only from verifyToken.
 // The app-wide JSON parser runs first, so enforce the small body here.
@@ -949,7 +950,7 @@ router.get('/discovery', verifyToken, async (req, res) => {
         const posterDisplayName = (id) => {
           const u = posterById.get(id);
           if (!u) return null;
-          return u.first_name || u.name || u.username || null;
+          return u.first_name || u.name || chosenUsernameOrNull(u.username) || null;
         };
 
         items = (gigs || []).map((g) => {
