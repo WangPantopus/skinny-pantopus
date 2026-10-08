@@ -39,6 +39,23 @@ function publicAliasFor(pathname: string): string | null {
   return null;
 }
 
+// Shared links open in the app for someone signed in. The public pages show only what anyone
+// may see, so a neighbor opening a Nearby post or a members-only train got "isn't publicly
+// shareable", and their "Open in app" only reaches the phone apps.
+const APP_ALIASES: Array<[RegExp, (id: string) => string]> = [
+  [/^\/gigs\/([^/]+)$/, (id) => `/app/gigs/${id}`],
+  [/^\/posts\/([^/]+)$/, (id) => `/app/feed/post/${id}`],
+  [/^\/support-trains\/([^/]+)$/, (id) => `/app/support-trains/${id}`],
+];
+
+function appAliasFor(pathname: string): string | null {
+  for (const [pattern, buildPath] of APP_ALIASES) {
+    const match = pathname.match(pattern);
+    if (match) return buildPath(match[1]);
+  }
+  return null;
+}
+
 function buildRefreshRedirect(req: NextRequest, redirectTo: string, onFail?: string) {
   const url = new URL(SESSION_REFRESH_PATH, req.url);
   url.searchParams.set('redirectTo', redirectTo);
@@ -108,6 +125,11 @@ export function middleware(req: NextRequest) {
       const alias = publicAliasFor(pathname);
       return buildRefreshRedirect(req, `${pathname}${search || ''}`, alias ? `${alias}${search || ''}` : undefined);
     }
+    // A shared link opens in the app once refreshed; the public page is the fallback.
+    const appPath = appAliasFor(pathname);
+    if (appPath) {
+      return buildRefreshRedirect(req, `${appPath}${search || ''}`, `${pathname}${search || ''}`);
+    }
     if (pathname === '/') {
       // Returning users land on their Place once refreshed; the landing page
       // stays the fallback when the refresh cookie is gone.
@@ -128,14 +150,9 @@ export function middleware(req: NextRequest) {
   }
 
   if (isAuthenticated) {
-    const appAliases: Array<[RegExp, (id: string) => string]> = [
-      [/^\/gigs\/([^/]+)$/, (id) => `/app/gigs/${id}`],
-    ];
-
-    for (const [pattern, buildPath] of appAliases) {
-      const match = pathname.match(pattern);
-      if (!match) continue;
-      const redirectUrl = new URL(buildPath(match[1]), req.url);
+    const appPath = appAliasFor(pathname);
+    if (appPath) {
+      const redirectUrl = new URL(appPath, req.url);
       redirectUrl.search = search || '';
       return NextResponse.redirect(redirectUrl);
     }
