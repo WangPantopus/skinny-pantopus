@@ -317,10 +317,14 @@ object SupportTrainDetailProjection {
         slot: SupportTrainSlotDto?,
     ): SlotRowContent {
         val date = slot?.let { parseDate(it.slotDate) }
+        // "Home-cooked meal", not the wire value "Cook", when the helper named no dish.
         val title =
             reservation.dishTitle
                 ?: reservation.restaurantName
-                ?: reservation.contributionMode?.replaceFirstChar { it.uppercase() }
+                ?: reservation.contributionMode?.let { mode ->
+                    SupportTrainContributionMode.entries.firstOrNull { it.wire == mode }?.label
+                        ?: mode.replaceFirstChar { it.uppercase() }
+                }
                 ?: "Your contribution"
         return SlotRowContent(
             id = reservation.id,
