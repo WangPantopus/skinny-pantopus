@@ -290,7 +290,7 @@ export default function PostLocationPicker({
             <Search className="w-4 h-4 flex-shrink-0" />
             <div>
               <div className="text-xs font-medium text-app">Search a place</div>
-              <div className="text-[10px] text-app-muted">Address, park, business…</div>
+              <div className="text-[10px] text-app-muted">Address, city or ZIP code</div>
             </div>
           </button>
           <div className="border-t border-app mt-1 pt-1">

@@ -356,6 +356,27 @@ export default function PostComposer({
     : (networkVisibility || f.visibility) === 'connections' ? 'connections' : 'nearby';
   const dealExpiryRequired = isEdit ? Boolean(editSeed?.dealExpires) : LOCAL_PUBLIC_AUDIENCES.has(createAudience);
 
+  // A searched place (no GPS fix) takes posts only from someone with a verified home or business
+  // near it. Ask when it's picked instead of refusing the finished post.
+  const [searchedPlaceRefused, setSearchedPlaceRefused] = useState(false);
+  const pickedLocation = f.location;
+  useEffect(() => {
+    setSearchedPlaceRefused(false);
+    if (!needsLocation || pickedLocation?.source !== 'search') return;
+    let current = true;
+    api.posts
+      .checkPlaceEligibility({ latitude: pickedLocation.latitude, longitude: pickedLocation.longitude })
+      .then((r) => {
+        if (current) setSearchedPlaceRefused(!r.eligible);
+      })
+      .catch(() => {
+        // Unknown: posting checks again.
+      });
+    return () => {
+      current = false;
+    };
+  }, [needsLocation, pickedLocation]);
+
   const contentPlaceholder = activeSurface === 'connections'
     ? 'Share something with your connections…'
     : canUseGlobalAudience && selectedAudience === 'connections'
@@ -592,6 +613,8 @@ export default function PostComposer({
       setSubmitError('Choose a location before posting there.');
       return;
     }
+
+    if (requiresExplicitLocation(targetPostAs, targetAudience) && searchedPlaceRefused) return;
 
     const contactPhoneDigits = f.contactPhone.replace(/\D/g, '');
     if (f.selectedIntent === 'lost_found' && f.contactPref === 'phone') {
@@ -1126,6 +1149,13 @@ export default function PostComposer({
               </div>
             )}
 
+            {searchedPlaceRefused && (
+              <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                You can post to a searched place only with a verified home or business near it. To post
+                where you are, remove this place and choose Location, then Use current location.
+              </p>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {isEdit && (
@@ -1183,7 +1213,7 @@ export default function PostComposer({
                 ) : (
                   <button
                     onClick={handlePost}
-                    disabled={!f.content.trim() || isPosting}
+                    disabled={!f.content.trim() || isPosting || searchedPlaceRefused}
                     className="rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ background: activeIntent.color }}
                   >
