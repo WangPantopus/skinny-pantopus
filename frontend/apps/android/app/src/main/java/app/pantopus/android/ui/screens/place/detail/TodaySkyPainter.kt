@@ -89,8 +89,8 @@ class TodaySkyPainter(
             brush =
                 Brush.verticalGradient(
                     0f to scene.sky.top,
-                    0.55f to scene.sky.mid.mixed(SkyPalette.sunLow, goldenWarmth * 0.4f),
-                    1f to scene.sky.bottom.mixed(SkyPalette.sunLow, goldenWarmth),
+                    0.55f to scene.sky.mid.mixed(SkyPalette.sunLow, goldenWarmth * 0.25f),
+                    1f to scene.sky.bottom.mixed(SkyPalette.sunLow, goldenWarmth * 0.6f),
                     startY = 0f,
                     endY = scene.horizon + 10f,
                 ),
@@ -117,10 +117,12 @@ class TodaySkyPainter(
         val x = (scene.width * (0.56 + 0.32 * fraction)).toFloat()
         val y = (scene.horizon - 18 - sin(PI * fraction) * (scene.horizon - 58)).toFloat()
         val warm = moment.phase == SkyPalette.Phase.DAWN || moment.phase == SkyPalette.Phase.DUSK
-        val core = if (warm) SkyPalette.sunLow else SkyPalette.sunHigh
+        // In the golden hour the sun warms and a wide halo of gold spreads around it.
+        val core = if (warm) SkyPalette.sunLow else SkyPalette.sunHigh.mixed(SkyPalette.sunLow, goldenWarmth * 2)
         val veiled = weather != SkyPalette.Weather.CLEAR && weather != SkyPalette.Weather.PARTLY
         glow(scene, Offset(x, y), 78f, core, if (veiled) 0.22f else 0.45f)
         if (veiled) return
+        if (goldenWarmth > 0f) glow(scene, Offset(x, y), 130f, SkyPalette.sunLow, goldenWarmth * 0.7f)
         translate(x, y) {
             rotateRad(if (still) 0f else (scene.time * 0.12).toFloat(), pivot = Offset.Zero) {
                 repeat(12) { index ->
