@@ -25,9 +25,10 @@ export class PostalController {
   get canAcknowledge() { return !!this.snapshot?.draft.outcome && this.snapshot.draft.outcome.state !== 'pending' && !this.busy; }
   get needsReload() { return this.attempted && !this.snapshot; }
   retire() { this.retired = true; this.status = null; this.progress = null; }
+  // The same account, API and session; a hidden tab still finishes what it started.
   current() {
     try { return !this.retired && !!this.token && api.getAuthToken() === this.token && api.getApiBaseUrl() === this.origin
-      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker && document.visibilityState !== 'hidden'; }
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker; }
     catch { return false; }
   }
   requireCurrent() { if (!this.current()) throw new Error('This page is out of date. Reload to check your last attempt.'); }
