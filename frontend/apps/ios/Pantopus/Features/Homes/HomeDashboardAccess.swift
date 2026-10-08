@@ -8,14 +8,17 @@ public struct HomeDashboardLimitedContent: Sendable {
     public let canOpenTasks: Bool
 
     var title: String {
-        if verificationKind == "residency" { return "Your residency request" }
+        // A private setup (the person's own Home, its tasks open to them) hasn't asked anyone for anything.
+        if verificationKind == "residency" { return canOpenTasks ? "Your private setup" : "Your residency request" }
         if verificationKind == "ownership" { return "Home ownership verification" }
         return "Home access unavailable"
     }
 
     var message: String {
         if verificationKind == "residency" {
-            return "Your residency is not yet verified. Check for updates to your request."
+            return canOpenTasks
+                ? "Household tools open once you're verified at this address. Your own tasks are ready now."
+                : "Your residency is not yet verified. Check for updates to your request."
         }
         if verificationKind == "ownership" {
             return "Complete your ownership verification to request access to this Home."
