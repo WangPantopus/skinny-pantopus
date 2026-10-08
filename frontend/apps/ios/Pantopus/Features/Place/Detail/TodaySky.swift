@@ -24,6 +24,8 @@ struct TodaySkyHero: View {
     /// The address calendar's upcoming dates: on the evening before a
     /// household pickup the bins stand at the curb.
     var pickups: [PlaceCalendarEvent] = []
+    /// The air reading: smoke veils the sky, and bad air leads the card.
+    var air: SkyAir?
     /// Tapping the bins shows the pickup schedule.
     var onBins: (() -> Void)?
 
@@ -48,18 +50,26 @@ struct TodaySkyHero: View {
             let hours = SkyScrub.hours(data.hourly, after: minute.date)
             let picked = scrub.flatMap { hours.indices.contains($0) ? hours[$0] : nil }
             let nowMoment = SkyMoment.at(minute.date, sunrise: sun?.sunrise, sunset: sun?.sunset)
-            let nowNote = SkyNote.pick(now: minute.date, moment: nowMoment, weather: data, pickups: pickups)
+            let nowNote = SkyNote.pick(now: minute.date, moment: nowMoment, weather: data, pickups: pickups, air: air)
             let when = picked?.date ?? minute.date
             let shown = picked.map { SkyScrub.weather(data, at: $0) } ?? data
             let moment = picked == nil ? nowMoment : SkyMoment.at(when, sunrise: sun?.sunrise, sunset: sun?.sunset)
-            let note = picked == nil ? nowNote : SkyNote.pick(now: when, moment: moment, weather: shown, pickups: pickups)
+            let note = picked == nil ? nowNote : SkyNote.pick(now: when, moment: moment, weather: shown, pickups: pickups, air: air)
             let sky = SkyPalette.sky(moment.phase, SkyPalette.Weather(shown.conditionCode))
+            // A new hour, phase or kind of weather crossfades in.
+            let key = SceneKey(hour: picked?.date, phase: moment.phase, sky: SkyPalette.Weather(shown.conditionCode))
             ZStack(alignment: .topLeading) {
                 scene(
-                    SkyScene(moment: moment, weather: shown, note: note, season: SkySeason.at(when)),
+                    SkyScene(
+                        moment: moment,
+                        weather: shown,
+                        note: note,
+                        season: SkySeason.at(when),
+                        rain: SkyScrub.rain(data.hourly, at: when)
+                    ),
                     shower: SkyNote.meteors(now: when, moment: moment, calendar: .autoupdatingCurrent) != nil
                 )
-                .id(picked?.date)
+                .id(key)
                 .transition(.opacity)
                 TodaySkyReading(
                     reading: SkyReadingModel(now: data, note: nowNote, picked: picked, at: minute.date),
@@ -70,7 +80,7 @@ struct TodaySkyHero: View {
                 if let scrub, picked != nil { SkyScrubTrack(index: scrub, count: hours.count) }
                 SkyScrubHint(hours: hours.count, scrubbing: scrub != nil)
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: picked?.date)
+            .animation(reduceMotion ? nil : .easeInOut(duration: picked == nil ? 0.6 : 0.18), value: key)
             // At least 188 pt; taller only if the chips have to stack on a narrow phone,
             // so the reading is never clipped. The ground stays at the bottom either way.
             .frame(maxWidth: .infinity, minHeight: Self.height)
@@ -103,6 +113,14 @@ struct TodaySkyHero: View {
         let weather: PlaceWeatherData
         let note: SkyNote?
         let season: SkySeason
+        /// 0...1, from the forecast hour's chance of rain.
+        let rain: Double
+    }
+
+    private struct SceneKey: Hashable {
+        let hour: Date?
+        let phase: SkyPalette.Phase
+        let sky: SkyPalette.Weather
     }
 
     private func scene(_ shown: SkyScene, shower: Bool) -> some View {
@@ -114,6 +132,8 @@ struct TodaySkyHero: View {
                 note: shown.note,
                 season: shown.season,
                 meteorShower: shower,
+                smoke: air?.smoke ?? 0,
+                rain: shown.rain,
                 still: !animating
             )
             Canvas { context, size in

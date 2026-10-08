@@ -27,6 +27,14 @@ enum SkyScrub {
         return Array(picked.sorted { $0.date < $1.date }.prefix(24))
     }
 
+    /// How hard it rains then, 0...1: the nearest forecast hour's chance of rain.
+    static func rain(_ hourly: [PlaceWeatherHour], at date: Date) -> Double {
+        let gaps = hourly.compactMap { hour -> (gap: TimeInterval, chance: Double)? in
+            PlacePresentation.parseISO(hour.time).map { (abs($0.timeIntervalSince(date)), hour.precipChance) }
+        }
+        return (gaps.min { $0.gap < $1.gap }?.chance ?? 50) / 100
+    }
+
     /// The reading for that hour: its temperature and sky, and that day's high and low.
     static func weather(_ data: PlaceWeatherData, at picked: SkyScrubHour, calendar: Calendar = .autoupdatingCurrent) -> PlaceWeatherData {
         let day = data.daily.first { $0.date.hasPrefix(SkyNote.dayKey(picked.date, calendar: calendar)) }

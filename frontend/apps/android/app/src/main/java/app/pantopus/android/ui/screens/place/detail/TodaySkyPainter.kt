@@ -44,6 +44,10 @@ class TodaySkyPainter(
     /** A meteor shower's peak night: shooting stars whatever the note says. */
     private val meteorShower: Boolean,
     private val still: Boolean,
+    /** Wildfire smoke, 0 (none) to 0.85: an amber veil and a dim red sun. */
+    private val smoke: Double = 0.0,
+    /** How hard it rains, 0 (a light shower) to 1 (a downpour). */
+    private val rain: Double = 0.5,
 ) {
     private val weather = skyWeather(condition)
     private val night = moment.phase == SkyPalette.Phase.NIGHT
@@ -76,6 +80,7 @@ class TodaySkyPainter(
             paintSnow(scene)
             if (condition == WeatherConditionCode.WIND) paintWind(scene)
             if (weather == SkyPalette.Weather.STORM && !still) paintLightning(scene)
+            if (smoke > 0) paintSmoke(scene, smoke, night)
             TodaySkyGround(scene, weather, moment, condition, temperature < 50, still, note?.bins.orEmpty(), season).paint(this)
             // Fog hugs the ground, in front of the house and below the reading.
             paintFog(scene)
@@ -118,10 +123,16 @@ class TodaySkyPainter(
         val y = (scene.horizon - 18 - sin(PI * fraction) * (scene.horizon - 58)).toFloat()
         val warm = moment.phase == SkyPalette.Phase.DAWN || moment.phase == SkyPalette.Phase.DUSK
         // In the golden hour the sun warms and a wide halo of gold spreads around it.
-        val core = if (warm) SkyPalette.sunLow else SkyPalette.sunHigh.mixed(SkyPalette.sunLow, goldenWarmth * 2)
+        val lit = if (warm) SkyPalette.sunLow else SkyPalette.sunHigh.mixed(SkyPalette.sunLow, goldenWarmth * 2)
+        // Through smoke the sun is a dim red disc without rays.
+        val core = lit.mixed(SkyPalette.smokeSun, (smoke * 1.2).toFloat())
         val veiled = weather != SkyPalette.Weather.CLEAR && weather != SkyPalette.Weather.PARTLY
-        glow(scene, Offset(x, y), 78f, core, if (veiled) 0.22f else 0.45f)
+        glow(scene, Offset(x, y), if (smoke > 0) 56f else 78f, core, if (veiled) 0.22f else 0.45f)
         if (veiled) return
+        if (smoke > 0) {
+            drawCircle(core.copy(alpha = 0.9f), 16f, Offset(x, y))
+            return
+        }
         if (goldenWarmth > 0f) glow(scene, Offset(x, y), 130f, SkyPalette.sunLow, goldenWarmth * 0.7f)
         translate(x, y) {
             rotateRad(if (still) 0f else (scene.time * 0.12).toFloat(), pivot = Offset.Zero) {
@@ -213,12 +224,14 @@ class TodaySkyPainter(
     private fun DrawScope.paintRain(scene: SkyScene) {
         if (weather != SkyPalette.Weather.WET && weather != SkyPalette.Weather.STORM) return
         val random = SkyRandom(11)
-        val count =
+        // Fewer streaks for a passing shower, more for a downpour.
+        val base =
             when {
                 weather == SkyPalette.Weather.STORM -> 90
                 condition == WeatherConditionCode.SLEET -> 40
                 else -> 70
             }
+        val count = (base * (0.6 + 0.8 * rain)).toInt()
         val path = Path()
         repeat(count) {
             val start = random.next() * (scene.width + 40)

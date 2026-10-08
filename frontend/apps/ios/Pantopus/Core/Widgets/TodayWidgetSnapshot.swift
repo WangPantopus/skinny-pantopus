@@ -67,11 +67,14 @@ public struct TodayWidgetSnapshot: Codable, Sendable, Equatable {
         /// "Good", "Unhealthy for sensitive groups", …
         public let label: String
         public let source: String?
+        /// Fine particles lead it (in the Northwest, wildfire smoke); nil in older snapshots.
+        public let smoky: Bool?
 
-        public init(aqi: Int, label: String, source: String?) {
+        public init(aqi: Int, label: String, source: String?, smoky: Bool? = nil) {
             self.aqi = aqi
             self.label = label
             self.source = source
+            self.smoky = smoky
         }
     }
 

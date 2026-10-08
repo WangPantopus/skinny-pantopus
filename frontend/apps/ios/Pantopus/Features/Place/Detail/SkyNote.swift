@@ -40,6 +40,7 @@ struct SkyNote: Equatable {
         case equinox
         case warmestDay
         case goldenHour
+        case air
     }
 
     let kind: Kind
@@ -76,6 +77,18 @@ struct SkyNote: Equatable {
                 bins: kinds
             )
             : SkyNote(kind: .pickupToday, kicker: "🗑️ PICKUP TODAY", spoken: "\(capitalized) pickup today.", bins: kinds)
+    }
+
+    // MARK: - Air
+
+    /// Air at 101 or worse: "🌫️ SMOKY AIR · AQI 168" when smoke leads it.
+    static func air(_ air: SkyAir?) -> SkyNote? {
+        guard let air, air.aqi >= 101 else { return nil }
+        return SkyNote(
+            kind: .air,
+            kicker: "\(air.smoky ? "🌫️ SMOKY AIR" : "😷 POOR AIR") · AQI \(air.aqi)",
+            spoken: "\(air.label), air quality index \(air.aqi)."
+        )
     }
 
     // MARK: - Meteor showers
@@ -165,6 +178,21 @@ struct SkyNote: Equatable {
     static func dayKey(_ date: Date, calendar: Calendar) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+}
+
+/// The air reading the sky and its note need: the index, its label, and
+/// whether fine particles (in the Northwest, wildfire smoke) lead it.
+struct SkyAir: Equatable {
+    let aqi: Int
+    /// "Unhealthy for sensitive groups".
+    let label: String
+    let smoky: Bool
+
+    /// How thick the smoke looks: none below 101, up to 0.85 from 301.
+    var smoke: Double {
+        guard smoky, aqi >= 101 else { return 0 }
+        return min(0.85, 0.35 + Double(aqi - 101) / 400)
     }
 }
 

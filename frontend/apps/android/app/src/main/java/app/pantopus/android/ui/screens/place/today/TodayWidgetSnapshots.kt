@@ -30,7 +30,10 @@ fun PlaceIntelligence.todayWidgetSnapshot(
                 TodayWidgetSnapshot.Weather(it.currentTempF, it.conditionCode.name.lowercase(), it.conditionLabel, it.highF, it.lowF)
             },
         sun = sun?.let { TodayWidgetSnapshot.Sun(it.sunrise, it.sunset) },
-        air = airSection?.airQuality?.let { TodayWidgetSnapshot.Air(it.index, it.categoryLabel, airSection.source) },
+        air =
+            airSection?.airQuality?.let {
+                TodayWidgetSnapshot.Air(it.index, it.categoryLabel, airSection.source, smoky = it.dominantPollutant == "pm25")
+            },
         dates = calendar?.upcoming.orEmpty().map { TodayWidgetSnapshot.DateItem(it.kind, it.title, it.date, it.scope) },
     )
 }

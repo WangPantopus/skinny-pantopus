@@ -143,6 +143,11 @@ object SkyPalette {
     /** Frost creeping in from the card's corners on a freezing morning. */
     val frost = Color(0xFFE8F4FF)
 
+    /** Wildfire smoke: the amber veil by day, a brown one at night, and the dim red sun seen through it. */
+    val smokeHaze = Color(0xFFC8A27A)
+    val smokeHazeNight = Color(0xFF5A4636)
+    val smokeSun = Color(0xFFF0743E)
+
     /** The round tree through the year, blended into the silhouette. */
     val treeSpring = Color(0xFF7BC67E)
     val treeSummer = Color(0xFF3F8F4A)

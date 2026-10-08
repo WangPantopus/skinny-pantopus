@@ -18,11 +18,15 @@ extension SkyNote {
         moment: SkyMoment,
         weather: PlaceWeatherData,
         pickups: [PlaceCalendarEvent],
+        air: SkyAir? = nil,
         calendar: Calendar = .autoupdatingCurrent
     ) -> SkyNote? {
         let sky = SkyPalette.Weather(weather.conditionCode)
         let clear = sky == .clear || sky == .partly
-        return bins(now: now, moment: moment, pickups: pickups, calendar: calendar)
+        // Unhealthy air (151+) comes first; air for sensitive groups after the bins.
+        return air.flatMap { $0.aqi >= 151 ? Self.air($0) : nil }
+            ?? bins(now: now, moment: moment, pickups: pickups, calendar: calendar)
+            ?? Self.air(air)
             ?? frost(weather: weather, moment: moment)
             ?? (clear ? meteors(now: now, moment: moment, calendar: calendar) : nil)
             ?? moon(moment: moment, clear: clear)

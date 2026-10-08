@@ -266,6 +266,7 @@ struct TodayWidgetSky: View {
                 note: bins,
                 season: SkySeason.at(date, calendar: calendar),
                 meteorShower: SkyNote.meteors(now: date, moment: moment, calendar: calendar) != nil,
+                smoke: snapshot?.air.map { SkyAir(aqi: $0.aqi, label: $0.label, smoky: $0.smoky ?? false).smoke } ?? 0,
                 still: true
             )
             painter.paint(context, size: size, time: 0)

@@ -38,7 +38,9 @@ extension TodayWidgetSnapshot {
                 )
             },
             sun: sun.map { Sun(sunrise: $0.sunrise, sunset: $0.sunset) },
-            air: airSection?.airQuality.map { Air(aqi: $0.index, label: $0.categoryLabel, source: airSection?.source) },
+            air: airSection?.airQuality.map {
+                Air(aqi: $0.index, label: $0.categoryLabel, source: airSection?.source, smoky: $0.dominantPollutant == "pm25")
+            },
             dates: events.map { DateItem(kind: $0.kind, title: $0.title, date: $0.date, scope: $0.scope) }
         )
     }

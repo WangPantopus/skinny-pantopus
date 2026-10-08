@@ -93,6 +93,8 @@ fun TodaySkyHero(
     sun: PlaceSunriseSunsetData?,
     /** The address calendar's upcoming dates: on the evening before a household pickup the bins stand at the curb. */
     pickups: List<PlaceCalendarEvent> = emptyList(),
+    /** The air reading: smoke veils the sky, and bad air leads the card. */
+    air: SkyAir? = null,
     /** Tapping the bins shows the pickup schedule. */
     onBins: (() -> Unit)? = null,
 ) {
@@ -106,8 +108,8 @@ fun TodaySkyHero(
     val hours = remember(data.hourly, now) { SkyScrub.hours(data.hourly, now) }
     val scrub = rememberSkyScrub(reduced)
     val picked = scrub.index?.let { hours.getOrNull(it) }
-    val current = SkyView.at(now, null, data, sun, pickups)
-    val shown = if (picked == null) current else SkyView.at(now, picked, data, sun, pickups)
+    val current = SkyView.at(now, null, data, sun, pickups, air)
+    val shown = if (picked == null) current else SkyView.at(now, picked, data, sun, pickups, air)
     val sky = SkyPalette.sky(shown.moment.phase, skyWeather(shown.weather.conditionCode))
     val shape = RoundedCornerShape(20.dp)
     Box(
@@ -128,13 +130,23 @@ fun TodaySkyHero(
                 }.skyScrubGesture(hours.size, scrub)
                 .testTag("todaySkyHero"),
     ) {
+        // A new hour, phase or kind of weather crossfades in.
         Crossfade(
-            targetState = picked,
+            targetState = shown,
             modifier = Modifier.matchParentSize(),
-            animationSpec = tween(if (reduced) 0 else 180),
-            label = "skyHour",
-        ) { hour ->
-            val painter = (if (hour == picked) shown else SkyView.at(now, hour, data, sun, pickups)).painter(!animating)
+            animationSpec =
+                tween(
+                    if (reduced) {
+                        0
+                    } else if (picked == null) {
+                        600
+                    } else {
+                        180
+                    },
+                ),
+            label = "skyScene",
+        ) { view ->
+            val painter = view.painter(!animating)
             Canvas(modifier = Modifier.fillMaxSize().clearAndSetSemantics { }) {
                 val t = time.doubleValue
                 val perDp = density
@@ -152,12 +164,15 @@ fun TodaySkyHero(
     }
 }
 
-/** What the card shows at a moment: now, or the forecast [hour] slid to. */
-private class SkyView(
+/** What the card shows at a moment: now, or a forecast hour slid to. */
+private data class SkyView(
     val time: ZonedDateTime,
     val weather: PlaceWeatherData,
     val moment: SkyMoment,
     val note: SkyNote?,
+    val air: SkyAir?,
+    /** 0..1, from the forecast hour's chance of rain. */
+    val rain: Double,
 ) {
     fun painter(still: Boolean) =
         TodaySkyPainter(
@@ -168,6 +183,8 @@ private class SkyView(
             season = SkySeason.at(time.toLocalDate()),
             meteorShower = SkyNote.meteors(time, moment) != null,
             still = still,
+            smoke = air?.smoke ?: 0.0,
+            rain = rain,
         )
 
     companion object {
@@ -177,11 +194,13 @@ private class SkyView(
             data: PlaceWeatherData,
             sun: PlaceSunriseSunsetData?,
             pickups: List<PlaceCalendarEvent>,
+            air: SkyAir?,
         ): SkyView {
             val time = hour?.time ?: now
             val weather = hour?.let { SkyScrub.weather(data, it) } ?: data
             val moment = SkyMoment.at(time, sun?.sunrise, sun?.sunset)
-            return SkyView(time, weather, moment, SkyNote.pick(time, moment, weather, pickups))
+            val note = SkyNote.pick(time, moment, weather, pickups, air)
+            return SkyView(time, weather, moment, note, air, SkyScrub.rain(data.hourly, time))
         }
     }
 }
