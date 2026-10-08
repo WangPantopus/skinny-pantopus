@@ -921,14 +921,13 @@ const registerSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH).required(),
   phoneNumber: Joi.string().pattern(/^\+[1-9]\d{1,14}$/), // E.164 format
-  // Wedge onboarding: web signup sends email+password only. A username is
-  // auto-generated server-side when omitted (User.username is NOT NULL +
-  // UNIQUE), and names are collected later in the claim flow. Native
-  // clients that still send the full profile remain valid.
+  // Nobody picks a username at sign-up: one is made up server-side when omitted (User.username is NOT NULL +
+  // UNIQUE) and can be chosen later in Edit Profile. Every app asks for a first and last name (middle optional),
+  // so neighbors see a person, never the made-up username.
   username: Joi.string().pattern(/^[a-zA-Z0-9_]+$/).min(3).max(30).optional(),
-  firstName: Joi.string().min(1).max(255).allow('', null).optional(),
-  middleName: Joi.string().min(1).max(255).allow('', null),
-  lastName: Joi.string().min(1).max(255).allow('', null).optional(),
+  firstName: Joi.string().trim().min(1).max(255).required(),
+  middleName: Joi.string().trim().max(255).allow('', null),
+  lastName: Joi.string().trim().min(1).max(255).required(),
   dateOfBirth: Joi.date().iso().max('now'), // optional
   address: Joi.string().min(5).max(255),
   city: Joi.string().min(2).max(100),
