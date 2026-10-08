@@ -1409,17 +1409,18 @@ router.get('/themes', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { data: themes } = await supabaseAdmin
-      .from('SeasonalTheme')
-      .select('*')
-      .order('name');
-
-    // Check user's active theme
-    const { data: settings } = await supabaseAdmin
-      .from('MailDaySettings')
-      .select('current_theme')
-      .eq('user_id', userId)
-      .single();
+    // The themes and the user's active theme are read together.
+    const [{ data: themes }, { data: settings }] = await Promise.all([
+      supabaseAdmin
+        .from('SeasonalTheme')
+        .select('*')
+        .order('name'),
+      supabaseAdmin
+        .from('MailDaySettings')
+        .select('current_theme')
+        .eq('user_id', userId)
+        .single(),
+    ]);
 
     const now = new Date();
     const enriched = (themes || []).map(t => ({
