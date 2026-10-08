@@ -799,11 +799,18 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         )}
 
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 mt-6">
-          <div className="space-y-4">
-            <ReliabilityPanel profile={profile} reliabilityLabel={reliabilityLabel} reliabilityScore={hasReliabilityHistory ? reliabilityScore : null} />
-          </div>
+          {/* Launch cut #4 (Open Gigs): no task reliability, and a skill hires no one, as in the apps. */}
+          {launchFeatures.openGigs && (
+            <div className="space-y-4">
+              <ReliabilityPanel profile={profile} reliabilityLabel={reliabilityLabel} reliabilityScore={hasReliabilityHistory ? reliabilityScore : null} />
+            </div>
+          )}
           <AboutCard profile={profile} residency={residency} />
-          <SkillsCard skills={featuredSkills} onAction={showOwnerOnly ? () => router.push('/app/profile/edit') : handleRequestHire} ownerView={showOwnerOnly} />
+          <SkillsCard
+            skills={featuredSkills}
+            onAction={showOwnerOnly ? () => router.push('/app/profile/edit') : launchFeatures.openGigs ? handleRequestHire : undefined}
+            ownerView={showOwnerOnly}
+          />
         </div>
       </main>
 
