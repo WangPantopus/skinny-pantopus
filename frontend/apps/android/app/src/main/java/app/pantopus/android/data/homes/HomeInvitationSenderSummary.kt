@@ -1,5 +1,7 @@
 package app.pantopus.android.data.homes
 
+import app.pantopus.android.core.identity.MadeUpUsername
+
 /** Show the prepared recipient and access terms, rejecting malformed identity or dates. */
 internal fun senderInvitationSummary(
     invite: Map<String, Any?>,
@@ -55,7 +57,7 @@ private fun senderRecipientSummary(invite: Map<String, Any?>): String {
         check(profile != null && homeTaskUUID(userId) && profile["id"] == userId)
         check(listOf("username", "name").all { profile[it] == null || profile[it] is String })
     }
-    val username = (profile?.get("username") as? String)?.takeIf(String::isNotBlank)?.let { "@$it" }
+    val username = MadeUpUsername.handle(profile?.get("username") as? String)
     val name = (profile?.get("name") as? String)?.takeIf(String::isNotBlank)
     val label = listOfNotNull(name, username).joinToString(" ").takeIf(String::isNotBlank)
     val recipient = listOfNotNull(label, email).joinToString("\n").takeIf(String::isNotBlank)

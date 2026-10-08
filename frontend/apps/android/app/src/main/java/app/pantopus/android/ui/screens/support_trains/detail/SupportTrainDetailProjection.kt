@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.support_trains.detail
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.support_trains.SupportTrainCoarseLocationDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainContributionMode
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
@@ -36,7 +37,7 @@ object SupportTrainDetailProjection {
         val covered = slots.count { it.isCovered }
         val total = slots.size
         val title = dto.title ?: dto.recipientSummary ?: "Support train"
-        val primaryName = organizers.firstOrNull()?.user?.let { it.name ?: it.username }
+        val primaryName = organizers.firstOrNull()?.user?.let { it.name ?: MadeUpUsername.chosen(it.username) }
 
         val typeDates =
             TypeDatesCardContent(

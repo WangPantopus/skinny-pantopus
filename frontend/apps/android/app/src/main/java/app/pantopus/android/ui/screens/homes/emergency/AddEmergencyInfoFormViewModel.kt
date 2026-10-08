@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.emergency
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.CreateEmergencyRequest
 import app.pantopus.android.data.api.models.homes.HomeEmergencyDto
 import app.pantopus.android.data.api.models.homes.OccupantDto
@@ -127,7 +128,7 @@ data class AddEmergencyInfoUiState(
         verifiedByUserId?.let { uid ->
             members
                 .firstOrNull { it.userId == uid }
-                ?.let { it.displayName ?: it.username }
+                ?.let { it.displayName ?: MadeUpUsername.chosen(it.username) }
         }
 }
 

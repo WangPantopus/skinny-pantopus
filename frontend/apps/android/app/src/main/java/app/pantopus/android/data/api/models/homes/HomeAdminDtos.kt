@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.api.models.homes
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -98,7 +99,7 @@ data class HomeAuditEntryDto(
 fun HomeAuditEntryDto.actorDisplayName(): String {
     val who = actor ?: return "System"
     if (!who.name.isNullOrEmpty()) return who.name
-    if (!who.username.isNullOrEmpty()) return "@${who.username}"
+    MadeUpUsername.handle(who.username)?.let { return it }
     return "System"
 }
 
@@ -206,7 +207,7 @@ fun HouseholdAccessRequestDto.requesterDisplayName(): String {
     if (!user.name.isNullOrEmpty()) return user.name
     val parts = listOfNotNull(user.firstName, user.lastName).filter { it.isNotEmpty() }
     if (parts.isNotEmpty()) return parts.joinToString(" ")
-    if (!user.username.isNullOrEmpty()) return "@${user.username}"
+    MadeUpUsername.handle(user.username)?.let { return it }
     return "Unknown user"
 }
 

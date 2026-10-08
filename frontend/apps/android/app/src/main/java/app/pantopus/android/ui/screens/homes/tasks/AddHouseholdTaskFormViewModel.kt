@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.tasks
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.homes.OccupantDto
@@ -228,7 +229,7 @@ data class HouseholdTaskAssignableMember(
             if (!occupant.isActive) return null
             val name =
                 occupant.displayName?.trim()
-                    ?: occupant.username?.trim()
+                    ?: MadeUpUsername.chosen(occupant.username)
                     ?: ""
             val display =
                 if (name.isEmpty()) {

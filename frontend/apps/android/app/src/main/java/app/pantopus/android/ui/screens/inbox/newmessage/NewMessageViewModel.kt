@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.inbox.newmessage
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.chats.UnifiedConversationDto
 import app.pantopus.android.data.api.models.relationships.RelationshipDto
 import app.pantopus.android.data.api.models.relationships.RelationshipUserDto
@@ -324,7 +325,7 @@ class NewMessageViewModel
 
         internal fun rowForVerified(dto: UserSearchResultDto): NewMessageContactRow {
             val displayName =
-                (dto.name?.takeIf { it.isNotEmpty() } ?: dto.username?.takeIf { it.isNotEmpty() })
+                (dto.name?.takeIf { it.isNotEmpty() } ?: MadeUpUsername.chosen(dto.username))
                     ?: "Member"
             val initials = initialsFrom(displayName)
             val identity =

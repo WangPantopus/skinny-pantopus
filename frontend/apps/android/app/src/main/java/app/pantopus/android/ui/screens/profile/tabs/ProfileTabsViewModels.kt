@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.profile.tabs
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.data.api.models.profile.GigReviewDto
 import app.pantopus.android.data.api.models.profile.GigReviewsResponse
@@ -607,13 +608,13 @@ class ProfileGigReviewsViewModel
                     review.reviewer?.name?.takeIf { it.isNotBlank() }
                         ?: review.reviewerName?.takeIf { it.isNotBlank() }
                         ?: review.reviewer?.firstName?.takeIf { it.isNotBlank() }
-                        ?: review.reviewer?.username?.takeIf { it.isNotBlank() }
+                        ?: MadeUpUsername.chosen(review.reviewer?.username)
                         ?: "Anonymous"
                 return ProfileGigReview(
                     id = review.id,
                     reviewerId = review.reviewer?.id ?: review.reviewerId,
                     reviewerName = name,
-                    reviewerHandle = review.reviewer?.username ?: review.reviewerUsername,
+                    reviewerHandle = MadeUpUsername.chosen(review.reviewer?.username ?: review.reviewerUsername),
                     reviewerAvatarUrl = review.reviewer?.profilePictureUrl ?: review.reviewerAvatar,
                     rating = review.rating.coerceIn(0, 5),
                     comment = review.comment?.takeIf { it.isNotBlank() },

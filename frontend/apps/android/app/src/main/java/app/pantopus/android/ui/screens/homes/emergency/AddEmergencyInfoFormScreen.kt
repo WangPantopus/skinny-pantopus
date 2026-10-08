@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
@@ -497,7 +498,7 @@ private fun MemberPickerDialog(
                                 tint = PantopusColors.appTextSecondary,
                             )
                             Text(
-                                text = member.displayName ?: member.username ?: "Member",
+                                text = member.displayName ?: MadeUpUsername.chosen(member.username) ?: "Member",
                                 style = PantopusTextStyle.body,
                                 modifier = Modifier.weight(1f),
                             )

@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.token_accept
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.token_accept.GuestPassDto
 import app.pantopus.android.data.api.models.token_accept.HomeInviteDetailsDto
 import app.pantopus.android.data.api.models.token_accept.HomeInviteResponse
@@ -331,7 +332,7 @@ class TokenAcceptViewModel
                 val venue =
                     listOfNotNull(homeName.takeIf { it.isNotBlank() }, city?.takeIf { it.isNotBlank() })
                         .joinToString(" · ")
-                val sender = home.inviter?.name ?: home.inviter?.username ?: "Someone"
+                val sender = home.inviter?.name ?: MadeUpUsername.chosen(home.inviter?.username) ?: "Someone"
                 val role = humanRole(invitation.proposedRole ?: "member")
                 return TokenAcceptOffer(
                     invitationId = invitation.id,

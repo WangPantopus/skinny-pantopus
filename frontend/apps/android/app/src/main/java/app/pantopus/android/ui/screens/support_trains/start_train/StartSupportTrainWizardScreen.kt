@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.ui.screens.shared.wizard.WizardIdentity
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
@@ -517,7 +518,7 @@ private fun ResultList(
                 Spacer(modifier = Modifier.width(Spacing.s3))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = recipient.name ?: recipient.username ?: "Recipient",
+                        text = recipient.name ?: MadeUpUsername.chosen(recipient.username) ?: "Recipient",
                         style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold),
                         color = PantopusColors.appText,
                     )
@@ -816,7 +817,7 @@ private fun SummaryCard(
     ) {
         val beneficiaryDisplay =
             selected?.name
-                ?: selected?.username
+                ?: MadeUpUsername.chosen(selected?.username)
                 ?: form.beneficiaryQuery.ifBlank { "—" }
         SummaryLine("Beneficiary", beneficiaryDisplay)
         SummaryLine("Kind", form.kind.title)

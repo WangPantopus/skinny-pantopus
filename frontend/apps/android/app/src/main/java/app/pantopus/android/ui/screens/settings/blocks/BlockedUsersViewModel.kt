@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.settings.blocks
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.MutedEntityDto
 import app.pantopus.android.data.api.net.NetworkResult
@@ -183,7 +184,7 @@ class BlockedUsersViewModel
                     (personal as? NetworkResult.Success)?.data?.blocked.orEmpty().map { block ->
                         BlockedEntry(
                             id = block.id,
-                            name = block.name ?: block.username?.let { "@$it" } ?: "Blocked user",
+                            name = block.name ?: MadeUpUsername.handle(block.username) ?: "Blocked user",
                             avatarUrl = block.profilePictureUrl,
                             createdAt = block.createdAt,
                             scope = null,
@@ -196,7 +197,7 @@ class BlockedUsersViewModel
                             id = block.id,
                             name =
                                 block.blocked?.name
-                                    ?: block.blocked?.username?.let { "@$it" }
+                                    ?: MadeUpUsername.handle(block.blocked?.username)
                                     ?: "Blocked user",
                             avatarUrl = block.blocked?.profilePictureUrl,
                             createdAt = block.createdAt,

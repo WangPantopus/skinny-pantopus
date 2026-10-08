@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.universal_search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.universalsearch.UniversalSearchBusinessDto
 import app.pantopus.android.data.api.models.universalsearch.UniversalSearchGigDto
 import app.pantopus.android.data.api.models.universalsearch.UniversalSearchHomeDto
@@ -402,8 +403,8 @@ class UniversalSearchViewModel
                 UniversalSearchResult(
                     id = user.id,
                     kind = UniversalSearchKind.Person,
-                    title = user.name?.nonBlank() ?: user.username?.nonBlank() ?: "Neighbor",
-                    subtitle = user.username?.nonBlank()?.let { "@$it" },
+                    title = user.name?.nonBlank() ?: MadeUpUsername.chosen(user.username) ?: "Neighbor",
+                    subtitle = MadeUpUsername.handle(user.username),
                     meta = locality(user.city, user.state),
                     imageUrl = user.profilePicture?.nonBlank(),
                     destination = UniversalSearchDestination.Person(user.id),
