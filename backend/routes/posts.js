@@ -15,6 +15,7 @@ const {
   getPersonaById,
   getPersonaMembershipForUser,
   getViewerTierRankForPersona,
+  localDisplayNames,
 } = require('../utils/identityProfiles');
 const { isPersonaEnabled } = require('../utils/featureFlags');
 const {
@@ -98,6 +99,7 @@ const DISMISSED_FACTS_CAP = 50;
 const notificationService = require('../services/notificationService');
 const { isFanBlockedFromPersona } = require('../services/personaBlockService');
 const { runPostCreatedHooks } = require('../services/postCreationHooksService');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const {
   normalizeFeedPostRow,
   normalizeMediaUrls,
@@ -778,7 +780,7 @@ async function getUserDisplayName(userId) {
     .eq('id', userId)
     .single();
   if (!data) return 'Someone';
-  return data.name || data.first_name || data.username || 'Someone';
+  return data.name || data.first_name || chosenUsernameOrNull(data.username) || 'Someone';
 }
 
 // ============ POST ROUTES ============
@@ -2347,7 +2349,7 @@ router.get('/mute', verifyToken, async (req, res) => {
         return {
           entity_type: m.muted_entity_type,
           entity_id: m.muted_entity_id,
-          name: account.name || fullName || account.username || 'Pantopus member',
+          name: account.name || fullName || chosenUsernameOrNull(account.username) || 'Pantopus member',
           username: account.username || null,
           avatar_url: account.profile_picture_url || null,
           muted_at: m.created_at,
@@ -2978,7 +2980,13 @@ router.get('/:id/likes', verifyToken, async (req, res) => {
     const { data: likes, error } = await likesQuery.order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
     if (error) { logger.error('Error fetching likes', { error: error.message, postId: id }); return res.status(500).json({ error: 'Failed to fetch likes' }); }
-    res.json({ likes: (likes || []).map(serializeLikeForViewer), pagination: { limit: parseInt(limit), offset: parseInt(offset) } });
+    // SAFE_CREATOR_SELECT carries no name: on a neighbor's post, likers show the name they show neighbors (a made-up
+    // username never stands in). A persona post's likers keep the audience-side firewall.
+    const names = post.identity_context_type === 'persona' ? new Map()
+      : await localDisplayNames((likes || []).map((like) => like.user?.id)).catch(() => new Map());
+    const named = (likes || []).map((like) => (like.user && names.has(String(like.user.id))
+      ? { ...like, user: { ...like.user, display_name: names.get(String(like.user.id)) } } : like));
+    res.json({ likes: named.map(serializeLikeForViewer), pagination: { limit: parseInt(limit), offset: parseInt(offset) } });
   } catch (err) {
     logger.error('Likes fetch error', { error: err.message, postId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch likes' });

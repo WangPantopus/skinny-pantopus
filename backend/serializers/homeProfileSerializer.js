@@ -16,6 +16,7 @@
 // ============================================================
 
 const { redactStreet, firstNameOnly } = require('../utils/addressRedaction');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 const HIDDEN_FROM_OUTSIDERS = Object.freeze([
   { key: 'house_number', label: 'Your house number and unit' },
@@ -45,7 +46,7 @@ function serializeHomeForViewer(home, { reveal }) {
 
 function fullName(user) {
   if (!user) return null;
-  return user.name || [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || null;
+  return user.name || [user.first_name, user.last_name].filter(Boolean).join(' ') || chosenUsernameOrNull(user.username) || null;
 }
 
 /**

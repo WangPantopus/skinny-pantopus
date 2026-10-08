@@ -32,6 +32,7 @@ const {
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const rateLimit = require('express-rate-limit');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const CHAT_DELETED_REDACT_DAYS = Math.max(parseInt(process.env.CHAT_DELETED_REDACT_DAYS || '180', 10) || 180, 1);
 const REDACTED_DELETED_MESSAGE = '[deleted message]';
 const LOCAL_PROFILE_IDENTITY_SELECT = [
@@ -2205,7 +2206,7 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
       .insert({
         room_id: roomId,
         user_id: userId,
-        message: `added ${newParticipant.user.name || newParticipant.user.username}`,
+        message: `added ${newParticipant.user.name || chosenUsernameOrNull(newParticipant.user.username) || 'someone'}`,
         type: 'system'
       });
     if (addNoticeError) {

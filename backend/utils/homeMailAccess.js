@@ -17,6 +17,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 /**
  * Occupancy verification states that may read the household's physical mail.
@@ -301,7 +302,7 @@ async function removedMailInfo(mail) {
         .select('name, first_name, username')
         .eq('id', mail.deleted_by)
         .maybeSingle();
-      byName = user ? (user.name || user.first_name || user.username || null) : null;
+      byName = user ? (user.name || user.first_name || chosenUsernameOrNull(user.username) || null) : null;
     }
     const until = new Date(new Date(mail.deleted_at).getTime() + MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000);
     return { action: 'deleted', at: mail.deleted_at, by_name: byName, restorable_until: until.toISOString() };
@@ -334,7 +335,7 @@ async function sendHomeMailRemovedNotice(mail, actorId, action) {
       mailId: mail.id,
       homeId: mail.recipient_home_id,
       letterTitle: letter ? (letter.display_title || letter.subject) : null,
-      actorName: actor ? (actor.name || actor.first_name || actor.username) : null,
+      actorName: actor ? (actor.name || actor.first_name || chosenUsernameOrNull(actor.username)) : null,
       action,
       restoreDays: MAIL_RESTORE_DAYS,
     });

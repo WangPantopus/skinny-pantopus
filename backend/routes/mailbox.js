@@ -18,6 +18,7 @@ const s3 = require('../services/s3Service');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -1654,7 +1655,7 @@ router.get('/deleted', verifyToken, async (req, res) => {
         .from('User')
         .select('id, name, first_name, username')
         .in('id', deleterIds);
-      for (const user of users || []) names.set(user.id, user.name || user.first_name || user.username || null);
+      for (const user of users || []) names.set(user.id, user.name || user.first_name || chosenUsernameOrNull(user.username) || null);
     }
 
     res.json({
