@@ -29,7 +29,9 @@ function terms(i:SenderInvitation){return <dl className="space-y-2 text-sm"><div
   {i.access_start_at&&<div><dt>Access starts</dt><dd>{new Date(i.access_start_at).toLocaleString()}</dd></div>}
   {i.access_end_at&&<div><dt>Access ends</dt><dd>{new Date(i.access_end_at).toLocaleString()}</dd></div>}
   {i.expires_at&&<div><dt>Invitation expires</dt><dd>{new Date(i.expires_at).toLocaleString()}</dd></div>}</dl>;}
-export default function SenderInvitationManager({homeId,onAcknowledged}:{homeId:string;onAcknowledged?:()=>void}){
+// On its own page this heading is the page's h1; inside the dashboard's panel it stays an h2.
+export default function SenderInvitationManager({homeId,onAcknowledged,headingLevel=2}:{homeId:string;onAcknowledged?:()=>void;headingLevel?:1|2}){
+  const Heading=headingLevel===1?'h1':'h2';
   const vm=useSender(homeId),[cancelConfirm,setCancelConfirm]=useState<string|null>(null),[now,setNow]=useState(()=>Date.now());
   const refresh=useRef(vm.refreshList);refresh.current=vm.refreshList;
   useEffect(()=>{
@@ -45,7 +47,7 @@ export default function SenderInvitationManager({homeId,onAcknowledged}:{homeId:
   const url=vm.shareToken&&draft?.token===vm.shareToken?`${window.location.origin}/invite/${encodeURIComponent(vm.shareToken)}`:null;
   const acknowledge=async()=>{if(!draft)return;const saved=await vm.acknowledge(draft.request_id);if(saved){vm.refreshList();onAcknowledged?.();}};
   return <div className="space-y-6" data-testid="sender-invitation-manager">
-    <div><h2 className="text-xl font-semibold">Household invitations</h2><p className="mt-1 text-sm text-app-text-secondary">An invitation gives someone household access for the role you choose. It doesn’t verify that they live here or own the Home.</p>
+    <div><Heading className="text-xl font-semibold">Household invitations</Heading><p className="mt-1 text-sm text-app-text-secondary">An invitation gives someone household access for the role you choose. It doesn’t verify that they live here or own the Home.</p>
       {vm.accountLabel&&<p className="mt-2 text-xs text-app-text-secondary">Signed in as {vm.accountLabel}</p>}</div>
     {vm.error&&<p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{vm.error}</p>}
     {vm.blocked?<button className={button} onClick={vm.reopen}>Reload</button>:!vm.ready?<p role="status">Loading invitations…</p>:draft?<section className="space-y-4 rounded-xl border border-app-border p-4" aria-label="Your last invitation">
