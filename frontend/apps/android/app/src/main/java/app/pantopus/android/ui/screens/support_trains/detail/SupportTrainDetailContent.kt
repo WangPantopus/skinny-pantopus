@@ -104,6 +104,13 @@ data class SlotRowContent(
     val reservationId: String? = null,
     /** `reserved` / `delivered` / `confirmed` for `mine` rows. */
     val reservationStatus: String? = null,
+    /**
+     * The helper's own row whose slot day hasn't come yet: marking it delivered asks first,
+     * because the organizer is told at once that it arrived.
+     */
+    val isBeforeSlotDay: Boolean = false,
+    /** "Sat, Oct 10", for that question. */
+    val slotDayLabel: String? = null,
 ) {
     /**
      * The helper can only leave / mark delivered while the reservation

@@ -595,7 +595,9 @@ extension SupportTrainDetailViewModel {
             mine: true,
             slotId: reservation.slotId,
             reservationId: reservation.id,
-            reservationStatus: reservation.status
+            reservationStatus: reservation.status,
+            isBeforeSlotDay: date.map { $0 > localToday() } ?? false,
+            slotDayLabel: date.map { format($0, "EEE, MMM d") }
         )
     }
 

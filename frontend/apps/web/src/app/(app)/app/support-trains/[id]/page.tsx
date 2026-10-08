@@ -397,9 +397,18 @@ export default function SupportTrainDetailPage() {
   };
 
   // The helper's own commitment, as on iOS and Android: mark it delivered, or
-  // leave the slot so it opens for someone else.
-  const handleMarkDelivered = async (reservationId: string) => {
+  // leave the slot so it opens for someone else. Before the slot's day, marking it delivered
+  // asks first: the organizer is told at once that it arrived.
+  const handleMarkDelivered = async (reservationId: string, slotDate?: string | null) => {
     if (helperAction) return;
+    if (slotDate && String(slotDate) > todayKey) {
+      const confirmed = await confirmStore.open({
+        title: 'Mark delivered early?',
+        description: `This slot is for ${formatSlotDay(String(slotDate))}. The organizer will be told it was delivered.`,
+        confirmLabel: 'Mark delivered',
+      });
+      if (!confirmed) return;
+    }
     setHelperAction(reservationId);
     try {
       await api.supportTrains.markDelivered(id, reservationId);
@@ -547,7 +556,7 @@ export default function SupportTrainDetailPage() {
                   reservation={reservation}
                   slot={slotsById.get(reservation.slot_id)}
                   busy={helperAction !== null}
-                  onDelivered={() => handleMarkDelivered(reservation.id)}
+                  onDelivered={(slotDate) => handleMarkDelivered(reservation.id, slotDate)}
                   onLeave={() => handleLeaveSlot(reservation.id)}
                 />
               ))}
@@ -799,7 +808,7 @@ function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
   reservation: any;
   slot: any;
   busy: boolean;
-  onDelivered: () => void;
+  onDelivered: (slotDate?: string | null) => void;
   onLeave: () => void;
 }) {
   const dateStr = slot?.slot_date
@@ -829,7 +838,7 @@ function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
         <div className="flex flex-wrap gap-2 mt-3">
           <button
             type="button"
-            onClick={onDelivered}
+            onClick={() => onDelivered(slot?.slot_date)}
             disabled={busy}
             className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-app-border bg-app-surface text-app-text hover:bg-app-surface-sunken disabled:opacity-50 transition"
           >
@@ -1269,6 +1278,16 @@ function helperIdentity(reservation: any): string {
     reservation?.id ||
     'helper'
   );
+}
+
+// "Fri, Oct 9" for a slot_date (a calendar day, so read in UTC).
+function formatSlotDay(slotDate: string): string {
+  return new Date(`${slotDate}T00:00:00Z`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 function formatContributionMode(mode: string): string {

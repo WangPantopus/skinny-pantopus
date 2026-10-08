@@ -334,6 +334,8 @@ object SupportTrainDetailProjection {
             slotId = reservation.slotId,
             reservationId = reservation.id,
             reservationStatus = reservation.status,
+            isBeforeSlotDay = date?.let { it.time > startOfTodayUtc().time } ?: false,
+            slotDayLabel = date?.let { format(it, "EEE, MMM d") },
         )
     }
 
