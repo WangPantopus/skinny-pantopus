@@ -15,3 +15,18 @@ export function contributionSummary(reservation: {
   const label = mode ? CONTRIBUTION_LABELS[mode] || mode.replace(/_/g, ' ') : null;
   return [label, reservation.dish_title || reservation.restaurant_name || null].filter(Boolean).join(': ');
 }
+
+// A train's status, named as the apps' train lists name it (a published train reads "Active" there too).
+const TRAIN_STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  published: 'Active',
+  active: 'Active',
+  paused: 'Paused',
+  completed: 'Completed',
+  archived: 'Archived',
+};
+
+export function trainStatusLabel(status?: string | null): string {
+  if (!status) return '';
+  return TRAIN_STATUS_LABELS[status] || status.replace(/_/g, ' ');
+}

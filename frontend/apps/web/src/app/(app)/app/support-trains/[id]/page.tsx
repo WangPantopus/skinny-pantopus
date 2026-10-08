@@ -10,7 +10,7 @@ import { buildSupportTrainShareUrl, chosenUsername } from '@pantopus/utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
-import { contributionSummary } from '@/components/support-trains/contributionLabels';
+import { contributionSummary, trainStatusLabel } from '@/components/support-trains/contributionLabels';
 import {
   Calendar,
   Clock,
@@ -749,7 +749,7 @@ export default function SupportTrainDetailPage() {
                 <span
                   className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusBadgeClasses(data.status)}`}
                 >
-                  {data.status}
+                  {trainStatusLabel(data.status)}
                 </span>
               </div>
             </div>
