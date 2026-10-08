@@ -192,6 +192,8 @@ object SupportTrainDetailProjection {
             dateLabel = date?.let { format(it, "EEEE, MMMM d") } ?: (slot.slotDate ?: ""),
             slotLabel = slot.slotLabel ?: slot.supportMode?.replaceFirstChar { it.uppercase() } ?: "Slot",
             windowLabel = windowLabel(slot),
+            slotDate = slot.slotDate,
+            windowStart = slot.startTime,
         )
     }
 
