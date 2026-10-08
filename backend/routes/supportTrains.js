@@ -4117,6 +4117,7 @@ router.get(
             .eq('support_train_id', supportTrainId)
             .eq('user_id', userId)
             .in('status', ['reserved', 'delivered', 'confirmed'])
+            .order('created_at', { ascending: true })
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -4130,6 +4131,11 @@ router.get(
         error: error.message,
       });
     }
+    // The apps list the person's signups as sent. Follow the slots' day order,
+    // so a signup made later for an earlier day doesn't come last.
+    const slotPosition = new Map(slots.map((slot, index) => [slot.id, index]));
+    const dayOrder = (reservation) => slotPosition.get(reservation.slot_id) ?? slots.length;
+    const myReservations = (myResRes.data || []).sort((a, b) => dayOrder(a) - dayOrder(b));
     const helperHasExactAddress =
       viewerLevel === 'signed_up_helper'
         ? await hasSupportTrainAddressGrant(supportTrainId, userId)
@@ -4220,7 +4226,7 @@ router.get(
       slots,
 
       // My reservations (used to render \"You're signed up\" on slots)
-      my_reservations: myResRes.data || [],
+      my_reservations: myReservations,
 
       // Updates
       updates: updatesRes.data || [],
