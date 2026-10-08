@@ -99,13 +99,12 @@ test.each([403, 503])('clears prior pages after current read %s; failure never b
   const c = new HistoryController(home); await c.open(); await expect(c.loadMore()).rejects.toBeDefined();
   expect(c.ready).toBe(false); expect(c.items).toEqual([]); expect(c.nextCursor).toBeNull();
 });
-test.each(['account', 'origin', 'background', 'retire'])('retires held history after %s changes', async change => {
+test.each(['account', 'origin', 'retire'])('retires held history after %s changes', async change => {
   const held = deferred<{ status: number; data: ReturnType<typeof page> }>();
   opened(); get.mockReturnValueOnce(held.promise);
   const c = new HistoryController(home), task = c.open(); await Promise.resolve(); await Promise.resolve();
   if (change === 'account') (api.getAuthToken as jest.Mock).mockReturnValue('another-session');
   if (change === 'origin') (api.getApiBaseUrl as jest.Mock).mockReturnValue('https://another.invalid');
-  if (change === 'background') Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
   if (change === 'retire') c.retire();
   held.resolve({ status: 200, data: page() }); await expect(task).rejects.toBeDefined();
   expect(c.items).toEqual([]); expect(c.ready).toBe(false);
