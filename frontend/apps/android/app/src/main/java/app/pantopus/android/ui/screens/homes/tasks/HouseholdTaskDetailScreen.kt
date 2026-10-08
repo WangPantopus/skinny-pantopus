@@ -76,7 +76,7 @@ fun HouseholdTaskDetailScreen(
                 TextButton(onClick = viewModel::reload, enabled = !state.busy) { Text("Reload task") }
             }
             state.task?.let { task ->
-                HouseholdTaskReadOnlyContent(task)
+                HouseholdTaskReadOnlyContent(task, state.assignee)
                 TextButton(onClick = recurrenceViewModel.controller::show, enabled = !state.busy) { Text("Repeat schedule") }
                 TextButton(onClick = mediaViewModel.controller::show, enabled = !state.busy) { Text("Private attachments") }
                 // Launch cut #4 (Open Gigs): publishing a household task as an open Gig is hidden.
@@ -107,13 +107,16 @@ fun HouseholdTaskDetailScreen(
 }
 
 @Composable
-internal fun HouseholdTaskReadOnlyContent(task: HomeTaskDto) {
+internal fun HouseholdTaskReadOnlyContent(
+    task: HomeTaskDto,
+    assignee: String?,
+) {
     Text(task.title, style = MaterialTheme.typography.headlineSmall)
     task.description?.takeIf(String::isNotBlank)?.let { Text(it) }
     Text("Status: ${task.status.taskLabel()}")
     task.priority?.let { Text("Priority: ${it.taskLabel()}") }
     task.dueAt?.let { Text("Due: ${taskDueLabel(it)}") }
-    HouseholdTasksListViewModel.assigneeDisplay(task.assignedTo)?.let { Text("Assigned to $it") }
+    assignee?.let { Text("Assigned to $it") }
     if (task.automaticRecurrence != null) {
         Text(task.automaticRecurrence.label())
     } else {

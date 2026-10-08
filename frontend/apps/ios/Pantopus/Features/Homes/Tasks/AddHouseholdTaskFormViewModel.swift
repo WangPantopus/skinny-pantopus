@@ -376,21 +376,17 @@ public final class AddHouseholdTaskFormViewModel {
 
     private func loadMembers(revision: Int) async {
         do {
-            try access.requireCurrent()
-            let response: OccupantsResponse = try await api.request(Endpoint(
-                method: .get,
-                path: "/api/homes/\(homeId)/occupants",
-                headers: access.currentHeaders,
-                cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
-            ))
+            let response = try await access.occupants()
             try access.requireCurrent()
             guard revision == generation else { return }
-            assignableMembers = response.occupants.compactMap(HouseholdTaskAssignableMember.from)
+            let members = response.occupants.compactMap(HouseholdTaskAssignableMember.from)
+            assignableMembers = HouseholdTaskAssignableMember.withViewer(members, viewerId: access.openingActorId)
             assigneeReadState = .loaded
         } catch {
             guard revision == generation else { return }
-            assignableMembers = []
-            assigneeReadState = .unavailable
+            // Task authority is independent of member-roster access: the viewer can still take the task.
+            assignableMembers = HouseholdTaskAssignableMember.withViewer([], viewerId: access.openingActorId)
+            assigneeReadState = Self.assigneeReadState(after: error)
             if !isCurrent { accessChanged() }
         }
     }

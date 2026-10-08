@@ -188,6 +188,15 @@ public struct HouseholdTaskAssignableMember: Sendable, Hashable, Identifiable {
             initials: initials.isEmpty ? "··" : initials
         )
     }
+
+    /// The viewer can always take a task: their own entry reads "Me" and comes first, and is
+    /// added when the household's member list can't be read (a private setup, an ordinary member).
+    public static func withViewer(_ members: [Self], viewerId: String?) -> [Self] {
+        guard let viewerId, !viewerId.isEmpty else { return members }
+        let own = members.first { $0.id == viewerId }
+        let me = HouseholdTaskAssignableMember(id: viewerId, displayName: "Me", initials: own?.initials ?? "Me")
+        return [me] + members.filter { $0.id != viewerId }
+    }
 }
 
 /// Render state for the Add/Edit Household Task form.
