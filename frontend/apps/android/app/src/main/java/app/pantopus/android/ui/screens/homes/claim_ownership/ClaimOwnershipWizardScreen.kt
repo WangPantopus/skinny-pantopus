@@ -107,8 +107,10 @@ fun ClaimOwnershipWizardScreen(
         )
     }
 
+    // System Back acts like the top bar's Back/X: a step back, or "Discard your progress?" once something is chosen.
     WizardShell(
         model = viewModel,
+        handleSystemBack = true,
         modifier = Modifier.testTag(CLAIM_OWNERSHIP_SCREEN_TAG),
     ) {
         if (!state.contextReady) {

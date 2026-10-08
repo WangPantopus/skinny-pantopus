@@ -3,7 +3,8 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
 
 import * as api from '@pantopus/api';
-import { homeAccessExpiry, readCurrentHomeAccess, watchHomeAccessExpiry } from './homeAccessFingerprint';
+import { homeAccessExpiry, homeAccessFingerprint, readCurrentHomeAccess, watchHomeAccessExpiry } from './homeAccessFingerprint';
+import { RETURN_REFRESH_MS, transientFailure } from './returnRefresh';
 
 // ============================================================
 // Types
@@ -130,27 +131,38 @@ export function HomePermissionsProvider({
   const scopeHome = useRef(homeId);
   const ready = useRef<(() => boolean) | null>(null);
   const stopExpiry = useRef<(() => void) | null>(null);
+  const lastAttempt = useRef(0);
+  const inFlight = useRef(0);
+  // The access the page currently shows (null while loading or failed), for background re-checks.
+  const shownFingerprint = useRef<string | null>(null);
   const retireGeneration = useCallback(() => {
     generation.current++; ready.current = null;
     stopExpiry.current?.(); stopExpiry.current = null;
   }, []);
 
-  const load = useCallback(async () => {
-    retireGeneration();
+  // A full load clears access first. A background re-check (coming back to the page) keeps it when
+  // the server answers the same access; a changed access or a refusal reloads in full.
+  const load = useCallback(async (background = false) => {
+    if (!background) retireGeneration();
     const revision = generation.current;
     let expiry: number | null = null;
-    scopeHome.current = homeId; ready.current = null;
+    lastAttempt.current = Date.now();
+    if (!background) { scopeHome.current = homeId; ready.current = null; }
     const token = api.getAuthToken(), origin = api.getApiBaseUrl();
     const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     const current = () => revision === generation.current && token === api.getAuthToken()
       && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
-      && document.visibilityState !== 'hidden' && (expiry === null || Date.now() < expiry);
-    setAccess(null); setLoading(true);
-    setError(null);
+      && (expiry === null || Date.now() < expiry);
+    if (!background) { setAccess(null); setLoading(true); setError(null); }
+    inFlight.current++;
     try {
       if (!token) throw new Error('Sign in again to check current home access.');
       const data = await readCurrentHomeAccess(homeId);
       if (!current()) return;
+      if (background) {
+        if (homeAccessFingerprint(data) !== shownFingerprint.current) void load();
+        return;
+      }
       const confirmed = data as HomeAccess;
       if ((confirmed.hasAccess !== true && confirmed.verification_required !== true) || !Array.isArray(confirmed.permissions)) {
         throw new Error('Current access to this home could not be confirmed. Reload to check access.');
@@ -166,6 +178,7 @@ export function HomePermissionsProvider({
       setAccess(confirmed);
     } catch (err: unknown) {
       if (!current()) return;
+      if (background) { if (!transientFailure(err)) void load(); return; }
       setError(err instanceof Error ? err.message : 'Failed to load permissions');
       setAccess({
         hasAccess: false,
@@ -190,22 +203,31 @@ export function HomePermissionsProvider({
         occupancy_id: null,
       });
     } finally {
-      if (current()) setLoading(false);
+      inFlight.current--;
+      if (!background && current()) setLoading(false);
     }
   }, [homeId, retireGeneration]);
 
   useEffect(() => {
+    shownFingerprint.current = !loading && !error && access ? homeAccessFingerprint(access) : null;
+  }, [access, loading, error]);
+
+  useEffect(() => {
     void load();
-    const invalidate = () => { retireGeneration(); setAccess(null); setLoading(true); setError(null); };
-    const changed = () => { invalidate(); if (document.visibilityState !== 'hidden') void load(); };
-    const visibility = () => { if (document.visibilityState === 'hidden') invalidate(); else changed(); };
-    const focus = () => { if (document.visibilityState !== 'hidden') changed(); };
+    // Another account's access must never show, so an account change clears it and reloads.
+    const changed = () => { retireGeneration(); setAccess(null); setLoading(true); setError(null); void load(); };
+    // Coming back keeps the page and re-checks access behind the scenes (in full when nothing is shown).
+    const resume = () => {
+      if (document.visibilityState === 'hidden' || inFlight.current > 0
+        || Date.now() - lastAttempt.current < RETURN_REFRESH_MS) return;
+      void load(ready.current !== null);
+    };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
     const unsubscribe = api.onTokenChange(changed);
-    window.addEventListener('storage', storage); window.addEventListener('focus', focus);
-    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('storage', storage); window.addEventListener('focus', resume);
+    document.addEventListener('visibilitychange', resume);
     return () => { retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
-      window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', visibility); };
+      window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume); };
   }, [load, retireGeneration]);
 
   const visibleAccess = scopeHome.current === homeId ? access : null;
@@ -239,6 +261,8 @@ export function HomePermissionsProvider({
     [visibleAccess, opening]
   );
 
+  const reload = useCallback(() => load(), [load]);
+
   const needsVerification = !visibleAccess || visibleAccess.verification_status !== 'verified';
 
   const isProvisional = visibleAccess?.verification_status === 'provisional'
@@ -246,7 +270,7 @@ export function HomePermissionsProvider({
 
   return (
     <HomePermissionsContext.Provider
-      value={{ access: visibleAccess, loading, error, can, hasRoleAtLeast, canSeeTab, needsVerification, isProvisional, reload: load }}
+      value={{ access: visibleAccess, loading, error, can, hasRoleAtLeast, canSeeTab, needsVerification, isProvisional, reload }}
     >
       {children}
     </HomePermissionsContext.Provider>

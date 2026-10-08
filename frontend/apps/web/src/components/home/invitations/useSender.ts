@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
 import { SenderController } from './SenderController';
 import { senderMessage, validInvitationSession, validSenderInvitation, type SenderInput, type SenderDraft, type SenderContext, type SenderInvitation } from './senderModel';
+import { RETURN_REFRESH_MS } from '../returnRefresh';
 interface View { ready:boolean;busy:boolean;error:string;pending:SenderDraft|null;canAcknowledge:boolean;blocked:boolean;
   context:SenderContext|null;review:SenderInput|null;lifetime:number;accountLabel:string;shareToken:string|null;shareUntil:number|null }
 const empty:View={ready:false,busy:false,error:'',pending:null,canAcknowledge:false,blocked:false,context:null,review:null,lifetime:0,accountLabel:'',shareToken:null,shareUntil:null};
@@ -18,9 +19,10 @@ export function useSender(homeId:string){
     setView({ready:current.opened,busy:false,error,pending:current.pending,canAcknowledge:current.canAcknowledge,blocked:current.needsReload,
       context:current.context,review:current.review,lifetime:generation.current,accountLabel:current.accountLabel,shareToken:current.shareToken,shareUntil:current.shareUntil});
   },[]);
-  const list=useCallback(async(current:SenderController,revision:number)=>{
-    const listRevision=++listGeneration.current;current.clearShare();
-    setView(previous=>({...previous,shareToken:null,shareUntil:null}));setInvitations(null);setListError('');setListDenied(false);
+  // A background re-read (coming back to the page) keeps the list and any share link on screen until it answers.
+  const list=useCallback(async(current:SenderController,revision:number,background=false)=>{
+    const listRevision=++listGeneration.current;
+    if(!background){current.clearShare();setView(previous=>({...previous,shareToken:null,shareUntil:null}));setInvitations(null);setListError('');setListDenied(false);}
     try{
       const s=(await api.apiClient.get('/api/homes/invitations/sender/session')).data?.session;
       if(!validInvitationSession(s)||!current.matchesSession(s))throw new Error('Current sender session is unavailable.');
@@ -29,11 +31,13 @@ export function useSender(homeId:string){
       if(controller.current!==current||!current.current()||revision!==generation.current||listRevision!==listGeneration.current)return;
       if(!validInvitationSession(r?.session)||r.session.actor_id!==s.actor_id||r.session.session_scope!==s.session_scope||!Array.isArray(r.invitations)
         ||r.invitations.some((i:unknown)=>!validSenderInvitation(i,homeId)))throw new Error('Current invitations could not be confirmed.');
-      setInvitations(r.invitations);
+      setInvitations(r.invitations);if(background){setListError('');setListDenied(false);}
     }catch(error){if(controller.current===current&&current.current()&&revision===generation.current&&listRevision===listGeneration.current){
-      current.clearShare();setView(previous=>({...previous,shareToken:null,shareUntil:null}));
       const refused=(error as {statusCode?:number;code?:string}|null);
-      if(refused?.statusCode===403&&refused.code==='MEMBERS_MANAGE_REQUIRED'){setListDenied(true);setListError(senderMessage(refused.code));return;}
+      const denied=refused?.statusCode===403&&refused.code==='MEMBERS_MANAGE_REQUIRED';
+      if(background&&!denied)return;
+      current.clearShare();setView(previous=>({...previous,shareToken:null,shareUntil:null}));
+      if(denied){setInvitations(null);setListDenied(true);setListError(senderMessage(refused.code));return;}
       setListError('Couldn’t load current invitations. Your last result is kept. Use Refresh invitations to try again.');
     }}
   },[homeId]);
@@ -50,13 +54,24 @@ export function useSender(homeId:string){
       }
       if(current?.opened&&current.current()&&controller.current===current)void list(current,revision);
     };
-    const visibility=()=>{if(document.visibilityState==='hidden')retire();else void open();};
+    // Coming back keeps the form, what was typed and any share link, and re-reads the list behind the scenes;
+    // a session that closed or changed opens again from the start. Account changes always start over.
+    let lastReturn=Date.now();
+    const resume=()=>{
+      if(disposed||document.visibilityState==='hidden')return;
+      const current=controller.current;
+      if(current&&!current.opened)return;
+      if(!current||!current.current()){void open();return;}
+      if(Date.now()-lastReturn<RETURN_REFRESH_MS)return;
+      lastReturn=Date.now();void list(current,generation.current,true);
+    };
+    const pageshow=(event:PageTransitionEvent)=>{if(event.persisted)void open();};
     const storage=(event:StorageEvent)=>{if(event.key===null||event.key===api.AUTH_SESSION_CHANGE_KEY)void open();};
     const session=()=>{retire();queueMicrotask(()=>{if(!disposed)void open();});};
-    const unsubscribe=api.onTokenChange(session);window.addEventListener('storage',storage);window.addEventListener('pagehide',retire);window.addEventListener('pageshow',visibility);
-    window.addEventListener('focus',visibility);document.addEventListener('visibilitychange',visibility);void open();
-    return()=>{disposed=true;retire();unsubscribe();window.removeEventListener('storage',storage);window.removeEventListener('pagehide',retire);window.removeEventListener('pageshow',visibility);
-      window.removeEventListener('focus',visibility);document.removeEventListener('visibilitychange',visibility);};
+    const unsubscribe=api.onTokenChange(session);window.addEventListener('storage',storage);window.addEventListener('pagehide',retire);window.addEventListener('pageshow',pageshow);
+    window.addEventListener('focus',resume);document.addEventListener('visibilitychange',resume);void open();
+    return()=>{disposed=true;retire();unsubscribe();window.removeEventListener('storage',storage);window.removeEventListener('pagehide',retire);window.removeEventListener('pageshow',pageshow);
+      window.removeEventListener('focus',resume);document.removeEventListener('visibilitychange',resume);};
   },[homeId,reload,publish,list]);
   useEffect(()=>{
     if(!view.shareUntil)return;

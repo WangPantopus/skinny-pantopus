@@ -579,7 +579,7 @@ struct GigActiveTaskPanel: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("gigDetail.cantMakeIt")
-            Text("Releases you and reopens the task for new bids.")
+            Text("Takes you off the task and releases the poster’s payment hold.")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }

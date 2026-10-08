@@ -645,9 +645,11 @@ class HouseholdTasksListViewModel
             ): HouseholdTaskRowProjection {
                 val category = HouseholdTaskCategory.from(task.title, task.taskType)
                 val assigneeLabel = assigneeDisplay(task.assignedTo, memberNames)
-                val isAssigned = assigneeLabel != null
-                // The line says "you" for the viewer's own tasks; the avatar keeps their name.
-                val assignee = if (task.assignedTo != null && task.assignedTo == viewerId) "you" else assigneeLabel
+                val own = task.assignedTo != null && task.assignedTo == viewerId
+                // The line says "you" for the viewer's own tasks.
+                val avatarName = rowAvatarName(task.assignedTo, assigneeLabel, memberNames, own)
+                val isAssigned = avatarName != null
+                val assignee = if (own) "you" else assigneeLabel
                 val recurrenceChip = task.automaticRecurrence?.label() ?: humanRecurrence(task.recurrenceRule)?.let { "Saved: $it" }
                 return when (task.status) {
                     "done" -> {
@@ -662,7 +664,7 @@ class HouseholdTasksListViewModel
                             recurrenceChip = recurrenceChip,
                             category = category,
                             isAssigned = isAssigned,
-                            assigneeLabel = assigneeLabel,
+                            assigneeLabel = avatarName,
                             highlight = RowHighlight.Muted,
                         )
                     }
@@ -676,7 +678,7 @@ class HouseholdTasksListViewModel
                             recurrenceChip = recurrenceChip,
                             category = category,
                             isAssigned = isAssigned,
-                            assigneeLabel = assigneeLabel,
+                            assigneeLabel = avatarName,
                             highlight = RowHighlight.Muted,
                         )
                     else -> {
@@ -692,7 +694,7 @@ class HouseholdTasksListViewModel
                             recurrenceChip = recurrenceChip,
                             category = category,
                             isAssigned = isAssigned,
-                            assigneeLabel = assigneeLabel,
+                            assigneeLabel = avatarName,
                             highlight = null,
                         )
                     }
@@ -894,3 +896,14 @@ class HouseholdTasksListViewModel
                     }.getOrNull()
         }
     }
+
+/**
+ * The row avatar names the assignee. For the viewer's own task it needs their name from the members
+ * list; without it the category icon shows (a "Member 1A2B" avatar would mean nothing to them).
+ */
+private fun rowAvatarName(
+    assigneeId: String?,
+    assigneeLabel: String?,
+    memberNames: Map<String, String>,
+    own: Boolean,
+): String? = if (own && assigneeId?.let(memberNames::get) == null) null else assigneeLabel

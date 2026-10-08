@@ -132,8 +132,7 @@ export default function HomePropertyDetailsPage() {
     const token = api.getAuthToken(), origin = api.getApiBaseUrl();
     const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     const current = () => revision === generation.current && token === api.getAuthToken()
-      && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
-      && document.visibilityState !== 'hidden';
+      && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     setHome(null); setAttomPayload(null); setUnavailableReason(null); setLoading(true); setError('');
     try {
       if (!token) throw new Error('Sign in to view this Home.');
@@ -153,18 +152,17 @@ export default function HomePropertyDetailsPage() {
       if (current()) setLoading(false);
     }
   }, [homeId]);
+  // Property facts don't change while the page is open, so coming back keeps them; an account change
+  // clears the page and reloads it, so another account's Home never shows.
   useEffect(() => {
-    const refresh = () => { retire(); if (document.visibilityState !== 'hidden') void load(); };
-    const visibility = () => { if (document.visibilityState === 'hidden') retire(); else refresh(); };
+    const refresh = () => { retire(); void load(); };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) refresh(); };
     void load();
     const unsubscribe = api.onTokenChange(refresh);
-    window.addEventListener('focus', refresh); window.addEventListener('storage', storage);
-    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('storage', storage);
     return () => {
       retire(); unsubscribe();
-      window.removeEventListener('focus', refresh); window.removeEventListener('storage', storage);
-      document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener('storage', storage);
     };
   }, [load, retire]);
 

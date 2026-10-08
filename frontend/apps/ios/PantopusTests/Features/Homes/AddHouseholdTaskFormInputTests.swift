@@ -41,12 +41,15 @@ extension AddHouseholdTaskFormViewModelTests {
             let vm = makeVM()
             await vm.load()
             if case .editing = vm.state {} else { XCTFail("Task permission is independently verified") }
-            XCTAssertEqual(vm.assigneeReadState, .unavailable)
+            // A refused roster (403) is expected for a private setup or an ordinary member, and the
+            // viewer can still take the task; only an unexpected failure says the list is unavailable.
+            XCTAssertEqual(vm.assigneeReadState, status == 403 ? .loaded : .unavailable)
             XCTAssertEqual(
                 vm.assigneeStatusMessage,
-                "Household members could not be loaded. You can leave this task unassigned."
+                status == 403 ? nil
+                    : "Household members couldn't be loaded. You can take this task yourself or leave it unassigned."
             )
-            XCTAssertTrue(vm.assignableMembers.isEmpty)
+            XCTAssertEqual(vm.assignableMembers.map(\.displayName), ["Me"])
             XCTAssertNil(vm.selectedAssigneeId)
             vm.update(.title, to: "A household task")
             XCTAssertTrue(vm.isValid)
@@ -66,14 +69,17 @@ extension AddHouseholdTaskFormViewModelTests {
         XCTAssertEqual(vm.assigneeReadState, .loading)
         XCTAssertEqual(vm.assigneeStatusMessage, "Checking household members…")
         await vm.load()
-        XCTAssertFalse(vm.assignableMembers.isEmpty)
+        XCTAssertEqual(vm.assignableMembers.first?.displayName, "Me")
+        XCTAssertGreaterThan(vm.assignableMembers.count, 1)
         XCTAssertNil(vm.assigneeStatusMessage)
         await vm.refresh()
-        XCTAssertTrue(vm.assignableMembers.isEmpty)
+        // The cached roster is retired; only the viewer's own "Me" stays assignable.
+        XCTAssertEqual(vm.assignableMembers.map(\.displayName), ["Me"])
         XCTAssertEqual(vm.assigneeReadState, .unavailable)
         await vm.refresh()
         XCTAssertEqual(vm.assigneeReadState, .loaded)
-        XCTAssertEqual(vm.assigneeStatusMessage, "No assignable members are available.")
+        XCTAssertEqual(vm.assignableMembers.map(\.displayName), ["Me"])
+        XCTAssertNil(vm.assigneeStatusMessage)
         vm.suspend()
         XCTAssertEqual(vm.assigneeReadState, .loading)
     }

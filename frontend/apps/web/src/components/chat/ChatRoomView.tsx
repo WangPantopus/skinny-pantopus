@@ -275,7 +275,7 @@ export default function ChatRoomView({
         historicalMessages.forEach((m: ChatMessage) => {
           const dKey = getDateKey(m?.created_at);
           if (dKey !== lastKey) {
-            groups.push({ dateKey: dKey, label: formatDateLabel(m?.created_at), msgs: [] });
+            groups.push({ dateKey: dKey, label: dKey ? formatDateLabel(dKey) : '', msgs: [] });
             lastKey = dKey;
           }
           groups[groups.length - 1]?.msgs.push(m);

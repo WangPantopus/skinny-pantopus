@@ -467,7 +467,7 @@ class MyHomesListViewModel
             val canDelete = home.canDeleteHome == true
             val footerTitle =
                 when {
-                    home.accessKind == "private_setup" -> "My tasks"
+                    home.accessKind == "private_setup" -> "Home tasks"
                     pending == PendingVerification.Owner && showsClaimStatus(home, onOpenWaitingRoom) -> "Check ownership claim"
                     pending == PendingVerification.Owner -> "Continue ownership verification"
                     pending == PendingVerification.Residency -> "Check residency status"

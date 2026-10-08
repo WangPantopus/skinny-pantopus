@@ -138,7 +138,10 @@ final class HomeTaskGigJourneyUITests: XCTestCase {
                 let visibleStatus = status == "open" && layout == "v2" ? "Open · No bids yet" : label
                 try verifyDetail(
                     status: visibleStatus,
-                    dock: status == "open" ? "Your task" : status == "cancelled" ? "Cancelled" : "Bidding closed"
+                    dock: [
+                        "open": "Your task", "assigned": "Assigned", "in_progress": "In progress",
+                        "completed": "Awaiting your confirmation", "cancelled": "Cancelled"
+                    ][status] ?? "Closed"
                 )
                 if layout == "v2" { XCTAssertTrue(app.staticTexts["GENERAL"].firstMatch.exists) }
                 keepScreenshot("Current \(layout) \(status) Gig detail")
