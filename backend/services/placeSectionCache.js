@@ -7,7 +7,7 @@
  * `readThrough` and get the Step-1 freshness model for free:
  *
  *   const { payload, fetchedAt, stale } = await readThrough({
- *     cacheKey: `geo:${geohash6}`,        // 'home:…' | 'geo:…' | 'zip:…' | 'county:…'
+ *     cacheKey: `geo:${geohash6}`,        // 'home:…' | 'geo:…' | 'geo9:…' | 'zip:…' | 'county:…'
  *     sectionId: 'civic_districts',
  *     ttlMs: 90 * 24 * 60 * 60 * 1000,
  *     fetch: () => civicProvider.fetchDistricts(latLng),
@@ -71,6 +71,13 @@ function warnMissingTableOnce(where, error) {
   });
 }
 
+// A building-level location cell (`geo9:`, ~5 m) never goes into a log line
+// whole: its ~1 km prefix is enough to debug a cache problem.
+function logKey(cacheKey) {
+  const key = String(cacheKey || '');
+  return key.startsWith('geo9:') ? `${key.slice(0, 11)}…` : key;
+}
+
 async function readRow(cacheKey, sectionId) {
   const { data, error } = await supabaseAdmin
     .from(TABLE)
@@ -80,7 +87,7 @@ async function readRow(cacheKey, sectionId) {
     .maybeSingle();
   if (error) {
     if (isMissingTableError(error)) warnMissingTableOnce('read', error);
-    else logger.warn('placeSectionCache: read failed', { cacheKey, sectionId, error: error.message });
+    else logger.warn('placeSectionCache: read failed', { cacheKey: logKey(cacheKey), sectionId, error: error.message });
     return null;
   }
   return data || null;
@@ -99,7 +106,7 @@ async function writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso) {
   );
   if (error) {
     if (isMissingTableError(error)) warnMissingTableOnce('write', error);
-    else logger.warn('placeSectionCache: write failed', { cacheKey, sectionId, error: error.message });
+    else logger.warn('placeSectionCache: write failed', { cacheKey: logKey(cacheKey), sectionId, error: error.message });
   }
 }
 
@@ -112,10 +119,13 @@ async function writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso) {
  * @param {number} params.ttlMs      Freshness budget for this section.
  * @param {function(): Promise<*>} params.fetch  Provider fetch; runs only on miss/expiry.
  * @param {boolean} [params.allowStale=true]     Serve an expired row when `fetch` fails.
+ * @param {number}  [params.maxStaleMs]          Oldest `fetched_at` age a stale row may
+ *                                               have; older rows are not served. Omitted
+ *                                               ⇒ no limit (the long-standing behavior).
  * @returns {Promise<{payload: *, fetchedAt: string|null, hit: boolean, stale: boolean}>}
  * @throws When `fetch` fails and no (allowed) cached row exists.
  */
-async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = true }) {
+async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = true, maxStaleMs }) {
   if (!cacheKey || !sectionId || !Number.isFinite(ttlMs) || typeof fetch !== 'function') {
     throw new Error('placeSectionCache.readThrough: cacheKey, sectionId, ttlMs and fetch are required');
   }
@@ -127,9 +137,14 @@ async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = tru
     return { payload: row.payload, fetchedAt: row.fetched_at, hit: true, stale: false };
   }
 
+  // Past maxStaleMs an expired row is never served, whether the provider just
+  // failed or is cooling down after a timeout.
+  const staleAgeOk = !Number.isFinite(maxStaleMs)
+    || (row && now - Date.parse(row.fetched_at) <= maxStaleMs);
+
   const coolingUntil = timedOutUntil.get(sectionId);
   if (coolingUntil > now) {
-    if (row && allowStale) {
+    if (row && allowStale && staleAgeOk) {
       return { payload: row.payload, fetchedAt: row.fetched_at, hit: true, stale: true };
     }
     throw new Error(`provider timed out; next try after ${new Date(coolingUntil).toISOString()}`);
@@ -152,9 +167,9 @@ async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = tru
         cooldown_ms: TIMEOUT_COOLDOWN_MS,
       });
     }
-    if (row && allowStale) {
+    if (row && allowStale && staleAgeOk) {
       logger.warn('placeSectionCache: fetch failed — serving stale', {
-        cacheKey,
+        cacheKey: logKey(cacheKey),
         sectionId,
         error: err.message,
       });

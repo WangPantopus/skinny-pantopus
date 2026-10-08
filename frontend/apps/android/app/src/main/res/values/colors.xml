@@ -71,4 +71,12 @@
     <color name="pantopus_gigs">#F97316</color>
     <color name="pantopus_rentals">#16A34A</color>
     <color name="pantopus_vehicles">#DC2626</color>
+
+    <!-- "Today at your address" widget: the shadow under its white text on the sky
+         (the Now card's 0.35-black text shadow; widget-only, no Compose twin). -->
+    <color name="pantopus_widget_text_shadow">#59000000</color>
+    <!-- Its picker preview: SkyPalette's clear day sky (top, middle, horizon). -->
+    <color name="pantopus_widget_sky_top">#0B5FA5</color>
+    <color name="pantopus_widget_sky_mid">#1D8FD8</color>
+    <color name="pantopus_widget_sky_bottom">#7CC8F2</color>
 </resources>

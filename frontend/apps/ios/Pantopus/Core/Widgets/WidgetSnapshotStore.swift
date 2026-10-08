@@ -2,7 +2,8 @@
 //  WidgetSnapshotStore.swift
 //  Pantopus
 //
-//  Phase 6c — app-side writer for the "Tasks near me" widget snapshot.
+//  Phase 6c — app-side writer for the "Tasks near me" widget snapshot,
+//  and since October 2026 the "Today at your address" one.
 //  `GigsFeedViewModel` calls `write(_:)` after every successful feed
 //  fetch; the store persists the JSON into the shared App Group suite
 //  and pokes WidgetKit to rebuild the timeline. Protocol-injected so
@@ -39,5 +40,15 @@ public final class WidgetSnapshotStore: WidgetSnapshotStoring {
         else { return }
         defaults.set(data, forKey: GigWidgetSnapshotContract.snapshotKey)
         WidgetCenter.shared.reloadTimelines(ofKind: GigWidgetSnapshotContract.widgetKind)
+    }
+
+    /// The "Today at your address" widget's snapshot, written after the Today tab loads.
+    public func writeToday(_ snapshot: TodayWidgetSnapshot) {
+        guard !isSuppressed,
+              let defaults = UserDefaults(suiteName: GigWidgetSnapshotContract.appGroupId),
+              let data = TodayWidgetSnapshotContract.encode(snapshot)
+        else { return }
+        defaults.set(data, forKey: TodayWidgetSnapshotContract.snapshotKey)
+        WidgetCenter.shared.reloadTimelines(ofKind: TodayWidgetSnapshotContract.widgetKind)
     }
 }

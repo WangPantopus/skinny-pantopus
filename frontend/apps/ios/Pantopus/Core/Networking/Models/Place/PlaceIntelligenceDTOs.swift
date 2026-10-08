@@ -242,28 +242,8 @@ extension PlaceSectionID: Decodable {
 
 // MARK: - Today section payloads
 
-/// Weather condition vocabulary. The server always ships a human
-/// `condition_label`, so `.unknown` still renders — it only loses the
-/// specific glyph.
-public enum WeatherConditionCode: String, Sendable, Hashable {
-    case clear
-    case partlyCloudy = "partly_cloudy"
-    case cloudy
-    case fog
-    case rain
-    case snow
-    case sleet
-    case thunderstorm
-    case wind
-    case unknown
-}
-
-extension WeatherConditionCode: Decodable {
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = WeatherConditionCode(rawValue: raw) ?? .unknown
-    }
-}
+// `WeatherConditionCode` lives in `WeatherConditionCode.swift`, shared with
+// the widget extension.
 
 public struct PlaceWeatherHour: Decodable, Sendable, Hashable {
     /// ISO 8601 timestamp for the hour.
@@ -993,6 +973,21 @@ public struct PlaceCivicRepresentative: Decodable, Sendable, Hashable {
 public struct PlaceCivicDistrictsData: Decodable, Sendable, Hashable {
     public let districts: [PlaceCivicDistrict]
     public let representatives: [PlaceCivicRepresentative]
+    /// Ballot P0 (`ballot_p0`): the governments view's data, all year; nil
+    /// when not sent.
+    public let governments: BallotGovernments?
+
+    private enum CodingKeys: String, CodingKey {
+        case districts, representatives, governments
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        districts = try c.decode([PlaceCivicDistrict].self, forKey: .districts)
+        representatives = try c.decode([PlaceCivicRepresentative].self, forKey: .representatives)
+        // A malformed Ballot field never blanks the districts.
+        governments = try? c.decodeIfPresent(BallotGovernments.self, forKey: .governments)
+    }
 }
 
 public enum BallotRaceType: String, Sendable, Hashable {
@@ -1039,11 +1034,23 @@ public struct PlaceCivicElectionData: Decodable, Sendable, Hashable {
     public let pollingPlace: PlacePollingPlace?
     /// Ballot races; may be empty (summary only) on the dashboard.
     public let ballot: [PlaceBallotRace]
+    /// Ballot P0 card fields (`ballot_p0` flag); nil when not sent.
+    public let ballotCard: BallotSummary?
 
     private enum CodingKeys: String, CodingKey {
         case name, date, ballot
         case daysUntil = "days_until"
         case pollingPlace = "polling_place"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        date = try c.decode(String.self, forKey: .date)
+        daysUntil = try c.decode(Int.self, forKey: .daysUntil)
+        pollingPlace = try c.decodeIfPresent(PlacePollingPlace.self, forKey: .pollingPlace)
+        ballot = try c.decode([PlaceBallotRace].self, forKey: .ballot)
+        ballotCard = BallotSummary.decodeIfPresent(from: decoder, fallbackTitle: "Your ballot")
     }
 }
 

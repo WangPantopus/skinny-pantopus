@@ -250,8 +250,10 @@ export function buildShareMetadata(opts: {
 
 export function displayNameForUser(user: any, fallback = 'Pantopus member'): string {
   if (!user || typeof user !== 'object') return fallback;
-  // A made-up username (user_…) is never shown as the person's name.
-  return user.name || user.first_name || user.firstName || chosenUsername(user.username) || fallback;
+  // A made-up username is never shown as the person's name: user_…, or one the server flags (the pre-October-7 kind
+  // built from the email address).
+  const handle = user.usernameIsGenerated ? null : chosenUsername(user.username);
+  return user.name || user.first_name || user.firstName || handle || fallback;
 }
 
 export function formatMoney(value: unknown): string | null {

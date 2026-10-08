@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { UserRound } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
@@ -182,11 +183,11 @@ export default function MyProfilePage() {
     );
   }
 
-  const fullName = user.firstName && user.lastName 
-    ? `${user.firstName} ${user.lastName}` 
-    : user.name || chosenUsername(user.username) || 'Pantopus user';
-  
-  const initial = fullName?.[0]?.toUpperCase() || 'U';
+  // A username the server made up (user_…, or the pre-October-7 kind built from the email) is never shown.
+  const chosenHandle = user.usernameIsGenerated ? null : chosenUsername(user.username);
+  const fullName = user.firstName && user.lastName
+    ? `${user.firstName} ${user.lastName}`
+    : user.name || chosenHandle;
 
   // What Edit Profile can fill in. The photo counts as this page shows it: /api/users/profile's `avatar_url` is
   // always null (User has no such column); the picture comes as `profilePicture`.
@@ -211,7 +212,7 @@ export default function MyProfilePage() {
                 {user.avatar_url || user.profilePicture ? (
                   <Image
                     src={user.avatar_url || user.profilePicture}
-                    alt={fullName}
+                    alt={fullName || 'Your profile photo'}
                     width={128}
                     height={128}
                     sizes="128px"
@@ -220,12 +221,23 @@ export default function MyProfilePage() {
                   />
                 ) : (
                   <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center text-white text-5xl font-bold border-4 border-app-border mb-4">
-                    {initial}
+                    {fullName ? fullName[0].toUpperCase() : <UserRound aria-hidden className="w-16 h-16" />}
                   </div>
                 )}
-                
-                <h2 className="text-2xl font-bold text-app text-center">{fullName}</h2>
-                {usernameHandle(user.username) ? <p className="text-app-muted">{usernameHandle(user.username)}</p> : null}
+
+                {fullName ? (
+                  <h2 className="text-2xl font-bold text-app text-center">{fullName}</h2>
+                ) : (
+                  // No name yet (the one-time prompt was skipped): an invitation to add one, not a stand-in label.
+                  <button
+                    type="button"
+                    onClick={() => router.push('/app/profile/edit')}
+                    className="text-xl font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                  >
+                    Add your name
+                  </button>
+                )}
+                {chosenHandle ? <p className="text-app-muted">{usernameHandle(chosenHandle)}</p> : null}
                 
                 <div className="mt-2 w-full text-left">
                   <ResidencyHomeBlock residency={(user as UserProfile).residency} dense />

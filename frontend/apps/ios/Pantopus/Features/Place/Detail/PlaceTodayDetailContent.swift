@@ -21,6 +21,9 @@ import UserNotifications
 struct PlaceTodayDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    /// Takes the Ballot P0 card's "Open your ballot" to the Place card;
+    /// without it the button is left out.
+    var onOpenBallot: (() -> Void)?
     var showHomeRadon = false
     @Environment(RootTabModel.self) private var rootTabs
     @Environment(\.scenePhase) private var scenePhase
@@ -38,10 +41,16 @@ struct PlaceTodayDetailContent: View {
         return section.status == .unavailable && vm.fallbackCalendar?.needsPickupDay == true
     }
 
-    init(intel: PlaceIntelligence, vm: PlaceDetailViewModel, showHomeRadon: Bool = false) {
+    init(
+        intel: PlaceIntelligence,
+        vm: PlaceDetailViewModel,
+        showHomeRadon: Bool = false,
+        onOpenBallot: (() -> Void)? = nil
+    ) {
         self.intel = intel
         self.vm = vm
         self.showHomeRadon = showHomeRadon
+        self.onOpenBallot = onOpenBallot
     }
 
     /// Order (matches Android): what it is like now, what to do with it,
@@ -157,6 +166,8 @@ struct PlaceTodayDetailContent: View {
             }
         }
 
+        ballotWeek
+
         // Verdicts, not readings. Silent when there is nothing to
         // answer — an empty verdict row is worse than no row.
         if let goodDay = vm.section(.goodDayTo, in: intel),
@@ -169,6 +180,20 @@ struct PlaceTodayDetailContent: View {
                 name: "Derived from today's conditions",
                 asOf: PlacePresentation.fmtTime(goodDay.asOf)
             )
+        }
+    }
+
+    /// Ballot P0 (ballot_p0): ballot week and "Moved this year?", only when
+    /// the server says either applies. Sits between Weather and the verdict
+    /// row, as it did before master split this view into sections.
+    @ViewBuilder
+    private var ballotWeek: some View {
+        if let election = vm.section(.civicElection, in: intel),
+           election.status == .ready,
+           let card = election.civicElection?.ballotCard,
+           BallotTodayCard.applies(card) {
+            BallotTodayCard(card: card, onOpenBallot: onOpenBallot)
+                .padding(.top, Spacing.s4)
         }
     }
 

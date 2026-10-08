@@ -78,7 +78,13 @@ struct AddressTodayTabView: View {
         if !resolved {
             PlaceDetailSkeleton()
         } else if let detail {
-            AddressTodayLoaded(viewModel: detail, savedPlace: savedPlace, onAddHome: onAddHome, onResolvePlace: resolveHome)
+            // The Ballot P0 card's "Open your ballot" lands on the Place tab.
+            AddressTodayLoaded(
+                viewModel: detail,
+                savedPlace: savedPlace,
+                onAddHome: onAddHome,
+                onResolvePlace: resolveHome
+            ) { openBallot() }
                 .id(detail.savedPlaceId ?? detail.homeId)
         } else if loadFailed {
             couldNotLoad
@@ -184,6 +190,19 @@ struct AddressTodayTabView: View {
         }
         resolved = true
     }
+
+    /// The ballot card is on this home's Place dashboard. Selecting the
+    /// Place tab alone can land on its hub or a detail page, so open the
+    /// dashboard through the place link, as the tab's own stack does.
+    private func openBallot() {
+        // Master's Today also opens for a saved place with no home
+        // (`calendarHomeId` is nil); there is no home dashboard to open then.
+        guard let homeId = detail?.calendarHomeId else {
+            rootTabs.selected = .place
+            return
+        }
+        DeepLinkRouter.shared.handle(path: "/place/\(homeId)")
+    }
 }
 
 /// The loaded Today content, driven by the same view model as the Place
@@ -194,6 +213,7 @@ private struct AddressTodayLoaded: View {
     let savedPlace: SavedPlaceDTO?
     let onAddHome: () -> Void
     let onResolvePlace: () async -> Void
+    let onOpenPlace: () -> Void
     @State private var scope = HomeClaimSessionScope(api: .shared)
     @State private var savedAnchorMatches = false
     @State private var showMorningCard = false
@@ -221,7 +241,12 @@ private struct AddressTodayLoaded: View {
                                 StatusChip("Saved place · Only you", variant: .neutral)
                                     .padding(.bottom, 12)
                             }
-                            PlaceTodayDetailContent(intel: intel, vm: viewModel, showHomeRadon: savedPlace == nil)
+                            PlaceTodayDetailContent(
+                                intel: intel,
+                                vm: viewModel,
+                                showHomeRadon: savedPlace == nil,
+                                onOpenBallot: onOpenPlace
+                            )
                             if savedPlace != nil {
                                 remindersRow.padding(.top, 12)
                             }
@@ -234,6 +259,10 @@ private struct AddressTodayLoaded: View {
                         .padding(.bottom, Spacing.s10)
                     }
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { scrollFrame = $0 }
+                    // The home-screen widget shows what Today just showed for this place.
+                    .task(id: WidgetSource(intel: intel, fallback: viewModel.fallbackCalendar)) {
+                        WidgetSnapshotStore.shared.writeToday(TodayWidgetSnapshot(intel: intel, viewModel: viewModel))
+                    }
                     .onChange(of: morningVisible) { _, visible in
                         if visible { Task { await markPromptDisplayed() } }
                     }
@@ -459,4 +488,10 @@ private struct AddressTodayLoaded: View {
         guard lifecycleVersion == version, rootTabs.selected == .today, savedPlace?.id == viewModel.savedPlaceId,
               !AppLockManager.shared.isLocked, UIApplication.shared.isProtectedDataAvailable else { throw CancellationError() }
     }
+}
+
+/// What the Today widget's snapshot is built from; a change rewrites it.
+private struct WidgetSource: Equatable {
+    let intel: PlaceIntelligence
+    let fallback: PlaceAddressCalendarData?
 }

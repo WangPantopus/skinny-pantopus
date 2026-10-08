@@ -18,6 +18,7 @@ const router = express.Router();
 const verifyToken = require('../middleware/verifyToken');
 const { checkHomePermission } = require('../utils/homePermissions');
 const placeIntelligenceService = require('../services/placeIntelligenceService');
+const featureFlagService = require('../services/featureFlagService');
 const { recordSystem, SYSTEM_KEYS } = require('../services/homeSystemsService');
 const { PLACE_SECTION_IDS } = require('../serializers/placeIntelligenceSerializer');
 const logger = require('../utils/logger');
@@ -42,7 +43,17 @@ function parseSectionsParam(raw) {
   return { sectionIds: ids };
 }
 
-// GET /api/homes/:id/intelligence[?sections=a,b,c]
+// Ballot (docs/ballot-implementation-plan-2026-09-24.md): a client that
+// understands the Ballot payload says so with `ballot=1`; the user must also
+// have `ballot_p0`. Decided once per request from the signed-in user (no User
+// read), so an app without Ballot never sees Ballot fields and a request that
+// cannot have them costs nothing extra.
+async function ballotOptIn(req) {
+  if (req.query.ballot !== '1') return false;
+  return featureFlagService.isFeatureEnabled('ballot_p0', req.user);
+}
+
+// GET /api/homes/:id/intelligence[?sections=a,b,c][&ballot=1]
 router.get('/:id/intelligence', verifyToken, async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
@@ -69,6 +80,7 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
       userId,
       access,
       sectionIds,
+      ballot: await ballotOptIn(req),
     });
     if (privateSetup && JSON.stringify(await homeListService.readAccessState(id, userId)) !== JSON.stringify(privateSetup)) {
       throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });

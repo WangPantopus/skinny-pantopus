@@ -59,9 +59,11 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
     public let reviews: [PublicProfileReview]
     public let socialLinks: JSONValue?
     public let skills: [String]
+    /// True when the server made the username up (user_…, or the pre-October-7 kind built from the email address).
+    public let usernameIsGenerated: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case id, username
+        case id, username, usernameIsGenerated
         case firstName, lastName, name
         case bio, tagline
         case avatarURL = "avatar_url"
@@ -102,6 +104,19 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
         reviews = try (c.decodeIfPresent([PublicProfileReview].self, forKey: .reviews)) ?? []
         socialLinks = try c.decodeIfPresent(JSONValue.self, forKey: .socialLinks)
         skills = try (c.decodeIfPresent([String].self, forKey: .skills)) ?? []
+        usernameIsGenerated = try c.decodeIfPresent(Bool.self, forKey: .usernameIsGenerated) ?? false
+    }
+
+    /// The username when the person chose it; nil for a made-up one.
+    public var chosenUsername: String? {
+        usernameIsGenerated ? nil : MadeUpUsername.chosen(username)
+    }
+
+    /// False when the profile has neither a name nor a chosen username.
+    public var hasName: Bool {
+        if let name, !name.isEmpty { return true }
+        if [firstName, lastName].contains(where: { $0?.isEmpty == false }) { return true }
+        return chosenUsername != nil
     }
 
     /// Best-effort display name.
@@ -109,8 +124,8 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
         if let name, !name.isEmpty { return name }
         let combined = [firstName, lastName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
         if !combined.isEmpty { return combined }
-        // A made-up username (user_…) is never shown as the name.
-        return MadeUpUsername.handle(username) ?? "Pantopus member"
+        // A made-up username is never shown as the name.
+        return chosenUsername.map { "@\($0)" } ?? "Pantopus member"
     }
 
     /// "City, ST" if both present.

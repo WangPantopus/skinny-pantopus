@@ -303,7 +303,8 @@ public struct PublicProfileView: View {
                         bio: payload.stats.bio,
                         isVerified: payload.header.isVerified,
                         avatarURL: payload.header.avatarURL,
-                        stats: payload.stats.stats
+                        stats: payload.stats.stats,
+                        avatarName: payload.header.hasName ? nil : ""
                     ) {
                         identityActions(for: payload)
                     }
@@ -383,7 +384,8 @@ public struct PublicProfileView: View {
                         bio: payload.stats.bio,
                         isVerified: payload.header.isVerified,
                         avatarURL: payload.header.avatarURL,
-                        stats: payload.stats.stats
+                        stats: payload.stats.stats,
+                        avatarName: payload.header.hasName ? nil : ""
                     ) {
                         identityActions(for: payload)
                     }

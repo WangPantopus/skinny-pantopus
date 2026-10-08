@@ -4,7 +4,8 @@ import { useState } from 'react';
 
 interface SkillsCardProps {
   skills: string[];
-  onAction: () => void;
+  /** A skill's action (edit for the owner, a hire request for visitors); without one the skills are plain chips. */
+  onAction?: () => void;
   ownerView: boolean;
 }
 
@@ -16,7 +17,7 @@ export default function SkillsCard({ skills, onAction, ownerView }: SkillsCardPr
     <div className="bg-surface rounded-xl border border-app p-5">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-semibold text-app">Skills</h3>
-        {ownerView && (
+        {ownerView && onAction && (
           <button onClick={onAction} className="text-sm text-primary-600">Edit</button>
         )}
       </div>
@@ -24,15 +25,24 @@ export default function SkillsCard({ skills, onAction, ownerView }: SkillsCardPr
         <p className="text-sm text-app-secondary">No skills added yet.</p>
       ) : (
         <div className="flex flex-wrap gap-2">
-          {visible.map((skill, idx) => (
-            <button
-              key={`${skill}-${idx}`}
-              onClick={onAction}
-              className="px-3 py-1.5 rounded-full border border-app bg-surface-muted text-sm text-app-strong"
-            >
-              {skill}
-            </button>
-          ))}
+          {visible.map((skill, idx) =>
+            onAction ? (
+              <button
+                key={`${skill}-${idx}`}
+                onClick={onAction}
+                className="px-3 py-1.5 rounded-full border border-app bg-surface-muted text-sm text-app-strong"
+              >
+                {skill}
+              </button>
+            ) : (
+              <span
+                key={`${skill}-${idx}`}
+                className="px-3 py-1.5 rounded-full border border-app bg-surface-muted text-sm text-app-strong"
+              >
+                {skill}
+              </span>
+            ),
+          )}
         </div>
       )}
       {skills.length > 6 && (

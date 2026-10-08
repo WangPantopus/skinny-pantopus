@@ -49,7 +49,7 @@ const realRentService = require('./realRentService');
 const { locationFromCoordinates } = require('./context/locationResolver');
 
 const HOME_SELECT =
-  'id, owner_id, address, address2, city, state, zipcode, map_center_lat, map_center_lng, year_built, sq_ft, bedrooms, bathrooms, lot_sq_ft, home_type';
+  'id, owner_id, address, address2, city, state, zipcode, map_center_lat, map_center_lng, year_built, sq_ft, bedrooms, bathrooms, lot_sq_ft, home_type, move_in_date';
 
 // k-anon density bucket labels (mirror @pantopus/types PLACE_DENSITY_LABELS).
 const DENSITY_LABELS = {
@@ -1043,8 +1043,8 @@ const COMPOSER_SECTIONS = [
   { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
   { ids: ['rent_band'], run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId, access }) => composeRealRent(home, tier, userId, !nonResidentViewer(access)) },
-  { ids: ['civic_districts'], run: ({ home }) => placeSectionAdapters.composeCivicDistricts(home) },
-  { ids: ['civic_election'], run: ({ home }) => placeSectionAdapters.composeCivicElection(home) },
+  { ids: ['civic_districts'], run: ({ home, ballot }) => placeSectionAdapters.composeCivicDistricts(home, { ballot }) },
+  { ids: ['civic_election'], run: ({ home, ballot }) => placeSectionAdapters.composeCivicElection(home, { ballot }) },
 ];
 
 // ── Per-home privacy → the place address ref (§ homePrivacy) ──
@@ -1080,9 +1080,13 @@ function buildPlaceRef(home, privacy) {
  * @param {object} params.access  Result of checkHomePermission (hasAccess, isOwner, occupancy).
  * @param {string[]} [params.sectionIds]  Optional subset of PLACE_SECTION_IDS to compose
  *                                        (already validated by the route); omitted ⇒ all.
+ * @param {boolean} [params.ballot]  The request opted in to Ballot (`ballot=1`) AND `ballot_p0`
+ *                                   is on for the user — decided once by the route, so the
+ *                                   composers never read the flag (or the User row) themselves.
+ *                                   Guests and service providers never get Ballot fields.
  * @returns {Promise<object|null>} The PlaceIntelligence response, or null if the home is missing.
  */
-async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
+async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false }) {
   // Owner-only sections depend on whether the viewer's ownership is still
   // pending; read it alongside the Home.
   const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
@@ -1146,9 +1150,13 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
 
   // An unreadable privacy row fails closed for the one toggle this payload
   // honors: the unit stays hidden, and the rest of Place still loads.
+  // Ballot is the household's own card: "Your ballot", and "Moved this year?"
+  // from the move-in date the household entered. Guests and service providers
+  // see public facts only, so they keep the plain election row and districts.
+  const ballotOn = Boolean(ballot) && viewer.role !== 'nonresident';
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
-    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access })),
+    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access, ballot: ballotOn })),
   ]);
 
   const composed = {};

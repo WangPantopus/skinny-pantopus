@@ -47,7 +47,7 @@ import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated 
 import { launchFeatures, webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import type { CSSProperties } from 'react';
-import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, type LucideIcon } from 'lucide-react';
+import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { chosenUsername } from '@pantopus/utils';
 
@@ -269,7 +269,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   // ── Derived ───────────────────────────────────────────────
   // A made-up username (user_…) is never shown as the person's name.
-  const userInitial = user?.firstName?.[0]?.toUpperCase() || user?.name?.[0]?.toUpperCase() || chosenUsername(user?.username)?.[0]?.toUpperCase() || 'U';
+  // No name and no chosen username: a plain avatar, not a stand-in letter.
+  const userInitial = user?.firstName?.[0]?.toUpperCase() || user?.name?.[0]?.toUpperCase()
+    || (user?.usernameIsGenerated ? null : chosenUsername(user?.username))?.[0]?.toUpperCase()
+    || <UserRound aria-hidden className="w-4 h-4" />;
   const userName = user?.firstName || user?.name || chosenUsername(user?.username) || '';
   const profile = user as (User & { avatar_url?: string; profilePicture?: string }) | null;
   const avatarUrl = profile?.avatar_url ?? profile?.profilePicture ?? profile?.profile_picture_url ?? null;

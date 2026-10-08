@@ -113,8 +113,12 @@ public struct MeView: View {
                 MeHeader(
                     content: active,
                     showBusiness: viewModel.showBusiness,
-                    onClose: onClose
-                ) { viewModel.selectIdentity($0) }
+                    onClose: onClose,
+                    onAddName: {
+                        onSection(MeSectionRow(id: "edit", icon: .edit2, label: "Edit profile", routeKey: "me.editProfile"))
+                    },
+                    onSwitch: { viewModel.selectIdentity($0) }
+                )
                 if !active.isUnbound {
                     MeStatsRow(stats: active.stats)
                         .padding(.horizontal, Spacing.s4)
@@ -216,6 +220,7 @@ private struct MeHeader: View {
     let content: MeIdentityContent
     let showBusiness: Bool
     let onClose: (@MainActor () -> Void)?
+    let onAddName: @MainActor () -> Void
     let onSwitch: @MainActor (MeIdentity) -> Void
 
     var body: some View {
@@ -236,10 +241,22 @@ private struct MeHeader: View {
             HStack(alignment: .center, spacing: 14) {
                 avatar
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(content.displayName)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Theme.Color.appTextInverse)
-                        .lineLimit(1)
+                    if content.displayName.isEmpty {
+                        // Skipped the one-time name sheet: an invitation, not a stand-in label.
+                        Button(action: onAddName) {
+                            Text("Add your name")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundStyle(Theme.Color.appTextInverse)
+                                .underline()
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("meAddName")
+                    } else {
+                        Text(content.displayName)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(Theme.Color.appTextInverse)
+                            .lineLimit(1)
+                    }
                     if !content.handle.isEmpty {
                         Text(content.handle)
                             .font(.system(size: 12, weight: .medium))
@@ -293,9 +310,13 @@ private struct MeHeader: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                Text(content.initials)
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(Theme.Color.appTextInverse)
+                if content.initials.isEmpty {
+                    Icon(.userRound, size: 30, color: Theme.Color.appTextInverse)
+                } else {
+                    Text(content.initials)
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(Theme.Color.appTextInverse)
+                }
             }
             .frame(width: 72, height: 72)
             .overlay(

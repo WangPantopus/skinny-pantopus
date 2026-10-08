@@ -1,4 +1,5 @@
 import InfoLine from '../atoms/InfoLine';
+import { launchFeatures } from '@/lib/featureFlags';
 import InfoRow from '../atoms/InfoRow';
 import { homePlaceText, type ResidencyPayload } from '../ResidencyHomeBlock';
 
@@ -36,7 +37,8 @@ export default function AboutCard({ profile, residency }: AboutCardProps) {
       <div className="mt-4 space-y-2 text-sm">
         <InfoLine label="Home" value={homePlaceText(residency ?? undefined)} />
         <InfoLine label="Member since" value={joinedLabel} />
-        <InfoLine label="Work type" value={workType} />
+        {/* Launch cut #4 (Open Gigs): poster / worker is a task-marketplace role. */}
+        {launchFeatures.openGigs && <InfoLine label="Work type" value={workType} />}
         {website && <InfoRow icon="🌐" label="Website" value={website} link />}
       </div>
     </div>

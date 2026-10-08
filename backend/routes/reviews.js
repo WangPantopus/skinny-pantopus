@@ -226,9 +226,9 @@ router.get('/user/:userId', async (req, res) => {
         reviewer: reviewerMap[r.reviewer_id] || null,
         reviewer_name: reviewerMap[r.reviewer_id]?.name ||
                        reviewerMap[r.reviewer_id]?.first_name ||
-                       reviewerMap[r.reviewer_id]?.username || 'Anonymous',
+                       chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username) || 'Anonymous',
         reviewer_avatar: reviewerMap[r.reviewer_id]?.profile_picture_url || null,
-        reviewer_username: reviewerMap[r.reviewer_id]?.username || null,
+        reviewer_username: chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username),
         received_as: resolveReceivedAs({ ...r, gig: gigMap[r.gig_id] || null }, userId),
       }));
 
@@ -256,9 +256,9 @@ router.get('/user/:userId', async (req, res) => {
       ...r,
       reviewer_name: r.reviewer?.name ||
                      r.reviewer?.first_name ||
-                     r.reviewer?.username || 'Anonymous',
+                     chosenUsernameOrNull(r.reviewer?.username) || 'Anonymous',
       reviewer_avatar: r.reviewer?.profile_picture_url || null,
-      reviewer_username: r.reviewer?.username || null,
+      reviewer_username: chosenUsernameOrNull(r.reviewer?.username),
       received_as: resolveReceivedAs(r, userId),
     }));
 
