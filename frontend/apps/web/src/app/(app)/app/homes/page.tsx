@@ -20,6 +20,10 @@ function claimInProgress(status: string) {
   return status === 'under_review';
 }
 
+// Returning to the page (switching apps or tabs, clicking into the window) refreshes the list in
+// the background at most this often. An account change always clears and reloads at once.
+const FOCUS_REFRESH_MS = 30_000;
+
 export default function HomesPage() {
   const router = useRouter();
   const [homes, setHomes] = useState<MyHome[]>([]);
@@ -32,25 +36,37 @@ export default function HomesPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState('');
   const [deletingClaimId, setDeletingClaimId] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState('');
   const generation = useRef(0);
   const ready = useRef<(() => boolean) | null>(null);
+  const lastAttempt = useRef(0);
+  const inFlight = useRef(0);
+  // A refresh that replaces the residency list bumps this, so an older "Load more" page isn't appended to it.
+  const residencyEpoch = useRef(0);
+  const morePages = useRef(false);
   const retire = useCallback(() => {
     generation.current++; ready.current = null; setHomes([]); setPendingClaims([]); setLoading(true);
-    setResidencyRequests([]); setResidencyCursor(null); setLoadingMore(false); setMoreError('');
+    setResidencyRequests([]); setResidencyCursor(null); setLoadingMore(false); setMoreError(''); setRefreshError('');
   }, []);
 
-  const load = useCallback(async () => {
-    const revision = ++generation.current;
-    ready.current = null;
-    setHomes([]); setPendingClaims([]);
-    setResidencyRequests([]); setResidencyCursor(null); setLoadingMore(false); setMoreError('');
-    setLoading(true);
-    setError('');
+  // A full load clears the page first. A background refresh keeps the list on screen and replaces it
+  // only with a newer, verified answer for the same account; if it fails, the list stays with a notice.
+  const load = useCallback(async (background = false) => {
+    const revision = background ? generation.current : ++generation.current;
+    lastAttempt.current = Date.now();
+    if (!background) {
+      ready.current = null; morePages.current = false;
+      setHomes([]); setPendingClaims([]);
+      setResidencyRequests([]); setResidencyCursor(null); setLoadingMore(false); setMoreError('');
+      setLoading(true);
+      setError('');
+    }
+    setRefreshError('');
+    inFlight.current++;
     const token = getAuthToken(), origin = api.getApiBaseUrl();
     let marker: string | null;
     const current = () => generation.current === revision && getAuthToken() === token
-      && api.getApiBaseUrl() === origin && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker
-      && document.visibilityState !== 'hidden';
+      && api.getApiBaseUrl() === origin && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker;
     try {
       marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
       if (!token) { router.push('/login'); return; }
@@ -87,40 +103,57 @@ export default function HomesPage() {
         }),
       );
       if (!current()) return;
-      ready.current = current; setHomes(list); setPendingClaims(enriched);
-      setResidencyRequests(residencyRes.requests); setResidencyCursor(residencyRes.next_cursor);
+      if (!background) ready.current = current;
+      setHomes(list); setPendingClaims(enriched);
+      // Keep the older requests someone already paged through; a refresh only renews the first page.
+      if (!background || !morePages.current) {
+        residencyEpoch.current++; setLoadingMore(false); setMoreError('');
+        setResidencyRequests(residencyRes.requests); setResidencyCursor(residencyRes.next_cursor);
+      }
     } catch (e: unknown) {
       if (generation.current !== revision) return;
+      if (background) { setRefreshError('Your homes couldn’t be refreshed, so this list may be out of date.'); return; }
       setHomes([]); setPendingClaims([]); ready.current = null;
       setError(e instanceof Error ? e.message : 'Failed to load homes');
     } finally {
+      inFlight.current--;
       if (generation.current === revision) setLoading(false);
     }
   }, [router]);
 
   const loadMoreResidency = async () => {
-    const opening = ready.current, cursor = residencyCursor;
+    const opening = ready.current, cursor = residencyCursor, epoch = residencyEpoch.current;
     if (!opening?.() || !cursor || loadingMore) return;
+    const same = () => ready.current === opening && opening() && residencyEpoch.current === epoch;
     setLoadingMore(true); setMoreError('');
     try {
       const response = await api.homes.getMyResidencyRequests(cursor);
-      if (ready.current !== opening || !opening()) return;
+      if (!same()) return;
       validateResidencyPage(response);
       if (response.requests.some(r => r.id <= cursor || residencyRequests.some(existing => existing.id === r.id))) throw new Error('Your request history changed. Refresh My Homes to continue.');
+      morePages.current = true;
       setResidencyRequests(previous => [...previous, ...response.requests]); setResidencyCursor(response.next_cursor);
     } catch (error) {
-      if (ready.current === opening && opening()) setMoreError(error instanceof Error ? error.message : 'Could not load more requests. Please retry.');
+      if (same()) setMoreError(error instanceof Error ? error.message : 'Could not load more requests. Please retry.');
     } finally {
-      if (ready.current === opening && opening()) setLoadingMore(false);
+      if (same()) setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    const refresh = () => { retire(); if (document.visibilityState !== 'hidden') void load(); };
-    const visibility = () => { if (document.visibilityState === 'hidden') retire(); else refresh(); };
-    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) refresh(); };
+    // Another account's list must never show, so an account change clears the page and reloads it.
+    const restart = () => { retire(); void load(); };
+    // Coming back keeps the list visible and refreshes it behind the scenes (a full load only
+    // after an error, when there's no list to keep).
+    const refresh = () => {
+      if (document.visibilityState === 'hidden' || inFlight.current > 0
+        || Date.now() - lastAttempt.current < FOCUS_REFRESH_MS) return;
+      void load(ready.current !== null);
+    };
+    const visibility = () => { if (document.visibilityState !== 'hidden') refresh(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) restart(); };
     void load();
-    const unsubscribe = api.onTokenChange(refresh);
+    const unsubscribe = api.onTokenChange(restart);
     window.addEventListener('focus', refresh); window.addEventListener('storage', storage);
     document.addEventListener('visibilitychange', visibility);
     return () => { retire(); unsubscribe();
@@ -184,6 +217,12 @@ export default function HomesPage() {
           </Link>
         </div>
         {savedRemoval && <div className="mb-5"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 dark:text-blue-400 underline">Check an unfinished removal</Link></div>}
+        {!loading && !error && refreshError && (
+          <div role="alert" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-app-border bg-app-surface p-4">
+            <p className="text-sm text-red-600 dark:text-red-400">{refreshError}</p>
+            <button type="button" onClick={() => { if (inFlight.current === 0) void load(true); }} className="rounded-lg border border-app-border px-3 py-2 text-sm font-semibold">Retry</button>
+          </div>
+        )}
         {loading ? (
           <div className="text-app-text-secondary">Loading…</div>
         ) : error ? (
