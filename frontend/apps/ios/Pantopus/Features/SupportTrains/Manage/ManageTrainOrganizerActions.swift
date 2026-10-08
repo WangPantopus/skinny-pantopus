@@ -603,10 +603,12 @@ public extension ManageTrainViewModel {
         let slotById = Dictionary(uniqueKeysWithValues: slots.map { ($0.id, $0) })
         return reservations.map { reservation in
             let slot = reservation.slotId.flatMap { slotById[$0] }
-            let contribution = [reservation.contributionMode?.capitalized, reservation.dishTitle]
-                .compactMap { $0 }
-                .filter { !$0.isEmpty }
-                .joined(separator: " · ")
+            let contribution = [
+                contributionSummary(reservation),
+                arrivalLabel(reservation.estimatedArrivalAt).map { "arrives \($0)" }
+            ]
+            .compactMap { $0 }
+            .joined(separator: " · ")
             return ManageHelperRow(
                 id: reservation.id,
                 name: reservation.displayName,
@@ -617,6 +619,37 @@ public extension ManageTrainViewModel {
                 exactAddressShared: reservation.exactAddressShared ?? false
             )
         }
+    }
+
+    /// "Home-cooked meal: Lentil soup", "Takeout / delivery: Thai Palace": what the helper brings,
+    /// named as the web train pages name it.
+    internal nonisolated static func contributionSummary(_ reservation: SupportTrainReservationDTO) -> String? {
+        let mode = reservation.contributionMode ?? ""
+        let label: String? = switch mode {
+        case "": nil
+        case "cook": "Home-cooked meal"
+        case "takeout": "Takeout / delivery"
+        case "groceries": "Groceries"
+        default: mode.replacingOccurrences(of: "_", with: " ")
+        }
+        let detail = [reservation.dishTitle, reservation.restaurantName].compactMap { $0 }.first { !$0.isEmpty }
+        let parts = [label, detail].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: ": ")
+    }
+
+    /// The helper's estimated arrival ("2026-10-12T00:30:00+00:00") as "5:30 pm" in this phone's time zone.
+    internal nonisolated static func arrivalLabel(_ iso: String?) -> String? {
+        guard let iso, !iso.isEmpty else { return nil }
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fractional = parser.date(from: iso)
+        parser.formatOptions = [.withInternetDateTime]
+        guard let date = fractional ?? parser.date(from: iso) else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date).lowercased()
     }
 
     internal nonisolated static func organizerRows(

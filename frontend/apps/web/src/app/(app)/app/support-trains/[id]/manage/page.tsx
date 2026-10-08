@@ -402,6 +402,9 @@ export default function ManageSupportTrainPage() {
                             timeZone: 'UTC',
                           })
                         : '—'}
+                      {arrivalLabel(r.estimated_arrival_at) && (
+                        <div>arrives {arrivalLabel(r.estimated_arrival_at)}</div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -468,4 +471,12 @@ function statusBadgeClasses(status: string): string {
     default:
       return 'bg-slate-100 text-slate-600';
   }
+}
+
+// The helper's estimated arrival as "5:30 pm" in this browser's time zone.
+function arrivalLabel(iso?: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 }
