@@ -5,6 +5,8 @@
 // same ATTOM record behind /app/homes/[id]/property-details (linked
 // below for the full public record). A private, device-local mortgage
 // input turns into an equity figure only the resident can see.
+// The value, assessment and equity are the confirmed owner's; renters and
+// household members see the Home's facts and systems.
 // ============================================================
 
 'use client';
@@ -383,20 +385,31 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
   const ready = home && (home.status === 'ready' || home.status === 'stale' || home.status === 'partial') && home.data;
   const data = ready ? (home!.data as PlaceYourHomeData) : null;
   const locked = home?.access === 'locked';
+  // Set up but not verified (T1): the Home's records open once the address
+  // is verified by mail.
+  const setupStage = intelligence.tier === 'T1';
+  // Older servers send no viewer and keep the value for everyone they serve.
+  const viewer = intelligence.viewer;
+  const valueAccess = !viewer || (viewer.role === 'owner' && viewer.ownership === 'confirmed')
+    ? 'shown' : viewer.role === 'owner' ? 'pending' : 'none';
+  const verifyByMail = () => homeId && router.push(`/app/homes/${homeId}/verify-postcard?return=place`);
 
   return (
     <>
       <DetailHeader title="Your home" address={detailAddress(intelligence.place)} />
       <div className="px-4 sm:px-5 pt-1 pb-16">
         {locked ? (
-          <div className="mt-2">
+          <div className="mt-2 flex flex-col gap-2.5">
             <LockedCard
               icon={House}
-              title="Home details & value"
-              reason={home?.unavailable_reason ?? "Claim your place to see your home's exact details and value."}
-              cta="Claim home"
-              onCta={() => homeId && router.push(`/app/homes/${homeId}/dashboard`)}
+              title={valueAccess === 'none' ? 'Home details' : 'Home details & value'}
+              reason={home?.unavailable_reason ?? "Verify your address by mail to see your home's details."}
+              cta={setupStage ? 'Verify address' : 'Claim home'}
+              onCta={setupStage ? verifyByMail : () => homeId && router.push(`/app/homes/${homeId}/dashboard`)}
             />
+            {systems?.access === 'locked' && systems.unavailable_reason ? (
+              <LockedCard icon={Wrench} title="Systems" reason={systems.unavailable_reason} cta="Verify address" />
+            ) : null}
           </div>
         ) : (
           <>
@@ -407,15 +420,24 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
               <SectionCard icon={House} title="Property facts" state={home ? statusToState(home.status) : 'unavailable'} caption={home?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
             )}
 
-            <DetailSectionLabel>Value</DetailSectionLabel>
-            {data ? (
-              <div className="flex flex-col gap-2.5">
-                <ValueCard data={data} />
-                <AssessmentCard data={data} />
-              </div>
-            ) : (
-              <SectionCard icon={Landmark} title="Estimated value" state={home ? statusToState(home.status) : 'unavailable'} caption={home?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
-            )}
+            {valueAccess === 'shown' ? (
+              <>
+                <DetailSectionLabel>Value</DetailSectionLabel>
+                {data ? (
+                  <div className="flex flex-col gap-2.5">
+                    <ValueCard data={data} />
+                    <AssessmentCard data={data} />
+                  </div>
+                ) : (
+                  <SectionCard icon={Landmark} title="Estimated value" state={home ? statusToState(home.status) : 'unavailable'} caption={home?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
+                )}
+              </>
+            ) : valueAccess === 'pending' ? (
+              <>
+                <DetailSectionLabel>Value</DetailSectionLabel>
+                <LockedCard icon={Landmark} title="Estimated value" reason="Available once your ownership is confirmed." cta="Confirm ownership" />
+              </>
+            ) : null}
             {home?.source ? <SourceNote name={home.source} asOf={fmtMonthYear(home.as_of) ? `as of ${fmtMonthYear(home.as_of)}` : undefined} /> : null}
 
             {homeId ? (
@@ -425,7 +447,7 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
               </>
             ) : null}
 
-            {data?.estimated_value ? (
+            {valueAccess === 'shown' && data?.estimated_value ? (
               <>
                 <DetailSectionLabel>Equity</DetailSectionLabel>
                 <MortgageEquity homeId={homeId} homeValue={data.estimated_value} />
@@ -447,9 +469,11 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
           </>
         )}
 
-        <InfoNote>
-          Values are informational, drawn from public records and a pricing model. They aren&apos;t an appraisal, a guarantee, or an offer to buy or lend.
-        </InfoNote>
+        {valueAccess === 'shown' ? (
+          <InfoNote>
+            Values are informational, drawn from public records and a pricing model. They aren&apos;t an appraisal, a guarantee, or an offer to buy or lend.
+          </InfoNote>
+        ) : null}
       </div>
     </>
   );

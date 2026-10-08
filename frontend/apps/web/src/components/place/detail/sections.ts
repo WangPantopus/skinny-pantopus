@@ -50,6 +50,19 @@ export const GROUP_TO_SLUG: Partial<Record<PlaceGroup, string>> = {
   identity: 'identity',
 };
 
+/**
+ * Detail pages whose group the server left out for this viewer: a guest or
+ * service provider has no Your home or Money signals, another household
+ * member no Money signals. Older servers send every group and no viewer.
+ */
+export function placeSlugsNotForViewer(intel: PlaceIntelligence): string[] {
+  if (!intel.viewer) return [];
+  return Object.entries(PLACE_DETAIL_BY_SLUG)
+    .filter(([, meta]) => (meta.group === 'your_home' || meta.group === 'money_signals')
+      && !intel.groups.some((g) => g.group === meta.group))
+    .map(([slug]) => slug);
+}
+
 /** Find a single section envelope across the grouped contract. */
 export function findPlaceSection<Id extends PlaceSectionId>(
   intel: PlaceIntelligence,

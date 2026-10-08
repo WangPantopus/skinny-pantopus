@@ -239,6 +239,7 @@ export type {
   PlaceAddressRef,
   PlaceGroupBlock,
   PlaceIntelligence,
+  PlaceViewer,
 } from './placeIntelligence';
 
 export {

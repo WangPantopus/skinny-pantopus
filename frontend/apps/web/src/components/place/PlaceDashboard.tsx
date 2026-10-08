@@ -20,6 +20,7 @@ import type { PlaceSwitcherHome } from '@/components/archetypes/place';
 import { PlaceHomeContext, placeHomeQuery } from '@/components/archetypes/place';
 import ErrorState from '@/components/ui/ErrorState';
 import SavedPlaceContext from './SavedPlaceContext';
+import { placeSlugsNotForViewer } from './detail/sections';
 import PlaceDashboardView from './PlaceDashboardView';
 import PlaceDashboardSkeleton from './PlaceDashboardSkeleton';
 import PlaceShell from './PlaceShell';
@@ -29,9 +30,9 @@ const REDIRECT_TO = encodeURIComponent('/app/place');
 
 // Comfortable reading column on mobile; at lg+ the shared PlaceShell
 // adds the persistent section rail beside a wider content column.
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ hidden, children }: { hidden?: string[]; children: React.ReactNode }) {
   return (
-    <PlaceShell active="overview">
+    <PlaceShell active="overview" hidden={hidden}>
       <div className="px-4 sm:px-5 py-5 sm:py-6">{children}</div>
     </PlaceShell>
   );
@@ -176,7 +177,7 @@ export default function PlaceDashboard() {
   }
 
   return (
-    <Shell>
+    <Shell hidden={placeSlugsNotForViewer(intelQuery.data)}>
       {/* Hub absorption (Phase 1 follow-up): the setup checklist lives on the
           place page now, in wedge order (claim → verify → profile). */}
       {setupSteps.length > 0 && !setupSteps.every((s) => s.done) ? (
@@ -198,7 +199,7 @@ export default function PlaceDashboard() {
           router.replace(`/app/place${placeHomeQuery(id === homeQuery.data?.home?.id ? null : id)}`);
         }}
         onAddPlace={() => router.push('/app/homes/new')}
-        onClaim={() => router.push('/app/homes')}
+        onVerifyByMail={() => router.push(`/app/homes/${homeId}/verify-postcard?return=place`)}
       />
     </Shell>
   );

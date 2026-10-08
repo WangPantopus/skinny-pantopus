@@ -185,7 +185,8 @@ describe('GET /api/homes/:id/intelligence', () => {
       can_view_finance: true, own_months: [], peer_months: [], available_currencies: [], bill_benchmark_opt_in: false };
     setRpcMock(async name => name === 'get_home_bill_comparison'
       ? { data: billSnapshot, error: null } : { data: null, error: { message: 'Unconfigured RPC' } });
-    seedTable('HomeRolePermission', [{ role_base: 'member', permission: 'home.view', allowed: true }]);
+    seedTable('HomeRolePermission', [{ role_base: 'member', permission: 'home.view', allowed: true },
+      { role_base: 'lease_resident', permission: 'home.view', allowed: true }]);
     delete process.env.ATTOM_API_KEY; // default: no ATTOM
     providerOrchestrator.getHubToday.mockResolvedValue(defaultHubToday());
     neighborhoodProfileService.getProfile.mockResolvedValue(defaultNeighborhoodProfile());
@@ -484,10 +485,13 @@ describe('GET /api/homes/:id/intelligence', () => {
     // Phase-2/3 sections are wired: whatever the mocked providers yield,
     // each is present with a valid envelope status and can never sink
     // the response (section-level degradation).
-    for (const id of ['lead_radon', 'sunrise_sunset', 'rent_band', 'drinking_water', 'environmental_hazards', 'civic_districts', 'seismic', 'wildfire']) {
+    for (const id of ['lead_radon', 'sunrise_sunset', 'drinking_water', 'environmental_hazards', 'civic_districts', 'seismic', 'wildfire']) {
       expect(s[id]).toBeDefined();
       expect(['ready', 'partial', 'stale', 'unavailable', 'error']).toContain(s[id].status);
     }
+    // The viewer owns this Home: rent sections are a renter's, not an owner's.
+    expect(s.rent_band).toBeUndefined();
+    expect(s.real_rent).toBeUndefined();
   });
 
   test('bill benchmark preserves major-unit amounts across matching months', async () => {
@@ -597,12 +601,17 @@ describe('GET /api/homes/:id/intelligence', () => {
     seedHome({ owner_id: coOwner ? USER : 'someone-else' });
     seedTable('HomeOccupancy', [{ id: 'occ-provenance', home_id: HOME_ID, user_id: USER,
       is_active: true, start_at: null, end_at: null, verification_status: 'verified',
-      verification_source, role_base: 'member' }]);
+      verification_source, role_base: 'lease_resident' }]);
     const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence?sections=weather,real_rent`).set('x-test-user-id', USER);
     expect(res.status).toBe(200);
     expect(res.body.tier).toBe(tier);
     const sections = sectionsById(res.body);
     expect(sections.weather.status).toBe('ready');
+    if (coOwner) {
+      // An owner of the Home gets no rent sections.
+      expect(sections.real_rent).toBeUndefined();
+      return;
+    }
     expect(sections.real_rent.access).toBe(tier === 'T4' ? 'available' : 'locked');
     if (tier === 'T3') {
       expect(sections.real_rent.data).toBeNull();
@@ -657,8 +666,10 @@ describe('GET /api/homes/:id/intelligence', () => {
   // owner must not see what the block pays, and must not be able to
   // infer the block's progress either.
   describe('real_rent — the first Band D section', () => {
-    test('a claimed-but-unverified owner gets a locked envelope with no data', async () => {
-      seedHome();
+    test('a claimed-but-unverified renter gets a locked envelope with no data', async () => {
+      seedHome({ owner_id: 'someone-else' });
+      seedTable('HomeOccupancy', [{ id: 'occ-household', home_id: HOME_ID, user_id: USER, is_active: true, start_at: null,
+        end_at: null, verification_status: 'verified', verification_source: 'household', role_base: 'lease_resident' }]);
       const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
 
       expect(res.body.tier).toBe('T3');
@@ -681,7 +692,7 @@ describe('GET /api/homes/:id/intelligence', () => {
         start_at: null,
         end_at: null,
         verification_status: 'verified',
-        role_base: 'member',
+        role_base: 'lease_resident',
       }]);
 
       const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
