@@ -981,17 +981,22 @@ async function handleChargeSucceeded(charge) {
   const payment = await findPaymentByPI(charge.payment_intent);
   if (!payment) return;
 
+  const cardDetails = {
+    payment_method_type: charge.payment_method_details?.type,
+    payment_method_last4:
+      charge.payment_method_details?.card?.last4 ||
+      charge.payment_method_details?.us_bank_account?.last4,
+    payment_method_brand: charge.payment_method_details?.card?.brand,
+    updated_at: new Date().toISOString(),
+  };
+  // An original tip's charge is recorded only by its own tip transaction, from Stripe's proof
+  // (protect_gig_tip_original refuses any other writer). This event often arrives before the
+  // app's status check has run that transaction; writing the charge here then failed and the
+  // event was answered 500 until Stripe retried it. Only the card details are saved for a tip.
+  const update = payment.metadata?.gig_tip_original_v1 ? cardDetails : { stripe_charge_id: charge.id, ...cardDetails };
   assertSupabaseOk(await supabaseAdmin
     .from('Payment')
-    .update({
-      stripe_charge_id: charge.id,
-      payment_method_type: charge.payment_method_details?.type,
-      payment_method_last4:
-        charge.payment_method_details?.card?.last4 ||
-        charge.payment_method_details?.us_bank_account?.last4,
-      payment_method_brand: charge.payment_method_details?.card?.brand,
-      updated_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq('id', payment.id), 'Charge record failed', { paymentId: payment.id });
 }
 
