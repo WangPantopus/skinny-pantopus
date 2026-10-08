@@ -96,6 +96,20 @@ final class HomeTaskAccess: HomeTaskCreationAccess {
         return result
     }
 
+    /// The household's members, for assignee names. Viewers who can't see members get an error.
+    func occupants() async throws -> OccupantsResponse {
+        let revision = generation
+        try requireCurrent(revision)
+        let result: OccupantsResponse = try await api.request(Endpoint(
+            method: .get,
+            path: "/api/homes/\(homeId)/occupants",
+            headers: currentHeaders,
+            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
+        ))
+        try requireCurrent(revision)
+        return result
+    }
+
     func detail(taskId: String) async throws -> HomeTaskDTO {
         let revision = generation
         try requireCurrent(revision)

@@ -257,7 +257,7 @@ class HouseholdTasksListViewModelTest {
         assertFalse(projection.chipText.isNullOrEmpty())
     }
 
-    @Test fun done_row_surfaces_done_by_in_subtitle_and_muted_highlight() {
+    @Test fun done_row_surfaces_done_time_assignee_and_muted_highlight() {
         val task =
             makeTask(
                 status = "done",
@@ -265,8 +265,8 @@ class HouseholdTasksListViewModelTest {
                 completedAt = "2026-05-15T10:00:00Z",
             )
         val projection = HouseholdTasksListViewModel.project(task, fixedNow)
-        assertTrue(projection.subtitle.startsWith("Done by "))
-        assertTrue(projection.subtitle.contains("2h ago"))
+        // Tasks don't record who finished them, so there is no "done by".
+        assertTrue(projection.subtitle.startsWith("Done 2h ago · Assigned to "))
         assertEquals(RowHighlight.Muted, projection.highlight)
     }
 

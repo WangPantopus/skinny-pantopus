@@ -245,15 +245,15 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
         XCTAssertFalse(projection.chipText?.isEmpty ?? true)
     }
 
-    func testDoneRowSurfacesDoneByInSubtitleAndMutedHighlight() {
+    func testDoneRowSurfacesDoneTimeAssigneeAndMutedHighlight() {
         let task = makeTask(
             status: "done",
             assignedTo: "user-aaaa1111",
             completedAt: "2026-05-15T10:00:00Z" // 2 hours before fixedNow
         )
         let projection = HouseholdTasksListViewModel.project(task: task, now: Self.fixedNow)
-        XCTAssertTrue(projection.subtitle.starts(with: "Done by "))
-        XCTAssertTrue(projection.subtitle.contains("2h ago"))
+        // Tasks don't record who finished them, so there is no "done by".
+        XCTAssertTrue(projection.subtitle.starts(with: "Done 2h ago · Assigned to "))
         XCTAssertEqual(projection.highlight, .muted)
     }
 
