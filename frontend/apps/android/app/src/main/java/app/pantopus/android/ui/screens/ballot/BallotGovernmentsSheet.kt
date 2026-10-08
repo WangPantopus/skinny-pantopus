@@ -116,6 +116,9 @@ fun BallotGovernmentsView(
         finished = true
     }
     val t = if (playing) elapsed else Float.POSITIVE_INFINITY
+    // The finished frame shows scrolled to its end, so a short screen never cuts off the last sentence.
+    val middle = rememberScrollState()
+    LaunchedEffect(playing) { if (!playing) middle.animateScrollTo(middle.maxValue) }
     Column(modifier = modifier.fillMaxSize().background(PantopusColors.appSurface)) {
         GovernmentsHeader(
             address = address,
@@ -123,7 +126,7 @@ fun BallotGovernmentsView(
             action = if (playing) "Skip" else "Close",
             onAction = if (playing) ({ finished = true }) else onClose,
         )
-        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+        Column(modifier = Modifier.weight(1f).verticalScroll(middle)) {
             BallotStack(count = governments.count, story = if (playing) story else null, time = t)
             Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
                 FinishedCaption(governments, Modifier.storyMotion(story, story.steps, t))
