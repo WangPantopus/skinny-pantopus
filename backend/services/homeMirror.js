@@ -5,7 +5,9 @@
 // Loads the same rows the public-profile route loads and projects them
 // with reveal=false through serializers/homeProfileSerializer, so the
 // mirror shows exactly the outsider view and cannot drift from it.
-// Members only: checkHomePermission decides who may ask.
+// Members may ask (checkHomePermission), and so may the person whose own
+// private setup this Home is: a homeowner whose ownership is pending has no
+// household access yet, and the outsider view holds nothing about anyone else.
 // ============================================================
 
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -14,9 +16,23 @@ const { serializeHomeForViewer, serializeOwnerForViewer, HIDDEN_FROM_OUTSIDERS }
 
 const VIEWER_LABEL = 'A neighbor who is not in your household';
 
+// The same private-setup test My Homes uses (homeListService): the record
+// context says private, the user created the Home, and it isn't frozen,
+// disputed or archived.
+async function ownPrivateSetup(homeId, userId) {
+  const [{ data: home }, { data: context }] = await Promise.all([
+    supabaseAdmin.from('Home').select('id, created_by_user_id, home_status, security_state').eq('id', homeId).maybeSingle(),
+    supabaseAdmin.rpc('home_record_context', { p_home_id: homeId, p_user_id: userId }),
+  ]);
+  return Boolean(home && home.created_by_user_id === userId
+    && context && context.allowed === true && context.private === true
+    && !['frozen', 'frozen_silent', 'disputed'].includes(home.security_state)
+    && !['archived', 'merged'].includes(home.home_status));
+}
+
 async function loadHomeMirror({ homeId, userId }) {
   const perm = await checkHomePermission(homeId, userId);
-  if (!perm || !perm.hasAccess) return null;
+  if ((!perm || !perm.hasAccess) && !(await ownPrivateSetup(homeId, userId))) return null;
 
   const { data: home } = await supabaseAdmin
     .from('Home')
