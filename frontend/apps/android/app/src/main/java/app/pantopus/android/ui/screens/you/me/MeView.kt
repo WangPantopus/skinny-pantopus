@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.MonthlyReceiptDto
 import app.pantopus.android.ui.components.Shimmer
@@ -79,6 +80,8 @@ fun MeView(
     val context = LocalContext.current
 
     LaunchedEffect(Unit) { viewModel.load() }
+    // A saved name or username changes the header.
+    LaunchedEffect(Unit) { ProfileChanges.events.collect { viewModel.refresh() } }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("meScreen")) {
         when (val s = state) {
@@ -270,13 +273,15 @@ private fun MeHeader(
                     color = PantopusColors.appTextInverse,
                     maxLines = 1,
                 )
-                Text(
-                    text = content.handle,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = PantopusColors.appTextInverse.copy(alpha = 0.85f),
-                    maxLines = 1,
-                )
+                if (content.handle.isNotEmpty()) {
+                    Text(
+                        text = content.handle,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = PantopusColors.appTextInverse.copy(alpha = 0.85f),
+                        maxLines = 1,
+                    )
+                }
                 if (!content.locality.isNullOrEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
                         PantopusIconImage(

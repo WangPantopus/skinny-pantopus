@@ -113,12 +113,15 @@ fun HubTopBar(
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                 )
-                Text(
-                    content.name,
-                    style = PantopusTextStyle.body.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold),
-                    color = PantopusColors.appText,
-                    modifier = Modifier.semantics { heading() },
-                )
+                // No name yet: the greeting stands alone (never a made-up username).
+                if (content.name.isNotBlank()) {
+                    Text(
+                        content.name,
+                        style = PantopusTextStyle.body.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold),
+                        color = PantopusColors.appText,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                }
             }
             Box(
                 modifier =

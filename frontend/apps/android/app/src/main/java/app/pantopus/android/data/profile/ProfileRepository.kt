@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.users.UpdateSkillsRequest
 import app.pantopus.android.data.api.models.users.UpdateSkillsResponse
 import app.pantopus.android.data.api.models.users.UserSearchResponse
 import app.pantopus.android.data.api.models.users.UserStatsDto
+import app.pantopus.android.data.api.models.users.UsernameAvailabilityDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.UsersApi
@@ -38,6 +39,13 @@ class ProfileRepository
          */
         suspend fun updateSkills(skills: List<String>): NetworkResult<UpdateSkillsResponse> =
             safeApiCall { api.updateSkills(UpdateSkillsRequest(skills = skills)) }
+
+        /**
+         * `GET /api/users/username-availability?username=` — can the signed-in person change their
+         * username to this one? Route `backend/routes/users.js` (`router.get('/username-availability'`).
+         */
+        suspend fun usernameAvailability(username: String): NetworkResult<UsernameAvailabilityDto> =
+            safeApiCall { api.usernameAvailability(username) }
 
         /** `GET /api/users/:id/stats` — route `backend/routes/users.js:2787`. */
         suspend fun stats(userId: String): NetworkResult<UserStatsDto> = safeApiCall { api.stats(userId) }

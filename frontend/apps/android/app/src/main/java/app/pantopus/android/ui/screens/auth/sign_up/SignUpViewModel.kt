@@ -139,11 +139,13 @@ class SignUpViewModel
                             confirmPassword != password -> "Passwords don't match."
                             else -> null
                         }
-                    // Wedge onboarding (Phase 1 follow-up, "signup slim"): the form
-                    // matches web — email + password. Everything below is optional
-                    // and collected later in the claim flow; when typed it is checked.
+                    // First and last name are required, as on web; middle is optional.
+                    SignUpField.FirstName -> AuthValidation.requiredName(firstName, missing = "Enter your first name.")
+                    SignUpField.LastName -> AuthValidation.requiredName(lastName, missing = "Enter your last name.")
+                    SignUpField.MiddleName -> if (middleName.length > 255) "Use 255 characters or fewer." else null
+                    // The username is made up server-side (Edit Profile can change it),
+                    // so the form has no username field; anything set is still checked.
                     SignUpField.Username -> AuthValidation.usernameOptional(username)
-                    SignUpField.FirstName, SignUpField.LastName, SignUpField.MiddleName -> null
                     SignUpField.DateOfBirth -> AuthValidation.dateOfBirthOptional(dateOfBirth)
                     SignUpField.PhoneNumber -> AuthValidation.phoneOptional(phoneNumber)
                     SignUpField.Address -> {

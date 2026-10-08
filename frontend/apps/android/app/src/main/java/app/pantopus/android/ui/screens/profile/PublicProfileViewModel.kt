@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -628,7 +629,8 @@ class PublicProfileViewModel
          * `fetchPublicProfileByIdentifier` (`src/app/user/[id].tsx:53-58`).
          */
         private suspend fun loadProfile(): NetworkResult<PublicProfileDto> {
-            val identifier = routeIdentifier.trim()
+            // Once loaded, a refresh goes by id: the owner may have just changed the username the route used.
+            val identifier = userId.takeIf { UserSocialRepository.isUuid(it) } ?: routeIdentifier.trim()
             return if (UserSocialRepository.isUuid(identifier)) {
                 repo.publicProfile(identifier)
             } else {
@@ -768,7 +770,8 @@ class PublicProfileViewModel
             val header =
                 PublicProfileHeader(
                     displayName = profile.displayName,
-                    handle = profile.username.takeIf { it.isNotEmpty() },
+                    // A made-up username (user_…) is never shown as "@…" or in "Report @…".
+                    handle = MadeUpUsername.chosen(profile.username),
                     locality = profile.locality,
                     avatarUrl = profile.profilePictureUrl ?: profile.avatarUrl,
                     // No avatar check: `verified` is the account email flag that

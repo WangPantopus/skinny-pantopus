@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.hub.sections.HubActionStrip
 import app.pantopus.android.ui.screens.hub.sections.HubDiscoveryRail
@@ -63,6 +64,8 @@ fun HubScreen(
     val discoveryFilter by viewModel.discoveryFilter.collectAsStateWithLifecycle()
     val discoveryLoading by viewModel.discoveryLoading.collectAsStateWithLifecycle()
     val discoveryFailed by viewModel.discoveryFailed.collectAsStateWithLifecycle()
+    // A saved name or username changes the greeting.
+    LaunchedEffect(Unit) { ProfileChanges.events.collect { viewModel.refresh() } }
     LaunchedEffect(Unit) {
         viewModel.load()
         viewModel.refreshUnread()

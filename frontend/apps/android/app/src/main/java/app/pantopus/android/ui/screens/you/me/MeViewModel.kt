@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.businesses.BusinessMembership
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHome
@@ -251,7 +252,8 @@ class MeViewModel
                 identity = MeIdentity.Personal,
                 displayName = displayName,
                 initials = initials(displayName),
-                handle = "@${profile.username}",
+                // A made-up username (user_…) is never shown as the handle.
+                handle = MadeUpUsername.handle(profile.username).orEmpty(),
                 locality = localityOf(profile),
                 tagline = tagline,
                 verified = residencyVerified,
