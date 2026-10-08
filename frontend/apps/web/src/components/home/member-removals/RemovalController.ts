@@ -33,7 +33,7 @@ export class RemovalController {
   current() {
     try {
       return !this.retired && !!this.auth && api.getAuthToken() === this.auth && api.getApiBaseUrl() === this.origin
-        && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker && document.visibilityState !== 'hidden';
+        && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker;
     } catch { return false; }
   }
   private requireCurrent() {

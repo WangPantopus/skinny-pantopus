@@ -13,7 +13,7 @@ export class QueueController {
   current(): boolean {
     try {
       return !this.retired && !!this.token && this.token === api.getAuthToken() && this.origin === api.getApiBaseUrl()
-        && this.marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) && document.visibilityState !== 'hidden';
+        && this.marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     } catch { return false; }
   }
   retire() { this.retired = true; this.claims = []; this.ready = false; }
