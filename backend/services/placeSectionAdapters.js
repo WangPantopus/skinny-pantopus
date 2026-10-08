@@ -32,6 +32,9 @@ const { readThrough } = require('./placeSectionCache');
 const { geocodeToTract } = require('./ai/neighborhoodProfileService');
 const { fetchHeatRisk } = require('./external/heatRisk');
 const { buildHeatColdOutlook } = require('./heatColdEngine');
+const ballotSummary = require('./ballot/summary');
+const ballotGovernments = require('./ballot/governments');
+const ballotReference = require('./ballot/referenceData');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
@@ -805,21 +808,47 @@ async function lookupRepresentatives(stateAbbr, codes) {
   return reps;
 }
 
-async function composeCivicDistricts(home) {
+// Ballot P0 (plan §11 item 7): for a request that opted in to Ballot
+// (`ballot`: the client sent `ballot=1` AND `ballot_p0` is on for the user,
+// decided once by the route), the Civic page's "Your governments" row opens
+// the governments view all year, not only while an election card is up. Any
+// failure just leaves the row out.
+async function composeCivicGovernments(home) {
+  try {
+    return await ballotSummary.civicGovernmentsForHome(home);
+  } catch (err) {
+    logger.warn('placeSections: civic governments failed', { homeId: home.id, error: err.message });
+    return null;
+  }
+}
+
+async function composeCivicDistricts(home, { ballot = false } = {}) {
   const ll = homeLatLng(home);
   if (!ll) return [serializePlaceSection('civic_districts', { status: 'unavailable' })];
+  // Where Ballot shows the governments view, the districts and the governments
+  // share one exact point: one geocoder answer (shared while it runs) cached
+  // per ~5 m point, not per ~1 km cell that can straddle a district line and
+  // show a neighbor's school district next to this home's governments. Started
+  // here, beside the districts, so neither waits for the other. Elsewhere the
+  // long-standing per-cell cache stands.
+  const exactPoint = Boolean(ballot) && ballotReference.isSupportedState(home.state);
+  const governmentsPromise = exactPoint ? composeCivicGovernments(home) : Promise.resolve(null);
   try {
-    const gh6 = encodeGeohash(ll.lat, ll.lng, 6);
     const { payload, fetchedAt, stale } = await readThrough({
-      cacheKey: `geo:${gh6}`,
+      cacheKey: exactPoint ? ballotGovernments.pointCacheKey(ll.lat, ll.lng) : `geo:${encodeGeohash(ll.lat, ll.lng, 6)}`,
       sectionId: 'civic_districts',
       ttlMs: 90 * DAY_MS,
       fetch: async () => {
-        const data = await fetchJson(
-          'https://geocoding.geo.census.gov/geocoder/geographies/coordinates' +
-          `?x=${ll.lng}&y=${ll.lat}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`,
-        );
-        const geo = data && data.result && data.result.geographies;
+        let geo;
+        if (exactPoint) {
+          geo = await ballotGovernments.sharedGeographies(ll.lat, ll.lng);
+        } else {
+          const data = await fetchJson(
+            'https://geocoding.geo.census.gov/geocoder/geographies/coordinates' +
+            `?x=${ll.lng}&y=${ll.lat}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`,
+          );
+          geo = data && data.result && data.result.geographies;
+        }
         if (!geo) return null;
         const { districts, codes } = districtsFromGeographies(geo);
         if (!districts.length) return null;
@@ -833,16 +862,19 @@ async function composeCivicDistricts(home) {
     // are keyless and individually cached; city/county officials have no
     // national source — the list is honestly partial.) Rows cached before
     // codes existed carry their old reps until the geo cache expires.
-    const representatives = payload.codes
-      ? await lookupRepresentatives(home.state, payload.codes)
-      : (payload.representatives || []);
+    const [representatives, governments] = await Promise.all([
+      payload.codes
+        ? lookupRepresentatives(home.state, payload.codes)
+        : Promise.resolve(payload.representatives || []),
+      governmentsPromise,
+    ]);
 
     return [serializePlaceSection('civic_districts', {
       asOf: fetchedAt,
       status: stale ? 'stale' : 'ready',
       source: 'U.S. Census Bureau · unitedstates/congress-legislators · OpenStates',
       coverage: representatives.length ? 'full' : 'partial',
-      data: { districts: payload.districts, representatives },
+      data: { districts: payload.districts, representatives, ...(governments ? { governments } : {}) },
     })];
   } catch (err) {
     logger.warn('placeSections: civic_districts failed', { homeId: home.id, error: err.message });
@@ -876,7 +908,32 @@ function electionMatchesState(election, stateAbbr) {
   return Boolean(name && ocd.includes(`state:${stateAbbr.toLowerCase()}`));
 }
 
-async function composeCivicElection(home) {
+// Ballot P0 (docs/ballot-implementation-plan-2026-09-24.md §5.2): for a
+// request that opted in to Ballot (see composeCivicGovernments) the section
+// gains the "Your ballot" card fields from person-checked reference data.
+// Not opted in, or no election in the card's window: the pre-Ballot behavior
+// below, unchanged.
+async function composeBallotElection(home, ballot) {
+  if (!ballot) return null;
+  try {
+    const data = await ballotSummary.summaryForHome(home);
+    if (!data) return null;
+    return [serializePlaceSection('civic_election', {
+      asOf: data.checked_at ? `${data.checked_at}T00:00:00.000Z` : null,
+      status: 'ready',
+      source: data.source_line,
+      coverage: data.coverage === 'supported' ? 'full' : 'partial',
+      data,
+    })];
+  } catch (err) {
+    logger.warn('placeSections: ballot summary failed', { homeId: home.id, error: err.message });
+    return null;
+  }
+}
+
+async function composeCivicElection(home, { ballot = false } = {}) {
+  const ballotSection = await composeBallotElection(home, ballot);
+  if (ballotSection) return ballotSection;
   const apiKey = process.env.GOOGLE_CIVIC_API_KEY;
   if (!apiKey) {
     return [serializePlaceSection('civic_election', {

@@ -18,6 +18,9 @@ const placePreviewService = require('../services/placePreviewService');
 const { foundingSlotsOpen } = require('../services/place/foundingWindow');
 const { recordFunnelEvent, CLIENT_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
 const { resolveUsState } = require('../utils/usState');
+const featureFlagService = require('../services/featureFlagService');
+const ballotSummary = require('../services/ballot/summary');
+const ballotGovernments = require('../services/ballot/governments');
 
 // ============================================================
 // Public Preview Endpoints
@@ -586,6 +589,47 @@ async function buildPlacePreview(place) {
   };
 }
 
+// The teaser's boundary lookup, kept in the preview's in-memory cache like
+// the flood and Census facts beside it: a fact about a point of land, keyed
+// by the point (~5 m), never by the address typed, held 24 h on this instance
+// only. It keeps the time it was made so the card never looks fresher.
+async function lookupGovernmentsCached(lat, lng, options) {
+  const key = `ballot-governments:${encodeGeohash(lat, lng, 9)}`;
+  const cached = previewCache.get(key);
+  if (cached) return cached;
+  const result = await ballotGovernments.governmentsForPoint(lat, lng, options);
+  if (!result) return { result: null, lookedUpAt: null };
+  const entry = { result, lookedUpAt: new Date().toISOString() };
+  previewCache.set(key, entry, AREA_TTL_MS);
+  return entry;
+}
+
+// Ballot P0 teaser (docs/ballot-implementation-plan-2026-09-24.md §5.3).
+// Anonymous, so it follows the flag's GLOBAL switch only. Coordinates only;
+// its geocoder call is live and writes nothing. Degrades to null on the
+// preview's per-section time budget. `undefined` = flag off (key omitted).
+async function ballotTeaserFor(place) {
+  try {
+    const flag = await featureFlagService.getFlag('ballot_p0');
+    if (!flag || !flag.enabled_globally) return undefined;
+    const budgetMs = placePreviewService.sectionBudgetMs();
+    const [teaser] = await placePreviewService.withBudget(
+      // The lookup stops when the budget does, so no upstream call runs on
+      // after the response.
+      async () => [await ballotSummary.teaserForPoint(
+        { lat: place.lat, lng: place.lng, state: place.state },
+        { timeoutMs: budgetMs, lookup: lookupGovernmentsCached },
+      )],
+      budgetMs,
+      () => [null],
+    );
+    return teaser || null;
+  } catch (err) {
+    console.warn('[public/place] ballot teaser failed:', err.message);
+    return null;
+  }
+}
+
 router.get('/place', async (req, res) => {
   try {
     // Same reason as /unlisted: a 200 with an ETag and no Cache-Control is
@@ -628,7 +672,13 @@ router.get('/place', async (req, res) => {
       });
     }
 
-    return res.json(await buildPlacePreview(place));
+    // The Ballot teaser rides beside the preview of a typed address only; a
+    // saved place's preview (routes/savedPlaces.js) carries no Ballot.
+    const [preview, ballotTeaser] = await Promise.all([
+      buildPlacePreview(place),
+      ballotTeaserFor(place),
+    ]);
+    return res.json(ballotTeaser !== undefined ? { ...preview, ballot_teaser: ballotTeaser } : preview);
   } catch (err) {
     console.error('[public/place] Error:', err.message);
     res.status(500).json({ error: 'Internal server error' });

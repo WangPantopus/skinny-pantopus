@@ -96,7 +96,7 @@ fun PlaceDetailScreen(
                             LocalPlaceDetailVerify provides detailVerify,
                             LocalPlaceDetailVerifiesFirst provides current.intelligence.verifiesFirst,
                         ) {
-                            GroupContent(group = viewModel.group, intel = current.intelligence, viewModel = viewModel)
+                            GroupContent(group = viewModel.group, intel = current.intelligence, viewModel = viewModel, onBack = onBack)
                         }
                         Spacer(modifier = Modifier.height(40.dp))
                     }
@@ -121,9 +121,11 @@ private fun GroupContent(
     group: PlaceDetailGroup,
     intel: PlaceIntelligence,
     viewModel: PlaceDetailViewModel,
+    onBack: () -> Unit,
 ) {
     when (group) {
-        PlaceDetailGroup.TODAY -> PlaceTodayDetailContent(intel, viewModel)
+        // This page opens over the Place dashboard, where the ballot card is.
+        PlaceDetailGroup.TODAY -> PlaceTodayDetailContent(intel, viewModel, onOpenBallot = onBack)
         PlaceDetailGroup.YOUR_HOME -> PlaceHomeDetailContent(intel)
         PlaceDetailGroup.RISK -> PlaceRiskDetailContent(intel, viewModel)
         PlaceDetailGroup.BLOCK -> PlaceBlockDetailContent(intel, viewModel)

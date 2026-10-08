@@ -13,11 +13,14 @@
 
 import SwiftUI
 
+// swiftlint:disable file_length type_body_length
+
 struct PlaceDashboardView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: PlaceDashboardViewModel
     @State private var showSwitcher = false
     @State private var showVerify = false
+    @State private var ballotGovernments: BallotGovernmentsSheet?
 
     private let isActive: Bool
     private let onOpenMenu: () -> Void
@@ -95,6 +98,14 @@ struct PlaceDashboardView: View {
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.hidden)
+        }
+        .sheet(item: $ballotGovernments) { sheet in
+            BallotGovernmentsView(
+                governments: sheet.governments,
+                address: verifyAddress.components(separatedBy: ",").first ?? verifyAddress
+            ) { ballotGovernments = nil }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
         }
         .sheet(isPresented: $showVerify) {
             PlaceVerifySheet(
@@ -176,7 +187,12 @@ struct PlaceDashboardView: View {
                     if isVerified {
                         messagesEntry(address: intel.place.label)
                     }
-                    ForEach(intel.groups, id: \.group) { group in
+                    // Ballot P0 (ballot_p0): the "Your ballot" card leads under
+                    // "This season" and leaves the civic group.
+                    if let ballot = Self.ballot(in: intel) {
+                        seasonBlock(ballot.card, asOf: ballot.asOf)
+                    }
+                    ForEach(Self.groups(intel), id: \.group) { group in
                         groupBlock(
                             group,
                             canVerify: !(intel.tier == .t3 && intel.verifyAvailable == false),
@@ -240,6 +256,45 @@ struct PlaceDashboardView: View {
                 .accessibilityLabel("Menu")
                 .accessibilityIdentifier("place.menu")
             }
+        }
+    }
+
+    // MARK: - This season (Ballot P0)
+
+    /// The civic_election envelope's Ballot P0 card, when the server sent one.
+    static func ballot(in intel: PlaceIntelligence) -> (card: BallotSummary, asOf: String?)? {
+        for section in intel.groups.flatMap(\.sections) where section.id == .civicElection {
+            if section.status == .ready, let card = section.civicElection?.ballotCard {
+                return (card, section.asOf)
+            }
+        }
+        return nil
+    }
+
+    /// The server's groups, minus the election row the ballot card replaces.
+    static func groups(_ intel: PlaceIntelligence) -> [PlaceGroupBlock] {
+        guard ballot(in: intel) != nil else { return intel.groups }
+        return intel.groups.compactMap { group in
+            let sections = group.sections.filter { $0.id != .civicElection }
+            return sections.isEmpty ? nil : PlaceGroupBlock(group: group.group, label: group.label, sections: sections)
+        }
+    }
+
+    private func seasonBlock(_ card: BallotSummary, asOf: String?) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            Text("This season")
+                .textCase(.uppercase)
+                .font(.system(size: 11, weight: .semibold))
+                .kerning(0.88)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .accessibilityAddTraits(.isHeader)
+            BallotCardView(
+                card: card,
+                asOf: asOf,
+                onOpenGovernments: card.governments.map { governments in
+                    { ballotGovernments = BallotGovernmentsSheet(governments: governments) }
+                }
+            )
         }
     }
 
@@ -342,6 +397,15 @@ struct PlaceDashboardView: View {
             .filter { $0.first?.isLetter ?? false }
         let letters = words.prefix(2).compactMap(\.first).map(String.init)
         return letters.isEmpty ? "PL" : letters.joined().uppercased()
+    }
+}
+
+/// The governments view's payload, identified so `.sheet(item:)` keeps its
+/// content on screen while the sheet slides away.
+private struct BallotGovernmentsSheet: Identifiable {
+    let governments: BallotGovernments
+    var id: BallotGovernments {
+        governments
     }
 }
 
