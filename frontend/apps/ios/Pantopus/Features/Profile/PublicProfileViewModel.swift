@@ -871,11 +871,12 @@ public final class PublicProfileViewModel {
                 ProfileStatCell(id: "rating", value: String(format: "%.1f", rating), label: "Rating")
             )
         }
-        if let gigsCompleted = profile.gigsCompleted, gigsCompleted > 0 {
+        // Launch cut #4 (Open Gigs): no gig count, like the hidden Gigs tab (as on Android).
+        if LaunchFeatures.openGigs, let gigsCompleted = profile.gigsCompleted, gigsCompleted > 0 {
             stats.append(
                 ProfileStatCell(id: "gigs", value: "\(gigsCompleted)", label: "Gigs")
             )
-        } else if let gigsPosted = profile.gigsPosted, gigsPosted > 0 {
+        } else if LaunchFeatures.openGigs, let gigsPosted = profile.gigsPosted, gigsPosted > 0 {
             stats.append(
                 ProfileStatCell(id: "gigs", value: "\(gigsPosted)", label: "Gigs")
             )
