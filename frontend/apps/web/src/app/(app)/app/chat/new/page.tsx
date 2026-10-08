@@ -6,6 +6,7 @@ import { ArrowLeft, Search, X, MessageCircle, Users, Loader2 } from 'lucide-reac
 import Image from 'next/image';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
+import { chosenUsername, usernameHandle } from '@pantopus/utils';
 
 function NewChatContent() {
   const router = useRouter();
@@ -109,7 +110,7 @@ function NewChatContent() {
       ) : results.length > 0 ? (
         <div className="divide-y divide-app-border-subtle">
           {results.map((user: any) => {
-            const name = user.name || user.username || 'User';
+            const name = user.name || chosenUsername(user.username) || 'Pantopus member';
             const avatarUrl = user.profile_picture_url || user.profilePicture || user.avatar_url;
             const isCreating = creating === user.id;
             return (
@@ -128,7 +129,7 @@ function NewChatContent() {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-app-text truncate">{name}</p>
-                  {user.username && <p className="text-xs text-app-text-secondary">@{user.username}</p>}
+                  {usernameHandle(user.username) && <p className="text-xs text-app-text-secondary">{usernameHandle(user.username)}</p>}
                 </div>
                 {isCreating ? (
                   <Loader2 className="w-5 h-5 text-emerald-600 animate-spin flex-shrink-0" />

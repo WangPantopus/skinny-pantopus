@@ -636,9 +636,13 @@ export interface User {
   id: string;
   email: string;
   username: string;
+  /** The signed-in person's own profile only: the server made this username up (nobody picks one at sign-up). */
+  usernameIsGenerated?: boolean;
   firstName: string;
   middleName?: string | null;
+  lastName?: string;
   name: string; // Keep this - it's the full name
+  accountType?: 'individual' | 'business' | string;
   phone_number?: string;
   profile_picture_url?: string;
   profilePicture?: string;
@@ -1323,9 +1327,13 @@ export interface RegisterForm {
   password: string;
   /** Validated internal destination carried by the verification email. */
   redirectTo?: string;
-  /** Optional since the wedge slim signup — the backend auto-generates a
-   *  handle when omitted. Native clients may still send one. */
+  /** The backend makes one up when omitted; the person can choose their
+   *  own later in Edit Profile. */
   username?: string;
+  /** Required by the sign-up forms; middle name is optional. */
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
   name?: string;
   phone_number?: string;
   /** Pre-account funnel continuity id (see @pantopus/api funnel). */
@@ -1549,6 +1557,8 @@ export interface MagicSettings {
 
 /** Form state for the profile edit screen (all fields are controlled strings). */
 export interface ProfileFormData {
+  /** Typed username (lowercase); empty means keep the current one. */
+  username: string;
   firstName: string;
   middleName: string;
   lastName: string;

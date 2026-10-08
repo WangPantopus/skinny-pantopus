@@ -9,6 +9,7 @@ import SlidePanel from '../SlidePanel';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import ErrorState from '@/components/ui/ErrorState';
 import { failureMessage } from '../share/shareFailure';
+import { chosenUsername, usernameHandle } from '@pantopus/utils';
 
 // ---- Permission display groups ----
 
@@ -139,8 +140,8 @@ export default function MemberDetail({
   const [expiryDate, setExpiryDate] = useState('');
   const expiryInputId = useId();
 
-  const memberName = member?.user?.displayName || member?.user?.handle || member?.user?.name || member?.user?.username || member?.name || 'Member';
-  const memberUsername = member?.user?.handle || member?.user?.username;
+  const memberName = member?.user?.displayName || chosenUsername(member?.user?.handle) || member?.user?.name || chosenUsername(member?.user?.username) || member?.name || 'Member';
+  const memberUsername = chosenUsername(member?.user?.handle || member?.user?.username);
   const profilePic = member?.user?.avatarUrl || member?.user?.profile_picture_url || member?.user?.avatar_url;
   const isTargetOwner = member?.role === 'owner' || member?.role_base === 'owner';
   const joinedDate = member?.start_at || member?.created_at;
@@ -274,7 +275,7 @@ export default function MemberDetail({
   const roleCfg = ROLE_CONFIG[roleBase] || ROLE_CONFIG.member;
 
   return (
-    <SlidePanel open={open} onClose={onClose} title={memberName} subtitle={memberUsername ? `@${memberUsername}` : undefined}>
+    <SlidePanel open={open} onClose={onClose} title={memberName} subtitle={usernameHandle(memberUsername) || undefined}>
       <div className="space-y-5">
         {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</div>}
 

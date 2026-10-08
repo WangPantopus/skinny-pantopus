@@ -14,6 +14,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import ErrorState from '@/components/ui/ErrorState';
 import InviteMemberModal from '@/components/home/InviteMemberModal';
 import { failureMessage } from '@/components/home/share/shareFailure';
+import { chosenUsername, usernameHandle } from '@pantopus/utils';
 import { RETURN_REFRESH_MS, transientFailure } from '@/components/home/returnRefresh';
 
 // Roles "Change role" can give, and each role's rank on the server (home_role_rank). Owners change
@@ -66,8 +67,8 @@ function requesterDisplayName(r: HouseholdAccessRequestRow): string {
   if (u.name) return u.name;
   const parts = [u.first_name, u.last_name].filter(Boolean);
   if (parts.length) return parts.join(' ');
-  if (u.username) return `@${u.username}`;
-  return 'Unknown user';
+  // A made-up username (user_…) says nothing about the person.
+  return usernameHandle(u.username) || 'Unknown user';
 }
 
 function MembersContent() {
@@ -203,7 +204,7 @@ function MembersContent() {
       && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
     const confirmation = confirmStore.open({
       title: 'Change Role',
-      description: `Change ${member.display_name || member.email} to ${roleLabel}?`,
+      description: `Change ${member.display_name || member.email || 'this member'} to ${roleLabel}?`,
       confirmLabel: `Set as ${roleLabel}`,
       variant: 'primary',
     });
@@ -342,12 +343,12 @@ function MembersContent() {
                     <div key={member.id || member.user_id} className="flex items-center gap-3 bg-app-surface border border-app-border rounded-xl p-3">
                       <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: meta.color + '15' }}>
                         <span className={`text-sm font-bold ${ACCENT_TEXT}`} style={accentStyle(meta)}>
-                          {(member.display_name || member.user?.name || member.user?.username || member.username || '?').charAt(0).toUpperCase()}
+                          {(member.display_name || member.user?.name || chosenUsername(member.user?.username || member.username) || '?').charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-app-text truncate">{member.display_name || member.user?.name || member.user?.username || member.username || 'Unknown'}</p>
-                        {(member.username || member.user?.username) && <p className="text-xs text-app-text-muted">@{member.username || member.user?.username}</p>}
+                        <p className="text-sm font-medium text-app-text truncate">{member.display_name || member.user?.name || chosenUsername(member.user?.username || member.username) || 'Household member'}</p>
+                        {usernameHandle(member.username || member.user?.username) && <p className="text-xs text-app-text-muted">{usernameHandle(member.username || member.user?.username)}</p>}
                         {member.joined_at && <p className="text-[11px] text-app-text-muted mt-0.5">Joined {new Date(member.joined_at).toLocaleDateString()}</p>}
                       </div>
                       {canManage && role !== 'owner' && (
@@ -374,7 +375,7 @@ function MembersContent() {
                               )}
                             </div>
                           )}
-                          <button onClick={() => handleRemove(member)} title="Remove" aria-label={`Review removal of ${member.user?.username || member.username || 'this member'}`} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
+                          <button onClick={() => handleRemove(member)} title="Remove" aria-label={`Review removal of ${member.display_name || chosenUsername(member.user?.username || member.username) || 'this member'}`} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
                             <UserMinus className="w-4 h-4" />
                           </button>
                         </div>
@@ -472,7 +473,7 @@ function MembersContent() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-app-text">{entry.description || entry.action}</p>
                 <p className="text-xs text-app-text-secondary mt-0.5">
-                  {entry.actor?.username || entry.actor_name || 'System'}
+                  {entry.actor_name || chosenUsername(entry.actor?.username) || 'System'}
                   {entry.target_name ? ` \u2192 ${entry.target_name}` : ''}
                 </p>
                 {entry.created_at && <p className="text-[11px] text-app-text-muted mt-0.5">{new Date(entry.created_at).toLocaleString()}</p>}

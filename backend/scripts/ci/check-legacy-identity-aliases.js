@@ -83,8 +83,9 @@ const ALLOWLIST_LINE_KEYS = new Set([
   // profile.handle into a legacy `username` key for the v1 search response
   // shape. The whole response is a legacy compat surface; retiring it is
   // a separate audit item. Line moved 305 → 306 with the authRedirect
-  // import; the compatibility mapping itself is unchanged.
-  'backend/routes/users.js:306',
+  // import, then 306 → 313 with the personalUsername import; the
+  // compatibility mapping itself is unchanged.
+  'backend/routes/users.js:313',
 ]);
 
 const ALLOWLIST_LINE_PATTERNS = [

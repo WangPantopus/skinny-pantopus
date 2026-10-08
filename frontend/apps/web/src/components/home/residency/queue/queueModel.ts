@@ -1,3 +1,4 @@
+import { usernameHandle } from '@pantopus/utils';
 export interface QueueSession { actor_id: string; session_scope: string }
 export interface QueueClaim {
   id: string; home_id: string; user_id: string; status: 'pending';
@@ -68,7 +69,9 @@ export function queueError(error: unknown): string {
   if (failure?.statusCode === 404) return 'Current residency claims are not available for your account in this Home.';
   return 'Current residency claims could not be loaded. Reload to check access.';
 }
-export const queueApplicant = (claim: QueueClaim) => claim.claimant?.username ? `@${claim.claimant.username}` : 'Applicant identity unavailable';
+// A made-up username (user_…) says nothing about the applicant, so it reads as "Applicant".
+export const queueApplicant = (claim: QueueClaim) => (claim.claimant
+  ? usernameHandle(claim.claimant.username) || 'Applicant' : 'Applicant identity unavailable');
 export const queueRelationship = (claim: QueueClaim) => claim.claimed_role === 'renter' ? 'Renter'
   : claim.claimed_role === 'household' ? 'Household' : 'Requested relationship unspecified';
 export const queueDate = (claim: QueueClaim) => claim.created_at === null ? 'Date unavailable'

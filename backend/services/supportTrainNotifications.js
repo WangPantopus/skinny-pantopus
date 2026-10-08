@@ -17,6 +17,7 @@ const { sendGuestReservationReminderEmail, sendGuestSignupReleasedEmail } = requ
 const { inferTimezone } = require('./context/locationResolver');
 const { DateTime } = require('luxon');
 const logger = require('../utils/logger');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 const DEEP_LINK_PREFIX = '/app/support-trains';
 
@@ -494,7 +495,7 @@ async function _getDisplayName(userId) {
     .select('name, username')
     .eq('id', userId)
     .maybeSingle();
-  return data?.name || data?.username || null;
+  return data?.name || chosenUsernameOrNull(data?.username) || null;
 }
 
 async function _getOrganizers(supportTrainId, excludeUserId) {

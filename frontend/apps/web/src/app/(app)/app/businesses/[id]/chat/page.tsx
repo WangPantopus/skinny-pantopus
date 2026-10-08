@@ -8,6 +8,7 @@ import { formatTimeAgo, getInitials } from '@pantopus/ui-utils';
 import { MessageCircle, Search } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import SearchInput from '@/components/SearchInput';
+import { chosenUsername } from '@pantopus/utils';
 
 type BusinessChatRoom = ChatRoomWithDetails & {
   other_participant_name?: string | null;
@@ -50,7 +51,7 @@ export default function BusinessChatListPage() {
   };
 
   const getRoomName = (room: BusinessChatRoom) =>
-    room.other_participant_name || room.other_participant_username || room.room_name || 'Chat';
+    room.other_participant_name || chosenUsername(room.other_participant_username) || room.room_name || 'Chat';
 
   const getRoomPreview = (room: BusinessChatRoom) =>
     room.last_message_preview || room.last_message?.message_text || 'No messages yet';

@@ -1,4 +1,5 @@
 import type { MailItem, MailLink, DeliverableType } from './legacy-detail-types';
+import { usernameHandle } from '@pantopus/utils';
 
 export const resolveDeliverableType = (item: MailItem): DeliverableType => {
   if (item.mail_type) return item.mail_type;
@@ -23,7 +24,7 @@ export const getSenderName = (item: MailItem) => {
   // sender is not attributed to Pantopus.
   if (item.sender_display?.trim()) return item.sender_display.trim();
   if (item.sender?.name) return item.sender.name;
-  if (item.sender?.username) return `@${item.sender.username}`;
+  if (usernameHandle(item.sender?.username)) return usernameHandle(item.sender?.username) as string;
   if (item.sender_business_name) return item.sender_business_name;
   if (item.sender_address) return item.sender_address;
   return 'Unknown sender';

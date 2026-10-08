@@ -23,6 +23,7 @@ const emailService = require('./emailService');
 const pushService = require('./pushService');
 const authPolicy = require('../config/authPolicy');
 const authSessionService = require('./authSessionService');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 const SECURITY_URL = authPolicy.SECURITY_DEEP_LINK;
 const DEFAULT_PREFS = Object.freeze({ allowRestoreGrants: true, newDeviceEmail: true });
@@ -56,7 +57,7 @@ async function loadRecipient(userId) {
     if (error || !data) return null;
     return {
       email: data.email || null,
-      firstName: data.first_name || data.name || data.username || null,
+      firstName: data.first_name || data.name || chosenUsernameOrNull(data.username) || null,
       prefs: normalizePrefs(data.security_prefs),
     };
   } catch (err) {

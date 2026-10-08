@@ -16,6 +16,7 @@ import { BaseMap, useCluster, useAnimatedPins, pinAnimClass, clusterAnimClass, Z
 import type { Bounds } from '@/components/map';
 import type { ClusterPoint } from '@/components/map/useCluster';
 import type { NearestActivityCenter } from '@/components/map';
+import { chosenUsername } from '@pantopus/utils';
 
 // Chip text on the map's own surfaces follows the theme: the palette's `textColor`
 // in light mode and `darkTextColor` in dark mode (inline colors can't reach `dark:`).
@@ -64,7 +65,7 @@ function MapPostPopupCard({
 }) {
   const config = getPostTypeConfig(pin.post_type || 'general');
   const TypeIcon = getTypeReactIcon(pin.post_type || 'general');
-  const author = pin.creator?.name || pin.creator?.username || 'Neighbor';
+  const author = pin.creator?.name || chosenUsername(pin.creator?.username) || 'Neighbor';
   const snippet = (pin.content || pin.title || 'No content yet').trim();
 
   return (
@@ -329,7 +330,7 @@ export default function FeedMap({
 
   // ─── Derived ─────────────────────────────────────────────
   const postCount = pins.length;
-  const authorName = (p: MapMarker) => p.creator?.name || p.creator?.username || 'Neighbor';
+  const authorName = (p: MapMarker) => p.creator?.name || chosenUsername(p.creator?.username) || 'Neighbor';
   const postType = (p: MapMarker) => p.post_type || 'general';
 
   const belowZoomGate = zoom < ZOOM_GATE;

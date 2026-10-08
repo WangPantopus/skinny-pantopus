@@ -25,6 +25,7 @@ const {
 const stripeService = require('../stripe/stripeService');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
 const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
@@ -3028,7 +3029,7 @@ router.post(
           slot_id: slotId,
           slot_label: slot.slot_label,
           slot_date: slot.slot_date,
-          helper_name: userRow?.name || userRow?.username || body.guest_name,
+          helper_name: userRow?.name || chosenUsernameOrNull(userRow?.username) || body.guest_name,
         },
       });
 

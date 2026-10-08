@@ -8,6 +8,8 @@ const property = require('./ai/propertyIntelligenceService');
 const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
 const parsePoint = require('../utils/parsePostGISPoint');
+const { localDisplayNames } = require('../utils/identityProfiles');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // A shared Home is not a container for every sensitive column/file reference.
 // Secret values and private files keep their exact-resource APIs. Legacy text
@@ -113,6 +115,16 @@ async function readMembers(homeId, { history = false } = {}) {
   return projected.filter(Boolean);
 }
 
+// Members show by the name they show neighbors on their posts. A username the server made up is never a display name
+// (utils/personalUsername.js); a person with no name reads "Household member". Used only once the consistency recheck
+// passes, and only for display_name: the rest of each row keeps its shape.
+async function withDisplayNames(occupants) {
+  if (occupants.length === 0) return occupants;
+  let names;
+  try { names = await localDisplayNames(occupants.map(member => member.user_id)); } catch (_) { throw failure(); }
+  return occupants.map(member => ({ ...member, display_name: names.get(String(member.user_id)) || 'Household member' }));
+}
+
 async function ownClaims(homeId, actorId) {
   const claims = await rows(db.from('HomeOwnershipClaim').select('id, home_id, state, claim_phase_v2, merged_into_claim_id')
     .eq('home_id', homeId).eq('claimant_user_id', actorId).order('created_at', { ascending: false }).order('id'));
@@ -144,16 +156,18 @@ async function detail(homeId, actorId) {
     const canDelete = settledValue(deleteRead).allowed;
     // A member or owner can change while this caller's grants remain unchanged.
     // Retire those held projections as well as rechecking caller authority.
-    // The three rereads run together and are compared in their old order.
-    const [ownersAgain, membersAgain, claimsAgain] = await Promise.allSettled([
+    // The three rereads run together and are compared in their old order; the members' display names are read
+    // alongside them (they only replace display_name, after the comparison holds).
+    const [ownersAgain, membersAgain, claimsAgain, namedOccupants] = await Promise.allSettled([
       readOwners(homeId, actorId, access),
       access.permissions.includes('members.view') ? readMembers(homeId) : null,
       ownClaims(homeId, actorId),
+      withDisplayNames(occupants),
     ]);
     if (JSON.stringify(settledValue(ownersAgain)) !== JSON.stringify(owners)
       || (access.permissions.includes('members.view') && JSON.stringify(settledValue(membersAgain)) !== JSON.stringify(occupants))
       || JSON.stringify(settledValue(claimsAgain)) !== JSON.stringify(claims)) throw failure();
-    return { home: { ...home, owner, occupants, owners: visibleOwners.map(row => pick(row, OWNER_FIELDS)),
+    return { home: { ...home, owner, occupants: settledValue(namedOccupants), owners: visibleOwners.map(row => pick(row, OWNER_FIELDS)),
       isOwner: access.isOwner, isOccupant: !!access.occupancy, isPendingOwner: mine?.owner_status === 'pending',
       ownership_status: mine?.owner_status || null, residency_status: access.occupancy?.verification_status || null,
       // F3b: 'household' when the verification came only from an invitation or a manager's approval.
@@ -192,16 +206,17 @@ async function members(homeId, actorId, { history = false } = {}) {
       if (!uuid(invite.id) || invite.home_id !== homeId || typeof invite.proposed_role !== 'string') throw failure();
       return { id: invite.id, user_id: invite.invitee_user_id, role: invite.proposed_role, is_active: false,
         email: invite.invitee_email, name: invite.invitee_email || 'Invited user',
-        invited_by: invite.inviter?.username || null, created_at: invite.created_at };
+        invited_by: chosenUsernameOrNull(invite.inviter?.username), created_at: invite.created_at };
     });
-    // Both rereads run together and are compared in their old order.
-    const [membersAgain, invitesAgain] = await Promise.allSettled([
+    // Both rereads and the members' names run together; failures are reported in the old order.
+    const [membersAgain, invitesAgain, namedOccupants] = await Promise.allSettled([
       readMembers(homeId, { history }),
       manage ? invitations.list(actorId, homeId) : null,
+      withDisplayNames(occupants),
     ]);
     if (JSON.stringify(settledValue(membersAgain)) !== JSON.stringify(occupants)) throw failure();
     if (manage && JSON.stringify(settledValue(invitesAgain)) !== JSON.stringify(invites)) throw failure();
-    return { occupants, pendingInvites };
+    return { occupants: settledValue(namedOccupants), pendingInvites };
   });
 }
 function sendError(res, error) {

@@ -22,6 +22,7 @@ const {
   isScopedBlocked,
 } = require('../utils/visibilityPolicy');
 const { hasBlocked } = require('../services/blockService');
+const { isGeneratedUsername } = require('../utils/personalUsername');
 
 router.use(requireIdentityFirewallEnabled);
 
@@ -319,7 +320,8 @@ async function localProfileResult(profile) {
     id: serialized.id,
     type: 'local_profile',
     title: serialized.displayName,
-    subtitle: serialized.handle ? `/${serialized.handle}` : null,
+    // A made-up username (utils/personalUsername.js) says nothing about the person, so it isn't shown.
+    subtitle: serialized.handle && !isGeneratedUsername(serialized.handle) ? `/${serialized.handle}` : null,
     meta: [locality.city, locality.state].filter(Boolean).join(', ') || null,
     imageUrl: serialized.avatarUrl || null,
     href: serialized.href || `/${serialized.handle}`,

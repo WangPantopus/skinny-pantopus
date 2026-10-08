@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, createElement } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
-import { getErrorMessage } from '@pantopus/utils';
+import { getErrorMessage, usernameHandle } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { toast, toastStore } from '@/components/ui/toast-store';
 import type { MailItem, Summary, MailScope, MailType, AvailableHome } from './mailbox-types';
@@ -299,7 +299,7 @@ export default function useMailboxData() {
     // sender is not attributed to Pantopus.
     if (item.sender_display?.trim()) return item.sender_display.trim();
     if (item.sender?.name) return item.sender.name;
-    if (item.sender?.username) return `@${item.sender.username}`;
+    if (usernameHandle(item.sender?.username)) return usernameHandle(item.sender?.username) as string;
     if (item.sender_business_name) return item.sender_business_name;
     if (item.sender_address) return item.sender_address;
     return 'Unknown sender';

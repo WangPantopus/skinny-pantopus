@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
-import { US_STATES } from '@pantopus/utils';
+import { US_STATES, chosenUsername } from '@pantopus/utils';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 import { useProfileForm } from '@/hooks/useProfileForm';
 import ErrorState from '@/components/ui/ErrorState';
+import UsernameField, { type UsernameStatus } from '@/components/profile/UsernameField';
 
 type GeoSuggestion = api.geo.GeoSuggestion;
 type NormalizedAddress = api.geo.NormalizedAddress;
@@ -140,6 +141,8 @@ export default function EditProfilePage() {
     loadProfile, saveProfile,
   } = useProfileForm();
 
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('unchanged');
+
   const stateName = useMemo(() => {
     const s = form.state.trim().toUpperCase();
     const match = US_STATES.find((x) => x.code === s);
@@ -176,7 +179,7 @@ export default function EditProfilePage() {
           {/* Profile Picture */}
           <ProfilePictureUpload
             currentUrl={profilePictureUrl}
-            fallbackInitial={form.firstName?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'U'}
+            fallbackInitial={form.firstName?.[0]?.toUpperCase() || chosenUsername(user?.username)?.[0]?.toUpperCase() || 'U'}
             onUploaded={(url) => {
               setProfilePictureUrl(url);
             }}
@@ -185,6 +188,19 @@ export default function EditProfilePage() {
           {/* Basic Information */}
           <div className="bg-surface rounded-xl border border-app p-6">
             <h2 className="text-lg font-semibold text-app mb-4">Basic Information</h2>
+
+            <div className="mb-4 md:max-w-md">
+              <label htmlFor="profile-username" className="block text-sm font-medium text-app-strong mb-2">Username</label>
+              <UsernameField
+                id="profile-username"
+                value={form.username}
+                onChange={(value) => setField('username', value)}
+                currentUsername={user?.username || ''}
+                currentIsMadeUp={!!user?.usernameIsGenerated}
+                serverError={fieldErrors.username}
+                onStatusChange={setUsernameStatus}
+              />
+            </div>
 
             <div className="grid md:grid-cols-3 gap-4">
               <div>
@@ -522,7 +538,8 @@ export default function EditProfilePage() {
           <div className="flex gap-4">
             <button
               type="submit"
-              disabled={saving}
+              // A username that can't be used (or is still being checked) holds the save.
+              disabled={saving || usernameStatus === 'unavailable' || usernameStatus === 'checking'}
               className="flex-1 bg-primary-600 text-white py-3 rounded-lg hover:bg-primary-700 font-semibold disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Save Changes'}

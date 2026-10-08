@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import type { BusinessInvoice, InvoiceLineItem, InvoiceRecipient } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { chosenUsername, usernameHandle } from '@pantopus/utils';
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   draft: { bg: 'bg-gray-100', text: 'text-gray-600' },
@@ -35,7 +36,7 @@ function RecipientAvatar({ person }: { person: InvoiceRecipient }) {
   }
   return (
     <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0" aria-hidden>
-      <span className="text-xs font-bold text-violet-700">{(person.name || person.username || '?').charAt(0).toUpperCase()}</span>
+      <span className="text-xs font-bold text-violet-700">{(person.name || chosenUsername(person.username) || '?').charAt(0).toUpperCase()}</span>
     </div>
   );
 }
@@ -203,7 +204,7 @@ export default function InvoicesTab({ businessId }: Props) {
               <div key={inv.id} className="bg-app-surface border border-app-border rounded-xl p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-app-text truncate">{(inv as any).recipient?.name || (inv as any).recipient?.username || 'Unknown'}</p>
+                    <p className="text-sm font-semibold text-app-text truncate">{(inv as any).recipient?.name || chosenUsername((inv as any).recipient?.username) || 'Unknown'}</p>
                     <p className="text-xs text-app-text-secondary mt-0.5">
                       {new Date(inv.created_at).toLocaleDateString()}
                       {inv.due_date && ` · Due ${new Date(inv.due_date).toLocaleDateString()}`}
@@ -261,7 +262,7 @@ export default function InvoicesTab({ businessId }: Props) {
                     <RecipientAvatar person={recipient} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-app-text truncate">{recipient.name}</p>
-                      <p className="text-xs text-app-text-muted truncate">@{recipient.username}</p>
+                      {usernameHandle(recipient.username) && <p className="text-xs text-app-text-muted truncate">{usernameHandle(recipient.username)}</p>}
                     </div>
                     <button type="button" onClick={() => setRecipient(null)} aria-label={`Change recipient (${recipient.name})`}
                       className="p-1 text-app-text-muted hover:text-app-text-secondary"><X className="w-4 h-4" /></button>
@@ -284,7 +285,7 @@ export default function InvoicesTab({ businessId }: Props) {
                           <RecipientAvatar person={person} />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-app-text truncate">{person.name}</p>
-                            <p className="text-xs text-app-text-muted truncate">@{person.username} · {RELATION_LABELS[person.relation]}</p>
+                            <p className="text-xs text-app-text-muted truncate">{[usernameHandle(person.username), RELATION_LABELS[person.relation]].filter(Boolean).join(' · ')}</p>
                           </div>
                         </button>
                       ))}

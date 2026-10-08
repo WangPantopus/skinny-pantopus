@@ -8,6 +8,7 @@ const refunds = require('./paymentRefundService');
 const { deliverStoredGigNotification, createNotification } = require('./notificationService');
 const logger = require('../utils/logger');
 const { sendAlert, SEVERITY } = require('./alertingService');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const stripe = getStripeClient();
 const fail = (code, message, statusCode = 409) => Object.assign(new Error(message), { code, statusCode });
 async function rpc(name, args, allowNull = false) {
@@ -333,7 +334,7 @@ async function notifyPosterNoShow({ gigId, posterId, workerId, gigTitle = null, 
     db.from('User').select('name, username').eq('id', workerId).maybeSingle(),
     gigTitle ? Promise.resolve({ data: { title: gigTitle } }) : db.from('Gig').select('title').eq('id', gigId).maybeSingle(),
   ]);
-  const reporterName = reporter?.name || reporter?.username || 'The other party';
+  const reporterName = reporter?.name || chosenUsernameOrNull(reporter?.username) || 'The other party';
   const chargedCents = feeCharge?.status === 'charged' ? feeCharge.feeCents : 0;
   const feeLine = chargedCents > 0
     ? ` No-show fee $${(chargedCents / 100).toFixed(2)} charged · $${(feeCharge.releasedCents / 100).toFixed(2)} released.` : '';

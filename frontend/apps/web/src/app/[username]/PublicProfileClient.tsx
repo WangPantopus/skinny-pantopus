@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
-import { buildUserProfileShareUrl } from '@pantopus/utils';
+import { buildUserProfileShareUrl, chosenUsername } from '@pantopus/utils';
 import type { UserProfile, User, GigListItem, Review } from '@pantopus/types';
 import { getAuthToken } from '@pantopus/api';
 import BusinessPublicProfile from '@/components/business/BusinessPublicProfile';
@@ -25,6 +25,7 @@ import {
 } from '@/components/profile/public/tabs';
 import type { PortfolioEntry } from '@/components/profile/public/tabs/PortfolioTab';
 import { launchFeatures } from '@/lib/featureFlags';
+import UsernamePrompt, { markAskedForUsername, shouldAskForUsername } from '@/components/profile/UsernamePrompt';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
@@ -104,6 +105,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [postsLoading, setPostsLoading] = useState(false);
   const [ownerPreviewContext, setOwnerPreviewContext] = useState<ViewerContext>('owner');
   const [shareCopied, setShareCopied] = useState(false);
+  // Sharing your own profile while its link still has the made-up username asks once for a real one.
+  const [usernamePromptOpen, setUsernamePromptOpen] = useState(false);
 
   // Reviews state
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -518,26 +521,43 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     router.push(`/app/gigs/new?requestFor=${profile!.id}`);
   };
 
-  const handleShare = async () => {
+  /** Share or copy the profile link; false when neither worked (the browser refused both). */
+  const shareProfileLink = async (linkUsername: string): Promise<boolean> => {
+    const shareUrl = buildUserProfileShareUrl(linkUsername);
     try {
-      const shareUrl = buildUserProfileShareUrl(username);
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({
           title: `${fullName} on Pantopus`,
           text: `Check out ${fullName}'s profile on Pantopus`,
           url: shareUrl,
         });
-        return;
+        return true;
       }
-
+    } catch (err) {
+      // Dismissed, or not allowed after the username dialog: copying the link still works.
+      if ((err as { name?: string } | null)?.name === 'AbortError') return true;
+    }
+    try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(shareUrl);
         setShareCopied(true);
         setTimeout(() => setShareCopied(false), 2000);
+        return true;
       }
     } catch (err) {
       console.error('Share failed:', err);
     }
+    return false;
+  };
+
+  const handleShare = async () => {
+    const ownProfile = Boolean(currentUser && profile && currentUser.id === profile.id);
+    if (ownProfile && shouldAskForUsername(currentUser)) {
+      markAskedForUsername(String(currentUser!.id));
+      setUsernamePromptOpen(true);
+      return;
+    }
+    await shareProfileLink(username);
   };
 
   // ── Loading / Error states ──
@@ -594,7 +614,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const isOwnProfile = currentUser?.id === profile.id || currentUser?.username === profile.username;
   const fullName = profile.firstName && profile.lastName
     ? `${profile.firstName} ${profile.lastName}`
-    : profile.name || profile.username;
+    : profile.name || chosenUsername(profile.username) || 'Pantopus member';
 
   const displayRating = reviewStats.average || profile.average_rating || 0;
   const displayReviewCount = reviewStats.total || profile.review_count || 0;
@@ -767,6 +787,28 @@ export default function PublicProfileClient({ username, initialProfile }: Public
           <SkillsCard skills={featuredSkills} onAction={showOwnerOnly ? () => router.push('/app/profile/edit') : handleRequestHire} ownerView={showOwnerOnly} />
         </div>
       </main>
+
+      {usernamePromptOpen && currentUser && (
+        <UsernamePrompt
+          open
+          currentUsername={currentUser.username}
+          onShareAsIs={() => {
+            setUsernamePromptOpen(false);
+            void shareProfileLink(username);
+          }}
+          onSaved={(saved) => {
+            setUsernamePromptOpen(false);
+            setCurrentUser((prev) => (prev ? { ...prev, ...saved } : saved));
+            // The old address no longer opens this profile.
+            router.replace(`/u/${encodeURIComponent(saved.username)}`);
+            void shareProfileLink(saved.username).then((shared) => {
+              // Sharing right after the dialog can be refused; the new link is still worth knowing.
+              if (shared) toast.success(`Your username is @${saved.username}.`);
+              else toast.success(`Your username is @${saved.username}. Your link: ${buildUserProfileShareUrl(saved.username).replace(/^https?:\/\//, '')}`);
+            });
+          }}
+        />
+      )}
 
       {!showOwnerOnly && (
         <div className="fixed bottom-[var(--fab-lift,0px)] left-0 right-0 md:hidden bg-surface border-t border-app p-3 z-30">

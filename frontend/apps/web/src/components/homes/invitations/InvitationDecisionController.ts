@@ -1,6 +1,7 @@
 import * as api from '@pantopus/api';
 import { validateResidencyProgress } from '../residencyProgressModel';
 import { PendingInvitationStore, type InvitationSnapshot } from './PendingInvitationStore';
+import { chosenUsername } from '@pantopus/utils';
 import { invitationUUID, validInvitationSession, validateInvitationContext, validInvitationOutcome, projectInvitationOutcome,
   invitationDecisionMessage, type InvitationSession, type InvitationContext, type InvitationDraft, type InvitationOutcome } from './invitationDecisionModel';
 
@@ -43,7 +44,7 @@ export class InvitationDecisionController {
     this.session = response.data.session;
     const profile = await api.users.getMyProfile(); this.requireCurrent();
     if (!invitationUUID(profile?.id) || profile.id !== this.session.actor_id) throw new Error('Your account changed. Reload to continue.');
-    this.accountLabel = profile.name || profile.username || profile.email || 'Your current account';
+    this.accountLabel = profile.name || chosenUsername(profile.username) || profile.email || 'Your current account';
     this.store = storeForActor(this.session.actor_id);
     const saved = await this.store.load(); this.requireCurrent();
     this.snapshot = saved; this.attempted = !!saved; this.opened = true;

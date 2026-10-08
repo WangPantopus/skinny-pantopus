@@ -29,7 +29,7 @@ export async function generateMetadata({
     };
   }
 
-  const fullName = displayNameForUser(profile, profile.username || 'Pantopus member');
+  const fullName = displayNameForUser(profile);
   const bioSource = typeof profile.bio === 'string' ? profile.bio : '';
 
   return buildShareMetadata({

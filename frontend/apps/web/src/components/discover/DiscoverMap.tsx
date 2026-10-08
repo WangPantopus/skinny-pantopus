@@ -10,6 +10,7 @@ import { BaseMap, LocateMeButton, MapProgressBar, clusterMarkers, makeClusterIco
 import type { Bounds } from '@/components/map';
 import type { NearestActivityCenter } from '@/components/map';
 import { launchFeatures } from '@/lib/featureFlags';
+import { chosenUsername } from '@pantopus/utils';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -698,7 +699,7 @@ function PostPinPopup({ marker }: { marker: MapMarker }) {
     <div className="min-w-[160px] space-y-1">
       {marker.creator && (
         <p className="text-xs font-medium text-app-text-strong">
-          {marker.creator.name || marker.creator.username}
+          {marker.creator.name || chosenUsername(marker.creator.username) || 'Neighbor'}
         </p>
       )}
       <p className="text-xs text-app-text-secondary line-clamp-3">{content}{content.length >= 120 ? '…' : ''}</p>

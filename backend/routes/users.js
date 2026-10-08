@@ -3,7 +3,6 @@ const express = require('express');
 const router = express.Router();
 const { createServerSupabaseClient } = require('../config/supabaseClient');
 const crypto = require('crypto');
-const { randomBytes } = crypto;
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { signUp, signIn } = require('../config/auth');
@@ -20,6 +19,14 @@ const affinityService = require('../services/gig/affinityService');
 const inviteRewardService = require('../services/inviteRewardService');
 const emailService = require('../services/emailService');
 const { recordFunnelEvent } = require('../services/funnelEvents');
+const {
+  buildGeneratedUsername,
+  chosenUsernameOrNull,
+  isGeneratedUsername,
+  isMadeUpUsername,
+  normalizePersonalUsername,
+  personalUsernameProblem,
+} = require('../utils/personalUsername');
 // Persistent login & trusted devices (docs/persistent-login/CONTRACT.md)
 const authPolicy = require('../config/authPolicy');
 const { verifyDpop } = require('../middleware/dpop');
@@ -304,7 +311,9 @@ function serializeCompatibilitySearchUser(profile, user = {}) {
   return {
     id: profile.user_id,
     username: profile.handle,
-    name: profile.display_name || profile.handle,
+    // A made-up username is never shown as the person's name (utils/personalUsername.js).
+    name: (isGeneratedUsername(profile.display_name) ? null : profile.display_name)
+      || chosenUsernameOrNull(profile.handle) || 'Pantopus member',
     profilePicture: profile.avatar_url || null,
     city: showLocality ? (profile.public_city || null) : null,
     state: showLocality ? (profile.public_state || null) : null,
@@ -360,7 +369,8 @@ function applyLocalProfilePublicOverlay(userData, localProfile) {
   return {
     ...userData,
     username: publicUsername,
-    name: localProfile.display_name || userData.name,
+    // A Local Profile made before its account had a name holds the made-up username as its display name.
+    name: (isGeneratedUsername(localProfile.display_name) ? null : localProfile.display_name) || userData.name,
     bio: localProfile.bio ?? userData.bio,
     tagline: localProfile.tagline ?? userData.tagline,
     profile_picture_url: localProfile.avatar_url || userData.profile_picture_url,
@@ -702,6 +712,13 @@ const registerLimiter = rateLimit({
   message: { error: 'Too many registration attempts. Please try again later.' },
 });
 
+// Username fields check as the person types (the apps wait for a pause first).
+const usernameAvailabilityLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: 'Too many username checks. Please wait a moment and try again.' },
+});
+
 const forgotPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5,
@@ -804,11 +821,9 @@ function getRegistrationConflictResponse(error) {
   }
 }
 
-// A generated handle says nothing about the person. Handles are shown to neighbors (feed authors, the invoice
-// recipient picker, a public profile link), and the first part of an email address is often a real name.
-function buildGeneratedUsername() {
-  return `user_${randomBytes(6).toString('hex')}`;
-}
+// A generated handle says nothing about the person (utils/personalUsername.js). Handles are shown to neighbors (feed
+// authors, the invoice recipient picker, a public profile link), and the first part of an email address is often a
+// real name.
 
 /**
  * Generate a username that is actually free. buildGeneratedUsername alone does
@@ -821,7 +836,7 @@ async function generateAvailableUsername() {
     // eslint-disable-next-line no-await-in-loop
     if (await isUsernameAvailable(candidate)) return candidate;
   }
-  return `user_${randomBytes(10).toString('hex')}`;
+  return buildGeneratedUsername(10);
 }
 
 async function getOAuthProfileById(userId) {
@@ -992,6 +1007,8 @@ const urlOrEmpty = Joi.string()
   .allow('', null);
 
 const updateProfileSchema = Joi.object({
+  // Checked in the handler (checkPersonalUsername) so the answer can say why a username can't be used.
+  username: Joi.string().max(64),
   firstName: Joi.string().min(1).max(255),
   middleName: Joi.string().min(1).max(255).allow('', null),
   lastName: Joi.string().min(1).max(255),
@@ -1403,6 +1420,48 @@ const isEmailAvailable = async (email, excludeUserId = null) => {
   if (excludeUserId && data[0].id === excludeUserId) return true;
 
   return false;
+};
+
+/**
+ * Can this person take a chosen (normalized) username? Case-insensitive, because people type profile links: another
+ * account's "JaneDoe" makes "janedoe" taken. A Local Profile handle answers the same profile links (the legacy
+ * route lookup falls back to it), so another person's handle counts as taken too.
+ */
+const isPersonalUsernameFree = async (normalized, userId) => {
+  const likeExact = normalized.replace(/[\\%_]/g, (match) => `\\${match}`);
+  const [users, handles] = await Promise.all([
+    supabaseAdmin.from('User').select('id').ilike('username', likeExact).limit(5),
+    supabaseAdmin.from('LocalProfile').select('user_id').eq('handle_normalized', normalized).limit(5),
+  ]);
+  if (users.error) throw users.error;
+  if (handles.error) throw handles.error;
+  return [
+    ...(users.data || []).map((row) => row.id),
+    ...(handles.data || []).map((row) => row.user_id),
+  ].every((id) => id === userId);
+};
+
+/**
+ * Whether the signed-in person can change their username to `raw`. Their own current username (any letter case)
+ * reads as 'current'; otherwise 'invalid' or 'reserved' (personalUsernameProblem), or 'taken'.
+ * Returns { username, available, reason? } with `username` normalized.
+ */
+const checkPersonalUsername = async (raw, userId, currentUsername) => {
+  const username = normalizePersonalUsername(raw);
+  if (currentUsername && username === String(currentUsername).toLowerCase()) {
+    return { username, available: true, reason: 'current' };
+  }
+  const problem = personalUsernameProblem(username);
+  if (problem) return { username, available: false, reason: problem };
+  return (await isPersonalUsernameFree(username, userId))
+    ? { username, available: true }
+    : { username, available: false, reason: 'taken' };
+};
+
+const USERNAME_REASON_MESSAGES = {
+  invalid: 'Use 3 to 30 lowercase letters, numbers or underscores.',
+  reserved: "That username isn't available. Try another.",
+  taken: 'That username is taken. Try another.',
 };
 
 /**
@@ -2557,6 +2616,9 @@ router.get('/profile', verifyToken, async (req, res) => {
         id: userData.id,
         email: userData.email,
         username: userData.username,
+        // The server made this username up (nobody chooses one at sign-up). Only the owner sees this; the apps ask
+        // for a real one when it would show, such as sharing the profile link.
+        usernameIsGenerated: isMadeUpUsername(userData.username, userData.email),
         firstName: userData.first_name,
         middleName: userData.middle_name, // ✅ FIX
         lastName: userData.last_name,
@@ -2608,6 +2670,29 @@ router.get('/profile', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /api/users/username-availability?username=<name>
+ * Can the signed-in person change their username to this? Answers { username, available, reason? }, where
+ * `username` is the normalized form (lowercase, no @) and `reason` is 'invalid', 'reserved', 'taken' or 'current'.
+ */
+router.get('/username-availability', verifyToken, usernameAvailabilityLimiter, async (req, res) => {
+  try {
+    const { data: current, error } = await supabaseAdmin
+      .from('User')
+      .select('username')
+      .eq('id', req.user.id)
+      .single();
+    if (error || !current) return res.status(404).json({ error: 'User profile not found' });
+    const check = await checkPersonalUsername(req.query.username, req.user.id, current.username);
+    res.json(check.reason && check.reason !== 'current'
+      ? { ...check, message: USERNAME_REASON_MESSAGES[check.reason] }
+      : check);
+  } catch (err) {
+    logger.error('Username availability error', { error: err.message, userId: req.user.id });
+    res.status(500).json({ error: 'Failed to check username' });
+  }
+});
+
+/**
  * PATCH /api/users/profile
  * Update current user's profile
  */
@@ -2615,6 +2700,30 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
   try {
     const userId = req.user.id;
     const updates = {};
+
+    // A new username moves the profile link (pantopus.com/<username>) and the Local Profile handle with it.
+    let previousUsername = null;
+    if (req.body.username !== undefined) {
+      const { data: current, error: currentErr } = await supabaseAdmin
+        .from('User')
+        .select('username')
+        .eq('id', userId)
+        .single();
+      if (currentErr || !current) {
+        return res.status(500).json({ error: 'Failed to read current user for username change' });
+      }
+      const check = await checkPersonalUsername(req.body.username, userId, current.username);
+      if (!check.available) {
+        return res.status(check.reason === 'taken' ? 409 : 400).json({
+          code: `USERNAME_${check.reason.toUpperCase()}`,
+          error: USERNAME_REASON_MESSAGES[check.reason],
+        });
+      }
+      if (check.username !== current.username) {
+        previousUsername = current.username;
+        updates.username = check.username;
+      }
+    }
 
     // Map request body to DB columns
     if (req.body.firstName !== undefined) updates.first_name = req.body.firstName;
@@ -2720,8 +2829,29 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
       .single();
 
     if (error) {
+      if (updates.username && error.code === '23505' && /username/i.test(`${error.message} ${error.details || ''}`)) {
+        return res.status(409).json({ code: 'USERNAME_TAKEN', error: USERNAME_REASON_MESSAGES.taken });
+      }
       logger.error('Profile update error', { error: error.message, userId });
       return res.status(500).json({ error: 'Failed to update profile' });
+    }
+
+    if (updates.username) {
+      // The Local Profile handle is the username's public copy (search, the legacy profile route). If it can't move,
+      // put the old username back so the two never disagree.
+      const { error: handleErr } = await supabaseAdmin
+        .from('LocalProfile')
+        .update({ handle: updates.username, handle_normalized: updates.username, updated_at: new Date().toISOString() })
+        .eq('user_id', userId);
+      if (handleErr) {
+        await supabaseAdmin.from('User').update({ username: previousUsername }).eq('id', userId);
+        if (handleErr.code === '23505') {
+          return res.status(409).json({ code: 'USERNAME_TAKEN', error: USERNAME_REASON_MESSAGES.taken });
+        }
+        logger.error('Profile update local profile handle error', { error: handleErr.message, userId });
+        return res.status(500).json({ error: 'Failed to update profile' });
+      }
+      logger.info('Username changed', { userId });
     }
 
     // Posts, comments and search show the LocalProfile's copy of the name and bio, and of the city and state.
@@ -2792,6 +2922,7 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
         id: userData.id,
         email: userData.email,
         username: userData.username,
+        usernameIsGenerated: isMadeUpUsername(userData.username, userData.email),
         firstName: userData.first_name,
         middleName: userData.middle_name,
         lastName: userData.last_name,
@@ -3614,7 +3745,7 @@ router.get('/public/join/:code', async (req, res) => {
       .eq('id', referral.referrer_id)
       .single();
 
-    const referrerName = referrer?.name || referrer?.first_name || referrer?.username || 'A neighbor';
+    const referrerName = referrer?.name || referrer?.first_name || chosenUsernameOrNull(referrer?.username) || 'A neighbor';
 
     res.json({
       valid: true,
@@ -4299,7 +4430,7 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
       .eq('id', followerId)
       .maybeSingle();
 
-    const followerName = followerUser?.name || followerUser?.first_name || followerUser?.username || 'Someone';
+    const followerName = followerUser?.name || followerUser?.first_name || chosenUsernameOrNull(followerUser?.username) || 'Someone';
     notificationService.createNotification({
       userId: followingId,
       type: 'new_follower',

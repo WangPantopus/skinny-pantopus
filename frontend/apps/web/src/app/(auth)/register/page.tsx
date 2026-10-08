@@ -1,13 +1,13 @@
 'use client';
 
 // ============================================================
-// Register — the wedge slim signup (Phase 1).
+// Register — name, email and password (or OAuth).
 //
-// Email + password (or OAuth) and nothing else: no username (the
-// backend auto-generates a handle — usernames belong to the creator
-// layer), no name fields (collected later, in the claim flow, where
-// they're actually needed). The page usually receives a pendingPlace
-// stashed by /start, and lands on /app/place to claim it.
+// First and last name are required (middle is optional): they are how
+// the household, neighbors and helpers know the person. No username:
+// the backend makes one up, and the person can choose their own later
+// in Edit Profile. The page usually receives a pendingPlace stashed by
+// /start, and lands on /app/place to claim it.
 // ============================================================
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
@@ -37,6 +37,9 @@ function RegisterContent() {
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   type FieldErrors = Record<string, string>;
   const [formData, setFormData] = useState({
+    firstName: '',
+    middleName: '',
+    lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -98,6 +101,12 @@ function RegisterContent() {
 
     const nextFieldErrors: FieldErrors = {};
 
+    if (!formData.firstName.trim()) {
+      nextFieldErrors.firstName = 'Enter your first name.';
+    }
+    if (!formData.lastName.trim()) {
+      nextFieldErrors.lastName = 'Enter your last name.';
+    }
     if (formData.password.length < PASSWORD_MIN_LENGTH) {
       nextFieldErrors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
     }
@@ -117,7 +126,11 @@ function RegisterContent() {
 
     try {
       const anonId = api.getFunnelAnonId();
+      const middleName = formData.middleName.trim();
       const response = await api.auth.register({
+        firstName: formData.firstName.trim(),
+        ...(middleName ? { middleName } : {}),
+        lastName: formData.lastName.trim(),
         email: normalizeEmail(formData.email),
         password: formData.password,
         redirectTo,
@@ -192,6 +205,70 @@ function RegisterContent() {
                 {error}
               </div>
             )}
+
+            {/* Name: first and last are required, middle is optional */}
+            <div>
+              <label htmlFor="firstName" className={labelClass}>
+                First name <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1">
+                <input
+                  id="firstName"
+                  name="firstName"
+                  type="text"
+                  autoComplete="given-name"
+                  required
+                  maxLength={255}
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  aria-invalid={fieldErrors.firstName ? true : undefined}
+                  aria-describedby={fieldErrors.firstName ? 'firstName-error' : undefined}
+                  className={inputClass + (fieldErrors.firstName ? inputErrorClass : '')}
+                />
+                {fieldErrors.firstName ? <p id="firstName-error" className={fieldErrorClass}>{fieldErrors.firstName}</p> : null}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="middleName" className={labelClass}>
+                Middle name <span className="font-normal text-app-text-secondary">(optional)</span>
+              </label>
+              <div className="mt-1">
+                <input
+                  id="middleName"
+                  name="middleName"
+                  type="text"
+                  autoComplete="additional-name"
+                  maxLength={255}
+                  value={formData.middleName}
+                  onChange={handleChange}
+                  className={inputClass + (fieldErrors.middleName ? inputErrorClass : '')}
+                />
+                {fieldErrors.middleName ? <p className={fieldErrorClass}>{fieldErrors.middleName}</p> : null}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="lastName" className={labelClass}>
+                Last name <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1">
+                <input
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  autoComplete="family-name"
+                  required
+                  maxLength={255}
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  aria-invalid={fieldErrors.lastName ? true : undefined}
+                  aria-describedby={fieldErrors.lastName ? 'lastName-error' : undefined}
+                  className={inputClass + (fieldErrors.lastName ? inputErrorClass : '')}
+                />
+                {fieldErrors.lastName ? <p id="lastName-error" className={fieldErrorClass}>{fieldErrors.lastName}</p> : null}
+              </div>
+            </div>
 
             {/* Email */}
             <div>
@@ -318,7 +395,7 @@ function RegisterContent() {
             </button>
 
             <p className="text-center text-xs text-app-text-secondary dark:text-app-text-muted">
-              Private by default. Your name and profile come later — only when you need them.
+              Use the name people know you by. You can change it later in your profile.
             </p>
           </AuthForm>
 

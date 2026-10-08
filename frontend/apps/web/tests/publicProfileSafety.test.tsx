@@ -12,7 +12,7 @@ jest.mock('@pantopus/api', () => ({
   gigs: { getGigs: jest.fn() }, posts: { getUserPosts: jest.fn() },
   reviews: { getUserReviews: jest.fn(), getPendingReviews: jest.fn() },
 }));
-jest.mock('@pantopus/utils', () => ({ buildUserProfileShareUrl: jest.fn() }));
+jest.mock('@pantopus/utils', () => ({ ...jest.requireActual('@pantopus/utils'), buildUserProfileShareUrl: jest.fn() }));
 jest.mock('next/navigation', () => { const router = { push: jest.fn() }; return { useRouter: () => router }; });
 jest.mock('next/image', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/ui/toast-store', () => ({ toast: { error: jest.fn(), success: jest.fn() } }));

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
+import { chosenUsername } from '@pantopus/utils';
 
 export default function BusinessActivityPage() {
   const params = useParams();
@@ -59,7 +60,7 @@ export default function BusinessActivityPage() {
                 <div key={entry.id} className="px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-app-text">
-                      {entry.actor?.name || entry.actor?.username || 'Former member'}
+                      {entry.actor?.name || chosenUsername(entry.actor?.username) || (entry.actor ? 'Team member' : 'Former member')}
                     </div>
                     <div className="text-xs text-app-text-muted">
                       {entry.created_at ? new Date(entry.created_at).toLocaleString() : ''}

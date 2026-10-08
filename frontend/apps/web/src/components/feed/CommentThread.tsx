@@ -9,6 +9,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import FeedMediaImage from './FeedMediaImage';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { PostComment } from '@pantopus/types';
+import { chosenUsername } from '@pantopus/utils';
 
 interface CommentThreadProps {
   comments: PostComment[];
@@ -173,7 +174,7 @@ export default function CommentThread({
   const renderComment = (comment: PostComment, depth = 0) => {
     // P0.4: read from the new identity shape only (displayName / handle).
     const authorName =
-      comment.author?.displayName || comment.author?.handle || 'Neighbor';
+      comment.author?.displayName || chosenUsername(comment.author?.handle) || 'Neighbor';
     const authorInitial = authorName[0]?.toUpperCase() || '?';
     const isOwn = comment.user_id === currentUserId;
     const replies = repliesMap[comment.id] || [];

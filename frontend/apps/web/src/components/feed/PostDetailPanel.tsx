@@ -16,7 +16,7 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import FeedMediaImage from './FeedMediaImage';
 import LinkPreviewCard from './LinkPreviewCard';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
+import { buildCanonicalShareUrlForPost, chosenUsername } from '@pantopus/utils';
 import { removePostFromFeedCaches } from '@/hooks/useFeedData';
 import type { Post, PostComment as PostCommentType } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -382,9 +382,9 @@ export default function PostDetailPanel({
     null;
   const creatorName =
     publicAuthor?.displayName ||
-    publicAuthor?.handle ||
+    chosenUsername(publicAuthor?.handle) ||
     post?.creator?.name ||
-    post?.creator?.username ||
+    chosenUsername(post?.creator?.username) ||
     'Neighbor';
 
   if (!mounted) return null;

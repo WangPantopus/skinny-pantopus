@@ -84,12 +84,16 @@ test('registration passes the destination to the email API and verification scre
   search.set('redirectTo', TARGETS[2]);
   register.mockResolvedValue({ user: { id: 'u1' }, requiresEmailVerification: true });
   render(<Register />);
+  fireEvent.change(screen.getByLabelText(/^First name/), { target: { value: 'Ada' } });
+  fireEvent.change(screen.getByLabelText(/^Last name/), { target: { value: 'Lovelace' } });
   fireEvent.change(screen.getByLabelText(/Email address/), { target: { value: 'a@example.com' } });
   fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'long-password-123' } });
   fireEvent.change(screen.getByLabelText(/^Confirm password/), { target: { value: 'long-password-123' } });
   fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.submit(screen.getByRole('button', { name: /create.*account/i }).closest('form')!);
-  await waitFor(() => expect(register).toHaveBeenCalledWith(expect.objectContaining({ redirectTo: TARGETS[2] })));
+  await waitFor(() => expect(register).toHaveBeenCalledWith(expect.objectContaining({
+    redirectTo: TARGETS[2], firstName: 'Ada', lastName: 'Lovelace',
+  })));
   expect(push).toHaveBeenCalledWith(authPageHref('/verify-email-sent', TARGETS[2], { email: 'a@example.com' }));
 });
 

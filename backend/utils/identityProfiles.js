@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
 const verificationAge = require('./verificationAge');
+const { chosenUsernameOrNull, isGeneratedUsername } = require('./personalUsername');
 
 /**
  * Which of these users are verified residents, for the public "verified_resident" badge: an ACTIVE HomeOccupancy
@@ -107,19 +108,58 @@ function fullNameFromUserParts(user) {
   return parts.length ? parts.join(' ') : null;
 }
 
+// A display name, unless it is a username the server made up: a Local Profile made while its account had no name
+// holds the made-up username as its display name, and that is never shown as the person's name.
+function nameText(value) {
+  const text = cleanIdentityText(value);
+  return text && !isGeneratedUsername(text) ? text : null;
+}
+
 // Public local identity policy: seed profiles with a readable name first and
-// keep username as the handle/fallback.
+// keep username as the handle/fallback (only a username the person chose).
 function displayNameFromUser(user) {
   if (!user) return 'Pantopus member';
   return (
-    cleanIdentityText(user.display_name) ||
-    cleanIdentityText(user.public_display_name) ||
+    nameText(user.display_name) ||
+    nameText(user.public_display_name) ||
     cleanIdentityText(user.name) ||
     fullNameFromUserParts(user) ||
     cleanIdentityText(user.first_name) ||
-    cleanIdentityText(user.username) ||
+    chosenUsernameOrNull(user.username) ||
     'Pantopus member'
   );
+}
+
+/**
+ * The name a person goes by on local surfaces (their household, who liked a neighbor's post): the
+ * display name they already show neighbors on their posts (their Local Profile's, or else their account name), or a
+ * username they chose. Never a username the server made up, so a person with neither has no entry and the caller
+ * shows a neutral label. For rows selected with SAFE_CREATOR_SELECT, which carries no name. Throws on a read error
+ * (household reads fail closed).
+ *
+ * @param {string[]} userIds
+ * @returns {Promise<Map<string, string>>} user id → name
+ */
+async function localDisplayNames(userIds) {
+  const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
+  const names = new Map();
+  if (ids.length === 0) return names;
+  const [users, profiles] = await Promise.all([
+    supabaseAdmin.from('User').select('id, username, name, first_name, middle_name, last_name').in('id', ids),
+    supabaseAdmin.from('LocalProfile').select('user_id, display_name').in('user_id', ids),
+  ]);
+  if (users.error) throw users.error;
+  if (profiles.error) throw profiles.error;
+  const profileNames = new Map((profiles.data || []).map((row) => [String(row.user_id), nameText(row.display_name)]));
+  for (const user of users.data || []) {
+    const name = profileNames.get(String(user.id))
+      || cleanIdentityText(user.name)
+      || fullNameFromUserParts(user)
+      || cleanIdentityText(user.first_name)
+      || chosenUsernameOrNull(user.username);
+    if (name) names.set(String(user.id), name);
+  }
+  return names;
 }
 
 async function canExposePublicLocality(userId) {
@@ -641,6 +681,7 @@ module.exports = {
   sanitizeHandle,
   syncLocalProfileLocality,
   displayNameFromUser,
+  localDisplayNames,
   ensureLocalProfile,
   syncLocalProfileFromAccount,
   localProfileVisibilityFor,

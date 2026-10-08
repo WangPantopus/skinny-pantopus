@@ -27,6 +27,7 @@ const { isBlocked, getRelationshipStatus } = require('../utils/visibilityPolicy'
 const { invalidateFilterCache } = require('../services/feedService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const rateLimit = require('express-rate-limit');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // A blocked relationship exists only for the person who blocked. To the
 // blocked person the routes below answer as if there were no relationship,
@@ -103,7 +104,7 @@ async function getUserDisplayName(userId) {
     .eq('id', userId)
     .single();
   if (!data) return 'Someone';
-  return data.name || data.first_name || data.username || 'Someone';
+  return data.name || data.first_name || chosenUsernameOrNull(data.username) || 'Someone';
 }
 
 // ============ ROUTES ============

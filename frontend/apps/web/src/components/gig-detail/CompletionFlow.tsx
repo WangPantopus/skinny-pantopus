@@ -1,6 +1,6 @@
 'use client';
 
-import { getErrorMessage } from '@pantopus/utils';
+import { getErrorMessage, chosenUsername } from '@pantopus/utils';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -855,7 +855,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
           gigId={gigId}
           workerName={
             gig?.accepted_bid?.bidder?.name ||
-            gig?.accepted_bid?.bidder?.username ||
+            chosenUsername(gig?.accepted_bid?.bidder?.username) ||
             'the worker'
           }
           onSuccess={(tipAmount) => {

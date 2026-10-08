@@ -1,6 +1,7 @@
 'use client';
 
 import type { PageRevision } from './types';
+import { chosenUsername } from '@pantopus/utils';
 
 interface RevisionDrawerProps {
   revisions: PageRevision[];
@@ -37,7 +38,7 @@ export default function RevisionDrawer({ revisions, publishedRevision, onClose }
                 </div>
                 {rev.publisher && (
                   <div className="text-[10px] text-app-text-muted mt-0.5">
-                    by {rev.publisher.name || rev.publisher.username}
+                    by {rev.publisher.name || chosenUsername(rev.publisher.username) || 'a team member'}
                   </div>
                 )}
                 {rev.notes && (
