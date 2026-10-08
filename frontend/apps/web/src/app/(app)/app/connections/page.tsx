@@ -182,6 +182,8 @@ function ConnectionsPageContent() {
             key={tab.key}
             role="tab"
             aria-selected={activeTab === tab.key}
+            // The count is its own span with only a margin before it, so the name read out was "Requests1".
+            aria-label={tab.count > 0 ? `${tab.label} (${tab.count})` : undefined}
             onClick={() => setActiveTab(tab.key)}
             className={`flex-1 whitespace-nowrap py-2.5 px-4 rounded-lg text-sm font-medium transition ${
               activeTab === tab.key

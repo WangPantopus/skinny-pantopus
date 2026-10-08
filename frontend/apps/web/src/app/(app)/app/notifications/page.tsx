@@ -432,12 +432,12 @@ export default function NotificationsPage() {
           them, /app/notifications remains the legacy all-context feed. */}
       {useScopedZones ? (
         <div role="tablist" aria-label="Notification zone" className="mb-4 flex gap-1 border-b border-app-border-subtle" data-testid="notifications-zone-tabs">
-          <button role="tab" type="button" aria-selected={zone === 'personal'} data-testid="zone-tab-personal" data-zone="personal" data-active={zone === 'personal' ? 'true' : 'false'} onClick={() => setZone('personal')} className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${zone === 'personal' ? 'border-blue-600 text-blue-700' : 'border-transparent text-app-text-secondary hover:text-app-text'}`}>
+          <button role="tab" type="button" aria-selected={zone === 'personal'} data-testid="zone-tab-personal" data-zone="personal" aria-label={notificationsByContext.personal + notificationsByContext.platform > 0 ? `Personal (${notificationsByContext.personal + notificationsByContext.platform})` : undefined} data-active={zone === 'personal' ? 'true' : 'false'} onClick={() => setZone('personal')} className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${zone === 'personal' ? 'border-blue-600 text-blue-700' : 'border-transparent text-app-text-secondary hover:text-app-text'}`}>
             Personal
             {notificationsByContext.personal + notificationsByContext.platform > 0 ? <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">{notificationsByContext.personal + notificationsByContext.platform}</span> : null}
           </button>
           {showAudienceZone ? (
-            <button role="tab" type="button" aria-selected={zone === 'audience'} data-testid="zone-tab-audience" data-zone="audience" data-active={zone === 'audience' ? 'true' : 'false'} onClick={() => setZone('audience')} className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${zone === 'audience' ? 'border-teal-600 text-teal-700' : 'border-transparent text-app-text-secondary hover:text-app-text'}`}>
+            <button role="tab" type="button" aria-selected={zone === 'audience'} data-testid="zone-tab-audience" data-zone="audience" aria-label={notificationsByContext.audience > 0 ? `Audience (${notificationsByContext.audience})` : undefined} data-active={zone === 'audience' ? 'true' : 'false'} onClick={() => setZone('audience')} className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${zone === 'audience' ? 'border-teal-600 text-teal-700' : 'border-transparent text-app-text-secondary hover:text-app-text'}`}>
               Audience
               {notificationsByContext.audience > 0 ? <span className="ml-2 rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-700">{notificationsByContext.audience}</span> : null}
             </button>
