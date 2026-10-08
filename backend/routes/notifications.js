@@ -17,6 +17,7 @@ const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const { NOTIFICATION_LIST } = require('../utils/columns');
 const pushService = require('../services/pushService');
+const badgeService = require('../services/badgeService');
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
 const FIREWALL_VALUES = ['personal', 'audience', 'platform'];
@@ -420,6 +421,8 @@ router.patch('/:id/read', verifyToken, async (req, res) => {
     // Not this person's, or deleted elsewhere (e.g. on the web, then tapped on the phone).
     if (!data) return res.status(404).json({ error: 'Notification not found' });
 
+    // Open tabs and other devices learn the new unread count (their bells kept the old one).
+    badgeService.emitBadgeUpdate(userId);
     res.json({ notification: data });
   } catch (err) {
     logger.error('Mark read error', { error: err.message });
@@ -462,6 +465,7 @@ router.post('/read-all', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to mark all as read' });
     }
 
+    badgeService.emitBadgeUpdate(userId);
     res.json({ message: 'All notifications marked as read' });
   } catch (err) {
     logger.error('Mark all read error', { error: err.message });
@@ -492,6 +496,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
     // Not this person's, or already deleted elsewhere: nothing was deleted, as mark-read answers.
     if (!data || data.length === 0) return res.status(404).json({ error: 'Notification not found' });
 
+    badgeService.emitBadgeUpdate(userId);
     res.json({ message: 'Notification deleted' });
   } catch (err) {
     logger.error('Delete notification error', { error: err.message });
