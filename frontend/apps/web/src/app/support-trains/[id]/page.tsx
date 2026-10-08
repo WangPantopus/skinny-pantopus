@@ -69,8 +69,10 @@ function getOrganizerUser(
 }
 
 function getProfileHref(user: OrganizerUser | null | undefined): string | null {
-  if (typeof user?.username !== 'string' || !user.username.trim()) return null;
-  return `/${encodeURIComponent(user.username.trim())}`;
+  const handle = typeof user?.username === 'string' ? user.username.trim() : '';
+  if (handle) return `/${encodeURIComponent(handle)}`;
+  // The server leaves out a made-up username; the profile page also opens by id.
+  return user?.id ? `/${encodeURIComponent(user.id)}` : null;
 }
 
 function initialsForName(value: string): string {
