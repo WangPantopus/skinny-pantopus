@@ -221,7 +221,8 @@ final class HomeMemberRemovalViewModel {
             method: .post,
             path: base + "/context",
             body: JSONValue.object(["home_id": .string(target.homeId), "target_user_id": .string(target.userId)]),
-            headers: headers,
+            // The server names the person (display_name) only when asked: older builds check these keys exactly.
+            headers: headers.merging(["X-Pantopus-Display-Names": "1"]) { $1 },
             cachePolicy: .reloadIgnoringLocalCacheData
         ))
         try current(revision)
