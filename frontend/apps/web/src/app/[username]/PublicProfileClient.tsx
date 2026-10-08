@@ -747,7 +747,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
             reviews={reviews}
             userGigs={userGigs}
             gigsLoading={gigsLoading}
-            onSkillRequest={handleRequestHire}
+            onSkillRequest={launchFeatures.openGigs ? handleRequestHire : undefined}
             onViewPortfolio={() => setActiveTab('portfolio')}
           />
         )}
