@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.tasks
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.homes.OccupantDto
@@ -228,9 +229,10 @@ data class HouseholdTaskAssignableMember(
         fun from(occupant: OccupantDto): HouseholdTaskAssignableMember? {
             // Guests can't see household tasks, so the server refuses them as assignees.
             if (!occupant.isActive || occupant.role == "guest") return null
+            // A made-up username (user_…) is never shown as the member's name.
             val name =
-                occupant.displayName?.trim()
-                    ?: occupant.username?.trim()
+                occupant.displayName?.trim()?.takeUnless(MadeUpUsername::isMadeUp)
+                    ?: MadeUpUsername.chosen(occupant.username)
                     ?: ""
             val display =
                 if (name.isEmpty()) {

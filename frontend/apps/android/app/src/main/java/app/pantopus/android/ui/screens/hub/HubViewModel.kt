@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.gigs.RebookableGigDto
 import app.pantopus.android.data.api.models.hub.HubResponse
@@ -152,14 +153,18 @@ class HubViewModel
             }
         }
 
-        /** Initial load; no-op when already populated. */
+        /** The [ProfileChanges] version the greeting was read at. */
+        private var readAtVersion = -1
+
+        /** Initial load; no-op when already populated and no name or username was saved since. */
         fun load() {
-            if (_state.value is HubUiState.Populated) return
+            if (_state.value is HubUiState.Populated && readAtVersion == ProfileChanges.version.value) return
             refresh()
         }
 
         /** Pull-to-refresh / retry. */
         fun refresh() {
+            readAtVersion = ProfileChanges.version.value
             discoveryGeneration += 1
             _discoveryLoading.value = false
             _state.value = HubUiState.Skeleton

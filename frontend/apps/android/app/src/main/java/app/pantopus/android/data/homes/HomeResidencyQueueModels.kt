@@ -1,5 +1,7 @@
 package app.pantopus.android.data.homes
 
+import app.pantopus.android.core.identity.MadeUpUsername
+
 data class HomeResidencyQueueSession(val actorId: String, val sessionScope: String)
 
 data class HomeResidencyQueueClaim(
@@ -9,7 +11,9 @@ data class HomeResidencyQueueClaim(
     val claimedRole: String?,
     val createdAt: String?,
 ) {
-    val applicantLabel: String get() = username?.takeIf { it.isNotEmpty() }?.let { "@$it" } ?: "Applicant identity unavailable"
+    // A made-up username (user_…) says nothing about the applicant, so it reads as "Applicant".
+    val applicantLabel: String get() =
+        MadeUpUsername.handle(username) ?: if (username.isNullOrEmpty()) "Applicant identity unavailable" else "Applicant"
     val roleLabel: String get() =
         when (claimedRole) {
             "household" -> "Requesting: Household"

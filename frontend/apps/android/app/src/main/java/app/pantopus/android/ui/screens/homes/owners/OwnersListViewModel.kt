@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.owners
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.OwnerDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -351,8 +352,7 @@ class OwnersListViewModel
         private fun displayName(owner: OwnerDto): String {
             val name = owner.user?.name?.takeIf { it.isNotEmpty() }
             if (name != null) return name
-            val username = owner.user?.username?.takeIf { it.isNotEmpty() }
-            if (username != null) return "@$username"
+            MadeUpUsername.handle(owner.user?.username)?.let { return it }
             val suffix = owner.subjectId.takeLast(SUBJECT_ID_DISPLAY_SUFFIX_LENGTH)
             return when (owner.subjectType.lowercase()) {
                 "business" -> "Business · $suffix"

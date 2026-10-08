@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.businesses.inbox
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.businessinbox.BusinessInboxRoomDto
 import app.pantopus.android.data.api.models.businessinbox.BusinessMatchedPostDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -162,7 +163,7 @@ class BusinessInboxViewModel
         companion object {
             /** Pure projection of a room row (exposed for unit tests). */
             fun projectRoom(dto: BusinessInboxRoomDto): BusinessInboxRoom {
-                val handle = dto.otherParticipantUsername.orEmpty().trim()
+                val handle = MadeUpUsername.chosen(dto.otherParticipantUsername).orEmpty()
                 val name =
                     dto.otherParticipantName?.takeIf { it.isNotEmpty() }
                         ?: dto.roomName?.takeIf { it.isNotEmpty() }
@@ -188,7 +189,7 @@ class BusinessInboxViewModel
                     id = dto.id,
                     authorName =
                         dto.creator?.name?.takeIf { it.isNotEmpty() }
-                            ?: dto.creator?.username?.takeIf { it.isNotEmpty() }
+                            ?: MadeUpUsername.chosen(dto.creator?.username)
                             ?: "Someone",
                     avatarUrl = dto.creator?.profilePictureUrl,
                     body = dto.title?.takeIf { it.isNotEmpty() } ?: dto.content.orEmpty(),

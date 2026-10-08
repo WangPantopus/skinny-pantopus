@@ -1,5 +1,6 @@
 package app.pantopus.android.data.homes
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 
@@ -74,7 +75,7 @@ class HomeMemberRemovalCodec(moshi: Moshi) {
     ): String {
         val homeName = nullableText(home, "name")?.takeIf(String::isNotBlank) ?: "Selected Home"
         check(target.containsKey("name") && target["name"] == null)
-        val username = nullableText(target, "username")?.takeIf(String::isNotBlank)?.let { "@$it" }
+        val username = MadeUpUsername.handle(nullableText(target, "username"))
         check(target["is_self"] is Boolean && target["is_active"] is Boolean)
         check(target["is_self"] == (intent.targetUserId == scope.actorId))
         val role = nullableText(target, "role_base")

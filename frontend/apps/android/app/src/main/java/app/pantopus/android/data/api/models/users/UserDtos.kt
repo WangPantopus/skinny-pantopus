@@ -53,9 +53,9 @@ data class UserProfile(
     val id: String,
     val email: String,
     val username: String,
-    // Slim sign-up writes null for all three (backend/routes/users.js
-    // stores `normalizedFirst || null`); the profile route returns the
-    // columns raw. Non-null here crashed the You tab for those accounts.
+    // Accounts made while sign-up asked only for an email and password have
+    // null for all three (backend/routes/users.js stores `normalizedFirst ||
+    // null`). Non-null here crashed the You tab for those accounts.
     val firstName: String?,
     val middleName: String?,
     val lastName: String?,
@@ -91,6 +91,12 @@ data class UserProfile(
      */
     val showEmail: Boolean? = null,
     val showPhone: Boolean? = null,
+    /**
+     * True when the server made `username` up (nobody picks one at sign-up);
+     * sent for the signed-in person's own profile only. Absent from older
+     * servers, which reads as false.
+     */
+    val usernameIsGenerated: Boolean? = null,
 )
 
 /** Envelope for `GET /api/users/profile`. Route: `backend/routes/users.js:1427`. */
@@ -108,6 +114,11 @@ data class ProfileResponse(
  */
 @JsonClass(generateAdapter = true)
 data class ProfileUpdateRequest(
+    /**
+     * A new username (lowercase). The server checks it again and answers 409
+     * `USERNAME_TAKEN` or 400 `USERNAME_INVALID` / `USERNAME_RESERVED`.
+     */
+    val username: String? = null,
     val firstName: String? = null,
     val middleName: String? = null,
     val lastName: String? = null,
@@ -173,4 +184,17 @@ data class UserStatsDto(
     @Json(name = "total_earnings") val totalEarnings: Double = 0.0,
     @Json(name = "average_rating") val averageRating: Double = 0.0,
     @Json(name = "total_ratings") val totalRatings: Int = 0,
+)
+
+/**
+ * `GET /api/users/username-availability?username=` — route `backend/routes/users.js`
+ * (`router.get('/username-availability'`). `reason` is `invalid`, `reserved`, `taken` or
+ * `current` (already theirs); `message` is a sentence to show when the name can't be used.
+ */
+@JsonClass(generateAdapter = true)
+data class UsernameAvailabilityDto(
+    val username: String,
+    val available: Boolean,
+    val reason: String? = null,
+    val message: String? = null,
 )

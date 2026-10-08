@@ -92,6 +92,9 @@ fun EditProfileScreen(
     val avatarUrl by viewModel.avatarUrl.collectAsStateWithLifecycle()
     val avatarInitial by viewModel.avatarInitial.collectAsStateWithLifecycle()
     val avatarState by viewModel.avatarState.collectAsStateWithLifecycle()
+    // Read with `.value` here so a finished username check recomposes Save: with `by`, the read would sit
+    // behind `viewModel.isValid &&` below and be skipped while the check runs.
+    val usernameState = viewModel.usernameCheck.state.collectAsStateWithLifecycle().value
     // Skills ride `PUT /api/users/skills`, not the profile PATCH, but they
     // commit through the same Save (`backend/routes/users.js:2246`).
     // Read with `.value` here rather than `by`: `isDirty`, `dirtyFieldCount`,
@@ -144,7 +147,7 @@ fun EditProfileScreen(
                             fields = fields,
                             email = email,
                             emailVerified = emailVerified,
-                            isValid = viewModel.isValid,
+                            isValid = viewModel.isValid && usernameState != UsernameCheckState.Checking,
                             isDirty = viewModel.isDirty,
                             dirtyFieldCount = viewModel.dirtyFieldCount,
                             isSaving = isSaving,
@@ -154,6 +157,16 @@ fun EditProfileScreen(
                     onCommit = viewModel::save,
                     onDiscard = viewModel::discardChanges,
                     onUpdate = viewModel::update,
+                    usernameSlot = {
+                        val snapshot = fields[EditProfileField.Username]
+                        UsernameFieldBlock(
+                            checker = viewModel.usernameCheck,
+                            value = snapshot?.value.orEmpty(),
+                            onValueChange = { viewModel.update(EditProfileField.Username, it) },
+                            serverError = snapshot?.error,
+                            isDirty = snapshot?.isDirty == true,
+                        )
+                    },
                     avatarSlot = {
                         EditProfileAvatarBlock(
                             avatarUrl = avatarUrl,
@@ -243,6 +256,7 @@ internal fun EditProfileLoaded(
     onDiscard: () -> Unit,
     onUpdate: (EditProfileField, String) -> Unit,
     shakeTrigger: Int = 0,
+    usernameSlot: @Composable () -> Unit = {},
     avatarSlot: @Composable () -> Unit = {},
     skillsSlot: @Composable () -> Unit = {},
     bioActionSlot: @Composable () -> Unit = {},
@@ -278,6 +292,7 @@ internal fun EditProfileLoaded(
                 email = state.email,
                 emailVerified = state.emailVerified,
                 onUpdate = onUpdate,
+                usernameSlot = usernameSlot,
                 avatarSlot = avatarSlot,
                 skillsSlot = skillsSlot,
                 bioActionSlot = bioActionSlot,
@@ -293,6 +308,7 @@ private fun EditProfileSections(
     email: String,
     emailVerified: Boolean,
     onUpdate: (EditProfileField, String) -> Unit,
+    usernameSlot: @Composable () -> Unit = {},
     avatarSlot: @Composable () -> Unit = {},
     skillsSlot: @Composable () -> Unit = {},
     bioActionSlot: @Composable () -> Unit = {},
@@ -304,6 +320,8 @@ private fun EditProfileSections(
     // field groups rather than inside one.
     avatarSlot()
     FormFieldGroup("About") {
+        // The profile link's username (`UsernameAvailability.kt`).
+        usernameSlot()
         TextRow(
             field = EditProfileField.FirstName,
             label = "First name",

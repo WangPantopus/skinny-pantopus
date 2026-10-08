@@ -83,8 +83,10 @@ fun PublicProfileScreen(
     onOpenGig: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     viewModel: PublicProfileViewModel = hiltViewModel(),
+    usernameShare: UsernameShareViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val usernameShareForm by usernameShare.form.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val selectedLocalTab by viewModel.selectedLocalTab.collectAsStateWithLifecycle()
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
@@ -216,12 +218,19 @@ fun PublicProfileScreen(
                 onDismissRequest = { viewModel.setShowOverflow(false) },
                 sheetState = sheetState,
             ) {
+                val loaded = (state as? PublicProfileUiState.Loaded)?.content
                 OverflowSheetContent(
                     // The header's "Share profile" opens this sheet, so it shares first.
                     shareUrl = profileShareUrl(state),
+                    isOwnProfile = loaded?.isOwner == true,
                     onShare = { url ->
                         viewModel.setShowOverflow(false)
-                        context.shareText(url)
+                        // Your own link still on a made-up username: offer to pick one first, once.
+                        if (loaded != null && loaded.isOwner && usernameShare.shouldAsk(loaded.profile.id, loaded.profile.username)) {
+                            usernameShare.open(loaded.profile.id, loaded.profile.username)
+                        } else {
+                            context.shareText(url)
+                        }
                     },
                     onBlock = {
                         viewModel.setShowOverflow(false)
@@ -234,6 +243,20 @@ fun PublicProfileScreen(
                     onCancel = { viewModel.setShowOverflow(false) },
                 )
             }
+        }
+        usernameShareForm?.let { form ->
+            UsernameShareSheet(
+                model = usernameShare,
+                form = form,
+                onShareAsIs = {
+                    usernameShare.close()
+                    profileShareUrl(state)?.let { context.shareText(it) }
+                },
+                onSaved = { username ->
+                    viewModel.refresh()
+                    context.shareText(InviteLinks.profileUrl(username))
+                },
+            )
         }
         if (showReportSheet) {
             val loaded = state as? PublicProfileUiState.Loaded
@@ -699,6 +722,7 @@ private fun profileShareUrl(state: PublicProfileUiState): String? {
 @Composable
 private fun OverflowSheetContent(
     shareUrl: String?,
+    isOwnProfile: Boolean,
     onShare: (String) -> Unit,
     onBlock: () -> Unit,
     onReport: () -> Unit,
@@ -709,8 +733,11 @@ private fun OverflowSheetContent(
         verticalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
         shareUrl?.let { url -> OverflowSheetRow(label = "Share profile", onClick = { onShare(url) }) }
-        OverflowSheetRow(label = "Block this user", destructive = true, onClick = onBlock)
-        OverflowSheetRow(label = "Report", onClick = onReport)
+        // Nobody blocks or reports themselves.
+        if (!isOwnProfile) {
+            OverflowSheetRow(label = "Block this user", destructive = true, onClick = onBlock)
+            OverflowSheetRow(label = "Report", onClick = onReport)
+        }
         OverflowSheetRow(label = "Cancel", onClick = onCancel)
     }
 }

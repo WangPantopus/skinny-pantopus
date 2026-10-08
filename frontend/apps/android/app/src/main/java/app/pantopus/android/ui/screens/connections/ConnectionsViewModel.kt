@@ -14,6 +14,7 @@ package app.pantopus.android.ui.screens.connections
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipDto
 import app.pantopus.android.data.api.models.connections.SentRequestDto
 import app.pantopus.android.data.api.models.relationships.PendingRequestDto
@@ -739,7 +740,7 @@ class ConnectionsViewModel
                     name,
                     if (first != null && last != null) "$first $last" else null,
                     first,
-                    user.username?.takeIf { it.isNotEmpty() },
+                    MadeUpUsername.chosen(user.username),
                 ).firstOrNull()
             }
 
@@ -771,7 +772,7 @@ class ConnectionsViewModel
             internal fun searchableText(user: RelationshipUserDto?): String =
                 listOfNotNull(
                     displayNameFor(user),
-                    user?.username,
+                    MadeUpUsername.chosen(user?.username),
                     user?.city,
                     user?.state,
                 ).joinToString(" ").lowercase(Locale.ROOT)

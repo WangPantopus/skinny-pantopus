@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.businesses.pages
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.business_pages.BusinessPageDto
 import app.pantopus.android.data.api.models.business_pages.BusinessPageRevisionDto
 import app.pantopus.android.data.api.net.NetworkResult
@@ -59,7 +60,7 @@ data class BusinessPageRevisionRow(
     companion object {
         fun from(dto: BusinessPageRevisionDto): BusinessPageRevisionRow {
             val notes = dto.notes?.trim().orEmpty()
-            val publisher = dto.publisher?.name ?: dto.publisher?.username ?: "Unknown"
+            val publisher = dto.publisher?.name ?: MadeUpUsername.chosen(dto.publisher?.username) ?: "Unknown"
             val date = formatted(dto.publishedAt)
             return BusinessPageRevisionRow(
                 id = dto.id,

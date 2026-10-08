@@ -4,6 +4,8 @@ package app.pantopus.android.ui.screens.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
+import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.ai.AIDraftRepository
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
@@ -17,6 +19,7 @@ import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.upload.UploadFile
 import app.pantopus.android.data.upload.UploadRepository
+import app.pantopus.android.ui.screens.auth.AuthValidation
 import app.pantopus.android.ui.screens.shared.form.FormAggregate
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
 import app.pantopus.android.ui.screens.shared.form.FormValidator
@@ -40,7 +43,8 @@ import javax.inject.Inject
  * `updateProfileSchema` (`backend/routes/users.js:324-351`).
  */
 enum class EditProfileField(val key: String) {
-    // About
+    // About. The username is the profile link; empty means keep the current one.
+    Username("username"),
     FirstName("firstName"),
     MiddleName("middleName"),
     LastName("lastName"),
@@ -165,6 +169,9 @@ class EditProfileViewModel
         private val _state = MutableStateFlow<EditProfileUiState>(EditProfileUiState.Loading)
         val state: StateFlow<EditProfileUiState> = _state.asStateFlow()
 
+        /** Checks a typed username (see `UsernameAvailability.kt`). */
+        val usernameCheck = UsernameAvailabilityChecker { repo.usernameAvailability(it) }
+
         private val _fields =
             MutableStateFlow(
                 EditProfileField.entries.associateWith {
@@ -284,7 +291,7 @@ class EditProfileViewModel
         val aggregate: FormAggregate
             get() = FormAggregate.from(EditProfileField.entries.mapNotNull { _fields.value[it] })
 
-        val isValid: Boolean get() = aggregate.isValid
+        val isValid: Boolean get() = aggregate.isValid && !usernameCheck.blocksSave
 
         /** Skills ride their own PUT, so they widen the form's dirty state
          *  without appearing in [aggregate]. */
@@ -349,6 +356,7 @@ class EditProfileViewModel
                     error = validator(field).validate(value),
                 )
             _fields.value = map
+            if (field == EditProfileField.Username) usernameCheck.check(value, viewModelScope)
         }
 
         fun dismissToast() {
@@ -404,6 +412,7 @@ class EditProfileViewModel
             _fields.value = map
             _skills.value = _savedSkills.value
             _skillDraft.value = ""
+            usernameCheck.reset(usernameCheck.current, usernameCheck.currentIsMadeUp)
         }
 
         fun acknowledgeDismiss() {
@@ -456,8 +465,10 @@ class EditProfileViewModel
                 if (fieldsDirty) {
                     when (val result = repo.updateProfile(buildRequest())) {
                         is NetworkResult.Success -> hydrate(result.data.user)
-                        is NetworkResult.Failure ->
+                        is NetworkResult.Failure -> {
                             failure = result.error.message.ifBlank { "Couldn't save profile." }
+                            markUsernameError(result.error.code, result.error.message)
+                        }
                     }
                 }
                 if (skillsDirty) {
@@ -479,6 +490,9 @@ class EditProfileViewModel
                     Analytics.track(AnalyticsEvent.FormEditProfileSubmit(result = AnalyticsResult.ERROR))
                 } else {
                     _toast.value = EditProfileToast("Profile updated.", isError = false)
+                    // The drawer and account card read the session's copy of the name.
+                    if (fieldsDirty) authRepository.refreshSessionUser()
+                    ProfileChanges.notifyChanged()
                     _shouldDismiss.value = true
                     Analytics.track(AnalyticsEvent.FormEditProfileSubmit(result = AnalyticsResult.SUCCESS))
                 }
@@ -570,7 +584,12 @@ class EditProfileViewModel
             if (_avatarUrl.value == null) {
                 _avatarUrl.value = profile.profilePictureUrl ?: profile.avatarUrl
             }
-            _avatarInitial.value = displayInitial(profile.firstName.orEmpty(), profile.name.orEmpty(), profile.username)
+            _avatarInitial.value =
+                displayInitial(profile.firstName.orEmpty(), profile.name.orEmpty(), MadeUpUsername.chosen(profile.username).orEmpty())
+            // A made-up username shows as an empty field ("Choose a username").
+            val madeUp = profile.usernameIsGenerated == true
+            usernameCheck.reset(profile.username, madeUp)
+            seed(EditProfileField.Username, if (madeUp) "" else profile.username)
             seed(EditProfileField.FirstName, profile.firstName.orEmpty())
             seed(EditProfileField.MiddleName, profile.middleName.orEmpty())
             seed(EditProfileField.LastName, profile.lastName.orEmpty())
@@ -611,6 +630,18 @@ class EditProfileViewModel
 
         private fun validator(field: EditProfileField): FormValidator = VALIDATORS[field] ?: FormValidator { null }
 
+        /** A save the server refused because of the username (taken since the check, reserved, malformed)
+         *  shows on the username field. */
+        private fun markUsernameError(
+            code: Int?,
+            message: String,
+        ) {
+            val snapshot = _fields.value[EditProfileField.Username] ?: return
+            if (!snapshot.isDirty) return
+            if (code != 409 && !message.contains("username", ignoreCase = true) && !message.startsWith("Use 3 to 30")) return
+            _fields.value = _fields.value + (EditProfileField.Username to snapshot.copy(error = message, touched = true))
+        }
+
         /**
          * Assemble a PATCH body containing only the dirty fields. Empty
          * strings are kept for fields whose schema entry has
@@ -636,6 +667,7 @@ class EditProfileViewModel
                 return snapshot.value == "true"
             }
             return ProfileUpdateRequest(
+                username = trimmed(EditProfileField.Username)?.let(UsernameAvailabilityChecker::normalize),
                 firstName = trimmed(EditProfileField.FirstName),
                 middleName = trimmed(EditProfileField.MiddleName),
                 lastName = trimmed(EditProfileField.LastName),
@@ -700,6 +732,11 @@ class EditProfileViewModel
             /** Validators keyed by field — mirrors iOS exactly. */
             private val VALIDATORS: Map<EditProfileField, FormValidator> =
                 mapOf(
+                    // Checked again by the server; empty keeps the current username.
+                    EditProfileField.Username to
+                        FormValidator { value ->
+                            UsernameAvailabilityChecker.normalize(value).takeIf { it.isNotEmpty() }?.let(AuthValidation::username)
+                        },
                     EditProfileField.FirstName to
                         FormValidator.all(
                             listOf(FormValidator.required("First name"), FormValidator.maxLength(255)),

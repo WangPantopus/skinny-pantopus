@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.accesscodes
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.CreateAccessSecretRequest
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretDto
 import app.pantopus.android.data.api.models.homes.UpdateAccessSecretRequest
@@ -456,7 +457,7 @@ class EditAccessCodeFormViewModel
                                 AccessRosterMember(
                                     id = occupant.userId,
                                     displayName =
-                                        occupant.displayName ?: occupant.username ?: "Member",
+                                        occupant.displayName ?: MadeUpUsername.chosen(occupant.username) ?: "Member",
                                     role = occupant.role,
                                     canManageAccess = occupant.canManageAccess ?: false,
                                     canViewSensitive = occupant.canViewSensitive ?: false,
