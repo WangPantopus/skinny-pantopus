@@ -44,9 +44,12 @@ import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.screens.place.detail.PlaceTodayDetailContent
+import app.pantopus.android.ui.screens.place.detail.rememberMinuteClock
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private const val PLACEHOLDER_ROWS = 3
 
@@ -73,7 +76,17 @@ fun TodayTabScreen(
     LaunchedEffect(state) { if (state !is TodayTabUiState.Loading) pulled = false }
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("todayTab")) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
-            Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
+                // The date beside the title (the f1-today-tab design); it turns over at midnight.
+                Text(
+                    rememberMinuteClock().format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appTextMuted,
+                    modifier = Modifier.padding(bottom = 3.dp),
+                )
+            }
             (state as? TodayTabUiState.Loaded)?.intelligence?.place?.label?.let {
                 Text(it, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted, maxLines = 1)
             }

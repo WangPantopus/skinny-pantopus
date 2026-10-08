@@ -2,9 +2,10 @@
 //  PlaceTodayDetailContent.swift
 //  Pantopus
 //
-//  C3 — Today / Environment detail. NowCard (current conditions),
-//  AQI card with the scale, active-alerts list, sunrise/sunset, and the
-//  "coming soon" daily layers, plus the "Good day to…" verdict row.
+//  C3 — Today / Environment detail. The living-sky Now card
+//  (`TodaySky.swift`), the "Good day to…" verdict tiles, the address
+//  calendar with its two-week strip, the AQI gauge, active alerts and the
+//  sun's arc (`TodayVisuals.swift`, `TodaySunArc.swift`).
 //
 //  The hourly/daily forecast arrays used to arrive empty (the backend
 //  hardcoded them), which is why the strips were omitted here. They are
@@ -136,7 +137,7 @@ struct PlaceTodayDetailContent: View {
         if let weather = vm.section(.weather, in: intel) {
             PlaceDetailSectionLabel(text: "Weather")
             if let data = weather.weather, weather.status == .ready || weather.status == .stale {
-                NowCard(data: data)
+                TodaySkyHero(data: data, sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset)
                 PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
             } else {
                 vm.fallbackCard(weather)
@@ -184,7 +185,7 @@ struct PlaceTodayDetailContent: View {
         if let sun = vm.section(.sunriseSunset, in: intel) {
             PlaceDetailSectionLabel(text: "Sun")
             if let data = sun.sunriseSunset {
-                SunCard(data: data)
+                TodaySunArcCard(data: data)
                 PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data.sunrise))
             } else {
                 vm.fallbackCard(sun)
@@ -209,127 +210,47 @@ struct PlaceTodayDetailContent: View {
     }
 }
 
-// MARK: - Now card
-
-private struct NowCard: View {
-    let data: PlaceWeatherData
-
-    /// "Now, 60°, Overcast": one spoken reading instead of "60", "°" apart.
-    private var nowLabel: String {
-        let reading = "Now, \(Int(data.currentTempF.rounded()))°"
-        return data.conditionLabel.isEmpty ? reading : "\(reading), \(data.conditionLabel)"
-    }
-
-    private var rangeLabel: String {
-        var parts: [String] = []
-        if let hi = data.highF, let lo = data.lowF {
-            parts.append("High \(Int(hi.rounded()))°, low \(Int(lo.rounded()))°")
-        }
-        if let feels = data.feelsLikeF { parts.append("feels like \(Int(feels.rounded()))°") }
-        return parts.joined(separator: ", ")
-    }
-
-    var body: some View {
-        PlaceDetailCard {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Now")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                    HStack(alignment: .top, spacing: 2) {
-                        Text("\(Int(data.currentTempF.rounded()))")
-                            .font(.system(size: 56, weight: .light))
-                            .kerning(-1.6)
-                            .foregroundStyle(Theme.Color.appText)
-                        Text("°")
-                            .font(.system(size: 24, weight: .light))
-                            .foregroundStyle(Theme.Color.appText)
-                            .padding(.top, 6)
-                    }
-                    if !data.conditionLabel.isEmpty {
-                        Text(data.conditionLabel)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.Color.appTextStrong)
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(nowLabel)
-                Spacer(minLength: 0)
-                VStack(alignment: .trailing, spacing: 10) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Theme.Color.warningBg)
-                        RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(Theme.Color.warningLight, lineWidth: 1)
-                        Icon(weatherGlyph(data.conditionCode), size: 30, strokeWidth: 2, color: weatherTint(data.conditionCode))
-                    }
-                    .frame(width: 54, height: 54)
-                    VStack(alignment: .trailing, spacing: 1) {
-                        if let hi = data.highF, let lo = data.lowF {
-                            Text("H \(Int(hi.rounded()))° · L \(Int(lo.rounded()))°")
-                        }
-                        if let feels = data.feelsLikeF {
-                            Text("Feels like \(Int(feels.rounded()))°")
-                        }
-                    }
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(rangeLabel)
-                    .accessibilityHidden(rangeLabel.isEmpty)
-                }
-            }
-        }
-    }
-}
-
 // MARK: - AQI card
 
 private struct AqiCard: View {
     let data: PlaceAirQualityData
 
+    /// The server sends pollutant tokens ("pm25", "ozone"); show their usual names.
+    private var pollutant: String? {
+        guard let token = data.dominantPollutant?.lowercased(), !token.isEmpty else { return nil }
+        let names = ["pm25": "PM2.5", "pm10": "PM10", "ozone": "Ozone", "no2": "NO2", "so2": "SO2", "co": "CO"]
+        return names[token] ?? token.uppercased()
+    }
+
     var body: some View {
         PlaceDetailCard {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 14) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.Color.homeBg)
-                        Icon(.wind, size: 23, strokeWidth: 2, color: Theme.Color.home)
-                    }
-                    .frame(width: 50, height: 50)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("\(data.index)")
-                            .font(.system(size: 34, weight: .semibold))
-                            .foregroundStyle(Theme.Color.appText)
+                HStack(alignment: .center, spacing: 16) {
+                    TodayAqiGauge(index: data.index, category: data.category)
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(data.categoryLabel)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(categoryColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("US Air Quality Index")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                        if let pollutant {
+                            Text("Mostly \(pollutant)")
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(Theme.Color.appTextSecondary)
+                        }
                     }
                     Spacer(minLength: 0)
                 }
-                // The continuous AQI scale (token-clean green→amber→red).
-                GeometryReader { proxy in
-                    let frac = min(max(Double(data.index) / 300.0, 0), 1)
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(LinearGradient(
-                                colors: [Theme.Color.home, Theme.Color.warning, Theme.Color.error],
-                                startPoint: .leading, endPoint: .trailing
-                            ))
-                            .frame(height: 8)
-                        Circle()
-                            .fill(Theme.Color.appSurface)
-                            .frame(width: 14, height: 14)
-                            .overlay(Circle().strokeBorder(categoryColor, lineWidth: 3))
-                            .offset(x: proxy.size.width * frac - 7)
-                    }
-                    .frame(height: 14)
-                }
-                .frame(height: 14)
+                .accessibilityElement(children: .combine)
                 Text(data.healthMessage)
                     .font(.system(size: 13.5))
                     .lineSpacing(2)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
         }
+        .accessibilityIdentifier("todayAqiCard")
     }
 
     private var categoryColor: Color {
@@ -351,11 +272,7 @@ private struct AlertsCard: View {
         if active.isEmpty {
             PlaceDetailCard {
                 HStack(spacing: 11) {
-                    ZStack {
-                        Circle().fill(Theme.Color.homeBg)
-                        Icon(.check, size: 21, strokeWidth: 2.5, color: Theme.Color.home)
-                    }
-                    .frame(width: 44, height: 44)
+                    TodayAllClearBadge()
                     VStack(alignment: .leading, spacing: 1) {
                         Text("No active alerts")
                             .font(.system(size: 15, weight: .semibold))
@@ -415,14 +332,16 @@ private struct AlertRow: View {
     }
 }
 
-// MARK: - Sun card
+// MARK: - Good day to…
 
 /// "Good day to…" — a row of verdicts. Tapping one reveals the numbers
 /// behind it: an opinionated tile that won't show its inputs is worse than
 /// no tile, because one visibly wrong verdict discredits every other card.
 private struct GoodDayRow: View {
     let tiles: [PlaceGoodDayTile]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var openID: String?
+    @State private var appeared = false
 
     private var shown: [PlaceGoodDayTile] {
         Array(tiles.prefix(5))
@@ -432,40 +351,22 @@ private struct GoodDayRow: View {
         shown.first { $0.id == openID }
     }
 
-    private func tint(_ verdict: GoodDayVerdict) -> Color {
-        switch verdict {
-        case .yes: Theme.Color.home
-        case .caution: Theme.Color.warning
-        default: Theme.Color.appTextMuted
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
+            // Up to three tiles share the row; more scroll, with the next one peeking in.
+            if shown.count <= 3 {
                 HStack(spacing: 8) {
-                    ForEach(shown, id: \.id) { tile in
-                        Button {
-                            openID = openID == tile.id ? nil : tile.id
-                        } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(tile.glyph).font(.system(size: 19))
-                                Text(tile.label)
-                                    .font(.system(size: 12.5, weight: .semibold))
-                                    .foregroundStyle(Theme.Color.appTextSecondary)
-                                Text(tile.answer)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(tint(tile.verdict))
-                            }
-                            .frame(width: 108, alignment: .leading)
-                            .padding(12)
-                            .background(Theme.Color.appSurface)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { index, tile in tileButton(tile, index: index) }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(shown.enumerated()), id: \.element.id) { index, tile in
+                            tileButton(tile, index: index).frame(width: 128)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(tile.label): \(tile.answer)")
-                        .accessibilityHint(tile.because)
                     }
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -480,73 +381,30 @@ private struct GoodDayRow: View {
                             .foregroundStyle(Theme.Color.appTextStrong)
                     }
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .onAppear {
+            guard !appeared else { return }
+            if reduceMotion { appeared = true } else { withAnimation { appeared = true } }
+        }
     }
-}
 
-private struct SunCard: View {
-    let data: PlaceSunriseSunsetData
-
-    var body: some View {
-        PlaceDetailCard {
-            HStack {
-                sunStat(icon: .sunrise, label: "Sunrise", time: PlacePresentation.fmtSunClock(data.sunrise))
-                Spacer()
-                VStack(spacing: 2) {
-                    Text("Daylight")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                    Text(daylight)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appTextStrong)
-                }
-                Spacer()
-                sunStat(icon: .sunset, label: "Sunset", time: PlacePresentation.fmtSunClock(data.sunset))
+    private func tileButton(_ tile: PlaceGoodDayTile, index: Int) -> some View {
+        Button {
+            withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) {
+                openID = openID == tile.id ? nil : tile.id
             }
+        } label: {
+            TodayGoodDayTile(tile: tile, open: openID == tile.id)
         }
-    }
-
-    private func sunStat(icon: PantopusIcon, label: String, time: String) -> some View {
-        VStack(spacing: 4) {
-            Icon(icon, size: 22, strokeWidth: 2, color: Theme.Color.warning)
-            Text(time.uppercased())
-                .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(Theme.Color.appText)
-            Text(label)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.Color.appTextMuted)
-        }
-    }
-
-    private var daylight: String {
-        let h = data.daylightMinutes / 60
-        let m = data.daylightMinutes % 60
-        return "\(h)h \(m)m"
-    }
-}
-
-// MARK: - Weather glyph mapping
-
-private func weatherGlyph(_ code: WeatherConditionCode) -> PantopusIcon {
-    switch code {
-    case .clear: .sun
-    case .partlyCloudy: .cloudSun
-    case .cloudy, .fog: .cloud
-    case .rain, .sleet: .cloudRain
-    case .snow: .cloudRain
-    case .thunderstorm: .cloudRain
-    case .wind: .wind
-    case .unknown: .cloud
-    }
-}
-
-private func weatherTint(_ code: WeatherConditionCode) -> Color {
-    switch code {
-    case .clear: Theme.Color.warning
-    case .rain, .sleet, .snow: Theme.Color.primary600
-    case .thunderstorm: Theme.Color.warning
-    default: Theme.Color.appTextSecondary
+        .buttonStyle(.plain)
+        .scaleEffect(appeared ? 1 : 0.88)
+        .opacity(appeared ? 1 : 0)
+        .animation(reduceMotion ? nil : .spring(duration: 0.5, bounce: 0.35).delay(Double(index) * 0.07), value: appeared)
+        .accessibilityLabel("\(tile.label): \(tile.answer)")
+        .accessibilityHint(tile.because)
+        .accessibilityAddTraits(openID == tile.id ? .isSelected : [])
     }
 }
 
@@ -633,6 +491,11 @@ struct AddressCalendarCard: View {
 
             if picking, homeId != nil {
                 picker
+            }
+
+            if !picking, !calendar.upcoming.isEmpty {
+                TodayCalendarStrip(today: calendar.today, windowDays: calendar.windowDays, events: calendar.upcoming)
+                    .padding(.bottom, 2)
             }
 
             if calendar.upcoming.isEmpty {
@@ -798,20 +661,6 @@ struct AddressCalendarCard: View {
         .padding(.vertical, 10)
     }
 
-    private func whenLabel(_ event: PlaceCalendarEvent) -> String {
-        switch event.daysUntil {
-        case 0: return "Today"
-        case 1: return "Tomorrow"
-        default:
-            let f = DateFormatter()
-            f.dateFormat = "yyyy-MM-dd"
-            guard let d = f.date(from: event.date) else { return event.date }
-            let out = DateFormatter()
-            out.dateFormat = "EEE, MMM d"
-            return out.string(from: d)
-        }
-    }
-
     @MainActor
     private func choose(reset: Bool = false) async {
         guard let homeId, saving == nil else { return }
@@ -880,6 +729,20 @@ struct AddressCalendarCard: View {
 }
 
 extension AddressCalendarCard {
+    private func whenLabel(_ event: PlaceCalendarEvent) -> String {
+        switch event.daysUntil {
+        case 0: return "Today"
+        case 1: return "Tomorrow"
+        default:
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd"
+            guard let d = f.date(from: event.date) else { return event.date }
+            let out = DateFormatter()
+            out.dateFormat = "EEE, MMM d"
+            return out.string(from: d)
+        }
+    }
+
     private func refreshAfterPrimer() {
         Task { @MainActor in
             guard (try? sessionScope.requireCurrent()) != nil, !AppLockManager.shared.isLocked,
