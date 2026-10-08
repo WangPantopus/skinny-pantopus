@@ -3489,13 +3489,20 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     let connection = null;
 
     if (!isOwn) {
-      // Check if there's an accepted relationship (connection)
-      const { data: connectionData } = await supabaseAdmin
-        .from('Relationship')
-        .select('id')
-        .eq('status', 'accepted')
-        .or(`and(requester_id.eq.${requestingUserId},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${requestingUserId})`)
-        .maybeSingle();
+      // Check if there's an accepted relationship (connection), and whether either person blocked
+      // the other: profile blocks (UserBlock) hide posts in both directions, as canViewPost does.
+      const [blocked, { data: connectionData }] = await Promise.all([
+        blockService.isBlocked(userId, requestingUserId),
+        supabaseAdmin
+          .from('Relationship')
+          .select('id')
+          .eq('status', 'accepted')
+          .or(`and(requester_id.eq.${requestingUserId},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${requestingUserId})`)
+          .maybeSingle(),
+      ]);
+      if (blocked) {
+        return res.json({ posts: [], pagination: buildCursorPagination([], parsedLimit) });
+      }
       connection = connectionData;
     }
 
