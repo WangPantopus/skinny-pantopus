@@ -1,4 +1,4 @@
--- Backwards compatible: yes. Replaces one function body; no tables, columns, grants or data change.
+-- Backwards compatible: yes. Replaces one function body and restates its privileges (unchanged); no tables, columns or data change.
 -- New tips are charged to cards only (Apple Pay, Google Pay and Link ride on cards), like invoice and task
 -- payments since a9cc43631: without payment_method_types the tip's PaymentIntent offered every method the
 -- Stripe dashboard enables (Klarna, Cash App Pay, Amazon Pay, crypto). Tips whose provider payload was
@@ -49,3 +49,6 @@ BEGIN
  PERFORM set_config('app.gig_tip_original','off',true);
  RETURN public.read_gig_tip_original(p_request_id,p_actor_id);
 END $$;
+
+REVOKE ALL ON FUNCTION public.prepare_gig_tip_provider(uuid,uuid,uuid,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.prepare_gig_tip_provider(uuid,uuid,uuid,text) TO service_role;
