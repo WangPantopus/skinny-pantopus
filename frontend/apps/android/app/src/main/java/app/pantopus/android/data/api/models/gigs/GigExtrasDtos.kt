@@ -1,6 +1,5 @@
 package app.pantopus.android.data.api.models.gigs
 
-import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -53,11 +52,11 @@ data class RebookableWorkerDto(
     val avatarUrl: String? = null,
     val rating: Double? = null,
 ) {
-    /** "Ana" — first name, else a chosen username, else a neutral fallback. */
+    /** "Ana" — first name, else username, else a neutral fallback. */
     val displayName: String
         get() =
             firstName?.takeIf { it.isNotBlank() }
-                ?: MadeUpUsername.chosen(username)
+                ?: username?.takeIf { it.isNotBlank() }
                 ?: "Helper"
 
     /** "AL" — first+last initials, else the username initial. */

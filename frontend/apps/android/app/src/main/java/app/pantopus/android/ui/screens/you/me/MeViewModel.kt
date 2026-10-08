@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.identity.MadeUpUsername
+import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.businesses.BusinessMembership
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHome
@@ -95,8 +96,12 @@ class MeViewModel
                 "https://pantopus.com/join/$code"
         }
 
+        /** The [ProfileChanges] version the shown profile was read at. */
+        private var readAtVersion = -1
+
+        /** Reads the profile unless it's showing and no name or username was saved since. */
         fun load() {
-            if (_state.value is MeUiState.Loaded && !businessReadFailed) return
+            if (_state.value is MeUiState.Loaded && !businessReadFailed && readAtVersion == ProfileChanges.version.value) return
             fetch()
         }
 
@@ -109,6 +114,7 @@ class MeViewModel
 
         private fun fetch() {
             if (loadJob?.isActive == true) return
+            readAtVersion = ProfileChanges.version.value
             loadJob =
                 viewModelScope.launch {
                     val profileDeferred = async { profileRepo.ownProfile() }

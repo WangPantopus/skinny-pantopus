@@ -79,9 +79,9 @@ fun MeView(
     val inviteCode by viewModel.inviteCode.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) { viewModel.load() }
-    // A saved name or username changes the header.
-    LaunchedEffect(Unit) { ProfileChanges.events.collect { viewModel.refresh() } }
+    // A saved name or username (here or in Edit Profile) changes the header.
+    val profileVersion by ProfileChanges.version.collectAsStateWithLifecycle()
+    LaunchedEffect(profileVersion) { viewModel.load() }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("meScreen")) {
         when (val s = state) {

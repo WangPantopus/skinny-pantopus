@@ -121,12 +121,12 @@ class UsernameAvailabilityChecker(
         fun normalize(value: String): String = value.replace(" ", "").trimStart('@').lowercase()
 
         /** The profile link for [username], without the scheme, for reading. */
-        fun linkLabel(username: String): String =
-            InviteLinks.profileUrl(username).removePrefix("https://").removePrefix("http://")
+        fun linkLabel(username: String): String = InviteLinks.profileUrl(username).removePrefix("https://").removePrefix("http://")
     }
 }
 
 /** The username field with its availability line and the link note. The caller's [onValueChange] checks. */
+@Suppress("LongParameterList")
 @Composable
 fun UsernameFieldBlock(
     checker: UsernameAvailabilityChecker,

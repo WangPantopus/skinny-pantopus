@@ -65,9 +65,9 @@ fun HubScreen(
     val discoveryLoading by viewModel.discoveryLoading.collectAsStateWithLifecycle()
     val discoveryFailed by viewModel.discoveryFailed.collectAsStateWithLifecycle()
     // A saved name or username changes the greeting.
-    LaunchedEffect(Unit) { ProfileChanges.events.collect { viewModel.refresh() } }
+    val profileVersion by ProfileChanges.version.collectAsStateWithLifecycle()
+    LaunchedEffect(profileVersion) { viewModel.load() }
     LaunchedEffect(Unit) {
-        viewModel.load()
         viewModel.refreshUnread()
         app.pantopus.android.data.analytics.Analytics.track(
             app.pantopus.android.data.analytics.AnalyticsEvent.ScreenHubViewed,

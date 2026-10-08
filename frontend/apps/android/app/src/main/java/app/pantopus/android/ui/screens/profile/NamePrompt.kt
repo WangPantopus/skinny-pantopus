@@ -142,8 +142,7 @@ class NamePromptViewModel
         companion object {
             fun askedKey(userId: String) = "namePrompt.$userId.asked"
 
-            fun isMissingName(profile: UserProfile): Boolean =
-                profile.firstName.isNullOrBlank() || profile.lastName.isNullOrBlank()
+            fun isMissingName(profile: UserProfile): Boolean = profile.firstName.isNullOrBlank() || profile.lastName.isNullOrBlank()
         }
     }
 

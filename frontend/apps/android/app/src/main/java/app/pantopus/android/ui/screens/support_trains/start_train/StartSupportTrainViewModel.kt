@@ -420,7 +420,8 @@ class StartSupportTrainViewModel
                 StartSupportTrainStep.Success -> false
             }
 
-        private fun displayName(recipient: MailRecipientDto?): String = recipient?.name ?: MadeUpUsername.chosen(recipient?.username).orEmpty()
+        private fun displayName(recipient: MailRecipientDto?): String =
+            recipient?.name ?: MadeUpUsername.chosen(recipient?.username).orEmpty()
 
         private fun scheduleBeneficiarySearch(query: String) {
             searchJob?.cancel()

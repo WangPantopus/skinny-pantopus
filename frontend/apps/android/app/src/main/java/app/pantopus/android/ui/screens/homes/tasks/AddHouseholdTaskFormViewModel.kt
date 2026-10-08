@@ -229,8 +229,9 @@ data class HouseholdTaskAssignableMember(
         fun from(occupant: OccupantDto): HouseholdTaskAssignableMember? {
             // Guests can't see household tasks, so the server refuses them as assignees.
             if (!occupant.isActive || occupant.role == "guest") return null
+            // A made-up username (user_…) is never shown as the member's name.
             val name =
-                occupant.displayName?.trim()
+                occupant.displayName?.trim()?.takeUnless(MadeUpUsername::isMadeUp)
                     ?: MadeUpUsername.chosen(occupant.username)
                     ?: ""
             val display =

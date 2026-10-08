@@ -11,7 +11,9 @@ data class HomeResidencyQueueClaim(
     val claimedRole: String?,
     val createdAt: String?,
 ) {
-    val applicantLabel: String get() = MadeUpUsername.handle(username) ?: "Applicant"
+    // A made-up username (user_…) says nothing about the applicant, so it reads as "Applicant".
+    val applicantLabel: String get() =
+        MadeUpUsername.handle(username) ?: if (username.isNullOrEmpty()) "Applicant identity unavailable" else "Applicant"
     val roleLabel: String get() =
         when (claimedRole) {
             "household" -> "Requesting: Household"

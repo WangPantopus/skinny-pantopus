@@ -489,6 +489,8 @@ class EditProfileViewModel
                     Analytics.track(AnalyticsEvent.FormEditProfileSubmit(result = AnalyticsResult.ERROR))
                 } else {
                     _toast.value = EditProfileToast("Profile updated.", isError = false)
+                    // The drawer and account card read the session's copy of the name.
+                    if (fieldsDirty) authRepository.refreshSessionUser()
                     ProfileChanges.notifyChanged()
                     _shouldDismiss.value = true
                     Analytics.track(AnalyticsEvent.FormEditProfileSubmit(result = AnalyticsResult.SUCCESS))
