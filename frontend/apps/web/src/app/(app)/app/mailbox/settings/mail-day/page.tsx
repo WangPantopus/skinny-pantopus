@@ -204,7 +204,12 @@ export default function MailDayPage() {
                 <div className="px-5 py-4 border-b border-app-border-subtle text-center">
                   <div className="text-5xl mb-2">{getSeasonEmoji()}</div>
                   <p className="text-sm text-app-text-secondary dark:text-app-text-muted">
-                    Flag is up · <span className="font-semibold">{summary.total_new} new item{summary.total_new !== 1 ? 's' : ''}</span>
+                    {/* The flag is up only when mail came today (iOS and Android say "Nothing new today" too). */}
+                    {summary.total_new > 0 ? (
+                      <>Flag is up · <span className="font-semibold">{summary.total_new} new item{summary.total_new !== 1 ? 's' : ''}</span></>
+                    ) : (
+                      'Nothing new today'
+                    )}
                   </p>
                 </div>
 
