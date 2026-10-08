@@ -63,7 +63,10 @@ class TodayTabViewModel
 
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
         val state: StateFlow<TodayTabUiState> = _state.asStateFlow()
-        private var homeId: String? = null
+
+        /** The home this tab shows, once resolved. */
+        var homeId: String? = null
+            private set
         override val calendarHomeId: String? get() = homeId
         val radonContext: suspend () -> Unit
             get() {

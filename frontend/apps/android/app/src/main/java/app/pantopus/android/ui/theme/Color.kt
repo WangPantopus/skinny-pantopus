@@ -209,6 +209,17 @@ object PantopusColors {
      */
     val paperCream = Color(0xFFFDF8EE)
 
+    // Ballot illustration — mirrors iOS `Ballot/*` in the asset catalog.
+
+    /**
+     * Ballot stack base — `#EEF1F5`. An illustration grey from the Pantopus
+     * Ballot canvas (the government stack's base layer), not a UI surface.
+     */
+    val ballotStackBase = Color(0xFFEEF1F5)
+
+    /** The Ballot timeline's "waiting for ballots" segment — `#9CA3AF`. */
+    val ballotWait = Color(0xFF9CA3AF)
+
     // Category accents
     val handyman = Color(0xFFF97316)
     val cleaning = Color(0xFF27AE60)
