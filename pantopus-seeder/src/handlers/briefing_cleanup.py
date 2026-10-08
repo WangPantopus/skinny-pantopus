@@ -8,6 +8,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from src.config.secrets import get_briefing_secrets, BriefingSecrets
 
+# Configure logging for Lambda (root logger must be set to INFO)
+logging.basicConfig(level=logging.INFO, force=True)
+# httpx logs every request URL at INFO, and Supabase filters carry full user
+# ids; keep them out of CloudWatch.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.briefing_cleanup")
 
 DELIVERY_RETENTION_DAYS = 30
@@ -21,6 +26,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     except Exception:
         log.exception("Briefing cleanup handler failed with unhandled exception")
         raise
+    log.info("Run summary: %s", result)
     if result.get("error"):
         # Fail the invocation so the Lambda Errors metric and its alarm see it.
         raise RuntimeError(f"Briefing cleanup run failed: {result}")
