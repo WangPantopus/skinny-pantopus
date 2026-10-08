@@ -33,10 +33,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -164,7 +166,12 @@ internal fun PopulatedFrame(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
     ) {
-        MeHeader(content = active, showBusiness = showBusiness, onSwitch = onSwitch)
+        MeHeader(
+            content = active,
+            showBusiness = showBusiness,
+            onSwitch = onSwitch,
+            onAddName = { onSection(MeSectionRow("edit", PantopusIcon.Edit2, "Edit profile", routeKey = "me.editProfile")) },
+        )
         if (!active.isUnbound) {
             MeStatsRow(
                 stats = active.stats,
@@ -235,6 +242,7 @@ private fun MeHeader(
     content: MeIdentityContent,
     showBusiness: Boolean,
     onSwitch: (MeIdentity) -> Unit,
+    onAddName: () -> Unit,
 ) {
     val brush =
         Brush.verticalGradient(
@@ -266,13 +274,26 @@ private fun MeHeader(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Avatar(content)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = content.displayName,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PantopusColors.appTextInverse,
-                    maxLines = 1,
-                )
+                if (content.displayName.isEmpty()) {
+                    // Skipped the one-time name dialog: an invitation, not a stand-in label.
+                    Text(
+                        text = "Add your name",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PantopusColors.appTextInverse,
+                        textDecoration = TextDecoration.Underline,
+                        maxLines = 1,
+                        modifier = Modifier.clickable(role = Role.Button, onClick = onAddName).testTag("meAddName"),
+                    )
+                } else {
+                    Text(
+                        text = content.displayName,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PantopusColors.appTextInverse,
+                        maxLines = 1,
+                    )
+                }
                 if (content.handle.isNotEmpty()) {
                     Text(
                         text = content.handle,
@@ -333,12 +354,16 @@ private fun Avatar(content: MeIdentityContent) {
                     .border(3.dp, PantopusColors.appSurface, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = content.initials,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                color = PantopusColors.appTextInverse,
-            )
+            if (content.initials.isEmpty()) {
+                PantopusIconImage(icon = PantopusIcon.User, contentDescription = null, size = 32.dp, tint = PantopusColors.appTextInverse)
+            } else {
+                Text(
+                    text = content.initials,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PantopusColors.appTextInverse,
+                )
+            }
         }
         if (content.verified) {
             Box(
