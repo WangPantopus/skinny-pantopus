@@ -10,6 +10,7 @@ import { toast } from '@/components/ui/toast-store';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import type { UserProfile, BusinessUser, Home } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
+import { chosenUsername, usernameHandle } from '@pantopus/utils';
 
 type Tab = 'all' | 'people' | 'businesses' | 'homes';
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
@@ -247,13 +248,13 @@ function DiscoverPageContent() {
                       <UserIdentityLink
                         userId={p.id}
                         username={p.username}
-                        displayName={p.name || p.username}
+                        displayName={p.name || chosenUsername(p.username) || 'Pantopus member'}
                         avatarUrl={p.profile_picture_url || p.profilePicture || null}
                         city={p.city}
                         state={p.state}
                         textClassName="font-semibold text-app hover:underline"
                       />
-                      <p className="text-sm text-app-muted">@{p.username}</p>
+                      {usernameHandle(p.username) && <p className="text-sm text-app-muted">{usernameHandle(p.username)}</p>}
                       <p className="text-xs text-app-muted">{[p.city, p.state].filter(Boolean).join(', ') || 'Location not set'}</p>
                     </div>
                     <div className="flex gap-2">

@@ -84,6 +84,7 @@ const { calculateAndStoreCompleteness, calculateProfileCompleteness } = require(
 const { shouldBlockCoordinateOverwrite } = require('../utils/verifiedCoordinateGuard');
 const { generateNewBusinessSignal } = require('../services/businessSignalService');
 const membershipService = require('../services/businessMembershipService');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 
 // ============ CONSTANTS ============
@@ -5102,7 +5103,7 @@ async function notifyInvoicePaid(invoice) {
       : Promise.resolve({ data: null }),
   ]);
   const total = `$${(invoice.total_cents / 100).toFixed(2)}`;
-  const payerName = payer?.name || payer?.username || 'A customer';
+  const payerName = payer?.name || chosenUsernameOrNull(payer?.username) || 'A customer';
   const net = payment?.amount_to_payee ? `$${(payment.amount_to_payee / 100).toFixed(2)}` : null;
   await require('../services/notificationService').createNotification({
     userId: ownerId,
@@ -5295,7 +5296,7 @@ router.get('/:businessId/invoice-recipients', verifyToken, async (req, res) => {
       .slice(0, INVOICE_RECIPIENT_RESULT_LIMIT)
       .map((u) => ({
         id: u.id,
-        name: u.name || u.username,
+        name: u.name || chosenUsernameOrNull(u.username) || 'Pantopus member',
         username: u.username,
         profile_picture_url: u.profile_picture_url || null,
         relation: relationById.get(u.id),

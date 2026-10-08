@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.transaction_reviews
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.transaction_reviews.TransactionReviewDto
 import app.pantopus.android.data.api.models.transaction_reviews.TransactionReviewerDto
 import app.pantopus.android.data.api.models.transaction_reviews.TransactionReviewsResponse
@@ -170,8 +171,7 @@ class ReceivedReviewsViewModel
                     val last = reviewer.lastName?.takeIf { it.isNotEmpty() }
                     return if (last != null) "$first $last" else first
                 }
-                val username = reviewer?.username?.takeIf { it.isNotEmpty() }
-                if (username != null) return username
+                MadeUpUsername.chosen(reviewer?.username)?.let { return it }
                 return "Neighbor"
             }
 

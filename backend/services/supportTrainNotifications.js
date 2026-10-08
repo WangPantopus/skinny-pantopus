@@ -17,6 +17,7 @@ const { sendGuestReservationReminderEmail, sendGuestSignupReleasedEmail } = requ
 const { inferTimezone } = require('./context/locationResolver');
 const { DateTime } = require('luxon');
 const logger = require('../utils/logger');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 const DEEP_LINK_PREFIX = '/app/support-trains';
 
@@ -369,7 +370,8 @@ async function emitSupportTrainEvent({ event, supportTrainId, actorUserId, paylo
               title: 'Support Train Update',
               body: `New update on ${supportTrainReference(title)}: ${(payload.body || '').slice(0, 100)}${(payload.body || '').length > 100 ? '...' : ''}`,
               icon: '📝',
-              link,
+              // The web train page opens its Updates tab; the apps' routers ignore the query.
+              link: `${link}?tab=updates`,
               metadata: { support_train_id: supportTrainId, update_id: payload.update_id },
             })),
             { sendPush: payload.push_to_phones !== false }
@@ -494,7 +496,7 @@ async function _getDisplayName(userId) {
     .select('name, username')
     .eq('id', userId)
     .maybeSingle();
-  return data?.name || data?.username || null;
+  return data?.name || chosenUsernameOrNull(data?.username) || null;
 }
 
 async function _getOrganizers(supportTrainId, excludeUserId) {

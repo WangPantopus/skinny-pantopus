@@ -11,6 +11,7 @@ const { homeOutboundLimiter } = require('../middleware/rateLimiter');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { chosenUsernameOrNull, nameUnlessMadeUp } = require('../utils/personalUsername');
 const { escapeIlike } = require('../utils/escapeIlike');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const homeAuthorityService = require('../services/homeAuthorityService');
@@ -1796,7 +1797,7 @@ router.post('/:id/request-household-from-owner', verifyToken, validate(requestHo
       action: 'request', payload: { requested_identity: req.body.requested_identity } });
     try {
       await require('../services/notificationService').notifyHouseholdAccessRequest({
-        ownerUserIds: result.notify_user_ids, requesterName: result.actor_name, homeLabel: result.home_label,
+        ownerUserIds: result.notify_user_ids, requesterName: nameUnlessMadeUp(result.actor_name, 'Someone'), homeLabel: result.home_label,
         homeId: req.params.id, requesterUserId: req.user.id, requestedIdentity: req.body.requested_identity,
         requestId: result.request_id,
       });
@@ -1841,7 +1842,7 @@ router.post('/:id/household-access-requests/:requestId/reject', verifyToken, asy
     if (!result.replayed) {
       try {
         await require('../services/notificationService').notifyHouseholdAccessRequestRejected({
-          requesterUserId: result.target_id, homeLabel: result.home_label, resolverName: result.actor_name,
+          requesterUserId: result.target_id, homeLabel: result.home_label, resolverName: nameUnlessMadeUp(result.actor_name, 'Someone'),
         });
       } catch (err) { logger.error('Household rejection notification failed after commit', { errorCode: err.code }); }
     }
@@ -2058,7 +2059,7 @@ router.post('/:id/move-out', verifyToken, async (req, res) => {
       try {
         const { data: user } = await supabaseAdmin.from('User').select('username, name, first_name')
           .eq('id', req.user.id).single();
-        const userName = user?.name || user?.first_name || user?.username || 'A member';
+        const userName = user?.name || user?.first_name || chosenUsernameOrNull(user?.username) || 'A member';
         await require('../services/notificationService').createBulkNotifications(result.notify_user_ids.map(userId => ({
           userId, type: 'member_moved_out', title: 'Member moved out', body: `${userName} has moved out.`,
           link: `/homes/${req.params.id}/members`, metadata: { home_id: req.params.id, moved_out_user_id: req.user.id },

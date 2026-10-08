@@ -42,6 +42,10 @@ struct HubView: View {
         .accessibilityIdentifier("hubScreen")
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
+        // A saved name or username changes the greeting.
+        .onReceive(NotificationCenter.default.publisher(for: .pantopusProfileDidChange)) { _ in
+            Task { await viewModel.refresh() }
+        }
         .onAppear {
             Analytics.track(.screenHubViewed)
             Task { await viewModel.refreshUnread() }

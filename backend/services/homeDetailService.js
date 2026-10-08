@@ -8,6 +8,8 @@ const property = require('./ai/propertyIntelligenceService');
 const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
 const parsePoint = require('../utils/parsePostGISPoint');
+const { localDisplayNames } = require('../utils/identityProfiles');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // A shared Home is not a container for every sensitive column/file reference.
 // Secret values and private files keep their exact-resource APIs. Legacy text
@@ -24,6 +26,11 @@ const OWNER_FIELDS = ['id', 'home_id', 'subject_type', 'subject_id', 'owner_stat
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const pick = (row, keys) => Object.fromEntries(keys.map(key => [key, row[key] ?? null]));
+// A read run alongside others: its value, or its error at the point the old one-by-one code threw it.
+const settledValue = result => {
+  if (result.status === 'rejected') throw result.reason;
+  return result.value;
+};
 function failure(code = 'HOME_DETAIL_UNAVAILABLE', statusCode = 503) {
   return Object.assign(new Error(code === 'HOME_MEMBER_HISTORY_DENIED'
     ? 'You do not have permission to view household history.' : 'Could not load this Home information. Please retry.'), { code, statusCode });
@@ -108,6 +115,16 @@ async function readMembers(homeId, { history = false } = {}) {
   return projected.filter(Boolean);
 }
 
+// Members show by the name they show neighbors on their posts. A username the server made up is never a display name
+// (utils/personalUsername.js); a person with no name reads "Household member". Used only once the consistency recheck
+// passes, and only for display_name: the rest of each row keeps its shape.
+async function withDisplayNames(occupants) {
+  if (occupants.length === 0) return occupants;
+  let names;
+  try { names = await localDisplayNames(occupants.map(member => member.user_id)); } catch (_) { throw failure(); }
+  return occupants.map(member => ({ ...member, display_name: names.get(String(member.user_id)) || 'Household member' }));
+}
+
 async function ownClaims(homeId, actorId) {
   const claims = await rows(db.from('HomeOwnershipClaim').select('id, home_id, state, claim_phase_v2, merged_into_claim_id')
     .eq('home_id', homeId).eq('claimant_user_id', actorId).order('created_at', { ascending: false }).order('id'));
@@ -129,14 +146,28 @@ async function detail(homeId, actorId) {
       ? owners.filter(owner => owner.owner_status === 'verified'
         || (access.permissions.includes('ownership.manage') && ['pending', 'disputed'].includes(owner.owner_status))) : [];
     const primary = visibleOwners.find(owner => owner.is_primary_owner && owner.owner_status === 'verified' && owner.subject_type === 'user');
-    const owner = primary ? userRef(await checked(db.from('User').select(SAFE_CREATOR_SELECT).eq('id', primary.subject_id).maybeSingle()), primary.subject_id) : null;
-    const canDelete = (await deletion.deleteEligibility(homeId, actorId)).allowed;
+    // The primary owner's account and delete eligibility are independent reads,
+    // so they run together; a failure is reported in the same order as before.
+    const [ownerRead, deleteRead] = await Promise.allSettled([
+      primary ? checked(db.from('User').select(SAFE_CREATOR_SELECT).eq('id', primary.subject_id).maybeSingle()) : null,
+      deletion.deleteEligibility(homeId, actorId),
+    ]);
+    const owner = primary ? userRef(settledValue(ownerRead), primary.subject_id) : null;
+    const canDelete = settledValue(deleteRead).allowed;
     // A member or owner can change while this caller's grants remain unchanged.
     // Retire those held projections as well as rechecking caller authority.
-    if (JSON.stringify(await readOwners(homeId, actorId, access)) !== JSON.stringify(owners)
-      || (access.permissions.includes('members.view') && JSON.stringify(await readMembers(homeId)) !== JSON.stringify(occupants))
-      || JSON.stringify(await ownClaims(homeId, actorId)) !== JSON.stringify(claims)) throw failure();
-    return { home: { ...home, owner, occupants, owners: visibleOwners.map(row => pick(row, OWNER_FIELDS)),
+    // The three rereads run together and are compared in their old order; the members' display names are read
+    // alongside them (they only replace display_name, after the comparison holds).
+    const [ownersAgain, membersAgain, claimsAgain, namedOccupants] = await Promise.allSettled([
+      readOwners(homeId, actorId, access),
+      access.permissions.includes('members.view') ? readMembers(homeId) : null,
+      ownClaims(homeId, actorId),
+      withDisplayNames(occupants),
+    ]);
+    if (JSON.stringify(settledValue(ownersAgain)) !== JSON.stringify(owners)
+      || (access.permissions.includes('members.view') && JSON.stringify(settledValue(membersAgain)) !== JSON.stringify(occupants))
+      || JSON.stringify(settledValue(claimsAgain)) !== JSON.stringify(claims)) throw failure();
+    return { home: { ...home, owner, occupants: settledValue(namedOccupants), owners: visibleOwners.map(row => pick(row, OWNER_FIELDS)),
       isOwner: access.isOwner, isOccupant: !!access.occupancy, isPendingOwner: mine?.owner_status === 'pending',
       ownership_status: mine?.owner_status || null, residency_status: access.occupancy?.verification_status || null,
       // F3b: 'household' when the verification came only from an invitation or a manager's approval.
@@ -162,18 +193,30 @@ async function propertyDetail(homeId, actorId) {
 async function members(homeId, actorId, { history = false } = {}) {
   return authority.withCurrentAccess({ homeId, actorId, permission: 'members.view' }, async access => {
     if (history && !access.permissions.includes('members.manage')) throw failure('HOME_MEMBER_HISTORY_DENIED', 403);
-    const occupants = await readMembers(homeId, { history });
-    const invites = access.permissions.includes('members.manage') ? await invitations.list(actorId, homeId) : [];
+    const manage = access.permissions.includes('members.manage');
+    // Members and invitations are independent reads, so they run together;
+    // a failure is reported in the same order as before.
+    const [occupantsRead, invitesRead] = await Promise.allSettled([
+      readMembers(homeId, { history }),
+      manage ? invitations.list(actorId, homeId) : [],
+    ]);
+    const occupants = settledValue(occupantsRead);
+    const invites = settledValue(invitesRead);
     const pendingInvites = invites.map(invite => {
       if (!uuid(invite.id) || invite.home_id !== homeId || typeof invite.proposed_role !== 'string') throw failure();
       return { id: invite.id, user_id: invite.invitee_user_id, role: invite.proposed_role, is_active: false,
         email: invite.invitee_email, name: invite.invitee_email || 'Invited user',
-        invited_by: invite.inviter?.username || null, created_at: invite.created_at };
+        invited_by: chosenUsernameOrNull(invite.inviter?.username), created_at: invite.created_at };
     });
-    if (JSON.stringify(await readMembers(homeId, { history })) !== JSON.stringify(occupants)) throw failure();
-    if (access.permissions.includes('members.manage')
-      && JSON.stringify(await invitations.list(actorId, homeId)) !== JSON.stringify(invites)) throw failure();
-    return { occupants, pendingInvites };
+    // Both rereads and the members' names run together; failures are reported in the old order.
+    const [membersAgain, invitesAgain, namedOccupants] = await Promise.allSettled([
+      readMembers(homeId, { history }),
+      manage ? invitations.list(actorId, homeId) : null,
+      withDisplayNames(occupants),
+    ]);
+    if (JSON.stringify(settledValue(membersAgain)) !== JSON.stringify(occupants)) throw failure();
+    if (manage && JSON.stringify(settledValue(invitesAgain)) !== JSON.stringify(invites)) throw failure();
+    return { occupants: settledValue(namedOccupants), pendingInvites };
   });
 }
 function sendError(res, error) {

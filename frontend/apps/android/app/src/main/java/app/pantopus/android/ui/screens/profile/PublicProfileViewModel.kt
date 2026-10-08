@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -628,7 +629,8 @@ class PublicProfileViewModel
          * `fetchPublicProfileByIdentifier` (`src/app/user/[id].tsx:53-58`).
          */
         private suspend fun loadProfile(): NetworkResult<PublicProfileDto> {
-            val identifier = routeIdentifier.trim()
+            // Once loaded, a refresh goes by id: the owner may have just changed the username the route used.
+            val identifier = userId.takeIf { UserSocialRepository.isUuid(it) } ?: routeIdentifier.trim()
             return if (UserSocialRepository.isUuid(identifier)) {
                 repo.publicProfile(identifier)
             } else {
@@ -768,7 +770,8 @@ class PublicProfileViewModel
             val header =
                 PublicProfileHeader(
                     displayName = profile.displayName,
-                    handle = profile.username.takeIf { it.isNotEmpty() },
+                    // A made-up username (user_…) is never shown as "@…" or in "Report @…".
+                    handle = MadeUpUsername.chosen(profile.username),
                     locality = profile.locality,
                     avatarUrl = profile.profilePictureUrl ?: profile.avatarUrl,
                     // No avatar check: `verified` is the account email flag that
@@ -779,7 +782,9 @@ class PublicProfileViewModel
                     // Launch cuts #1/#2 (Beacon + Personas): no "Persona" chip while personas are hidden.
                     tierLabel =
                         if (kind == PublicProfileKind.Persona && LaunchFeatures.beacon && LaunchFeatures.personas) "Persona" else null,
-                    isVerifiedNeighbor = kind == PublicProfileKind.Local,
+                    // The chip needs the verified home itself: unverified people get the
+                    // neighbor layout too while creators are cut.
+                    isVerifiedNeighbor = hasHomeResidency(profile),
                 )
             val stats = buildStatCells(profile)
             val reviewCards = buildReviewCards(profile)
@@ -983,10 +988,16 @@ class PublicProfileViewModel
          * blob is a Local (verified neighbor) profile; everyone else is
          * treated as a Persona (creator) profile. Backend doesn't ship
          * an explicit creator/local discriminator yet — this signal is
-         * the closest stable proxy.
+         * the closest stable proxy. While the creator side is cut for
+         * launch (Beacon + Personas) nobody is a creator: every person
+         * gets the neighbor layout, verified or not.
          */
         private fun derivedKind(profile: PublicProfileDto): PublicProfileKind =
-            if (hasHomeResidency(profile)) PublicProfileKind.Local else PublicProfileKind.Persona
+            when {
+                !(LaunchFeatures.beacon && LaunchFeatures.personas) -> PublicProfileKind.Local
+                hasHomeResidency(profile) -> PublicProfileKind.Local
+                else -> PublicProfileKind.Persona
+            }
 
         private fun buildBadges(profile: PublicProfileDto): List<IdentityPillarBadge> {
             val verified = profile.verified == true

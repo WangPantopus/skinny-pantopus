@@ -8,7 +8,9 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerConfig
@@ -142,8 +144,8 @@ const val HOUSEHOLD_TASKS_HOME_ID_KEY = "homeId"
  *    the home identity ring when an assignee is set.
  *  - Active trailing = round-checkbox [RowTrailing.CircularAction]
  *    that optimistically toggles to Done.
- *  - Done trailing = success status chip; "Done by … · …" surfaces
- *    in the subtitle.
+ *  - Done trailing = success status chip; "Done <when> · Assigned to …"
+ *    surfaces in the subtitle (tasks don't record who finished them).
  *  - Recurring trailing = kebab; recurrence cadence surfaces in the
  *    inline chip.
  *
@@ -156,12 +158,14 @@ class HouseholdTasksListViewModel
         accessFactory: HomeTaskAccessFactory,
         savedStateHandle: SavedStateHandle,
         private val clock: () -> Instant = Instant::now,
+        private val membersRepo: HomeMembersRepository? = null,
     ) : ViewModel() {
         @Inject
         constructor(
             accessFactory: HomeTaskAccessFactory,
             savedStateHandle: SavedStateHandle,
-        ) : this(accessFactory, savedStateHandle, Instant::now)
+            membersRepo: HomeMembersRepository,
+        ) : this(accessFactory, savedStateHandle, Instant::now, membersRepo)
 
         private val homeId: String =
             checkNotNull(savedStateHandle.get<String>(HOUSEHOLD_TASKS_HOME_ID_KEY)) {
@@ -199,6 +203,9 @@ class HouseholdTasksListViewModel
         val actionError: StateFlow<String?> = _actionError.asStateFlow()
 
         private var tasks: List<HomeTaskDto>? = null
+
+        /** Members' names by user id, for assignees; empty when the viewer can't read members ("Member 1A2B"). */
+        private var memberNames: Map<String, String> = emptyMap()
         private var onOpenTask: (String) -> Unit = {}
         private var onAddTask: () -> Unit = {}
         private var onEditRecurring: (String) -> Unit = {}
@@ -235,6 +242,7 @@ class HouseholdTasksListViewModel
             work = null
             acting = false
             clearContent()
+            memberNames = emptyMap()
             _actionError.value = null
             _state.value = ListOfRowsUiState.Loading
         }
@@ -252,8 +260,22 @@ class HouseholdTasksListViewModel
                         if (!current(revision)) return@taskAttempt
                         canCreate = result.collectionCapabilities?.canCreate == true
                         applySuccess(result.tasks)
+                        loadMemberNames(revision)
                     }
                 }
+        }
+
+        /** Only when a task has an assignee, so an unassigned list costs no extra request. */
+        private suspend fun loadMemberNames(revision: Int) {
+            val repo = membersRepo ?: return
+            if (tasks.orEmpty().none { !it.assignedTo.isNullOrEmpty() }) return
+            val result = repo.listOccupants(homeId) as? NetworkResult.Success ?: return
+            if (!current(revision)) return
+            memberNames =
+                result.data.occupants
+                    .mapNotNull(HouseholdTaskAssignableMember::from)
+                    .associate { it.id to it.displayName }
+            tasks?.let(::renderForCurrentTab)
         }
 
         fun selectTab(id: String) {
@@ -390,6 +412,7 @@ class HouseholdTasksListViewModel
             generation++
             acting = false
             clearContent()
+            memberNames = emptyMap()
             _state.value = ListOfRowsUiState.Error(message)
             _actionError.value = message
         }
@@ -491,7 +514,7 @@ class HouseholdTasksListViewModel
             tab: HouseholdTasksTab,
             now: Instant,
         ): RowModel {
-            val projection = project(task, now)
+            val projection = project(task, now, memberNames, access.actorId)
             val taskId = task.id
             return RowModel(
                 id = task.id,
@@ -617,25 +640,31 @@ class HouseholdTasksListViewModel
             fun project(
                 task: HomeTaskDto,
                 now: Instant,
+                memberNames: Map<String, String> = emptyMap(),
+                viewerId: String? = null,
             ): HouseholdTaskRowProjection {
                 val category = HouseholdTaskCategory.from(task.title, task.taskType)
-                val assigneeLabel = assigneeDisplay(task.assignedTo)
-                val isAssigned = assigneeLabel != null
+                val assigneeLabel = assigneeDisplay(task.assignedTo, memberNames)
+                val own = task.assignedTo != null && task.assignedTo == viewerId
+                // The line says "you" for the viewer's own tasks.
+                val avatarName = rowAvatarName(task.assignedTo, assigneeLabel, memberNames, own)
+                val isAssigned = avatarName != null
+                val assignee = if (own) "you" else assigneeLabel
                 val recurrenceChip = task.automaticRecurrence?.label() ?: humanRecurrence(task.recurrenceRule)?.let { "Saved: $it" }
                 return when (task.status) {
                     "done" -> {
-                        val doneTime = humanRelativeTime(task.completedAt ?: task.updatedAt, now)
-                        val by = assigneeLabel ?: "Someone"
+                        // Tasks don't record who finished them, so the row names the assignee, not a "done by".
+                        val done = humanRelativeTime(task.completedAt ?: task.updatedAt, now)?.let { "Done $it" } ?: "Done"
                         HouseholdTaskRowProjection(
                             title = task.title,
-                            subtitle = doneTime?.let { "Done by $by · $it" } ?: "Done by $by",
+                            subtitle = assignee?.let { "$done · Assigned to $it" } ?: done,
                             chipText = null,
                             chipVariant = null,
                             chipIcon = null,
                             recurrenceChip = recurrenceChip,
                             category = category,
                             isAssigned = isAssigned,
-                            assigneeLabel = assigneeLabel,
+                            assigneeLabel = avatarName,
                             highlight = RowHighlight.Muted,
                         )
                     }
@@ -649,12 +678,12 @@ class HouseholdTasksListViewModel
                             recurrenceChip = recurrenceChip,
                             category = category,
                             isAssigned = isAssigned,
-                            assigneeLabel = assigneeLabel,
+                            assigneeLabel = avatarName,
                             highlight = RowHighlight.Muted,
                         )
                     else -> {
                         val due = dueChip(task.dueAt, now)
-                        val assigneeLine = assigneeLabel?.let { "Assigned to $it" } ?: "Unassigned"
+                        val assigneeLine = assignee?.let { "Assigned to $it" } ?: "Unassigned"
                         val subtitle = due.subtitleLine?.let { "$assigneeLine · $it" } ?: assigneeLine
                         HouseholdTaskRowProjection(
                             title = task.title,
@@ -665,7 +694,7 @@ class HouseholdTasksListViewModel
                             recurrenceChip = recurrenceChip,
                             category = category,
                             isAssigned = isAssigned,
-                            assigneeLabel = assigneeLabel,
+                            assigneeLabel = avatarName,
                             highlight = null,
                         )
                     }
@@ -765,16 +794,16 @@ class HouseholdTasksListViewModel
             }
 
             /**
-             * Surface a fingerprint for an assignee uuid. The backend
-             * returns just an id today — no joined user profile. Until
-             * a server-side join lands, surface a short identifier so
-             * the row stays distinguishable but the UI doesn't lie
-             * about who's assigned.
+             * Tasks carry only the assignee's id; names come from the household's members. A viewer
+             * who can't read members gets a short fingerprint, not a guessed name.
              */
             @JvmStatic
-            fun assigneeDisplay(assigneeId: String?): String? {
+            fun assigneeDisplay(
+                assigneeId: String?,
+                memberNames: Map<String, String> = emptyMap(),
+            ): String? {
                 if (assigneeId.isNullOrEmpty()) return null
-                return "Member ${assigneeId.take(4).uppercase(Locale.US)}"
+                return memberNames[assigneeId] ?: "Member ${assigneeId.take(4).uppercase(Locale.US)}"
             }
 
             /**
@@ -867,3 +896,14 @@ class HouseholdTasksListViewModel
                     }.getOrNull()
         }
     }
+
+/**
+ * The row avatar names the assignee. For the viewer's own task it needs their name from the members
+ * list; without it the category icon shows (a "Member 1A2B" avatar would mean nothing to them).
+ */
+private fun rowAvatarName(
+    assigneeId: String?,
+    assigneeLabel: String?,
+    memberNames: Map<String, String>,
+    own: Boolean,
+): String? = if (own && assigneeId?.let(memberNames::get) == null) null else assigneeLabel

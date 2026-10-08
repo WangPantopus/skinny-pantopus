@@ -134,8 +134,10 @@ fun VerifyLandlordWizardScreen(
         }
     }
 
+    // System Back acts like the top bar's Back/X: a step back, or "Discard your progress?" once something is typed.
     WizardShell(
         model = viewModel,
+        handleSystemBack = true,
         chrome = viewModel.chromeFor(state),
         scrollResetKey = Triple(state.currentStep, state.errors != null, (state.submitState as? VerifyLandlordSubmitState.Error)?.message),
         modifier = Modifier.testTag(VERIFY_LANDLORD_SCREEN_TAG),

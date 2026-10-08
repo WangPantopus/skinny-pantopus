@@ -138,7 +138,7 @@ struct StartTrainRecipientCard: View {
     }
 
     private var displayName: String {
-        recipient.name ?? recipient.username ?? "Recipient"
+        recipient.name ?? MadeUpUsername.chosen(recipient.username) ?? "Recipient"
     }
 
     /// Only the server's `isVerified` may back a verified claim.
@@ -160,7 +160,7 @@ struct StartTrainRecipientCard: View {
     }
 
     private var initials: String {
-        let source = recipient.name ?? recipient.username ?? "Recipient"
+        let source = recipient.name ?? MadeUpUsername.chosen(recipient.username) ?? "Recipient"
         let pieces = source.split(separator: " ")
         let chars = pieces.prefix(2).compactMap(\.first)
         let letters = chars.map(String.init).joined()

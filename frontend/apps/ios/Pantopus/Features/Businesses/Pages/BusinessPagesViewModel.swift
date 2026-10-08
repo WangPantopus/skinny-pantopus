@@ -50,8 +50,8 @@ public struct BusinessPageRevisionRow: Sendable, Hashable, Identifiable {
         let notes = dto.notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         title = notes.isEmpty ? "v\(dto.revision)" : "v\(dto.revision) — \(notes)"
         let publisher = dto.publisher?.name
-            ?? dto.publisher?.username
-            ?? "Unknown"
+            ?? MadeUpUsername.chosen(dto.publisher?.username)
+            ?? "A team member"
         let date = BusinessPageRevisionRow.formatted(dto.publishedAt)
         subtitle = date.isEmpty ? publisher : "\(publisher) · \(date)"
     }

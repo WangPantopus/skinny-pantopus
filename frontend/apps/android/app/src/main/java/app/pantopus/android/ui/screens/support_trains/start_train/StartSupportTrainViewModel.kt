@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.support_trains.start_train
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.support_trains.CreateSupportTrainBody
 import app.pantopus.android.data.api.models.support_trains.GenerateSupportTrainSlotsBody
@@ -239,7 +240,7 @@ class StartSupportTrainViewModel
             val selected = _selectedBeneficiary.value
             val raw =
                 selected?.name
-                    ?: selected?.username
+                    ?: MadeUpUsername.chosen(selected?.username)
                     ?: current.beneficiaryQuery.trim()
             val name = raw.ifBlank { "a neighbor" }
             return "${current.kind.title} for $name"
@@ -419,7 +420,8 @@ class StartSupportTrainViewModel
                 StartSupportTrainStep.Success -> false
             }
 
-        private fun displayName(recipient: MailRecipientDto?): String = recipient?.name ?: recipient?.username ?: ""
+        private fun displayName(recipient: MailRecipientDto?): String =
+            recipient?.name ?: MadeUpUsername.chosen(recipient?.username).orEmpty()
 
         private fun scheduleBeneficiarySearch(query: String) {
             searchJob?.cancel()

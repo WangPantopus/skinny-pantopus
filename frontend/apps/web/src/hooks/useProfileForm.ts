@@ -35,6 +35,7 @@ function toDateInputValue(v: unknown): string {
 // ── Reducer ──
 
 const INITIAL_FORM: ProfileFormData = {
+  username: '',
   firstName: '',
   middleName: '',
   lastName: '',
@@ -153,6 +154,8 @@ export function useProfileForm(): UseProfileFormReturn {
 
       const sl = userData.socialLinks || userData.social_links || {};
       const loaded: ProfileFormData = {
+        // A username the server made up shows as an empty field ("Choose a username").
+        username: userData.usernameIsGenerated ? '' : (userData.username || ''),
         firstName: userData.firstName || '',
         middleName: userData.middleName || userData.middle_name || '',
         lastName: userData.lastName || '',
@@ -203,6 +206,12 @@ export function useProfileForm(): UseProfileFormReturn {
 
     try {
       const updates: Record<string, unknown> = {};
+
+      // Only a new username travels; the server checks it again and answers with a reason.
+      const typedUsername = form.username.trim().replace(/^@+/, '').toLowerCase();
+      if (typedUsername && typedUsername !== String(user?.username || '').toLowerCase()) {
+        updates.username = typedUsername;
+      }
 
       if (form.firstName !== undefined) updates.firstName = form.firstName.trim();
       if (form.middleName !== undefined) updates.middleName = form.middleName.trim();
@@ -260,6 +269,10 @@ export function useProfileForm(): UseProfileFormReturn {
       const message = extractApiError(err, 'Failed to update profile. Please try again.');
       // The phone conflict comes back without field details; it is the phone field.
       if (message === 'Phone number already in use') fields.phoneNumber = message;
+      // A username the server refused (taken since the check, reserved, or malformed) is the username field.
+      const code = (err as { data?: { code?: string }; code?: string } | null)?.data?.code
+        || (err as { code?: string } | null)?.code;
+      if (typeof code === 'string' && code.startsWith('USERNAME_')) fields.username = message;
       setFieldErrors(fields);
       // One rejected field: its own message. Several: point at the highlighted fields.
       const rejected = Object.values(fields).filter((m): m is string => Boolean(m));

@@ -13,16 +13,19 @@ import PlaceNavRail from './PlaceNavRail';
 
 export default function PlaceShell({
   active,
+  hidden,
   children,
 }: {
   /** Rail highlight: 'overview' | a detail slug | 'pulse'. */
   active: string;
+  /** Detail slugs the rail leaves out because they don't apply to this viewer. */
+  hidden?: string[];
   children: React.ReactNode;
 }) {
   return (
     <div className="mx-auto w-full max-w-[640px] lg:max-w-[1040px] lg:grid lg:grid-cols-[218px_minmax(0,1fr)] lg:gap-9 lg:px-8 lg:pt-2">
       <div className="hidden lg:block">
-        <PlaceNavRail active={active} />
+        <PlaceNavRail active={active} hidden={hidden} />
       </div>
       <div className="min-w-0 lg:max-w-[760px]">{children}</div>
     </div>

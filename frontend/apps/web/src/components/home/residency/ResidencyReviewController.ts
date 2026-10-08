@@ -2,6 +2,7 @@ import * as api from '@pantopus/api';
 import type { ResidencyReviewAction, ResidencyReviewRole, ResidencyReview } from '@pantopus/api';
 import { PendingResidencyReviewStore, type ResidencyReviewSnapshot } from './PendingResidencyReviewStore';
 import { UUID, validReview, validReceipt, canDecide, type PendingResidencyReview } from './residencyReviewModel';
+import { chosenUsername } from '@pantopus/utils';
 
 /** Opening account/session, current ordinary authority and one original per Home. */
 export class ResidencyReviewController {
@@ -23,7 +24,7 @@ export class ResidencyReviewController {
   retire() { this.active = false; this.review = null; this.claimant = null; }
   current = () => {
     if (!this.active || !this.token || api.getAuthToken() !== this.token || api.getApiBaseUrl() !== this.origin
-      || localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) !== this.marker || document.visibilityState === 'hidden') {
+      || localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) !== this.marker) {
       this.retire(); throw new Error('This review is no longer current. Reload to check access.');
     }
     return true;
@@ -54,7 +55,7 @@ export class ResidencyReviewController {
     const profile = await api.users.getProfileById(review.claim.user_id).catch(() => null);
     this.current();
     this.claimant = profile?.id === review.claim.user_id ? {
-      name: profile.name || profile.username || 'Applicant', username: profile.username || null,
+      name: profile.name || chosenUsername(profile.username) || 'Applicant', username: chosenUsername(profile.username),
     } : null;
   }
   private async requireSaved() {

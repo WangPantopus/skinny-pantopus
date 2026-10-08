@@ -474,10 +474,11 @@ extension AuthManager {
         store.get(SecureStoreKey.sessionContext).flatMap(SessionContext.init(rawValue:))
     }
 
-    /// Refresh the remembered hint's `lastSeenAt` (and method when known).
+    /// Refresh the remembered hint's `lastSeenAt` (and method when known) and
+    /// its address, which the login form is filled in from.
     func touchHint(for user: UserDTO, method: AccountHintMethod?) {
         let existing = AccountHintStore.load(from: store).first { $0.userId == user.id }
-        let hint = existing?.touched(at: now(), method: method)
+        let hint = existing?.touched(at: now(), method: method, email: user.email)
             ?? AccountHint(user: user, lastMethod: method, lastSeenAt: now())
         AccountHintStore.remember(hint, in: store)
     }

@@ -334,7 +334,7 @@ public final class NewMessageViewModel {
 
     public func rowForVerified(_ dto: UserSearchResultDTO) -> NewMessageContactRow {
         let displayName = (dto.name?.isEmpty == false ? dto.name : nil)
-            ?? (dto.username?.isEmpty == false ? dto.username : nil)
+            ?? MadeUpUsername.chosen(dto.username)
             ?? "Member"
         let initials = Self.initials(from: displayName)
         let identity: NewMessageIdentityBadge = dto.accountType == "business" ? .business : .personal

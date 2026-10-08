@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const db = require('../config/supabaseAdmin');
 const verificationAge = require('../utils/verificationAge');
 const logger = require('../utils/logger');
+const { chosenUsernameOrNull, nameUnlessMadeUp } = require('../utils/personalUsername');
 const MESSAGES = {
   INVITE_SENDER_NOT_FOUND: 'This invitation attempt has not been found. Retry or cancel its original attempt.',
   INVITE_SENDER_CONFLICT: 'This attempt has different details. Recover its original invitation command.',
@@ -70,6 +71,10 @@ async function act({ actorId = null, invitationId = null, token = null, action }
   if (action==='accept' && (result.kind==='claim_merge' ? !result.invitation?.id
     : (!result.occupancy?.id || !result.homeId || typeof result.replayed!=='boolean'))) throw failure();
   if (action==='decline' && typeof result.replayed!=='boolean') throw failure();
+  // The SQL names the inviter coalesce(name, first_name, username, 'Someone'); a made-up username isn't a name.
+  if (result.inviter && typeof result.inviter.name === 'string') {
+    return { ...result, inviter: { ...result.inviter, name: nameUnlessMadeUp(result.inviter.name, 'Someone') } };
+  }
   return result;
 }
 async function list(actorId,homeId=null) {
@@ -89,14 +94,14 @@ async function notifyCreated(result,message) {
   if (result.delivery_email) {
     try {
       const delivery = await require('./emailService').sendHomeInviteEmail({ toEmail: result.delivery_email,
-        inviterName: result.actor_name, homeName: result.home_label, homeCity: result.home_city,
+        inviterName: nameUnlessMadeUp(result.actor_name, 'Someone'), homeName: result.home_label, homeCity: result.home_city,
         role: invite.proposed_role, token: invite.token, message: message || null, isExistingUser: !!invite.invitee_user_id });
       emailSent = delivery?.success === true && delivery?.preview !== true;
     } catch (err) { logger.error('Home invitation email failed after commit', { errorCode: err.code, inviteId: invite.id }); }
   }
   if (invite.invitee_user_id) {
     try { await require('./notificationService').notifyHomeInvite({ inviteeUserId: invite.invitee_user_id,
-      inviterName: result.actor_name, homeName: result.home_label, homeId: invite.home_id, inviteToken: invite.token });
+      inviterName: nameUnlessMadeUp(result.actor_name, 'Someone'), homeName: result.home_label, homeId: invite.home_id, inviteToken: invite.token });
     } catch (err) { logger.error('Home invitation notification failed after commit', { errorCode: err.code, inviteId: invite.id }); }
   }
   return emailSent;
@@ -108,7 +113,7 @@ async function notifySenderDelivery(result, message) {
   if (result.delivery_email) {
     try {
       const delivery = await require('./emailService').sendHomeInviteEmail({ toEmail:result.delivery_email,
-        inviterName:result.actor_name, homeName:result.home_label, homeCity:result.home_city,
+        inviterName:nameUnlessMadeUp(result.actor_name, 'Someone'), homeName:result.home_label, homeCity:result.home_city,
         role:invite.proposed_role, token:invite.token, message:message || null, isExistingUser:!!invite.invitee_user_id });
       if (delivery?.success === true && delivery?.preview !== true) proof.email = 'provider_accepted';
     } catch { logger.warn('Home invitation email handoff unconfirmed', { inviteId:invite.id }); }
@@ -116,7 +121,7 @@ async function notifySenderDelivery(result, message) {
   if (invite.invitee_user_id) {
     try {
       const notification = await require('./notificationService').notifyHomeInvite({ inviteeUserId:invite.invitee_user_id,
-        inviterName:result.actor_name, homeName:result.home_label, homeId:invite.home_id, inviteToken:invite.token });
+        inviterName:nameUnlessMadeUp(result.actor_name, 'Someone'), homeName:result.home_label, homeId:invite.home_id, inviteToken:invite.token });
       if (typeof notification?.id === 'string' && notification.id.length > 0 && notification.user_id === invite.invitee_user_id) proof.in_app = 'saved';
     } catch { logger.warn('Home invitation notification save unconfirmed', { inviteId:invite.id }); }
   }
@@ -128,7 +133,7 @@ async function notifyAccepted(result,actorId) {
     const { data: actor, error } = await db.from('User').select('name,username,first_name').eq('id',actorId).maybeSingle();
     if (error) throw error;
     await require('./notificationService').notifyHomeInviteAccepted({ inviterUserId: result.inviter_id,
-      accepterName: actor?.name || actor?.first_name || actor?.username || 'Someone',
+      accepterName: actor?.name || actor?.first_name || chosenUsernameOrNull(actor?.username) || 'Someone',
       homeName: result.home_label, homeId: result.homeId });
   } catch (err) { logger.error('Home invite acceptance notification failed after commit', { errorCode: err.code }); }
 }

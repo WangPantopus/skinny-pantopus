@@ -12,7 +12,7 @@ WHERE IT LIVES: this is PRE-AUTH, ahead of the four tabs — the anonymous addre
 THE ONE JOB: never promise a Founding Neighbor slot the system cannot honour — including when the founding-window lookup fails, which today defaults to "open".
 
 CONTENT (exact strings, this density):
-- Address: 2914 NW Lacamas Dr, Camas, WA 98607
+- Address: 2914 NW Pantopus Loop, Camas, WA 98607
 - Existing density content, unchanged: four qualitative dots, 3 of 4 filled, "A few verified homes nearby"
 - NEW slot line, open: "3 of 5 Founding Neighbor slots open on this block" · "This window closes Nov 27, 2026" (day 15 of 21)
 - No slots / window ended: no meter, no line, silently — the card renders density only

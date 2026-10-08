@@ -7,6 +7,8 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { getAuthToken } from '@pantopus/api';
 import { buildSupportTrainShareUrl } from '@pantopus/utils';
 import ErrorState from '@/components/ui/ErrorState';
+import { toast } from '@/components/ui/toast-store';
+import { CONTRIBUTION_LABELS } from '@/components/support-trains/contributionLabels';
 import {
   ArrowLeft,
   Copy,
@@ -21,6 +23,8 @@ import {
   X,
   Plus,
   Trash2,
+  Megaphone,
+  Send,
 } from 'lucide-react';
 
 // ============================================================
@@ -44,6 +48,10 @@ export default function ManageSupportTrainPage() {
 
   // Share link
   const [copied, setCopied] = useState(false);
+  // Send an update, as from the apps' Manage screen
+  const [updateBody, setUpdateBody] = useState('');
+  const [pushToPhones, setPushToPhones] = useState(true);
+  const [sendingUpdate, setSendingUpdate] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // Sort
@@ -106,6 +114,21 @@ export default function ManageSupportTrainPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [id]);
+
+  const handleSendUpdate = useCallback(async () => {
+    const body = updateBody.trim();
+    if (!body || sendingUpdate) return;
+    setSendingUpdate(true);
+    try {
+      await api.supportTrains.postUpdate(id, { body, push_to_phones: pushToPhones });
+      setUpdateBody('');
+      toast.success('Update sent');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Could not send the update. Try again.');
+    } finally {
+      setSendingUpdate(false);
+    }
+  }, [id, updateBody, pushToPhones, sendingUpdate]);
 
   const handleDeleteSupportTrain = useCallback(async () => {
     if (deleting) return;
@@ -256,6 +279,48 @@ export default function ManageSupportTrainPage() {
           )}
         </section>
 
+        {/* ── Send an update ── (as the apps' Manage screen) */}
+        <section className="bg-app-surface border border-app-border rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-app-text mb-4 flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-app-text-muted" />
+            Send an update
+          </h2>
+          <label htmlFor="train-update-body" className="block text-sm font-medium text-app-text mb-1.5">
+            Message
+          </label>
+          <textarea
+            id="train-update-body"
+            value={updateBody}
+            onChange={(e) => setUpdateBody(e.target.value)}
+            maxLength={500}
+            rows={4}
+            placeholder="How is the recipient doing? Anything helpers should know?"
+            className="w-full p-2.5 bg-app-surface-sunken border border-app-border rounded-lg text-sm text-app-text placeholder:text-app-text-muted"
+          />
+          <div className="flex justify-between gap-3 text-xs text-app-text-muted mt-1">
+            <span>Shows on the train&apos;s Updates tab. Helpers and organizers with an account get a notification.</span>
+            <span className="shrink-0">{updateBody.length} / 500</span>
+          </div>
+          <label className="flex items-center gap-2 mt-3 text-sm text-app-text">
+            <input
+              type="checkbox"
+              checked={pushToPhones}
+              onChange={(e) => setPushToPhones(e.target.checked)}
+              className="rounded border-app-border"
+            />
+            Push to phones
+            <span className="text-app-text-muted">(otherwise it lands in their inbox only)</span>
+          </label>
+          <button
+            onClick={handleSendUpdate}
+            disabled={!updateBody.trim() || sendingUpdate}
+            className="mt-4 px-4 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {sendingUpdate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {sendingUpdate ? 'Sending…' : 'Send update'}
+          </button>
+        </section>
+
         {/* ── Donation Summary ── (launch cut #9: shown only once gift funds are on) */}
         {launchFeatures.giftFunds && (
         <section className="bg-app-surface border border-app-border rounded-xl p-6">
@@ -379,11 +444,15 @@ export default function ManageSupportTrainPage() {
                     <td className="px-4 py-3 text-app-text font-medium">
                       {r.user?.name || r.guest_name || '—'}
                     </td>
-                    <td className="px-4 py-3 text-app-text-secondary capitalize">
-                      {r.contribution_mode}
+                    <td className="px-4 py-3 text-app-text-secondary">
+                      {CONTRIBUTION_LABELS[r.contribution_mode] || r.contribution_mode}
                     </td>
                     <td className="px-4 py-3 text-app-text-secondary">
                       {r.dish_title || r.restaurant_name || '—'}
+                      {/* The helper's note to the recipient, which the organizer reads on their behalf. */}
+                      {typeof r.note_to_recipient === 'string' && r.note_to_recipient.trim() && (
+                        <div className="text-xs text-app-text-muted mt-0.5">“{r.note_to_recipient.trim()}”</div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -401,6 +470,9 @@ export default function ManageSupportTrainPage() {
                             timeZone: 'UTC',
                           })
                         : '—'}
+                      {arrivalLabel(r.estimated_arrival_at) && (
+                        <div>arrives {arrivalLabel(r.estimated_arrival_at)}</div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -467,4 +539,12 @@ function statusBadgeClasses(status: string): string {
     default:
       return 'bg-slate-100 text-slate-600';
   }
+}
+
+// The helper's estimated arrival as "5:30 pm" in this browser's time zone.
+function arrivalLabel(iso?: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 }

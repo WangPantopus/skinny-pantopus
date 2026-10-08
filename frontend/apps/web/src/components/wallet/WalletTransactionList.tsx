@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { ArrowUp, ArrowDown, Wallet, Star, Undo2, Settings, X, BarChart3 } from 'lucide-react';
 import { wallet as walletApi } from '@pantopus/api';
 import { WALLET_TX_TYPE_CONFIG } from '@pantopus/ui-utils';
+import { chosenUsername } from '@pantopus/utils';
 
 interface WalletTransaction {
   id: string;
@@ -151,7 +152,7 @@ export default function WalletTransactionList({ refreshKey = 0 }: { refreshKey?:
                     </div>
                     <p className="text-xs text-app-text-muted truncate">
                       {tx.description || label}
-                      {tx.counterparty && ` • ${tx.counterparty.name || tx.counterparty.username}`}
+                      {tx.counterparty && (tx.counterparty.name || chosenUsername(tx.counterparty.username)) && ` • ${tx.counterparty.name || chosenUsername(tx.counterparty.username)}`}
                     </p>
                     <p className="text-xs text-app-text-muted">
                       {new Date(tx.created_at).toLocaleDateString(undefined, {

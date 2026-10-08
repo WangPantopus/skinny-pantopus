@@ -800,9 +800,9 @@ public final class MembersListViewModel: ListOfRowsDataSource {
     // MARK: - Helpers (pure)
 
     static func displayName(for occ: OccupantDTO) -> String {
-        if let name = occ.displayName?.nilIfEmpty { return name }
-        if let username = occ.username?.nilIfEmpty { return "@\(username)" }
-        return "Member"
+        if let name = occ.displayName?.nilIfEmpty, !MadeUpUsername.isMadeUp(name) { return name }
+        // A made-up username (user_…) is never shown as the member's name.
+        return MadeUpUsername.handle(occ.username) ?? "Household member"
     }
 
     static func avatarURL(_ raw: String?) -> URL? {

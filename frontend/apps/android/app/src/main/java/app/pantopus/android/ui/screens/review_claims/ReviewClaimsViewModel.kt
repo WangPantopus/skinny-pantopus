@@ -10,6 +10,7 @@ package app.pantopus.android.ui.screens.review_claims
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.admin.AdminRepository
 import app.pantopus.android.data.api.models.admin.AdminClaimBucket
 import app.pantopus.android.data.api.models.admin.AdminClaimCountsResponse
@@ -195,7 +196,7 @@ class ReviewClaimsViewModel
             val chip = AdminClaimChip.descriptor(claim, forBucket)
             val claimantName =
                 claim.claimant?.name
-                    ?: claim.claimant?.username
+                    ?: MadeUpUsername.chosen(claim.claimant?.username)
                     ?: "Unknown claimant"
             val address = AdminClaimAddressFormat.full(claim.home)
             val evidenceText = "${claim.evidenceCount} doc${if (claim.evidenceCount == 1) "" else "s"}"

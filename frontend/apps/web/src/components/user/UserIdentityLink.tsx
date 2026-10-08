@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import * as api from '@pantopus/api';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { toast } from '@/components/ui/toast-store';
+import { usernameHandle, chosenUsername } from '@pantopus/utils';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 
@@ -237,14 +238,14 @@ export default function UserIdentityLink({
                   />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-white text-sm font-semibold flex items-center justify-center">
-                    {(displayName || username || '?').charAt(0).toUpperCase()}
+                    {(displayName || chosenUsername(username) || '?').charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div className="min-w-0">
                   <Link href={`/${username}`} className="font-semibold text-app-text hover:underline" onClick={withMaybeStop}>
                     {displayName}
                   </Link>
-                  <p className="text-xs text-app-text-secondary truncate">@{username}</p>
+                  {usernameHandle(username) ? <p className="text-xs text-app-text-secondary truncate">{usernameHandle(username)}</p> : null}
                   {locationText ? <p className="text-xs text-app-text-secondary">{locationText}</p> : null}
                 </div>
               </div>

@@ -46,6 +46,8 @@ import app.pantopus.android.data.api.models.place.PlaceExemptionCheckData
 import app.pantopus.android.data.api.models.place.PlaceIncentive
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceRentBandData
+import app.pantopus.android.data.api.models.place.PlaceSectionAccess
+import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.data.api.models.place.RecordWatch
@@ -58,6 +60,7 @@ import app.pantopus.android.ui.screens.place.components.PlaceChipTone
 import app.pantopus.android.ui.screens.place.components.PlaceIconTile
 import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
 import app.pantopus.android.ui.screens.place.components.PlaceTileTone
+import app.pantopus.android.ui.screens.place.ownerTools
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -76,7 +79,7 @@ fun PlaceMoneyDetailContent(
         PlaceDetailSectionLabel("Bill benchmark")
         val data = env.billBenchmark
         if (data != null && env.isLive()) BillBenchmarkCard(data) else PlaceDetailFallbackCard(env)
-        PlaceSourceNote("Your utility · peer comparison")
+        SourceNoteUnlessLocked(env, "Your utility · peer comparison")
     }
     intel.section(PlaceSectionId.INCENTIVES)?.let { env ->
         PlaceDetailSectionLabel("Incentives")
@@ -115,8 +118,26 @@ fun PlaceMoneyDetailContent(
         PlaceDetailSectionLabel("Property-tax exemption")
         val data = env.exemptionCheck
         if (data != null && env.isLive()) ExemptionCheckCard(data) else PlaceDetailFallbackCard(env)
-        PlaceSourceNote("County records · ATTOM")
+        SourceNoteUnlessLocked(env, "County records · ATTOM")
     }
+    // Rate watch, deed alerts and the property-tax check are the owner's, like the exemption check.
+    if (intel.ownerTools) OwnerTools(intel, viewModel)
+}
+
+/** A provider note under a section, left off a locked card (as on the web). */
+@Composable
+private fun SourceNoteUnlessLocked(
+    env: PlaceSectionEnvelope,
+    name: String,
+) {
+    if (env.access != PlaceSectionAccess.LOCKED) PlaceSourceNote(name)
+}
+
+@Composable
+private fun OwnerTools(
+    intel: PlaceIntelligence,
+    viewModel: PlaceDetailViewModel,
+) {
     PlaceDetailSectionLabel("Rate watch")
     if (intel.tier == PlaceTier.T4) {
         LaunchedEffect(Unit) { viewModel.loadRateWatch() }

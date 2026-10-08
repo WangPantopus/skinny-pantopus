@@ -25,7 +25,7 @@ extension MailDetailViewModel {
             ?? item.senderBusinessName
             ?? item.senderAddress
             ?? "Unknown sender"
-        let senderMeta = detail.sender.map { "@\($0.username)" } ?? item.senderAddress
+        let senderMeta = detail.sender.flatMap { MadeUpUsername.handle($0.username) } ?? item.senderAddress
         let senderTypeLabel = senderTypeLabel(
             category: category,
             sender: detail.sender,

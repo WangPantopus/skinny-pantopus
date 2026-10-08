@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.api.models.support_trains
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -136,9 +137,9 @@ data class SupportTrainReservationDto(
     val wasEdited: Boolean
         get() = !updatedAt.isNullOrBlank() && updatedAt != createdAt
 
-    /** Best-effort display name: `helper.name` → `username` → `guestName` → "Helper". */
+    /** Best-effort display name: `helper.name` → a chosen `username` → `guestName` → "Helper". */
     val displayName: String
-        get() = helperUser?.name ?: helperUser?.username ?: guestName ?: "Helper"
+        get() = helperUser?.name ?: MadeUpUsername.chosen(helperUser?.username) ?: guestName ?: "Helper"
 
     /** Guest signups have no linked account — organizers email them. */
     val isGuestSignup: Boolean

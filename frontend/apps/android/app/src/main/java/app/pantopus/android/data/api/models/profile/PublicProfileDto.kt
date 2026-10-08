@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.profile
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.common.JsonValue
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
@@ -59,7 +60,7 @@ data class PublicProfileDto(
             if (!name.isNullOrEmpty()) return name
             val combined = listOfNotNull(firstName, lastName).filter { it.isNotEmpty() }.joinToString(" ")
             if (combined.isNotEmpty()) return combined
-            return "@$username"
+            return MadeUpUsername.handle(username) ?: "Pantopus member"
         }
 
     /** "City, ST" if both present. */

@@ -1,6 +1,7 @@
 // Context-specific identity serializers for the Pantopus Identity Firewall.
 
 const { computeQuotaRemaining } = require('../utils/personaQuotas');
+const { chosenUsernameOrNull, isGeneratedUsername } = require('../utils/personalUsername');
 
 // Phase 0 / P0.3 — replace raw `creator:user_id (name, city, state, ...)`
 // nested-select patterns with a safe column set. Audience Profile design v2
@@ -42,23 +43,31 @@ function sameDisplayValue(a, b) {
   return left.toLowerCase() === right.toLowerCase();
 }
 
+// A display name, unless it is a username the server made up (a Local Profile made while its account had no name
+// holds one as its display name). A made-up username is never shown as the person's name.
+function nameText(value) {
+  const text = cleanIdentityText(value);
+  return text && !isGeneratedUsername(text) ? text : null;
+}
+
 // Public local identity policy: people should render by their public display
-// name/name, not by handle, unless no name is available.
+// name/name, not by handle, unless no name is available (and then only by a
+// handle the person chose).
 function displayNameFromUser(user) {
   if (!user) return 'Pantopus member';
   return (
-    cleanIdentityText(user.display_name) ||
-    cleanIdentityText(user.public_display_name) ||
+    nameText(user.display_name) ||
+    nameText(user.public_display_name) ||
     cleanIdentityText(user.name) ||
     fullNameFromUserParts(user) ||
     cleanIdentityText(user.first_name) ||
-    cleanIdentityText(user.username) ||
+    chosenUsernameOrNull(user.username) ||
     'Pantopus member'
   );
 }
 
 function displayNameFromLocalProfile(profile, user, handle) {
-  const explicit = cleanIdentityText(profile.display_name);
+  const explicit = nameText(profile.display_name);
   const userDisplayName = user ? displayNameFromUser(user) : null;
   const looksLikeHandleDefault =
     explicit && (
@@ -74,7 +83,7 @@ function displayNameFromLocalProfile(profile, user, handle) {
     return explicit;
   }
 
-  return userDisplayName || cleanIdentityText(handle) || 'Pantopus member';
+  return userDisplayName || chosenUsernameOrNull(handle) || 'Pantopus member';
 }
 
 // Whole-month difference between two Dates, never negative. Used by

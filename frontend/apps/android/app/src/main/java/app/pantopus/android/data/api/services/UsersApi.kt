@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.users.UpdateSkillsRequest
 import app.pantopus.android.data.api.models.users.UpdateSkillsResponse
 import app.pantopus.android.data.api.models.users.UserSearchResponse
 import app.pantopus.android.data.api.models.users.UserStatsDto
+import app.pantopus.android.data.api.models.users.UsernameAvailabilityDto
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
@@ -30,6 +31,15 @@ interface UsersApi {
     suspend fun updateProfile(
         @Body body: ProfileUpdateRequest,
     ): ProfileUpdateResponse
+
+    /**
+     * `GET /api/users/username-availability?username=` — can the signed-in person change their
+     * username to this one? Route `backend/routes/users.js` (`router.get('/username-availability'`).
+     */
+    @GET("api/users/username-availability")
+    suspend fun usernameAvailability(
+        @Query("username") username: String,
+    ): UsernameAvailabilityDto
 
     /** `PUT /api/users/skills` — replace the caller's whole skill list.
      *  Route `backend/routes/users.js:2246`; the handler trims, dedupes,

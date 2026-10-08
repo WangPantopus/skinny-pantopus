@@ -122,10 +122,12 @@ class SignUpViewModelTest {
     }
 
     @Test
-    fun `names optional since the wedge slim`() {
+    fun `first and last name required`() {
         val vm = buildVm()
-        assertNull(vm.uiState.value.validate(SignUpField.FirstName))
-        assertNull(vm.uiState.value.validate(SignUpField.LastName))
+        assertEquals("Enter your first name.", vm.uiState.value.validate(SignUpField.FirstName))
+        assertEquals("Enter your last name.", vm.uiState.value.validate(SignUpField.LastName))
+        vm.onFirstNameChange("   ")
+        assertEquals("Enter your first name.", vm.uiState.value.validate(SignUpField.FirstName))
         vm.onFirstNameChange("Maria")
         vm.onLastNameChange("Kowalski")
         assertNull(vm.uiState.value.validate(SignUpField.FirstName))
@@ -174,14 +176,16 @@ class SignUpViewModelTest {
     }
 
     @Test
-    fun `isValid requires terms and the account fields only`() {
+    fun `isValid requires terms, names and the account fields`() {
         val vm = buildVm()
         assertFalse(vm.uiState.value.isValid)
-        // The slim form: email + password + terms is a complete sign-up.
         vm.onEmailChange("alice@example.com")
         vm.onPasswordChange("strongpass12")
         vm.onConfirmPasswordChange("strongpass12")
         vm.onTermsToggle()
+        assertFalse("First and last name are required", vm.uiState.value.isValid)
+        vm.onFirstNameChange("Maria")
+        vm.onLastNameChange("Kowalski")
         assertTrue(vm.uiState.value.isValid)
         vm.onTermsToggle()
         assertFalse(vm.uiState.value.isValid)

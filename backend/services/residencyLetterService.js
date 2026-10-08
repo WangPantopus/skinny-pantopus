@@ -29,6 +29,7 @@ const PDFDocument = require('pdfkit');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { currentOccupancy, resolveHomeRole, NON_RESIDENT_ROLES } = require('../utils/homeAccessPolicy');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 const PURPOSE_MAX_LEN = 140;
 const DEFAULT_PURPOSE = 'General verification of residency';
@@ -62,7 +63,7 @@ function residentNameFromUser(user) {
   const last = (user.last_name || '').trim();
   if (first || last) return [first, last].filter(Boolean).join(' ');
   if ((user.name || '').trim()) return user.name.trim();
-  return user.username || 'Pantopus resident';
+  return chosenUsernameOrNull(user.username) || 'Pantopus resident';
 }
 
 // Street line incl. unit — a residency letter is the one surface where the

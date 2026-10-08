@@ -32,11 +32,22 @@ object AuthValidation {
         return null
     }
 
+    /** A required name part (first or last name): not blank, at most 255 characters (the server's limit). */
+    fun requiredName(
+        value: String,
+        missing: String,
+    ): String? {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) return missing
+        return if (trimmed.length > 255) "Use 255 characters or fewer." else null
+    }
+
     fun username(value: String): String? {
         val trimmed = value.trim()
         if (trimmed.isEmpty()) return "Username is required."
         if (trimmed.length < 3) return "Username must be at least 3 characters."
-        if (trimmed.length > 20) return "Username must be 20 characters or fewer."
+        // The server's limit (backend/utils/personalUsername.js).
+        if (trimmed.length > 30) return "Username must be 30 characters or fewer."
         return if (usernameRegex.containsMatchIn(trimmed)) {
             null
         } else {

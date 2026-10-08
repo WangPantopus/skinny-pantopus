@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.api.models.gigs
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.payments.PaymentIntentSheetParamsDto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
@@ -36,11 +37,11 @@ data class GigCreator(
     fun resolvedDisplayName(): String =
         displayName?.takeIf { it.isNotEmpty() }
             ?: name?.takeIf { it.isNotEmpty() }
-            ?: handle?.takeIf { it.isNotEmpty() }
-            ?: username?.takeIf { it.isNotEmpty() }
+            ?: MadeUpUsername.chosen(handle)
+            ?: MadeUpUsername.chosen(username)
             ?: "Neighbor"
 
-    fun resolvedHandle(): String? = handle?.takeIf { it.isNotEmpty() } ?: username?.takeIf { it.isNotEmpty() }
+    fun resolvedHandle(): String? = MadeUpUsername.chosen(handle) ?: MadeUpUsername.chosen(username)
 
     fun resolvedVerified(): Boolean = verified == true || badges.orEmpty().contains("verified_resident")
 

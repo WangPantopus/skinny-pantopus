@@ -68,15 +68,21 @@ struct SignUpView: View {
             AuthOAuthTermsLine(identifier: "signUpLegalTermsLine", onOpenLegal: onOpenLegal)
                 .padding(.horizontal, Spacing.s4)
 
+            // First and last name are required (middle is optional), as on web:
+            // they are how the household, neighbors and helpers know the person.
+            // The username is made up server-side; Edit Profile can change it.
+            FormFieldGroup("Your name") {
+                firstNameField
+                middleNameField
+                lastNameField
+            }
+
             FormFieldGroup("Account") {
                 emailField
                 passwordField
                 confirmPasswordField
             }
 
-            // Wedge onboarding: the form matches web — email + password. The
-            // username is generated server-side; names and the address arrive
-            // in the claim flow, where they mean something.
             FormFieldGroup("Account type") {
                 AccountTypePicker(selection: $viewModel.accountType)
                     .accessibilityIdentifier("signUpAccountTypePicker")
@@ -96,6 +102,7 @@ struct SignUpView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { seedInviteCode() }
+        .task { await seedInvitedEmail() }
         .onChange(of: viewModel.didSucceed) { _, succeeded in
             guard succeeded else { return }
             let email = viewModel.email.trimmingCharacters(in: .whitespaces).lowercased()
@@ -136,6 +143,14 @@ struct SignUpView: View {
               let code = inviteCode?.trimmingCharacters(in: .whitespacesAndNewlines),
               !code.isEmpty else { return }
         viewModel.inviteCode = code
+    }
+
+    /// An emailed household invitation waiting for sign-in only works for its address, so the Email field
+    /// starts with it, never over something the person already typed.
+    private func seedInvitedEmail() async {
+        guard viewModel.email.isEmpty, let email = await ParkedInvitationEmail.load(), viewModel.email.isEmpty else { return }
+        viewModel.email = email
+        viewModel.suggestedEmail = email
     }
 
     // MARK: - Field bindings
@@ -183,6 +198,41 @@ struct SignUpView: View {
             identifier: "signUpConfirmPasswordField"
         )
         .onChange(of: viewModel.confirmPassword) { _, _ in viewModel.clearError(for: .confirmPassword) }
+    }
+
+    private var firstNameField: some View {
+        PantopusTextField(
+            "First name",
+            text: $viewModel.firstName,
+            placeholder: "Maria",
+            state: state(for: .firstName),
+            contentType: .givenName,
+            identifier: "signUpFirstNameField"
+        )
+        .onChange(of: viewModel.firstName) { _, _ in viewModel.clearError(for: .firstName) }
+    }
+
+    private var middleNameField: some View {
+        PantopusTextField(
+            "Middle name (optional)",
+            text: $viewModel.middleName,
+            placeholder: "Optional",
+            state: state(for: .middleName),
+            contentType: .middleName,
+            identifier: "signUpMiddleNameField"
+        )
+    }
+
+    private var lastNameField: some View {
+        PantopusTextField(
+            "Last name",
+            text: $viewModel.lastName,
+            placeholder: "Kowalski",
+            state: state(for: .lastName),
+            contentType: .familyName,
+            identifier: "signUpLastNameField"
+        )
+        .onChange(of: viewModel.lastName) { _, _ in viewModel.clearError(for: .lastName) }
     }
 
     private var phoneField: some View {

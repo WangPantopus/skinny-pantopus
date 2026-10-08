@@ -236,7 +236,7 @@ private struct StartSupportTrainWhoAndWhyStep: View {
                     HStack(spacing: 10) {
                         Icon(.user, size: 16, color: Theme.Color.primaryInk)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(recipient.name ?? recipient.username ?? "Recipient")
+                            Text(recipient.name ?? MadeUpUsername.chosen(recipient.username) ?? "Recipient")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(Theme.Color.appText)
                             if let address = recipient.homeAddress {
@@ -588,7 +588,7 @@ private struct StartSupportTrainReviewStep: View {
             reviewLine(
                 "Beneficiary",
                 value: viewModel.selectedBeneficiary?.name
-                    ?? viewModel.selectedBeneficiary?.username
+                    ?? MadeUpUsername.chosen(viewModel.selectedBeneficiary?.username)
                     ?? viewModel.beneficiaryQuery
             )
             reviewLine("Kind", value: viewModel.kind.title)

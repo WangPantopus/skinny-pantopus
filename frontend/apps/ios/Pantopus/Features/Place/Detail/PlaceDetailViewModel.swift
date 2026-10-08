@@ -61,6 +61,12 @@ final class PlaceDetailViewModel {
         return false
     }
 
+    /// The viewer set this Home up and hasn't verified it (T1): every lock is the verify step.
+    var verifiesFirst: Bool {
+        if case let .loaded(intel) = state { return intel.verifiesFirst }
+        return false
+    }
+
     /// The tap for a locked section's "Verify address"; nil where no flow is wired
     /// or the viewer can't verify this address.
     var verifyAction: (() -> Void)? {

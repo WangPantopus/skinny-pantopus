@@ -188,9 +188,7 @@ public struct BusinessInvoicePartyDTO: Decodable, Sendable, Hashable {
     public func displayName(fallback: String) -> String {
         let trimmedName = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedName.isEmpty { return trimmedName }
-        let handle = (username ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !handle.isEmpty { return handle }
-        return fallback
+        return MadeUpUsername.chosen(username) ?? fallback
     }
 }
 

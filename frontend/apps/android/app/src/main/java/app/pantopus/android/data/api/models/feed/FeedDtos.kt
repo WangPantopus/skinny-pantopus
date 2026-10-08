@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.feed
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -77,8 +78,8 @@ data class FeedPostCreator(
         return authorDisplayName?.takeIf { it.isNotEmpty() }
             ?: name?.takeIf { it.isNotEmpty() }
             ?: combined.takeIf { it.isNotEmpty() }
-            ?: username?.takeIf { it.isNotEmpty() }?.let { "@$it" }
-            ?: handle?.takeIf { it.isNotEmpty() }?.let { "@$it" }
+            ?: MadeUpUsername.handle(username)
+            ?: MadeUpUsername.handle(handle)
             ?: "Pantopus user"
     }
 }

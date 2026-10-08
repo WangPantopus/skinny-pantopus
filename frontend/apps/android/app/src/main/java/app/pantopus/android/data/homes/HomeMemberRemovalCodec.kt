@@ -1,5 +1,6 @@
 package app.pantopus.android.data.homes
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 
@@ -74,7 +75,9 @@ class HomeMemberRemovalCodec(moshi: Moshi) {
     ): String {
         val homeName = nullableText(home, "name")?.takeIf(String::isNotBlank) ?: "Selected Home"
         check(target.containsKey("name") && target["name"] == null)
-        val username = nullableText(target, "username")?.takeIf(String::isNotBlank)?.let { "@$it" }
+        val username = MadeUpUsername.handle(nullableText(target, "username"))
+        // display_name comes only from a server that was asked for it.
+        val name = if (target.containsKey("display_name")) householdPersonName(nullableText(target, "display_name")) else null
         check(target["is_self"] is Boolean && target["is_active"] is Boolean)
         check(target["is_self"] == (intent.targetUserId == scope.actorId))
         val role = nullableText(target, "role_base")
@@ -84,7 +87,7 @@ class HomeMemberRemovalCodec(moshi: Moshi) {
         val dates = DATES.associateWith { nullableDate(target, it) }
         return listOfNotNull(
             homeName,
-            username ?: "Selected household member",
+            name ?: username ?: "Selected household member",
             if (target["is_self"] == true) "Your household membership" else null,
             "Role: ${role?.let(::invitationRoleLabel) ?: "Not recorded"}",
             dates["start_at"]?.let { "Membership starts: ${reviewedDateLabel(it)}" },

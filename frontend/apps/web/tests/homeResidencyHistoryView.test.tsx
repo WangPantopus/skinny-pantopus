@@ -93,7 +93,7 @@ test('two same-render Load older calls issue one GET and append one page', async
   expect(result.current.hasMore).toBe(false);
 });
 
-test.each(['focus', 'background', 'session', 'storage', 'page-return'])('held old page cannot replace a newer forbidden read after %s', async change => {
+test.each(['session', 'storage', 'page-return'])('held old page cannot replace a newer forbidden read after %s', async change => {
   const held = deferred<ReturnType<typeof page>>(); let listReads = 0;
   get.mockImplementation(async path => {
     if (path === HISTORY_BASE + '/session') return sessionResponse;
@@ -108,21 +108,13 @@ test.each(['focus', 'background', 'session', 'storage', 'page-return'])('held ol
   act(() => { request = result.current.loadMore(); });
   await waitFor(() => expect(listReads).toBe(2));
   await act(async () => {
-    if (change === 'focus') fireEvent.focus(window);
-    if (change === 'background') {
-      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
-      fireEvent(document, new Event('visibilitychange'));
-    }
     if (change === 'session') { jest.mocked(api.getAuthToken).mockReturnValue('new-synthetic-session'); sessionChanged(); }
     if (change === 'storage') { localStorage.setItem(api.AUTH_SESSION_CHANGE_KEY, 'new-marker'); fireEvent(window, new StorageEvent('storage', { key: api.AUTH_SESSION_CHANGE_KEY })); }
     if (change === 'page-return') fireEvent(window, new Event('pagehide'));
   });
   expect(result.current.items).toEqual([]);
-  if (change === 'background' || change === 'page-return') {
-    await act(async () => {
-      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
-      fireEvent(window, new Event('pageshow'));
-    });
+  if (change === 'page-return') {
+    await act(async () => { fireEvent(window, Object.assign(new Event('pageshow'), { persisted: true })); });
   }
   await waitFor(() => expect(result.current.phase).toBe('error'));
   expect(result.current.error).toMatch(/current household permissions/);

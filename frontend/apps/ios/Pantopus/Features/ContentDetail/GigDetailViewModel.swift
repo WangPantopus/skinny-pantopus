@@ -2403,11 +2403,31 @@ extension GigDetailViewModel {
             )
         }
         if status == "open", !owner { return dock }
-        let label = status == "open" ? "Your task" : ["cancelled", "canceled"].contains(status ?? "") ? "Cancelled" : "Bidding closed"
         return ContentDetailDock(
             secondary: secondary,
-            primary: ContentDetailDockButton(label: label, icon: .lock, enabled: false)
+            primary: ContentDetailDockButton(
+                label: lockedDockLabel(gig, status: status, owner: owner, viewer: viewer), icon: .lock, enabled: false
+            )
         )
+    }
+
+    /// The locked dock names where the task stands for this viewer. Bidding is a launch cut, so
+    /// "Bidding closed" described a step nobody takes; a helper who delivered waits on the poster,
+    /// and a poster with work to review confirms it in the Task progress panel.
+    private static func lockedDockLabel(_ gig: GigDTO, status: String?, owner: Bool, viewer: String?) -> String {
+        switch status {
+        case "open": return "Your task"
+        case "cancelled", "canceled": return "Cancelled"
+        case "assigned": return "Assigned"
+        case "accepted", "awarded": return "Awarded"
+        case "in_progress": return "In progress"
+        case "completed":
+            if gig.ownerConfirmedAt != nil { return "Completed" }
+            if owner { return "Awaiting your confirmation" }
+            if let viewer, viewer == gig.acceptedBy { return "Waiting for the poster" }
+            return "Completed"
+        default: return "Closed"
+        }
     }
 
     /// Poster card for the "Posted By" section — avatar, name, @handle,

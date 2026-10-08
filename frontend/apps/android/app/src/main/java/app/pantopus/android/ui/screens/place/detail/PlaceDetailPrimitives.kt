@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -122,15 +124,17 @@ fun PlaceDetailSectionLabel(text: String) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PlaceSourceNote(
     name: String,
     asOf: String? = null,
 ) {
-    Row(
+    // Wraps as whole pieces: at large font sizes a Row squeezed the time to one letter per line.
+    FlowRow(
         modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(text = name, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
         if (asOf != null) {

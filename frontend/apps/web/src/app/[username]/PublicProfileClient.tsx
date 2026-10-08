@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
-import { buildUserProfileShareUrl } from '@pantopus/utils';
+import { buildUserProfileShareUrl, chosenUsername } from '@pantopus/utils';
 import type { UserProfile, User, GigListItem, Review } from '@pantopus/types';
 import { getAuthToken } from '@pantopus/api';
 import BusinessPublicProfile from '@/components/business/BusinessPublicProfile';
@@ -25,6 +25,7 @@ import {
 } from '@/components/profile/public/tabs';
 import type { PortfolioEntry } from '@/components/profile/public/tabs/PortfolioTab';
 import { launchFeatures } from '@/lib/featureFlags';
+import UsernamePrompt, { markAskedForUsername, shouldAskForUsername } from '@/components/profile/UsernamePrompt';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
@@ -101,9 +102,15 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [portfolioFailed, setPortfolioFailed] = useState(false);
   const portfolioRequested = useRef<string | null>(null);
   const [userPosts, setUserPosts] = useState<Record<string, unknown>[]>([]);
+  // Posts are requested once per profile, reviews once per profile and viewer (the pending-review
+  // check needs the viewer); the tab effect re-runs on every profile or portfolio update.
+  const postsRequested = useRef<string | null>(null);
+  const reviewsRequested = useRef<string | null>(null);
   const [postsLoading, setPostsLoading] = useState(false);
   const [ownerPreviewContext, setOwnerPreviewContext] = useState<ViewerContext>('owner');
   const [shareCopied, setShareCopied] = useState(false);
+  // Sharing your own profile while its link still has the made-up username asks once for a real one.
+  const [usernamePromptOpen, setUsernamePromptOpen] = useState(false);
 
   // Reviews state
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -165,6 +172,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     const retire = () => {
       invalidate(); pendingBlock.current = false;
       setReportTarget(null); setActionLoading(false); setCurrentUser(null);
+      postsRequested.current = null; // the new session sees the posts it may see
       void loadCurrentUser();
     };
     const storage = (event: StorageEvent) => {
@@ -287,6 +295,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     } catch (err) {
       console.error('Failed to load user posts:', err);
       setUserPosts([]);
+      postsRequested.current = null; // the next visit to the tab tries again
     } finally {
       setPostsLoading(false);
     }
@@ -304,6 +313,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       });
     } catch (err) {
       console.error('Failed to load reviews:', err);
+      reviewsRequested.current = null; // the next visit to the tab tries again
     } finally {
       setReviewsLoading(false);
     }
@@ -340,13 +350,16 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     if (profile && ['overview', 'portfolio', 'insights'].includes(activeTab) && portfolio === null) {
       loadPortfolio();
     }
-    if (profile && ['overview', 'activity'].includes(activeTab) && userPosts.length === 0) {
+    if (profile && ['overview', 'activity'].includes(activeTab) && postsRequested.current !== profile.id) {
+      postsRequested.current = profile.id;
       loadUserPosts();
     }
-    if (profile && (activeTab === 'overview' || activeTab === 'reviews')) {
+    const reviewsKey = profile ? `${profile.id}:${currentUser?.id ?? ''}` : null;
+    if (profile && (activeTab === 'overview' || activeTab === 'reviews') && reviewsRequested.current !== reviewsKey) {
+      reviewsRequested.current = reviewsKey;
       loadReviews();
     }
-  }, [activeTab, profile, userGigs.length, userPosts.length, portfolio, loadUserGigs, loadPortfolio, loadUserPosts, loadReviews]);
+  }, [activeTab, profile, currentUser?.id, userGigs.length, portfolio, loadUserGigs, loadPortfolio, loadUserPosts, loadReviews]);
 
   useEffect(() => {
     if (currentUser && profile && currentUser.id !== profile.id) {
@@ -518,26 +531,43 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     router.push(`/app/gigs/new?requestFor=${profile!.id}`);
   };
 
-  const handleShare = async () => {
+  /** Share or copy the profile link; false when neither worked (the browser refused both). */
+  const shareProfileLink = async (linkUsername: string): Promise<boolean> => {
+    const shareUrl = buildUserProfileShareUrl(linkUsername);
     try {
-      const shareUrl = buildUserProfileShareUrl(username);
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({
           title: `${fullName} on Pantopus`,
           text: `Check out ${fullName}'s profile on Pantopus`,
           url: shareUrl,
         });
-        return;
+        return true;
       }
-
+    } catch (err) {
+      // Dismissed, or not allowed after the username dialog: copying the link still works.
+      if ((err as { name?: string } | null)?.name === 'AbortError') return true;
+    }
+    try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(shareUrl);
         setShareCopied(true);
         setTimeout(() => setShareCopied(false), 2000);
+        return true;
       }
     } catch (err) {
       console.error('Share failed:', err);
     }
+    return false;
+  };
+
+  const handleShare = async () => {
+    const ownProfile = Boolean(currentUser && profile && currentUser.id === profile.id);
+    if (ownProfile && shouldAskForUsername(currentUser)) {
+      markAskedForUsername(String(currentUser!.id));
+      setUsernamePromptOpen(true);
+      return;
+    }
+    await shareProfileLink(username);
   };
 
   // ── Loading / Error states ──
@@ -594,7 +624,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const isOwnProfile = currentUser?.id === profile.id || currentUser?.username === profile.username;
   const fullName = profile.firstName && profile.lastName
     ? `${profile.firstName} ${profile.lastName}`
-    : profile.name || profile.username;
+    : profile.name || chosenUsername(profile.username) || 'Pantopus member';
 
   const displayRating = reviewStats.average || profile.average_rating || 0;
   const displayReviewCount = reviewStats.total || profile.review_count || 0;
@@ -603,6 +633,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     : (connectionState === 'connected' ? 'follower' : 'public');
 
   const showOwnerOnly = effectiveViewer === 'owner';
+  // Someone you blocked can't be messaged (the block says so); Settings unblocks.
+  const canMessage = connectionState !== 'blocked';
 
   const trustBadges = [
     profile.address_verified ? { icon: '🏠', text: 'Address on file', color: 'green' } : null,
@@ -745,6 +777,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
             posts={userPosts}
             reviews={reviews}
             loading={gigsLoading || reviewsLoading || postsLoading}
+            blocked={connectionState === 'blocked'}
+            firstName={profile.firstName || null}
           />
         )}
         {activeTab === 'insights' && showOwnerOnly && (
@@ -768,11 +802,33 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         </div>
       </main>
 
-      {!showOwnerOnly && (
+      {usernamePromptOpen && currentUser && (
+        <UsernamePrompt
+          open
+          currentUsername={currentUser.username}
+          onShareAsIs={() => {
+            setUsernamePromptOpen(false);
+            void shareProfileLink(username);
+          }}
+          onSaved={(saved) => {
+            setUsernamePromptOpen(false);
+            setCurrentUser((prev) => (prev ? { ...prev, ...saved } : saved));
+            // The old address no longer opens this profile.
+            router.replace(`/u/${encodeURIComponent(saved.username)}`);
+            void shareProfileLink(saved.username).then((shared) => {
+              // Sharing right after the dialog can be refused; the new link is still worth knowing.
+              if (shared) toast.success(`Your username is @${saved.username}.`);
+              else toast.success(`Your username is @${saved.username}. Your link: ${buildUserProfileShareUrl(saved.username).replace(/^https?:\/\//, '')}`);
+            });
+          }}
+        />
+      )}
+
+      {!showOwnerOnly && (canMessage || launchFeatures.openGigs) && (
         <div className="fixed bottom-[var(--fab-lift,0px)] left-0 right-0 md:hidden bg-surface border-t border-app p-3 z-30">
           {/* Launch cut #4 (Open Gigs): no "Request / Hire"; Message spans the bar. */}
-          <div className={`max-w-lg mx-auto grid ${launchFeatures.openGigs ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-            <button onClick={handleMessage} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg font-medium">Message</button>
+          <div className={`max-w-lg mx-auto grid ${canMessage && launchFeatures.openGigs ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+            {canMessage && <button onClick={handleMessage} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg font-medium">Message</button>}
             {launchFeatures.openGigs && <button onClick={handleRequestHire} className="px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium">Request / Hire</button>}
           </div>
         </div>

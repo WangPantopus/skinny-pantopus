@@ -172,7 +172,7 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
         {showMailDayBanner && (
           <div
             className="flex items-center gap-3 px-4 py-2.5 bg-primary-50 dark:bg-primary-900/20 border-b border-primary-100 dark:border-primary-800 flex-shrink-0"
-            role="alert"
+            role="status"
           >
             <span className="text-base" aria-hidden="true">&#9993;</span>
             <p className="flex-1 text-sm text-primary-800 dark:text-primary-200 min-w-0">
@@ -180,8 +180,9 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
               <span className="text-primary-600 dark:text-primary-400">
                 {' · '}
                 {mailDay!.total_new} new item{mailDay!.total_new !== 1 ? 's' : ''}
+                {/* The most urgent unread letter, which may be older than today's mail. */}
                 {mailDay!.needs_attention.length > 0 && (
-                  <> · {mailDay!.needs_attention[0].display_title || mailDay!.needs_attention[0].subject}</>
+                  <> · Needs attention: {mailDay!.needs_attention[0].display_title || mailDay!.needs_attention[0].subject}</>
                 )}
               </span>
             </p>

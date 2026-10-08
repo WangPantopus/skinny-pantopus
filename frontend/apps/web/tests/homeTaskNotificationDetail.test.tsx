@@ -60,23 +60,27 @@ test.each([
   expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   expect(screen.queryByTestId('attachments')).not.toBeInTheDocument();
 });
-test('backgrounding clears content and restoration rechecks access with the original server session', async () => {
+test('coming back keeps the task and a later re-check uses the original server session', async () => {
+  const start = Date.now(), now = jest.spyOn(Date, 'now').mockReturnValue(start);
   render(<HomeTaskPage />); await screen.findByRole('heading');
-  act(() => visibility('hidden'));
-  expect(screen.queryByText('Current private notes')).not.toBeInTheDocument();
-  get.mockRejectedValueOnce({ statusCode: 403 }); act(() => visibility('visible'));
+  act(() => { visibility('hidden'); visibility('visible'); });
+  expect(screen.getByText('Current private notes')).toBeInTheDocument(); expect(get).toHaveBeenCalledTimes(1);
+  now.mockReturnValue(start + 31_000);
+  get.mockRejectedValueOnce({ statusCode: 403 }); act(() => { visibility('hidden'); visibility('visible'); });
   await screen.findByRole('alert');
   expect(get).toHaveBeenLastCalledWith(`/api/homes/${home}/tasks/${taskId}`, undefined,
     { headers: { 'x-pantopus-session-scope': 'a'.repeat(64) } });
+  expect(screen.queryByText('Current private notes')).not.toBeInTheDocument();
   expect(screen.queryByTestId('attachments')).not.toBeInTheDocument();
+  now.mockRestore();
 });
-test('a late background response cannot show content and a queued visible return makes a fresh read', async () => {
+test('a read that finishes while the tab is hidden still shows its task, without a second read', async () => {
   const pending = deferred<ReturnType<typeof response>>(); get.mockReturnValueOnce(pending.promise);
   render(<HomeTaskPage />); await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
   act(() => { visibility('hidden'); visibility('visible'); });
-  await act(async () => pending.resolve(response({ task: { id: taskId, home_id: home, title: 'Old private reply', status: 'open' } })));
+  await act(async () => pending.resolve(response()));
   await screen.findByRole('heading', { name: 'Exact Home task' });
-  expect(get).toHaveBeenCalledTimes(2); expect(screen.queryByText('Old private reply')).not.toBeInTheDocument();
+  expect(get).toHaveBeenCalledTimes(1);
 });
 test.each(['token', 'same-cookie-session', 'origin'])('replacement %s during first profile read cannot bind the old page', async kind => {
   const pending = deferred<{ id: string }>(); profile.mockReturnValueOnce(pending.promise);
@@ -89,11 +93,13 @@ test.each(['token', 'same-cookie-session', 'origin'])('replacement %s during fir
   expect(get).not.toHaveBeenCalled();
 });
 test('same-session server scope drift clears the previously visible task', async () => {
+  const start = Date.now(), now = jest.spyOn(Date, 'now').mockReturnValue(start);
   render(<HomeTaskPage />); await screen.findByRole('heading');
-  act(() => visibility('hidden'));
+  now.mockReturnValue(start + 31_000);
   get.mockResolvedValueOnce(response({ task_session: { actor_id: actor, home_id: home, session_scope: 'b'.repeat(64) } }));
-  act(() => visibility('visible')); await screen.findByText(/signed-in session changed/);
+  act(() => { visibility('hidden'); visibility('visible'); }); await screen.findByText(/signed-in session changed/);
   expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+  now.mockRestore();
 });
 test('logout notification immediately clears private task content', async () => {
   render(<HomeTaskPage />); await screen.findByRole('heading'); act(() => changed());

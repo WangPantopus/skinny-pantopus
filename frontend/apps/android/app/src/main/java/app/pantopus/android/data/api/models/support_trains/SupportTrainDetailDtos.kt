@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.api.models.support_trains
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -148,7 +149,7 @@ data class SupportTrainOrganizerDto(
         get() = role == "primary"
 
     val displayName: String
-        get() = organizerUser?.name ?: organizerUser?.username ?: "Organizer"
+        get() = organizerUser?.name ?: MadeUpUsername.chosen(organizerUser?.username) ?: "Organizer"
 }
 
 /** Coarse (city/state) location surfaced to all viewers. */

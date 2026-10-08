@@ -1230,6 +1230,21 @@ data class PlaceGroupBlock(
 }
 
 /**
+ * Who is looking at a Home's Place. [role] picks which sections apply:
+ * "owner" (value and the exemption check), "renter" (the rent sections),
+ * "member" (the Home's facts) or "nonresident" (guests and service
+ * providers: public facts only). [stage] is "setup" (set up, not
+ * verified), "claimed" or "verified"; [ownership] is "confirmed",
+ * "pending" or "none". Strings, so a new value never fails the decode.
+ */
+@JsonClass(generateAdapter = true)
+data class PlaceViewer(
+    val role: String,
+    val stage: String,
+    val ownership: String,
+)
+
+/**
  * `GET /api/homes/:id/intelligence` — grouped section envelopes for an
  * address. `regionSupported = false` drives the "coming to your region"
  * state for non-US addresses.
@@ -1244,6 +1259,8 @@ data class PlaceIntelligence(
     val groups: List<PlaceGroupBlock> = emptyList(),
     /** Whether this viewer can start residency verification here; false for guests and service providers. */
     @Json(name = "verify_available") val verifyAvailable: Boolean? = null,
+    /** Who is looking; sections that don't apply to the role are left out. Null from older servers. */
+    val viewer: PlaceViewer? = null,
 )
 
 // ─── Anonymous T0 preview (`GET /api/public/place`) ──────────

@@ -375,15 +375,12 @@ public struct GigCreator: Decodable, Sendable, Hashable {
     public var resolvedDisplayName: String {
         if let displayName, !displayName.isEmpty { return displayName }
         if let name, !name.isEmpty { return name }
-        if let handle, !handle.isEmpty { return handle }
-        if let username, !username.isEmpty { return username }
-        return "Neighbor"
+        // A made-up username (user_…) is never shown as the name or the handle.
+        return MadeUpUsername.chosen(handle) ?? MadeUpUsername.chosen(username) ?? "Neighbor"
     }
 
     public var resolvedHandle: String? {
-        let value = handle ?? username
-        guard let value, !value.isEmpty else { return nil }
-        return value
+        MadeUpUsername.chosen(handle ?? username)
     }
 
     public var resolvedVerified: Bool {

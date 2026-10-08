@@ -6,6 +6,7 @@ import Badge from './atoms/Badge';
 import TrustChip from './atoms/TrustChip';
 import ResidencyHomeBlock, { type ResidencyPayload } from './ResidencyHomeBlock';
 import { launchFeatures } from '@/lib/featureFlags';
+import { usernameHandle } from '@pantopus/utils';
 
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
 
@@ -84,7 +85,8 @@ export default function ProfileHeader({
 }: ProfileHeaderProps) {
   const router = useRouter();
   const username = stringField(profile.username);
-  const tagline = stringField(profile.tagline) || 'Helping neighbors with local services.';
+  // Only the person's own tagline: a stand-in line would read as their words.
+  const tagline = stringField(profile.tagline);
   const avatarUrl = stringField(profile.profile_picture_url) || stringField(profile.avatar_url) || stringField(profile.profilePicture);
   const createdAt = stringField(profile.created_at) || stringField(profile.createdAt);
   const joinedLabel = createdAt
@@ -126,8 +128,8 @@ export default function ProfileHeader({
             {/* Info */}
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl md:text-3xl font-bold text-app leading-tight">{fullName}</h1>
-              <p className="text-app-secondary">@{username}</p>
-              <p className="text-sm text-app-secondary mt-1">{tagline}</p>
+              {usernameHandle(username) ? <p className="text-app-secondary">{usernameHandle(username)}</p> : null}
+              {tagline ? <p className="text-sm text-app-secondary mt-1">{tagline}</p> : null}
               <ResidencyHomeBlock residency={residency ?? undefined} />
 
               <div className="flex flex-wrap gap-2 mt-3">
@@ -168,7 +170,10 @@ export default function ProfileHeader({
                 </>
               ) : (
                 <>
-                  <button onClick={onMessage} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium">Message</button>
+                  {/* Someone you blocked can't be messaged (the block says so); Settings unblocks. */}
+                  {connectionState !== 'blocked' && (
+                    <button onClick={onMessage} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium">Message</button>
+                  )}
                   {/* Launch cut #4 (Open Gigs): "Request / Hire" opens the open-post composer. */}
                   {launchFeatures.openGigs && <button onClick={onRequestHire} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium">Request / Hire</button>}
                   {canConnect && onConnect && (

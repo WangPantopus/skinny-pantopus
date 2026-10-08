@@ -6,6 +6,7 @@ import type { UnifiedConversationItem, ConversationTopic } from '@pantopus/types
 import { getInitials } from '@pantopus/ui-utils';
 import { useSocketEvent } from '../../hooks/useSocket';
 import { launchFeatures } from '@/lib/featureFlags';
+import { chosenUsername } from '@pantopus/utils';
 
 interface MiniConversationListProps {
   onSelectConversation: (chat: {
@@ -126,7 +127,7 @@ export default function MiniConversationList({ onSelectConversation }: MiniConve
 
         const title = isRoom
           ? (conv.room_name || (isHome ? 'Home Chat' : 'Group Chat'))
-          : (conv.other_participant_name || conv.other_participant_username || 'Chat');
+          : (conv.other_participant_name || chosenUsername(conv.other_participant_username) || 'Chat');
         const avatarUrl = !isRoom ? conv.other_participant_avatar : null;
         const preview = conv.last_message_preview || '';
         const lastMessageAt = conv.last_message_at || null;

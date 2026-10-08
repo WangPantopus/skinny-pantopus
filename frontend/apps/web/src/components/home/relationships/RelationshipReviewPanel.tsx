@@ -27,7 +27,7 @@ export function RelationshipReviewPanel({ homeId, claimId, initialAction }: {
   useEffect(() => {
     setController(null); setError(''); setLoading(true); setWorking(false);
     setNote(''); setReviewed(false); setAction(initialAction);
-    const ctx = { active: true, busy: false, client: null as RelationshipController | null };
+    const ctx = { active: true, busy: false, opened: false, loading: true, client: null as RelationshipController | null };
     lifecycle.current = ctx;
     const invalidate = () => {
       ctx.active = false; ctx.client?.retire(); setController(null); setLoading(false); setWorking(false);
@@ -37,25 +37,26 @@ export function RelationshipReviewPanel({ homeId, claimId, initialAction }: {
       ctx.client = new RelationshipController(homeId, claimId);
       const client = await ctx.client.open();
       if (!ctx.active) return;
-      client.current(); setController(client);
+      client.current(); setController(client); ctx.opened = true;
     })().catch(failure => {
       if (ctx.active) { setController(null); setError(failure instanceof Error ? failure.message : 'Current claim access could not be confirmed.'); }
-    }).finally(() => { if (ctx.active) setLoading(false); });
-    const visibility = () => {
-      if (document.visibilityState === 'hidden') invalidate();
-      else setReload(n => n + 1);
+    }).finally(() => { ctx.loading = false; if (ctx.active) setLoading(false); });
+    // Coming back keeps the open review and anything typed into it; the decision itself is checked by the
+    // server. Only a review that isn't open (it failed to load, or the account changed) loads again.
+    const resume = () => {
+      if (document.visibilityState === 'hidden' || ctx.loading) return;
+      if (!ctx.active || !ctx.opened) setReload(n => n + 1);
     };
     const changed = () => { invalidate(); setError('Your account changed. Reload to check current access.'); };
     const storage = (e: StorageEvent) => { if (e.key === null || e.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
-    const focus = () => { if (document.visibilityState !== 'hidden') { invalidate(); setReload(n => n + 1); } };
     const unsubscribe = api.onTokenChange(changed);
-    window.addEventListener('storage', storage); window.addEventListener('focus', focus);
-    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('storage', storage); window.addEventListener('focus', resume);
+    document.addEventListener('visibilitychange', resume);
     return () => {
       ctx.active = false; ctx.client?.retire(); unsubscribe();
       if (lifecycle.current === ctx) lifecycle.current = null;
-      window.removeEventListener('storage', storage); window.removeEventListener('focus', focus);
-      document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener('storage', storage); window.removeEventListener('focus', resume);
+      document.removeEventListener('visibilitychange', resume);
     };
   }, [homeId, claimId, initialAction, reload]);
 

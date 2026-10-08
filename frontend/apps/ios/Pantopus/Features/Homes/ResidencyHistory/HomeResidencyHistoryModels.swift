@@ -69,13 +69,16 @@ struct HomeResidencyHistoryItem: Equatable, Identifiable {
     let currentClaimStatus: String
     let currentApplicantId: String?
     let currentUsername: String?
+    /// The name the applicant shows neighbors, when the server sent it.
+    var currentDisplayName: String?
 
     var decisionLabel: String {
         action == .approve ? "Approval recorded" : "Rejection recorded"
     }
 
     var applicantLabel: String {
-        if let currentUsername, !currentUsername.isEmpty { return "Current applicant: @" + currentUsername }
+        if let name = HomeResidencyQueueValidation.personName(currentDisplayName) { return "Current applicant: " + name }
+        if let handle = MadeUpUsername.handle(currentUsername) { return "Current applicant: " + handle }
         return "Current applicant identity unavailable"
     }
 
@@ -113,17 +116,7 @@ struct HomeResidencyHistoryItem: Equatable, Identifiable {
         guard result["role_base"] == .null || role != nil, action == .approve || result["role_base"] == .null else {
             throw HomeResidencyHistoryError.unavailable
         }
-        var applicantId: String?
-        var username: String?
-        if current["applicant"] != .null {
-            let applicant = try Validation.fields(current["applicant"], keys: ["id", "username", "name"])
-            guard let id = applicant["id"]?.stringValue, Validation.uuid(id), applicant["name"] == .null,
-                  applicant["username"] == .null || (applicant["username"]?.stringValue.map { $0.utf16.count <= 100 } == true) else {
-                throw HomeResidencyHistoryError.unavailable
-            }
-            applicantId = id
-            username = applicant["username"]?.stringValue
-        }
+        let applicant = try parseApplicant(current["applicant"])
         return Self(
             id: id,
             claimId: claim,
@@ -134,9 +127,29 @@ struct HomeResidencyHistoryItem: Equatable, Identifiable {
             occupancyId: occupancy,
             role: role,
             currentClaimStatus: status,
-            currentApplicantId: applicantId,
-            currentUsername: username
+            currentApplicantId: applicant.id,
+            currentUsername: applicant.username,
+            currentDisplayName: applicant.displayName
         )
+    }
+
+    private struct Applicant {
+        var id: String?
+        var username: String?
+        var displayName: String?
+    }
+
+    /// The current applicant reference: nil fields when the server has none.
+    private static func parseApplicant(_ value: JSONValue?) throws -> Applicant {
+        guard let value, value != .null else { return Applicant() }
+        guard case let .object(applicant) = value, Set(["id", "username", "name"]).isSubset(of: applicant.keys),
+              Set(applicant.keys).isSubset(of: ["id", "username", "name", "display_name"]),
+              let id = applicant["id"]?.stringValue, HomeResidencyHistoryValidation.uuid(id), applicant["name"] == .null,
+              applicant["username"] == .null || (applicant["username"]?.stringValue.map { $0.utf16.count <= 100 } == true),
+              HomeResidencyQueueValidation.optionalText(applicant["display_name"]) else {
+            throw HomeResidencyHistoryError.unavailable
+        }
+        return Applicant(id: id, username: applicant["username"]?.stringValue, displayName: applicant["display_name"]?.stringValue)
     }
 }
 

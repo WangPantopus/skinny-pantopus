@@ -3,6 +3,7 @@
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import { useInvitationPreview } from '@/components/homes/useInvitationPreview';
+import { usernameHandle } from '@pantopus/utils';
 
 const ROLE_LABELS: Record<string, { label: string; icon: string; desc: string }> = {
   roommate: { label: 'Roommate', icon: '🏠', desc: 'Household role with assigned permissions' },
@@ -38,7 +39,10 @@ export default function PublicInvitationPage() {
 
   const handleSignUp = () => {
     const next = encodeURIComponent(`/invite/${token}`);
-    router.push(`/register?redirectTo=${next}`);
+    // An emailed invitation only works for that address, so sign-up starts with it filled in.
+    const email = data?.invitation.invitee_email;
+    const prefill = typeof email === 'string' && email.includes('@') ? `&email=${encodeURIComponent(email)}` : '';
+    router.push(`/register?redirectTo=${next}${prefill}`);
   };
 
   // ==========================================
@@ -182,8 +186,8 @@ export default function PublicInvitationPage() {
             )}
             <div>
               <div className="text-sm font-medium text-app-text">Invited by {inviter?.name || 'Someone'}</div>
-              {inviter?.username && (
-                <div className="text-xs text-app-text-secondary">@{inviter.username}</div>
+              {usernameHandle(inviter?.username) && (
+                <div className="text-xs text-app-text-secondary">{usernameHandle(inviter?.username)}</div>
               )}
             </div>
           </div>

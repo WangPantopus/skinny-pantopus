@@ -81,7 +81,7 @@ test.each(['members', 'review page'])('%s retires a failed or malformed reload b
   await screen.findByText('No pending residency claims');
 });
 
-test.each(['account', 'session marker', 'origin', 'background'])('render and an earlier action closure reject a changed %s before subscription cleanup', async change => {
+test.each(['account', 'session marker', 'origin'])('render and an earlier action closure reject a changed %s before subscription cleanup', async change => {
   const { result, rerender } = renderHook(() => useResidencyQueue(home));
   await waitFor(() => expect(result.current.phase).toBe('ready'));
   const earlier = result.current.canReview;
@@ -89,7 +89,6 @@ test.each(['account', 'session marker', 'origin', 'background'])('render and an 
   if (change === 'account') jest.mocked(api.getAuthToken).mockReturnValue('another-synthetic-session');
   if (change === 'session marker') localStorage.setItem(api.AUTH_SESSION_CHANGE_KEY, 'new-marker');
   if (change === 'origin') jest.mocked(api.getApiBaseUrl).mockReturnValue('https://another.invalid');
-  if (change === 'background') Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
   expect(earlier(claimId)).toBe(false);
   rerender();
   expect(result.current.claims).toEqual([]);

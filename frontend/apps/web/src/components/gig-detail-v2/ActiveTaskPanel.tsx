@@ -1,6 +1,6 @@
 'use client';
 
-import { getErrorMessage } from '@pantopus/utils';
+import { getErrorMessage, chosenUsername } from '@pantopus/utils';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGigListSession } from '@/hooks/useGigListSession';
 import {
@@ -236,12 +236,12 @@ export default function ActiveTaskPanel({
 
   // User info
   const worker = gig.acceptedBy || gig.accepted_by_user;
-  const workerName = worker?.name || worker?.username || 'Helper';
+  const workerName = worker?.name || chosenUsername(worker?.username) || 'Helper';
   const workerAvatar = worker?.profile_picture_url || null;
   const workerRating = worker?.average_rating;
 
   const poster = gig.creator || gig.user || gig.poster;
-  const posterName = poster?.name || poster?.username || 'Poster';
+  const posterName = poster?.name || chosenUsername(poster?.username) || 'Poster';
 
   const badge = getStatusBadge(fulfillmentStatus);
   const currentStepIndex = fulfillmentStatus

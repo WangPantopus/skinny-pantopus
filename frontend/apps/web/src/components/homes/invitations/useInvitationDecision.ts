@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
 import { InvitationDecisionController } from './InvitationDecisionController';
 import type { InvitationDraft, InvitationContext } from './invitationDecisionModel';
+import { RETURN_REFRESH_MS } from '../../home/returnRefresh';
 interface View { ready: boolean; busy: boolean; error: string; pending: InvitationDraft | null; canAcknowledge: boolean;
   blocked: boolean; context: InvitationContext | null; progress: api.homes.PersonalResidencyProgress | null; lifetime: number; accountLabel: string; canDecide: boolean }
 const empty: View = { ready: false, busy: false, error: '', pending: null, canAcknowledge: false, blocked: false, context: null, progress: null, lifetime: 0, accountLabel: '', canDecide: false };
@@ -19,8 +20,10 @@ export function useInvitationDecision(token: string) {
   useEffect(() => {
     let disposed = false;
     const retire = () => { generation.current++; controller.current?.retire(); controller.current = null; setView({ ...empty, lifetime: generation.current }); };
+    let lastOpen = 0;
     const open = async () => {
-      retire(); if (disposed || document.visibilityState === 'hidden') return;
+      retire(); if (disposed) return;
+      lastOpen = Date.now();
       const revision = generation.current;
       let current: InvitationDecisionController | null = null;
       try {
@@ -36,14 +39,24 @@ export function useInvitationDecision(token: string) {
           error: 'Couldn’t open this invitation. Any answer you gave is kept. Reload to try again.' });
       }
     };
-    const visibility = () => { if (document.visibilityState === 'hidden') retire(); else void open(); };
+    // Coming back keeps what the page shows: answering checks the invitation again on the server, and the
+    // expiry timer reopens it when it runs out. A changed sign-in opens it again at once; a page left with
+    // only an error tries again at most every 30 s.
+    const resume = () => {
+      if (disposed || document.visibilityState === 'hidden') return;
+      const current = controller.current;
+      if (current && !current.current()) { void open(); return; }
+      if (current?.context || current?.pending || Date.now() - lastOpen < RETURN_REFRESH_MS) return;
+      void open();
+    };
+    const pageshow = (event: PageTransitionEvent) => { if (event.persisted) void open(); };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) void open(); };
     const session = () => { retire(); queueMicrotask(() => { if (!disposed) void open(); }); };
     const unsubscribe = api.onTokenChange(session);
-    window.addEventListener('storage', storage); window.addEventListener('pagehide', retire); window.addEventListener('pageshow', visibility);
-    window.addEventListener('focus', visibility); document.addEventListener('visibilitychange', visibility); void open();
+    window.addEventListener('storage', storage); window.addEventListener('pagehide', retire); window.addEventListener('pageshow', pageshow);
+    window.addEventListener('focus', resume); document.addEventListener('visibilitychange', resume); void open();
     return () => { disposed = true; retire(); unsubscribe(); window.removeEventListener('storage', storage); window.removeEventListener('pagehide', retire);
-      window.removeEventListener('pageshow', visibility); window.removeEventListener('focus', visibility); document.removeEventListener('visibilitychange', visibility); };
+      window.removeEventListener('pageshow', pageshow); window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume); };
   }, [token, reload, publish]);
   useEffect(() => {
     const expires = view.context?.preview.invitation.expires_at;

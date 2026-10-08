@@ -2,6 +2,7 @@ package app.pantopus.android.ui.screens.root
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.auth.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,8 +21,11 @@ class RootSessionViewModel
     constructor(
         authRepository: AuthRepository,
     ) : ViewModel() {
+        /** The drawer's "<name> · Your profile": the person's name, or a username they chose; never a made-up one. */
         val currentHandle: StateFlow<String> =
             authRepository.state
-                .map { (it as? AuthRepository.State.SignedIn)?.user?.username.orEmpty() }
-                .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+                .map { state ->
+                    val user = (state as? AuthRepository.State.SignedIn)?.user
+                    user?.displayName?.takeIf { it.isNotBlank() } ?: MadeUpUsername.chosen(user?.username).orEmpty()
+                }.stateIn(viewModelScope, SharingStarted.Eagerly, "")
     }

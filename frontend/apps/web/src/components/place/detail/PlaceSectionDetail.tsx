@@ -16,13 +16,14 @@ import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { MapPinned } from 'lucide-react';
+import type { PlaceGroup, PlaceViewer } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
 import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
 import { DetailHeader, PlaceHomeContext, placeHomeQuery } from '@/components/archetypes/place';
 import PlaceShell from '../PlaceShell';
-import { PLACE_DETAIL_BY_SLUG } from './sections';
+import { PLACE_DETAIL_BY_SLUG, placeSlugsNotForViewer } from './sections';
 import TodayDetail from './TodayDetail';
 import YourHomeDetail from './YourHomeDetail';
 import RiskDetail from './RiskDetail';
@@ -31,8 +32,22 @@ import MoneyDetail from './MoneyDetail';
 import CivicDetail from './CivicDetail';
 import IdentityDetail from './IdentityDetail';
 
-function DetailShell({ section, children }: { section: string; children: React.ReactNode }) {
-  return <PlaceShell active={section}>{children}</PlaceShell>;
+function DetailShell({ section, hidden, children }: { section: string; hidden?: string[]; children: React.ReactNode }) {
+  return <PlaceShell active={section} hidden={hidden}>{children}</PlaceShell>;
+}
+
+// What a viewer is told on a page that isn't part of their view of a Home.
+function notForViewer(group: PlaceGroup, role: PlaceViewer['role']): { title: string; description: string } {
+  if (role === 'nonresident') {
+    return {
+      title: group === 'money_signals' ? 'Money signals are for the household' : 'Home records are for the household',
+      description: "Guests and service providers see this address's public information: today, risk and readiness, the block and civic details.",
+    };
+  }
+  return {
+    title: 'Money signals are for the owner or renter',
+    description: "Bill comparisons, rent and property-tax checks belong to whoever owns or rents this home. Your Place still shows the home's details, its risks and today's conditions.",
+  };
 }
 
 function DetailSkeleton() {
@@ -86,9 +101,27 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     staleTime: 60_000,
   });
 
-  // The switcher's place (?home=) when there is one, else the primary home.
+  // The switcher's place (?home=) when there is one, else the primary home,
+  // else the resident's own private setup (as on the overview).
   const switchedHome = useContext(PlaceHomeContext);
-  const homeId = switchedHome ?? homeQuery.data?.home?.id ?? null;
+  const noSharedHome = homeQuery.isSuccess && !homeQuery.data?.home && !switchedHome;
+  const myHomesQuery = useQuery({
+    queryKey: queryKeys.placeMyHomes(),
+    queryFn: async () => api.homes.getMyHomes(),
+    enabled: authed && valid && noSharedHome,
+    staleTime: 60_000,
+  });
+  const privateSetupId = (myHomesQuery.data?.homes ?? []).find((h) => h.access_kind === 'private_setup')?.id ?? null;
+  const homeId = switchedHome ?? homeQuery.data?.home?.id ?? privateSetupId;
+
+  // Without any home, a saved address still deserves a straight answer.
+  const savedQuery = useQuery({
+    queryKey: ['place', 'saved-places'],
+    queryFn: async () => api.savedPlaces.getSavedPlaces(),
+    enabled: authed && valid && noSharedHome && myHomesQuery.isFetched && !privateSetupId,
+    staleTime: 60_000,
+  });
+  const savedPlace = savedQuery.data?.savedPlaces?.[0] ?? null;
 
   const intelQuery = useQuery({
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
@@ -144,18 +177,50 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
   }
 
   if (homeQuery.isSuccess && !homeId) {
+    if (myHomesQuery.isError || savedQuery.isError) {
+      return (
+        <DetailShell section={section}>
+          <DetailHeader title={meta.title} />
+          <div className="px-4 sm:px-5">
+            <ErrorState
+              message="We couldn't load your place. Check your connection and try again."
+              onRetry={() => { void (myHomesQuery.isError ? myHomesQuery.refetch() : savedQuery.refetch()); }}
+            />
+          </div>
+        </DetailShell>
+      );
+    }
+    if (myHomesQuery.isPending || savedQuery.isPending) {
+      return (
+        <DetailShell section={section}>
+          <DetailHeader title={meta.title} />
+          <DetailSkeleton />
+        </DetailShell>
+      );
+    }
     return (
       <DetailShell section={section}>
         <DetailHeader title={meta.title} />
         <div className="px-4 sm:px-5">
-          <EmptyState
-            icon={MapPinned}
-            title="You haven't added a place yet"
-            description="Claim your address to see flood risk, today's air, your home's value, and your verified neighbors."
-            actionLabel="Add your place"
-            headingLevel={2}
-            onAction={() => router.push('/app/homes')}
-          />
+          {savedPlace ? (
+            <EmptyState
+              icon={MapPinned}
+              title="Set up this home to see this"
+              description={`You saved ${savedPlace.label}. Its public information is on the overview; ${meta.title} needs the home set up.`}
+              actionLabel="Set up this home"
+              headingLevel={2}
+              onAction={() => router.push(`/app/homes/new?savedPlace=${encodeURIComponent(savedPlace.id)}`)}
+            />
+          ) : (
+            <EmptyState
+              icon={MapPinned}
+              title="You haven't added a place yet"
+              description="Claim your address to see flood risk, today's air, your home's value, and your verified neighbors."
+              actionLabel="Add your place"
+              headingLevel={2}
+              onAction={() => router.push('/app/homes')}
+            />
+          )}
         </div>
       </DetailShell>
     );
@@ -189,9 +254,31 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
 
   const intelligence = intelQuery.data;
   const residentName = userQuery.data?.name || userQuery.data?.firstName || '';
+  const hidden = placeSlugsNotForViewer(intelligence);
+
+  // The server leaves out the groups that don't apply to this viewer; a
+  // link or bookmark to one gets a straight answer, not empty cards.
+  if (hidden.includes(section) && intelligence.viewer) {
+    const copy = notForViewer(meta.group, intelligence.viewer.role);
+    return (
+      <DetailShell section={section} hidden={hidden}>
+        <DetailHeader title={meta.title} />
+        <div className="px-4 sm:px-5">
+          <EmptyState
+            icon={MapPinned}
+            title={copy.title}
+            description={copy.description}
+            actionLabel="Back to your Place"
+            headingLevel={2}
+            onAction={() => router.push(`/app/place${placeHomeQuery(switchedHome)}`)}
+          />
+        </div>
+      </DetailShell>
+    );
+  }
 
   return (
-    <DetailShell section={section}>
+    <DetailShell section={section} hidden={hidden}>
       {meta.group === 'today' && <TodayDetail intelligence={intelligence} homeId={homeId} />}
       {meta.group === 'your_home' && <YourHomeDetail intelligence={intelligence} homeId={homeId} />}
       {meta.group === 'risk_readiness' && <RiskDetail intelligence={intelligence} homeId={homeId} />}

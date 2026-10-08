@@ -3140,7 +3140,7 @@ public struct HubTabRoot: View {
                 viewModel: TransferOwnershipViewModel(
                     homeId: homeId,
                     currentUserId: transferUser?.id,
-                    currentUserName: transferUser?.displayName ?? transferUser?.username
+                    currentUserName: transferUser?.displayName ?? MadeUpUsername.chosen(transferUser?.username)
                 )
             )
         case let .tasksMap(categoryKey):
@@ -3648,8 +3648,12 @@ public struct HubTabRoot: View {
         let response: MyHomesResponse = try await APIClient.shared.request(
             HomesEndpoints.myHomes()
         )
+        // A resident's own private setup is their Place until a household shares
+        // it (as on the web): public readings, with the Home's records waiting on
+        // verification.
         return response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
             ?? response.sharedHomes.first?.id
+            ?? response.homes.first { $0.hasValidListContext && $0.accessKind == "private_setup" }?.id
     }
 
     private static func billsListViewModel(

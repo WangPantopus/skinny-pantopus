@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.api.models.support_trains
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -86,7 +87,7 @@ data class SupportTrainOrganizerRowDto(
     val user: SupportTrainHelperDto? = null,
 ) {
     val displayName: String
-        get() = user?.name ?: user?.username ?: "Organizer"
+        get() = user?.name ?: MadeUpUsername.chosen(user?.username) ?: "Organizer"
 
     /** Primary organizers can't be removed (`supportTrains.js:1102`). */
     val isPrimary: Boolean

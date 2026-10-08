@@ -13,6 +13,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const s3 = require('../services/s3Service');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -185,7 +186,7 @@ function resolveSenderDisplay(mail) {
   const senderName = typeof mail?.sender?.name === 'string' ? mail.sender.name.trim() : '';
   if (senderName) return senderName;
 
-  const senderUsername = typeof mail?.sender?.username === 'string' ? mail.sender.username.trim() : '';
+  const senderUsername = chosenUsernameOrNull(typeof mail?.sender?.username === 'string' ? mail.sender.username : '') || '';
   if (senderUsername) return senderUsername;
 
   const senderBusiness = typeof mail?.sender_business_name === 'string' ? mail.sender_business_name.trim() : '';
@@ -298,6 +299,8 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       .eq('drawer', drawer)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
+      // Mail delivered together shares created_at; the id keeps the order the same on every page.
+      .order('id', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
     // Scope by user or home

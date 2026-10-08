@@ -20,6 +20,7 @@ import ReportModal from '../ui/ReportModal';
 import { confirmStore } from '../ui/confirm-store';
 import { toast } from '../ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
+import { usernameHandle } from '@pantopus/utils';
 
 // ============================================================
 // UNIFIED CONVERSATION VIEW (Person-Based)
@@ -517,7 +518,7 @@ export default function ConversationView({
                   ) : (
                     <div className="font-semibold text-app">{chatTitle}</div>
                   )}
-                  {otherHandle && <div className="text-sm text-app-text-secondary">@{otherHandle}</div>}
+                  {usernameHandle(otherHandle) && <div className="text-sm text-app-text-secondary">{usernameHandle(otherHandle)}</div>}
                 </div>
               </div>
 

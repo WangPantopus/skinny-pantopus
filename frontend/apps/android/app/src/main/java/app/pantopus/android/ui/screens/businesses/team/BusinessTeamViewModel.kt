@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.businesses.team
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.businesses.BusinessAccessDto
 import app.pantopus.android.data.api.models.businesses.BusinessRolePresetDto
 import app.pantopus.android.data.api.models.businesses.BusinessSeatDto
@@ -331,7 +332,7 @@ class BusinessTeamViewModel
 
             fun displayName(member: BusinessTeamMemberDto): String {
                 member.user?.name?.takeIf { it.isNotBlank() }?.let { return it }
-                member.user?.username?.takeIf { it.isNotBlank() }?.let { return "@$it" }
+                MadeUpUsername.handle(member.user?.username)?.let { return it }
                 member.user?.email?.takeIf { it.isNotBlank() }?.let { return it }
                 return "Team member"
             }

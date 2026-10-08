@@ -1,5 +1,5 @@
 import * as api from '@pantopus/api';
-import { QUEUE_SESSION_PATH, queueUUID, queueSession, validateQueue, type QueueClaim } from './queueModel';
+import { DISPLAY_NAMES_HEADER, QUEUE_SESSION_PATH, queueUUID, queueSession, validateQueue, type QueueClaim } from './queueModel';
 
 /** Ephemeral current queue. No command, receipt, persistent cache or original store. */
 export class QueueController {
@@ -13,7 +13,7 @@ export class QueueController {
   current(): boolean {
     try {
       return !this.retired && !!this.token && this.token === api.getAuthToken() && this.origin === api.getApiBaseUrl()
-        && this.marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) && document.visibilityState !== 'hidden';
+        && this.marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     } catch { return false; }
   }
   retire() { this.retired = true; this.claims = []; this.ready = false; }
@@ -26,7 +26,7 @@ export class QueueController {
       this.requireCurrent(); if (bootstrap.status !== 200) throw new Error('Current queue session unavailable.');
       const session = queueSession(bootstrap.data);
       const response = await api.apiClient.get<unknown>(`/api/homes/${this.homeId}/claims`, {
-        headers: { 'X-Pantopus-Session-Scope': session.session_scope, 'Cache-Control': 'no-cache, no-store' },
+        headers: { 'X-Pantopus-Session-Scope': session.session_scope, 'Cache-Control': 'no-cache, no-store', ...DISPLAY_NAMES_HEADER },
       });
       this.requireCurrent(); if (response.status !== 200) throw new Error('Current queue unavailable.');
       validateQueue(response.data, this.homeId, session);

@@ -140,7 +140,7 @@ final class ContentDetailProjectionTests: XCTestCase {
         ))
         // A viewer who cannot deliver must not be offered another bid after assignment.
         let content = GigDetailViewModel.project(gig: gig, bids: [])
-        XCTAssertEqual(content.dock.primary.label, "Bidding closed")
+        XCTAssertEqual(content.dock.primary.label, "In progress")
         XCTAssertFalse(content.dock.primary.enabled)
     }
 
@@ -292,7 +292,7 @@ final class ContentDetailProjectionTests: XCTestCase {
         XCTAssertEqual(bidsModule?.bids.dropFirst().allSatisfy(\.dimmed), true)
         // Dock primary disabled with lock.
         XCTAssertFalse(content.dock.primary.enabled)
-        XCTAssertEqual(content.dock.primary.label, "Bidding closed")
+        XCTAssertEqual(content.dock.primary.label, "Awarded")
         XCTAssertEqual(content.dock.primary.icon, .lock)
     }
 

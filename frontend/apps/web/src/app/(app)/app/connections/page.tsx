@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/toast-store';
 import ErrorState from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/query-keys';
 import type { Relationship, ConnectionRequest, RelationshipUser } from '@pantopus/types';
+import { chosenUsername, usernameHandle } from '@pantopus/utils';
 
 type Tab = 'connections' | 'pending' | 'sent' | 'blocked';
 const TABS: readonly Tab[] = ['connections', 'pending', 'sent', 'blocked'];
@@ -181,6 +182,8 @@ function ConnectionsPageContent() {
             key={tab.key}
             role="tab"
             aria-selected={activeTab === tab.key}
+            // The count is its own span with only a margin before it, so the name read out was "Requests1".
+            aria-label={tab.count > 0 ? `${tab.label} (${tab.count})` : undefined}
             onClick={() => setActiveTab(tab.key)}
             className={`flex-1 whitespace-nowrap py-2.5 px-4 rounded-lg text-sm font-medium transition ${
               activeTab === tab.key
@@ -321,8 +324,13 @@ function ConnectionsPageContent() {
               {blockedUsers.length === 0 ? (
                 <EmptyState
                   icon={<Ban className="w-10 h-10 text-app-text-muted" />}
-                  title="No blocked users"
-                  description="Users you block won't be able to see your content or contact you."
+                  title="No blocked connections"
+                  description="People you blocked from their profile or a chat are in Blocked users, where you can unblock them."
+                  action={
+                    <Link href={BLOCKED_USERS_HREF} className="inline-flex px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700">
+                      Open Blocked users
+                    </Link>
+                  }
                 />
               ) : (
                 blockedUsers.map((rel) => (
@@ -341,6 +349,12 @@ function ConnectionsPageContent() {
                     }
                   />
                 ))
+              )}
+              {blockedUsers.length > 0 && (
+                <p className="text-sm text-app-text-secondary">
+                  People you blocked from their profile or a chat are in{' '}
+                  <Link href={BLOCKED_USERS_HREF} className="text-primary-600 hover:underline">Blocked users</Link>.
+                </p>
               )}
             </div>
           )}
@@ -370,7 +384,8 @@ function UserCard({
   actions: React.ReactNode;
 }) {
   if (!user) return null;
-  const displayName = user.name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : null) || user.username;
+  // A made-up username (user_…) is never shown as a name or a handle.
+  const displayName = user.name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : null) || chosenUsername(user.username) || 'Pantopus member';
 
   const identity = (
     <>
@@ -388,7 +403,7 @@ function UserCard({
       {/* Info */}
       <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-app-text truncate">{displayName}</h3>
-        <p className="text-sm text-app-text-secondary truncate">@{user.username}</p>
+        {usernameHandle(user.username) && <p className="text-sm text-app-text-secondary truncate">{usernameHandle(user.username)}</p>}
         {(user.city || user.state) && (
           <p className="text-xs text-app-text-muted mt-0.5">{[user.city, user.state].filter(Boolean).join(', ')}</p>
         )}
@@ -414,15 +429,20 @@ function UserCard({
   );
 }
 
-function EmptyState({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+function EmptyState({ icon, title, description, action }: { icon: ReactNode; title: string; description: string; action?: ReactNode }) {
   return (
     <div className="text-center py-16 bg-app-surface rounded-xl border border-app-border">
       <div className="mb-4 flex justify-center">{icon}</div>
       <h3 className="text-lg font-semibold text-app-text mb-2">{title}</h3>
       <p className="text-app-text-secondary max-w-sm mx-auto">{description}</p>
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
+
+// Blocks made from a profile or a chat (UserBlock) and Identity Firewall blocks aren't
+// connection blocks, so this tab never lists them; Blocked users lists and lifts all three.
+const BLOCKED_USERS_HREF = '/app/profile/settings/blocked';
 
 export default function ConnectionsPage() {
   return (

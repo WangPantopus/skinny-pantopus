@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.admin.AdminClaimDetailResponse
 import app.pantopus.android.data.api.models.admin.AdminClaimEvidenceDto
 import app.pantopus.android.data.api.models.admin.AdminClaimHomeDto
@@ -243,7 +244,7 @@ fun ReviewClaimDetailScreen(
 
 private fun claimantFirstName(state: ReviewClaimDetailUiState): String {
     val detail = (state as? ReviewClaimDetailUiState.Loaded)?.detail ?: return "the claimant"
-    val name = detail.claimant?.name ?: detail.claimant?.username ?: return "the claimant"
+    val name = detail.claimant?.name ?: MadeUpUsername.chosen(detail.claimant?.username) ?: return "the claimant"
     return name.trim().split(" ").firstOrNull()?.takeIf { it.isNotEmpty() } ?: "the claimant"
 }
 
@@ -465,7 +466,7 @@ private fun claimantModel(
     reviewable: Boolean,
 ): ClaimantCardModel {
     val claimant = detail.claimant
-    val name = claimant?.name ?: claimant?.username ?: "Unknown claimant"
+    val name = claimant?.name ?: MadeUpUsername.chosen(claimant?.username) ?: "Unknown claimant"
     return ClaimantCardModel(
         name = name,
         email = claimant?.email,

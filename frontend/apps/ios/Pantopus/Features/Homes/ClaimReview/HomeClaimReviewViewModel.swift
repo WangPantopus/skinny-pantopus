@@ -546,8 +546,8 @@ public final class HomeClaimReviewViewModel {
         fallback: String = "Claimant"
     ) -> String {
         if let name = name?.nilIfEmpty { return name }
-        if let username = username?.nilIfEmpty { return "@\(username)" }
-        return fallback
+        // A made-up username (user_…) says nothing about the claimant.
+        return MadeUpUsername.handle(username) ?? fallback
     }
 
     static func initials(for name: String) -> String {

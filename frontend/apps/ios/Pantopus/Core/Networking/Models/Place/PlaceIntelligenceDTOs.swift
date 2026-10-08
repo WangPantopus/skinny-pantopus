@@ -1593,13 +1593,28 @@ public struct PlaceIntelligence: Decodable, Sendable, Hashable {
     /// ISO 8601.
     public let generatedAt: String
     public let groups: [PlaceGroupBlock]
+    /// Who is looking; sections that don't apply to the role are left out.
+    /// Nil from older servers.
+    public var viewer: PlaceViewer?
 
     private enum CodingKeys: String, CodingKey {
-        case place, tier, groups
+        case place, tier, groups, viewer
         case verifyAvailable = "verify_available"
         case regionSupported = "region_supported"
         case generatedAt = "generated_at"
     }
+}
+
+/// Who is looking at a Home's Place. `role` picks which sections apply:
+/// "owner" (value and the exemption check), "renter" (the rent sections),
+/// "member" (the Home's facts) or "nonresident" (guests and service
+/// providers: public facts only). `stage` is "setup" (set up, not
+/// verified), "claimed" or "verified"; `ownership` is "confirmed",
+/// "pending" or "none". Strings, so a new value never fails the decode.
+public struct PlaceViewer: Decodable, Sendable, Hashable {
+    public let role: String
+    public let stage: String
+    public let ownership: String
 }
 
 // MARK: - Anonymous T0 preview (`GET /api/public/place`)

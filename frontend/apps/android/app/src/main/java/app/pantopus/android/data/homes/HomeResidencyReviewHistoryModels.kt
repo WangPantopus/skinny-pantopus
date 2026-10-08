@@ -1,11 +1,23 @@
 package app.pantopus.android.data.homes
 
+import app.pantopus.android.core.identity.MadeUpUsername
+
 /** Read-only projections. No original command, reason, token or capability is retained. */
 data class HomeResidencyHistorySession(val actorId: String, val sessionScope: String)
 
 data class HomeResidencyHistoryReference(val homeId: String, val actorId: String, val receiptId: String)
 
-data class HomeResidencyHistoryApplicant(val id: String, val username: String?)
+data class HomeResidencyHistoryApplicant(
+    val id: String,
+    val username: String?,
+    /** The name the applicant shows neighbors, when the server sent it. */
+    val displayName: String? = null,
+) {
+    /** The name first, then a chosen @username; never a made-up one. */
+    val label: String? get() =
+        householdPersonName(displayName)?.let { "Current applicant: $it" }
+            ?: MadeUpUsername.handle(username)?.let { "Current public username: $it" }
+}
 
 data class HomeResidencyHistoryItem(
     val id: String,

@@ -2,6 +2,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const notificationService = require('./notificationService');
 const { getPersonaNotificationRecipientIds } = require('./personaNotificationRecipients');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 function newPostFanoutLinkAndMeta(post) {
   if (post?.ref_task_id) {
@@ -37,7 +38,7 @@ async function getUserDisplayName(userId) {
     .eq('id', userId)
     .single();
   if (!data) return 'Someone';
-  return data.name || data.first_name || data.username || 'Someone';
+  return data.name || data.first_name || chosenUsernameOrNull(data.username) || 'Someone';
 }
 
 async function resolvePostFanoutRecipients({

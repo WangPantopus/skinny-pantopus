@@ -11,7 +11,7 @@ HOW THE USER GETS HERE: Nearby tab, tap a cell; "Unlocked — see the map" on th
 THE ONE JOB: tap a cell and either read its real numbers or see exactly what would unlock them — without the map itself ever feeling withheld.
 
 CONTENT (exact strings, densest realistic case):
-Base: a muted street grid of east Clark County WA — SR-14, NE 192nd Ave, Lacamas Lake, the Camas paper mill. Overlay geohash-6 cells, which are RECTANGLES roughly 1.2 km east–west by 0.6 km north–south: draw a 6×4 grid of wide rectangles, never hexagons. The user's own cell (Prune Hill · c21hgu, from 2417 NW Lacamas Dr, Camas WA 98607) carries a 2px primary ring.
+Base: a muted street grid of east Clark County WA — SR-14, NE 192nd Ave, Lacamas Lake, the Camas paper mill. Overlay geohash-6 cells, which are RECTANGLES roughly 1.2 km east–west by 0.6 km north–south: draw a 6×4 grid of wide rectangles, never hexagons. The user's own cell (Prune Hill · c21hgu, from 2417 NW Pantopus Loop, Camas WA 98607) carries a 2px primary ring.
 Unlocked panel, "Prune Hill · c21hgu": "Verified homes 7" · "Founding slots 2 of 5 open · closes Sep 22, 2026" · "Neighbor posts, last 30 days 14" · caption "3 Pantopus curator posts not counted" · "Last neighbor activity Tue, Sep 15".
 Locked panel, same cell name and same shading: "Unlock with 3 neighbors who join", a "1 of 3" row reading "Dana R. joined Sep 9, 2026", and a share control "Copy your invite link · pantopus.com/join/ypw-4k2p".
 Neighbouring cells carry real values in the unlocked frame: Grass Valley 4 homes / 9 posts · Fisher's Landing 11 / 31 · Dawson's Ridge 2 / 3 · Sifton 5 / 6 · Lacamas Shores 1 / 0 · Forest Home 0 / 0.

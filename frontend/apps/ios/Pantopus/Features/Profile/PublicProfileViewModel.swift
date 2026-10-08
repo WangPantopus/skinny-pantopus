@@ -573,6 +573,33 @@ public final class PublicProfileViewModel {
         return true
     }
 
+    /// True when the signed-in owner's link still uses the username the
+    /// server made up and this device hasn't asked them to pick one yet
+    /// (`UsernameShareSheet.swift`).
+    public var asksForUsernameBeforeSharing: Bool {
+        guard case let .loaded(payload) = state, payload.isOwner,
+              MadeUpUsername.isMadeUp(payload.profile.username),
+              let currentUserId else { return false }
+        return !UsernamePromptMemory.wasAsked(currentUserId)
+    }
+
+    /// Asked once per account on this device.
+    public func markAskedForUsername() {
+        if let currentUserId { UsernamePromptMemory.markAsked(currentUserId) }
+    }
+
+    /// The loaded profile's username ("" before it loads).
+    public var loadedUsername: String {
+        guard case let .loaded(payload) = state else { return "" }
+        return payload.profile.username
+    }
+
+    /// True once the loaded profile is the signed-in person's own.
+    public var isOwnProfileLoaded: Bool {
+        guard case let .loaded(payload) = state else { return false }
+        return payload.isOwner
+    }
+
     /// The profile's public web link for the header's "Share profile" sheet
     /// (web `/u/:username`, the link web's own profile Share uses).
     public var profileShareURL: URL? {
@@ -640,8 +667,12 @@ public final class PublicProfileViewModel {
 
     /// UUIDs resolve by id; handles resolve by username. Mirrors RN's
     /// `fetchPublicProfileByIdentifier` (`src/app/user/[id].tsx:53-58`).
+    /// Once loaded, a refresh goes by id: the owner may have just changed
+    /// the username the route was opened with.
     private var profileEndpoint: Endpoint {
-        let identifier = routeIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        let identifier = UserSocialEndpoints.isUUID(resolvedUserId)
+            ? resolvedUserId
+            : routeIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
         if UserSocialEndpoints.isUUID(identifier) {
             return PublicProfileEndpoints.profile(id: identifier)
         }
@@ -813,7 +844,8 @@ public final class PublicProfileViewModel {
     ) -> PublicProfileContent {
         let header = PublicProfileHeader(
             displayName: profile.displayName,
-            handle: profile.username.isEmpty ? nil : profile.username,
+            // A made-up username (user_…) is never shown as "@…" or in "Report @…".
+            handle: MadeUpUsername.chosen(profile.username),
             locality: profile.locality,
             avatarURL: (profile.profilePictureURL ?? profile.avatarURL).flatMap(URL.init(string:)),
             // No avatar check: `verified` is the account email flag that sign-in
@@ -823,7 +855,9 @@ public final class PublicProfileViewModel {
             // No server field verifies a persona, so the chip names the kind only.
             // Launch cuts #1 + #2: no "Persona" chip while personas are hidden.
             tierLabel: kind == .persona && LaunchFeatures.beacon && LaunchFeatures.personas ? "Persona" : nil,
-            isVerifiedNeighbor: kind == .local
+            // The chip needs the verified home itself: unverified people get the
+            // neighbor layout too while creators are cut.
+            isVerifiedNeighbor: hasHomeResidency(profile)
         )
 
         var stats: [ProfileStatCell] = []
@@ -837,11 +871,12 @@ public final class PublicProfileViewModel {
                 ProfileStatCell(id: "rating", value: String(format: "%.1f", rating), label: "Rating")
             )
         }
-        if let gigsCompleted = profile.gigsCompleted, gigsCompleted > 0 {
+        // Launch cut #4 (Open Gigs): no gig count, like the hidden Gigs tab (as on Android).
+        if LaunchFeatures.openGigs, let gigsCompleted = profile.gigsCompleted, gigsCompleted > 0 {
             stats.append(
                 ProfileStatCell(id: "gigs", value: "\(gigsCompleted)", label: "Gigs")
             )
-        } else if let gigsPosted = profile.gigsPosted, gigsPosted > 0 {
+        } else if LaunchFeatures.openGigs, let gigsPosted = profile.gigsPosted, gigsPosted > 0 {
             stats.append(
                 ProfileStatCell(id: "gigs", value: "\(gigsPosted)", label: "Gigs")
             )
@@ -1007,9 +1042,12 @@ public final class PublicProfileViewModel {
     /// blob is a Local (verified neighbor) profile; everyone else is
     /// treated as a Persona (creator) profile. Backend doesn't ship an
     /// explicit creator/local discriminator yet — this signal is the
-    /// closest stable proxy.
+    /// closest stable proxy. While the creator side is cut for launch
+    /// (Beacon + Personas) nobody is a creator: every person gets the
+    /// neighbor layout, verified or not.
     private func derivedKind(from profile: PublicProfile) -> PublicProfileKind {
-        hasHomeResidency(profile) ? .local : .persona
+        guard LaunchFeatures.beacon, LaunchFeatures.personas else { return .local }
+        return hasHomeResidency(profile) ? .local : .persona
     }
 
     private func buildBadges(_ profile: PublicProfile) -> [IdentityPillarBadge] {

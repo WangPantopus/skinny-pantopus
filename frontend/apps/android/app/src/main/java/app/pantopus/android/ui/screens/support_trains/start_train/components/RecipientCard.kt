@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.ui.screens.support_trains.start_train.StartSupportTrainMutual
 import app.pantopus.android.ui.theme.PantopusColors
@@ -64,7 +65,7 @@ internal fun StartTrainRecipientCard(
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 Text(
-                    text = recipient.name ?: recipient.username ?: "Recipient",
+                    text = recipient.name ?: MadeUpUsername.chosen(recipient.username) ?: "Recipient",
                     style = PantopusTextStyle.small.copy(fontWeight = FontWeight.Bold),
                     color = PantopusColors.appText,
                 )
@@ -212,7 +213,7 @@ private fun mutualsSummary(mutuals: List<StartSupportTrainMutual>): String {
 }
 
 private fun initials(recipient: MailRecipientDto): String {
-    val source = recipient.name ?: recipient.username ?: "Recipient"
+    val source = recipient.name ?: MadeUpUsername.chosen(recipient.username) ?: "Recipient"
     return source
         .split(" ")
         .filter { it.isNotBlank() }

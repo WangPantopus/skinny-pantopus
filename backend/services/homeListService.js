@@ -93,54 +93,72 @@ async function readClaims(homeId, actorId) {
   return claims;
 }
 
-async function materialize(homeId, actorId, opening, claims) {
+async function card(homeId, mode) {
+  if (mode === 'verification') {
+    // Personal progress is not shared Home access. The caller's submitted
+    // evidence/address remains on its own authorized verification endpoint.
+    return { id: homeId, name: 'Home verification', address: null, address2: null, city: null, state: null, zipcode: null, location: null };
+  }
+  const row = await checked(db.from('Home').select(CARD_COLUMNS).eq('id', homeId).maybeSingle());
+  if (!object(row) || row.id !== homeId || typeof row.address !== 'string'
+    || (row.address2 != null && typeof row.address2 !== 'string')) throw failure();
+  const projected = Object.fromEntries(CARD_COLUMNS.split(', ').map(key => [key, row[key]]));
+  projected.location = projected.location ? parsePoint(projected.location) : null;
+  return projected;
+}
+
+function materialize(opening, claims, homeCard) {
   const { access, owners, mode } = opening;
   const owner = owners.find(row => row.owner_status === 'verified') || owners.find(row => row.owner_status === 'pending') || null;
   const pending = claims.find(claim => claimsConfig.flags.v2ReadPaths
     ? claimsPolicy.isClaimActiveRecord(claim) : claimsPolicy.isLegacyStateActive(claim.state));
-  let card;
-  if (mode === 'verification') {
-    // Personal progress is not shared Home access. The caller's submitted
-    // evidence/address remains on its own authorized verification endpoint.
-    card = { id: homeId, name: 'Home verification', address: null, address2: null, city: null, state: null, zipcode: null, location: null };
-  } else {
-    card = await checked(db.from('Home').select(CARD_COLUMNS).eq('id', homeId).maybeSingle());
-    if (!object(card) || card.id !== homeId || typeof card.address !== 'string'
-      || (card.address2 != null && typeof card.address2 !== 'string')) throw failure();
-    card = Object.fromEntries(CARD_COLUMNS.split(', ').map(key => [key, card[key]]));
-    card.location = card.location ? parsePoint(card.location) : null;
-  }
   const occupancy = access.occupancy ? Object.fromEntries(OWN_OCCUPANCY_COLUMNS.map(key => [key, access.occupancy[key] ?? null])) : null;
   return {
-    ...card, occupancy, access_kind: mode, has_home_access: mode === 'shared',
+    ...homeCard, occupancy, access_kind: mode, has_home_access: mode === 'shared',
     role_base: mode === 'shared' ? access.effective_role_base : null,
     ownership_status: owner?.owner_status || null, verification_tier: owner?.verification_tier || null,
     is_primary_owner: owner?.is_primary_owner === true, pending_claim_id: pending?.id || null,
-    can_delete_home: (await deleteEligibility(homeId, actorId)).allowed,
+    can_delete_home: null, // read() sets it from the final recheck
   };
+}
+
+// Runs `work` over `items` with at most `limit` in flight, keeping their order;
+// after a failure no further item starts.
+async function bounded(items, work, limit = 4) {
+  const results = new Array(items.length);
+  let next = 0;
+  let failed = false;
+  const lane = async () => {
+    while (!failed && next < items.length) {
+      const index = next++;
+      try { results[index] = await work(items[index]); } catch (err) { failed = true; throw err; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
+  return results;
 }
 
 async function read(actorId, { primary = false, legacy = false } = {}) {
   if (!uuid(actorId)) throw failure();
   const ids = await candidates(actorId);
-  const entries = [];
   // Bound fanout: candidate discovery contains IDs only, and every projected
-  // card has its own opening authority. All entries are rechecked at the end.
-  for (const homeId of ids) {
+  // card has its own opening authority. Homes load a few at a time (each is a
+  // chain of database round trips), and all entries are rechecked at the end.
+  const opened = await bounded(ids, async (homeId) => {
     const opening = await state(homeId, actorId);
-    if (opening.mode === 'denied' || (primary && opening.mode !== 'shared')) continue;
-    const claims = await readClaims(homeId, actorId);
-    entries.push({ homeId, opening, claims, card: await materialize(homeId, actorId, opening, claims) });
-  }
-  for (const entry of entries) {
+    if (opening.mode === 'denied' || (primary && opening.mode !== 'shared')) return null;
+    const [claims, homeCard] = await Promise.all([readClaims(homeId, actorId), card(homeId, opening.mode)]);
+    return { homeId, opening, claims, card: materialize(opening, claims, homeCard) };
+  });
+  const entries = opened.filter(Boolean);
+  await bounded(entries, async (entry) => {
     // Eligibility can change through records/history without a role change.
-    entry.card.can_delete_home = (await deleteEligibility(entry.homeId, actorId)).allowed;
-    if (JSON.stringify(await readClaims(entry.homeId, actorId)) !== JSON.stringify(entry.claims)) throw failure(true);
-  }
-  for (const entry of entries) {
-    const current = await state(entry.homeId, actorId);
-    if (JSON.stringify(current) !== JSON.stringify(entry.opening)) throw failure(true);
-  }
+    const [eligibility, claims, current] = await Promise.all([deleteEligibility(entry.homeId, actorId),
+      readClaims(entry.homeId, actorId), state(entry.homeId, actorId)]);
+    entry.card.can_delete_home = eligibility.allowed;
+    if (JSON.stringify(claims) !== JSON.stringify(entry.claims)
+      || JSON.stringify(current) !== JSON.stringify(entry.opening)) throw failure(true);
+  });
   if (primary) {
     // Preserve the oldest-current-occupancy preference, then verified owners
     // and legacy pointers. Expired candidates cannot hide a later current Home.

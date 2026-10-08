@@ -1,5 +1,6 @@
 package app.pantopus.android.data.homes
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.PendingInviteDto
 
 fun homeInvitationSenderRows(
@@ -21,7 +22,7 @@ fun homeInvitationSenderRows(
             if (row["invitee"] != null) check(user != null && user["id"] == userId)
             val email = row["invitee_email"] as? String
             check(row["invitee_email"] == null || email != null)
-            val username = (user?.get("username") as? String)?.takeIf(String::isNotBlank)?.let { "@$it" }
+            val username = MadeUpUsername.handle(user?.get("username") as? String)
             val name = (user?.get("name") as? String)?.takeIf(String::isNotBlank)
             val label = email ?: listOfNotNull(name, username).joinToString(" ").takeIf(String::isNotBlank)
             PendingInviteDto(

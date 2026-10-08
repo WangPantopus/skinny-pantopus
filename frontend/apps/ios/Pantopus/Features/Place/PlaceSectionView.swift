@@ -23,6 +23,8 @@ struct PlaceSectionView: View {
     var onRetry: (() -> Void)?
     /// A re-read is in flight; a failed section shows loading until it lands.
     var retrying = false
+    /// The viewer set this Home up and hasn't verified it: every lock is the verify step.
+    var verifiesFirst = false
 
     private var cardState: PlaceSectionCardState {
         let state = PlacePresentation.cardState(env)
@@ -30,7 +32,7 @@ struct PlaceSectionView: View {
     }
 
     private var lockHandler: (() -> Void)? {
-        env.band == .d ? onVerify : onClaim
+        verifiesFirst || env.band == .d ? onVerify : onClaim
     }
 
     var body: some View {
@@ -41,7 +43,7 @@ struct PlaceSectionView: View {
                 icon: PlacePresentation.config(for: env.id).icon,
                 title: PlacePresentation.config(for: env.id).title,
                 reason: PlacePresentation.lockReason(env),
-                cta: PlacePresentation.lockCta(env.band),
+                cta: PlacePresentation.lockCta(env.band, verifiesFirst: verifiesFirst),
                 onTap: lockHandler
             )
         } else {
@@ -56,7 +58,7 @@ struct PlaceSectionView: View {
                 icon: .users,
                 title: "Verified homes nearby",
                 reason: PlacePresentation.lockReason(env),
-                cta: PlacePresentation.lockCta(env.band),
+                cta: PlacePresentation.lockCta(env.band, verifiesFirst: verifiesFirst),
                 onTap: lockHandler
             )
         } else if let density = env.blockDensity,

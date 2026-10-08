@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.businesses
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -92,7 +93,7 @@ data class BusinessInvoicePartyDto(
      */
     fun displayName(fallback: String): String =
         name?.trim()?.takeIf { it.isNotEmpty() }
-            ?: username?.trim()?.takeIf { it.isNotEmpty() }
+            ?: MadeUpUsername.chosen(username)
             ?: fallback
 }
 

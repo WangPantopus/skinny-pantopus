@@ -141,7 +141,8 @@ enum HomeMemberRemovalValidation {
         guard let fields = value.dictValue, Set(fields.keys) == ["home", "target"],
               let home = fields["home"]?.dictValue, Set(home.keys) == ["id", "name"],
               home["id"]?.stringValue == homeId, text(home["name"]), let target = fields["target"]?.dictValue,
-              Set(target.keys) == [
+              // display_name comes only from a server that was asked for it, so a summary may or may not have it.
+              Set(target.keys).subtracting(["display_name"]) == [
                   "id",
                   "name",
                   "username",
@@ -154,6 +155,7 @@ enum HomeMemberRemovalValidation {
                   "access_start_at",
                   "access_end_at"
               ],
+              text(target["display_name"] ?? .null, limit: 200),
               target["id"]?.stringValue == targetId, target["is_self"] == .bool(targetId == actorId),
               target["is_active"]?.boolValue != nil, target["name"] == .null, text(target["username"]),
               text(target["verification_status"], limit: 100),
@@ -170,8 +172,9 @@ enum HomeMemberRemovalValidation {
     }
 
     static func targetLabel(_ summary: JSONValue) -> String {
-        let username = summary.dictValue?["target"]?.dictValue?["username"]?.stringValue
-        return username.flatMap { $0.isEmpty ? nil : $0 } ?? "Selected household member"
+        let target = summary.dictValue?["target"]?.dictValue
+        return HomeResidencyQueueValidation.personName(target?["display_name"]?.stringValue)
+            ?? MadeUpUsername.chosen(target?["username"]?.stringValue) ?? "Selected household member"
     }
 
     static func homeLabel(_ summary: JSONValue) -> String {

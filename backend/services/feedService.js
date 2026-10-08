@@ -416,16 +416,22 @@ function applyMuteHideFilters(posts, filters, surface, viewerUserId = null) {
 // Enrichment (like / save status)
 // ---------------------------------------------------------------------------
 
-// NOTE: This function applies location privacy via applyPostLocationPrivacy.
-// Callers should NOT also call applyPostLocationPrivacy/applyPostLocationPrivacyBatch.
-async function enrichWithUserStatus(posts, userId) {
-  if (!posts.length) return posts;
+// The viewer's like, save and repost rows for these posts.
+function loadUserStatusRows(posts, userId) {
   const postIds = posts.map(p => p.id);
-  const [{ data: likes }, { data: saves }, { data: reposts }] = await Promise.all([
+  return Promise.all([
     supabaseAdmin.from('PostLike').select('post_id').eq('user_id', userId).in('post_id', postIds),
     supabaseAdmin.from('PostSave').select('post_id').eq('user_id', userId).in('post_id', postIds),
     supabaseAdmin.from('PostShare').select('post_id').eq('user_id', userId).eq('share_type', 'repost').in('post_id', postIds),
   ]);
+}
+
+// NOTE: This function applies location privacy via applyPostLocationPrivacy.
+// Callers should NOT also call applyPostLocationPrivacy/applyPostLocationPrivacyBatch.
+// `statusRows` is loadUserStatusRows' result when the caller has already read it.
+async function enrichWithUserStatus(posts, userId, statusRows = null) {
+  if (!posts.length) return posts;
+  const [{ data: likes }, { data: saves }, { data: reposts }] = statusRows || await loadUserStatusRows(posts, userId);
   const likedSet = new Set((likes || []).map(r => r.post_id));
   const savedSet = new Set((saves || []).map(r => r.post_id));
   const repostSet = new Set((reposts || []).map(r => r.post_id));
@@ -465,9 +471,8 @@ function redactPrivateIdentityFields(post, author) {
   return post;
 }
 
-async function attachIdentityAuthors(posts, viewerUserId) {
-  if (!posts.length) return posts;
-
+// The persona, local profile and user rows of these posts' authors.
+function loadIdentityAuthorRows(posts) {
   const personaIds = [...new Set(posts
     .filter(p => p.identity_context_type === 'persona' && p.identity_context_id)
     .map(p => p.identity_context_id))];
@@ -476,7 +481,7 @@ async function attachIdentityAuthors(posts, viewerUserId) {
     .map(p => p.author_user_id || p.user_id)
     .filter(Boolean))];
 
-  const [personaResult, localResult, localUserResult] = await Promise.all([
+  return Promise.all([
     personaIds.length
       ? supabaseAdmin.from('PublicPersona').select('*').in('id', personaIds)
       : Promise.resolve({ data: [] }),
@@ -487,6 +492,13 @@ async function attachIdentityAuthors(posts, viewerUserId) {
       ? supabaseAdmin.from('User').select(LOCAL_AUTHOR_USER_SELECT).in('id', localUserIds)
       : Promise.resolve({ data: [] }),
   ]);
+}
+
+// `authorRows` is loadIdentityAuthorRows' result when the caller has already read it.
+async function attachIdentityAuthors(posts, viewerUserId, authorRows = null) {
+  if (!posts.length) return posts;
+
+  const [personaResult, localResult, localUserResult] = authorRows || await loadIdentityAuthorRows(posts);
 
   const personasById = new Map((personaResult.data || []).map(row => [row.id, row]));
   const localsByUserId = new Map((localResult.data || []).map(row => [String(row.user_id), row]));
@@ -561,6 +573,35 @@ async function attachIdentityAuthors(posts, viewerUserId) {
       business_author: null,
     };
   });
+}
+
+// Like/save status and typed public authors for a page of posts: enrichWithUserStatus, then
+// attachIdentityAuthors. Neither lookup depends on the other, so both are read in one round
+// trip; the location privacy pass still runs before the authors are attached.
+async function enrichFeedPosts(posts, userId) {
+  if (!posts.length) return posts;
+  const [statusRows, authorRows] = await Promise.all([
+    loadUserStatusRows(posts, userId),
+    loadIdentityAuthorRows(posts),
+  ]);
+  return attachIdentityAuthors(await enrichWithUserStatus(posts, userId, statusRows), userId, authorRows);
+}
+
+// ---------------------------------------------------------------------------
+// Reads started ahead of use
+// ---------------------------------------------------------------------------
+
+// A read started before it's needed holds its outcome until awaited with outcome(), so an early
+// return or a failure in between leaves no rejection unhandled (app.js exits the process on one).
+// A failed read still throws, where its result is used.
+function settle(read) {
+  return read.then((value) => ({ value }), (error) => ({ error }));
+}
+
+async function outcome(pending) {
+  const { value, error } = await pending;
+  if (error) throw error;
+  return value;
 }
 
 // ---------------------------------------------------------------------------
@@ -805,6 +846,11 @@ async function getListFeed({
 
   const parsedLimit = Number(limit) || 20;
   const overFetchLimit = parsedLimit + 20;
+  const isFirstPage = !cursorCreatedAt && !cursorId;
+  // The mute/hide filters and the first page's global pins don't shape the query, so they're
+  // read alongside the cursor, the author graph and the first round of posts.
+  const filtersRead = settle(getMuteAndHideFilters(userId));
+  const globalPinsRead = isFirstPage ? settle(getGlobalPins()) : null;
   const initialCursorPinned = await getCursorPinState(cursorId);
 
   // 2–4. Resolve author IDs and distribution target per surface
@@ -846,10 +892,6 @@ async function getListFeed({
       return { posts: [], pagination: { nextCursor: null, hasMore: false }, emptyGraph: true };
     }
   }
-
-  // Pre-compute filters once and reuse across fetch iterations
-  const filters = await getMuteAndHideFilters(userId);
-  const filterPolitics = !filters.feedPreferences?.[politicsPrefKey(surface)];
 
   // Pre-compute bounding box and center for place surface
   let box, centerLat, centerLng;
@@ -914,6 +956,9 @@ async function getListFeed({
     query = applyPinnedCursorCondition(query, loopCursorCreatedAt, loopCursorId, loopCursorPinned);
 
     const { data, error } = await query;
+    // Loaded once (filtersRead above) and reused across fetch iterations.
+    const filters = await outcome(filtersRead);
+    const filterPolitics = !filters.feedPreferences?.[politicsPrefKey(surface)];
     if (error) {
       logger.error('Feed query failed', { error: error.message, userId, surface });
       throw new Error(`Feed query failed: ${error.message}`);
@@ -984,9 +1029,8 @@ async function getListFeed({
 
   // 12. Prepend global pins on the first page (no cursor = first page).
   // These bypass all surface/location/author filters.
-  const isFirstPage = !cursorCreatedAt && !cursorId;
   if (isFirstPage) {
-    const globalPins = await getGlobalPins();
+    const globalPins = await outcome(globalPinsRead);
     if (globalPins.length) {
       // Deduplicate — a global pin might also match the regular query
       const regularIds = new Set(posts.map(p => p.id));
@@ -996,7 +1040,7 @@ async function getListFeed({
   }
 
   // 13. Enrich with like/save status and typed public authors
-  const enriched = await attachIdentityAuthors(await enrichWithUserStatus(posts, userId), userId);
+  const enriched = await enrichFeedPosts(posts, userId);
 
   // 14–15. Build pagination and return
   const lastPost = enriched.length > 0 ? enriched[enriched.length - 1] : null;
@@ -1248,11 +1292,13 @@ async function getSportsFeed({
   const centerLng = parseFloat(longitude);
   const box = boundingBoxFromCenter(centerLat, centerLng, radiusMeters);
 
-  const activeEvents = await getActiveSportsEvents();
+  const [activeEvents, filters] = await Promise.all([
+    getActiveSportsEvents(),
+    getMuteAndHideFilters(userId),
+  ]);
   const activeEventKeys = new Set(activeEvents.map(e => e.event_key));
   const effectiveEventKey = eventKey || activeEvents[0]?.event_key || null;
 
-  const filters = await getMuteAndHideFilters(userId);
   const filterPolitics = !filters.feedPreferences?.[politicsPrefKey('place')];
 
   // Mode shaping — determines which underlying queries to run and any
@@ -1338,7 +1384,7 @@ async function getSportsFeed({
 
   const page = candidates.slice(0, parsedLimit);
   const hasMore = candidates.length > parsedLimit;
-  const enriched = await attachIdentityAuthors(await enrichWithUserStatus(page, userId), userId);
+  const enriched = await enrichFeedPosts(page, userId);
 
   // Strip internal scoring field before returning to caller.
   for (const p of enriched) delete p._rankBucket;
@@ -1390,6 +1436,8 @@ async function getMapFeed({
 }) {
   const normalizedSurface = FEED_SURFACES.includes(surface) ? surface : 'place';
   const queryLimit = Math.max(Number(limit) || 50, 1);
+  // The mute/hide filters don't shape the query, so they're read alongside it.
+  const filtersRead = settle(getMuteAndHideFilters(userId));
 
   // 1. Resolve author IDs and distribution target
   let authorIds = null;
@@ -1426,7 +1474,7 @@ async function getMapFeed({
   }
 
   // 3–4. Normalize and apply mute/hide/block
-  const filters = await getMuteAndHideFilters(userId);
+  const filters = await outcome(filtersRead);
   let posts = applyMuteHideFilters(
     (data || []).map(row => normalizeFeedPostRow(row, new Set(), new Set())),
     filters,
@@ -1446,7 +1494,7 @@ async function getMapFeed({
   posts = applyPostLocationPrivacyBatch(posts, userId);
 
   // 8. Enrich
-  return attachIdentityAuthors(await enrichWithUserStatus(posts, userId), userId);
+  return enrichFeedPosts(posts, userId);
 }
 
 // ---------------------------------------------------------------------------
@@ -1466,6 +1514,7 @@ module.exports = {
   getMuteAndHideFilters,
   applyMuteHideFilters,
   enrichWithUserStatus,
+  enrichFeedPosts,
   applyPostLocationPrivacy,
   applyPostLocationPrivacyBatch,
   applyCursorCondition,

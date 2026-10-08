@@ -11,6 +11,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // ============ VALIDATION ============
 
@@ -119,7 +120,7 @@ router.post('/', verifyToken, validate(createReviewSchema), async (req, res) => 
           userId: reviewee_id,
           type: 'review_received',
           title: 'New Review',
-          body: `${reviewer?.name || reviewer?.first_name || reviewer?.username || 'Someone'} left you a ${rating}-star review`,
+          body: `${reviewer?.name || reviewer?.first_name || chosenUsernameOrNull(reviewer?.username) || 'Someone'} left you a ${rating}-star review`,
           link: `/gigs/${gig_id}`,
           metadata: { gig_id, review_id: review.id },
         });
@@ -317,7 +318,7 @@ router.get('/gig/:gigId', async (req, res) => {
 
     const enriched = reviews.map(r => ({
       ...r,
-      reviewer_name: reviewerMap[r.reviewer_id]?.name || reviewerMap[r.reviewer_id]?.username || 'Anonymous',
+      reviewer_name: reviewerMap[r.reviewer_id]?.name || chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username) || 'Anonymous',
       reviewer_avatar: reviewerMap[r.reviewer_id]?.profile_picture_url || null,
     }));
 
@@ -406,7 +407,7 @@ router.get('/my-pending', verifyToken, async (req, res) => {
 
     const enriched = pending.map(p => ({
       ...p,
-      reviewee_name: nameMap[p.reviewee_id]?.name || nameMap[p.reviewee_id]?.username || 'Unknown',
+      reviewee_name: nameMap[p.reviewee_id]?.name || chosenUsernameOrNull(nameMap[p.reviewee_id]?.username) || 'Unknown',
       reviewee_avatar: nameMap[p.reviewee_id]?.profile_picture_url || null,
     }));
 

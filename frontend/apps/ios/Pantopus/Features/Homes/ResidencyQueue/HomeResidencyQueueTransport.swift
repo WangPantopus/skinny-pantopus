@@ -21,13 +21,15 @@ struct APIHomeResidencyQueueTransport: HomeResidencyQueueTransport {
         guard identity.isValid, session.actorId == identity.actorId, HomeClaimReviewSnapshot.validToken(session.scope) else {
             throw HomeResidencyQueueError.sessionChanged
         }
-        let value = try await read(path: "/api/homes/" + identity.homeId + "/claims", session: session)
+        let value = try await read(path: "/api/homes/" + identity.homeId + "/claims", session: session, displayNames: true)
         return try HomeResidencyQueuePage.parse(value, identity: identity, session: session)
     }
 
-    private func read(path: String, session: HomeResidencyQueueSession? = nil) async throws -> JSONValue {
+    private func read(path: String, session: HomeResidencyQueueSession? = nil, displayNames: Bool = false) async throws -> JSONValue {
         var headers = ["Cache-Control": "no-cache, no-store"]
         if let session { headers["X-Pantopus-Session-Scope"] = session.scope }
+        // The server names each applicant (display_name) only when asked: older builds check these keys exactly.
+        if displayNames { headers["X-Pantopus-Display-Names"] = "1" }
         let endpoint = Endpoint(method: .get, path: path, headers: headers, cachePolicy: .reloadIgnoringLocalCacheData)
         do {
             let result = try await api.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true)

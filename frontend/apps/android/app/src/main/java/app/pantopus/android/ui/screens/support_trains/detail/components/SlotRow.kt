@@ -262,28 +262,32 @@ private fun Trailing(
             }
         }
         content.mine -> {
-            Box(
-                modifier =
-                    Modifier
-                        .testTag("supportTrainSlotRowEdit-${content.id}")
-                        .heightIn(min = 30.dp)
-                        .clip(RoundedCornerShape(Radii.md))
-                        .background(PantopusColors.appSurface)
-                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))
-                        .clickable(enabled = onEdit != null) { onEdit?.invoke() }
-                        .padding(horizontal = Spacing.s2)
-                        .clearAndSetSemantics {
-                            role = Role.Button
-                            contentDescription = "Edit your slot"
-                        },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Edit",
-                    color = PantopusColors.primary700,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 11.5.sp,
-                )
+            // Only with an edit action: no screen passes one today (the edit route is
+            // organizer-only), and a disabled Edit sat on every helper's own slot.
+            if (onEdit != null) {
+                Box(
+                    modifier =
+                        Modifier
+                            .testTag("supportTrainSlotRowEdit-${content.id}")
+                            .heightIn(min = 30.dp)
+                            .clip(RoundedCornerShape(Radii.md))
+                            .background(PantopusColors.appSurface)
+                            .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))
+                            .clickable { onEdit() }
+                            .padding(horizontal = Spacing.s2)
+                            .clearAndSetSemantics {
+                                role = Role.Button
+                                contentDescription = "Edit your slot"
+                            },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "Edit",
+                        color = PantopusColors.primary700,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.5.sp,
+                    )
+                }
             }
         }
         else -> {

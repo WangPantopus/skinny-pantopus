@@ -2,15 +2,19 @@
 
 package app.pantopus.android.ui.screens.support_trains.detail
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.support_trains.SupportTrainCoarseLocationDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainContributionMode
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainModesDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainMyReservationDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainOrganizerDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateDto
 import app.pantopus.android.ui.components.SlotCalendarDay
 import app.pantopus.android.ui.components.SlotCalendarState
 import java.text.SimpleDateFormat
+import java.time.OffsetDateTime
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -36,7 +40,7 @@ object SupportTrainDetailProjection {
         val covered = slots.count { it.isCovered }
         val total = slots.size
         val title = dto.title ?: dto.recipientSummary ?: "Support train"
-        val primaryName = organizers.firstOrNull()?.user?.let { it.name ?: it.username }
+        val primaryName = organizers.firstOrNull()?.user?.let { it.name ?: MadeUpUsername.chosen(it.username) }
 
         val typeDates =
             TypeDatesCardContent(
@@ -90,7 +94,49 @@ object SupportTrainDetailProjection {
             viewerRole = viewerRole(dto),
             exactAddress = dto.address?.singleLineLabel?.takeIf { it.isNotBlank() },
             deliveryInstructions = dto.deliveryInstructions,
+            updates = updateCards(dto.updates.orEmpty(), organizers),
         )
+    }
+
+    /**
+     * The organizers' updates in the API's order (newest first), each signed by the organizer
+     * who posted it. A made-up username is never shown; "Organizer" stands in, as on the web.
+     */
+    fun updateCards(
+        updates: List<SupportTrainUpdateDto>,
+        organizers: List<SupportTrainOrganizerDto>,
+    ): List<TrainUpdateCard> {
+        val names = mutableMapOf<String, String>()
+        organizers.mapNotNull { it.organizerUser }.forEach { user ->
+            val name = user.name?.takeIf { it.isNotBlank() } ?: MadeUpUsername.chosen(user.username)
+            if (name != null && user.id !in names) names[user.id] = name
+        }
+        return updates.mapNotNull { update ->
+            val body = update.body?.trim().orEmpty()
+            if (body.isEmpty()) return@mapNotNull null
+            TrainUpdateCard(
+                id = update.id,
+                author = update.authorUserId?.let { names[it] } ?: "Organizer",
+                timeLabel = updateTimeLabel(update.createdAt),
+                body = body,
+            )
+        }
+    }
+
+    /** "just now", "5m ago", "2h ago", then "Oct 3", as the web train page's Updates tab. */
+    fun updateTimeLabel(
+        iso: String?,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): String? {
+        if (iso.isNullOrBlank()) return null
+        val posted = runCatching { OffsetDateTime.parse(iso).toInstant().toEpochMilli() }.getOrNull() ?: return null
+        val minutes = ((nowMillis - posted).coerceAtLeast(0) / 60_000).toInt()
+        return when {
+            minutes < 1 -> "just now"
+            minutes < 60 -> "${minutes}m ago"
+            minutes < 60 * 24 -> "${minutes / 60}h ago"
+            else -> SimpleDateFormat("MMM d", Locale.US).format(Date(posted))
+        }
     }
 
     private fun dock(
@@ -146,6 +192,8 @@ object SupportTrainDetailProjection {
             dateLabel = date?.let { format(it, "EEEE, MMMM d") } ?: (slot.slotDate ?: ""),
             slotLabel = slot.slotLabel ?: slot.supportMode?.replaceFirstChar { it.uppercase() } ?: "Slot",
             windowLabel = windowLabel(slot),
+            slotDate = slot.slotDate,
+            windowStart = slot.startTime,
         )
     }
 
@@ -316,10 +364,14 @@ object SupportTrainDetailProjection {
         slot: SupportTrainSlotDto?,
     ): SlotRowContent {
         val date = slot?.let { parseDate(it.slotDate) }
+        // "Home-cooked meal", not the wire value "Cook", when the helper named no dish.
         val title =
             reservation.dishTitle
                 ?: reservation.restaurantName
-                ?: reservation.contributionMode?.replaceFirstChar { it.uppercase() }
+                ?: reservation.contributionMode?.let { mode ->
+                    SupportTrainContributionMode.entries.firstOrNull { it.wire == mode }?.label
+                        ?: mode.replaceFirstChar { it.uppercase() }
+                }
                 ?: "Your contribution"
         return SlotRowContent(
             id = reservation.id,
@@ -333,6 +385,8 @@ object SupportTrainDetailProjection {
             slotId = reservation.slotId,
             reservationId = reservation.id,
             reservationStatus = reservation.status,
+            isBeforeSlotDay = date?.let { it.time > startOfTodayUtc().time } ?: false,
+            slotDayLabel = date?.let { format(it, "EEE, MMM d") },
         )
     }
 
@@ -365,7 +419,9 @@ object SupportTrainDetailProjection {
             listOf("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", "yyyy-MM-dd'T'HH:mm:ssXXX").firstNotNullOfOrNull { pattern ->
                 runCatching { utcFormatter(pattern).parse(iso) }.getOrNull()
             } ?: return null
-        return utcFormatter("h:mm a").format(date)
+        // An arrival is an instant (the sign-up sheets send one), so it reads in the helper's own
+        // time zone, as the Edit signup form shows it; in UTC a 5:30 pm drop-off read 12:30 AM.
+        return SimpleDateFormat("h:mm a", Locale.US).format(date)
     }
 
     private fun shortTime(hhmm: String): String {

@@ -30,6 +30,8 @@ public struct PublicProfileView: View {
     @State private var showReportSheet = false
     @State private var showBlockConfirm = false
     @State private var shareURL: URL?
+    /// The "Pick a username for your link" sheet, asked before the first share.
+    @State private var usernameShare: UsernameShareSheetModel?
     private let onBack: @MainActor () -> Void
     private let onOpenMessages: @MainActor (PublicProfile) -> Void
     private let onEditPersona: @MainActor () -> Void
@@ -91,12 +93,22 @@ public struct PublicProfileView: View {
         ) {
             // The header's "Share profile" opens this sheet, so it shares first.
             if let url = viewModel.profileShareURL {
-                Button("Share profile") { shareURL = url }
+                Button("Share profile") {
+                    if viewModel.asksForUsernameBeforeSharing {
+                        viewModel.markAskedForUsername()
+                        usernameShare = UsernameShareSheetModel(currentUsername: viewModel.loadedUsername)
+                    } else {
+                        shareURL = url
+                    }
+                }
             }
-            Button("Block this user", role: .destructive) {
-                showBlockConfirm = true
+            // Nobody blocks or reports themselves.
+            if !viewModel.isOwnProfileLoaded {
+                Button("Block this user", role: .destructive) {
+                    showBlockConfirm = true
+                }
+                Button("Report") { showReportSheet = true }
             }
-            Button("Report") { showReportSheet = true }
             Button("Cancel", role: .cancel) {}
         }
         // Blocking from a chat asks first (`ChatConversationDetailsSheet`), so
@@ -111,6 +123,30 @@ public struct PublicProfileView: View {
         }
         .sheet(isPresented: $showReportSheet) {
             reportSheet
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { usernameShare != nil },
+                set: { if !$0 { usernameShare = nil } }
+            )
+        ) {
+            if let usernameShare {
+                UsernameShareSheet(
+                    model: usernameShare,
+                    onShareAsIs: {
+                        let url = viewModel.profileShareURL
+                        self.usernameShare = nil
+                        shareAfterSheet(url)
+                    },
+                    onSaved: { username in
+                        self.usernameShare = nil
+                        Task {
+                            await viewModel.refresh()
+                            shareAfterSheet(URL(string: InviteLinks.profileURLString(username: username)))
+                        }
+                    }
+                )
+            }
         }
         .sheet(
             isPresented: Binding(
@@ -225,6 +261,16 @@ public struct PublicProfileView: View {
         }
     }
 
+    /// The share sheet can't present while the username sheet is still
+    /// going away, so it opens a moment later.
+    private func shareAfterSheet(_ url: URL?) {
+        guard let url else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            shareURL = url
+        }
+    }
+
     // MARK: - A21.2 Local Beacon profile
 
     /// The designed Local archetype: green Home banner, overlapping
@@ -296,7 +342,8 @@ public struct PublicProfileView: View {
                 onEmptyCTA: { onOpenMessages(payload.profile) },
                 localName: payload.header.displayName,
                 loadFailed: viewModel.postsLoadFailed,
-                onRetry: retryLoad
+                onRetry: retryLoad,
+                hiddenByBlock: viewModel.connection == .blocked
             )
         case .about:
             LocalProfileAboutSection(content: neighbor)
@@ -371,7 +418,10 @@ public struct PublicProfileView: View {
                         onOpenGig: onOpenGig,
                         onOpenReviewer: onOpenProfile
                     )
-                    ReceivedReviewsSection(userId: payload.profile.id)
+                    // Launch cut #3 (Marketplace): no "Marketplace reviews" section, as on Android.
+                    if LaunchFeatures.marketplace {
+                        ReceivedReviewsSection(userId: payload.profile.id)
+                    }
                     // Launch cuts #1 + #2: the persona broadcasts feed ("No broadcasts
                     // yet … Follow") is hidden; the rest of the profile stays.
                     if payload.kind != .persona || Self.showsPersonaParts {
@@ -488,8 +538,11 @@ public struct PublicProfileView: View {
                 .opacity(viewModel.isConnectEnabled ? 1 : 0.7)
                 .accessibilityIdentifier("publicProfileConnectCta")
             }
-            BeaconHeaderPrimaryButton(title: "Message", icon: .messageSquare) {
-                onOpenMessages(payload.profile)
+            // Someone you blocked can't be messaged (the block says so); Settings unblocks.
+            if viewModel.connection != .blocked {
+                BeaconHeaderPrimaryButton(title: "Message", icon: .messageSquare) {
+                    onOpenMessages(payload.profile)
+                }
             }
         }
     }

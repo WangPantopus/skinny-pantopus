@@ -8,6 +8,8 @@ final class HouseholdTaskDetailViewModel {
     private(set) var loading = false
     private(set) var error: String?
     private(set) var acting = false
+    /// "You", a member's name, or the short "Member 1A2B" label; nil when nobody is assigned.
+    private(set) var assignee: String?
     private let taskId: String
     private let access: HomeTaskAccess
     private var generation = 0
@@ -15,6 +17,10 @@ final class HouseholdTaskDetailViewModel {
     private var pendingReload = false
     private var mountedViews = Set<UUID>()
     private var readTask: (revision: Int, task: Task<Void, Never>)?
+    /// Members' names by user id; nil until read, empty when the viewer may not list members.
+    private var memberNames: [String: String]?
+    private var namesRead: Task<Void, Never>?
+    private var namesToken = 0
 
     var isCurrent: Bool {
         access.isCurrent
@@ -80,7 +86,7 @@ final class HouseholdTaskDetailViewModel {
         do {
             let current = try await access.detail(taskId: taskId)
             guard revision == generation else { return }
-            task = current
+            show(current)
         } catch {
             guard revision == generation else { return }
             self.error = error.localizedDescription
@@ -102,7 +108,7 @@ final class HouseholdTaskDetailViewModel {
             let current = try await access.detail(taskId: taskId)
             guard visible, revision == generation, isCurrent else { return }
             guard current.capabilities?.canEdit == true else { throw HomeTaskAccess.AccessError.denied }
-            task = current
+            show(current)
             onAllowed()
         } catch {
             guard revision == generation else { return }
@@ -123,12 +129,57 @@ final class HouseholdTaskDetailViewModel {
                 guard self.visible, revision == self.generation, self.isCurrent else { throw CancellationError() }
             }
             guard visible, revision == generation, isCurrent else { return }
-            self.task = current
+            show(current)
         } catch {
             guard visible, revision == generation else { return }
             self.task = nil
             self.error = error.localizedDescription
         }
+    }
+
+    private func show(_ current: HomeTaskDTO) {
+        task = current
+        assignee = assigneeLabel(current)
+        loadMemberNames(for: current)
+    }
+
+    private func assigneeLabel(_ task: HomeTaskDTO) -> String? {
+        guard let id = task.assignedTo, !id.isEmpty else { return nil }
+        if id == access.openingActorId { return "You" }
+        return memberNames?[id] ?? "Member \(id.prefix(4).uppercased())"
+    }
+
+    /// Only for someone else's task; a viewer who may not list members keeps the short label.
+    private func loadMemberNames(for task: HomeTaskDTO) {
+        guard memberNames == nil, namesRead == nil, let id = task.assignedTo, !id.isEmpty,
+              id != access.openingActorId else { return }
+        namesToken += 1
+        let token = namesToken
+        let access = access
+        namesRead = Task { [weak self] in
+            let names: [String: String]?
+            do {
+                let response = try await access.occupants()
+                names = Dictionary(
+                    response.occupants.compactMap(HouseholdTaskAssignableMember.from).map { ($0.id, $0.displayName) }
+                ) { first, _ in first }
+            } catch APIError.forbidden {
+                names = [:] // A refusal won't change on retry; other failures try again on the next read.
+            } catch {
+                names = nil
+            }
+            guard let self, token == namesToken else { return }
+            namesRead = nil
+            if let names { memberNames = names }
+            // Whatever task is shown now (a completion may have replaced it) gets the name.
+            if visible, isCurrent, let shown = self.task { assignee = assigneeLabel(shown) }
+        }
+    }
+
+    private func cancelNames() {
+        namesToken += 1
+        namesRead?.cancel()
+        namesRead = nil
     }
 
     private func finishAction() {
@@ -149,7 +200,9 @@ final class HouseholdTaskDetailViewModel {
         access.invalidatePending()
         readTask?.task.cancel()
         readTask = nil
+        cancelNames()
         task = nil
+        assignee = nil
         loading = false
     }
 
@@ -159,7 +212,10 @@ final class HouseholdTaskDetailViewModel {
         access.retire()
         readTask?.task.cancel()
         readTask = nil
+        cancelNames()
+        memberNames = nil
         task = nil
+        assignee = nil
         loading = false
         error = HomeTaskAccess.AccessError.changed.localizedDescription
     }

@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.members
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeAuditEntryDto
 import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestDto
@@ -882,7 +883,7 @@ class MembersListViewModel
 
             fun displayName(occ: OccupantDto): String {
                 if (!occ.displayName.isNullOrEmpty()) return occ.displayName
-                if (!occ.username.isNullOrEmpty()) return "@${occ.username}"
+                MadeUpUsername.handle(occ.username)?.let { return it }
                 return "Member"
             }
 

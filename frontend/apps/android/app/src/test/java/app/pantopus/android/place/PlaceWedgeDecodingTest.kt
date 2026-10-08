@@ -46,7 +46,7 @@ class PlaceWedgeDecodingTest {
         val json =
             """
             {"status":"ready","tier":"preview","region":"US",
-             "place":{"address":"2518 NW Lacamas Dr","city":"Camas","state":"WA","zipcode":"98607"},
+             "place":{"address":"2518 NW Pantopus Loop","city":"Camas","state":"WA","zipcode":"98607"},
              "aha":{"section_id":"lead_radon","tone":"alert","grade":"Radon zone 1",
                "headline":"This county is in the EPA's highest radon band",
                "detail":"Zone 1 means the predicted average indoor level is above the EPA action level.",

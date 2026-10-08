@@ -304,7 +304,7 @@ final class OwnersListViewModel: ListOfRowsDataSource {
 
     private func displayName(for owner: OwnerDTO) -> String {
         if let name = owner.user?.name?.nilIfEmpty { return name }
-        if let username = owner.user?.username?.nilIfEmpty { return "@\(username)" }
+        if let handle = MadeUpUsername.handle(owner.user?.username) { return handle }
         // Mask non-user subjects (business / trust) and orphaned rows.
         let suffix = String(owner.subjectId.suffix(4))
         switch owner.subjectType.lowercased() {

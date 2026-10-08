@@ -1,9 +1,11 @@
 import * as api from '@pantopus/api';
+import { DISPLAY_NAMES_HEADER } from '../residency/queue/queueModel';
 import { PendingRemovalStore, type RemovalSnapshot } from './PendingRemovalStore';
 import { validInvitationSession, validRemovalInput, validateRemovalContext, validRemovalOutcome,
   projectRemovalSummary, projectRemovalOutcome, removalMessage,
   type RemovalInput, type RemovalSession, type RemovalContext, type RemovalDraft, type RemovalOutcome } from './removalModel';
 import { invitationUUID as uuid } from '../../homes/invitations/invitationDecisionModel';
+import { chosenUsername } from '@pantopus/utils';
 
 type Store = Pick<PendingRemovalStore, 'load' | 'save' | 'clear'>;
 export const removalBase = '/api/homes/member-removals';
@@ -31,7 +33,7 @@ export class RemovalController {
   current() {
     try {
       return !this.retired && !!this.auth && api.getAuthToken() === this.auth && api.getApiBaseUrl() === this.origin
-        && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker && document.visibilityState !== 'hidden';
+        && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker;
     } catch { return false; }
   }
   private requireCurrent() {
@@ -51,7 +53,7 @@ export class RemovalController {
     try { profile = await api.users.getMyProfile(); } catch (error) { this.authenticationFailure(error); }
     this.requireCurrent();
     if (profile && profile.id !== this.session.actor_id) { this.retire(); throw new Error('Your account changed. Reload to continue.'); }
-    this.accountLabel = profile?.name || profile?.username || 'Your current account';
+    this.accountLabel = profile?.name || chosenUsername(profile?.username) || 'Your current account';
     this.store = storeForActor(this.session.actor_id);
     const saved = await this.store.load();
     this.requireCurrent(); this.snapshot = saved; this.attempted = !!saved; this.opened = true;
@@ -175,7 +177,7 @@ export class RemovalController {
       return structuredClone(original.draft);
     });
   }
-  private headers() { return { 'X-Pantopus-Session-Scope': this.session!.session_scope, 'Cache-Control': 'no-cache, no-store', 'Content-Type': 'application/json' }; }
+  private headers() { return { 'X-Pantopus-Session-Scope': this.session!.session_scope, 'Cache-Control': 'no-cache, no-store', 'Content-Type': 'application/json', ...DISPLAY_NAMES_HEADER }; }
   private async action<T>(run: () => Promise<T>): Promise<T> {
     this.requireCurrent();
     if (!this.opened || this.busy) throw new Error('Wait for the removal check to finish.');

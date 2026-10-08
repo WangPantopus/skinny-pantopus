@@ -407,6 +407,11 @@ fun PublicProfilePostsFeed(
      */
     loadFailed: Boolean = false,
     onRetry: () -> Unit = {},
+    /**
+     * `true` when the viewer blocked this neighbour: a block hides both
+     * people's posts, so the card says so and invites nothing.
+     */
+    hiddenByBlock: Boolean = false,
 ) {
     if (posts.isEmpty()) {
         BeaconPostsEmptyState(
@@ -414,6 +419,7 @@ fun PublicProfilePostsFeed(
             onCta = if (loadFailed) onRetry else onEmptyCta,
             localName = localName,
             loadFailed = loadFailed,
+            hiddenByBlock = hiddenByBlock,
             modifier = Modifier.padding(horizontal = Spacing.s4),
         )
     } else {
@@ -440,12 +446,13 @@ fun PublicProfilePostsFeed(
     }
 }
 
-/** Icon and copy for the posts feed card: failed, persona empty or Local empty. */
+/** Icon and copy for the posts feed card: failed, persona empty, hidden by a block or Local empty. */
 private data class PostsCardCopy(
     val icon: PantopusIcon,
     val headline: String,
     val body: String,
-    val ctaLabel: String,
+    // null: the card offers no action.
+    val ctaLabel: String?,
     val ctaIcon: PantopusIcon,
 )
 
@@ -453,6 +460,7 @@ private fun postsCardCopy(
     persona: Boolean,
     loadFailed: Boolean,
     localName: String?,
+    hiddenByBlock: Boolean = false,
 ): PostsCardCopy {
     if (loadFailed) {
         return PostsCardCopy(
@@ -476,6 +484,17 @@ private fun postsCardCopy(
     // just moved in. …"); without a name we fall back to the neutral
     // sentence rather than printing an empty gap.
     val firstName = localName?.split(" ")?.firstOrNull()?.takeIf { it.isNotEmpty() }
+    if (hiddenByBlock) {
+        return PostsCardCopy(
+            icon = PantopusIcon.EyeOff,
+            headline = "Posts hidden",
+            body =
+                "You blocked ${firstName ?: "this person"}. " +
+                    "Neither of you sees the other's posts while the block is on.",
+            ctaLabel = null,
+            ctaIcon = PantopusIcon.EyeOff,
+        )
+    }
     val body =
         if (firstName != null) {
             "No posts yet — $firstName just moved in. Say hi or send a message to break the ice."
@@ -504,19 +523,28 @@ private fun BeaconPostsEmptyState(
     onCta: () -> Unit,
     localName: String? = null,
     loadFailed: Boolean = false,
+    hiddenByBlock: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val persona = kind == PublicProfileKind.Persona
     val disc = if (persona) PantopusColors.primary50 else PantopusColors.homeBg
     val accent = if (persona) PantopusColors.primary600 else PantopusColors.home
-    val copy = postsCardCopy(persona, loadFailed, localName)
+    // A Local profile the viewer blocked (a failed load still says so first).
+    val hidden = hiddenByBlock && !loadFailed && !persona
+    val copy = postsCardCopy(persona, loadFailed, localName, hidden)
 
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
                 .padding(top = Spacing.s12, bottom = Spacing.s5)
-                .testTag(if (loadFailed) "publicProfilePostsFailed" else "publicProfilePostsEmpty"),
+                .testTag(
+                    when {
+                        loadFailed -> "publicProfilePostsFailed"
+                        hidden -> "publicProfilePostsHidden"
+                        else -> "publicProfilePostsEmpty"
+                    },
+                ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
@@ -548,33 +576,36 @@ private fun BeaconPostsEmptyState(
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = 260.dp),
         )
-        Spacer(Modifier.size(Spacing.s4))
-        Row(
-            modifier =
-                Modifier
-                    .height(40.dp)
-                    .clip(RoundedCornerShape(Radii.md))
-                    .background(accent)
-                    .clickable(onClick = onCta)
-                    .padding(horizontal = Spacing.s4)
-                    .testTag(if (loadFailed) "publicProfilePostsRetry" else "publicProfilePostsEmptyCTA")
-                    .semantics { contentDescription = copy.ctaLabel },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            PantopusIconImage(
-                icon = copy.ctaIcon,
-                contentDescription = null,
-                size = 14.dp,
-                strokeWidth = 2.4f,
-                tint = PantopusColors.appTextInverse,
-            )
-            Text(
-                text = copy.ctaLabel,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = PantopusColors.appTextInverse,
-            )
+        val ctaLabel = copy.ctaLabel
+        if (ctaLabel != null) {
+            Spacer(Modifier.size(Spacing.s4))
+            Row(
+                modifier =
+                    Modifier
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(Radii.md))
+                        .background(accent)
+                        .clickable(onClick = onCta)
+                        .padding(horizontal = Spacing.s4)
+                        .testTag(if (loadFailed) "publicProfilePostsRetry" else "publicProfilePostsEmptyCTA")
+                        .semantics { contentDescription = ctaLabel },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                PantopusIconImage(
+                    icon = copy.ctaIcon,
+                    contentDescription = null,
+                    size = 14.dp,
+                    strokeWidth = 2.4f,
+                    tint = PantopusColors.appTextInverse,
+                )
+                Text(
+                    text = ctaLabel,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PantopusColors.appTextInverse,
+                )
+            }
         }
     }
 }

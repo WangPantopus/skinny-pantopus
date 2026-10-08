@@ -292,6 +292,7 @@ internal fun PlaceDashboardContent(
                 onVerify = onVerify.takeUnless { intel.tier == PlaceTier.T3 && intel.verifyAvailable == false },
                 modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
                 onRetry = onRetry,
+                verifiesFirst = intel.verifiesFirst,
             )
         }
         item {
@@ -348,6 +349,7 @@ private fun PlaceGroupBlockView(
     onVerify: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null,
+    verifiesFirst: Boolean = false,
 ) {
     val detail = PlaceDetailGroup.forGroup(group.groupId)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -360,6 +362,7 @@ private fun PlaceGroupBlockView(
                     onVerify = onVerify,
                     onClaim = onVerify,
                     onRetry = onRetry,
+                    verifiesFirst = verifiesFirst,
                 )
             }
         }

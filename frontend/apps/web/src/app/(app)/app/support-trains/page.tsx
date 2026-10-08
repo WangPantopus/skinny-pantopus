@@ -7,6 +7,7 @@ import { getAuthToken } from '@pantopus/api';
 import { Heart, Plus, Calendar, Users } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
+import { trainStatusLabel } from '@/components/support-trains/contributionLabels';
 
 type RoleFilter = 'all' | 'organizer' | 'helper';
 
@@ -149,10 +150,10 @@ export default function SupportTrainsPage() {
                   </h2>
                   <div className="flex items-center gap-3 mt-2">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClasses(train.status)}`}>
-                      {train.status}
+                      {trainStatusLabel(train.status)}
                     </span>
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${roleBadgeClasses(train.my_role)}`}>
-                      {train.my_role === 'primary' ? 'Organizer' : train.my_role === 'co_organizer' ? 'Co-organizer' : train.my_role === 'helper' ? 'Helper' : train.my_role}
+                      {train.my_role === 'primary' || train.my_role === 'organizer' ? 'Organizer' : train.my_role === 'co_organizer' ? 'Co-organizer' : train.my_role === 'helper' ? 'Helper' : train.my_role}
                     </span>
                   </div>
                 </div>

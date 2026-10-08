@@ -12,6 +12,7 @@ import type { HomeTaskClient } from './tasks/HomeTaskClient';
 import { PendingHomeTaskUploadStore, type TaskUploadSnapshot } from './tasks/PendingHomeTaskUploadStore';
 import { HomeTaskRecurrenceCard } from './tasks/HomeTaskRecurrenceCard';
 import { launchFeatures } from '@/lib/featureFlags';
+import { chosenUsername } from '@pantopus/utils';
 
 function uploadStore(client: HomeTaskClient, taskId: string) {
   client.requireCurrent();
@@ -52,6 +53,7 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
   openingScope: api.HomeTaskSessionScope | null;
 }) {
   const form = useHomeTaskForm(open, homeId, task?.id, openingScope);
+  const viewerId = openingScope?.actor_id;
   const fieldId = useId();
   const { taskType, title, description, assignedTo, priority, status, dueAt, budget } = form.fields;
   const savedTaskId = form.task?.id;
@@ -321,10 +323,12 @@ export default function TaskSlidePanel({ open, onClose, onSaved, task, members, 
               className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Unassigned</option>
-              {assignedTo && !members.some(member => (member.user_id || member.id) === assignedTo) && <option value={assignedTo}>Current assignee</option>}
-              {members.map((m) => (
+              {/* You can always take a task, even when the household's members can't be listed (a private setup, an ordinary member). */}
+              {viewerId && <option value={viewerId}>Me</option>}
+              {assignedTo && assignedTo !== viewerId && !members.some(member => (member.user_id || member.id) === assignedTo) && <option value={assignedTo}>Current assignee</option>}
+              {members.filter(m => (m.user_id || m.id) !== viewerId).map((m) => (
                 <option key={m.user_id || m.id} value={m.user_id || m.id}>
-                  {m.display_name || m.user?.displayName || m.user?.name || m.user?.handle || m.user?.username || m.name || m.username || 'Member'}
+                  {m.display_name || m.user?.displayName || m.user?.name || chosenUsername(m.user?.handle) || chosenUsername(m.user?.username) || m.name || chosenUsername(m.username) || 'Member'}
                 </option>
               ))}
             </select>

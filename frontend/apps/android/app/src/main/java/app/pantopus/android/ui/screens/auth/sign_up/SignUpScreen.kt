@@ -179,6 +179,39 @@ fun SignUpScreen(
                 modifier = Modifier.padding(horizontal = Spacing.s4),
             )
 
+            // First and last name are required (middle is optional), as on web:
+            // they are how the household, neighbors and helpers know the person.
+            // The username is made up server-side; Edit Profile can change it.
+            FormFieldGroup("Your name") {
+                FieldWithLiveError(state, SignUpField.FirstName) {
+                    PantopusTextField(
+                        label = "First name",
+                        value = state.firstName,
+                        onValueChange = viewModel::onFirstNameChange,
+                        placeholder = "Maria",
+                        state = fieldState(state, SignUpField.FirstName),
+                        fieldTestTag = SignUpScreenTags.FIRST_NAME,
+                    )
+                }
+                PantopusTextField(
+                    label = "Middle name (optional)",
+                    value = state.middleName,
+                    onValueChange = viewModel::onMiddleNameChange,
+                    placeholder = "Optional",
+                    fieldTestTag = SignUpScreenTags.MIDDLE_NAME,
+                )
+                FieldWithLiveError(state, SignUpField.LastName) {
+                    PantopusTextField(
+                        label = "Last name",
+                        value = state.lastName,
+                        onValueChange = viewModel::onLastNameChange,
+                        placeholder = "Kowalski",
+                        state = fieldState(state, SignUpField.LastName),
+                        fieldTestTag = SignUpScreenTags.LAST_NAME,
+                    )
+                }
+            }
+
             FormFieldGroup("Account") {
                 FieldWithLiveError(state, SignUpField.Email) {
                     PantopusTextField(
@@ -210,9 +243,6 @@ fun SignUpScreen(
                 )
             }
 
-            // Wedge onboarding: the form matches web — email + password. The
-            // username is generated server-side; names and the address arrive
-            // in the claim flow, where they mean something.
             FormFieldGroup("Account type") {
                 AccountTypePicker(
                     selection = state.accountType,

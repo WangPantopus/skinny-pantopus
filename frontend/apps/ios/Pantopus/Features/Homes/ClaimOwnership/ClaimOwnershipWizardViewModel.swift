@@ -541,6 +541,13 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
                 submitError = "This address needs the dedicated dispute review flow. Document upload cannot open a challenge here."
                 return
             }
+            // As on Android: say another person's claim is pending before the document goes up;
+            // Continue resumes this same claim (`acknowledgeRoutingWarning`).
+            if verificationType != .residency, !acknowledgedRoutingWarning,
+               let warning = Self.routingWarning(for: routingClassification) {
+                routingWarning = warning
+                return
+            }
             for slot in activeSlots {
                 if case .uploaded = storedSlots[slot] { continue }
                 guard let file = storedSlots[slot]?.pickedFile else { throw APIError.invalidResponse }
@@ -570,11 +577,22 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
             Analytics.track(.ctaClaimOwnershipSubmit(result: .success))
         } catch {
             if client === evidenceClient {
-                submitError = HomeClaimReviewError.message(for: error)
-                if !client.isCurrent { retire() }
+                if client.isCurrent, Self.isBlockedByOtherClaim(error) {
+                    blockedByOtherClaimPrompt = blockedByOtherClaimCopy
+                } else {
+                    submitError = HomeClaimReviewError.message(for: error)
+                    if !client.isCurrent { retire() }
+                }
             }
             Analytics.track(.ctaClaimOwnershipSubmit(result: .error))
         }
+    }
+
+    /// The claim POST's 409 when another person's verification already holds this home. It gets the
+    /// same "Unable to submit / Search homes" prompt as the opaque refusal, as on Android.
+    private static func isBlockedByOtherClaim(_ error: any Error) -> Bool {
+        guard case let APIError.clientError(status, body) = error, status == 409 else { return false }
+        return APIError.code(in: body) == "EXISTING_IN_FLIGHT_CLAIM"
     }
 
     /// "Continue" on the routing warning — resume the same submit with

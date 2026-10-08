@@ -6,6 +6,8 @@
 //  its range (no trend line: there is no value history), the tax assessment, and the device-local
 //  equity calculator (private to the resident, never sent to the server
 //  — the codebase's deliberate privacy stance for equity).
+//  The value, assessment and equity are the confirmed owner's; renters and
+//  household members see the Home's facts and systems.
 //
 
 import SwiftUI
@@ -31,18 +33,33 @@ struct PlaceHomeDetailContent: View {
                         asOf: PlacePresentation.fmtMonthYear(env.asOf)
                     )
 
-                    PlaceDetailSectionLabel(text: "Value")
-                    ValueCard(data: data)
-                    if let assessed = data.assessedValue {
-                        AssessmentCard(assessed: assessed)
-                    }
-                    PlaceSourceNote(
-                        name: "County public records · estimate model",
-                        asOf: PlacePresentation.fmtMonthYear(env.asOf)
-                    )
+                    switch intel.valueAccess {
+                    case .shown:
+                        PlaceDetailSectionLabel(text: "Value")
+                        ValueCard(data: data)
+                        if let assessed = data.assessedValue {
+                            AssessmentCard(assessed: assessed)
+                        }
+                        PlaceSourceNote(
+                            name: "County public records · estimate model",
+                            asOf: PlacePresentation.fmtMonthYear(env.asOf)
+                        )
 
-                    PlaceDetailSectionLabel(text: "Equity")
-                    EquityCalculator(estimatedValue: data.estimatedValue)
+                        PlaceDetailSectionLabel(text: "Equity")
+                        EquityCalculator(estimatedValue: data.estimatedValue)
+                    case .pending:
+                        // The value is the confirmed owner's; a pending owner waits for the ownership review.
+                        PlaceDetailSectionLabel(text: "Value")
+                        PlaceLockedCard(
+                            icon: .landmark,
+                            title: "Estimated value",
+                            reason: "Available once your ownership is confirmed.",
+                            cta: "Confirm ownership"
+                        )
+                    case .hidden:
+                        // Renters and other household members see the Home's facts.
+                        EmptyView()
+                    }
                 } else {
                     PlaceDetailSectionLabel(text: "Your home")
                     vm.fallbackCard(env)

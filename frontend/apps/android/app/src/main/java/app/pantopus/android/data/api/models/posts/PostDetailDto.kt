@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.posts
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -30,7 +31,7 @@ data class PostCreatorDto(
             val combined = listOfNotNull(firstName, lastName).filter { it.isNotEmpty() }.joinToString(" ")
             if (combined.isNotEmpty()) return combined
             if (!handle.isNullOrBlank()) return "@$handle"
-            if (!username.isNullOrEmpty()) return "@$username"
+            MadeUpUsername.handle(username)?.let { return it }
             return "Pantopus user"
         }
 

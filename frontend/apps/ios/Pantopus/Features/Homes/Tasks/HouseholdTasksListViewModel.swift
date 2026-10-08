@@ -170,6 +170,9 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     /// Last successful payload — held so a tab change can re-filter
     /// without re-fetching.
     private var tasks: [HomeTaskDTO]?
+    /// Members' names by user id, for assignees. Empty when the viewer can't read the
+    /// household's members, which keeps the short "Member 1A2B" label.
+    private var memberNames: [String: String] = [:]
 
     private let access: HomeTaskAccess
     private var canCreate = false
@@ -248,10 +251,21 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
             tasks = response.tasks
             canCreate = response.collectionCapabilities?.canCreate == true
             rebuildState()
+            await loadMemberNames(revision: revision)
         } catch {
             guard revision == generation else { return }
             clearRecords(error)
         }
+    }
+
+    /// Only when a task has an assignee, so an unassigned list costs no extra request.
+    private func loadMemberNames(revision: Int) async {
+        guard tasks?.contains(where: { $0.assignedTo?.isEmpty == false }) == true,
+              let response = try? await access.occupants(), revision == generation else { return }
+        memberNames = Dictionary(
+            response.occupants.compactMap(HouseholdTaskAssignableMember.from).map { ($0.id, $0.displayName) }
+        ) { first, _ in first }
+        rebuildState()
     }
 
     func suspend() {
@@ -259,6 +273,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
         generation += 1
         access.invalidatePending()
         tasks = nil
+        memberNames = [:]
         canCreate = false
         pendingEvent = nil
         actionError = nil
@@ -302,6 +317,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
 
     private func clearRecords(_ error: any Error) {
         tasks = nil
+        memberNames = [:]
         canCreate = false
         pendingEvent = nil
         state = .error(message: error.localizedDescription)
@@ -393,7 +409,12 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     // MARK: - Row + chip mapping
 
     func row(for task: HomeTaskDTO, tab: HouseholdTasksTab, now: Date) -> RowModel {
-        let projection = HouseholdTasksListViewModel.project(task: task, now: now)
+        let projection = HouseholdTasksListViewModel.project(
+            task: task,
+            now: now,
+            memberNames: memberNames,
+            viewerId: access.openingActorId
+        )
         let taskId = task.id
         return RowModel(
             id: task.id,
@@ -502,26 +523,36 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     /// Pure mapping from a task + clock to display strings. Exposed
     /// `static` so unit tests can exercise the chip / subtitle
     /// derivation without standing the VM up.
-    static func project(task: HomeTaskDTO, now: Date) -> HouseholdTaskRowProjection {
+    static func project(
+        task: HomeTaskDTO,
+        now: Date,
+        memberNames: [String: String] = [:],
+        viewerId: String? = nil
+    ) -> HouseholdTaskRowProjection {
         let category = HouseholdTaskCategory.from(title: task.title, taskType: task.taskType)
-        let assigneeLabel = assigneeDisplay(for: task.assignedTo)
-        let isAssigned = assigneeLabel != nil
+        let assigneeLabel = assigneeDisplay(for: task.assignedTo, memberNames: memberNames)
+        let own = task.assignedTo != nil && task.assignedTo == viewerId
+        // The line says "you" for the viewer's own tasks. Their avatar shows their name, or the category
+        // icon when the viewer may not list members (a "Member 1A2B" avatar would mean nothing to them).
+        let avatarName = own && memberNames[task.assignedTo ?? ""] == nil ? nil : assigneeLabel
+        let isAssigned = avatarName != nil
+        let assignee = own ? "you" : assigneeLabel
         let recurrenceChip = task.automaticRecurrence?.label ?? humanRecurrence(rule: task.recurrenceRule).map { "Saved: \($0)" }
         // Status / chip / subtitle vary by status.
         switch task.status {
         case "done":
-            let doneTime = humanRelativeTime(iso: task.completedAt ?? task.updatedAt, now: now)
-            let by = assigneeLabel ?? "Someone"
+            // Tasks don't record who finished them, so the row names the assignee, not a "done by".
+            let done = humanRelativeTime(iso: task.completedAt ?? task.updatedAt, now: now).map { "Done \($0)" } ?? "Done"
             return HouseholdTaskRowProjection(
                 title: task.title,
-                subtitle: doneTime.map { "Done by \(by) · \($0)" } ?? "Done by \(by)",
+                subtitle: assignee.map { "\(done) · Assigned to \($0)" } ?? done,
                 chipText: nil,
                 chipVariant: nil,
                 chipIcon: nil,
                 recurrenceChip: recurrenceChip,
                 category: category,
                 isAssigned: isAssigned,
-                assigneeLabel: assigneeLabel,
+                assigneeLabel: avatarName,
                 highlight: .muted
             )
         case "canceled":
@@ -534,13 +565,13 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
                 recurrenceChip: recurrenceChip,
                 category: category,
                 isAssigned: isAssigned,
-                assigneeLabel: assigneeLabel,
+                assigneeLabel: avatarName,
                 highlight: .muted
             )
         default:
             // open / in_progress
             let due = dueChip(for: task.dueAt, now: now)
-            let assigneeLine = assigneeLabel.map { "Assigned to \($0)" } ?? "Unassigned"
+            let assigneeLine = assignee.map { "Assigned to \($0)" } ?? "Unassigned"
             let subtitle = due.dueLine.map { "\(assigneeLine) · \($0)" } ?? assigneeLine
             return HouseholdTaskRowProjection(
                 title: task.title,
@@ -551,7 +582,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
                 recurrenceChip: recurrenceChip,
                 category: category,
                 isAssigned: isAssigned,
-                assigneeLabel: assigneeLabel,
+                assigneeLabel: avatarName,
                 highlight: nil
             )
         }
@@ -719,15 +750,11 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
 
     // MARK: - Formatting helpers
 
-    private static func assigneeDisplay(for assigneeId: String?) -> String? {
+    private static func assigneeDisplay(for assigneeId: String?, memberNames: [String: String]) -> String? {
         guard let assigneeId, !assigneeId.isEmpty else { return nil }
-        // The backend returns just an id today — no joined user
-        // profile. Until a server-side join lands, surface a short
-        // identifier so the row stays distinguishable. The string is
-        // intentionally a fingerprint, not a name, so the UI doesn't
-        // lie about who's assigned.
-        let prefix = assigneeId.prefix(4).uppercased()
-        return "Member \(prefix)"
+        // Tasks carry only the assignee's id; names come from the household's members. A viewer
+        // who can't read members gets a short fingerprint, not a guessed name.
+        return memberNames[assigneeId] ?? "Member \(assigneeId.prefix(4).uppercased())"
     }
 
     /// Human-readable rendering of an RRULE-ish recurrence string. The

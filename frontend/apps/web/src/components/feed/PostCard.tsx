@@ -14,7 +14,7 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import FeedMediaImage from './FeedMediaImage';
 import LinkPreviewCard from './LinkPreviewCard';
 import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
+import { buildCanonicalShareUrlForPost, chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { lostFoundContactLabel } from './composer/LostFoundFields';
 import type { AudienceProfile, Post } from '@pantopus/types';
@@ -97,6 +97,8 @@ function PostCard({
   const config = getPostTypeConfig(post.post_type || 'general');
   const typeIconNode = getTypeIcon(post.post_type || 'general');
   const ctaIconNode = getTypeCtaIcon(post.post_type || 'general');
+  // A "Save" call to action saves the post, like the bookmark; the others open the replies.
+  const ctaSaves = config.ctaIcon === 'bookmark' && Boolean(onSave);
   const authorUserId = post.author_user_id || post.user_id;
   const isOwn = authorUserId === currentUserId;
   const publicAuthor = post.author || null;
@@ -112,11 +114,12 @@ function PostCard({
   // / avatarUrl). The legacy post.creator slot still ships from the backend
   // via legacyCreatorFromAuthor, but new code reads from post.author so
   // retiring that bridge becomes safe.
+  // A made-up username (user_…) is never shown as the author's name.
   const creatorName =
     publicAuthor?.displayName ||
-    publicAuthor?.handle ||
+    chosenUsername(publicAuthor?.handle) ||
     post.creator?.name ||
-    post.creator?.username ||
+    chosenUsername(post.creator?.username) ||
     'Neighbor';
 
   const creatorAvatar =
@@ -575,7 +578,8 @@ function PostCard({
         {/* Type-specific CTA */}
         {config.ctaLabel && (
           <button
-            onClick={() => onComment(post.id)}
+            onClick={() => (ctaSaves ? onSave?.(post.id) : onComment(post.id))}
+            aria-pressed={ctaSaves ? Boolean(post.userHasSaved) : undefined}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 hover:shadow-sm active:scale-95 ${POST_TYPE_THEMED_TEXT}`}
             style={{
               background: `${config.color}10`,
@@ -584,7 +588,7 @@ function PostCard({
             }}
           >
             {ctaIconNode && <span className="flex-shrink-0">{ctaIconNode}</span>}
-            {config.ctaLabel}
+            {ctaSaves && post.userHasSaved ? 'Saved' : config.ctaLabel}
           </button>
         )}
       </div>
@@ -598,6 +602,7 @@ export default React.memo(PostCard, (prev, next) => {
     && prev.post.updated_at === next.post.updated_at
     && prev.post.like_count === next.post.like_count
     && prev.post.comment_count === next.post.comment_count
+    && prev.post.userHasSaved === next.post.userHasSaved
     && prev.isLiking === next.isLiking
     && prev.currentUserId === next.currentUserId
     && prev.surface === next.surface

@@ -268,7 +268,6 @@ export default function DevPlaceDashboardPage() {
               intelligence={build(false, 'T3')}
               homeId="dev-home"
               userInitials="RC"
-              onClaim={() => {}}
             />
           </Column>
           <Column label="Loading">

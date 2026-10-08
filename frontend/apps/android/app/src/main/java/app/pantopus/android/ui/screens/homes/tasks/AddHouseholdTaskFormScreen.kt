@@ -412,19 +412,33 @@ private fun AssigneePicker(
                 onClick = { onSelect(member.id) },
             )
         }
-        if (members.isEmpty()) {
-            Text(
-                text =
-                    if (memberListUnavailable) {
-                        "Member list unavailable. You can leave this task unassigned."
-                    } else {
-                        "No assignable members are available."
-                    },
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextMuted,
+        // Someone this viewer can't see in the list (they may not list members, or the person left)
+        // stays selected under the same short label the task list uses.
+        if (selectedId != null && members.none { it.id == selectedId }) {
+            AssigneeRow(
+                id = selectedId,
+                title = HouseholdTasksListViewModel.assigneeDisplay(selectedId) ?: "Current assignee",
+                initials = "··",
+                selected = true,
+                onClick = { onSelect(selectedId) },
             )
         }
+        AssigneeNote(members.isEmpty(), memberListUnavailable)
     }
+}
+
+@Composable
+private fun AssigneeNote(
+    noMembers: Boolean,
+    memberListUnavailable: Boolean,
+) {
+    val text =
+        when {
+            memberListUnavailable -> "Household members couldn't be loaded. You can take this task yourself or leave it unassigned."
+            noMembers -> "No assignable members are available."
+            else -> return
+        }
+    Text(text = text, style = PantopusTextStyle.caption, color = PantopusColors.appTextMuted)
 }
 
 @Composable

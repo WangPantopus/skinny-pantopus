@@ -438,8 +438,10 @@ function statusToState(status: PlaceSectionStatus): PlaceSectionState {
 }
 
 // ── lock reason / CTA, by band (rare on the authed dashboard) ─
-function lockCta(band: PlaceBand): string {
-  if (band === 'D') return 'Verify address';
+// Someone who already set the Home up verifies by mail next, so every lock
+// is that step, never another claim.
+function lockCta(band: PlaceBand, verifyFirst = false): string {
+  if (band === 'D' || verifyFirst) return 'Verify address';
   if (band === 'B' || band === 'C') return 'Claim home';
   return 'Create account';
 }
@@ -455,9 +457,11 @@ function lockReason(env: PlaceSection): string {
 export interface PlaceSectionHandlers {
   onVerify?: () => void;
   onClaim?: () => void;
+  /** The viewer set this Home up and hasn't verified it: every lock is the verify step. */
+  verifyFirst?: boolean;
 }
 function lockHandler(env: PlaceSection, handlers?: PlaceSectionHandlers): (() => void) | undefined {
-  return env.band === 'D' ? handlers?.onVerify : handlers?.onClaim;
+  return env.band === 'D' || handlers?.verifyFirst ? handlers?.onVerify : handlers?.onClaim;
 }
 
 // ── render one section envelope as the right card ───────────
@@ -491,7 +495,7 @@ export function renderSection(env: PlaceSection, opts?: PlaceSectionRenderOption
           icon={cfg.icon}
           title="Verified homes nearby"
           reason={lockReason(env)}
-          cta={lockCta(env.band)}
+          cta={lockCta(env.band, handlers?.verifyFirst)}
           onCta={lockHandler(env, handlers)}
         />
       );
@@ -518,7 +522,7 @@ export function renderSection(env: PlaceSection, opts?: PlaceSectionRenderOption
         icon={cfg.icon}
         title={cfg.title}
         reason={lockReason(env)}
-        cta={lockCta(env.band)}
+        cta={lockCta(env.band, handlers?.verifyFirst)}
         onCta={lockHandler(env, handlers)}
       />
     );

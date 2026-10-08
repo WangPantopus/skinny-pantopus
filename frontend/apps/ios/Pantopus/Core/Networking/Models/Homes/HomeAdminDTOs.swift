@@ -183,8 +183,8 @@ public struct HomeAuditEntryDTO: Decodable, Sendable, Hashable, Identifiable {
     /// (`src/app/homes/[id]/members/index.tsx:393`).
     public var actorDisplayName: String {
         if let name = actor?.name, !name.isEmpty { return name }
-        if let username = actor?.username, !username.isEmpty { return "@\(username)" }
-        return "System"
+        if let handle = MadeUpUsername.handle(actor?.username) { return handle }
+        return actor == nil ? "System" : "Household member"
     }
 
     /// The server's description when it sends one; otherwise the verb in words,
@@ -356,8 +356,8 @@ public struct HouseholdAccessRequestDTO: Decodable, Sendable, Hashable, Identifi
             .compactMap { $0 }
             .filter { !$0.isEmpty }
         if !parts.isEmpty { return parts.joined(separator: " ") }
-        if let username = requester.username, !username.isEmpty { return "@\(username)" }
-        return "Unknown user"
+        // A made-up username (user_…) says nothing about who is asking.
+        return MadeUpUsername.handle(requester.username) ?? "Someone"
     }
 
     private enum CodingKeys: String, CodingKey {

@@ -35,6 +35,7 @@ import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.RootViewModel
 import app.pantopus.android.ui.screens.auth.AuthNavHost
 import app.pantopus.android.ui.screens.auth.ContinueAsScreen
+import app.pantopus.android.ui.screens.profile.NamePromptHost
 import app.pantopus.android.ui.screens.root.RootTabScreen
 import app.pantopus.android.ui.theme.PantopusColors
 
@@ -118,6 +119,8 @@ fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
                             manager = viewModel.appLockManager,
                             isSignedIn = true,
                         )
+                        // One-time "What should we call you?" for an account with no name.
+                        NamePromptHost(userId = state.user.id)
                         // Step-up coordinator (device_key biometric / password
                         // sheet) for the 403 STEP_UP_REQUIRED interceptor and
                         // the Devices / delete-account flows.

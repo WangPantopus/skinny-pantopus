@@ -93,8 +93,9 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
     }
 
     public var derivedTitle: String {
+        // A made-up username (user_…) never names the train ("Meals for user_…").
         let recipientName = selectedBeneficiary?.name
-            ?? selectedBeneficiary?.username
+            ?? MadeUpUsername.chosen(selectedBeneficiary?.username)
             ?? beneficiaryQuery.trimmingCharacters(in: .whitespaces)
         let name = recipientName.isEmpty ? "a neighbor" : recipientName
         return "\(kind.title) for \(name)"
@@ -517,6 +518,6 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
     }
 
     private func displayName(_ recipient: MailRecipientDTO) -> String {
-        recipient.name ?? recipient.username ?? "Recipient"
+        recipient.name ?? MadeUpUsername.chosen(recipient.username) ?? "Recipient"
     }
 }

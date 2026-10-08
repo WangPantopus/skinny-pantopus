@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
 import { RemovalController } from './RemovalController';
 import type { RemovalInput, RemovalDraft, RemovalContext } from './removalModel';
+import { RETURN_REFRESH_MS } from '../returnRefresh';
 
 interface View {
   ready: boolean; busy: boolean; error: string; pending: RemovalDraft | null; canAcknowledge: boolean;
@@ -31,10 +32,11 @@ export function useRemoval(selectionKey: string) {
       generation.current++; readGeneration.current++; controller.current?.retire(); controller.current = null;
       setView({ ...empty, lifetime: generation.current }); setRoster({ state: 'unchecked' });
     };
+    let lastOpen = 0;
     const open = async () => {
       retire();
-      if (disposed || document.visibilityState === 'hidden') return;
-      const revision = generation.current;
+      if (disposed) return;
+      const revision = generation.current; lastOpen = Date.now();
       let current: RemovalController | null = null;
       try {
         current = new RemovalController(); controller.current = current; await current.open();
@@ -48,17 +50,27 @@ export function useRemoval(selectionKey: string) {
           error: 'Couldn’t open your removals. Anything unfinished is kept. Reload to try again.' });
       }
     };
-    const visibility = () => { if (document.visibilityState === 'hidden') retire(); else void open(); };
+    // Coming back keeps what the page shows, including a removal you're reviewing: submitting checks it again
+    // on the server. A changed sign-in opens it again at once; a page that couldn't open tries again at most
+    // every 30 s.
+    const resume = () => {
+      if (disposed || document.visibilityState === 'hidden') return;
+      const current = controller.current;
+      if (current && !current.current()) { void open(); return; }
+      if (current?.opened || Date.now() - lastOpen < RETURN_REFRESH_MS) return;
+      void open();
+    };
+    const pageshow = (event: PageTransitionEvent) => { if (event.persisted) void open(); };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) void open(); };
     const session = () => { retire(); queueMicrotask(() => { if (!disposed) void open(); }); };
     const unsubscribe = api.onTokenChange(session);
     window.addEventListener('storage', storage); window.addEventListener('pagehide', retire);
-    window.addEventListener('pageshow', visibility); window.addEventListener('focus', visibility);
-    document.addEventListener('visibilitychange', visibility); void open();
+    window.addEventListener('pageshow', pageshow); window.addEventListener('focus', resume);
+    document.addEventListener('visibilitychange', resume); void open();
     return () => {
       disposed = true; retire(); unsubscribe(); window.removeEventListener('storage', storage);
-      window.removeEventListener('pagehide', retire); window.removeEventListener('pageshow', visibility);
-      window.removeEventListener('focus', visibility); document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener('pagehide', retire); window.removeEventListener('pageshow', pageshow);
+      window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume);
     };
   }, [selectionKey, reload, publish]);
   const run = async <T,>(action: (current: RemovalController) => Promise<T>): Promise<T | undefined> => {

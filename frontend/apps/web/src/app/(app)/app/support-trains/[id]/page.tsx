@@ -6,10 +6,11 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
-import { buildSupportTrainShareUrl } from '@pantopus/utils';
+import { buildSupportTrainShareUrl, chosenUsername } from '@pantopus/utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
+import { contributionSummary, trainStatusLabel } from '@/components/support-trains/contributionLabels';
 import {
   Calendar,
   Clock,
@@ -72,7 +73,13 @@ function getOrganizerUser(
 }
 
 function displayOrganizerName(user: OrganizerUser | null | undefined): string {
-  return user?.name || user?.username || 'Organizer';
+  return user?.name || chosenUsername(user?.username) || 'Organizer';
+}
+
+// The organizer who posted an update: the train sends only its author_user_id.
+function updateAuthorName(train: SupportTrainWithOrganizers | null | undefined, authorUserId: unknown): string {
+  const organizers = Array.isArray(train?.organizers) ? train.organizers : [];
+  return displayOrganizerName(organizers.find((organizer) => organizer?.user?.id === authorUserId)?.user);
 }
 
 function getProfileHref(user: OrganizerUser | null | undefined): string | null {
@@ -192,6 +199,11 @@ export default function SupportTrainDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [reservationError, setReservationError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('needs');
+  // An update notification links here with ?tab=updates, so the update is what opens.
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'updates' || tab === 'details') setActiveTab(tab);
+  }, []);
   // Reservation id of the helper action in flight (Mark delivered / Leave slot).
   const [helperAction, setHelperAction] = useState<string | null>(null);
   const [reserveSlot, setReserveSlot] = useState<any>(null);
@@ -396,9 +408,18 @@ export default function SupportTrainDetailPage() {
   };
 
   // The helper's own commitment, as on iOS and Android: mark it delivered, or
-  // leave the slot so it opens for someone else.
-  const handleMarkDelivered = async (reservationId: string) => {
+  // leave the slot so it opens for someone else. Before the slot's day, marking it delivered
+  // asks first: the organizer is told at once that it arrived.
+  const handleMarkDelivered = async (reservationId: string, slotDate?: string | null) => {
     if (helperAction) return;
+    if (slotDate && String(slotDate) > todayKey) {
+      const confirmed = await confirmStore.open({
+        title: 'Mark delivered early?',
+        description: `This slot is for ${formatSlotDay(String(slotDate))}. The organizer will be told it was delivered.`,
+        confirmLabel: 'Mark delivered',
+      });
+      if (!confirmed) return;
+    }
     setHelperAction(reservationId);
     try {
       await api.supportTrains.markDelivered(id, reservationId);
@@ -517,7 +538,7 @@ export default function SupportTrainDetailPage() {
               disabled={!isOrganizer && Boolean(closedReason)}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition disabled:cursor-not-allowed disabled:bg-app-border-strong disabled:text-app-text-secondary disabled:hover:bg-app-border-strong"
             >
-              {isOrganizer ? 'View signups' : closedReason ?? 'Take a slot'}
+              {isOrganizer ? 'View signups' : closedReason ?? 'Sign up for a slot'}
             </button>
             <button
               onClick={handleCopyLink}
@@ -546,7 +567,7 @@ export default function SupportTrainDetailPage() {
                   reservation={reservation}
                   slot={slotsById.get(reservation.slot_id)}
                   busy={helperAction !== null}
-                  onDelivered={() => handleMarkDelivered(reservation.id)}
+                  onDelivered={(slotDate) => handleMarkDelivered(reservation.id, slotDate)}
                   onLeave={() => handleLeaveSlot(reservation.id)}
                 />
               ))}
@@ -696,7 +717,7 @@ export default function SupportTrainDetailPage() {
                   >
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-semibold text-app-text">
-                        {u.author?.name || 'Organizer'}
+                        {u.author?.name || updateAuthorName(data, u.author_user_id)}
                       </span>
                       <span className="text-xs text-app-text-muted">
                         {formatTimeAgo(u.created_at)}
@@ -728,7 +749,7 @@ export default function SupportTrainDetailPage() {
                 <span
                   className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusBadgeClasses(data.status)}`}
                 >
-                  {data.status}
+                  {trainStatusLabel(data.status)}
                 </span>
               </div>
             </div>
@@ -788,23 +809,25 @@ export default function SupportTrainDetailPage() {
 
 // ─── Sub-components ─────────────────────────────────────────────────────
 
-const CONTRIBUTION_LABELS: Record<string, string> = {
-  cook: 'Home-cooked meal',
-  takeout: 'Takeout / delivery',
-  groceries: 'Groceries',
-};
-
 const MY_SIGNUP_STATUS: Record<string, string> = {
   reserved: "You're signed up",
   delivered: 'Marked delivered',
   confirmed: 'Delivery confirmed',
 };
 
+// The helper's estimated arrival as "5:30 pm" in this browser's time zone, as the organizer's table shows it.
+function arrivalLabel(iso: unknown): string | null {
+  if (typeof iso !== 'string' || !iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+}
+
 function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
   reservation: any;
   slot: any;
   busy: boolean;
-  onDelivered: () => void;
+  onDelivered: (slotDate?: string | null) => void;
   onLeave: () => void;
 }) {
   const dateStr = slot?.slot_date
@@ -815,10 +838,8 @@ function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
         timeZone: 'UTC',
       })
     : '';
-  const contribution = [
-    CONTRIBUTION_LABELS[reservation.contribution_mode] || null,
-    reservation.dish_title || reservation.restaurant_name || null,
-  ].filter(Boolean).join(': ');
+  const contribution = contributionSummary(reservation);
+  const arrival = arrivalLabel(reservation.estimated_arrival_at);
   const isReserved = reservation.status === 'reserved';
 
   return (
@@ -829,7 +850,11 @@ function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
       {slot?.start_time && (
         <p className="text-xs text-app-text-secondary mt-0.5">{formatSlotWindow(slot.start_time, slot.end_time)}</p>
       )}
-      {contribution && <p className="text-xs text-app-text-secondary mt-0.5">{contribution}</p>}
+      {(contribution || arrival) && (
+        <p className="text-xs text-app-text-secondary mt-0.5">
+          {[contribution, arrival && `arrives ${arrival}`].filter(Boolean).join(' · ')}
+        </p>
+      )}
       <p className="text-xs font-medium text-primary-700 dark:text-primary-300 mt-1">
         {MY_SIGNUP_STATUS[reservation.status] || "You're signed up"}
       </p>
@@ -837,7 +862,7 @@ function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
         <div className="flex flex-wrap gap-2 mt-3">
           <button
             type="button"
-            onClick={onDelivered}
+            onClick={() => onDelivered(slot?.slot_date)}
             disabled={busy}
             className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-app-border bg-app-surface text-app-text hover:bg-app-surface-sunken disabled:opacity-50 transition"
           >
@@ -1124,9 +1149,7 @@ function OwnerSignupCard({ row }: { row: OwnerSignupRow }) {
               <span className="font-normal text-app-text-muted">
                 {' '}
                 · {formatSlotSummary(slot)}
-                {reservation.contribution_mode
-                  ? ` · ${formatContributionMode(reservation.contribution_mode)}`
-                  : ''}
+                {contributionSummary(reservation) ? ` · ${contributionSummary(reservation)}` : ''}
               </span>
             </span>
           ))}
@@ -1279,6 +1302,16 @@ function helperIdentity(reservation: any): string {
     reservation?.id ||
     'helper'
   );
+}
+
+// "Fri, Oct 9" for a slot_date (a calendar day, so read in UTC).
+function formatSlotDay(slotDate: string): string {
+  return new Date(`${slotDate}T00:00:00Z`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 function formatContributionMode(mode: string): string {

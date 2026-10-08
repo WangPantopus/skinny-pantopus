@@ -182,6 +182,8 @@ struct RootView: View {
         // One-time offer to turn app lock on, after the first sensitive action
         // the person verifies (RN raised it right after sign-in).
         .appLockSetupPrompt(manager: appLock, isSignedIn: isSignedInState)
+        // One-time "What should we call you?" for an account with no name.
+        .namePrompt(userId: signedInUserId)
         .onAppear {
             syncAppLock()
             installStepUpPrompt()
@@ -210,6 +212,12 @@ struct RootView: View {
     private var isSignedInState: Bool {
         if case .signedIn = auth.state { return true }
         return false
+    }
+
+    /// The signed-in account's id — gates the one-time name sheet.
+    private var signedInUserId: String? {
+        if case let .signedIn(user) = auth.state { return user.id }
+        return nil
     }
 
     /// Signed-in *and* locked — the only state that raises `AppLockOverlay`.

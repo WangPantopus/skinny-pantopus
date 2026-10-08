@@ -44,10 +44,18 @@ struct AddressTodayTabView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Today")
-                .font(.system(size: 22, weight: .bold))
-                .kerning(-0.4)
-                .foregroundStyle(Theme.Color.appText)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Today")
+                    .font(.system(size: 22, weight: .bold))
+                    .kerning(-0.4)
+                    .foregroundStyle(Theme.Color.appText)
+                // The date beside the title (the f1-today-tab design); it turns over at midnight.
+                TimelineView(.everyMinute) { minute in
+                    Text(minute.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                }
+            }
             if let address {
                 Text(address)
                     .font(.system(size: 13, weight: .medium))

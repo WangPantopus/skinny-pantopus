@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import ReviewForm from '@/components/ReviewForm';
 import type { GigDetail, User, Review } from '@pantopus/types';
+import { chosenUsername } from '@pantopus/utils';
 
 export default function GigReviewPage() {
   const params = useParams();
@@ -65,8 +66,8 @@ export default function GigReviewPage() {
     // task has no accepted bid to read the helper's name from.
     const revieweeName =
       (isOwner
-        ? gig?.accepted_bid?.bidder?.name || gig?.accepted_bid?.bidder?.username || gig?.acceptedBy?.displayName
-        : gig?.owner?.name || gig?.owner?.username || gig?.user?.name || gig?.user?.username
+        ? gig?.accepted_bid?.bidder?.name || chosenUsername(gig?.accepted_bid?.bidder?.username) || gig?.acceptedBy?.displayName
+        : gig?.owner?.name || chosenUsername(gig?.owner?.username) || gig?.user?.name || chosenUsername(gig?.user?.username)
           || gig?.creator?.displayName) ||
       revieweeLabel;
 

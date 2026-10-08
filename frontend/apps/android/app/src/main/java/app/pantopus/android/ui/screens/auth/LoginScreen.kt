@@ -214,8 +214,8 @@ fun LoginScreen(
             Box(modifier = Modifier.height(Spacing.s3))
         }
 
-        // Persistent login — L3 prefill from the most recent remembered
-        // account (display hint only: the real address comes from autofill).
+        // Persistent login — L3: the most recent remembered account, whose
+        // address the view model fills into the email field below.
         state.rememberedAccount?.let { hint ->
             RememberedAccountHeader(
                 hint = hint,
@@ -549,8 +549,8 @@ private fun OAuthButton(
 /**
  * Persistent login — the remembered-account strip above the form: avatar,
  * "Welcome back, Ying", masked email, and "Not you?" which forgets the
- * account on this device. Mirrors iOS `LoginView`'s remembered-account
- * header.
+ * account on this device. The form below is filled in with the account's
+ * address. Mirrors iOS `LoginView`'s remembered-account header.
  */
 @Composable
 private fun RememberedAccountHeader(
@@ -799,9 +799,10 @@ private fun PasswordFieldWithForgot(
                         .testTag(LoginScreenTags.PASSWORD_FIELD)
                         .semantics { contentDescription = "Password" },
                 decorationBox = { inner ->
+                    // Words, not dots: a dotted placeholder reads as a password already entered.
                     if (value.isEmpty()) {
                         Text(
-                            text = "••••••••",
+                            text = "Enter your password",
                             style = PantopusTextStyle.body,
                             color = PantopusColors.appTextMuted,
                         )

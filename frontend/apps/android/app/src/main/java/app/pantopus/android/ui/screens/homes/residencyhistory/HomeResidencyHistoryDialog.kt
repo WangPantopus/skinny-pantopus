@@ -149,14 +149,12 @@ private fun HistoryDetail(item: HomeResidencyHistoryItem) {
         Text("Current claim reference", style = MaterialTheme.typography.titleMedium)
         Text(currentApplicant(item))
         Text("Current claim status: ${item.currentClaimStatus}")
-        Text("This is today's referenced claim and public username, not a saved identity snapshot.")
+        Text("This is today's referenced claim and the applicant's current name, not a saved identity snapshot.")
         Text("Current household access has not been checked. This saved result does not restore access or decide a later request.")
     }
 }
 
-private fun currentApplicant(item: HomeResidencyHistoryItem): String =
-    item.currentApplicant?.username?.takeIf(String::isNotBlank)?.let { "Current public username: @$it" }
-        ?: "Current public username unavailable"
+private fun currentApplicant(item: HomeResidencyHistoryItem): String = item.currentApplicant?.label ?: "Current applicant unavailable"
 
 private fun historyDate(value: String): String =
     DateTimeFormatter.ofPattern("MMM d, uuuu HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.parse(value))

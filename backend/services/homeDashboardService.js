@@ -12,6 +12,7 @@ const authority = require('./homeAuthorityService');
 const { getHealthScore, canReadHealthScore } = require('./homeHealthService');
 const { describeHomeActivity } = require('../utils/homeActivityLabels');
 const { isLaunchFeatureEnabled, excludeHiddenHomeActivity } = require('../utils/featureFlags');
+const { localDisplayNames } = require('../utils/identityProfiles');
 
 const MESSAGES = {
   HOME_DASHBOARD_UNAVAILABLE: 'Could not load the Home summary. Please retry.',
@@ -43,12 +44,21 @@ async function count(query) {
 const permissionKey = permissions => JSON.stringify([...permissions].sort());
 async function readAccess(homeId, actorId, permission = 'home.view') {
   const denied = permission === 'home.view' ? 'HOME_DASHBOARD_DENIED' : 'HOME_RESOURCE_DENIED';
-  const access = await getUserAccess(homeId, actorId);
-  if (!access.hasAccess || !access.permissions.includes(permission)) throw failure(denied, 403);
   // Use the established SQL context as well: it fences frozen/archived Homes,
   // disputed ownership pointers and private setup. Private task first-use stays
   // on its own exact collection capability; it is not shared dashboard access.
-  const { data: context } = await checked(db.rpc('home_record_context', { p_home_id: homeId, p_user_id: actorId }));
+  // It needs only the ids, so it is read alongside the access check (one
+  // database round trip, not two); outcomes keep their order: an access error,
+  // then a denial, then a failed context read.
+  const [accessRead, contextRead] = await Promise.allSettled([
+    getUserAccess(homeId, actorId),
+    checked(db.rpc('home_record_context', { p_home_id: homeId, p_user_id: actorId })),
+  ]);
+  if (accessRead.status === 'rejected') throw accessRead.reason;
+  const access = accessRead.value;
+  if (!access.hasAccess || !access.permissions.includes(permission)) throw failure(denied, 403);
+  if (contextRead.status === 'rejected') throw contextRead.reason;
+  const { data: context } = contextRead.value;
   if (!context || typeof context.allowed !== 'boolean' || typeof context.private !== 'boolean'
     || !Array.isArray(context.permissions)) throw failure();
   if (!context.allowed || context.private || !context.permissions.includes(permission)) throw failure(denied, 403);
@@ -217,12 +227,17 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
 
   // Pending, future, ended and unknown-role rows are not active household members.
   const members = rawMembers.filter(member => currentOccupancy(member) && resolveHomeRole(member));
-  const ownerRows = members.length ? await rows(db.from('HomeOwner').select('subject_id, owner_status, verification_tier')
-    .eq('home_id', homeId).eq('subject_type', 'user').in('subject_id', members.map(member => member.user_id)).neq('owner_status', 'revoked')) : [];
+  // Members show by the name they show neighbors (a made-up username never stands in for it).
+  const [ownerRows, memberNames] = members.length ? await Promise.all([
+    rows(db.from('HomeOwner').select('subject_id, owner_status, verification_tier')
+      .eq('home_id', homeId).eq('subject_type', 'user').in('subject_id', members.map(member => member.user_id)).neq('owner_status', 'revoked')),
+    localDisplayNames(members.map(member => member.user_id)).catch(() => { throw failure(); }),
+  ]) : [[], new Map()];
   const owners = new Map(ownerRows.map(owner => [owner.subject_id, owner]));
   const enrichedMembers = members.map(member => {
     const owner = owners.get(member.user_id);
-    return { user_id: member.user_id, role: member.role, role_base: member.role_base, is_active: member.is_active, user: serializeUserAsLocalIdentity(member.user),
+    const user = member.user && { ...member.user, display_name: memberNames.get(String(member.user_id)) || 'Household member' };
+    return { user_id: member.user_id, role: member.role, role_base: member.role_base, is_active: member.is_active, user: serializeUserAsLocalIdentity(user),
       display_role: ({ verified: 'owner', pending: 'pending_owner', disputed: 'disputed_owner' })[owner?.owner_status] || member.role,
       ownership_status: owner?.owner_status || null, verification_tier: owner?.verification_tier || null };
   });

@@ -30,6 +30,8 @@ import { PlaceHomeContext, placeHomeQuery } from '@/components/archetypes/place'
 export interface PlaceNavRailProps {
   /** 'overview' | a detail slug ('today', 'risk', …) | 'pulse'. */
   active: string;
+  /** Detail slugs that don't apply to this viewer (a guest has no Money signals). */
+  hidden?: string[];
 }
 
 const NAV_ITEMS: Array<{ key: string; href: string; label: string; icon: LucideIcon }> = [
@@ -43,7 +45,7 @@ const NAV_ITEMS: Array<{ key: string; href: string; label: string; icon: LucideI
   { key: 'identity', href: '/app/place/identity', label: 'Identity', icon: BadgeCheck },
 ];
 
-export default function PlaceNavRail({ active }: PlaceNavRailProps) {
+export default function PlaceNavRail({ active, hidden = [] }: PlaceNavRailProps) {
   const homeQuery = placeHomeQuery(useContext(PlaceHomeContext));
   return (
     <nav aria-label="Place sections" className="sticky top-[72px] self-start">
@@ -51,7 +53,7 @@ export default function PlaceNavRail({ active }: PlaceNavRailProps) {
         Your place
       </div>
       <ul className="flex flex-col gap-0.5">
-        {NAV_ITEMS.map(({ key, href, label, icon: Icon }) => {
+        {NAV_ITEMS.filter(({ key }) => !hidden.includes(key)).map(({ key, href, label, icon: Icon }) => {
           const isActive = active === key;
           return (
             <li key={key}>

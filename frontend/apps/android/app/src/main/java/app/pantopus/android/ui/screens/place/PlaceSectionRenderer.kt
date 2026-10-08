@@ -28,11 +28,13 @@ fun PlaceSectionView(
     // "Try again" on a section that failed to load: re-read the place.
     onRetry: (() -> Unit)? = null,
     retrying: Boolean = false,
+    // The viewer set this Home up and hasn't verified it: every lock is the verify step.
+    verifiesFirst: Boolean = false,
 ) {
     val baseState = PlacePresentation.cardState(env)
     val cardState = if (retrying && baseState == PlaceSectionCardState.ERROR) PlaceSectionCardState.LOADING else baseState
     val lockHandler =
-        if (env.band == app.pantopus.android.data.api.models.place.PlaceBand.D) onVerify else onClaim
+        if (verifiesFirst || env.band == app.pantopus.android.data.api.models.place.PlaceBand.D) onVerify else onClaim
 
     when {
         env.sectionId == PlaceSectionId.BLOCK_DENSITY -> {
@@ -49,7 +51,7 @@ fun PlaceSectionView(
                     PlaceLockedCard(
                         title = "Verified homes nearby",
                         reason = PlacePresentation.lockReason(env),
-                        cta = PlacePresentation.lockCta(env),
+                        cta = PlacePresentation.lockCta(env, verifiesFirst),
                         icon = PantopusIcon.Users,
                         onTap = lockHandler,
                     )
@@ -76,7 +78,7 @@ fun PlaceSectionView(
             PlaceLockedCard(
                 title = cfg.title,
                 reason = PlacePresentation.lockReason(env),
-                cta = PlacePresentation.lockCta(env),
+                cta = PlacePresentation.lockCta(env, verifiesFirst),
                 icon = cfg.icon,
                 onTap = lockHandler,
             )

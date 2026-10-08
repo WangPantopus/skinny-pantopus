@@ -15,6 +15,7 @@ const {
   getPersonaById,
   getPersonaMembershipForUser,
   getViewerTierRankForPersona,
+  localDisplayNames,
 } = require('../utils/identityProfiles');
 const { isPersonaEnabled } = require('../utils/featureFlags');
 const {
@@ -94,17 +95,35 @@ function _buildSeededItem(fact, timestamp, systemAuthor) {
   };
 }
 
+/**
+ * The seeded fact IDs a user dismissed. Empty when the lookup fails, so all facts show.
+ */
+async function loadDismissedSeededFactIds(userId) {
+  try {
+    const { data: userData } = await supabaseAdmin
+      .from('User')
+      .select('dismissed_seeded_facts')
+      .eq('id', userId)
+      .maybeSingle();
+    if (Array.isArray(userData?.dismissed_seeded_facts)) {
+      return new Set(userData.dismissed_seeded_facts);
+    }
+  } catch { /* ignore — show all facts if lookup fails */ }
+  return new Set();
+}
+
 const DISMISSED_FACTS_CAP = 50;
 const notificationService = require('../services/notificationService');
 const { isFanBlockedFromPersona } = require('../services/personaBlockService');
 const { runPostCreatedHooks } = require('../services/postCreationHooksService');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const {
   normalizeFeedPostRow,
   normalizeMediaUrls,
   normalizeAlignedMediaUrls,
   getMuteAndHideFilters,
   applyMuteHideFilters,
-  enrichWithUserStatus,
+  enrichFeedPosts,
   attachIdentityAuthors,
   applyPostLocationPrivacy,
   applyPostLocationPrivacyBatch,
@@ -552,10 +571,6 @@ async function serializePostForViewer(post, viewerUserId) {
   return serialized || post;
 }
 
-async function serializePostsForViewer(posts, viewerUserId) {
-  return attachIdentityAuthors(posts || [], viewerUserId);
-}
-
 
 
 async function isConnectedToUser(viewerId, authorId) {
@@ -778,7 +793,7 @@ async function getUserDisplayName(userId) {
     .eq('id', userId)
     .single();
   if (!data) return 'Someone';
-  return data.name || data.first_name || data.username || 'Someone';
+  return data.name || data.first_name || chosenUsernameOrNull(data.username) || 'Someone';
 }
 
 // ============ POST ROUTES ============
@@ -1671,20 +1686,11 @@ router.get('/feed', verifyToken, async (req, res) => {
     if (isColdStart && realPostCount < 5) {
       try {
         const geohash = _encodeGeohash6(feedLatitude, feedLongitude);
-        const facts = await generateNeighborhoodFacts(geohash);
-
-        // Load user's dismissed fact IDs
-        let dismissedIds = new Set();
-        try {
-          const { data: userData } = await supabaseAdmin
-            .from('User')
-            .select('dismissed_seeded_facts')
-            .eq('id', userId)
-            .maybeSingle();
-          if (Array.isArray(userData?.dismissed_seeded_facts)) {
-            dismissedIds = new Set(userData.dismissed_seeded_facts);
-          }
-        } catch { /* ignore — show all facts if lookup fails */ }
+        // The facts and the user's dismissed fact IDs are read together.
+        const [facts, dismissedIds] = await Promise.all([
+          generateNeighborhoodFacts(geohash),
+          loadDismissedSeededFactIds(userId),
+        ]);
 
         // Filter out dismissed facts
         const eligibleFacts = facts.filter((f) => !dismissedIds.has(f.id));
@@ -2078,8 +2084,7 @@ router.get('/saved', verifyToken, async (req, res) => {
       userId
     );
     // The viewer's like/save/repost state, as every feed lane returns it (the cards draw it).
-    const withStatus = await enrichWithUserStatus(privacySafePosts, userId);
-    const serializedPosts = await serializePostsForViewer(withStatus, userId);
+    const serializedPosts = await enrichFeedPosts(privacySafePosts, userId);
 
     // Offsets count saves, not the posts left after the visibility check, so a short page isn't the end.
     const savesRead = (saves || []).length;
@@ -2193,11 +2198,10 @@ router.get('/feed/home', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch home feed' });
     }
 
-    const enriched = await enrichWithUserStatus(
+    const serialized = await enrichFeedPosts(
       (posts || []).map(r => normalizeFeedPostRow(r, new Set(), new Set())),
       userId
     );
-    const serialized = await serializePostsForViewer(enriched, userId);
 
     res.json({
       posts: serialized,
@@ -2347,7 +2351,7 @@ router.get('/mute', verifyToken, async (req, res) => {
         return {
           entity_type: m.muted_entity_type,
           entity_id: m.muted_entity_id,
-          name: account.name || fullName || account.username || 'Pantopus member',
+          name: account.name || fullName || chosenUsernameOrNull(account.username) || 'Pantopus member',
           username: account.username || null,
           avatar_url: account.profile_picture_url || null,
           muted_at: m.created_at,
@@ -2978,7 +2982,13 @@ router.get('/:id/likes', verifyToken, async (req, res) => {
     const { data: likes, error } = await likesQuery.order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
     if (error) { logger.error('Error fetching likes', { error: error.message, postId: id }); return res.status(500).json({ error: 'Failed to fetch likes' }); }
-    res.json({ likes: (likes || []).map(serializeLikeForViewer), pagination: { limit: parseInt(limit), offset: parseInt(offset) } });
+    // SAFE_CREATOR_SELECT carries no name: on a neighbor's post, likers show the name they show neighbors (a made-up
+    // username never stands in). A persona post's likers keep the audience-side firewall.
+    const names = post.identity_context_type === 'persona' ? new Map()
+      : await localDisplayNames((likes || []).map((like) => like.user?.id)).catch(() => new Map());
+    const named = (likes || []).map((like) => (like.user && names.has(String(like.user.id))
+      ? { ...like, user: { ...like.user, display_name: names.get(String(like.user.id)) } } : like));
+    res.json({ likes: named.map(serializeLikeForViewer), pagination: { limit: parseInt(limit), offset: parseInt(offset) } });
   } catch (err) {
     logger.error('Likes fetch error', { error: err.message, postId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch likes' });
@@ -3479,13 +3489,20 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     let connection = null;
 
     if (!isOwn) {
-      // Check if there's an accepted relationship (connection)
-      const { data: connectionData } = await supabaseAdmin
-        .from('Relationship')
-        .select('id')
-        .eq('status', 'accepted')
-        .or(`and(requester_id.eq.${requestingUserId},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${requestingUserId})`)
-        .maybeSingle();
+      // Check if there's an accepted relationship (connection), and whether either person blocked
+      // the other: profile blocks (UserBlock) hide posts in both directions, as canViewPost does.
+      const [blocked, { data: connectionData }] = await Promise.all([
+        blockService.isBlocked(userId, requestingUserId),
+        supabaseAdmin
+          .from('Relationship')
+          .select('id')
+          .eq('status', 'accepted')
+          .or(`and(requester_id.eq.${requestingUserId},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${requestingUserId})`)
+          .maybeSingle(),
+      ]);
+      if (blocked) {
+        return res.json({ posts: [], pagination: buildCursorPagination([], parsedLimit) });
+      }
       connection = connectionData;
     }
 
@@ -3558,8 +3575,7 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     }
 
     const normalized = filtered.map(r => normalizeFeedPostRow(r, new Set(), new Set()));
-    const enriched = await enrichWithUserStatus(normalized, requestingUserId);
-    const serialized = await serializePostsForViewer(enriched, requestingUserId);
+    const serialized = await enrichFeedPosts(normalized, requestingUserId);
 
     res.json({
       posts: serialized,

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { chosenUsername } from '@pantopus/utils';
 
 export default function BusinessTeamPage() {
   const params = useParams();
@@ -108,8 +109,8 @@ export default function BusinessTeamPage() {
               {members.map((m) => (
                 <div key={m.id} className="px-4 py-3 flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-medium text-app-text">{m.user?.name || m.user?.username}</div>
-                    <div className="text-xs text-app-text-secondary">@{m.user?.username} · {m.role_base}{m.title ? ` · ${m.title}` : ''}</div>
+                    <div className="text-sm font-medium text-app-text">{m.user?.name || chosenUsername(m.user?.username) || 'Team member'}</div>
+                    <div className="text-xs text-app-text-secondary">{[chosenUsername(m.user?.username) && `@${chosenUsername(m.user?.username)}`, m.role_base, m.title].filter(Boolean).join(' · ')}</div>
                   </div>
                   {m.role_base !== 'owner' && (
                     <button onClick={() => void removeMember(m.user?.id)} className="text-xs text-red-600 hover:underline">

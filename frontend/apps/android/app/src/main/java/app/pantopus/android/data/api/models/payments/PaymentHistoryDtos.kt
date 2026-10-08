@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.payments
 
+import app.pantopus.android.core.identity.MadeUpUsername
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -82,5 +83,5 @@ data class PaymentHistoryPartyDto(
     val displayName: String?
         get() =
             name?.trim()?.takeIf { it.isNotEmpty() }
-                ?: username?.trim()?.takeIf { it.isNotEmpty() }?.let { "@$it" }
+                ?: MadeUpUsername.handle(username)
 }

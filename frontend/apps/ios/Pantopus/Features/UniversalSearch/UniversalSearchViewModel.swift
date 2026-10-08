@@ -302,12 +302,13 @@ public final class UniversalSearchViewModel {
             UniversalSearchEndpoints.people(query: text, limit: limit)
         )
         return response.users.map { user in
-            let name = user.name?.nonEmpty ?? user.username?.nonEmpty ?? "Neighbor"
+            // A made-up username (user_…) is never shown as a name or a handle.
+            let name = user.name?.nonEmpty ?? MadeUpUsername.chosen(user.username) ?? "Neighbor"
             return UniversalSearchResult(
                 id: user.id,
                 kind: .person,
                 title: name,
-                subtitle: user.username?.nonEmpty.map { "@\($0)" },
+                subtitle: MadeUpUsername.handle(user.username),
                 meta: Self.locality(city: user.city, state: user.state),
                 imageURL: user.profilePicture.flatMap(URL.init(string:)),
                 destination: .person(userId: user.id)

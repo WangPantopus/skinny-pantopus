@@ -326,7 +326,7 @@ extension MyHomesListViewModel {
         }
         let ownerAction = showsClaimStatus(entry) ? "Check ownership claim" : "Continue ownership verification"
         let footerTitle = entry
-            .accessKind == "private_setup" ? "My tasks" : pending == .owner ? ownerAction : pending == .residency ?
+            .accessKind == "private_setup" ? "Home tasks" : pending == .owner ? ownerAction : pending == .residency ?
             "Check residency status" : nil
         return footerTitle.map { text in
             let action = RowFooterAction(

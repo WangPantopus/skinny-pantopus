@@ -7,6 +7,7 @@ import type { ChatMessage, User } from '@pantopus/types';
 import { getDateKey, formatDateLabel } from '@pantopus/ui-utils';
 import { useSocket, useSocketConnected } from './useSocket';
 import { useSocketEvent, useSocketEmit } from './useSocket';
+import { chosenUsername } from '@pantopus/utils';
 
 // Re-export shared helpers so existing consumers don't break
 export { getDateKey, formatDateLabel };
@@ -122,8 +123,9 @@ export function chatPersonName(person: ChatPerson): string | undefined {
   return (person.displayName as string)
     || (person.name as string)
     || [person.first_name ?? person.firstName, person.last_name ?? person.lastName].filter(Boolean).join(' ')
-    || (person.username as string)
-    || (person.handle as string)
+    // A made-up username (user_…) is never shown as the person's name.
+    || chosenUsername(person.username as string)
+    || chosenUsername(person.handle as string)
     || undefined;
 }
 

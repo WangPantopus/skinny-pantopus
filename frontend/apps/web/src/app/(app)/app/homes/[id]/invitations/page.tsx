@@ -5,5 +5,5 @@ import SenderInvitationManager from '@/components/home/invitations/SenderInvitat
 export default function HomeInvitationsPage(){
   const homeId=useParams().id as string;
   return <main className="mx-auto max-w-2xl space-y-5 px-4 py-6"><Link href={`/app/homes/${homeId}/dashboard?tab=security`} className="text-sm text-blue-600 dark:text-blue-400 underline">Back to Home</Link>
-    <SenderInvitationManager homeId={homeId}/></main>;
+    <SenderInvitationManager homeId={homeId} headingLevel={1}/></main>;
 }

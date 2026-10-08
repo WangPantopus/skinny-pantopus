@@ -123,19 +123,23 @@ class HomeResidencyReviewHistoryCodec(moshi: Moshi) {
         check(claimStatus in setOf("pending", "verified", "rejected"))
         check(current["applicant_lookup"] == "current_claim_reference" && current["household_access"] == "not_checked")
         check(current.containsKey("applicant"))
-        val applicant =
-            current["applicant"]?.let {
-                val profile = objectValue(it)
-                val profileId = profile["id"] as? String
-                check(uuid(profileId) && profile.containsKey("name") && profile["name"] == null)
-                check(nullable(profile, "username") { name -> name is String && name.length <= MAX_USERNAME })
-                HomeResidencyHistoryApplicant(checkNotNull(profileId), profile["username"] as? String)
-            }
+        val applicant = current["applicant"]?.let(::applicant)
         return HomeResidencyHistoryItem(
             checkNotNull(id), homeId, checkNotNull(claim), actorId, checkNotNull(action), checkNotNull(created),
             decision["legacy_request"] as Boolean, checkNotNull(status), checkNotNull(reviewed), occupancy, role,
             checkNotNull(claimStatus), applicant,
         )
+    }
+
+    /** Today's applicant reference; display_name comes only from a server that was asked for it. */
+    private fun applicant(value: Any): HomeResidencyHistoryApplicant {
+        val profile = objectValue(value)
+        val profileId = profile["id"] as? String
+        check(uuid(profileId) && profile.containsKey("name") && profile["name"] == null)
+        check(nullable(profile, "username") { name -> name is String && name.length <= MAX_USERNAME })
+        val shown = profile["display_name"]
+        check(shown == null || shown is String && shown.length <= MAX_USERNAME * 2)
+        return HomeResidencyHistoryApplicant(checkNotNull(profileId), profile["username"] as? String, shown as? String)
     }
 
     private fun objectValue(value: Any?): Map<*, *> =

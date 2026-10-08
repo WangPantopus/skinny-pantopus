@@ -54,6 +54,8 @@ public struct SupportTrainDetailView: View {
     /// Confirm target for "Leave this slot" — RN gates the cancel behind
     /// an alert naming the slot (`src/app/support-trains/[id].tsx:331`).
     @State private var pendingLeave: SlotRowContent?
+    /// Confirm target for "Mark delivered" on a slot whose day hasn't come yet.
+    @State private var pendingEarlyDelivery: SlotRowContent?
     /// Sections whose "See all N" was tapped.
     @State private var expandedSections: Set<String> = []
 
@@ -87,6 +89,24 @@ public struct SupportTrainDetailView: View {
             }
         } message: { row in
             Text("Leave \(row.title) on \(row.dayLabel) \(row.dateLabel)? This reopens the date for someone else.")
+        }
+        .alert(
+            "Mark delivered early?",
+            isPresented: Binding(
+                get: { pendingEarlyDelivery != nil },
+                set: { if !$0 { pendingEarlyDelivery = nil } }
+            ),
+            presenting: pendingEarlyDelivery
+        ) { row in
+            Button("Not yet", role: .cancel) { pendingEarlyDelivery = nil }
+            Button("Mark delivered") {
+                let reservationId = row.reservationId
+                pendingEarlyDelivery = nil
+                guard let reservationId else { return }
+                Task { await viewModel.markDelivered(reservationId: reservationId) }
+            }
+        } message: { row in
+            Text("This slot is for \(row.slotDayLabel ?? "a later day"). The organizer will be told it was delivered.")
         }
         .alert(
             viewModel.actionErrorTitle,
@@ -163,6 +183,10 @@ public struct SupportTrainDetailView: View {
 
                     overline("The train")
                     TypeDatesCard(content: content.typeDates)
+
+                    if !content.updates.isEmpty {
+                        updatesSection(content.updates)
+                    }
 
                     overline("Slot calendar")
                     calendarCard(days: content.calendarDays)
@@ -258,7 +282,11 @@ public struct SupportTrainDetailView: View {
                         icon: .check,
                         identifier: "supportTrainMarkDeliveredButton"
                     ) {
-                        Task { await viewModel.markDelivered(reservationId: reservationId) }
+                        if row.isBeforeSlotDay {
+                            pendingEarlyDelivery = row
+                        } else {
+                            Task { await viewModel.markDelivered(reservationId: reservationId) }
+                        }
                     }
                 }
                 if row.reservationStatus == "delivered",
@@ -313,6 +341,52 @@ public struct SupportTrainDetailView: View {
         .buttonStyle(.plain)
         .disabled(viewModel.isSubmitting)
         .accessibilityIdentifier(identifier)
+    }
+
+    /// The organizers' updates, newest first. The latest shows; "See all N" lists the rest here.
+    /// A helper opening the train from an update notification finds it near the top.
+    @ViewBuilder
+    private func updatesSection(_ updates: [TrainUpdateCard]) -> some View {
+        let expanded = expandedSections.contains("updates")
+        overline(
+            "Updates",
+            action: updates.count > 1 ? (expanded ? "Show fewer" : "See all \(updates.count)") : nil
+        ) { toggleSection("updates") }
+        VStack(spacing: Spacing.s2) {
+            ForEach(expanded ? updates : Array(updates.prefix(1))) { update in
+                updateCard(update)
+            }
+        }
+    }
+
+    private func updateCard(_ update: TrainUpdateCard) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s1) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
+                Text(update.author)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                Spacer(minLength: Spacing.s2)
+                if let time = update.timeLabel {
+                    Text(time)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                }
+            }
+            Text(update.body)
+                .font(.system(size: 13.5))
+                .foregroundStyle(Theme.Color.appText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(Spacing.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                .stroke(Theme.Color.appBorder, lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("supportTrainUpdateCard")
     }
 
     /// The exact address only ever renders from the server payload — it
