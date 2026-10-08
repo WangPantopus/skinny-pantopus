@@ -49,7 +49,27 @@ function isEmailDerivedUsername(username, email) {
 
 /** The owner's own check: a username the server made up, in either the current or the pre-October-7 form. */
 function isMadeUpUsername(username, email) {
-  return isGeneratedUsername(username) || (Boolean(email) && isEmailDerivedUsername(username, email));
+  return isKnownMadeUpUsername(username) || (Boolean(email) && isEmailDerivedUsername(username, email));
+}
+
+// The pre-October-7 made-up usernames still in use. Other people's rows rarely carry an email address, so the server
+// keeps this list (utils/legacyUsernames.js loads it from the database and refreshes it; no new ones are ever made)
+// and treats these like user_… wherever it shows a name or a handle. Empty until the first load, and in tests.
+let legacyMadeUpUsernames = new Set();
+
+function setLegacyMadeUpUsernames(usernames) {
+  legacyMadeUpUsernames = new Set((usernames || []).map(value => String(value)));
+}
+
+/** The person chose a new username: the old email-based one no longer belongs to anyone. */
+function forgetLegacyMadeUpUsername(username) {
+  legacyMadeUpUsernames.delete(String(username || ''));
+}
+
+/** True for a username the server made up: user_… or one of the email-based ones still in use. */
+function isKnownMadeUpUsername(value) {
+  const text = String(value || '').trim();
+  return isGeneratedUsername(text) || legacyMadeUpUsernames.has(text);
 }
 
 /** A username as a person types it: no surrounding spaces, no leading @, lowercase. */
@@ -74,7 +94,7 @@ function personalUsernameProblem(normalized) {
 /** The name-slot fallback: a username only when the person chose it. */
 function chosenUsernameOrNull(value) {
   const text = String(value || '').trim();
-  return text && !isGeneratedUsername(text) ? text : null;
+  return text && !isKnownMadeUpUsername(text) ? text : null;
 }
 
 /**
@@ -82,7 +102,7 @@ function chosenUsernameOrNull(value) {
  * landed on becomes `fallback` instead.
  */
 function nameUnlessMadeUp(value, fallback) {
-  return isGeneratedUsername(value) ? fallback : value;
+  return isKnownMadeUpUsername(value) ? fallback : value;
 }
 
 module.exports = {
@@ -93,6 +113,9 @@ module.exports = {
   isGeneratedUsername,
   isEmailDerivedUsername,
   isMadeUpUsername,
+  isKnownMadeUpUsername,
+  setLegacyMadeUpUsernames,
+  forgetLegacyMadeUpUsername,
   normalizePersonalUsername,
   personalUsernameProblem,
   chosenUsernameOrNull,

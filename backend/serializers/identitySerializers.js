@@ -1,7 +1,7 @@
 // Context-specific identity serializers for the Pantopus Identity Firewall.
 
 const { computeQuotaRemaining } = require('../utils/personaQuotas');
-const { chosenUsernameOrNull, isGeneratedUsername } = require('../utils/personalUsername');
+const { chosenUsernameOrNull, isKnownMadeUpUsername } = require('../utils/personalUsername');
 
 // Phase 0 / P0.3 — replace raw `creator:user_id (name, city, state, ...)`
 // nested-select patterns with a safe column set. Audience Profile design v2
@@ -47,7 +47,7 @@ function sameDisplayValue(a, b) {
 // holds one as its display name). A made-up username is never shown as the person's name.
 function nameText(value) {
   const text = cleanIdentityText(value);
-  return text && !isGeneratedUsername(text) ? text : null;
+  return text && !isKnownMadeUpUsername(text) ? text : null;
 }
 
 // Public local identity policy: people should render by their public display
