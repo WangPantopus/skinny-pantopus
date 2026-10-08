@@ -1083,6 +1083,7 @@ function buildPlaceRef(home, privacy) {
  * @param {boolean} [params.ballot]  The request opted in to Ballot (`ballot=1`) AND `ballot_p0`
  *                                   is on for the user — decided once by the route, so the
  *                                   composers never read the flag (or the User row) themselves.
+ *                                   Guests and service providers never get Ballot fields.
  * @returns {Promise<object|null>} The PlaceIntelligence response, or null if the home is missing.
  */
 async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false }) {
@@ -1149,9 +1150,13 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
 
   // An unreadable privacy row fails closed for the one toggle this payload
   // honors: the unit stays hidden, and the rest of Place still loads.
+  // Ballot is the household's own card: "Your ballot", and "Moved this year?"
+  // from the move-in date the household entered. Guests and service providers
+  // see public facts only, so they keep the plain election row and districts.
+  const ballotOn = Boolean(ballot) && viewer.role !== 'nonresident';
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
-    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access, ballot })),
+    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access, ballot: ballotOn })),
   ]);
 
   const composed = {};
