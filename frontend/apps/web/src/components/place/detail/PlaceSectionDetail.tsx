@@ -86,9 +86,27 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     staleTime: 60_000,
   });
 
-  // The switcher's place (?home=) when there is one, else the primary home.
+  // The switcher's place (?home=) when there is one, else the primary home,
+  // else the resident's own private setup (as on the overview).
   const switchedHome = useContext(PlaceHomeContext);
-  const homeId = switchedHome ?? homeQuery.data?.home?.id ?? null;
+  const noSharedHome = homeQuery.isSuccess && !homeQuery.data?.home && !switchedHome;
+  const myHomesQuery = useQuery({
+    queryKey: queryKeys.placeMyHomes(),
+    queryFn: async () => api.homes.getMyHomes(),
+    enabled: authed && valid && noSharedHome,
+    staleTime: 60_000,
+  });
+  const privateSetupId = (myHomesQuery.data?.homes ?? []).find((h) => h.access_kind === 'private_setup')?.id ?? null;
+  const homeId = switchedHome ?? homeQuery.data?.home?.id ?? privateSetupId;
+
+  // Without any home, a saved address still deserves a straight answer.
+  const savedQuery = useQuery({
+    queryKey: ['place', 'saved-places'],
+    queryFn: async () => api.savedPlaces.getSavedPlaces(),
+    enabled: authed && valid && noSharedHome && myHomesQuery.isFetched && !privateSetupId,
+    staleTime: 60_000,
+  });
+  const savedPlace = savedQuery.data?.savedPlaces?.[0] ?? null;
 
   const intelQuery = useQuery({
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
@@ -144,18 +162,50 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
   }
 
   if (homeQuery.isSuccess && !homeId) {
+    if (myHomesQuery.isError || savedQuery.isError) {
+      return (
+        <DetailShell section={section}>
+          <DetailHeader title={meta.title} />
+          <div className="px-4 sm:px-5">
+            <ErrorState
+              message="We couldn't load your place. Check your connection and try again."
+              onRetry={() => { void (myHomesQuery.isError ? myHomesQuery.refetch() : savedQuery.refetch()); }}
+            />
+          </div>
+        </DetailShell>
+      );
+    }
+    if (myHomesQuery.isPending || savedQuery.isPending) {
+      return (
+        <DetailShell section={section}>
+          <DetailHeader title={meta.title} />
+          <DetailSkeleton />
+        </DetailShell>
+      );
+    }
     return (
       <DetailShell section={section}>
         <DetailHeader title={meta.title} />
         <div className="px-4 sm:px-5">
-          <EmptyState
-            icon={MapPinned}
-            title="You haven't added a place yet"
-            description="Claim your address to see flood risk, today's air, your home's value, and your verified neighbors."
-            actionLabel="Add your place"
-            headingLevel={2}
-            onAction={() => router.push('/app/homes')}
-          />
+          {savedPlace ? (
+            <EmptyState
+              icon={MapPinned}
+              title="Set up this home to see this"
+              description={`You saved ${savedPlace.label}. Its public information is on the overview; ${meta.title} needs the home set up.`}
+              actionLabel="Set up this home"
+              headingLevel={2}
+              onAction={() => router.push(`/app/homes/new?savedPlace=${encodeURIComponent(savedPlace.id)}`)}
+            />
+          ) : (
+            <EmptyState
+              icon={MapPinned}
+              title="You haven't added a place yet"
+              description="Claim your address to see flood risk, today's air, your home's value, and your verified neighbors."
+              actionLabel="Add your place"
+              headingLevel={2}
+              onAction={() => router.push('/app/homes')}
+            />
+          )}
         </div>
       </DetailShell>
     );

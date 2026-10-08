@@ -92,8 +92,16 @@ export default function PlaceDashboard() {
     staleTime: 60_000,
   });
 
-  // The active home: an explicit switch wins, else the primary home.
-  const homeId = selectedHomeId ?? homeQuery.data?.home?.id ?? null;
+  // The resident's own private setup is their place too until they share a
+  // household: the server answers it with public readings only (tier T1).
+  const privateSetupId = useMemo(
+    () => (myHomesQuery.data?.homes ?? []).find((h) => h.access_kind === 'private_setup')?.id ?? null,
+    [myHomesQuery.data],
+  );
+
+  // The active home: an explicit switch wins, then the primary home, then
+  // the private setup.
+  const homeId = selectedHomeId ?? homeQuery.data?.home?.id ?? privateSetupId;
   // Links carry the place only when it isn't the primary home.
   const linkHomeId = homeId !== homeQuery.data?.home?.id ? homeId : null;
 
@@ -137,11 +145,13 @@ export default function PlaceDashboard() {
     );
   }
 
-  // No claimed home yet — point at adding one (the funnel claims/verifies elsewhere).
+  // No home yet: saved addresses, or a pointer to adding one (the funnel
+  // claims/verifies elsewhere). Wait for the Home list first, so a private
+  // setup doesn't flash the no-home view.
   if (homeQuery.isSuccess && !homeId) {
     return (
       <Shell>
-        <SavedPlaceContext />
+        {myHomesQuery.isPending ? <PlaceDashboardSkeleton /> : <SavedPlaceContext />}
       </Shell>
     );
   }
