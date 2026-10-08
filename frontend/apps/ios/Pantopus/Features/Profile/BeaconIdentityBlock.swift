@@ -36,6 +36,8 @@ struct BeaconIdentityBlock<Actions: View>: View {
     let isVerified: Bool
     let avatarURL: URL?
     let stats: [ProfileStatCell]
+    /// The avatar's initials come from this; "" (someone with no name) shows a plain avatar.
+    let avatarName: String
     private let actions: () -> Actions
 
     init(
@@ -49,10 +51,12 @@ struct BeaconIdentityBlock<Actions: View>: View {
         isVerified: Bool,
         avatarURL: URL?,
         stats: [ProfileStatCell],
+        avatarName: String? = nil,
         @ViewBuilder actions: @escaping () -> Actions
     ) {
         self.identity = identity
         self.name = name
+        self.avatarName = avatarName ?? name
         self.handle = handle
         self.tierLabel = tierLabel
         self.isVerifiedNeighbor = isVerifiedNeighbor
@@ -123,7 +127,7 @@ struct BeaconIdentityBlock<Actions: View>: View {
         HStack(alignment: .top, spacing: Spacing.s2) {
             ZStack(alignment: .bottomTrailing) {
                 AvatarWithIdentityRing(
-                    name: name,
+                    name: avatarName,
                     imageURL: avatarURL,
                     identity: avatarIdentity,
                     ringProgress: 1,

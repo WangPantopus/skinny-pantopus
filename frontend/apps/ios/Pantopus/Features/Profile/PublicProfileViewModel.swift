@@ -194,6 +194,8 @@ public struct PublicProfileHeader: Sendable, Equatable, Hashable {
     public let tierLabel: String?
     /// P6.5 — Green "Verified neighbor" shield chip on Local profiles.
     public let isVerifiedNeighbor: Bool
+    /// False when `displayName` is the stand-in for someone with no name: the avatar shows no initials.
+    public let hasName: Bool
 
     public init(
         displayName: String,
@@ -203,7 +205,8 @@ public struct PublicProfileHeader: Sendable, Equatable, Hashable {
         isVerified: Bool,
         identityBadges: [IdentityPillarBadge],
         tierLabel: String? = nil,
-        isVerifiedNeighbor: Bool = false
+        isVerifiedNeighbor: Bool = false,
+        hasName: Bool = true
     ) {
         self.displayName = displayName
         self.handle = handle
@@ -213,6 +216,7 @@ public struct PublicProfileHeader: Sendable, Equatable, Hashable {
         self.identityBadges = identityBadges
         self.tierLabel = tierLabel
         self.isVerifiedNeighbor = isVerifiedNeighbor
+        self.hasName = hasName
     }
 }
 
@@ -578,7 +582,7 @@ public final class PublicProfileViewModel {
     /// (`UsernameShareSheet.swift`).
     public var asksForUsernameBeforeSharing: Bool {
         guard case let .loaded(payload) = state, payload.isOwner,
-              MadeUpUsername.isMadeUp(payload.profile.username),
+              payload.profile.chosenUsername == nil,
               let currentUserId else { return false }
         return !UsernamePromptMemory.wasAsked(currentUserId)
     }
@@ -844,8 +848,8 @@ public final class PublicProfileViewModel {
     ) -> PublicProfileContent {
         let header = PublicProfileHeader(
             displayName: profile.displayName,
-            // A made-up username (user_…) is never shown as "@…" or in "Report @…".
-            handle: MadeUpUsername.chosen(profile.username),
+            // A made-up username is never shown as "@…" or in "Report @…".
+            handle: profile.chosenUsername,
             locality: profile.locality,
             avatarURL: (profile.profilePictureURL ?? profile.avatarURL).flatMap(URL.init(string:)),
             // No avatar check: `verified` is the account email flag that sign-in
@@ -857,7 +861,8 @@ public final class PublicProfileViewModel {
             tierLabel: kind == .persona && LaunchFeatures.beacon && LaunchFeatures.personas ? "Persona" : nil,
             // The chip needs the verified home itself: unverified people get the
             // neighbor layout too while creators are cut.
-            isVerifiedNeighbor: hasHomeResidency(profile)
+            isVerifiedNeighbor: hasHomeResidency(profile),
+            hasName: profile.hasName
         )
 
         var stats: [ProfileStatCell] = []
