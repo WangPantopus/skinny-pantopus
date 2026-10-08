@@ -287,7 +287,8 @@ private extension MeViewModel {
         let name = fullName.isEmpty
             ? [profile.firstName, profile.lastName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
             : fullName
-        let displayName = name.isEmpty ? "Pantopus user" : name
+        // No name yet (the one-time name sheet was skipped): no stand-in; the header offers "Add your name".
+        let displayName = name
         let locality = localityString(profile)
         let tagline = (profile.tagline?.isEmpty == false ? profile.tagline : nil) ?? profile.bio
         let activityValue = "\(stats?.totalGigsCompleted ?? profile.gigsCompleted ?? 0)"
@@ -302,9 +303,9 @@ private extension MeViewModel {
         return MeIdentityContent(
             identity: .personal,
             displayName: displayName,
-            initials: initials(from: displayName),
-            // A made-up username (user_…) is never shown as the handle.
-            handle: MadeUpUsername.handle(profile.username) ?? "",
+            initials: displayName.isEmpty ? "" : initials(from: displayName),
+            // A made-up username (user_…, or the pre-October-7 kind built from the email) is never shown.
+            handle: profile.usernameIsGenerated == true ? "" : MadeUpUsername.handle(profile.username) ?? "",
             locality: locality,
             tagline: tagline,
             verified: residencyVerified,

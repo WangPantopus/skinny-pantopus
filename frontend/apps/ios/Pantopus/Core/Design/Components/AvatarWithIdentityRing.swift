@@ -98,9 +98,15 @@ public struct AvatarWithIdentityRing: View {
     private var initialsView: some View {
         ZStack {
             identity.backgroundColor
-            Text(initials(from: name))
-                .pantopusTextStyle(.small)
-                .foregroundStyle(identity.color)
+            let initials = initials(from: name)
+            if initials.isEmpty {
+                // No name: a plain avatar, not a stand-in letter.
+                Icon(.userRound, size: size * 0.4, color: identity.color)
+            } else {
+                Text(initials)
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(identity.color)
+            }
         }
     }
 

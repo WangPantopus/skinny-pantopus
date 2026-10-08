@@ -12,6 +12,8 @@ import SwiftUI
 struct SignUpView: View {
     @Environment(AuthManager.self) private var auth
     @State private var viewModel = SignUpViewModel()
+    /// Return moves to the next field, which scrolls into view above the keyboard and the Create account bar.
+    @FocusState private var focusedField: SignUpField?
 
     /// Referral code carried in from a `pantopus://join/:code` deep link.
     /// Seeds the optional Invite code field on first appear so it rides the
@@ -168,6 +170,9 @@ struct SignUpView: View {
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
         .onChange(of: viewModel.email) { _, _ in viewModel.clearError(for: .email) }
+        .focused($focusedField, equals: .email)
+        .submitLabel(.next)
+        .onSubmit { focusedField = .password }
     }
 
     private var passwordField: some View {
@@ -182,6 +187,9 @@ struct SignUpView: View {
                 identifier: "signUpPasswordField"
             )
             .onChange(of: viewModel.password) { _, _ in viewModel.clearError(for: .password) }
+            .focused($focusedField, equals: .password)
+            .submitLabel(.next)
+            .onSubmit { focusedField = .confirmPassword }
             PasswordStrengthMeter(score: viewModel.passwordStrength, label: viewModel.passwordStrengthLabel)
                 .accessibilityIdentifier("signUpPasswordStrengthMeter")
         }
@@ -198,6 +206,9 @@ struct SignUpView: View {
             identifier: "signUpConfirmPasswordField"
         )
         .onChange(of: viewModel.confirmPassword) { _, _ in viewModel.clearError(for: .confirmPassword) }
+        .focused($focusedField, equals: .confirmPassword)
+        .submitLabel(.done)
+        .onSubmit { focusedField = nil }
     }
 
     private var firstNameField: some View {
@@ -210,6 +221,9 @@ struct SignUpView: View {
             identifier: "signUpFirstNameField"
         )
         .onChange(of: viewModel.firstName) { _, _ in viewModel.clearError(for: .firstName) }
+        .focused($focusedField, equals: .firstName)
+        .submitLabel(.next)
+        .onSubmit { focusedField = .middleName }
     }
 
     private var middleNameField: some View {
@@ -221,6 +235,9 @@ struct SignUpView: View {
             contentType: .middleName,
             identifier: "signUpMiddleNameField"
         )
+        .focused($focusedField, equals: .middleName)
+        .submitLabel(.next)
+        .onSubmit { focusedField = .lastName }
     }
 
     private var lastNameField: some View {
@@ -233,6 +250,9 @@ struct SignUpView: View {
             identifier: "signUpLastNameField"
         )
         .onChange(of: viewModel.lastName) { _, _ in viewModel.clearError(for: .lastName) }
+        .focused($focusedField, equals: .lastName)
+        .submitLabel(.next)
+        .onSubmit { focusedField = .email }
     }
 
     private var phoneField: some View {
