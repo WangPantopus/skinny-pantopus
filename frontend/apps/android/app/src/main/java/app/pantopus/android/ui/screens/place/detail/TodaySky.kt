@@ -110,6 +110,8 @@ fun TodaySkyHero(
     val now = rememberMinuteClock()
     val hours = remember(data.hourly, now) { SkyScrub.hours(data.hourly, now) }
     val scrub = rememberSkyScrub(reduced)
+    // When the card appeared or got new data: the sun or moon rises into place.
+    val shownAt = remember(data) { System.currentTimeMillis() }
     val picked = scrub.index?.let { hours.getOrNull(it) }
     val current = SkyView.at(now, null, data, sun, pickups, air)
     val shown = if (picked == null) current else SkyView.at(now, picked, data, sun, pickups, air)
@@ -153,8 +155,11 @@ fun TodaySkyHero(
             Canvas(modifier = Modifier.fillMaxSize().clearAndSetSemantics { }) {
                 val t = time.doubleValue
                 val perDp = density
+                // Eased over 0.9 s; in place at once without motion or while sliding.
+                val progress = if (animating && view.time == now) ((System.currentTimeMillis() - shownAt) / 900f).coerceIn(0f, 1f) else 1f
+                val rise = 1 - (1 - progress) * (1 - progress) * (1 - progress)
                 withTransform({ scale(perDp, perDp, pivot = Offset.Zero) }) {
-                    painter.paint(this, size.width / perDp, size.height / perDp, t)
+                    painter.paint(this, size.width / perDp, size.height / perDp, t, rise)
                 }
             }
         }

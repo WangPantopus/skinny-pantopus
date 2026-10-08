@@ -151,7 +151,19 @@ struct PlaceTodayDetailContent: View {
     @ViewBuilder
     private func weatherAndGoodDay(proxy: ScrollViewProxy) -> some View {
         if let weather = vm.section(.weather, in: intel) {
-            PlaceDetailSectionLabel(text: "Weather")
+            HStack(alignment: .bottom, spacing: 8) {
+                PlaceDetailSectionLabel(text: "Weather")
+                if let data = weather.weather, weather.status == .ready || weather.status == .stale, !intel.place.city.isEmpty {
+                    SkyShareLink(card: SkyShareCard(
+                        weather: data,
+                        sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
+                        air: skyAir,
+                        city: intel.place.city,
+                        date: .now
+                    ))
+                    .padding(.trailing, 4)
+                }
+            }
             if let data = weather.weather, weather.status == .ready || weather.status == .stale {
                 TodaySkyHero(
                     data: data,

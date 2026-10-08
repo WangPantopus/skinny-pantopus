@@ -73,13 +73,15 @@ class TodaySkyPainter(
             0f
         }
 
+    /** [rise] (0..1) lifts the sun or moon into its place as the card loads. */
     fun paint(
         scope: DrawScope,
         width: Float,
         height: Float,
         time: Double,
+        rise: Float = 1f,
     ) {
-        val scene = SkyScene(width, height, if (still) 2.0 else time, SkyPalette.sky(moment.phase, weather))
+        val scene = SkyScene(width, height, if (still) 2.0 else time, SkyPalette.sky(moment.phase, weather), rise)
         val clear = weather == SkyPalette.Weather.CLEAR || weather == SkyPalette.Weather.PARTLY
         with(scope) {
             paintSky(scene)
@@ -131,7 +133,7 @@ class TodaySkyPainter(
         // The sun rides the right half of the sky: low at dawn and dusk, high at noon.
         val fraction = moment.dayFraction
         val x = (scene.width * (0.56 + 0.32 * fraction)).toFloat()
-        val y = (scene.horizon - 18 - sin(PI * fraction) * (scene.horizon - 58)).toFloat()
+        val y = (scene.horizon - 18 - sin(PI * fraction) * (scene.horizon - 58)).toFloat() + (1 - scene.rise) * 44
         val warm = moment.phase == SkyPalette.Phase.DAWN || moment.phase == SkyPalette.Phase.DUSK
         // In the golden hour the sun warms and a wide halo of gold spreads around it.
         val lit = if (warm) SkyPalette.sunLow else SkyPalette.sunHigh.mixed(SkyPalette.sunLow, goldenWarmth * 2)
@@ -166,7 +168,7 @@ class TodaySkyPainter(
 
     private fun DrawScope.paintMoon(scene: SkyScene) {
         if (weather == SkyPalette.Weather.WET || weather == SkyPalette.Weather.SNOW || weather == SkyPalette.Weather.STORM) return
-        val center = Offset(scene.width * 0.8f, 50f)
+        val center = Offset(scene.width * 0.8f, 50f + (1 - scene.rise) * 44)
         val veiled = weather == SkyPalette.Weather.OVERCAST || weather == SkyPalette.Weather.FOG
         // A full moon lights up more of the sky.
         val full = abs(moment.moonPhase - 0.5) < 0.034
@@ -476,6 +478,8 @@ internal class SkyScene(
     val height: Float,
     val time: Double,
     val sky: SkyPalette.Sky,
+    /** 0 below its place, 1 in it. */
+    val rise: Float = 1f,
 ) {
     val horizon = height - 34f
 

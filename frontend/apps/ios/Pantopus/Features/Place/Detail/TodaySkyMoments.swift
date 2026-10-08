@@ -60,6 +60,26 @@ extension TodaySkyPainter {
         )
     }
 
+    /// A storm's flash and bolt, a few seconds apart.
+    func paintLightning(_ context: GraphicsContext, _ scene: Scene) {
+        let period = 7.0
+        let cycle = (scene.time / period).rounded(.down)
+        let local = scene.time - cycle * period
+        var random = SkyRandom(seed: UInt32(truncatingIfNeeded: 100 + Int(cycle)))
+        let strike = 1 + random.next() * 4
+        let since = local - strike
+        let opacity: Double = if since >= 0, since < 0.09 { 0.28 } else if since >= 0.17, since < 0.25 { 0.18 } else { 0 }
+        guard opacity > 0 else { return }
+        context.fill(Path(CGRect(origin: .zero, size: scene.size)), with: .color(SkyPalette.lightning.color(opacity: opacity)))
+        let x = scene.width * (0.35 + random.next() * 0.5)
+        var bolt = Path()
+        bolt.move(to: CGPoint(x: x, y: 40))
+        bolt.addLine(to: CGPoint(x: x - 8, y: 70))
+        bolt.addLine(to: CGPoint(x: x + 4, y: 72))
+        bolt.addLine(to: CGPoint(x: x - 6, y: scene.horizon - 20))
+        context.stroke(bolt, with: .color(SkyPalette.bolt.color(opacity: 0.9)), lineWidth: 2)
+    }
+
     /// Frost from three corners (never the top left, where the reading sits):
     /// a pale haze and a few crystals with side shoots.
     func paintFrost(_ context: GraphicsContext, _ scene: Scene) {

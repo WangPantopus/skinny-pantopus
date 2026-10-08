@@ -96,8 +96,8 @@ extension TodaySkyGround {
     /// Three attached houses; the resident's is the middle one, with the
     /// chimney, and the neighbours' sit a shade darker.
     private func paintTownhouses(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
-        let x = origin.x
-        let y = origin.y
+        let x = Double(origin.x)
+        let y = Double(origin.y)
         let side = tones.house.mixed(with: SkyPalette.ink, by: 0.12)
         unit(context, center: x - 26, width: 24, ground: y, tone: side)
         unit(context, center: x + 26, width: 24, ground: y, tone: side)
@@ -128,8 +128,8 @@ extension TodaySkyGround {
     /// A small three-storey block with a flat roof; the resident's window is
     /// the warm one, a few others glow dimmer after dusk.
     private func paintApartment(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
-        let x = origin.x
-        let y = origin.y
+        let x = Double(origin.x)
+        let y = Double(origin.y)
         context.fill(Path(CGRect(x: x - 26, y: y - 50, width: 52, height: 50)), with: .color(tones.house.color))
         context.fill(Path(CGRect(x: x - 28, y: y - 52, width: 56, height: 3)), with: .color(tones.house.color))
         porchGlow(context, at: origin, width: 48)
@@ -155,8 +155,8 @@ extension TodaySkyGround {
 
     /// A long, low home on a skirt.
     private func paintMobileHome(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
-        let x = origin.x
-        let y = origin.y
+        let x = Double(origin.x)
+        let y = Double(origin.y)
         context.fill(
             Path(roundedRect: CGRect(x: x - 29, y: y - 20, width: 58, height: 17), cornerRadius: 3),
             with: .color(tones.house.color)
@@ -174,20 +174,27 @@ extension TodaySkyGround {
         context.fill(Path(CGRect(x: x + 3, y: y - 15, width: 6, height: 12)), with: .color(door))
     }
 
+    /// A cubic Bézier through four control values, at `t` in 0...1.
+    private static func bezier(_ v: [Double], at t: Double) -> Double {
+        let u = 1 - t
+        let a = u * u * u * v[0]
+        let b = 3 * u * u * t * v[1]
+        let c = 3 * u * t * t * v[2]
+        return a + b + c + t * t * t * v[3]
+    }
+
     /// After dusk, warm windows along the far hill: the verified homes on
     /// the block, as many as the density bucket allows.
     func paintStreetLights(_ context: GraphicsContext) {
         let w = scene.width
         let y = scene.horizon
-        // The far hill's right-hand curve, as drawn in `paintHills`.
-        let p = [CGPoint(x: w * 0.6, y: y - 10), CGPoint(x: w * 0.78, y: y - 18), CGPoint(x: w * 0.9, y: y - 6), CGPoint(x: w, y: y - 12)]
+        // The far hill's right-hand curve, as drawn in `paintHills`: its four
+        // control points' x and y.
+        let xs: [Double] = [w * 0.6, w * 0.78, w * 0.9, w]
+        let ys: [Double] = [y - 10, y - 18, y - 6, y - 12]
         let glow = Gradient(colors: [SkyPalette.windowGlow.color(opacity: 0.3), SkyPalette.windowGlow.color(opacity: 0)])
         for spot in SkyStreet.spots.prefix(streetLights) {
-            let t = spot.at
-            let u = 1 - t
-            let x = u * u * u * p[0].x + 3 * u * u * t * p[1].x + 3 * u * t * t * p[2].x + t * t * t * p[3].x
-            let crest = u * u * u * p[0].y + 3 * u * u * t * p[1].y + 3 * u * t * t * p[2].y + t * t * t * p[3].y
-            let center = CGPoint(x: x, y: crest + spot.drop)
+            let center = CGPoint(x: Self.bezier(xs, at: spot.at), y: Self.bezier(ys, at: spot.at) + spot.drop)
             context.fill(
                 Path(CGRect(x: center.x - 6, y: center.y - 6, width: 12, height: 12)),
                 with: .radialGradient(glow, center: center, startRadius: 0, endRadius: 6)
