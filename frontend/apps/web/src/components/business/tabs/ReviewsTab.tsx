@@ -15,6 +15,8 @@ export default function ReviewsTab({ businessId, businessName }: ReviewsTabProps
   const [ratingFilter, setRatingFilter] = useState<number | ''>('');
   const [reviews, setReviews] = useState<Record<string, any>[]>([]);
   const [summary, setSummary] = useState<{ total: number; average_rating: number }>({ total: 0, average_rating: 0 });
+  // A failed read is not "No reviews yet": a role without review access gets a 403.
+  const [loadFailure, setLoadFailure] = useState<'forbidden' | 'failed' | null>(null);
 
   const loadReviews = useCallback(async () => {
     setLoading(true);
@@ -25,9 +27,9 @@ export default function ReviewsTab({ businessId, businessName }: ReviewsTabProps
         total: res.total || 0,
         average_rating: res.average_rating || 0,
       });
+      setLoadFailure(null);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to load reviews';
-      toast.error(msg);
+      setLoadFailure((e as { statusCode?: number } | null)?.statusCode === 403 ? 'forbidden' : 'failed');
     } finally {
       setLoading(false);
     }
@@ -54,6 +56,23 @@ export default function ReviewsTab({ businessId, businessName }: ReviewsTabProps
     return (
       <div className="rounded-xl border border-app bg-surface p-6 text-center text-app-secondary">
         Loading reviews...
+      </div>
+    );
+  }
+
+  if (loadFailure) {
+    return (
+      <div className="rounded-xl border border-app bg-surface p-6 text-center">
+        <p className="text-sm font-medium text-app mb-1">
+          {loadFailure === 'forbidden' ? "Your role can't see reviews" : "Couldn't load reviews"}
+        </p>
+        {loadFailure === 'forbidden' ? (
+          <p className="text-xs text-app-secondary">The business owner can change your role.</p>
+        ) : (
+          <button onClick={() => void loadReviews()} className="text-sm text-violet-600 hover:underline">
+            Try again
+          </button>
+        )}
       </div>
     );
   }
