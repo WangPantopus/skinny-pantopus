@@ -225,6 +225,31 @@ async function loadFallbackHomeCandidates(userId) {
  */
 async function resolveLocation(userId) {
   try {
+    // The viewing location and the homes don't depend on the preferences, so
+    // all three reads start together: one round trip instead of three (Today
+    // resolves twice per load). Until awaited below, the two early reads hold
+    // their outcome rather than reject, so a custom location still returns
+    // without them and a thrown error surfaces where it always did.
+    const settle = (read) => read.then((value) => ({ value }), (error) => ({ error }));
+    const outcome = async (pending) => {
+      const { value, error } = await pending;
+      if (error) throw error;
+      return value;
+    };
+    const viewingRead = settle(supabaseAdmin
+      .from('UserViewingLocation')
+      .select('latitude, longitude, label, is_pinned, type, updated_at')
+      .eq('user_id', userId)
+      .single());
+    const homesRead = settle(Promise.all([
+      supabaseAdmin
+        .from('HomeOccupancy')
+        .select(`home_id, home:home_id(${HOME_LOCATION_SELECT})`)
+        .eq('user_id', userId)
+        .eq('is_active', true),
+      loadFallbackHomeCandidates(userId),
+    ]));
+
     // ── Step 1: Read preferences ──
     const { data: prefs, error: prefsErr } = await supabaseAdmin
       .from('UserNotificationPreferences')
@@ -248,11 +273,7 @@ async function resolveLocation(userId) {
     }
 
     // ── Step 2: Load current viewing location ──
-    const { data: vl, error: vlErr } = await supabaseAdmin
-      .from('UserViewingLocation')
-      .select('latitude, longitude, label, is_pinned, type, updated_at')
-      .eq('user_id', userId)
-      .single();
+    const { data: vl, error: vlErr } = await outcome(viewingRead);
 
     if (vlErr && vlErr.code !== 'PGRST116') {
       // PGRST116 = no rows found, which is expected
@@ -262,14 +283,7 @@ async function resolveLocation(userId) {
     // ── Step 3: Load homes ──
     // Select both flat coords and PostGIS location for fallback.
     // Homes created before map_center_lat/lng were populated only have PostGIS location.
-    const [{ data: occupancies, error: occErr }, fallbackHomes] = await Promise.all([
-      supabaseAdmin
-        .from('HomeOccupancy')
-        .select(`home_id, home:home_id(${HOME_LOCATION_SELECT})`)
-        .eq('user_id', userId)
-        .eq('is_active', true),
-      loadFallbackHomeCandidates(userId),
-    ]);
+    const [{ data: occupancies, error: occErr }, fallbackHomes] = await outcome(homesRead);
 
     if (occErr) {
       logger.warn('locationResolver: occupancy query error', { userId, error: occErr.message });
