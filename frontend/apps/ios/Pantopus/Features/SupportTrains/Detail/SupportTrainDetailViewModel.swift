@@ -409,7 +409,9 @@ extension SupportTrainDetailViewModel {
             id: slot.id,
             dateLabel: date.map { format($0, "EEEE, MMMM d") } ?? (slot.slotDate ?? ""),
             slotLabel: slot.slotLabel ?? slot.supportMode?.capitalized ?? "Slot",
-            windowLabel: windowLabel(slot)
+            windowLabel: windowLabel(slot),
+            slotDate: slot.slotDate,
+            windowStart: slot.startTime
         )
     }
 
