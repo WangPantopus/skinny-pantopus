@@ -179,6 +179,7 @@ jest.setTimeout(30000);
 describe('GET /api/homes/:id/intelligence', () => {
   let app;
   const savedAttomKey = process.env.ATTOM_API_KEY;
+  const savedFetch = global.fetch;
 
   beforeEach(() => {
     resetTables();
@@ -192,12 +193,18 @@ describe('GET /api/homes/:id/intelligence', () => {
     providerOrchestrator.getHubToday.mockResolvedValue(defaultHubToday());
     neighborhoodProfileService.getProfile.mockResolvedValue(defaultNeighborhoodProfile());
     propertyIntelligenceService.getProfile.mockReset();
+    // No network (see the header): a provider call the mocks above don't cover
+    // fails at once. A real one can hit its 8 s timeout on a slow CI runner,
+    // and a timeout cools that section down for the rest of this file, which
+    // the Ballot tests (their clock is fixed in the past) see as never ending.
+    global.fetch = jest.fn(() => Promise.reject(new Error('no network in this test')));
     app = buildApp();
   });
 
   afterAll(() => {
     if (savedAttomKey === undefined) delete process.env.ATTOM_API_KEY;
     else process.env.ATTOM_API_KEY = savedAttomKey;
+    global.fetch = savedFetch;
   });
 
   // ── Regression: the Today section used to hardcode `hourly: []`,
