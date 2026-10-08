@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useId, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useId, useMemo, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,7 +14,7 @@ import SearchInput from '@/components/SearchInput';
 import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket';
 import { useBadges } from '@/contexts/BadgeContext';
 import { queryKeys } from '@/lib/query-keys';
-import type { UnifiedConversationItem, ConversationTopic, User } from '@pantopus/types';
+import type { UnifiedConversationItem, ConversationTopic, Relationship, RelationshipUser, User } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
 
@@ -34,6 +34,83 @@ type ConversationsResponse = Awaited<ReturnType<typeof api.chat.getUnifiedConver
 // Today `getUnifiedConversations` only accepts a `limit` param and returns
 // everything up to that limit; we request `limit: 200` to match prior behavior.
 const CONVERSATIONS_LIMIT = 200;
+
+type NewChatPerson = { id: string; name: string; handle: string; avatar?: string | null };
+
+// A made-up username (user_…) is never shown as a name or a handle.
+function searchedPerson(user: User): NewChatPerson {
+  return {
+    id: String(user?.id || ''),
+    name: user.name || user.firstName || chosenUsername(user.username) || 'Pantopus member',
+    handle: usernameHandle(user?.username) || '',
+    avatar: user?.profilePicture || user?.profile_picture_url,
+  };
+}
+
+// Named as on the Connections page.
+function connectionNames(user: RelationshipUser): string[] {
+  const fullName = user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : '';
+  return [user.name || '', fullName, chosenUsername(user.username) || ''].filter(Boolean);
+}
+
+function connectedPerson(user: RelationshipUser): NewChatPerson {
+  return {
+    id: String(user.id),
+    name: connectionNames(user)[0] || 'Pantopus member',
+    handle: usernameHandle(user.username) || '',
+    avatar: user.profile_picture_url,
+  };
+}
+
+function NewChatSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h3 className="px-3 pt-2.5 pb-1 text-xs font-semibold text-app-muted uppercase tracking-wider">{title}</h3>
+      <div className="divide-y divide-app">{children}</div>
+    </section>
+  );
+}
+
+function NewChatPersonRow({ person, starting, onStart }: {
+  person: NewChatPerson;
+  starting: boolean;
+  onStart: (userId: string) => void;
+}) {
+  const initials = person.name
+    .split(' ')
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  return (
+    <button
+      onClick={() => onStart(person.id)}
+      disabled={starting}
+      className="w-full px-3 py-2.5 text-left hover-bg-app transition disabled:opacity-70"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {person.avatar ? (
+            <Image src={person.avatar} alt={person.name} width={36} height={36} sizes="36px" quality={75} className="w-9 h-9 rounded-full object-cover bg-surface-muted" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-primary-600 text-white flex items-center justify-center text-xs font-semibold">
+              {initials || 'U'}
+            </div>
+          )}
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-app truncate">{person.name}</div>
+            <div className="text-xs text-app-muted truncate">{person.handle}</div>
+          </div>
+        </div>
+        <span className="text-xs font-medium text-primary-600">
+          {starting ? 'Opening…' : 'Chat'}
+        </span>
+      </div>
+    </button>
+  );
+}
 
 export default function ChatListPage() {
   const router = useRouter();
@@ -74,6 +151,32 @@ export default function ChatListPage() {
   const error = conversationsQuery.error
     ? (conversationsQuery.error instanceof Error ? conversationsQuery.error.message : 'Failed to load conversations')
     : null;
+
+  // "Start new chat" lists your connections, as the iOS and Android pickers do. Search finds only
+  // neighbor profiles, so a connection without one couldn't be reached from here.
+  const connectionsQuery = useQuery({
+    queryKey: queryKeys.connections(),
+    queryFn: async (): Promise<Relationship[]> => {
+      const res = await api.relationships.getConnections();
+      return res.relationships || [];
+    },
+    staleTime: 30_000,
+    enabled: newChatOpen,
+  });
+
+  const newChatConnections = useMemo<NewChatPerson[]>(() => {
+    const q = newChatQuery.trim().toLowerCase();
+    return (connectionsQuery.data || [])
+      .map((rel) => rel.other_user)
+      .filter((user): user is RelationshipUser => Boolean(user?.id))
+      .filter((user) => !q || connectionNames(user).some((text) => text.toLowerCase().includes(q)))
+      .map(connectedPerson);
+  }, [connectionsQuery.data, newChatQuery]);
+
+  const newChatPeople = useMemo<NewChatPerson[]>(() => {
+    const listed = new Set(newChatConnections.map((person) => person.id));
+    return newChatResults.map(searchedPerson).filter((person) => person.id && !listed.has(person.id));
+  }, [newChatResults, newChatConnections]);
 
   // Shim for imperative refetch calls (fallback polling, reload after new message from unknown room)
   const load = useCallback(async () => {
@@ -263,8 +366,7 @@ export default function ChatListPage() {
     setStartingChatUserId(null);
   };
 
-  const startDirectChat = async (user: User) => {
-    const userId = String(user?.id || '');
+  const startDirectChat = async (userId: string) => {
     if (!userId) return;
     try {
       setStartingChatUserId(userId);
@@ -558,57 +660,38 @@ export default function ChatListPage() {
               )}
 
               <div className="mt-3 max-h-80 overflow-auto rounded-xl border border-app divide-y divide-app">
+                {newChatConnections.length > 0 && (
+                  <NewChatSection title="Connections">
+                    {newChatConnections.map((person) => (
+                      <NewChatPersonRow
+                        key={person.id}
+                        person={person}
+                        starting={startingChatUserId === person.id}
+                        onStart={startDirectChat}
+                      />
+                    ))}
+                  </NewChatSection>
+                )}
                 {!newChatQuery.trim() ? (
-                  <div className="p-4 text-sm text-app-muted">Start typing to find people.</div>
+                  newChatConnections.length === 0 && (
+                    <div className="p-4 text-sm text-app-muted">Start typing to find people.</div>
+                  )
                 ) : newChatSearching ? (
                   <div className="p-4 text-sm text-app-muted">Searching…</div>
-                ) : newChatResults.length === 0 ? (
+                ) : newChatPeople.length > 0 ? (
+                  <NewChatSection title="People">
+                    {newChatPeople.map((person) => (
+                      <NewChatPersonRow
+                        key={person.id}
+                        person={person}
+                        starting={startingChatUserId === person.id}
+                        onStart={startDirectChat}
+                      />
+                    ))}
+                  </NewChatSection>
+                ) : newChatConnections.length === 0 ? (
                   <div className="p-4 text-sm text-app-muted">No users found.</div>
-                ) : (
-                  newChatResults.map((u) => {
-                    const uid = String(u?.id || '');
-                    // A made-up username (user_…) is never shown as a name or a handle.
-                    const name = u.name || u.firstName || chosenUsername(u.username) || 'Pantopus member';
-                    const username = usernameHandle(u?.username) || '';
-                    const avatar = u?.profilePicture || u?.profile_picture_url;
-                    const initials = name
-                      .split(' ')
-                      .map((w: string) => w[0])
-                      .filter(Boolean)
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase();
-                    const isStarting = startingChatUserId === uid;
-
-                    return (
-                      <button
-                        key={uid}
-                        onClick={() => startDirectChat(u)}
-                        disabled={isStarting}
-                        className="w-full px-3 py-2.5 text-left hover-bg-app transition disabled:opacity-70"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            {avatar ? (
-                              <Image src={avatar} alt={name} width={36} height={36} sizes="36px" quality={75} className="w-9 h-9 rounded-full object-cover bg-surface-muted" />
-                            ) : (
-                              <div className="w-9 h-9 rounded-full bg-primary-600 text-white flex items-center justify-center text-xs font-semibold">
-                                {initials || 'U'}
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium text-app truncate">{name}</div>
-                              <div className="text-xs text-app-muted truncate">{username}</div>
-                            </div>
-                          </div>
-                          <span className="text-xs font-medium text-primary-600">
-                            {isStarting ? 'Opening…' : 'Chat'}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })
-                )}
+                ) : null}
               </div>
             </div>
           </div>
