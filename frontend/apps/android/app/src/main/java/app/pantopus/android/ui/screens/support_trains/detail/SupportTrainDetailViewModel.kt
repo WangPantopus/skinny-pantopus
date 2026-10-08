@@ -37,6 +37,8 @@ data class SupportTrainDetailActionState(
     val error: String? = null,
     val reserveSheet: ReserveSheetSelection? = null,
     val pendingLeave: SlotRowContent? = null,
+    /** "Mark delivered" on a slot whose day hasn't come yet, waiting for the helper to confirm. */
+    val pendingEarlyDelivery: SlotRowContent? = null,
 )
 
 /**
@@ -217,8 +219,35 @@ class SupportTrainDetailViewModel
             )
         }
 
-        /** `POST /:id/reservations/:rid/deliver`. */
-        fun markDelivered(reservationId: String) =
+        /**
+         * `POST /:id/reservations/:rid/deliver`. Before the slot's day it asks first
+         * ([SupportTrainDetailActionState.pendingEarlyDelivery]): the organizer is told at once.
+         */
+        fun markDelivered(reservationId: String) {
+            val row =
+                (_state.value as? SupportTrainDetailUiState.Loaded)
+                    ?.content
+                    ?.sections
+                    ?.flatMap { it.rows + it.moreRows }
+                    ?.firstOrNull { it.reservationId == reservationId }
+            if (row?.isBeforeSlotDay == true) {
+                _action.update { it.copy(pendingEarlyDelivery = row) }
+                return
+            }
+            deliver(reservationId)
+        }
+
+        fun confirmEarlyDelivery() {
+            val reservationId = _action.value.pendingEarlyDelivery?.reservationId ?: return
+            _action.update { it.copy(pendingEarlyDelivery = null) }
+            deliver(reservationId)
+        }
+
+        fun dismissEarlyDelivery() {
+            _action.update { it.copy(pendingEarlyDelivery = null) }
+        }
+
+        private fun deliver(reservationId: String) =
             runAction(
                 success = "Marked delivered",
                 failure = "Failed to mark this as delivered.",

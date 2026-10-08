@@ -208,6 +208,11 @@ public struct SlotRowContent: Equatable, Sendable, Identifiable {
     public let reservationId: String?
     /// `reserved` / `delivered` / `confirmed` for `mine` rows.
     public let reservationStatus: String?
+    /// The helper's own row whose slot day hasn't come yet: marking it delivered asks first,
+    /// because the organizer is told at once that it arrived.
+    public let isBeforeSlotDay: Bool
+    /// "Sat, Oct 10", for that question.
+    public let slotDayLabel: String?
 
     public init(
         id: String,
@@ -220,7 +225,9 @@ public struct SlotRowContent: Equatable, Sendable, Identifiable {
         mine: Bool = false,
         slotId: String? = nil,
         reservationId: String? = nil,
-        reservationStatus: String? = nil
+        reservationStatus: String? = nil,
+        isBeforeSlotDay: Bool = false,
+        slotDayLabel: String? = nil
     ) {
         self.id = id
         self.dayLabel = dayLabel
@@ -233,6 +240,8 @@ public struct SlotRowContent: Equatable, Sendable, Identifiable {
         self.slotId = slotId
         self.reservationId = reservationId
         self.reservationStatus = reservationStatus
+        self.isBeforeSlotDay = isBeforeSlotDay
+        self.slotDayLabel = slotDayLabel
     }
 
     /// The helper can only leave / mark delivered while the reservation

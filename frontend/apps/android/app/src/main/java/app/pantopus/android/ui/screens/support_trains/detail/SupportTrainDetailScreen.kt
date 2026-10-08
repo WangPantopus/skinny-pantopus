@@ -179,6 +179,26 @@ fun SupportTrainDetailScreen(
         )
     }
 
+    action.pendingEarlyDelivery?.let { row ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissEarlyDelivery() },
+            title = { Text("Mark delivered early?") },
+            text = {
+                Text(
+                    "This slot is for ${row.slotDayLabel ?: "a later day"}. " +
+                        "The organizer will be told it was delivered.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmEarlyDelivery() }) { Text("Mark delivered") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissEarlyDelivery() }) { Text("Not yet") }
+            },
+            modifier = Modifier.testTag("supportTrainEarlyDeliveryDialog"),
+        )
+    }
+
     action.error?.let { message ->
         AlertDialog(
             onDismissRequest = { viewModel.acknowledgeError() },
