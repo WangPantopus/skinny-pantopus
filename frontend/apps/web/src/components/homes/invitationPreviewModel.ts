@@ -3,6 +3,7 @@ export interface InvitationPreview {
     id: string;
     status: 'pending' | 'accepted' | 'expired' | 'revoked';
     proposed_role?: string;
+    invitee_email?: string | null;
     expires_at?: string | null;
     created_at?: string;
     access_start_at?: string | null;
