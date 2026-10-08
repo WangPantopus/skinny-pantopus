@@ -3140,7 +3140,7 @@ public struct HubTabRoot: View {
                 viewModel: TransferOwnershipViewModel(
                     homeId: homeId,
                     currentUserId: transferUser?.id,
-                    currentUserName: transferUser?.displayName ?? transferUser?.username
+                    currentUserName: transferUser?.displayName ?? MadeUpUsername.chosen(transferUser?.username)
                 )
             )
         case let .tasksMap(categoryKey):

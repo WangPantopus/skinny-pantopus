@@ -353,7 +353,7 @@ struct HomeClaimResidencyCard: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(alignment: .center, spacing: Spacing.s3) {
                 HomeClaimAvatar(
-                    initials: item.username.flatMap { $0.first.map { String($0).uppercased() } } ?? "?",
+                    initials: MadeUpUsername.chosen(item.username).flatMap { $0.first.map { String($0).uppercased() } } ?? "?",
                     size: 36,
                     tint: Theme.Color.home
                 )

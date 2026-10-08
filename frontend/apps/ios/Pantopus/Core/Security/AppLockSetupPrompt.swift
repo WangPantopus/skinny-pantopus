@@ -110,8 +110,9 @@ public struct AppLockSetupPromptModifier: ViewModifier {
     }
 
     /// A link is stashed for replay, waiting for its tab, or still loading.
+    /// Also gates the one-time name sheet (`NamePrompt.swift`).
     @MainActor
-    private static var isDeepLinkInFlight: Bool {
+    static var isDeepLinkInFlight: Bool {
         DeepLinkRouter.shared.pending != nil
             || DeepLinkRouter.shared.activeContentArrival != nil
             || PendingDeepLinkStore.peek() != nil
@@ -120,7 +121,7 @@ public struct AppLockSetupPromptModifier: ViewModifier {
     /// Something is presented over the shell: a destination's sheet, the
     /// login cover on its way out, or a system prompt.
     @MainActor
-    private static var isShellCovered: Bool {
+    static var isShellCovered: Bool {
         let scene = UIApplication.shared.connectedScenes
             .first { $0.activationState == .foregroundActive } as? UIWindowScene
         return scene?.keyWindow?.rootViewController?.presentedViewController != nil

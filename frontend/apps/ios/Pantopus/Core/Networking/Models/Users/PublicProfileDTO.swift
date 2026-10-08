@@ -109,7 +109,8 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
         if let name, !name.isEmpty { return name }
         let combined = [firstName, lastName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
         if !combined.isEmpty { return combined }
-        return "@\(username)"
+        // A made-up username (user_…) is never shown as the name.
+        return MadeUpUsername.handle(username) ?? "Pantopus member"
     }
 
     /// "City, ST" if both present.

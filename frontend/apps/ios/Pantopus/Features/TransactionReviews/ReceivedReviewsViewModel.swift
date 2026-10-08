@@ -157,7 +157,7 @@ public final class ReceivedReviewsViewModel {
             }
             return first
         }
-        if let username = reviewer?.username, !username.isEmpty { return username }
+        if let username = MadeUpUsername.chosen(reviewer?.username) { return username }
         return "Neighbor"
     }
 

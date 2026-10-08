@@ -381,7 +381,7 @@ private struct MemberPickerSheet: View {
                                         Icon(.userRound, size: 16, color: Theme.Color.appTextSecondary)
                                     }
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(member.displayName ?? member.username ?? "Member")
+                                        Text(member.displayName ?? MadeUpUsername.chosen(member.username) ?? "Member")
                                             .pantopusTextStyle(.body)
                                             .foregroundStyle(Theme.Color.appText)
                                         if let role = member.role, !role.isEmpty {

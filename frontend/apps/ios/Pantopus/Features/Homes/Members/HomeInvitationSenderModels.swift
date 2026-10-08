@@ -46,7 +46,7 @@ struct PendingHomeInvitationSender: Codable, Equatable {
 
     var recipient: String {
         let payload = fields["payload"]?.dictValue ?? [:]
-        return payload["email"]?.stringValue ?? payload["username"]?.stringValue
+        return payload["email"]?.stringValue ?? MadeUpUsername.chosen(payload["username"]?.stringValue)
             ?? review.dictValue?["recipient_label"]?.stringValue
             ?? review.dictValue?["invitee_email"]?.stringValue ?? "Original invitation"
     }
@@ -213,7 +213,8 @@ enum HomeInvitationSenderValidation {
 
     static func profileLabel(_ profile: [String: JSONValue]) -> String {
         let name = profile["name"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let username = profile["username"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // A made-up username (user_…) is never shown.
+        let username = MadeUpUsername.chosen(profile["username"]?.stringValue) ?? ""
         if !username.isEmpty { return name.isEmpty ? "@" + username : name + " (@" + username + ")" }
         return name.isEmpty ? "Invited person" : name
     }

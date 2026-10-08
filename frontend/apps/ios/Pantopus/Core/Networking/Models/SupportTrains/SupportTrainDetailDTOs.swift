@@ -272,7 +272,7 @@ public struct SupportTrainOrganizerDTO: Decodable, Sendable, Identifiable, Hasha
     }
 
     public var displayName: String {
-        user?.name ?? user?.username ?? "Organizer"
+        user?.name ?? MadeUpUsername.chosen(user?.username) ?? "Organizer"
     }
 }
 

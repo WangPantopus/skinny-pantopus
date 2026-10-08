@@ -177,7 +177,6 @@ public struct PaymentHistoryPartyDTO: Decodable, Sendable, Hashable {
     public var displayName: String? {
         let trimmedName = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedName.isEmpty { return trimmedName }
-        let handle = (username ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return handle.isEmpty ? nil : "@\(handle)"
+        return MadeUpUsername.handle(username)
     }
 }

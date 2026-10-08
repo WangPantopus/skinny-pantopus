@@ -93,7 +93,7 @@ public struct PostCreatorDTO: Decodable, Sendable, Hashable, Identifiable {
         if let name, !name.isEmpty { return name }
         let combined = [firstName, lastName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
         if !combined.isEmpty { return combined }
-        if let username, !username.isEmpty { return "@\(username)" }
+        if let handle = MadeUpUsername.handle(username) { return handle }
         return "Pantopus user"
     }
 

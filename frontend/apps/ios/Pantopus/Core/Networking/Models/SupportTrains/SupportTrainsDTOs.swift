@@ -304,10 +304,10 @@ public struct SupportTrainReservationDTO: Decodable, Sendable, Identifiable, Has
         return updated != created
     }
 
-    /// Best-effort display name. Falls back through `helper.name` →
-    /// `helper.username` → `guest_name` → "Helper".
+    /// Best-effort display name. Falls back through `helper.name` → a
+    /// username the helper chose → `guest_name` → "Helper".
     public var displayName: String {
-        helper?.name ?? helper?.username ?? guestName ?? "Helper"
+        helper?.name ?? MadeUpUsername.chosen(helper?.username) ?? guestName ?? "Helper"
     }
 }
 

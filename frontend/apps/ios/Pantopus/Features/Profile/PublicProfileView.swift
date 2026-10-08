@@ -30,6 +30,8 @@ public struct PublicProfileView: View {
     @State private var showReportSheet = false
     @State private var showBlockConfirm = false
     @State private var shareURL: URL?
+    /// The "Pick a username for your link" sheet, asked before the first share.
+    @State private var usernameShare: UsernameShareSheetModel?
     private let onBack: @MainActor () -> Void
     private let onOpenMessages: @MainActor (PublicProfile) -> Void
     private let onEditPersona: @MainActor () -> Void
@@ -91,12 +93,22 @@ public struct PublicProfileView: View {
         ) {
             // The header's "Share profile" opens this sheet, so it shares first.
             if let url = viewModel.profileShareURL {
-                Button("Share profile") { shareURL = url }
+                Button("Share profile") {
+                    if viewModel.asksForUsernameBeforeSharing {
+                        viewModel.markAskedForUsername()
+                        usernameShare = UsernameShareSheetModel(currentUsername: viewModel.loadedUsername)
+                    } else {
+                        shareURL = url
+                    }
+                }
             }
-            Button("Block this user", role: .destructive) {
-                showBlockConfirm = true
+            // Nobody blocks or reports themselves.
+            if !viewModel.isOwnProfileLoaded {
+                Button("Block this user", role: .destructive) {
+                    showBlockConfirm = true
+                }
+                Button("Report") { showReportSheet = true }
             }
-            Button("Report") { showReportSheet = true }
             Button("Cancel", role: .cancel) {}
         }
         // Blocking from a chat asks first (`ChatConversationDetailsSheet`), so
@@ -111,6 +123,30 @@ public struct PublicProfileView: View {
         }
         .sheet(isPresented: $showReportSheet) {
             reportSheet
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { usernameShare != nil },
+                set: { if !$0 { usernameShare = nil } }
+            )
+        ) {
+            if let usernameShare {
+                UsernameShareSheet(
+                    model: usernameShare,
+                    onShareAsIs: {
+                        let url = viewModel.profileShareURL
+                        self.usernameShare = nil
+                        shareAfterSheet(url)
+                    },
+                    onSaved: { username in
+                        self.usernameShare = nil
+                        Task {
+                            await viewModel.refresh()
+                            shareAfterSheet(URL(string: InviteLinks.profileURLString(username: username)))
+                        }
+                    }
+                )
+            }
         }
         .sheet(
             isPresented: Binding(
@@ -222,6 +258,16 @@ public struct PublicProfileView: View {
             localLayout(payload, neighbor: neighbor)
         } else {
             personaLayout(payload)
+        }
+    }
+
+    /// The share sheet can't present while the username sheet is still
+    /// going away, so it opens a moment later.
+    private func shareAfterSheet(_ url: URL?) {
+        guard let url else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            shareURL = url
         }
     }
 

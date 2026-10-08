@@ -431,7 +431,7 @@ final class EditAccessCodeFormViewModel {
                 .map { occupant in
                     AccessRosterMember(
                         id: occupant.userId,
-                        displayName: occupant.displayName ?? occupant.username ?? "Member",
+                        displayName: occupant.displayName ?? MadeUpUsername.chosen(occupant.username) ?? "Member",
                         role: occupant.role,
                         canManageAccess: occupant.canManageAccess ?? false,
                         canViewSensitive: occupant.canViewSensitive ?? false

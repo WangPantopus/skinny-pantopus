@@ -573,6 +573,33 @@ public final class PublicProfileViewModel {
         return true
     }
 
+    /// True when the signed-in owner's link still uses the username the
+    /// server made up and this device hasn't asked them to pick one yet
+    /// (`UsernameShareSheet.swift`).
+    public var asksForUsernameBeforeSharing: Bool {
+        guard case let .loaded(payload) = state, payload.isOwner,
+              MadeUpUsername.isMadeUp(payload.profile.username),
+              let currentUserId else { return false }
+        return !UsernamePromptMemory.wasAsked(currentUserId)
+    }
+
+    /// Asked once per account on this device.
+    public func markAskedForUsername() {
+        if let currentUserId { UsernamePromptMemory.markAsked(currentUserId) }
+    }
+
+    /// The loaded profile's username ("" before it loads).
+    public var loadedUsername: String {
+        guard case let .loaded(payload) = state else { return "" }
+        return payload.profile.username
+    }
+
+    /// True once the loaded profile is the signed-in person's own.
+    public var isOwnProfileLoaded: Bool {
+        guard case let .loaded(payload) = state else { return false }
+        return payload.isOwner
+    }
+
     /// The profile's public web link for the header's "Share profile" sheet
     /// (web `/u/:username`, the link web's own profile Share uses).
     public var profileShareURL: URL? {
@@ -813,7 +840,8 @@ public final class PublicProfileViewModel {
     ) -> PublicProfileContent {
         let header = PublicProfileHeader(
             displayName: profile.displayName,
-            handle: profile.username.isEmpty ? nil : profile.username,
+            // A made-up username (user_…) is never shown as "@…" or in "Report @…".
+            handle: MadeUpUsername.chosen(profile.username),
             locality: profile.locality,
             avatarURL: (profile.profilePictureURL ?? profile.avatarURL).flatMap(URL.init(string:)),
             // No avatar check: `verified` is the account email flag that sign-in

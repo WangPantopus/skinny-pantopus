@@ -100,9 +100,13 @@ public struct UserProfile: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let email: String
     public let username: String
-    /// Names are `null` until the claim flow collects them: the email +
-    /// password signup sends none (`backend/routes/users.js:887`), and OAuth
-    /// may omit the last name. Required `String`s failed the whole decode.
+    /// True when the server made `username` up (nobody picks one at sign-up);
+    /// sent for the signed-in person's own profile only. Absent from older
+    /// servers, which reads as false.
+    public let usernameIsGenerated: Bool?
+    /// Names are `null` for accounts made while sign-up asked only for an
+    /// email and password, and OAuth may omit the last name. Required
+    /// `String`s failed the whole decode.
     public let firstName: String?
     public let middleName: String?
     public let lastName: String?
@@ -139,7 +143,7 @@ public struct UserProfile: Decodable, Sendable, Hashable, Identifiable {
     public let updatedAt: String
 
     private enum CodingKeys: String, CodingKey {
-        case id, email, username, firstName, middleName, lastName, name
+        case id, email, username, usernameIsGenerated, firstName, middleName, lastName, name
         case phoneNumber, dateOfBirth, address, city, state, zipcode
         case accountType, role, verified, residency
         case avatarURL = "avatar_url"
@@ -169,6 +173,10 @@ public struct ProfileResponse: Decodable, Sendable, Hashable {
 /// `PATCH /api/users/profile` — see `backend/routes/users.js:1503`. Every
 /// field is optional; unspecified keys are left untouched server-side.
 public struct ProfileUpdateRequest: Encodable, Sendable, Hashable {
+    /// A new username (lowercase). The server checks it again
+    /// (`GET /api/users/username-availability` rules) and answers 409
+    /// `USERNAME_TAKEN` or 400 `USERNAME_INVALID` / `USERNAME_RESERVED`.
+    public var username: String?
     public var firstName: String?
     public var middleName: String?
     public var lastName: String?
@@ -194,6 +202,7 @@ public struct ProfileUpdateRequest: Encodable, Sendable, Hashable {
     public var facebook: String?
 
     public init(
+        username: String? = nil,
         firstName: String? = nil,
         middleName: String? = nil,
         lastName: String? = nil,
@@ -214,6 +223,7 @@ public struct ProfileUpdateRequest: Encodable, Sendable, Hashable {
         instagram: String? = nil,
         facebook: String? = nil
     ) {
+        self.username = username
         self.firstName = firstName
         self.middleName = middleName
         self.lastName = lastName
@@ -240,4 +250,15 @@ public struct ProfileUpdateRequest: Encodable, Sendable, Hashable {
 public struct ProfileUpdateResponse: Decodable, Sendable, Hashable {
     public let message: String
     public let user: UserProfile
+}
+
+/// `GET /api/users/username-availability?username=` — route
+/// `backend/routes/users.js` (`router.get('/username-availability'`).
+/// `reason` is `invalid`, `reserved`, `taken` or `current` (already theirs);
+/// `message` is a sentence to show when the name can't be used.
+public struct UsernameAvailabilityDTO: Decodable, Sendable, Hashable {
+    public let username: String
+    public let available: Bool
+    public let reason: String?
+    public let message: String?
 }
