@@ -208,9 +208,15 @@ function serializePlaceIntelligence(options = {}) {
     generatedAt,
     sections = [],
     verifyAvailable = false,
+    viewer = null,
   } = options;
 
   assertOneOf(tier, ['T0', 'T1', 'T2', 'T3', 'T4'], 'tier');
+  if (viewer) {
+    assertOneOf(viewer.role, ['owner', 'renter', 'member', 'nonresident'], 'viewer.role');
+    assertOneOf(viewer.stage, ['setup', 'claimed', 'verified'], 'viewer.stage');
+    assertOneOf(viewer.ownership, ['confirmed', 'pending', 'none'], 'viewer.ownership');
+  }
 
   // Accept already-serialized envelopes or raw `{ id, ... }` specs.
   // An envelope is recognized by its snake_case `as_of` key, which raw
@@ -245,6 +251,10 @@ function serializePlaceIntelligence(options = {}) {
     // Whether this viewer can start residency verification here. Guests and
     // service providers are not residents, so they get no verify prompts.
     verify_available: Boolean(verifyAvailable),
+    // Who is looking: the role picks which sections apply (owner, renter,
+    // household member, guest) and the stage what is locked (setup, claimed,
+    // verified). Absent on responses that aren't about a Home.
+    ...(viewer ? { viewer: { role: viewer.role, stage: viewer.stage, ownership: viewer.ownership } } : {}),
     region_supported: regionSupported,
     generated_at: generatedAt || new Date().toISOString(),
     groups,

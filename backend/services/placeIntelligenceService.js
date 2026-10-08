@@ -25,6 +25,8 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { encodeGeohash } = require('../utils/geohash');
 const { NON_RESIDENT_ROLES, resolveHomeRole } = require('../utils/homeAccessPolicy');
+const claimsConfig = require('../config/householdClaims');
+const claimsPolicy = require('./homeClaimRoutingService');
 const {
   PLACE_SECTION_IDS,
   PLACE_SECTION_META,
@@ -71,6 +73,67 @@ function resolveTier(access) {
 // they get no verify prompts or verify-only locked reasons.
 function nonResidentViewer(access) {
   return NON_RESIDENT_ROLES.has(resolveHomeRole(access && access.occupancy));
+}
+
+// ── Who is looking (the founder's Place rules, October 8, 2026) ──
+// The role decides which sections apply at all:
+//   owner        Home value and the property-tax exemption; no rent sections
+//   renter       the rent band and what the block pays; no value or exemption
+//   member       other household roles: public facts and the Home's facts
+//   nonresident  guests and service providers: public facts only
+// The stage decides what is locked: before verification (a private setup)
+// the household sections wait for verifying the address by mail, and while
+// ownership is pending the owner-only items wait for it to be confirmed.
+const OWNER_ONLY_SECTIONS = new Set(['exemption_check']);
+const RENTER_ONLY_SECTIONS = new Set(['rent_band', 'real_rent']);
+const MONEY_SECTIONS = new Set(['bill_benchmark', 'incentives', 'rent_band', 'real_rent', 'exemption_check']);
+const HOME_RECORD_SECTIONS = new Set(['your_home', 'home_systems']);
+const VERIFY_BY_MAIL_REASONS = {
+  your_home: "Verify your address by mail to see your home's details.",
+  home_systems: "Verify your address by mail to keep your home's maintenance record.",
+  bill_benchmark: "Verify your address by mail to compare your bills with your neighbors'.",
+  exemption_check: 'Verify your address by mail to check for property-tax exemptions.',
+  real_rent: 'Verify your address by mail to see what your block actually pays.',
+};
+const OWNERSHIP_PENDING_REASON = 'Available once your ownership is confirmed.';
+const VALUE_FIELDS = ['estimated_value', 'value_low', 'value_high', 'assessed_value'];
+
+function resolveViewer(access, tier, ownershipPending) {
+  const base = (access && (access.effective_role_base || access.role_base)) || null;
+  let role = 'member';
+  if (nonResidentViewer(access)) role = 'nonresident';
+  else if ((access && access.isOwner) || base === 'owner' || ownershipPending) role = 'owner';
+  else if (base === 'lease_resident') role = 'renter';
+  const stage = tier === 'T4' ? 'verified' : tier === 'T3' ? 'claimed' : 'setup';
+  const ownership = access && access.isOwner ? 'confirmed' : role === 'owner' ? 'pending' : 'none';
+  return { role, stage, ownership };
+}
+
+function sectionApplies(id, viewer) {
+  if (viewer.role === 'nonresident') return !MONEY_SECTIONS.has(id) && !HOME_RECORD_SECTIONS.has(id);
+  if (viewer.role === 'member') return !MONEY_SECTIONS.has(id);
+  if (OWNER_ONLY_SECTIONS.has(id)) return viewer.role === 'owner';
+  if (RENTER_ONLY_SECTIONS.has(id)) return viewer.role === 'renter';
+  return true;
+}
+
+// The viewer's own pending ownership of this Home (a pending owner row or an
+// ownership claim still in progress). A failed read counts as none.
+async function hasPendingOwnership(homeId, userId) {
+  try {
+    const [owners, claims] = await Promise.all([
+      supabaseAdmin.from('HomeOwner').select('id').eq('home_id', homeId).eq('subject_type', 'user')
+        .eq('subject_id', userId).eq('owner_status', 'pending').limit(1),
+      supabaseAdmin.from('HomeOwnershipClaim').select('id, state, claim_phase_v2, merged_into_claim_id')
+        .eq('home_id', homeId).eq('claimant_user_id', userId),
+    ]);
+    if ((owners.data || []).length) return true;
+    return (claims.data || []).some((claim) => (claimsConfig.flags.v2ReadPaths
+      ? claimsPolicy.isClaimActiveRecord(claim) : claimsPolicy.isLegacyStateActive(claim.state)));
+  } catch (err) {
+    logger.warn('placeIntelligence: pending ownership read failed', { homeId, error: err.message });
+    return false;
+  }
 }
 
 // ── Band × tier → section access (§9.2) ──────────────────────
@@ -858,7 +921,7 @@ async function composeRealRent(home, tier, userId, canVerify = true) {
     return [serializePlaceSection('real_rent', {
       access: 'locked',
       unavailableReason: canVerify
-        ? 'Verify your address to see what your block actually pays.'
+        ? 'Verify your address by mail to see what your block actually pays.'
         : 'Shared with the verified residents of this block.',
     })];
   }
@@ -1020,6 +1083,9 @@ function buildPlaceRef(home, privacy) {
  * @returns {Promise<object|null>} The PlaceIntelligence response, or null if the home is missing.
  */
 async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
+  // Owner-only sections depend on whether the viewer's ownership is still
+  // pending; read it alongside the Home.
+  const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
   const { data: home, error } = await supabaseAdmin
     .from('Home')
     .select(HOME_SELECT)
@@ -1032,14 +1098,21 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
   }
 
   const tier = resolveTier(access);
+  const viewer = resolveViewer(access, tier, await ownershipPending);
+  // Sections that can't apply to this viewer are left out entirely.
   const requested = new Set(
-    Array.isArray(sectionIds) && sectionIds.length ? sectionIds : PLACE_SECTION_IDS,
+    (Array.isArray(sectionIds) && sectionIds.length ? sectionIds : PLACE_SECTION_IDS)
+      .filter((id) => sectionApplies(id, viewer)),
   );
+  // Before verification the household sections are locked outright, so
+  // their providers (ATTOM, the household's bills) aren't asked at all.
+  const setupLocked = viewer.stage === 'setup'
+    ? Object.keys(VERIFY_BY_MAIL_REASONS).filter((id) => requested.has(id)) : [];
 
   // Compose only the composers that produce a requested section — plus the
   // home's privacy toggles — in parallel; each composer is self-contained
   // and resolves (never rejects), so one failure can't sink the response.
-  const runs = COMPOSER_SECTIONS.filter(({ ids }) => ids.some((id) => requested.has(id)));
+  const runs = COMPOSER_SECTIONS.filter(({ ids }) => ids.some((id) => requested.has(id) && !setupLocked.includes(id)));
 
   // The Today group and heat_cold both need the same provider payload.
   // Started ONCE here rather than inside each composer: the getHubToday memo
@@ -1080,6 +1153,21 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
 
   const composed = {};
   for (const env of groups.flat()) composed[env.id] = env;
+  for (const id of setupLocked) {
+    composed[id] = serializePlaceSection(id, { access: 'locked', unavailableReason: VERIFY_BY_MAIL_REASONS[id] });
+  }
+  if (viewer.ownership === 'pending' && composed.exemption_check && !setupLocked.includes('exemption_check')) {
+    composed.exemption_check = serializePlaceSection('exemption_check', {
+      access: 'locked', unavailableReason: OWNERSHIP_PENDING_REASON,
+    });
+  }
+  // The Home's value is the confirmed owner's; everyone else sees its facts.
+  if (composed.your_home && composed.your_home.data && viewer.ownership !== 'confirmed') {
+    composed.your_home = {
+      ...composed.your_home,
+      data: { ...composed.your_home.data, ...Object.fromEntries(VALUE_FIELDS.map((field) => [field, null])) },
+    };
+  }
 
   // Emit the requested sections in canonical order; anything not yet wired
   // fills as `unavailable` so the full IA renders with section-by-section
@@ -1093,7 +1181,9 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
   return serializePlaceIntelligence({
     place: buildPlaceRef(home, privacy),
     tier,
-    verifyAvailable: tier === 'T3' && !nonResidentViewer(access),
+    viewer,
+    // A private setup verifies by mail too; guests and service providers can't.
+    verifyAvailable: (tier === 'T3' || viewer.stage === 'setup') && viewer.role !== 'nonresident',
     regionSupported: true,
     sections,
   });
