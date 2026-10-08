@@ -171,7 +171,8 @@ public struct HouseholdTaskAssignableMember: Sendable, Hashable, Identifiable {
     }
 
     public static func from(_ occupant: OccupantDTO) -> HouseholdTaskAssignableMember? {
-        guard occupant.isActive else { return nil }
+        // Guests can't see household tasks, so the server refuses them as assignees.
+        guard occupant.isActive, occupant.role != "guest" else { return nil }
         let name = occupant.displayName?.trimmingCharacters(in: .whitespaces)
             ?? occupant.username?.trimmingCharacters(in: .whitespaces)
             ?? ""

@@ -226,7 +226,8 @@ data class HouseholdTaskAssignableMember(
 ) {
     companion object {
         fun from(occupant: OccupantDto): HouseholdTaskAssignableMember? {
-            if (!occupant.isActive) return null
+            // Guests can't see household tasks, so the server refuses them as assignees.
+            if (!occupant.isActive || occupant.role == "guest") return null
             val name =
                 occupant.displayName?.trim()
                     ?: occupant.username?.trim()

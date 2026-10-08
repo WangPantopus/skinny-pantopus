@@ -44,8 +44,9 @@ export function useHomeTaskCollection(homeId: string) {
           const response = await api.homes.getHomeOccupants(homeId);
           if (!current(revision)) return;
           const occupants: unknown = response.occupants;
+          // Guests can't see household tasks, so the server refuses them as assignees.
           if (Array.isArray(occupants)) setMembers(occupants.filter((value): value is TaskMember =>
-            value && typeof value.user_id === 'string' && TASK_UUID.test(value.user_id)));
+            value && typeof value.user_id === 'string' && TASK_UUID.test(value.user_id) && value.role !== 'guest'));
         } catch { /* Task access remains independently verified. */ }
       } catch (failure) {
         if (ctx.active && context.current === ctx) {
