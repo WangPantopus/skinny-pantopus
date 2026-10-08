@@ -623,9 +623,10 @@ extension SupportTrainDetailViewModel {
         slot: SupportTrainSlotDTO?
     ) -> SlotRowContent {
         let date = slot.flatMap { parseSlotDate($0.slotDate) }
+        // "Home-cooked meal", not the wire value "Cook", when the helper named no dish.
         let title = reservation.dishTitle
             ?? reservation.restaurantName
-            ?? reservation.contributionMode?.capitalized
+            ?? reservation.contributionMode.map { SupportTrainContributionMode(rawValue: $0)?.label ?? $0.capitalized }
             ?? "Your contribution"
         return SlotRowContent(
             id: reservation.id,
