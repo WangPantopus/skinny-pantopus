@@ -107,8 +107,8 @@ struct TodaySkyPainter {
         let warmth = goldenWarmth
         let gradient = Gradient(stops: [
             .init(color: scene.sky.top.color, location: 0),
-            .init(color: scene.sky.mid.mixed(with: SkyPalette.sunLow, by: warmth * 0.4).color, location: 0.55),
-            .init(color: scene.sky.bottom.mixed(with: SkyPalette.sunLow, by: warmth).color, location: 1)
+            .init(color: scene.sky.mid.mixed(with: SkyPalette.sunLow, by: warmth * 0.25).color, location: 0.55),
+            .init(color: scene.sky.bottom.mixed(with: SkyPalette.sunLow, by: warmth * 0.6).color, location: 1)
         ])
         context.fill(
             Path(CGRect(origin: .zero, size: scene.size)),
@@ -134,10 +134,17 @@ struct TodaySkyPainter {
         let fraction = moment.dayFraction
         let x = scene.width * (0.56 + 0.32 * fraction)
         let y = scene.horizon - 18 - sin(.pi * fraction) * (scene.horizon - 58)
-        let core = moment.phase == .dawn || moment.phase == .dusk ? SkyPalette.sunLow : SkyPalette.sunHigh
+        // In the golden hour the sun warms and a wide halo of gold spreads around it.
+        let golden = goldenWarmth
+        let core = moment.phase == .dawn || moment.phase == .dusk
+            ? SkyPalette.sunLow
+            : SkyPalette.sunHigh.mixed(with: SkyPalette.sunLow, by: golden * 2)
         let veiled = weather != .clear && weather != .partly
         glow(context, scene, Glow(center: CGPoint(x: x, y: y), radius: 78, color: core, opacity: veiled ? 0.22 : 0.45))
         guard !veiled else { return }
+        if golden > 0 {
+            glow(context, scene, Glow(center: CGPoint(x: x, y: y), radius: 130, color: SkyPalette.sunLow, opacity: golden * 0.7))
+        }
         var rays = context
         rays.translateBy(x: x, y: y)
         rays.rotate(by: .radians(still ? 0 : scene.time * 0.12))
