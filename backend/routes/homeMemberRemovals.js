@@ -3,6 +3,7 @@ const verifyToken = require('../middleware/verifyToken');
 const { invalidateRoleCache } = require('../middleware/verifyToken');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const service = require('../services/homeMemberRemovalService');
+const { wantsDisplayNames, addDisplayNames } = require('../utils/householdDisplayNames');
 
 router.use((_req,res,next)=>{res.set('Cache-Control','private, no-store');next();});
 router.use(verifyToken);
@@ -11,7 +12,9 @@ router.get('/session',(req,res)=>{
 });
 router.use((req,res,next)=>{if(requireExpectedSessionScope(req,res,{required:true}))next();});
 router.post('/context',async(req,res)=>{
-  try {res.json({...await service.prepare({actorId:req.user.id,intent:req.body}),session:getRequestSessionScope(req)});}
+  try {const result=await service.prepare({actorId:req.user.id,intent:req.body});
+    if (wantsDisplayNames(req)) await addDisplayNames([result.target]);
+    res.json({...result,session:getRequestSessionScope(req)});}
   catch(error){service.sendError(req,res,error);}
 });
 router.get('/commands/:requestId',async(req,res)=>{

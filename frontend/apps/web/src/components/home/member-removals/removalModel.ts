@@ -7,6 +7,8 @@ export interface RemovalSummary {
   home: { id: string; name: string | null };
   target: {
     id: string; name: null; username: string | null; role_base: string | null;
+    /** Their name, from a server that knows it (and only for summaries saved since). */
+    display_name?: string | null;
     is_self: boolean; is_active: boolean; verification_status: string | null;
     start_at: string | null; end_at: string | null; access_start_at: string | null; access_end_at: string | null;
   };
@@ -49,7 +51,7 @@ function validSummary(v: unknown, input: RemovalInput, actor: string): v is Remo
   if (!object(v) || !object(v.home) || !object(v.target)) return false;
   const t = v.target;
   return v.home.id === input.home_id && label(v.home.name) && t.id === input.target_user_id
-    && t.name === null && label(t.username) && typeof t.is_self === 'boolean' && t.is_self === (actor === input.target_user_id)
+    && t.name === null && label(t.username) && (t.display_name === undefined || label(t.display_name)) && typeof t.is_self === 'boolean' && t.is_self === (actor === input.target_user_id)
     && typeof t.is_active === 'boolean' && (t.role_base === null ? t.is_self : typeof t.role_base === 'string' && roles.includes(t.role_base))
     && (t.verification_status === null || typeof t.verification_status === 'string' && t.verification_status.length <= 80)
     && dates.every(k => t[k] === null || date(t[k]));
@@ -63,7 +65,8 @@ export function validateRemovalContext(value: unknown, input: RemovalInput, sess
 export function projectRemovalSummary(v: RemovalSummary): RemovalSummary {
   const t = v.target;
   return { home: { id: v.home.id, name: v.home.name }, target: {
-    id: t.id, name: t.name, username: t.username, role_base: t.role_base, is_self: t.is_self,
+    id: t.id, name: t.name, username: t.username, ...(t.display_name !== undefined && { display_name: t.display_name }),
+    role_base: t.role_base, is_self: t.is_self,
     is_active: t.is_active, verification_status: t.verification_status,
     start_at: t.start_at, end_at: t.end_at, access_start_at: t.access_start_at, access_end_at: t.access_end_at,
   } };

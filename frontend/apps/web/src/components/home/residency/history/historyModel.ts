@@ -9,7 +9,7 @@ export interface HistoryItem {
   };
   current: {
     claim_status: 'pending' | 'verified' | 'rejected'; applicant_lookup: 'current_claim_reference';
-    applicant: { id: string; username: string | null; name: null } | null; household_access: 'not_checked';
+    applicant: { id: string; username: string | null; name: null; display_name?: string | null } | null; household_access: 'not_checked';
   };
 }
 export interface HistoryPage { home_id: string; actor_id: string; items: HistoryItem[]; next_cursor: string | null; session: HistorySession }
@@ -55,7 +55,10 @@ export function validateHistoryItem(value: unknown, homeId: string, actorId: str
     && typeof c.claim_status === 'string' && ['pending', 'verified', 'rejected'].includes(c.claim_status)
     && c.applicant_lookup === 'current_claim_reference' && c.household_access === 'not_checked';
   if (c.applicant !== null) {
-    valid = valid && object(c.applicant) && keys(c.applicant, ['id', 'username', 'name'])
+    // `display_name` comes only from a server that knows it; older answers carry the base keys.
+    valid = valid && object(c.applicant) && (keys(c.applicant, ['id', 'username', 'name'])
+      || (keys(c.applicant, ['id', 'username', 'name', 'display_name']) && (c.applicant.display_name === null
+        || typeof c.applicant.display_name === 'string' && c.applicant.display_name.length <= 200)))
       && historyUUID(c.applicant.id) && c.applicant.name === null
       && (c.applicant.username === null || typeof c.applicant.username === 'string' && c.applicant.username.length <= 100);
   }
