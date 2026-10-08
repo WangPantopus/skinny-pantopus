@@ -23,7 +23,7 @@ export function useHomeCreation() {
     const retire = () => { generation.current++; controller.current?.retire(); controller.current = null; setView(empty); };
     const open = async () => {
       retire();
-      if (disposed || document.visibilityState === 'hidden') return;
+      if (disposed) return;
       const revision = generation.current;
       let current: HomeCreationController | null = null;
       try {
@@ -39,15 +39,25 @@ export function useHomeCreation() {
           error: 'Protected Home recovery could not be opened. Your saved request is kept. Reopen recovery to try again.' });
       }
     };
-    const visibility = () => { if (document.visibilityState === 'hidden') retire(); else void open(); };
+    // Coming back keeps the form. Only an unfinished request (a reply lost while away) is re-checked,
+    // and a closed or changed session opens again. Account changes and leaving the page start over.
+    const resume = () => {
+      if (disposed || document.visibilityState === 'hidden') return;
+      const current = controller.current;
+      if (!current || !current.current()) { void open(); return; }
+      if (current.pending) {
+        void current.recover('status').then(() => publish(current), error => publish(current, error instanceof Error ? error.message : 'Reopen recovery to try again.'));
+      }
+    };
+    const pageshow = (event: PageTransitionEvent) => { if (event.persisted) void open(); };
     const session = () => { retire(); void open(); };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) session(); };
     const unsubscribe = api.onTokenChange(session);
     window.addEventListener('storage', storage); window.addEventListener('pagehide', retire);
-    window.addEventListener('pageshow', visibility); document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('pageshow', pageshow); document.addEventListener('visibilitychange', resume);
     void open();
     return () => { disposed = true; retire(); unsubscribe(); window.removeEventListener('storage', storage);
-      window.removeEventListener('pagehide', retire); window.removeEventListener('pageshow', visibility); document.removeEventListener('visibilitychange', visibility); };
+      window.removeEventListener('pagehide', retire); window.removeEventListener('pageshow', pageshow); document.removeEventListener('visibilitychange', resume); };
   }, [reload, publish]);
 
   const run = async <T,>(action: (current: HomeCreationController) => Promise<T>): Promise<T | undefined> => {

@@ -85,7 +85,8 @@ export default function ProfileHeader({
 }: ProfileHeaderProps) {
   const router = useRouter();
   const username = stringField(profile.username);
-  const tagline = stringField(profile.tagline) || 'Helping neighbors with local services.';
+  // Only the person's own tagline: a stand-in line would read as their words.
+  const tagline = stringField(profile.tagline);
   const avatarUrl = stringField(profile.profile_picture_url) || stringField(profile.avatar_url) || stringField(profile.profilePicture);
   const createdAt = stringField(profile.created_at) || stringField(profile.createdAt);
   const joinedLabel = createdAt
@@ -128,7 +129,7 @@ export default function ProfileHeader({
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl md:text-3xl font-bold text-app leading-tight">{fullName}</h1>
               {usernameHandle(username) ? <p className="text-app-secondary">{usernameHandle(username)}</p> : null}
-              <p className="text-sm text-app-secondary mt-1">{tagline}</p>
+              {tagline ? <p className="text-sm text-app-secondary mt-1">{tagline}</p> : null}
               <ResidencyHomeBlock residency={residency ?? undefined} />
 
               <div className="flex flex-wrap gap-2 mt-3">
