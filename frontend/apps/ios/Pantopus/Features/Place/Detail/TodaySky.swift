@@ -79,6 +79,12 @@ struct SkyMoment: Equatable {
         return hour * 60 + minute
     }
 
+    /// "5:38 PM" for minutes past local midnight, in the person's own clock style.
+    static func clockText(_ minutes: Double, calendar: Calendar = .autoupdatingCurrent) -> String {
+        let midnight = calendar.startOfDay(for: Date())
+        return midnight.addingTimeInterval(minutes * 60).formatted(date: .omitted, time: .shortened)
+    }
+
     /// The moon's age as a fraction of the 29.53-day synodic month, from the
     /// new moon of 6 January 2000 (Julian day 2451550.1).
     static func moonPhase(at date: Date) -> Double {
@@ -109,6 +115,11 @@ extension SkyPalette.Weather {
 struct TodaySkyHero: View {
     let data: PlaceWeatherData
     let sun: PlaceSunriseSunsetData?
+    /// The address calendar's upcoming dates: on the evening before a
+    /// household pickup the bins stand at the curb.
+    var pickups: [PlaceCalendarEvent] = []
+    /// Tapping the bins shows the pickup schedule.
+    var onBins: (() -> Void)?
 
     static let height: CGFloat = 188
 
@@ -122,10 +133,11 @@ struct TodaySkyHero: View {
         !reduceMotion && !lowPower && scenePhase == .active && onScreen && appeared
     }
 
-    /// "Now, 60°, Overcast": one spoken reading instead of "60", "°" apart.
-    private var nowLabel: String {
+    /// "Full moon tonight. Now, 60°, Overcast": one spoken reading instead of "60", "°" apart.
+    private func nowLabel(_ note: SkyNote?) -> String {
         let reading = "Now, \(Int(data.currentTempF.rounded()))°"
-        return data.conditionLabel.isEmpty ? reading : "\(reading), \(data.conditionLabel)"
+        let now = data.conditionLabel.isEmpty ? reading : "\(reading), \(data.conditionLabel)"
+        return note.map { "\($0.spoken) \(now)" } ?? now
     }
 
     private var rangeLabel: String {
@@ -154,9 +166,12 @@ struct TodaySkyHero: View {
         TimelineView(.everyMinute) { minute in
             let moment = SkyMoment.at(minute.date, sunrise: sun?.sunrise, sunset: sun?.sunset)
             let sky = SkyPalette.sky(moment.phase, SkyPalette.Weather(data.conditionCode))
+            let note = SkyNote.pick(now: minute.date, moment: moment, weather: data, pickups: pickups)
+            let shower = SkyNote.meteors(now: minute.date, moment: moment, calendar: .autoupdatingCurrent) != nil
             ZStack(alignment: .topLeading) {
-                scene(moment: moment)
-                reading
+                scene(moment: moment, note: note, season: SkySeason.at(minute.date), shower: shower)
+                reading(note)
+                if let note, !note.bins.isEmpty, let onBins { binsButton(note, action: onBins) }
             }
             // At least 188 pt; taller only if the chips have to stack on a narrow phone,
             // so the reading is never clipped. The ground stays at the bottom either way.
@@ -175,15 +190,20 @@ struct TodaySkyHero: View {
             lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
         .modifier(ScrollVisibility(onScreen: $onScreen))
+        // A container, so the bins button keeps its own identifier.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("todaySkyHero")
     }
 
-    private func scene(moment: SkyMoment) -> some View {
+    private func scene(moment: SkyMoment, note: SkyNote?, season: SkySeason, shower: Bool) -> some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !animating)) { frame in
             let painter = TodaySkyPainter(
                 condition: data.conditionCode,
                 moment: moment,
-                cold: data.currentTempF < 50,
+                temperature: data.currentTempF,
+                note: note,
+                season: season,
+                meteorShower: shower,
                 still: !animating
             )
             Canvas { context, size in
@@ -193,13 +213,29 @@ struct TodaySkyHero: View {
         .accessibilityHidden(true)
     }
 
-    private var reading: some View {
+    /// The bins drawn at the curb, as a 44 pt button that shows the pickup schedule.
+    private func binsButton(_ note: SkyNote, action: @escaping () -> Void) -> some View {
+        GeometryReader { proxy in
+            Button(action: action) {
+                Color.clear.frame(width: 52, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .position(TodaySkyGround.binsCenter(in: proxy.size, count: note.bins.count))
+            .accessibilityLabel(note.spoken)
+            .accessibilityHint("Shows your pickup schedule.")
+            .accessibilityIdentifier("todaySkyBins")
+        }
+    }
+
+    private func reading(_ note: SkyNote?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             VStack(alignment: .leading, spacing: 0) {
                 // 14 pt bold (large text) in full white: it sits over the cloud deck on grey days.
-                Text("NOW")
+                // A true note for today takes the place of "NOW".
+                Text(note?.kicker ?? "NOW")
                     .font(.system(size: 14, weight: .bold))
                     .kerning(0.9)
+                    .background { if note != nil { noteGlass } }
                 HStack(alignment: .top, spacing: 1) {
                     Text("\(Int(data.currentTempF.rounded()))")
                         .font(.system(size: 64, weight: .light))
@@ -218,7 +254,7 @@ struct TodaySkyHero: View {
             }
             .shadow(color: SkyPalette.black.color(opacity: 0.28), radius: 3, y: 1)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(nowLabel)
+            .accessibilityLabel(nowLabel(note))
             if !chips.isEmpty {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 6) { chipViews }
@@ -235,6 +271,16 @@ struct TodaySkyHero: View {
         .padding(.top, 14)
         .padding(.trailing, 110)
         .padding(.bottom, 36)
+    }
+
+    /// A note is longer than "NOW" and can run under a bright cloud, so it
+    /// sits on the chips' dark glass, drawn outside its frame so the card
+    /// keeps its height.
+    private var noteGlass: some View {
+        Capsule()
+            .fill(SkyPalette.scrim.color(opacity: 0.45))
+            .padding(.horizontal, -8)
+            .padding(.vertical, -3)
     }
 
     private var chipViews: some View {

@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotateRad
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -19,6 +20,7 @@ import app.pantopus.android.data.api.models.place.WeatherConditionCode
 import app.pantopus.android.ui.theme.SkyPalette
 import app.pantopus.android.ui.theme.SkyPalette.mixed
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.sin
@@ -34,11 +36,27 @@ import kotlin.math.sqrt
 class TodaySkyPainter(
     private val condition: WeatherConditionCode,
     private val moment: SkyMoment,
-    private val cold: Boolean,
+    /** The current temperature, °F: smoke from the chimney below 50, frost at 32. */
+    private val temperature: Double,
+    /** Today's note, when it has a picture: bins at the curb. */
+    private val note: SkyNote?,
+    private val season: SkySeason,
+    /** A meteor shower's peak night: shooting stars whatever the note says. */
+    private val meteorShower: Boolean,
     private val still: Boolean,
 ) {
     private val weather = skyWeather(condition)
     private val night = moment.phase == SkyPalette.Phase.NIGHT
+
+    /** The day's first and last golden hour warm the horizon until dawn's or dusk's own sky takes over (up to 0.5). */
+    private val goldenWarmth =
+        if (moment.phase == SkyPalette.Phase.DAY) {
+            val evening = (moment.minutes - (moment.sunset - 60)) / 20
+            val morning = (moment.sunrise + 60 - moment.minutes) / 20
+            (maxOf(evening, morning).coerceIn(0.0, 1.0) * 0.5).toFloat()
+        } else {
+            0f
+        }
 
     fun paint(
         scope: DrawScope,
@@ -47,19 +65,22 @@ class TodaySkyPainter(
         time: Double,
     ) {
         val scene = SkyScene(width, height, if (still) 2.0 else time, SkyPalette.sky(moment.phase, weather))
+        val clear = weather == SkyPalette.Weather.CLEAR || weather == SkyPalette.Weather.PARTLY
         with(scope) {
             paintSky(scene)
-            if (night && (weather == SkyPalette.Weather.CLEAR || weather == SkyPalette.Weather.PARTLY)) paintStars(scene)
+            if (night && clear) paintStars(scene)
+            if (night && clear && meteorShower) paintMeteors(scene, still)
             if (night) paintMoon(scene) else paintSun(scene)
             paintClouds(scene)
             paintRain(scene)
             paintSnow(scene)
             if (condition == WeatherConditionCode.WIND) paintWind(scene)
             if (weather == SkyPalette.Weather.STORM && !still) paintLightning(scene)
-            TodaySkyGround(scene, weather, moment, condition, cold, still).paint(this)
+            TodaySkyGround(scene, weather, moment, condition, temperature < 50, still, note?.bins.orEmpty(), season).paint(this)
             // Fog hugs the ground, in front of the house and below the reading.
             paintFog(scene)
             paintScrim(scene)
+            if (temperature <= 32) paintFrost(scene)
         }
     }
 
@@ -68,8 +89,8 @@ class TodaySkyPainter(
             brush =
                 Brush.verticalGradient(
                     0f to scene.sky.top,
-                    0.55f to scene.sky.mid,
-                    1f to scene.sky.bottom,
+                    0.55f to scene.sky.mid.mixed(SkyPalette.sunLow, goldenWarmth * 0.4f),
+                    1f to scene.sky.bottom.mixed(SkyPalette.sunLow, goldenWarmth),
                     startY = 0f,
                     endY = scene.horizon + 10f,
                 ),
@@ -123,10 +144,31 @@ class TodaySkyPainter(
         if (weather == SkyPalette.Weather.WET || weather == SkyPalette.Weather.SNOW || weather == SkyPalette.Weather.STORM) return
         val center = Offset(scene.width * 0.8f, 50f)
         val veiled = weather == SkyPalette.Weather.OVERCAST || weather == SkyPalette.Weather.FOG
-        glow(scene, center, 70f, SkyPalette.moonGlow, if (veiled) 0.12f else 0.22f)
+        // A full moon lights up more of the sky.
+        val full = abs(moment.moonPhase - 0.5) < 0.034
+        glow(
+            scene,
+            center,
+            if (full) 92f else 70f,
+            SkyPalette.moonGlow,
+            if (veiled) {
+                0.12f
+            } else if (full) {
+                0.3f
+            } else {
+                0.22f
+            },
+        )
         if (veiled) return
         drawCircle(SkyPalette.moonShadow.copy(alpha = 0.13f), 17f, center)
-        drawPath(moonPath(center, 17f, moment.moonPhase), SkyPalette.moon)
+        val disc = moonPath(center, 17f, moment.moonPhase)
+        drawPath(disc, SkyPalette.moon)
+        // Faint maria on the lit part, so it reads as the moon and not a lamp.
+        clipPath(disc) {
+            MARIA.forEach { (dx, dy, radius) ->
+                drawCircle(SkyPalette.moonShadow.copy(alpha = 0.45f), radius, Offset(center.x + dx, center.y + dy))
+            }
+        }
     }
 
     private fun DrawScope.paintClouds(scene: SkyScene) {
@@ -351,6 +393,9 @@ class TodaySkyPainter(
     )
 
     companion object {
+        /** The moon's dark seas: offset from its centre and radius, in dp. */
+        private val MARIA = listOf(Triple(-5f, -4f, 4.5f), Triple(4f, 2f, 3.5f), Triple(-1f, 7f, 2.8f), Triple(6f, -6f, 2f))
+
         private val DECK =
             listOf(
                 DeckCloud(0f, 24f, 150f, 5.0, true),

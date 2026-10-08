@@ -5,8 +5,11 @@ package app.pantopus.android.ui.screens.place.detail
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -28,8 +32,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.boundsInWindow
@@ -37,8 +44,10 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
+import app.pantopus.android.data.api.models.place.PlaceCalendarEvent
 import app.pantopus.android.data.api.models.place.PlaceSunriseSunsetData
 import app.pantopus.android.data.api.models.place.PlaceWeatherData
 import app.pantopus.android.ui.theme.SkyPalette
@@ -72,6 +82,10 @@ import kotlin.math.roundToInt
 fun TodaySkyHero(
     data: PlaceWeatherData,
     sun: PlaceSunriseSunsetData?,
+    /** The address calendar's upcoming dates: on the evening before a household pickup the bins stand at the curb. */
+    pickups: List<PlaceCalendarEvent> = emptyList(),
+    /** Tapping the bins shows the pickup schedule. */
+    onBins: (() -> Unit)? = null,
 ) {
     val reduced = rememberMotionReduced()
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
@@ -79,9 +93,21 @@ fun TodaySkyHero(
     var onScreen by remember { mutableStateOf(true) }
     val animating = !reduced && lifecycle.isAtLeast(Lifecycle.State.RESUMED) && onScreen
     val time = rememberSkyTime(animating)
-    val moment = SkyMoment.at(rememberMinuteClock(), sun?.sunrise, sun?.sunset)
+    val now = rememberMinuteClock()
+    val moment = SkyMoment.at(now, sun?.sunrise, sun?.sunset)
+    val note = SkyNote.pick(now, moment, data, pickups)
+    val shower = SkyNote.meteors(now, moment) != null
     val sky = SkyPalette.sky(moment.phase, skyWeather(data.conditionCode))
-    val painter = TodaySkyPainter(data.conditionCode, moment, cold = data.currentTempF < 50, still = !animating)
+    val painter =
+        TodaySkyPainter(
+            condition = data.conditionCode,
+            moment = moment,
+            temperature = data.currentTempF,
+            note = note,
+            season = SkySeason.at(now.toLocalDate()),
+            meteorShower = shower,
+            still = !animating,
+        )
     val shape = RoundedCornerShape(20.dp)
     Box(
         modifier =
@@ -105,7 +131,30 @@ fun TodaySkyHero(
                 painter.paint(this, size.width / perDp, size.height / perDp, t)
             }
         }
-        SkyReading(data)
+        SkyReading(data, note)
+        if (note != null && note.bins.isNotEmpty() && onBins != null) BinsTarget(note, onBins)
+    }
+}
+
+/** The bins drawn at the curb, as a 48 dp target that shows the pickup schedule. */
+@Composable
+private fun BoxScope.BinsTarget(
+    note: SkyNote,
+    onBins: () -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.matchParentSize()) {
+        val center = TodaySkyGround.binsCenter(maxWidth.value, maxHeight.value, note.bins.size)
+        Box(
+            modifier =
+                Modifier
+                    .offset(x = (center.x - 26).dp, y = (center.y - 24).dp)
+                    .size(52.dp, 48.dp)
+                    .clickable(onClickLabel = "Show the pickup schedule", onClick = onBins)
+                    .clearAndSetSemantics {
+                        contentDescription = note.spoken
+                        role = Role.Button
+                    }.testTag("todaySkyBins"),
+        )
     }
 }
 
@@ -123,9 +172,13 @@ private fun rememberSkyTime(animating: Boolean): androidx.compose.runtime.Mutabl
 }
 
 @Composable
-private fun SkyReading(data: PlaceWeatherData) {
+private fun SkyReading(
+    data: PlaceWeatherData,
+    note: SkyNote?,
+) {
     val temp = data.currentTempF.roundToInt()
-    val nowLabel = if (data.conditionLabel.isEmpty()) "Now, $temp°" else "Now, $temp°, ${data.conditionLabel}"
+    val reading = if (data.conditionLabel.isEmpty()) "Now, $temp°" else "Now, $temp°, ${data.conditionLabel}"
+    val nowLabel = note?.let { "${it.spoken} $reading" } ?: reading
     // High/low and feels-like, each in a dark glass chip: they sit near the bright horizon, where
     // white text alone can't keep 4.5:1 on a light sky.
     val chips =
@@ -145,13 +198,17 @@ private fun SkyReading(data: PlaceWeatherData) {
     Column(modifier = Modifier.padding(start = 18.dp, top = 14.dp, end = 110.dp, bottom = 36.dp)) {
         Column(modifier = Modifier.clearAndSetSemantics { contentDescription = nowLabel }) {
             // 14 sp bold (large text) in full white: it sits over the cloud deck on grey days.
+            // A true note for today takes the place of "NOW".
             Text(
-                "NOW",
+                note?.kicker ?: "NOW",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.9.sp,
                 color = SkyPalette.white,
                 style = shadow,
+                modifier = if (note != null) Modifier.noteGlass() else Modifier,
             )
             Row(verticalAlignment = Alignment.Top) {
                 Text(
@@ -190,6 +247,23 @@ private fun SkyReading(data: PlaceWeatherData) {
         if (chips.isNotEmpty()) SkyChips(chips, spokenRange)
     }
 }
+
+/**
+ * A note is longer than "NOW" and can run under a bright cloud, so it sits on the chips' dark glass,
+ * drawn outside its bounds so the card keeps its height.
+ */
+private fun Modifier.noteGlass(): Modifier =
+    drawBehind {
+        val padX = 8.dp.toPx()
+        val padY = 3.dp.toPx()
+        val height = size.height + padY * 2
+        drawRoundRect(
+            SkyPalette.scrim.copy(alpha = 0.45f),
+            topLeft = Offset(-padX, -padY),
+            size = Size(size.width + padX * 2, height),
+            cornerRadius = CornerRadius(height / 2),
+        )
+    }
 
 /** High/low and feels-like in dark glass chips; they wrap onto a second line rather than truncate. */
 @OptIn(ExperimentalLayoutApi::class)

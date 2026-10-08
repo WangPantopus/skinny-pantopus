@@ -14,7 +14,13 @@ import SwiftUI
 struct TodaySkyPainter {
     let condition: WeatherConditionCode
     let moment: SkyMoment
-    let cold: Bool
+    /// The current temperature, °F: smoke from the chimney below 50, frost at 32.
+    let temperature: Double
+    /// Today's note, when it has a picture: bins at the curb.
+    var note: SkyNote?
+    var season: SkySeason = .summer
+    /// A meteor shower's peak night: shooting stars whatever the note says.
+    var meteorShower = false
     let still: Bool
 
     private var weather: SkyPalette.Weather {
@@ -27,18 +33,30 @@ struct TodaySkyPainter {
 
     func paint(_ context: GraphicsContext, size: CGSize, time: Double) {
         let scene = Scene(size: size, time: still ? 2 : time, sky: SkyPalette.sky(moment.phase, weather))
+        let clear = weather == .clear || weather == .partly
         paintSky(context, scene)
-        if night, weather == .clear || weather == .partly { paintStars(context, scene) }
+        if night, clear { paintStars(context, scene) }
+        if night, clear, meteorShower { paintMeteors(context, scene) }
         if night { paintMoon(context, scene) } else { paintSun(context, scene) }
         paintClouds(context, scene)
         paintRain(context, scene)
         paintSnow(context, scene)
         if condition == .wind { paintWind(context, scene) }
         if weather == .storm, !still { paintLightning(context, scene) }
-        TodaySkyGround(scene: scene, weather: weather, moment: moment, condition: condition, cold: cold, still: still).paint(context)
+        TodaySkyGround(
+            scene: scene,
+            weather: weather,
+            moment: moment,
+            condition: condition,
+            cold: temperature < 50,
+            still: still,
+            bins: note?.bins ?? [],
+            season: season
+        ).paint(context)
         // Fog hugs the ground, in front of the house and below the reading.
         paintFog(context, scene)
         paintScrim(context, scene)
+        if temperature <= 32 { paintFrost(context, scene) }
     }
 
     /// One cloud of the overcast deck: where it starts (fraction of its
@@ -76,11 +94,21 @@ struct TodaySkyPainter {
         }
     }
 
+    /// The day's first and last golden hour warm the horizon until dawn's or
+    /// dusk's own sky takes over: 0 outside them, up to 0.5 at the handover.
+    private var goldenWarmth: Double {
+        guard moment.phase == .day else { return 0 }
+        let evening = (moment.minutes - (moment.sunset - 60)) / 20
+        let morning = (moment.sunrise + 60 - moment.minutes) / 20
+        return min(max(max(evening, morning), 0), 1) * 0.5
+    }
+
     private func paintSky(_ context: GraphicsContext, _ scene: Scene) {
+        let warmth = goldenWarmth
         let gradient = Gradient(stops: [
             .init(color: scene.sky.top.color, location: 0),
-            .init(color: scene.sky.mid.color, location: 0.55),
-            .init(color: scene.sky.bottom.color, location: 1)
+            .init(color: scene.sky.mid.mixed(with: SkyPalette.sunLow, by: warmth * 0.4).color, location: 0.55),
+            .init(color: scene.sky.bottom.mixed(with: SkyPalette.sunLow, by: warmth).color, location: 1)
         ])
         context.fill(
             Path(CGRect(origin: .zero, size: scene.size)),
@@ -130,10 +158,25 @@ struct TodaySkyPainter {
         let x = scene.width * 0.8
         let y = 50.0
         let veiled = weather == .overcast || weather == .fog
-        glow(context, scene, Glow(center: CGPoint(x: x, y: y), radius: 70, color: SkyPalette.moonGlow, opacity: veiled ? 0.12 : 0.22))
+        // A full moon lights up more of the sky.
+        let full = abs(moment.moonPhase - 0.5) < 0.034
+        let light = Glow(
+            center: CGPoint(x: x, y: y),
+            radius: full ? 92 : 70,
+            color: SkyPalette.moonGlow,
+            opacity: veiled ? 0.12 : (full ? 0.3 : 0.22)
+        )
+        glow(context, scene, light)
         guard !veiled else { return }
         context.fill(Self.circle(x, y, 17), with: .color(SkyPalette.moonShadow.color(opacity: 0.13)))
-        context.fill(Self.moonPath(center: CGPoint(x: x, y: y), radius: 17, phase: moment.moonPhase), with: .color(SkyPalette.moon.color))
+        let disc = Self.moonPath(center: CGPoint(x: x, y: y), radius: 17, phase: moment.moonPhase)
+        context.fill(disc, with: .color(SkyPalette.moon.color))
+        // Faint maria on the lit part, so it reads as the moon and not a lamp.
+        var maria = context
+        maria.clip(to: disc)
+        for spot in [[-5.0, -4.0, 4.5], [4.0, 2.0, 3.5], [-1.0, 7.0, 2.8], [6.0, -6.0, 2.0]] {
+            maria.fill(Self.circle(x + spot[0], y + spot[1], spot[2]), with: .color(SkyPalette.moonShadow.color(opacity: 0.45)))
+        }
     }
 
     private func paintClouds(_ context: GraphicsContext, _ scene: Scene) {

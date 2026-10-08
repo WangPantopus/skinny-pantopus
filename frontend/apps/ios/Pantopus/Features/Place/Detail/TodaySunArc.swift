@@ -140,8 +140,7 @@ private struct TodaySunArcContent: View {
     }
 
     private func clock(_ minutes: Double) -> String {
-        let midnight = Calendar.autoupdatingCurrent.startOfDay(for: Date())
-        return midnight.addingTimeInterval(minutes * 60).formatted(date: .omitted, time: .shortened)
+        SkyMoment.clockText(minutes)
     }
 
     private func move(to value: Double) {

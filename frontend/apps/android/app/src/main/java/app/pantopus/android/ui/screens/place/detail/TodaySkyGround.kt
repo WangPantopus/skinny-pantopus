@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.place.detail
 
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -31,6 +32,9 @@ internal class TodaySkyGround(
     private val condition: WeatherConditionCode,
     private val cold: Boolean,
     private val still: Boolean,
+    /** Bins at the curb, in order: "garbage", "recycling", "yard_waste". */
+    private val bins: List<String> = emptyList(),
+    private val season: SkySeason = SkySeason.SUMMER,
 ) {
     private val night = moment.phase == SkyPalette.Phase.NIGHT
 
@@ -85,8 +89,43 @@ internal class TodaySkyGround(
         drawPath(front, tones.frontHill)
         val house = Offset(w * 0.7f, y + 7)
         paintHouse(tones, house)
+        if (bins.isNotEmpty()) paintBins(tones, house)
         if (cold && !still) paintSmoke(house)
         paintTrees(tones, house)
+    }
+
+    /** Bins at the curb left of the house, lit by the porch after dark. */
+    private fun DrawScope.paintBins(
+        tones: Tones,
+        origin: Offset,
+    ) {
+        val right = origin.x - 27
+        // At the curb: a little in front of the house.
+        val base = origin.y + 8
+        if (moment.phase == SkyPalette.Phase.DUSK || night) {
+            val width = bins.size * 9f + 12
+            drawRect(
+                Brush.radialGradient(
+                    listOf(SkyPalette.windowGlow.copy(alpha = 0.22f), SkyPalette.windowGlow.copy(alpha = 0f)),
+                    Offset(right - width / 2 + 3, base - 5),
+                    18f,
+                ),
+                topLeft = Offset(right - width, base - 22),
+                size = Size(width + 6, 26f),
+            )
+        }
+        bins.reversed().forEachIndexed { index, kind ->
+            val colour =
+                when (kind) {
+                    "recycling" -> SkyPalette.binRecycling
+                    "yard_waste" -> SkyPalette.binYard
+                    else -> SkyPalette.binGarbage
+                }
+            val tint = colour.mixed(tones.house, if (night) 0.55f else 0.35f)
+            val x = right - (index + 1) * 9 + 2
+            drawRoundRect(tint, Offset(x, base - 9), Size(7f, 9f), CornerRadius(1.2f))
+            drawRoundRect(tint, Offset(x - 0.6f, base - 10.6f), Size(8.2f, 2f), CornerRadius(0.8f))
+        }
     }
 
     /** A 40 × 26 dp house with its door on the ground line at [origin]. */
@@ -149,7 +188,10 @@ internal class TodaySkyGround(
         }
     }
 
-    /** A round tree and a pine to the right of the house; both lean in the wind. */
+    /**
+     * A round tree and a pine to the right of the house; both lean in the wind. The round tree
+     * blossoms in spring, turns in autumn and is bare in winter.
+     */
     private fun DrawScope.paintTrees(
         tones: Tones,
         origin: Offset,
@@ -160,7 +202,13 @@ internal class TodaySkyGround(
             rotateRad(lean, pivot = Offset.Zero)
         }) {
             drawRect(tones.house, Offset(-1.5f, -12f), Size(3f, 12f))
-            drawCircle(tones.house, 11f, Offset(0f, -20f))
+            if (season == SkySeason.WINTER) {
+                paintBareBranches(tones)
+            } else {
+                paintCanopy(tones)
+                if (season == SkySeason.SPRING) paintBlossom()
+                if (season == SkySeason.AUTUMN && !still) paintFallingLeaves()
+            }
         }
         withTransform({
             translate(origin.x + 60, origin.y + 3)
@@ -174,7 +222,78 @@ internal class TodaySkyGround(
                     lineTo(9f, -6f)
                     close()
                 }
-            drawPath(needles, tones.house)
+            drawPath(needles, tones.house.mixed(SkyPalette.pine, if (night) 0.12f else 0.4f))
         }
+    }
+
+    /** A leafy crown lit from the upper left over its darker shade side, which turns deep red in autumn. */
+    private fun DrawScope.paintCanopy(tones: Tones) {
+        val leaf =
+            when (season) {
+                SkySeason.SPRING -> SkyPalette.treeSpring
+                SkySeason.AUTUMN -> SkyPalette.treeAutumn
+                else -> SkyPalette.treeSummer
+            }
+        val amount = if (night) 0.22f else 0.62f
+        val shade =
+            if (season == SkySeason.AUTUMN) {
+                tones.house.mixed(SkyPalette.treeAutumnDeep, if (night) 0.2f else 0.6f)
+            } else {
+                tones.house.mixed(leaf, amount * 0.6f)
+            }
+        drawOval(shade, Offset(-10f, -30f), Size(22f, 21f))
+        drawOval(tones.house.mixed(leaf, amount), Offset(-11f, -31.5f), Size(17f, 16f))
+    }
+
+    private fun DrawScope.paintBareBranches(tones: Tones) {
+        val branches =
+            Path().apply {
+                moveTo(0f, -10f)
+                lineTo(0f, -30f)
+                // Each twig: where it leaves the trunk, and its tip.
+                listOf(
+                    floatArrayOf(-16f, -9f, -27f),
+                    floatArrayOf(-19f, 8f, -29f),
+                    floatArrayOf(-24f, -5f, -33f),
+                    floatArrayOf(-25f, 5f, -34f),
+                ).forEach { twig ->
+                    moveTo(0f, twig[0])
+                    lineTo(twig[1], twig[2])
+                }
+            }
+        drawPath(branches, tones.house, style = Stroke(width = 1.6f, cap = StrokeCap.Round))
+    }
+
+    private fun DrawScope.paintBlossom() {
+        val tint = SkyPalette.blossom.copy(alpha = if (night) 0.35f else 0.9f)
+        listOf(-6f to -26f, 3f to -28f, 7f to -22f, -3f to -19f, -8f to -20f, 2f to -16f).forEach { (x, y) ->
+            drawCircle(tint, 1.5f, Offset(x, y))
+        }
+    }
+
+    /** Two leaves drifting down from the canopy on a loop. */
+    private fun DrawScope.paintFallingLeaves() {
+        repeat(2) { index ->
+            val progress = (scene.time * 0.22 + index * 0.5) % 1.0
+            withTransform({
+                translate((6 - index * 12 + sin(progress * 9 + index) * 4).toFloat(), (-20 + progress * 22).toFloat())
+                rotateRad((progress * 6 + index).toFloat(), pivot = Offset.Zero)
+            }) {
+                val alpha = (if (night) 0.4f else 0.85f) * (1 - progress.toFloat() * 0.7f)
+                drawOval(SkyPalette.treeAutumn.copy(alpha = alpha), Offset(-2f, -1f), Size(4f, 2f))
+            }
+        }
+    }
+
+    companion object {
+        /** Where the bins stand in a card [width] × [height] dp, for the tap target over them. */
+        fun binsCenter(
+            width: Float,
+            height: Float,
+            count: Int,
+        ): Offset =
+            // Horizon (34 above the bottom), down 7 to the house's ground line and 8 more to the curb,
+            // then up 5 to the bins' middle.
+            Offset(width * 0.7f - 27 - (count * 9f - 2) / 2, height - 34 + 7 + 8 - 5)
     }
 }
