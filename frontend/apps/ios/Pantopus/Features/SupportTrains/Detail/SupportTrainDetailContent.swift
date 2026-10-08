@@ -265,12 +265,25 @@ public struct ReserveSlotOption: Equatable, Sendable, Identifiable, Hashable {
     public let slotLabel: String
     /// Time window caption ("5:00 pm – 7:00 pm"), when the slot carries one.
     public let windowLabel: String?
+    /// The slot's day ("2026-10-11"), so an arrival time is saved on that day.
+    public let slotDate: String?
+    /// The window's start ("17:00:00"), where the arrival picker starts.
+    public let windowStart: String?
 
-    public init(id: String, dateLabel: String, slotLabel: String, windowLabel: String?) {
+    public init(
+        id: String,
+        dateLabel: String,
+        slotLabel: String,
+        windowLabel: String?,
+        slotDate: String? = nil,
+        windowStart: String? = nil
+    ) {
         self.id = id
         self.dateLabel = dateLabel
         self.slotLabel = slotLabel
         self.windowLabel = windowLabel
+        self.slotDate = slotDate
+        self.windowStart = windowStart
     }
 }
 

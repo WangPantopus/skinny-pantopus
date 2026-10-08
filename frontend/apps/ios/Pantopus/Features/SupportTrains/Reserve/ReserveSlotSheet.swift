@@ -241,6 +241,10 @@ public struct ReserveSlotSheet: View {
             }
             .tint(Theme.Color.primary600)
             .accessibilityIdentifier("supportTrainReserveArrivalToggle")
+            .onChange(of: hasArrivalTime) { _, isOn in
+                // Start at the slot's window, not at the moment the sheet opened (8:15 AM for a dinner).
+                if isOn, let start = Self.clockTime(selectedOption?.windowStart) { arrivalTime = start }
+            }
             if hasArrivalTime {
                 DatePicker(
                     "Estimated arrival",
@@ -376,7 +380,9 @@ public struct ReserveSlotSheet: View {
             contributionMode: mode.rawValue,
             dishTitle: dishTitle.isEmpty ? nil : dishTitle,
             restaurantName: restaurantName.isEmpty ? nil : restaurantName,
-            estimatedArrivalAt: hasArrivalTime ? Self.isoTimestamp(arrivalTime) : nil,
+            estimatedArrivalAt: hasArrivalTime
+                ? Self.isoTimestamp(Self.arrival(at: arrivalTime, on: selectedOption?.slotDate))
+                : nil,
             noteToRecipient: noteToRecipient.isEmpty ? nil : noteToRecipient
         )
         if let failure = await onSubmit(slotId, body) {
@@ -514,6 +520,24 @@ public struct ReserveSlotSheet: View {
     }
 
     // MARK: - Formatting
+
+    /// "17:00:00" → today at 5:00 PM, for the picker (only its hour and minute are used).
+    private static func clockTime(_ value: String?) -> Date? {
+        let parts = (value ?? "").split(separator: ":").compactMap { Int($0) }
+        guard parts.count >= 2 else { return nil }
+        return Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: Date())
+    }
+
+    /// The picker sets only the hour and minute, on today's date. The arrival is that time
+    /// on the slot's day, in the helper's time zone, as on the web.
+    private static func arrival(at time: Date, on slotDate: String?) -> Date {
+        let day = (slotDate ?? "").prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard day.count == 3 else { return time }
+        let calendar = Calendar.current
+        let clock = calendar.dateComponents([.hour, .minute], from: time)
+        let parts = DateComponents(year: day[0], month: day[1], day: day[2], hour: clock.hour, minute: clock.minute)
+        return calendar.date(from: parts) ?? time
+    }
 
     /// Backend validates `estimated_arrival_at` with `Joi.isoDate()`.
     private static func isoTimestamp(_ date: Date) -> String {
