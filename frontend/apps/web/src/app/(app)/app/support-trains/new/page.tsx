@@ -396,6 +396,7 @@ export default function NewSupportTrainPage() {
               <button
                 key={m.key}
                 onClick={() => toggleMode(m.key)}
+                aria-pressed={selected}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border transition ${
                   selected
                     ? 'bg-primary-600 border-primary-600 text-white'
@@ -555,6 +556,7 @@ export default function NewSupportTrainPage() {
                 <button
                   key={key}
                   onClick={() => toggleCuisine(label)}
+                  aria-pressed={selected}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${
                     selected
                       ? 'bg-primary-600 border-primary-600 text-white'
@@ -589,6 +591,7 @@ export default function NewSupportTrainPage() {
                 <button
                   key={s.key}
                   onClick={() => setSharingMode(s.key)}
+                  aria-pressed={active}
                   className={`w-full text-left p-3 rounded-lg border transition ${
                     active
                       ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
