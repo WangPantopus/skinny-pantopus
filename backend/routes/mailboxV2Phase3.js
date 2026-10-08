@@ -813,6 +813,8 @@ router.get('/community/feed', verifyToken, async (req, res) => {
       .select('*', { count: 'exact' })
       .in('home_id', homeIds)
       .order('created_at', { ascending: false })
+      // Mail delivered together shares created_at; the id keeps the order the same on every page.
+      .order('id', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (communityType) query = query.eq('community_type', communityType);

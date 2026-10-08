@@ -1462,6 +1462,8 @@ router.get('/', verifyToken, async (req, res) => {
       `, { count: 'exact' })
       .eq('archived', archived === 'true')
       .order('created_at', { ascending: false })
+      // Mail delivered together shares created_at; the id keeps the order the same on every page.
+      .order('id', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
     query = applyMailboxScopeToQuery(query, {
