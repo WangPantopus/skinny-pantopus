@@ -152,7 +152,10 @@ export function listOrganizers(id: string) {
 
 // ─── Updates ────────────────────────────────────────────────────────────
 
-export function postUpdate(id: string, data: { body: string; media_urls?: string[] }) {
+export function postUpdate(
+  id: string,
+  data: { body: string; media_urls?: string[]; push_to_phones?: boolean; client_request_id?: string }
+) {
   return post<SupportTrainUpdate>(`${BASE}/${id}/updates`, data);
 }
 
