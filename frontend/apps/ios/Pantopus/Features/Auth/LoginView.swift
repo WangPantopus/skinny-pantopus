@@ -9,10 +9,11 @@
 //  Persistent login (design §3 state C / D, §8): the screen reads the most
 //  recent remembered account (`AuthManager.rememberedAccounts`) — a
 //  non-secret display hint that survives sign-out — and shows a "Welcome
-//  back" card with the masked email as the field placeholder; the email
-//  field carries `.username` so Password AutoFill / passkeys (associated
-//  `webcredentials:` domains) fill the real address. A session that ended
-//  with a security code shows the "signed out for security" banner.
+//  back" card (masked email) with the account's address filled into the
+//  email field, so only the password is left; the email field carries
+//  `.username` so Password AutoFill / passkeys (associated `webcredentials:`
+//  domains) offer the saved password for it. A session that ended with a
+//  security code shows the "signed out for security" banner.
 //
 
 // swiftlint:disable file_length
@@ -120,7 +121,7 @@ struct LoginView: View {
                         PantopusTextField(
                             "Email",
                             text: $viewModel.email,
-                            placeholder: viewModel.emailPlaceholder,
+                            placeholder: "you@email.com",
                             state: viewModel.emailFieldState,
                             keyboardType: .emailAddress,
                             contentType: .username,
@@ -481,13 +482,14 @@ struct PasswordField: View {
 
             HStack(spacing: Spacing.s2) {
                 Group {
+                    // Words, not dots: a dotted placeholder reads as a password already entered.
                     if isVisible {
-                        TextField("••••••••", text: $value)
+                        TextField("Enter your password", text: $value)
                             .textContentType(.password)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                     } else {
-                        SecureField("••••••••", text: $value)
+                        SecureField("Enter your password", text: $value)
                             .textContentType(.password)
                     }
                 }
@@ -538,8 +540,9 @@ struct PasswordField: View {
 }
 
 /// "Welcome back, Ying · y•••@gmail.com" card above the sign-in controls
-/// when a remembered account exists (design §3 state C). Display-only —
-/// nothing here authenticates; "Not you?" forgets the hint on this device.
+/// when a remembered account exists (design §3 state C). The form below is
+/// filled in with that account's address; nothing here authenticates.
+/// "Not you?" forgets the hint on this device.
 struct RememberedAccountCard: View {
     let hint: AccountHint
     let onForget: () -> Void
@@ -739,10 +742,13 @@ final class LoginViewModel {
     /// True while `POST /api/users/resend-verification` is in flight.
     private(set) var isResendingVerification: Bool = false
 
-    /// The most recent remembered account on this device (display hint —
-    /// masked email only). Drives the "Welcome back" card, the placeholder
-    /// and the "Last used" OAuth marker.
+    /// The most recent remembered account on this device. Drives the
+    /// "Welcome back" card, the filled-in email and the "Last used" OAuth
+    /// marker.
     private(set) var rememberedAccount: AccountHint?
+    /// The address filled in from `rememberedAccount` (once per screen), so
+    /// "Not you?" can take it back out without touching anything typed.
+    private var prefilledEmail: String?
     /// "You were signed out for security…" when the last session ended
     /// with a security code; dismissable.
     private(set) var securityMessage: String?
@@ -763,23 +769,32 @@ final class LoginViewModel {
         email = confirmedEmail
     }
 
-    /// Read the remembered account + the reason the last session ended.
-    /// Idempotent; called from `onAppear`.
+    /// Read the remembered account + the reason the last session ended, and
+    /// fill in the remembered address. Idempotent; called from `onAppear`.
     func prepare(using auth: AuthManager) {
-        rememberedAccount = rememberedHintDismissed ? nil : auth.rememberedAccounts.first
+        // Still `.resumable` here only behind "Use a different account" on the
+        // Continue-as card: that person asked for a blank form, not this account.
+        let isDifferentAccount = if case .resumable = auth.state { true } else { false }
+        rememberedAccount = rememberedHintDismissed || isDifferentAccount ? nil : auth.rememberedAccounts.first
+        prefillRememberedEmail()
         if let reason = auth.sessionEndReason, securityMessage == nil, !didDismissSecurityMessage {
             securityMessage = reason.message
         }
     }
 
-    /// The hint never stores the full address (CONTRACT: `maskedEmail`),
-    /// so the "prefill" is the masked address as the placeholder — the
-    /// real value comes from Password AutoFill via `.username`.
-    var emailPlaceholder: String {
-        if let masked = rememberedAccount?.maskedEmail, !masked.isEmpty {
-            return masked
+    /// Put the remembered account's address in the email field so only the
+    /// password is left. Once per screen, only into an empty field, and not
+    /// for an Apple / Google account (its "Last used" button is the way back).
+    private func prefillRememberedEmail() {
+        guard prefilledEmail == nil, email.isEmpty, let remembered = rememberedAccount,
+              let address = remembered.email, !address.isEmpty else { return }
+        switch remembered.lastMethod {
+        case .apple, .google:
+            return
+        case .password, .passkey, .resume, nil:
+            email = address
+            prefilledEmail = address
         }
-        return "you@email.com"
     }
 
     /// OAuth provider the remembered account last used, if any.
@@ -797,8 +812,11 @@ final class LoginViewModel {
         guard !isLoading, let remembered = rememberedAccount,
               userId == nil || userId == remembered.userId else { return }
         rememberedHintDismissed = true
-        // Whatever the user already typed stays; only this visit's hint goes.
+        // Whatever the user typed stays; this visit's hint and the address it filled in go.
         rememberedAccount = nil
+        if let prefilledEmail, email == prefilledEmail {
+            email = ""
+        }
         isLoading = true
         defer { isLoading = false }
         await auth.removeRememberedAccount(userId: remembered.userId)

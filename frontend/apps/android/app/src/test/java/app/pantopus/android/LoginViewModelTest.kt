@@ -48,6 +48,7 @@ class LoginViewModelTest {
     ) = mockk<AuthRepository>(relaxed = true).apply {
         coEvery { state } returns MutableStateFlow(AuthRepository.State.SignedOut)
         every { rememberedAccounts } returns MutableStateFlow(remembered)
+        every { loginStartsBlank } returns MutableStateFlow(false)
         every { sessionEndReason } returns MutableStateFlow(sessionEnd)
         coEvery { signIn(any(), any()) } returns result
     }
@@ -152,14 +153,15 @@ class LoginViewModelTest {
     // ---- Persistent login: remembered-account prefill + session-end banner ----
 
     @Test
-    fun `most recent remembered account is surfaced as the prefill hint, email field stays empty`() =
+    fun `most recent remembered account is surfaced, a Google account's address is not filled in`() =
         runTest {
             val hints =
                 listOf(
                     AccountHint(
                         userId = "u_1",
                         displayName = "Ying",
-                        maskedEmail = "y•••@gmail.com",
+                        maskedEmail = "y•••@example.com",
+                        email = "ying@example.com",
                         lastMethod = AccountHint.METHOD_GOOGLE,
                     ),
                     AccountHint(userId = "u_2", displayName = "Old", maskedEmail = "o•••@x.com", lastMethod = AccountHint.METHOD_PASSWORD),
@@ -169,8 +171,8 @@ class LoginViewModelTest {
 
             val state = vm.uiState.value
             assertEquals("u_1", state.rememberedAccount?.userId)
-            assertEquals("y•••@gmail.com", state.rememberedAccount?.maskedEmail)
-            // The hint holds a *masked* address (CONTRACT) — never prefilled into the field.
+            assertEquals("y•••@example.com", state.rememberedAccount?.maskedEmail)
+            // A Google account comes back through its "Last used" button, not the password form.
             assertEquals("", state.email)
             assertEquals(OAuthProvider.Google, state.lastUsedOAuthProvider)
         }

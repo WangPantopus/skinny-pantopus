@@ -90,16 +90,14 @@ final class LoginViewModelTests: XCTestCase {
         AccountHintStore.remember(AccountHint(user: user, lastMethod: .apple, lastSeenAt: Date()), in: store)
         auth.setSessionEndReason(.tokenReuse)
         let vm = LoginViewModel()
-        XCTAssertEqual(vm.emailPlaceholder, "you@email.com")
         XCTAssertNil(vm.rememberedAccount)
 
         vm.prepare(using: auth)
 
         XCTAssertEqual(vm.rememberedAccount?.userId, "u_1")
-        XCTAssertEqual(vm.emailPlaceholder, "y•••@gmail.com", "hint carries only the masked address")
         XCTAssertEqual(vm.lastUsedOAuthProvider, .apple)
         XCTAssertEqual(vm.securityMessage, "You were signed out for security. Sign in again.")
-        XCTAssertEqual(vm.email, "", "the field itself is never prefilled with a masked value")
+        XCTAssertEqual(vm.email, "", "an Apple account comes back through its Last used button, not the password form")
 
         vm.dismissSecurityMessage()
         XCTAssertNil(vm.securityMessage)
@@ -134,7 +132,7 @@ final class LoginViewModelTests: XCTestCase {
         XCTAssertNil(vm.rememberedAccount)
         XCTAssertNil(vm.securityMessage)
         XCTAssertNil(vm.lastUsedOAuthProvider)
-        XCTAssertEqual(vm.emailPlaceholder, "you@email.com")
+        XCTAssertEqual(vm.email, "")
     }
 
     func testForgetRememberedAccountWipesTheHint() async {
@@ -153,6 +151,5 @@ final class LoginViewModelTests: XCTestCase {
         XCTAssertNil(vm.rememberedAccount)
         XCTAssertTrue(auth.rememberedAccounts.isEmpty)
         XCTAssertEqual(vm.email, "typed@example.com", "what the user typed stays")
-        XCTAssertEqual(vm.emailPlaceholder, "you@email.com")
     }
 }
