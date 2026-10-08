@@ -190,7 +190,7 @@ final class HomeCreationRecoveryJourneyUITests: XCTestCase {
         let id = try XCTUnwrap(home["id"] as? String)
         let destination = app.buttons["myHomes.row_" + id + ".continue"]
         try reveal(destination)
-        XCTAssertEqual(destination.label, "My tasks")
+        XCTAssertEqual(destination.label, "Home tasks")
         let unit = try XCTUnwrap(home["unit"] as? String)
         XCTAssertTrue(label("Unit " + unit).exists)
         XCTAssertTrue(label("Private setup").exists)

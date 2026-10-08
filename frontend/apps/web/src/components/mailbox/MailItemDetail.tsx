@@ -10,6 +10,7 @@ import type {
 // Security: DOMPurify is required to sanitize HTML rendered via dangerouslySetInnerHTML.
 // Do not remove — mail content is untrusted user/external input (AUTH-3.2).
 import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
+import { useEffect, useState } from 'react';
 import { parseDisplayDate } from '@pantopus/ui-utils';
 import TrustBadge from './TrustBadge';
 import UrgencyIndicator from './UrgencyIndicator';
@@ -70,36 +71,45 @@ const SANITIZE_CONFIG: DOMPurifyConfig = {
   ALLOW_DATA_ATTR: false,
 };
 
-// Strip javascript: URIs from href/src after sanitization
-DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-  if (node.hasAttribute('href')) {
-    const val = node.getAttribute('href') || '';
-    if (/^\s*javascript\s*:/i.test(val)) {
-      node.removeAttribute('href');
-    }
-  }
-  if (node.hasAttribute('src')) {
-    const val = node.getAttribute('src') || '';
-    if (/^\s*javascript\s*:/i.test(val)) {
-      node.removeAttribute('src');
-    }
-  }
-});
-
+// DOMPurify needs a DOM. On the server it is an instance without methods (isSupported is false), so
+// registering the hook at module load threw on every Mail page the server rendered. The hook is added on
+// first use in the browser, nothing is sanitized without a DOM, and SanitizedHtml fills its block only
+// after mounting, so the server and the first client render agree (an empty block).
+let javascriptUriHookAdded = false;
 function sanitizeHtml(dirty: string): string {
+  if (typeof window === 'undefined' || !DOMPurify.isSupported) return '';
+  if (!javascriptUriHookAdded) {
+    // Strip javascript: URIs from href/src after sanitization
+    DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+      if (node.hasAttribute('href')) {
+        const val = node.getAttribute('href') || '';
+        if (/^\s*javascript\s*:/i.test(val)) {
+          node.removeAttribute('href');
+        }
+      }
+      if (node.hasAttribute('src')) {
+        const val = node.getAttribute('src') || '';
+        if (/^\s*javascript\s*:/i.test(val)) {
+          node.removeAttribute('src');
+        }
+      }
+    });
+    javascriptUriHookAdded = true;
+  }
   return DOMPurify.sanitize(dirty, SANITIZE_CONFIG) as unknown as string;
+}
+
+function SanitizedHtml({ html, className }: { html: string; className: string }) {
+  const [clean, setClean] = useState('');
+  useEffect(() => { setClean(sanitizeHtml(html)); }, [html]);
+  return <div className={className} dangerouslySetInnerHTML={{ __html: clean }} />;
 }
 
 // ── Block renderers ──────────────────────────────────────────
 
 function TextBlockView({ block }: { block: InsideBlock & { type: 'text' } }) {
   if (block.format === 'html') {
-    return (
-      <div
-        className="prose prose-sm dark:prose-invert max-w-none"
-        dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.content) }}
-      />
-    );
+    return <SanitizedHtml className="prose prose-sm dark:prose-invert max-w-none" html={block.content} />;
   }
   return <p className="text-sm text-app-text-strong whitespace-pre-wrap">{block.content}</p>;
 }
@@ -242,12 +252,7 @@ function ActionPromptBlockView({ block, onAction }: { block: InsideBlock & { typ
 }
 
 function RichContentBlockView({ block }: { block: InsideBlock & { type: 'rich_content' } }) {
-  return (
-    <div
-      className="my-3 prose prose-sm dark:prose-invert max-w-none"
-      dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.html) }}
-    />
-  );
+  return <SanitizedHtml className="my-3 prose prose-sm dark:prose-invert max-w-none" html={block.html} />;
 }
 
 function renderBlock(block: InsideBlock, onAction?: (a: MailAction) => void) {

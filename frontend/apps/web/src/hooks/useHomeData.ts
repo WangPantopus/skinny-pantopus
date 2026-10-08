@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { homeAccessExpiry, homeAccessFingerprint, readCurrentHomeAccess, watchHomeAccessExpiry } from '@/components/home/homeAccessFingerprint';
+import { RETURN_REFRESH_MS, transientFailure } from '@/components/home/returnRefresh';
 
 // ── Types ──
 
@@ -216,22 +217,31 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
   const scopeHome = useRef(homeId);
   const ready = useRef<(() => boolean) | null>(null);
   const stopExpiry = useRef<(() => void) | null>(null);
+  const lastAttempt = useRef(0);
+  const inFlight = useRef(0);
+  // The access the page currently shows (null while loading or failed), for background re-checks.
+  const shownFingerprint = useRef<string | null>(null);
   const retireGeneration = useCallback(() => {
     generation.current++; ready.current = null;
     stopExpiry.current?.(); stopExpiry.current = null;
   }, []);
 
-  const loadDashboard = useCallback(async () => {
-    retireGeneration();
+  // A full load clears the page first. A background re-check (coming back to the page) keeps it and
+  // replaces the records only when access is unchanged; a changed access or a refusal reloads in full.
+  const loadDashboard = useCallback(async (background = false) => {
+    if (!background) retireGeneration();
     const revision = generation.current;
     let expiry: number | null = null;
-    scopeHome.current = homeId; ready.current = null;
+    lastAttempt.current = Date.now();
+    if (!background) { scopeHome.current = homeId; ready.current = null; }
     const token = getAuthToken(), origin = api.getApiBaseUrl();
     const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     const current = () => revision === generation.current && token === getAuthToken()
       && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
-      && document.visibilityState !== 'hidden' && (expiry === null || Date.now() < expiry);
-    dispatch({ type: 'LOAD_START' });
+      && (expiry === null || Date.now() < expiry);
+    const reloadInFull = () => { if (current()) void loadDashboard(); };
+    if (!background) dispatch({ type: 'LOAD_START' });
+    inFlight.current++;
     try {
       if (!token) {
         router.push('/login');
@@ -254,7 +264,9 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
       // An unavailable authority read cannot authorize stale dashboard data.
       const accessRes = await readCurrentHomeAccess(homeId);
       if (!current()) return;
+      if (background && homeAccessFingerprint(accessRes) !== shownFingerprint.current) { reloadInFull(); return; }
       if (accessRes.verification_required === true && !accessRes.hasAccess) {
+        if (background) return;
         ready.current = current;
         dispatch({ type: 'LOAD_COMPLETE', data: { accessFingerprint: homeAccessFingerprint(accessRes) } });
         return;
@@ -263,7 +275,8 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         throw new Error('Current access to this home could not be confirmed. Reload to check access.');
       }
       expiry = homeAccessExpiry(accessRes);
-      stopExpiry.current = watchHomeAccessExpiry(expiry, () => {
+      // A background re-check found the same access, so the full load's expiry watch still applies.
+      if (!background) stopExpiry.current = watchHomeAccessExpiry(expiry, () => {
         if (revision !== generation.current) return;
         retireGeneration();
         dispatch({ type: 'LOAD_ERROR', error: 'Home access changed or could not be confirmed. Reload to check current access.' });
@@ -335,30 +348,41 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         throw new Error('Home access changed while loading. Reload to check current access.');
       }
       if (result.home?.id !== homeId) throw new Error('The requested home could not be confirmed.');
-      ready.current = current;
+      if (!background) ready.current = current;
       dispatch({ type: 'LOAD_COMPLETE', data: result });
     } catch (e: unknown) {
       if (!current()) return;
+      if (background) { if (!transientFailure(e)) reloadInFull(); return; }
       ready.current = null;
       dispatch({
         type: 'LOAD_ERROR',
         error: e instanceof Error ? e.message : 'Current home access could not be confirmed. Reload to try again.',
       });
+    } finally {
+      inFlight.current--;
     }
   }, [homeId, router, retireGeneration]);
 
   useEffect(() => {
+    shownFingerprint.current = state.loading || state.error ? null : state.accessFingerprint;
+  }, [state.loading, state.error, state.accessFingerprint]);
+
+  useEffect(() => {
     void loadDashboard();
-    const invalidate = () => { retireGeneration(); dispatch({ type: 'LOAD_START' }); };
-    const changed = () => { invalidate(); if (document.visibilityState !== 'hidden') void loadDashboard(); };
-    const visibility = () => { if (document.visibilityState === 'hidden') invalidate(); else changed(); };
-    const focus = () => { if (document.visibilityState !== 'hidden') changed(); };
+    // Another account's Home must never show, so an account change clears the page and reloads it.
+    const changed = () => { retireGeneration(); dispatch({ type: 'LOAD_START' }); void loadDashboard(); };
+    // Coming back keeps the page and re-checks it behind the scenes (in full when nothing is shown).
+    const resume = () => {
+      if (document.visibilityState === 'hidden' || inFlight.current > 0
+        || Date.now() - lastAttempt.current < RETURN_REFRESH_MS) return;
+      void loadDashboard(ready.current !== null);
+    };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
     const unsubscribe = api.onTokenChange(changed);
-    window.addEventListener('storage', storage); window.addEventListener('focus', focus);
-    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('storage', storage); window.addEventListener('focus', resume);
+    document.addEventListener('visibilitychange', resume);
     return () => { retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
-      window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', visibility); };
+      window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume); };
   }, [loadDashboard, retireGeneration]);
 
   // A record refresh also refreshes current grants and aggregate counts; a
@@ -366,6 +390,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
   const refreshEntity = useCallback(async (_entity: keyof HomeDataEntities) => {
     await loadDashboard();
   }, [loadDashboard]);
+  const refresh = useCallback(() => loadDashboard(), [loadDashboard]);
 
   const openingAccess = ready.current;
   const can = useCallback(
@@ -412,7 +437,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
     summaryCounts: visibleState.summaryCounts,
     entityErrors: visibleState.entityErrors,
     can,
-    refresh: loadDashboard,
+    refresh,
     refreshEntity,
     // Optimistic updaters
     setTasks: makeEntityUpdater('tasks'),

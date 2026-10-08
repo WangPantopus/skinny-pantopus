@@ -102,6 +102,8 @@ describe('POST /api/payments/tip', () => {
     expect(res.status).toBe(202); expect(res.body.status).toBe('pending'); expect(res.body.receipt).toBeNull();
     expect(res.body.success).toBeUndefined(); expect(res.body.sessionScope).toBe(opening(DEFAULT_USER));
     expect(stripeService.createTipPayment).toHaveBeenCalledWith({ ...tipCommand(), paymentMethodId: null,
+      // Android's Z form reaches the service in the server's +00:00 form (utils/echoedTimestamps).
+      expectedTerms: { ...tipCommand().expectedTerms, ownerConfirmedAt: '2026-09-14T00:00:00+00:00' },
       payerId: DEFAULT_USER, sessionScope: opening(DEFAULT_USER) });
   });
   test('returns a successful terminal receipt without replacing original identity', async () => {

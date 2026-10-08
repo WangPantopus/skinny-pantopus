@@ -116,6 +116,12 @@ extension AddHouseholdTaskFormView {
                     initials: member.initials
                 )
             }
+            // Someone this viewer can't see in the list (they may not list members, or the person
+            // left) stays selected under the same short label the task list uses.
+            if let current = viewModel.selectedAssigneeId, viewModel.assigneeReadState != .loading,
+               !viewModel.assignableMembers.contains(where: { $0.id == current }) {
+                assigneeRow(id: current, title: "Member \(current.prefix(4).uppercased())", subtitle: nil)
+            }
             if let message = viewModel.assigneeStatusMessage {
                 Text(message)
                     .pantopusTextStyle(.caption)

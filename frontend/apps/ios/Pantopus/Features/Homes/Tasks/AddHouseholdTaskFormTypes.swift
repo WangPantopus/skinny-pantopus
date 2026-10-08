@@ -171,7 +171,8 @@ public struct HouseholdTaskAssignableMember: Sendable, Hashable, Identifiable {
     }
 
     public static func from(_ occupant: OccupantDTO) -> HouseholdTaskAssignableMember? {
-        guard occupant.isActive else { return nil }
+        // Guests can't see household tasks, so the server refuses them as assignees.
+        guard occupant.isActive, occupant.role != "guest" else { return nil }
         let name = occupant.displayName?.trimmingCharacters(in: .whitespaces)
             ?? occupant.username?.trimmingCharacters(in: .whitespaces)
             ?? ""
@@ -187,6 +188,15 @@ public struct HouseholdTaskAssignableMember: Sendable, Hashable, Identifiable {
             displayName: display,
             initials: initials.isEmpty ? "··" : initials
         )
+    }
+
+    /// The viewer can always take a task: their own entry reads "Me" and comes first, and is
+    /// added when the household's member list can't be read (a private setup, an ordinary member).
+    public static func withViewer(_ members: [Self], viewerId: String?) -> [Self] {
+        guard let viewerId, !viewerId.isEmpty else { return members }
+        let own = members.first { $0.id == viewerId }
+        let me = HouseholdTaskAssignableMember(id: viewerId, displayName: "Me", initials: own?.initials ?? "Me")
+        return [me] + members.filter { $0.id != viewerId }
     }
 }
 

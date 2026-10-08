@@ -7,6 +7,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
+const { serverUtcForm } = require('../utils/echoedTimestamps');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const logger = require('../utils/logger');
 const { emitPrivateGigUpdate } = require('../socket/chatSocketio');
@@ -80,6 +81,10 @@ function stopCommand(routeAction = null) {
       return res.status(409).json({ code: 'STOP_TERMS_REQUIRED', error: 'Refresh the stop preview before continuing.' });
     }
     if (parsed.value.expectedActorId !== req.user.id) return res.status(409).json({ code: 'SESSION_SCOPE_CHANGED', error: 'Your account changed. Reopen the task.' });
+    // Android echoes the preview's acceptedAt with Z for +00:00; the frozen terms compare as text.
+    if (typeof parsed.value.expectedTerms.acceptedAt === 'string') {
+      parsed.value.expectedTerms = { ...parsed.value.expectedTerms, acceptedAt: serverUtcForm(parsed.value.expectedTerms.acceptedAt) };
+    }
     if (!requireExpectedSessionScope({ user: req.user, session: req.session, cookies: req.cookies,
       headers: { ...req.headers, 'x-pantopus-session-scope': parsed.value.expectedSessionScope } }, res, { required: true })) return;
     try {

@@ -116,8 +116,8 @@ async function readMembers(homeId, { history = false } = {}) {
 }
 
 // Members show by the name they show neighbors on their posts. A username the server made up is never a display name
-// (utils/personalUsername.js); a person with no name reads "Household member". Applied after the consistency recheck,
-// and only to display_name: the rest of each row keeps its shape.
+// (utils/personalUsername.js); a person with no name reads "Household member". Used only once the consistency recheck
+// passes, and only for display_name: the rest of each row keeps its shape.
 async function withDisplayNames(occupants) {
   if (occupants.length === 0) return occupants;
   let names;
@@ -193,18 +193,30 @@ async function propertyDetail(homeId, actorId) {
 async function members(homeId, actorId, { history = false } = {}) {
   return authority.withCurrentAccess({ homeId, actorId, permission: 'members.view' }, async access => {
     if (history && !access.permissions.includes('members.manage')) throw failure('HOME_MEMBER_HISTORY_DENIED', 403);
-    const occupants = await readMembers(homeId, { history });
-    const invites = access.permissions.includes('members.manage') ? await invitations.list(actorId, homeId) : [];
+    const manage = access.permissions.includes('members.manage');
+    // Members and invitations are independent reads, so they run together;
+    // a failure is reported in the same order as before.
+    const [occupantsRead, invitesRead] = await Promise.allSettled([
+      readMembers(homeId, { history }),
+      manage ? invitations.list(actorId, homeId) : [],
+    ]);
+    const occupants = settledValue(occupantsRead);
+    const invites = settledValue(invitesRead);
     const pendingInvites = invites.map(invite => {
       if (!uuid(invite.id) || invite.home_id !== homeId || typeof invite.proposed_role !== 'string') throw failure();
       return { id: invite.id, user_id: invite.invitee_user_id, role: invite.proposed_role, is_active: false,
         email: invite.invitee_email, name: invite.invitee_email || 'Invited user',
         invited_by: chosenUsernameOrNull(invite.inviter?.username), created_at: invite.created_at };
     });
-    if (JSON.stringify(await readMembers(homeId, { history })) !== JSON.stringify(occupants)) throw failure();
-    if (access.permissions.includes('members.manage')
-      && JSON.stringify(await invitations.list(actorId, homeId)) !== JSON.stringify(invites)) throw failure();
-    return { occupants: await withDisplayNames(occupants), pendingInvites };
+    // Both rereads and the members' names run together; failures are reported in the old order.
+    const [membersAgain, invitesAgain, namedOccupants] = await Promise.allSettled([
+      readMembers(homeId, { history }),
+      manage ? invitations.list(actorId, homeId) : null,
+      withDisplayNames(occupants),
+    ]);
+    if (JSON.stringify(settledValue(membersAgain)) !== JSON.stringify(occupants)) throw failure();
+    if (manage && JSON.stringify(settledValue(invitesAgain)) !== JSON.stringify(invites)) throw failure();
+    return { occupants: settledValue(namedOccupants), pendingInvites };
   });
 }
 function sendError(res, error) {

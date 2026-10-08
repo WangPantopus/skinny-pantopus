@@ -7,7 +7,7 @@
 //  (`GigDetailView`). Design: docs/design/new/Delivery Proof Sheet.html
 //  + delivery-proof-frames.jsx. One sheet · two states: ENTRY (compose
 //  the proof — ≥1 photo required, optional note) and SUBMITTED
-//  ("Delivery confirmed" recap with a "Back to task" CTA).
+//  ("Marked as delivered" recap with a "Back to task" CTA).
 //
 //  Submit roundtrip is owned by the host (`GigDetailViewModel`): each
 //  photo is uploaded via `POST /api/files/upload`, then the resulting
@@ -305,7 +305,7 @@ public struct DeliveryProofSheetView: View {
         HStack(spacing: Spacing.s2) {
             Icon(.shieldCheck, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInkStrong)
             Text(target.paid
-                ? "Payment is released once the poster confirms — usually within a few hours."
+                ? "Once the poster confirms, your payment is held for 48 hours, then added to your wallet."
                 : "The poster confirms the task once they've seen your proof.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.Color.primaryInkStrong)
@@ -363,11 +363,15 @@ extension DeliveryProofSheetView {
                     .padding(.top, Spacing.s5)
 
                 VStack(spacing: Spacing.s2) {
-                    Text("Delivery confirmed")
+                    Text("Marked as delivered")
                         .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(Theme.Color.appText)
                         .accessibilityAddTraits(.isHeader)
-                    Text("We’ve let the poster know. Payment releases once they confirm — usually within a few hours.")
+                    // The poster's confirmation captures the payment; the helper's share then waits out the
+                    // 48-hour hold before it reaches the wallet (stripeService COOLING_OFF_MS).
+                    Text(target.paid
+                        ? "We’ve let the poster know. Once they confirm, your payment is held for 48 hours, then added to your wallet."
+                        : "We’ve let the poster know. They confirm the task once they’ve seen your proof.")
                         .font(.system(size: 13.5))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .multilineTextAlignment(.center)
