@@ -170,7 +170,10 @@ export default function ProfileHeader({
                 </>
               ) : (
                 <>
-                  <button onClick={onMessage} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium">Message</button>
+                  {/* Someone you blocked can't be messaged (the block says so); Settings unblocks. */}
+                  {connectionState !== 'blocked' && (
+                    <button onClick={onMessage} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium">Message</button>
+                  )}
                   {/* Launch cut #4 (Open Gigs): "Request / Hire" opens the open-post composer. */}
                   {launchFeatures.openGigs && <button onClick={onRequestHire} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium">Request / Hire</button>}
                   {canConnect && onConnect && (

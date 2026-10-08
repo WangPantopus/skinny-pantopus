@@ -633,6 +633,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     : (connectionState === 'connected' ? 'follower' : 'public');
 
   const showOwnerOnly = effectiveViewer === 'owner';
+  // Someone you blocked can't be messaged (the block says so); Settings unblocks.
+  const canMessage = connectionState !== 'blocked';
 
   const trustBadges = [
     profile.address_verified ? { icon: '🏠', text: 'Address on file', color: 'green' } : null,
@@ -822,11 +824,11 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         />
       )}
 
-      {!showOwnerOnly && (
+      {!showOwnerOnly && (canMessage || launchFeatures.openGigs) && (
         <div className="fixed bottom-[var(--fab-lift,0px)] left-0 right-0 md:hidden bg-surface border-t border-app p-3 z-30">
           {/* Launch cut #4 (Open Gigs): no "Request / Hire"; Message spans the bar. */}
-          <div className={`max-w-lg mx-auto grid ${launchFeatures.openGigs ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-            <button onClick={handleMessage} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg font-medium">Message</button>
+          <div className={`max-w-lg mx-auto grid ${canMessage && launchFeatures.openGigs ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+            {canMessage && <button onClick={handleMessage} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg font-medium">Message</button>}
             {launchFeatures.openGigs && <button onClick={handleRequestHire} className="px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium">Request / Hire</button>}
           </div>
         </div>
