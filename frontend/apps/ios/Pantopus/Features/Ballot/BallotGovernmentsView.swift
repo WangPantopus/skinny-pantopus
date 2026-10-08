@@ -32,6 +32,10 @@ struct BallotGovernmentsView: View {
     /// The design system's serif ("ceremonial letter") face, 30/34 bold.
     private static let titleFont = Font.system(size: 30, weight: .bold, design: .serif)
 
+    /// The finished frame shows scrolled to its end, so a short screen never
+    /// cuts off the last sentence.
+    private static let middleID = "ballot.governments.middle"
+
     private var story: BallotStory {
         BallotStory(steps: min(governments.items.count, BallotStackGeometry.layers(for: governments.count)))
     }
@@ -66,13 +70,25 @@ struct BallotGovernmentsView: View {
     private func frame(at t: Double) -> some View {
         VStack(spacing: Spacing.s0) {
             header(bar: story.bar(at: t))
-            ScrollView {
-                VStack(spacing: Spacing.s0) {
-                    BallotStackView(count: governments.count, story: playing ? story : nil, time: t)
-                    captions(at: t)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: Spacing.s0) {
+                        BallotStackView(count: governments.count, story: playing ? story : nil, time: t)
+                        captions(at: t)
+                    }
+                    .id(Self.middleID)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .onAppear {
+                    if !playing { proxy.scrollTo(Self.middleID, anchor: .bottom) }
+                }
+                .onChange(of: playing) { _, isPlaying in
+                    guard !isPlaying else { return }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) {
+                        proxy.scrollTo(Self.middleID, anchor: .bottom)
+                    }
                 }
             }
-            .scrollBounceBehavior(.basedOnSize)
             VStack(spacing: Spacing.s2) {
                 BallotPrimaryButton(label: "Done", height: 50, fontSize: 16, action: onClose)
                     .accessibilityIdentifier("ballot.governments.done")
