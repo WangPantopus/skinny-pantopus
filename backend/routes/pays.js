@@ -13,6 +13,7 @@ const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
+const { serverUtcForm } = require('../utils/echoedTimestamps');
 const logger = require('../utils/logger');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
@@ -1153,6 +1154,9 @@ router.get('/tip-requests/:requestId', verifyToken, async (req, res) => {
 router.post('/tip', verifyToken, async (req, res) => {
   const parsed = tipSchema.validate(req.body, { convert: false });
   if (parsed.error) return res.status(409).json({ code: 'TIP_TERMS_REQUIRED', error: 'Refresh the tip preview before continuing.' });
+  // Android echoes the preview's ownerConfirmedAt with Z for +00:00; the frozen terms compare as text.
+  parsed.value.expectedTerms = { ...parsed.value.expectedTerms,
+    ownerConfirmedAt: serverUtcForm(parsed.value.expectedTerms.ownerConfirmedAt) };
   if (parsed.value.expectedActorId !== req.user.id) {
     return res.status(409).json({ code: 'SESSION_SCOPE_CHANGED', error: 'Your account changed. Reopen the tip screen.' });
   }
