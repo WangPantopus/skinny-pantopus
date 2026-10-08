@@ -54,10 +54,11 @@ class TodaySkyPainter(
             paintClouds(scene)
             paintRain(scene)
             paintSnow(scene)
-            paintFog(scene)
             if (condition == WeatherConditionCode.WIND) paintWind(scene)
             if (weather == SkyPalette.Weather.STORM && !still) paintLightning(scene)
             TodaySkyGround(scene, weather, moment, condition, cold, still).paint(this)
+            // Fog hugs the ground, in front of the house and below the reading.
+            paintFog(scene)
             paintScrim(scene)
         }
     }
@@ -213,7 +214,7 @@ class TodaySkyPainter(
         if (weather != SkyPalette.Weather.FOG) return
         val tint = if (night) SkyPalette.fogNight else SkyPalette.fogDay
         repeat(4) { index ->
-            val y = scene.horizon - 62 + index * 17
+            val y = scene.horizon - 18 + index * 12
             val width = scene.width * 1.3f
             val speed = if (index % 2 == 0) 6.0 else -6.0
             val x = scene.drift(index * 90.0, speed, width.toDouble(), still) - scene.width * 0.3f
@@ -288,16 +289,19 @@ class TodaySkyPainter(
         drawPath(bolt, SkyPalette.bolt.copy(alpha = 0.9f), style = Stroke(width = 2f))
     }
 
-    /** Darkens the left of the sky a little so the white reading always reads. */
+    /**
+     * Darkens the left of the sky so the white reading keeps its contrast: with it every scene gives
+     * the temperature and condition (large text) at least 3:1 and "NOW" 4.5:1; the chips carry their own backing.
+     */
     private fun DrawScope.paintScrim(scene: SkyScene) {
         drawRect(
             brush =
                 Brush.horizontalGradient(
-                    listOf(SkyPalette.scrim.copy(alpha = 0.32f), SkyPalette.scrim.copy(alpha = 0f)),
+                    listOf(SkyPalette.scrim.copy(alpha = 0.4f), SkyPalette.scrim.copy(alpha = 0f)),
                     startX = 0f,
-                    endX = scene.width * 0.65f,
+                    endX = scene.width * 0.8f,
                 ),
-            size = Size(scene.width * 0.65f, scene.horizon),
+            size = Size(scene.width * 0.8f, scene.horizon),
         )
     }
 

@@ -33,10 +33,11 @@ struct TodaySkyPainter {
         paintClouds(context, scene)
         paintRain(context, scene)
         paintSnow(context, scene)
-        paintFog(context, scene)
         if condition == .wind { paintWind(context, scene) }
         if weather == .storm, !still { paintLightning(context, scene) }
         TodaySkyGround(scene: scene, weather: weather, moment: moment, condition: condition, cold: cold, still: still).paint(context)
+        // Fog hugs the ground, in front of the house and below the reading.
+        paintFog(context, scene)
         paintScrim(context, scene)
     }
 
@@ -219,7 +220,7 @@ struct TodaySkyPainter {
         guard weather == .fog else { return }
         let tint = night ? SkyPalette.fogNight : SkyPalette.fogDay
         for index in 0..<4 {
-            let y = scene.horizon - 62 + Double(index) * 17
+            let y = scene.horizon - 18 + Double(index) * 12
             let width = scene.width * 1.3
             let x = scene.drift(Double(index) * 90, speed: index.isMultiple(of: 2) ? 6 : -6, span: width, still: still) - scene.width * 0.3
             let band = Gradient(stops: [
@@ -287,12 +288,14 @@ struct TodaySkyPainter {
         context.stroke(bolt, with: .color(SkyPalette.bolt.color(opacity: 0.9)), lineWidth: 2)
     }
 
-    /// Darkens the left of the sky a little so the white reading always reads.
+    /// Darkens the left of the sky so the white reading keeps its contrast:
+    /// with it every scene gives the temperature and condition (large text)
+    /// at least 3:1 and "NOW" 4.5:1; the chips carry their own backing.
     private func paintScrim(_ context: GraphicsContext, _ scene: Scene) {
-        let gradient = Gradient(colors: [SkyPalette.scrim.color(opacity: 0.32), SkyPalette.scrim.color(opacity: 0)])
+        let gradient = Gradient(colors: [SkyPalette.scrim.color(opacity: 0.4), SkyPalette.scrim.color(opacity: 0)])
         context.fill(
-            Path(CGRect(x: 0, y: 0, width: scene.width * 0.65, height: scene.horizon)),
-            with: .linearGradient(gradient, startPoint: .zero, endPoint: CGPoint(x: scene.width * 0.65, y: 0))
+            Path(CGRect(x: 0, y: 0, width: scene.width * 0.8, height: scene.horizon)),
+            with: .linearGradient(gradient, startPoint: .zero, endPoint: CGPoint(x: scene.width * 0.8, y: 0))
         )
     }
 }

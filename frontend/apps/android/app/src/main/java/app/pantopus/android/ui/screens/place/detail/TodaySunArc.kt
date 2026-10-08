@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -148,12 +149,15 @@ private fun SunArcDial(
             drawCircle(if (up) SkyPalette.sunHigh else muted, 8.dp.toPx(), sun)
             drawCircle(PantopusColors.appSurface, 8.dp.toPx(), sun, style = Stroke(width = 2.dp.toPx()))
         }
+        // Sized in dp: the daylight sits inside the arc and must fit it at any font size;
+        // the times and the countdown below scale.
+        val unscaled = 1f / LocalDensity.current.fontScale
         Column(
             modifier = Modifier.align(Alignment.Center).padding(top = 34.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(daylight, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
-            Text("of daylight", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
+            Text(daylight, fontSize = (17 * unscaled).sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
+            Text("of daylight", fontSize = (12 * unscaled).sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
         }
     }
 }

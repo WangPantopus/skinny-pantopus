@@ -3,15 +3,19 @@
 package app.pantopus.android.ui.screens.place.detail
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +52,7 @@ import app.pantopus.android.data.api.models.place.PlaceWeatherData
 import app.pantopus.android.ui.theme.SkyPalette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /*
@@ -82,7 +87,8 @@ fun TodaySkyHero(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(188.dp)
+                // Grows with large fonts instead of clipping the reading; the ground stays at the bottom.
+                .heightIn(min = 188.dp)
                 .shadow(elevation = 10.dp, shape = shape, ambientColor = sky.mid, spotColor = sky.mid)
                 .clip(shape)
                 // A hairline edge keeps a night sky from melting into a dark page.
@@ -92,7 +98,7 @@ fun TodaySkyHero(
                     onScreen = bounds.bottom > 0f && bounds.top < screenHeight
                 }.testTag("todaySkyHero"),
     ) {
-        Canvas(modifier = Modifier.fillMaxSize().clearAndSetSemantics { }) {
+        Canvas(modifier = Modifier.matchParentSize().clearAndSetSemantics { }) {
             val t = time.doubleValue
             val perDp = density
             withTransform({ scale(perDp, perDp, pivot = Offset.Zero) }) {
@@ -120,18 +126,23 @@ private fun rememberSkyTime(animating: Boolean): androidx.compose.runtime.Mutabl
 private fun SkyReading(data: PlaceWeatherData) {
     val temp = data.currentTempF.roundToInt()
     val nowLabel = if (data.conditionLabel.isEmpty()) "Now, $temp°" else "Now, $temp°, ${data.conditionLabel}"
-    val range =
+    // High/low and feels-like, each in a dark glass chip: they sit near the bright horizon, where
+    // white text alone can't keep 4.5:1 on a light sky.
+    val chips =
         listOfNotNull(
             if (data.highF != null && data.lowF != null) "H ${data.highF.roundToInt()}° · L ${data.lowF.roundToInt()}°" else null,
             data.feelsLikeF?.let { "Feels like ${it.roundToInt()}°" },
-        ).joinToString(" · ")
+        )
     val spokenRange =
         listOfNotNull(
             if (data.highF != null && data.lowF != null) "High ${data.highF.roundToInt()}°, low ${data.lowF.roundToInt()}°" else null,
             data.feelsLikeF?.let { "feels like ${it.roundToInt()}°" },
         ).joinToString(", ")
+    // The numeral is a picture of the reading: it grows a little with the font size, not without bound.
+    val fontScale = LocalDensity.current.fontScale
+    val numeral = min(fontScale, 1.3f) / fontScale
     val shadow = TextStyle(shadow = Shadow(SkyPalette.black.copy(alpha = 0.28f), Offset(0f, 2f), 6f))
-    Column(modifier = Modifier.padding(start = 18.dp, top = 14.dp, end = 120.dp)) {
+    Column(modifier = Modifier.padding(start = 18.dp, top = 14.dp, end = 110.dp, bottom = 36.dp)) {
         Column(modifier = Modifier.clearAndSetSemantics { contentDescription = nowLabel }) {
             Text(
                 "NOW",
@@ -144,8 +155,8 @@ private fun SkyReading(data: PlaceWeatherData) {
             Row(verticalAlignment = Alignment.Top) {
                 Text(
                     "$temp",
-                    fontSize = 64.sp,
-                    lineHeight = 70.sp,
+                    fontSize = (64 * numeral).sp,
+                    lineHeight = (70 * numeral).sp,
                     fontWeight = FontWeight.Light,
                     letterSpacing = (-2).sp,
                     color = SkyPalette.white,
@@ -153,7 +164,7 @@ private fun SkyReading(data: PlaceWeatherData) {
                 )
                 Text(
                     "°",
-                    fontSize = 34.sp,
+                    fontSize = (34 * numeral).sp,
                     fontWeight = FontWeight.Light,
                     color = SkyPalette.white,
                     style = shadow,
@@ -161,28 +172,48 @@ private fun SkyReading(data: PlaceWeatherData) {
                 )
             }
             if (data.conditionLabel.isNotEmpty()) {
+                // 18 sp: large text, so 3:1 over the sky is enough (every scene clears it).
                 Text(
                     data.conditionLabel,
-                    fontSize = 17.sp,
+                    fontSize = 18.sp,
+                    lineHeight = 22.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = SkyPalette.white,
                     style = shadow,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.offset(y = (-4).dp),
                 )
             }
         }
-        if (range.isNotEmpty()) {
+        if (chips.isNotEmpty()) SkyChips(chips, spokenRange)
+    }
+}
+
+/** High/low and feels-like in dark glass chips; they wrap onto a second line rather than truncate. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SkyChips(
+    chips: List<String>,
+    spoken: String,
+) {
+    FlowRow(
+        modifier = Modifier.padding(top = 2.dp).clearAndSetSemantics { contentDescription = spoken },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        chips.forEach { chip ->
             Text(
-                range,
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Medium,
-                color = SkyPalette.white.copy(alpha = 0.9f),
-                style = shadow,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.clearAndSetSemantics { contentDescription = spokenRange },
+                chip,
+                fontSize = 13.sp,
+                lineHeight = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = SkyPalette.white,
+                modifier =
+                    Modifier
+                        .clip(CircleShape)
+                        .background(SkyPalette.scrim.copy(alpha = 0.45f))
+                        .padding(horizontal = 9.dp, vertical = 4.dp),
             )
         }
     }

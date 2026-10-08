@@ -315,7 +315,8 @@ struct TodayCalendarStrip: View {
 
 // MARK: - Alerts all-clear
 
-/// The green check with a slow, quiet ping: someone is keeping watch.
+/// The green check with three slow, quiet pings when it appears: someone is
+/// keeping watch. It then rests, so nothing keeps redrawing.
 struct TodayAllClearBadge: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var ping = false
@@ -331,7 +332,7 @@ struct TodayAllClearBadge: View {
         .frame(width: 44, height: 44)
         .onAppear {
             guard !reduceMotion else { return }
-            withAnimation(.easeOut(duration: 2.4).repeatForever(autoreverses: false)) { ping = true }
+            withAnimation(.easeOut(duration: 2.4).repeatCount(3, autoreverses: false)) { ping = true }
         }
         .onDisappear { ping = false }
     }

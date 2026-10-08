@@ -4,10 +4,6 @@ package app.pantopus.android.ui.screens.place.detail
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -16,6 +12,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -30,7 +28,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -137,12 +139,21 @@ fun TodayAqiGauge(
             drawCircle(surface, 8.dp.toPx(), marker)
             drawCircle(SkyPalette.airQualityBands[band], 6.25.dp.toPx(), marker, style = Stroke(width = 3.5.dp.toPx()))
         }
+        // Sized in dp: the reading is part of the dial and must stay inside it at any font size;
+        // the category and caption beside it scale.
+        val unscaled = 1f / LocalDensity.current.fontScale
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("$index", fontSize = 30.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            Text(
+                "$index",
+                fontSize = (30 * unscaled).sp,
+                lineHeight = (30 * unscaled).sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.appText,
+            )
             Text(
                 "AQI",
-                fontSize = 10.5.sp,
-                lineHeight = 13.sp,
+                fontSize = (10.5f * unscaled).sp,
+                lineHeight = (13 * unscaled).sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.8.sp,
                 color = PantopusColors.appTextMuted,
@@ -200,7 +211,7 @@ fun TodayGoodDayTile(
             Box(
                 modifier = Modifier.size(40.dp).clip(CircleShape).background(tone.bg),
                 contentAlignment = Alignment.Center,
-            ) { Text(tile.glyph, fontSize = 21.sp) }
+            ) { Text(tile.glyph, fontSize = (21 / LocalDensity.current.fontScale).sp) }
             Spacer(modifier = Modifier.weight(1f))
             Box(
                 modifier = Modifier.size(19.dp).clip(CircleShape).background(tone.fg),
@@ -275,6 +286,7 @@ private class StripDay(
  * The next two weeks as fourteen day cells with a coloured dot for each kind of date: the rhythm
  * of pickups at a glance. The rows below carry the same dates in words, so TalkBack skips the strip.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TodayCalendarStrip(
     today: String,
@@ -303,7 +315,7 @@ fun TodayCalendarStrip(
             days.forEach { day -> StripCell(day, Modifier.weight(1f)) }
         }
         if (present.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 present.forEach { kind ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(calendarKindColor(kind)))
@@ -322,10 +334,13 @@ private fun StripCell(
 ) {
     val weekend = day.date.dayOfWeek == DayOfWeek.SATURDAY || day.date.dayOfWeek == DayOfWeek.SUNDAY
     val initial = "SMTWTFS"[day.date.dayOfWeek.value % 7].toString()
+    // Fourteen cells share the card's width, so their labels are sized in dp and can't overflow
+    // at large font sizes; the rows below say the same dates in scalable text.
+    val unscaled = 1f / LocalDensity.current.fontScale
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             initial,
-            fontSize = 10.sp,
+            fontSize = (10 * unscaled).sp,
             fontWeight = FontWeight.SemiBold,
             color = if (day.isToday) PantopusColors.primary600 else PantopusColors.appTextMuted,
         )
@@ -348,7 +363,7 @@ private fun StripCell(
         ) {
             Text(
                 "${day.date.dayOfMonth}",
-                fontSize = 12.5.sp,
+                fontSize = (12.5f * unscaled).sp,
                 fontWeight = if (day.isToday) FontWeight.Bold else FontWeight.SemiBold,
                 color = if (day.isToday) PantopusColors.appSurface else PantopusColors.appText,
             )
@@ -363,27 +378,27 @@ private fun StripCell(
 
 // ─── Alerts all-clear ────────────────────────────────────────
 
-/** The green check with a slow, quiet ping: someone is keeping watch. */
+/** The green check with three slow, quiet pings when it appears: someone is keeping watch. It then rests. */
 @Composable
 fun TodayAllClearBadge() {
     val reduced = rememberMotionReduced()
     val home = PantopusColors.home
-    val ping =
-        if (reduced) {
-            null
-        } else {
-            rememberInfiniteTransition(label = "allClear").animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
-                label = "ping",
-            )
+    val ping = remember { Animatable(0f) }
+    var pinging by remember { mutableStateOf(false) }
+    LaunchedEffect(reduced) {
+        if (reduced) return@LaunchedEffect
+        pinging = true
+        repeat(3) {
+            ping.snapTo(0f)
+            ping.animateTo(1f, tween(2400, easing = LinearEasing))
         }
+        pinging = false
+    }
     Box(
         modifier =
             Modifier.size(44.dp).drawBehind {
-                val progress = ping?.value ?: return@drawBehind
-                val eased = 1 - (1 - progress) * (1 - progress)
+                if (!pinging) return@drawBehind
+                val eased = 1 - (1 - ping.value) * (1 - ping.value)
                 drawCircle(
                     home.copy(alpha = 0.45f * (1 - eased)),
                     radius = size.minDimension / 2 * (1 + 0.55f * eased),

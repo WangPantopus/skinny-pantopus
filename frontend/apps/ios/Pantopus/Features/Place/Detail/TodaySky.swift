@@ -137,13 +137,15 @@ struct TodaySkyHero: View {
         return parts.joined(separator: ", ")
     }
 
-    private var rangeText: String {
+    /// High/low and feels-like, each in a dark glass chip: they sit near the
+    /// bright horizon, where white text alone can't keep 4.5:1 on a light sky.
+    private var chips: [String] {
         var parts: [String] = []
         if let hi = data.highF, let lo = data.lowF {
             parts.append("H \(Int(hi.rounded()))° · L \(Int(lo.rounded()))°")
         }
         if let feels = data.feelsLikeF { parts.append("Feels like \(Int(feels.rounded()))°") }
-        return parts.joined(separator: " · ")
+        return parts
     }
 
     var body: some View {
@@ -191,7 +193,7 @@ struct TodaySkyHero: View {
     }
 
     private var reading: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 6) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("NOW")
                     .font(.system(size: 12, weight: .bold))
@@ -207,28 +209,40 @@ struct TodaySkyHero: View {
                 }
                 .padding(.top, -2)
                 if !data.conditionLabel.isEmpty {
+                    // 18 pt: large text, so 3:1 over the sky is enough (every scene clears it).
                     Text(data.conditionLabel)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .padding(.top, -4)
                 }
             }
+            .shadow(color: SkyPalette.black.color(opacity: 0.28), radius: 3, y: 1)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(nowLabel)
-            if !rangeText.isEmpty {
-                Text(rangeText)
-                    .font(.system(size: 13.5, weight: .medium))
-                    .opacity(0.9)
-                    .padding(.top, 3)
-                    .accessibilityLabel(rangeLabel)
+            if !chips.isEmpty {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) { chipViews }
+                    VStack(alignment: .leading, spacing: 4) { chipViews }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(rangeLabel)
             }
         }
         .lineLimit(1)
         .minimumScaleFactor(0.8)
         .foregroundStyle(SkyPalette.white.color)
-        .shadow(color: SkyPalette.black.color(opacity: 0.28), radius: 3, y: 1)
         .padding(.leading, 18)
         .padding(.top, 14)
-        .padding(.trailing, 120)
+        .padding(.trailing, 110)
+    }
+
+    private var chipViews: some View {
+        ForEach(chips, id: \.self) { chip in
+            Text(chip)
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(SkyPalette.scrim.color(opacity: 0.45)))
+        }
     }
 }
 
