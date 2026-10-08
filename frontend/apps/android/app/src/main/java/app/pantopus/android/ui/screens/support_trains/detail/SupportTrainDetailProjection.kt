@@ -365,7 +365,9 @@ object SupportTrainDetailProjection {
             listOf("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", "yyyy-MM-dd'T'HH:mm:ssXXX").firstNotNullOfOrNull { pattern ->
                 runCatching { utcFormatter(pattern).parse(iso) }.getOrNull()
             } ?: return null
-        return utcFormatter("h:mm a").format(date)
+        // An arrival is an instant (the sign-up sheets send one), so it reads in the helper's own
+        // time zone, as the Edit signup form shows it; in UTC a 5:30 pm drop-off read 12:30 AM.
+        return SimpleDateFormat("h:mm a", Locale.US).format(date)
     }
 
     private fun shortTime(hhmm: String): String {
