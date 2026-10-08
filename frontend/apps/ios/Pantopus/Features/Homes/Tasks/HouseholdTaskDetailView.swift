@@ -49,6 +49,7 @@ struct HouseholdTaskDetailView: View {
                         LabeledContent("Status", value: task.status.replacingOccurrences(of: "_", with: " ").capitalized)
                         if let priority = task.priority { LabeledContent("Priority", value: priority.capitalized) }
                         if let due = task.dueAt { LabeledContent("Due", value: dueLabel(due)) }
+                        if let assignee = viewModel.assignee { LabeledContent("Assigned to", value: assignee) }
                         if let automatic = task.automaticRecurrence {
                             Text(automatic.label)
                         } else if let recurrence = HouseholdTasksListViewModel.humanRecurrence(rule: task.recurrenceRule) {

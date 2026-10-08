@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection.HTTP_FORBIDDEN
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -225,7 +226,8 @@ data class HouseholdTaskAssignableMember(
 ) {
     companion object {
         fun from(occupant: OccupantDto): HouseholdTaskAssignableMember? {
-            if (!occupant.isActive) return null
+            // Guests can't see household tasks, so the server refuses them as assignees.
+            if (!occupant.isActive || occupant.role == "guest") return null
             val name =
                 occupant.displayName?.trim()
                     ?: occupant.username?.trim()
@@ -245,6 +247,20 @@ data class HouseholdTaskAssignableMember(
                 displayName = display,
                 initials = initialsBuf.ifEmpty { "··" },
             )
+        }
+
+        /**
+         * The viewer can always take a task: their own entry reads "Me" and comes first, and is
+         * added when the household's member list can't be read (a private setup, an ordinary member).
+         */
+        fun withViewer(
+            members: List<HouseholdTaskAssignableMember>,
+            viewerId: String?,
+        ): List<HouseholdTaskAssignableMember> {
+            if (viewerId.isNullOrEmpty()) return members
+            val own = members.firstOrNull { it.id == viewerId }
+            return listOf(HouseholdTaskAssignableMember(viewerId, "Me", own?.initials ?: "Me")) +
+                members.filterNot { it.id == viewerId }
         }
     }
 }
@@ -648,14 +664,16 @@ class AddHouseholdTaskFormViewModel
             when (val result = membersRepo.listOccupants(homeId)) {
                 is NetworkResult.Success -> {
                     access.requireCurrent()
-                    _assignableMembers.value = result.data.occupants.mapNotNull(HouseholdTaskAssignableMember::from)
+                    val members = result.data.occupants.mapNotNull(HouseholdTaskAssignableMember::from)
+                    _assignableMembers.value = HouseholdTaskAssignableMember.withViewer(members, access.actorId)
                     _memberListUnavailable.value = false
                 }
                 is NetworkResult.Failure -> {
-                    // Task authority is independent of member-roster access.
-                    // Keep unassigned creation available without claiming the Home is empty.
-                    _assignableMembers.value = emptyList()
-                    _memberListUnavailable.value = true
+                    // Task authority is independent of member-roster access. Someone who may not list
+                    // the household's members (403) can still take the task or leave it unassigned;
+                    // only an unexpected failure says the list is unavailable.
+                    _assignableMembers.value = HouseholdTaskAssignableMember.withViewer(emptyList(), access.actorId)
+                    _memberListUnavailable.value = result.error.code != HTTP_FORBIDDEN
                 }
             }
         }

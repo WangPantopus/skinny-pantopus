@@ -221,7 +221,7 @@ class ContentDetailProjectionTest {
             )
         // A viewer who cannot deliver must not be offered another bid after assignment.
         val content = GigDetailViewModel.Projection.project(gig, emptyList())
-        assertEquals("Bidding closed", content.dock.primary.label)
+        assertEquals("In progress", content.dock.primary.label)
         assertFalse(content.dock.primary.enabled)
     }
 
@@ -284,7 +284,7 @@ class ContentDetailProjectionTest {
         assertTrue(bidsModule!!.bids.first().won)
         assertTrue(bidsModule.bids.drop(1).all { it.dimmed })
         assertFalse(content.dock.primary.enabled)
-        assertEquals("Bidding closed", content.dock.primary.label)
+        assertEquals("Awarded", content.dock.primary.label)
     }
 
     @Test fun listing_projection_carries_cover_inline_pills_and_offer_dock() {

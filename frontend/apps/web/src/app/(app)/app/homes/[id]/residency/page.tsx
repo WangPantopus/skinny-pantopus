@@ -54,7 +54,7 @@ export default function ResidencyStatusPage() {
         {progress.current_access === 'private_setup' && <section className="rounded-xl border border-app-border p-5">
           <h2 className="font-semibold text-app-text">Your private tasks are available</h2>
           <p className="mt-2 text-sm text-app-text-secondary">You can organize your own tasks while verification is pending.</p>
-          <Link href={`/app/homes/${homeId}/tasks`} className="mt-3 inline-block rounded-lg border border-app-border px-4 py-2 font-semibold">My tasks</Link>
+          <Link href={`/app/homes/${homeId}/tasks`} className="mt-3 inline-block rounded-lg border border-app-border px-4 py-2 font-semibold">Home tasks</Link>
         </section>}
       </div>}
   </main>;

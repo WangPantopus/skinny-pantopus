@@ -9,9 +9,17 @@ extension AddHouseholdTaskFormViewModel {
     var assigneeStatusMessage: String? {
         switch assigneeReadState {
         case .loading: "Checking household members…"
-        case .unavailable: "Household members could not be loaded. You can leave this task unassigned."
+        case .unavailable: "Household members couldn't be loaded. You can take this task yourself or leave it unassigned."
         case .loaded: assignableMembers.isEmpty ? "No assignable members are available." : nil
         }
+    }
+
+    /// Someone who may not list the household's members (403: a private setup, an ordinary member)
+    /// can still take the task or leave it unassigned; only an unexpected failure says the list
+    /// couldn't be loaded.
+    static func assigneeReadState(after error: any Error) -> AssigneeReadState {
+        if case APIError.forbidden = error { return .loaded }
+        return .unavailable
     }
 
     // MARK: - Hydration

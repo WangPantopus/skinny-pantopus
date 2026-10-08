@@ -300,7 +300,7 @@ export default function HomesPage() {
                     const destination = privateSetup ? `/app/homes/${h.id}/tasks`
                       : verification ? ownership ? `/app/homes/${h.id}/claim-owner/evidence${h.pending_claim_id ? `?claimId=${encodeURIComponent(h.pending_claim_id)}` : ''}`
                         : `/app/homes/${h.id}/residency` : `/app/homes/${h.id}/dashboard`;
-                    const action = privateSetup ? 'My tasks' : verification ? 'Check status' : 'Dashboard';
+                    const action = privateSetup ? 'Home tasks' : verification ? 'Check status' : 'Dashboard';
                     const occ = privateSetup ? 'Private setup' : verification ? (ownership ? 'Ownership verification pending' : 'Residency verification pending')
                       : ({ owner: 'Owner', admin: 'Administrator', manager: 'Manager', member: 'Member', lease_resident: 'Resident', restricted_member: 'Restricted member', guest: 'Guest', service_provider: 'Service provider' } as Record<string, string>)[h.role_base || ''] || 'Home access';
                     return (

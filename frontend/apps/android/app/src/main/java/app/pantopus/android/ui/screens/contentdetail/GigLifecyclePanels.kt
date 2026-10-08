@@ -979,7 +979,7 @@ private fun GigActiveTaskPanel(
                     onClick = onCantMakeIt,
                 )
                 Text(
-                    text = "Releases you and reopens the task for new bids.",
+                    text = "Takes you off the task and releases the poster’s payment hold.",
                     fontSize = 11.sp,
                     color = PantopusColors.appTextSecondary,
                 )

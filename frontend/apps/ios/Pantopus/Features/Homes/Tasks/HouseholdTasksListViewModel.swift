@@ -531,9 +531,12 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     ) -> HouseholdTaskRowProjection {
         let category = HouseholdTaskCategory.from(title: task.title, taskType: task.taskType)
         let assigneeLabel = assigneeDisplay(for: task.assignedTo, memberNames: memberNames)
-        let isAssigned = assigneeLabel != nil
-        // The line says "you" for the viewer's own tasks; the avatar keeps their name.
-        let assignee = task.assignedTo != nil && task.assignedTo == viewerId ? "you" : assigneeLabel
+        let own = task.assignedTo != nil && task.assignedTo == viewerId
+        // The line says "you" for the viewer's own tasks. Their avatar shows their name, or the category
+        // icon when the viewer may not list members (a "Member 1A2B" avatar would mean nothing to them).
+        let avatarName = own && memberNames[task.assignedTo ?? ""] == nil ? nil : assigneeLabel
+        let isAssigned = avatarName != nil
+        let assignee = own ? "you" : assigneeLabel
         let recurrenceChip = task.automaticRecurrence?.label ?? humanRecurrence(rule: task.recurrenceRule).map { "Saved: \($0)" }
         // Status / chip / subtitle vary by status.
         switch task.status {
@@ -549,7 +552,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
                 recurrenceChip: recurrenceChip,
                 category: category,
                 isAssigned: isAssigned,
-                assigneeLabel: assigneeLabel,
+                assigneeLabel: avatarName,
                 highlight: .muted
             )
         case "canceled":
@@ -562,7 +565,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
                 recurrenceChip: recurrenceChip,
                 category: category,
                 isAssigned: isAssigned,
-                assigneeLabel: assigneeLabel,
+                assigneeLabel: avatarName,
                 highlight: .muted
             )
         default:
@@ -579,7 +582,7 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
                 recurrenceChip: recurrenceChip,
                 category: category,
                 isAssigned: isAssigned,
-                assigneeLabel: assigneeLabel,
+                assigneeLabel: avatarName,
                 highlight: nil
             )
         }
