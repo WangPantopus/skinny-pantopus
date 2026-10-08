@@ -435,6 +435,9 @@ struct PublicProfilePostsFeed: View {
     /// Try again instead of presenting the feed as empty.
     var loadFailed = false
     var onRetry: @MainActor () -> Void = {}
+    /// `true` when the viewer blocked this neighbour: a block hides both
+    /// people's posts, so the card says so and invites nothing.
+    var hiddenByBlock = false
 
     var body: some View {
         if posts.isEmpty {
@@ -491,28 +494,44 @@ struct PublicProfilePostsFeed: View {
                 .frame(maxWidth: 260)
                 .padding(.top, Spacing.s2)
 
-            Button(action: loadFailed ? onRetry : onEmptyCTA) {
-                HStack(spacing: 6) {
-                    Icon(emptyCTAIcon, size: 14, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
-                    Text(emptyCTALabel)
-                        .font(.system(size: 12.5, weight: .bold))
-                        .foregroundStyle(Theme.Color.appTextInverse)
-                }
-                .padding(.horizontal, Spacing.s4)
-                .frame(height: 40)
-                .background(emptyAccentColor)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+            if !showsHiddenByBlock {
+                emptyCTAButton
             }
-            .buttonStyle(.plain)
-            .padding(.top, Spacing.s4)
-            .accessibilityLabel(emptyCTALabel)
-            .accessibilityIdentifier(loadFailed ? "publicProfilePostsRetry" : "publicProfilePostsEmptyCTA")
         }
         .frame(maxWidth: .infinity)
         .padding(.top, Spacing.s12)
         .padding(.bottom, Spacing.s5)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(loadFailed ? "publicProfilePostsFailed" : "publicProfilePostsEmpty")
+        .accessibilityIdentifier(emptyStateIdentifier)
+    }
+
+    private var emptyCTAButton: some View {
+        Button(action: loadFailed ? onRetry : onEmptyCTA) {
+            HStack(spacing: 6) {
+                Icon(emptyCTAIcon, size: 14, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
+                Text(emptyCTALabel)
+                    .font(.system(size: 12.5, weight: .bold))
+                    .foregroundStyle(Theme.Color.appTextInverse)
+            }
+            .padding(.horizontal, Spacing.s4)
+            .frame(height: 40)
+            .background(emptyAccentColor)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, Spacing.s4)
+        .accessibilityLabel(emptyCTALabel)
+        .accessibilityIdentifier(loadFailed ? "publicProfilePostsRetry" : "publicProfilePostsEmptyCTA")
+    }
+
+    /// A Local profile the viewer blocked (a failed load still says so first).
+    private var showsHiddenByBlock: Bool {
+        hiddenByBlock && !loadFailed && kind == .local
+    }
+
+    private var emptyStateIdentifier: String {
+        if loadFailed { return "publicProfilePostsFailed" }
+        return showsHiddenByBlock ? "publicProfilePostsHidden" : "publicProfilePostsEmpty"
     }
 
     private var headerLabel: String {
@@ -531,11 +550,13 @@ struct PublicProfilePostsFeed: View {
 
     private var emptyIcon: PantopusIcon {
         if loadFailed { return .alertCircle }
+        if showsHiddenByBlock { return .eyeOff }
         return kind == .persona ? .radioTower : .home
     }
 
     private var emptyHeadline: String {
         if loadFailed { return "Couldn't load posts" }
+        if showsHiddenByBlock { return "Posts hidden" }
         return kind == .persona ? "No broadcasts yet" : "Quiet for now"
     }
 
@@ -548,6 +569,10 @@ struct PublicProfilePostsFeed: View {
         }
         if kind == .persona {
             return "Be the first to follow — you'll get a ping the moment they go live."
+        }
+        if showsHiddenByBlock {
+            return "You blocked \(Self.firstName(localName) ?? "this person"). "
+                + "Neither of you sees the other's posts while the block is on."
         }
         guard let first = Self.firstName(localName) else {
             return "No posts yet — say hi or send a message to break the ice."

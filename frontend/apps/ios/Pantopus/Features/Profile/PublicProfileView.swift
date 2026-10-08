@@ -296,7 +296,8 @@ public struct PublicProfileView: View {
                 onEmptyCTA: { onOpenMessages(payload.profile) },
                 localName: payload.header.displayName,
                 loadFailed: viewModel.postsLoadFailed,
-                onRetry: retryLoad
+                onRetry: retryLoad,
+                hiddenByBlock: viewModel.connection == .blocked
             )
         case .about:
             LocalProfileAboutSection(content: neighbor)

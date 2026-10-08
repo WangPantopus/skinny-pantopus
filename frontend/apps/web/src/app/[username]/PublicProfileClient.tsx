@@ -775,6 +775,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
             posts={userPosts}
             reviews={reviews}
             loading={gigsLoading || reviewsLoading || postsLoading}
+            blocked={connectionState === 'blocked'}
+            firstName={profile.firstName || null}
           />
         )}
         {activeTab === 'insights' && showOwnerOnly && (
