@@ -236,7 +236,7 @@ public final class AddEmergencyInfoFormViewModel {
         guard let verifiedByUserId else { return nil }
         return members
             .first { $0.userId == verifiedByUserId }
-            .flatMap { $0.displayName ?? $0.username }
+            .flatMap { $0.displayName ?? MadeUpUsername.chosen($0.username) }
     }
 
     // MARK: - Field updates

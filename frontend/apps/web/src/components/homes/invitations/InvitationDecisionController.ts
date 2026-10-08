@@ -1,6 +1,7 @@
 import * as api from '@pantopus/api';
 import { validateResidencyProgress } from '../residencyProgressModel';
 import { PendingInvitationStore, type InvitationSnapshot } from './PendingInvitationStore';
+import { transientFailure } from '../../home/returnRefresh';
 import { chosenUsername } from '@pantopus/utils';
 import { invitationUUID, validInvitationSession, validateInvitationContext, validInvitationOutcome, projectInvitationOutcome,
   invitationDecisionMessage, type InvitationSession, type InvitationContext, type InvitationDraft, type InvitationOutcome } from './invitationDecisionModel';
@@ -33,7 +34,7 @@ export class InvitationDecisionController {
   retire() { this.retired = true; this.context = null; this.progress = null; }
   current() {
     try { return !this.retired && !!this.auth && api.getAuthToken() === this.auth && api.getApiBaseUrl() === this.origin
-      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker && document.visibilityState !== 'hidden'; }
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker; }
     catch { return false; }
   }
   private requireCurrent() { if (!this.current()) throw new Error('This page is out of date. Reload to check your answer.'); }
@@ -60,7 +61,7 @@ export class InvitationDecisionController {
         this.requireCurrent();
         const code = (error as { code?: string })?.code;
         if (code === 'SESSION_SCOPE_CHANGED') { this.retire(); throw new Error('Your sign-in changed. Reload before answering.'); }
-        throw new Error(code === 'INVITE_UNAVAILABLE' ? 'Couldn’t check this invitation. Reload to try again.' : invitationDecisionMessage(code));
+        throw new Error(code === 'INVITE_UNAVAILABLE' || transientFailure(error) ? 'Couldn’t check this invitation. Reload to try again.' : invitationDecisionMessage(code));
       }
       this.requireCurrent(); validateInvitationContext(body, this.session!); this.context = body;
     });

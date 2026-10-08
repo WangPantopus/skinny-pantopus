@@ -1,4 +1,5 @@
 import * as api from '@pantopus/api';
+import { DISPLAY_NAMES_HEADER } from '../residency/queue/queueModel';
 import { PendingRemovalStore, type RemovalSnapshot } from './PendingRemovalStore';
 import { validInvitationSession, validRemovalInput, validateRemovalContext, validRemovalOutcome,
   projectRemovalSummary, projectRemovalOutcome, removalMessage,
@@ -32,7 +33,7 @@ export class RemovalController {
   current() {
     try {
       return !this.retired && !!this.auth && api.getAuthToken() === this.auth && api.getApiBaseUrl() === this.origin
-        && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker && document.visibilityState !== 'hidden';
+        && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === this.marker;
     } catch { return false; }
   }
   private requireCurrent() {
@@ -176,7 +177,7 @@ export class RemovalController {
       return structuredClone(original.draft);
     });
   }
-  private headers() { return { 'X-Pantopus-Session-Scope': this.session!.session_scope, 'Cache-Control': 'no-cache, no-store', 'Content-Type': 'application/json' }; }
+  private headers() { return { 'X-Pantopus-Session-Scope': this.session!.session_scope, 'Cache-Control': 'no-cache, no-store', 'Content-Type': 'application/json', ...DISPLAY_NAMES_HEADER }; }
   private async action<T>(run: () => Promise<T>): Promise<T> {
     this.requireCurrent();
     if (!this.opened || this.busy) throw new Error('Wait for the removal check to finish.');

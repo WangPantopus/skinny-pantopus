@@ -45,8 +45,9 @@ struct HomeResidencyQueueClaim: Equatable, Identifiable {
     let createdAt: String?
 
     var applicantLabel: String {
-        if let username, !username.isEmpty { return "@" + username }
-        return "Applicant identity unavailable"
+        if let handle = MadeUpUsername.handle(username) { return handle }
+        // A made-up username (user_…) says nothing about the applicant.
+        return username?.isEmpty == false ? "Applicant" : "Applicant identity unavailable"
     }
 
     var roleLabel: String {

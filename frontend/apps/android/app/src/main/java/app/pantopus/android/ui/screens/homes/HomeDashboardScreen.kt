@@ -1241,9 +1241,10 @@ private fun LimitedLayout(
             Modifier.fillMaxWidth().padding(Spacing.s4).testTag("homeDashboard_limited"),
             verticalArrangement = Arrangement.spacedBy(Spacing.s4),
         ) {
+            // A private setup (the person's own Home, its tasks open to them) hasn't asked anyone for anything.
             Text(
                 when (state.verificationKind) {
-                    "residency" -> "Your residency request"
+                    "residency" -> if (state.canOpenTasks) "Your private setup" else "Your residency request"
                     "ownership" -> "Home ownership verification"
                     else -> "Home access unavailable"
                 },
@@ -1252,7 +1253,12 @@ private fun LimitedLayout(
             )
             Text(
                 when (state.verificationKind) {
-                    "residency" -> "Your residency is not yet verified. Check for updates to your request."
+                    "residency" ->
+                        if (state.canOpenTasks) {
+                            "Household tools open once you're verified at this address. Your own tasks are ready now."
+                        } else {
+                            "Your residency is not yet verified. Check for updates to your request."
+                        }
                     "ownership" -> "Complete your ownership verification to request access to this Home."
                     // The server answered: this account has no shared access. Say so plainly (as web Place does).
                     else -> "You don't have access to this Home."

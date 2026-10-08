@@ -47,6 +47,10 @@ public struct MeView: View {
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .sheet(item: $systemSheet) { request in request.makeView() }
             .task { await viewModel.load() }
+            // A saved name or username changes the header.
+            .onReceive(NotificationCenter.default.publisher(for: .pantopusProfileDidChange)) { _ in
+                Task { await viewModel.refresh() }
+            }
             .overlay(alignment: .bottom) {
                 if let toast = viewModel.toastMessage {
                     ToastView(message: ToastMessage(text: toast, kind: .neutral))
@@ -236,10 +240,12 @@ private struct MeHeader: View {
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(Theme.Color.appTextInverse)
                         .lineLimit(1)
-                    Text(content.handle)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Theme.Color.appTextInverse.opacity(0.85))
-                        .lineLimit(1)
+                    if !content.handle.isEmpty {
+                        Text(content.handle)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Theme.Color.appTextInverse.opacity(0.85))
+                            .lineLimit(1)
+                    }
                     if let locality = content.locality, !locality.isEmpty {
                         HStack(spacing: Spacing.s1) {
                             Icon(.mapPin, size: 11, color: Theme.Color.appTextInverse.opacity(0.85))

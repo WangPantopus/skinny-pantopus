@@ -2,6 +2,7 @@ const router = require('express').Router();
 const verifyToken = require('../middleware/verifyToken');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const service = require('../services/homeResidencyClaimsService');
+const { wantsDisplayNames, addDisplayNames } = require('../utils/householdDisplayNames');
 const noStore = (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); };
 
 // These specific routes apply private headers before authentication, including
@@ -20,6 +21,7 @@ router.get('/:homeId/claims', noStore, verifyToken, async (req, res) => {
     if (Object.keys(req.query).length) return service.sendError(res, { code: 'RESIDENCY_CLAIMS_INVALID', statusCode: 400 });
     const session = getRequestSessionScope(req);
     const result = await service.list({ homeId: req.params.homeId, actorId: req.user.id });
+    if (wantsDisplayNames(req)) await addDisplayNames(result.claims.map(claim => claim.claimant));
     res.json({ ...result, residency_session: { ...session, home_id: result.home_id } });
   } catch (error) { service.sendError(res, error); }
 });

@@ -3,7 +3,7 @@ export interface QueueSession { actor_id: string; session_scope: string }
 export interface QueueClaim {
   id: string; home_id: string; user_id: string; status: 'pending';
   created_at: string | null; claimed_role: 'renter' | 'household' | null;
-  claimant: { id: string; username: string | null; name: null } | null;
+  claimant: { id: string; username: string | null; name: null; display_name?: string | null } | null;
 }
 export interface QueueResult {
   home_id: string; actor_id: string; claims: QueueClaim[];
@@ -12,6 +12,11 @@ export interface QueueResult {
 export const QUEUE_SESSION_PATH = '/api/homes/residency-claims/session';
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const keys = (value: Record<string, unknown>, expected: string[]) => Object.keys(value).sort().join() === [...expected].sort().join();
+// The applicant's name (`display_name`) comes only from a server that knows it; older answers carry the base keys.
+const personKeys = (value: Record<string, unknown>, base: string[]) => keys(value, base) || (keys(value, [...base, 'display_name'])
+  && (value.display_name === null || typeof value.display_name === 'string' && value.display_name.length <= 200));
+/** Asks the server for people's names (`display_name`) on the residency queue, history and member removal. */
+export const DISPLAY_NAMES_HEADER = { 'X-Pantopus-Display-Names': '1' };
 export const queueUUID = (value: unknown): value is string => typeof value === 'string'
   && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value);
 function date(value: unknown): value is string {
@@ -38,7 +43,7 @@ function claim(value: unknown, homeId: string): asserts value is QueueClaim {
     || !(value.claimed_role === null || value.claimed_role === 'renter' || value.claimed_role === 'household')) throw invalid();
   if (value.claimant !== null) {
     const person = value.claimant;
-    if (!object(person) || !keys(person, ['id', 'username', 'name']) || person.id !== value.user_id || person.name !== null
+    if (!object(person) || !personKeys(person, ['id', 'username', 'name']) || person.id !== value.user_id || person.name !== null
       || !(person.username === null || typeof person.username === 'string' && person.username.length <= 100)) throw invalid();
   }
 }
@@ -69,9 +74,9 @@ export function queueError(error: unknown): string {
   if (failure?.statusCode === 404) return 'Current residency claims are not available for your account in this Home.';
   return 'Current residency claims could not be loaded. Reload to check access.';
 }
-// A made-up username (user_…) says nothing about the applicant, so it reads as "Applicant".
+// Their name, else a username they chose; a made-up username (user_…) says nothing, so it reads as "Applicant".
 export const queueApplicant = (claim: QueueClaim) => (claim.claimant
-  ? usernameHandle(claim.claimant.username) || 'Applicant' : 'Applicant identity unavailable');
+  ? claim.claimant.display_name || usernameHandle(claim.claimant.username) || 'Applicant' : 'Applicant identity unavailable');
 export const queueRelationship = (claim: QueueClaim) => claim.claimed_role === 'renter' ? 'Renter'
   : claim.claimed_role === 'household' ? 'Household' : 'Requested relationship unspecified';
 export const queueDate = (claim: QueueClaim) => claim.created_at === null ? 'Date unavailable'

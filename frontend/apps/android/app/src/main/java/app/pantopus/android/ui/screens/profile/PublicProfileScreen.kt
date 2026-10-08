@@ -588,6 +588,7 @@ internal fun LocalProfileLoadedFrame(
                             localName = content.header.displayName,
                             loadFailed = postsLoadFailed,
                             onRetry = onRetryPosts,
+                            hiddenByBlock = connection == ProfileConnection.Blocked,
                         )
                     LocalProfileTab.About ->
                         Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {

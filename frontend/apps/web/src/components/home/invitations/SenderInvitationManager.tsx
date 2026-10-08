@@ -29,7 +29,9 @@ function terms(i:SenderInvitation){return <dl className="space-y-2 text-sm"><div
   {i.access_start_at&&<div><dt>Access starts</dt><dd>{new Date(i.access_start_at).toLocaleString()}</dd></div>}
   {i.access_end_at&&<div><dt>Access ends</dt><dd>{new Date(i.access_end_at).toLocaleString()}</dd></div>}
   {i.expires_at&&<div><dt>Invitation expires</dt><dd>{new Date(i.expires_at).toLocaleString()}</dd></div>}</dl>;}
-export default function SenderInvitationManager({homeId,onAcknowledged}:{homeId:string;onAcknowledged?:()=>void}){
+// On its own page this heading is the page's h1; inside the dashboard's panel it stays an h2.
+export default function SenderInvitationManager({homeId,onAcknowledged,headingLevel=2}:{homeId:string;onAcknowledged?:()=>void;headingLevel?:1|2}){
+  const Heading=headingLevel===1?'h1':'h2';
   const vm=useSender(homeId),[cancelConfirm,setCancelConfirm]=useState<string|null>(null),[now,setNow]=useState(()=>Date.now());
   const refresh=useRef(vm.refreshList);refresh.current=vm.refreshList;
   useEffect(()=>{
@@ -45,7 +47,7 @@ export default function SenderInvitationManager({homeId,onAcknowledged}:{homeId:
   const url=vm.shareToken&&draft?.token===vm.shareToken?`${window.location.origin}/invite/${encodeURIComponent(vm.shareToken)}`:null;
   const acknowledge=async()=>{if(!draft)return;const saved=await vm.acknowledge(draft.request_id);if(saved){vm.refreshList();onAcknowledged?.();}};
   return <div className="space-y-6" data-testid="sender-invitation-manager">
-    <div><h2 className="text-xl font-semibold">Household invitations</h2><p className="mt-1 text-sm text-app-text-secondary">An invitation gives someone household access for the role you choose. It doesn’t verify that they live here or own the Home.</p>
+    <div><Heading className="text-xl font-semibold">Household invitations</Heading><p className="mt-1 text-sm text-app-text-secondary">An invitation gives someone household access for the role you choose. It doesn’t verify that they live here or own the Home.</p>
       {vm.accountLabel&&<p className="mt-2 text-xs text-app-text-secondary">Signed in as {vm.accountLabel}</p>}</div>
     {vm.error&&<p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{vm.error}</p>}
     {vm.blocked?<button className={button} onClick={vm.reopen}>Reload</button>:!vm.ready?<p role="status">Loading invitations…</p>:draft?<section className="space-y-4 rounded-xl border border-app-border p-4" aria-label="Your last invitation">
@@ -108,9 +110,11 @@ function CreateInvitationForm({homeId,disabled,prepare}:{homeId:string;disabled:
       if(!Array.isArray(res.users)||res.users.some(u=>!u.id||!u.username))throw new Error();if(current)setResults(res.users);
     }catch{if(current)setSearchError('User search is unavailable. Change the search to retry.');}finally{if(current)setSearching(false);}},350);
     return()=>{current=false;clearTimeout(timer);};},[mode,query,selected]);
-  const submit=async(e:React.FormEvent)=>{e.preventDefault();setError('');try{if(mode==='username'&&!selected)throw new Error('Search and select a recipient first.');
+  // Search only finds people with a neighbor profile, so an exact username can be invited too (the server resolves it, as in the apps).
+  const typedUsername=query.trim().replace(/^@/,'');const exactUsername=/^[A-Za-z0-9_.-]{2,64}$/.test(typedUsername)?typedUsername:'';
+  const submit=async(e:React.FormEvent)=>{e.preventDefault();setError('');try{if(mode==='username'&&!selected&&!exactUsername)throw new Error('Type their exact username, or pick them from the list.');
     if(mode==='email'&&!email.trim().includes('@'))throw new Error('Enter a valid email address.');const role=roles.find(r=>r[0]===preset)!;
-    await prepare({home_id:homeId,action:'create',payload:{...(mode==='email'?{email:email.trim()}:mode==='username'?{user_id:selected!.id,username:selected!.username}:{}),
+    await prepare({home_id:homeId,action:'create',payload:{...(mode==='email'?{email:email.trim()}:mode==='username'?(selected?{user_id:selected.id,username:selected.username}:{username:exactUsername}):{}),
       relationship:role[2],preset_key:preset,...homeInviteDates(start,end),...(message.trim()?{message:message.trim()}: {})}});
   }catch(e){setError(e instanceof Error?e.message:'Review the invitation details.');}};
   return <form onSubmit={e=>void submit(e)} className="space-y-4" aria-label="Create household invitation"><h3 className="font-semibold">New invitation</h3>
@@ -119,15 +123,15 @@ function CreateInvitationForm({homeId,disabled,prepare}:{homeId:string;disabled:
       <label className="block space-y-1 text-sm"><span>Invite by</span><select value={mode} onChange={e=>{setMode(e.target.value);setEmail('');setQuery('');setSelected(null);}} className={field}>
         <option value="email">Email</option><option value="username">Username</option><option value="link">Shareable link / QR code</option></select></label>
       {mode==='email'?<label className="block space-y-1 text-sm"><span>Email address</span><input type="email" required value={email} onChange={e=>setEmail(e.target.value)} className={field} autoComplete="off"/></label>
-        :mode==='username'?<div className="space-y-2"><label className="block space-y-1 text-sm"><span>Search by username</span><input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} className={field} autoComplete="off"/></label>
+        :mode==='username'?<div className="space-y-2"><label className="block space-y-1 text-sm"><span>Username</span><input value={query} onChange={e=>{setQuery(e.target.value);setSelected(null);}} className={field} autoComplete="off"/></label>
           {searching&&<p role="status" className="text-sm">Searching…</p>}{searchError&&<p role="alert" className="text-sm text-red-700">{searchError}</p>}
           {selected?<p className="text-sm">Selected @{selected.username}</p>:results.map(u=><button type="button" key={u.id} className={button+' block w-full text-left'} onClick={()=>{setSelected(u);setQuery(u.username);}}>{u.name||u.username} (@{u.username})</button>)}
-          {!selected&&!searching&&!searchError&&query.trim().length>=2&&results.length===0&&<p className="text-sm">No users found.</p>}</div>:<p className="text-sm">Anyone with the link can accept this invitation. Share it only with the person you’re inviting.</p>}
+          {!selected&&!searching&&!searchError&&query.trim().length>=2&&results.length===0&&<p className="text-sm">{exactUsername?`No neighbor profiles match. If @${exactUsername} is their exact username, you can still invite them.`:'No neighbor profiles match.'}</p>}</div>:<p className="text-sm">Anyone with the link can accept this invitation. Share it only with the person you’re inviting.</p>}
       <label className="block space-y-1 text-sm"><span>Role in household</span><select value={preset} onChange={e=>setPreset(e.target.value)} className={field}>{roles.map(r=><option key={r[0]} value={r[0]}>{r[1]}</option>)}</select></label>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><label className="space-y-1 text-sm"><span>Start date (optional)</span><input type="date" value={start} onChange={e=>setStart(e.target.value)} className={field}/></label>
         <label className="space-y-1 text-sm"><span>End date (inclusive, optional)</span><input type="date" value={end} onChange={e=>setEnd(e.target.value)} className={field}/></label></div>
       <p className="text-xs text-app-text-secondary">Dates use this device&apos;s time zone.</p>
       <label className="block space-y-1 text-sm"><span>Message (optional)</span><textarea value={message} onChange={e=>setMessage(e.target.value)} maxLength={300} rows={2} className={field}/></label>
-      <button type="submit" className={primary} disabled={disabled||mode==='username'&&!selected}>{disabled?'Checking…':'Review invitation'}</button>
+      <button type="submit" className={primary} disabled={disabled||mode==='username'&&!selected&&!exactUsername}>{disabled?'Checking…':'Review invitation'}</button>
     </fieldset></form>;
 }

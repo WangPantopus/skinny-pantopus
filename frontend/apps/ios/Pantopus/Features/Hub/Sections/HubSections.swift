@@ -42,9 +42,12 @@ struct HubTopBar: View {
                 Text(content.greeting)
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                Text(content.name)
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(Theme.Color.appText)
+                // No name yet: the greeting stands alone (never a made-up username).
+                if !content.name.isEmpty {
+                    Text(content.name)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(Theme.Color.appText)
+                }
             }
             Spacer()
             // Bell + menu — design uses 36pt buttons with 20pt icons.

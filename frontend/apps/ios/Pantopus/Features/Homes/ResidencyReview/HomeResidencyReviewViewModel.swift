@@ -207,6 +207,6 @@ final class HomeResidencyReviewViewModel: Identifiable {
         guard current(revision), review?.applicantId == applicant else { return }
         let fields = value?.dictValue?["user"]?.dictValue ?? value?.dictValue
         guard fields?["id"]?.stringValue == applicant else { return }
-        claimant = fields?["name"]?.stringValue ?? fields?["username"]?.stringValue
+        claimant = fields?["name"]?.stringValue ?? MadeUpUsername.chosen(fields?["username"]?.stringValue)
     }
 }

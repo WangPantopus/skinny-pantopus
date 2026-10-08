@@ -44,7 +44,7 @@ final class InviteMemberWizardViewModel {
         session = HomeClaimSessionScope(api: api)
         let auth = api.authProvider ?? AuthManager.shared
         if case let .signedIn(user) = auth.state {
-            accountLabel = user.displayName ?? user.username
+            accountLabel = user.displayName ?? MadeUpUsername.chosen(user.username) ?? user.email
         } else {
             accountLabel = "Sign in to manage invitations"
         }

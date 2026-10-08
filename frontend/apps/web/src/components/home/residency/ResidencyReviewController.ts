@@ -24,7 +24,7 @@ export class ResidencyReviewController {
   retire() { this.active = false; this.review = null; this.claimant = null; }
   current = () => {
     if (!this.active || !this.token || api.getAuthToken() !== this.token || api.getApiBaseUrl() !== this.origin
-      || localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) !== this.marker || document.visibilityState === 'hidden') {
+      || localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) !== this.marker) {
       this.retire(); throw new Error('This review is no longer current. Reload to check access.');
     }
     return true;

@@ -1462,6 +1462,8 @@ router.get('/', verifyToken, async (req, res) => {
       `, { count: 'exact' })
       .eq('archived', archived === 'true')
       .order('created_at', { ascending: false })
+      // Mail delivered together shares created_at; the id keeps the order the same on every page.
+      .order('id', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
     query = applyMailboxScopeToQuery(query, {
@@ -1482,14 +1484,29 @@ router.get('/', verifyToken, async (req, res) => {
       query = query.eq('starred', starred === 'true');
     }
 
-    const { data: mail, error, count } = await query;
+    // The summary counts (direct queries; MailboxSummary view may not exist) don't depend on
+    // the page, so they're read alongside it.
+    const countsRead = Promise.allSettled([
+      applyMailboxScopeToQuery(
+        supabaseAdmin.from('Mail').select('id', { count: 'exact', head: true }).eq('archived', false),
+        { scope, userId, homeId, accessibleHomeIds }
+      ),
+      applyMailboxScopeToQuery(
+        supabaseAdmin.from('Mail').select('id', { count: 'exact', head: true }).eq('viewed', false).eq('archived', false),
+        { scope, userId, homeId, accessibleHomeIds }
+      ),
+      applyMailboxScopeToQuery(
+        supabaseAdmin.from('Mail').select('id', { count: 'exact', head: true }).eq('starred', true),
+        { scope, userId, homeId, accessibleHomeIds }
+      ),
+    ]);
+    const [{ data: mail, error, count }, counts] = await Promise.all([query, countsRead]);
 
     if (error) {
       logger.error('Error fetching mailbox', { error: error.message, userId });
       return res.status(500).json({ error: 'Failed to fetch mailbox' });
     }
 
-    // Compute summary from direct queries (MailboxSummary view may not exist)
     let summary = {
       total_mail: 0,
       unread_count: 0,
@@ -1501,20 +1518,7 @@ router.get('/', verifyToken, async (req, res) => {
     };
 
     try {
-      const [totalRes, unreadRes, starredRes] = await Promise.allSettled([
-        applyMailboxScopeToQuery(
-          supabaseAdmin.from('Mail').select('id', { count: 'exact', head: true }).eq('archived', false),
-          { scope, userId, homeId, accessibleHomeIds }
-        ),
-        applyMailboxScopeToQuery(
-          supabaseAdmin.from('Mail').select('id', { count: 'exact', head: true }).eq('viewed', false).eq('archived', false),
-          { scope, userId, homeId, accessibleHomeIds }
-        ),
-        applyMailboxScopeToQuery(
-          supabaseAdmin.from('Mail').select('id', { count: 'exact', head: true }).eq('starred', true),
-          { scope, userId, homeId, accessibleHomeIds }
-        ),
-      ]);
+      const [totalRes, unreadRes, starredRes] = counts;
 
       summary.total_mail = totalRes.status === 'fulfilled' ? (totalRes.value.count || 0) : 0;
       summary.unread_count = unreadRes.status === 'fulfilled' ? (unreadRes.value.count || 0) : 0;

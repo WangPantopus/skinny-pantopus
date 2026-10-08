@@ -35,11 +35,20 @@ enum AuthValidation {
     }
 
     /// Lowercase letters / digits / underscore, length 3–20.
+    /// A required name part (first or last name): not blank, at most 255
+    /// characters (the server's limit).
+    static func requiredName(_ value: String, missing: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return missing }
+        return trimmed.count > 255 ? "Use 255 characters or fewer." : nil
+    }
+
     static func username(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty { return "Username is required." }
         if trimmed.count < 3 { return "Username must be at least 3 characters." }
-        if trimmed.count > 20 { return "Username must be 20 characters or fewer." }
+        // The server's limit (backend/utils/personalUsername.js).
+        if trimmed.count > 30 { return "Username must be 30 characters or fewer." }
         let pattern = #"^[a-z0-9_]+$"#
         return trimmed.range(of: pattern, options: .regularExpression) != nil
             ? nil

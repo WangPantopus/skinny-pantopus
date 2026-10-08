@@ -8,6 +8,7 @@
 
 const crypto = require('crypto');
 const express = require('express');
+const { DateTime } = require('luxon');
 const multer = require('multer');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -171,6 +172,21 @@ async function logMailEvent(userId, eventType, mailId, metadata = {}) {
   } catch (err) {
     logger.error('[P3 MailEvent] Failed to log', { eventType, err: err.message });
   }
+}
+
+// Mail Day's "today" and greeting follow the person's push notification timezone, as the Mail
+// Day push does (jobs/mailDayNotification.js); the server's own clock runs on UTC.
+const MAIL_DAY_DEFAULT_TIMEZONE = 'America/Los_Angeles';
+
+async function mailDayNow(userId) {
+  const { data: prefs } = await supabaseAdmin
+    .from('UserNotificationPreferences')
+    .select('daily_briefing_timezone')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const now = DateTime.now().setZone(prefs?.daily_briefing_timezone || MAIL_DAY_DEFAULT_TIMEZONE);
+  // An unknown zone name leaves an invalid time: the default stands in.
+  return now.isValid ? now : DateTime.now().setZone(MAIL_DAY_DEFAULT_TIMEZONE);
 }
 
 
@@ -797,6 +813,8 @@ router.get('/community/feed', verifyToken, async (req, res) => {
       .select('*', { count: 'exact' })
       .in('home_id', homeIds)
       .order('created_at', { ascending: false })
+      // Mail delivered together shares created_at; the id keeps the order the same on every page.
+      .order('id', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (communityType) query = query.eq('community_type', communityType);
@@ -1112,9 +1130,8 @@ router.post('/tasks/:id/to-gig', verifyToken, validate(taskToGigSchema), async (
 router.get('/mailday/summary', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const homeIds = await getAccessibleHomeIds(userId);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const [homeIds, now] = await Promise.all([getAccessibleHomeIds(userId), mailDayNow(userId)]);
+    const todayStart = now.startOf('day').toJSDate();
 
     // Mail has no delivered_at/read columns (created_at and viewed are the
     // delivery time and read state); a failed read must not become "no mail".
@@ -1164,25 +1181,24 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
       communityCount = count || 0;
     }
 
-    // Get greeting based on time
-    const hour = new Date().getHours();
+    // Get greeting based on the person's local time
+    const hour = now.hour;
     let greeting;
     if (hour < 12) greeting = 'Good morning';
     else if (hour < 17) greeting = 'Good afternoon';
     else greeting = 'Good evening';
 
-    // Memory (on this day)
+    // Memory (on this day, in the person's timezone)
     let memory = null;
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    const dayStr = `${oneYearAgo.getMonth() + 1}-${oneYearAgo.getDate()}`;
+    const oneYearAgo = now.minus({ years: 1 });
+    const dayStr = `${oneYearAgo.month}-${oneYearAgo.day}`;
     const { data: oldMail, error: oldErr } = await supabaseAdmin
       .from('Mail')
       .select('id, subject, sender_name:sender_display, delivered_at:created_at')
       .eq('recipient_user_id', userId)
       .is('deleted_at', null)
-      .gte('created_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate()).toISOString())
-      .lt('created_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate() + 1).toISOString())
+      .gte('created_at', oneYearAgo.startOf('day').toJSDate().toISOString())
+      .lt('created_at', oneYearAgo.startOf('day').plus({ days: 1 }).toJSDate().toISOString())
       .limit(3);
     if (oldErr) throw oldErr;
 
@@ -1190,7 +1206,7 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
       memory = {
         id: `otd-${dayStr}`,
         memory_type: 'on_this_day',
-        reference_date: oneYearAgo.toISOString(),
+        reference_date: oneYearAgo.toJSDate().toISOString(),
         headline: `This day last year`,
         body: `You received ${oldMail.length} item${oldMail.length > 1 ? 's' : ''}`,
         mail_items: oldMail,
@@ -1395,17 +1411,18 @@ router.get('/themes', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { data: themes } = await supabaseAdmin
-      .from('SeasonalTheme')
-      .select('*')
-      .order('name');
-
-    // Check user's active theme
-    const { data: settings } = await supabaseAdmin
-      .from('MailDaySettings')
-      .select('current_theme')
-      .eq('user_id', userId)
-      .single();
+    // The themes and the user's active theme are read together.
+    const [{ data: themes }, { data: settings }] = await Promise.all([
+      supabaseAdmin
+        .from('SeasonalTheme')
+        .select('*')
+        .order('name'),
+      supabaseAdmin
+        .from('MailDaySettings')
+        .select('current_theme')
+        .eq('user_id', userId)
+        .single(),
+    ]);
 
     const now = new Date();
     const enriched = (themes || []).map(t => ({

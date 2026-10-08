@@ -171,8 +171,9 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
         let personalEntries = (personal?.blocked ?? []).map { block in
             BlockedEntry(
                 id: block.id,
+                // A made-up username (user_…) is never shown as the name.
                 name: block.name
-                    ?? block.username.map { "@\($0)" }
+                    ?? MadeUpUsername.handle(block.username)
                     ?? "Blocked user",
                 avatarURL: block.profilePictureUrl.flatMap(URL.init(string:)),
                 createdAt: block.createdAt,
@@ -184,7 +185,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
             BlockedEntry(
                 id: block.id,
                 name: block.blocked?.name
-                    ?? block.blocked?.username.map { "@\($0)" }
+                    ?? MadeUpUsername.handle(block.blocked?.username)
                     ?? "Blocked user",
                 avatarURL: block.blocked?.profilePictureUrl.flatMap(URL.init(string:)),
                 createdAt: block.createdAt,
@@ -423,7 +424,7 @@ extension BlockedUsersViewModel {
         return RowModel(
             id: Self.mutedRowId(entityId),
             title: mute.name,
-            subtitle: mute.username.map { "@\($0)" },
+            subtitle: MadeUpUsername.handle(mute.username),
             template: .avatarKebab,
             leading: .avatarWithBadge(
                 name: mute.name,

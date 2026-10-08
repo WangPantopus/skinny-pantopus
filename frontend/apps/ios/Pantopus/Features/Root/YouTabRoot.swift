@@ -2669,7 +2669,7 @@ public struct YouTabRoot: View {
                 viewModel: TransferOwnershipViewModel(
                     homeId: homeId,
                     currentUserId: signedInUser?.id,
-                    currentUserName: signedInUser?.displayName ?? signedInUser?.username
+                    currentUserName: signedInUser?.displayName ?? MadeUpUsername.chosen(signedInUser?.username)
                 )
             )
         case let .homeClaimReview(homeId):

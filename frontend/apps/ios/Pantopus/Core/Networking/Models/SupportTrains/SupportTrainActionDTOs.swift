@@ -213,7 +213,7 @@ public struct SupportTrainOrganizerRowDTO: Decodable, Sendable, Identifiable, Ha
 
     /// Best-effort display name for the roster row.
     public var displayName: String {
-        user?.name ?? user?.username ?? "Organizer"
+        user?.name ?? MadeUpUsername.chosen(user?.username) ?? "Organizer"
     }
 
     public var isPrimary: Bool {

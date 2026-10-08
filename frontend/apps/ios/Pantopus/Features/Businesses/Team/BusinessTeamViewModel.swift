@@ -443,7 +443,7 @@ public typealias BusinessPermissionLoadResult = Result<[String], BusinessPermiss
 private enum BusinessTeamProjection {
     static func displayName(for member: BusinessTeamMemberDTO) -> String {
         if let name = member.user?.name?.nilIfBlank { return name }
-        if let username = member.user?.username?.nilIfBlank { return "@\(username)" }
+        if let handle = MadeUpUsername.handle(member.user?.username) { return handle }
         if let email = member.user?.email?.nilIfBlank { return email }
         return "Team member"
     }

@@ -309,7 +309,7 @@ extension SupportTrainDetailViewModel {
         let slotsFilled = covered.count
         let title = dto.title ?? dto.recipientSummary ?? "Support train"
         let primary = organizers.first
-        let primaryName = primary?.user?.name ?? primary?.user?.username
+        let primaryName = primary?.user?.name ?? MadeUpUsername.chosen(primary?.user?.username)
 
         let typeDates = TypeDatesCardContent(
             kind: kind(from: dto.supportModes),

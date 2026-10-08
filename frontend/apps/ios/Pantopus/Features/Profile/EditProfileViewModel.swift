@@ -28,7 +28,8 @@ import Observation
 /// Order mirrors `updateProfileSchema` declaration order so the form layout
 /// reads top-down in the same order as the backend contract.
 public enum EditProfileField: String, CaseIterable, Sendable {
-    // About
+    // About. The username is the profile link; empty means keep the current one.
+    case username
     case firstName
     case middleName
     case lastName
@@ -121,10 +122,13 @@ final class EditProfileViewModel {
 
     let api: APIClient
     private let uploader: MultipartUploader
+    /// Checks a typed username (see `UsernameAvailability.swift`).
+    let usernameCheck: UsernameAvailabilityChecker
 
     init(api: APIClient = .shared, uploader: MultipartUploader = .shared) {
         self.api = api
         self.uploader = uploader
+        usernameCheck = UsernameAvailabilityChecker(api: api)
         for field in EditProfileField.allCases {
             fields[field] = FormFieldState(id: field.rawValue, originalValue: "")
         }
@@ -203,6 +207,7 @@ final class EditProfileViewModel {
         snapshot.touched = true
         snapshot.error = validator(for: field).validate(value)
         fields[field] = snapshot
+        if field == .username { usernameCheck.check(value) }
     }
 
     /// Current aggregate dirty + validity.
@@ -214,7 +219,7 @@ final class EditProfileViewModel {
     /// thread `aggregate.isValid` / `aggregate.isDirty` through the call
     /// site.
     var isValid: Bool {
-        aggregate.isValid
+        aggregate.isValid && !usernameCheck.blocksSave
     }
 
     /// Skills ride their own PUT, so they widen the form's dirty state
@@ -300,6 +305,7 @@ final class EditProfileViewModel {
                 hydrate(from: response.user)
             } catch {
                 failure = (error as? APIError)?.errorDescription ?? "Couldn't save profile."
+                markUsernameError(error)
             }
         }
         if skillsDirty {
@@ -322,6 +328,7 @@ final class EditProfileViewModel {
             return false
         }
         toast = ToastMessage(text: "Profile updated.", kind: .success)
+        NotificationCenter.default.post(name: .pantopusProfileDidChange, object: nil)
         shouldDismiss = true
         Analytics.track(.formEditProfileSubmit(result: .success))
         return true
@@ -347,8 +354,12 @@ final class EditProfileViewModel {
         avatarInitial = Self.initial(
             firstName: profile.firstName ?? "",
             name: profile.name ?? "",
-            username: profile.username
+            username: MadeUpUsername.chosen(profile.username) ?? ""
         )
+        // A made-up username shows as an empty field ("Choose a username").
+        let madeUp = profile.usernameIsGenerated == true
+        usernameCheck.reset(current: profile.username, isMadeUp: madeUp)
+        seed(.username, madeUp ? "" : profile.username)
         seed(.firstName, profile.firstName ?? "")
         seed(.middleName, profile.middleName ?? "")
         seed(.lastName, profile.lastName ?? "")
@@ -370,22 +381,6 @@ final class EditProfileViewModel {
         seed(.showPhone, Self.boolString(profile.showPhone))
     }
 
-    /// Bridge between the string-valued form machinery and the two boolean
-    /// contact-visibility keys.
-    static func boolString(_ value: Bool?) -> String {
-        (value ?? false) ? "true" : "false"
-    }
-
-    /// First glyph of the best available display name — matches the RN
-    /// `displayInitial` fallback on the avatar circle.
-    static func initial(firstName: String, name: String, username: String) -> String {
-        for candidate in [firstName, name, username] {
-            let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let first = trimmed.first { return String(first).uppercased() }
-        }
-        return "?"
-    }
-
     private func seed(_ field: EditProfileField, _ value: String) {
         var snapshot = FormFieldState(id: field.rawValue, originalValue: value)
         snapshot.error = validator(for: field).validate(value)
@@ -401,6 +396,11 @@ final class EditProfileViewModel {
     /// Static validator table. Each entry mirrors the corresponding Joi
     /// rule in `updateProfileSchema` (`backend/routes/users.js:324-351`).
     private static let validators: [EditProfileField: FormValidator] = [
+        // Checked again by the server; empty keeps the current username.
+        .username: FormValidator { value in
+            let username = UsernameAvailabilityChecker.normalize(value)
+            return username.isEmpty ? nil : AuthValidation.username(username)
+        },
         // Required name fields — Joi `.string().min(1).max(255)`.
         .firstName: .all([.required("First name"), .maxLength(255)]),
         .lastName: .all([.required("Last name"), .maxLength(255)]),
@@ -466,6 +466,7 @@ final class EditProfileViewModel {
             let trimmed = snapshot.value.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty && !Self.allowsEmpty.contains(field) { continue }
             switch field {
+            case .username: update.username = UsernameAvailabilityChecker.normalize(trimmed)
             case .firstName: update.firstName = trimmed
             case .middleName: update.middleName = trimmed
             case .lastName: update.lastName = trimmed

@@ -39,7 +39,10 @@ export default function PublicInvitationPage() {
 
   const handleSignUp = () => {
     const next = encodeURIComponent(`/invite/${token}`);
-    router.push(`/register?redirectTo=${next}`);
+    // An emailed invitation only works for that address, so sign-up starts with it filled in.
+    const email = data?.invitation.invitee_email;
+    const prefill = typeof email === 'string' && email.includes('@') ? `&email=${encodeURIComponent(email)}` : '';
+    router.push(`/register?redirectTo=${next}${prefill}`);
   };
 
   // ==========================================

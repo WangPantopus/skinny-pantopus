@@ -171,7 +171,7 @@ enum HomeMemberRemovalValidation {
 
     static func targetLabel(_ summary: JSONValue) -> String {
         let username = summary.dictValue?["target"]?.dictValue?["username"]?.stringValue
-        return username.flatMap { $0.isEmpty ? nil : $0 } ?? "Selected household member"
+        return MadeUpUsername.chosen(username) ?? "Selected household member"
     }
 
     static func homeLabel(_ summary: JSONValue) -> String {

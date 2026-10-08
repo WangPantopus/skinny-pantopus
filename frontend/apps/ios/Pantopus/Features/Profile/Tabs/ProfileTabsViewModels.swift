@@ -585,13 +585,13 @@ public final class ProfileGigReviewsViewModel {
         let name = review.reviewer?.name
             ?? review.reviewerName
             ?? review.reviewer?.firstName
-            ?? review.reviewer?.username
+            ?? MadeUpUsername.chosen(review.reviewer?.username)
         let avatar = review.reviewer?.profilePictureURL ?? review.reviewerAvatar
         return ProfileGigReview(
             id: review.id,
             reviewerId: review.reviewer?.id ?? review.reviewerID,
             reviewerName: (name?.isEmpty == false ? name : nil) ?? "Anonymous",
-            reviewerHandle: review.reviewer?.username ?? review.reviewerUsername,
+            reviewerHandle: MadeUpUsername.chosen(review.reviewer?.username ?? review.reviewerUsername),
             reviewerAvatarURL: avatar.flatMap(URL.init(string:)),
             rating: review.rating,
             comment: review.comment?.isEmpty == false ? review.comment : nil,

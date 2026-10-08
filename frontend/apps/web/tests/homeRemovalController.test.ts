@@ -103,13 +103,12 @@ test.each(['home_id', 'target_user_id', 'occupancy_id', 'decision_token', 'state
   jest.mocked(api.apiClient.request).mockImplementation(async () => ({ status: 200, data: { ...result(c.pending!), [field]: corrupt[field] } } as never));
   await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result'); expect(c.pending?.outcome).toBeUndefined(); expect(c.canAcknowledge).toBe(false);
 });
-test.each(['token', 'marker', 'origin', 'hidden', 'scope', 'unauthorized'])('%s lifetime change prevents another removal request and keeps its original', async change => {
+test.each(['token', 'marker', 'origin', 'scope', 'unauthorized'])('%s lifetime change prevents another removal request and keeps its original', async change => {
   const { c, store } = await prepared(); jest.mocked(api.apiClient.request).mockRejectedValueOnce(Error('Lost reply'));
   await expect(c.submit(decision)).rejects.toThrow('couldn’t confirm the result'); const original = c.pending!.request_json;
   if (change === 'token') jest.mocked(api.getAuthToken).mockReturnValue('other-account');
   if (change === 'marker') localStorage.setItem(api.AUTH_SESSION_CHANGE_KEY, 'changed');
   if (change === 'origin') jest.mocked(api.getApiBaseUrl).mockReturnValue('https://other.invalid');
-  if (change === 'hidden') Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
   if (change === 'scope') jest.mocked(api.apiClient.get).mockResolvedValueOnce({ data: { session: { ...session, session_scope: 'c'.repeat(64) } } } as never);
   if (change === 'unauthorized') jest.mocked(api.apiClient.get).mockRejectedValueOnce({ statusCode: 401 });
   await expect(c.recover('retry')).rejects.toThrow(); expect(api.apiClient.request).toHaveBeenCalledTimes(1);

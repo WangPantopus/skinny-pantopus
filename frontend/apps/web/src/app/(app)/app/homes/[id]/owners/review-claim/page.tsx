@@ -11,6 +11,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import { useResidencyQueue } from '@/components/home/residency/queue/useResidencyQueue';
 import { ResidencyQueueContent } from '@/components/home/residency/queue/ResidencyQueueContent';
 import { useSavedReviewDecisions } from '@/components/home/residency/useSavedReviewDecisions';
+import { RETURN_REFRESH_MS, transientFailure } from '@/components/home/returnRefresh';
 
 type ClaimTab = 'ownership' | 'residency';
 
@@ -28,11 +29,12 @@ function ReviewClaimContent() {
   const residencyQueue = useResidencyQueue(homeId, activeTab === 'residency');
   const [loadError, setLoadError] = useState('');
   const [reload, setReload] = useState(0);
-  const generation = useRef(0);
+  const generation = useRef(0), epoch = useRef(0);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
-  const fetchClaims = useCallback(async () => {
+  // A background re-check (coming back to the page) keeps what's shown through a network or server blip.
+  const fetchClaims = useCallback(async (background = false) => {
     if (!homeId) return;
     const request = ++generation.current;
     const token = getAuthToken();
@@ -42,9 +44,12 @@ function ReviewClaimContent() {
       api.homeOwnership.getOwnershipClaimComparison(homeId),
     ]);
     if (request !== generation.current || token !== getAuthToken() || marker !== localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)) return;
-    setClaims(ownershipRes.status === 'fulfilled' ? ownershipRes.value.claims || [] : []);
-    setLoadError(ownershipRes.status === 'rejected' ? 'Current ownership claims could not be loaded. Reload to check access.' : '');
-    setComparison(comparisonRes.status === 'fulfilled' ? comparisonRes.value : null);
+    const blip = (result: PromiseSettledResult<unknown>) => background && result.status === 'rejected' && transientFailure(result.reason);
+    if (!blip(ownershipRes)) {
+      setClaims(ownershipRes.status === 'fulfilled' ? ownershipRes.value.claims || [] : []);
+      setLoadError(ownershipRes.status === 'rejected' ? 'Current ownership claims could not be loaded. Reload to check access.' : '');
+    }
+    if (!blip(comparisonRes)) setComparison(comparisonRes.status === 'fulfilled' ? comparisonRes.value : null);
   }, [homeId]);
 
   useEffect(() => {
@@ -52,16 +57,22 @@ function ReviewClaimContent() {
     setLoading(true); setClaims([]); setComparison(null); setLoadError('');
     void fetchClaims().catch(() => { if (active) setLoadError('Current ownership claims could not be loaded.'); })
       .finally(() => { if (active) setLoading(false); });
-    const retireGeneration = () => { generation.current++; };
+    const retireGeneration = () => { generation.current++; epoch.current++; };
     const invalidate = () => { retireGeneration(); setClaims([]); setComparison(null); setActionLoading(null); };
     const changed = () => { invalidate(); setReload(n => n + 1); };
-    const visibility = () => { if (document.visibilityState === 'hidden') { invalidate(); setLoading(true); } else changed(); };
-    const focus = () => { if (document.visibilityState !== 'hidden') changed(); };
+    // Coming back keeps the claims on screen and re-reads them behind the scenes at most every 30 s. Only an
+    // account change clears the page.
+    let lastRead = Date.now(), reading = false;
+    const resume = () => {
+      if (document.visibilityState === 'hidden' || reading || Date.now() - lastRead < RETURN_REFRESH_MS) return;
+      lastRead = Date.now(); reading = true;
+      void fetchClaims(true).catch(() => {}).finally(() => { reading = false; });
+    };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
     const unsubscribe = api.onTokenChange(changed);
-    window.addEventListener('storage', storage); window.addEventListener('focus', focus); document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('storage', storage); window.addEventListener('focus', resume); document.addEventListener('visibilitychange', resume);
     return () => { active = false; retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
-      window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', visibility); };
+      window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume); };
   }, [fetchClaims, reload]);
 
   const handleOwnershipReview = useCallback(async (claimId: string, action: 'approve' | 'reject' | 'flag') => {
@@ -93,7 +104,8 @@ function ReviewClaimContent() {
       router.push(`/app/homes/${homeId}/owners/review-claim/relationship?claimId=${encodeURIComponent(claim.id)}&action=${action}`);
       return;
     }
-    const opening = generation.current;
+    // A background re-read doesn't cancel this; an account change or reload does.
+    const opening = epoch.current;
     const claimId = claim.id;
     const isOwnerClaim = (claim.claim_type || 'owner') === 'owner';
     const actionMeta = {
@@ -108,7 +120,7 @@ function ReviewClaimContent() {
     };
 
     const yes = await confirmStore.open(actionMeta[action]);
-    if (!yes || opening !== generation.current) return;
+    if (!yes || opening !== epoch.current) return;
 
     setActionLoading(claimId);
     try {

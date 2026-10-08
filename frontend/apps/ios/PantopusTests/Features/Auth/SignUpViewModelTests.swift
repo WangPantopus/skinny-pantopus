@@ -87,10 +87,12 @@ final class SignUpViewModelTests: XCTestCase {
         XCTAssertNil(vm.validate(.username))
     }
 
-    func test_names_optional_since_the_wedge_slim() {
+    func test_first_and_last_name_required() {
         let vm = SignUpViewModel()
-        XCTAssertNil(vm.validate(.firstName))
-        XCTAssertNil(vm.validate(.lastName))
+        XCTAssertEqual(vm.validate(.firstName), "Enter your first name.")
+        XCTAssertEqual(vm.validate(.lastName), "Enter your last name.")
+        vm.firstName = "   "
+        XCTAssertEqual(vm.validate(.firstName), "Enter your first name.")
         vm.firstName = "Maria"
         vm.lastName = "Kowalski"
         XCTAssertNil(vm.validate(.firstName))
@@ -152,14 +154,16 @@ final class SignUpViewModelTests: XCTestCase {
 
     // MARK: - Aggregate validity
 
-    func test_isValid_requires_terms_and_the_account_fields_only() {
+    func test_isValid_requires_terms_names_and_the_account_fields() {
         let vm = SignUpViewModel()
         XCTAssertFalse(vm.isValid)
-        // The slim form: email + password + terms is a complete sign-up.
         vm.email = "alice@example.com"
         vm.password = "strongpass12"
         vm.confirmPassword = "strongpass12"
         vm.agreedToTerms = true
+        XCTAssertFalse(vm.isValid, "First and last name are required")
+        vm.firstName = "Maria"
+        vm.lastName = "Kowalski"
         XCTAssertTrue(vm.isValid)
         vm.agreedToTerms = false
         XCTAssertFalse(vm.isValid, "Terms must be accepted")
@@ -247,7 +251,7 @@ final class SignUpViewModelTests: XCTestCase {
         XCTAssertEqual(body?["address"] as? String, "123 Main St")
     }
 
-    func test_slim_submit_sends_no_empty_profile_keys() async {
+    func test_submit_sends_the_names_and_no_empty_optional_keys() async {
         SequencedURLProtocol.routeResponses["/api/users/register"] = [
             .status(
                 201,
@@ -261,6 +265,8 @@ final class SignUpViewModelTests: XCTestCase {
         let client = APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none)
         let auth = AuthManager(store: InMemorySecureStore(), apiClient: client)
         let vm = SignUpViewModel()
+        vm.firstName = "Ada"
+        vm.lastName = "Lovelace"
         vm.email = "a@b.co"
         vm.password = "strongpass12"
         vm.confirmPassword = "strongpass12"
@@ -269,7 +275,9 @@ final class SignUpViewModelTests: XCTestCase {
         let captured = SequencedURLProtocol.capturedRequests.last
         let body = captured?.httpBodyData().flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         XCTAssertEqual(body?["email"] as? String, "a@b.co")
-        for key in ["username", "firstName", "lastName", "address", "city", "state", "zipcode", "dateOfBirth"] {
+        XCTAssertEqual(body?["firstName"] as? String, "Ada")
+        XCTAssertEqual(body?["lastName"] as? String, "Lovelace")
+        for key in ["username", "middleName", "address", "city", "state", "zipcode", "dateOfBirth"] {
             XCTAssertNil(body?[key], "\(key) must be absent, not empty")
         }
     }

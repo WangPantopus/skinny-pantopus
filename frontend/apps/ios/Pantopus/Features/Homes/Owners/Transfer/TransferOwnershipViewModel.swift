@@ -365,7 +365,7 @@ public final class TransferOwnershipViewModel {
 
     private static func displayName(for owner: OwnerDTO) -> String {
         if let name = owner.user?.name?.nilIfBlank { return name }
-        if let username = owner.user?.username?.nilIfBlank { return "@\(username)" }
+        if let handle = MadeUpUsername.handle(owner.user?.username) { return handle }
         return "Owner · \(String(owner.subjectId.suffix(4)))"
     }
 

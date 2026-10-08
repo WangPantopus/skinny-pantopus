@@ -102,6 +102,10 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [portfolioFailed, setPortfolioFailed] = useState(false);
   const portfolioRequested = useRef<string | null>(null);
   const [userPosts, setUserPosts] = useState<Record<string, unknown>[]>([]);
+  // Posts are requested once per profile, reviews once per profile and viewer (the pending-review
+  // check needs the viewer); the tab effect re-runs on every profile or portfolio update.
+  const postsRequested = useRef<string | null>(null);
+  const reviewsRequested = useRef<string | null>(null);
   const [postsLoading, setPostsLoading] = useState(false);
   const [ownerPreviewContext, setOwnerPreviewContext] = useState<ViewerContext>('owner');
   const [shareCopied, setShareCopied] = useState(false);
@@ -168,6 +172,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     const retire = () => {
       invalidate(); pendingBlock.current = false;
       setReportTarget(null); setActionLoading(false); setCurrentUser(null);
+      postsRequested.current = null; // the new session sees the posts it may see
       void loadCurrentUser();
     };
     const storage = (event: StorageEvent) => {
@@ -290,6 +295,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     } catch (err) {
       console.error('Failed to load user posts:', err);
       setUserPosts([]);
+      postsRequested.current = null; // the next visit to the tab tries again
     } finally {
       setPostsLoading(false);
     }
@@ -307,6 +313,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       });
     } catch (err) {
       console.error('Failed to load reviews:', err);
+      reviewsRequested.current = null; // the next visit to the tab tries again
     } finally {
       setReviewsLoading(false);
     }
@@ -343,13 +350,16 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     if (profile && ['overview', 'portfolio', 'insights'].includes(activeTab) && portfolio === null) {
       loadPortfolio();
     }
-    if (profile && ['overview', 'activity'].includes(activeTab) && userPosts.length === 0) {
+    if (profile && ['overview', 'activity'].includes(activeTab) && postsRequested.current !== profile.id) {
+      postsRequested.current = profile.id;
       loadUserPosts();
     }
-    if (profile && (activeTab === 'overview' || activeTab === 'reviews')) {
+    const reviewsKey = profile ? `${profile.id}:${currentUser?.id ?? ''}` : null;
+    if (profile && (activeTab === 'overview' || activeTab === 'reviews') && reviewsRequested.current !== reviewsKey) {
+      reviewsRequested.current = reviewsKey;
       loadReviews();
     }
-  }, [activeTab, profile, userGigs.length, userPosts.length, portfolio, loadUserGigs, loadPortfolio, loadUserPosts, loadReviews]);
+  }, [activeTab, profile, currentUser?.id, userGigs.length, portfolio, loadUserGigs, loadPortfolio, loadUserPosts, loadReviews]);
 
   useEffect(() => {
     if (currentUser && profile && currentUser.id !== profile.id) {
@@ -765,6 +775,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
             posts={userPosts}
             reviews={reviews}
             loading={gigsLoading || reviewsLoading || postsLoading}
+            blocked={connectionState === 'blocked'}
+            firstName={profile.firstName || null}
           />
         )}
         {activeTab === 'insights' && showOwnerOnly && (

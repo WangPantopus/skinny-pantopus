@@ -27,6 +27,7 @@ extension EditProfileView {
 
     var aboutSection: some View {
         FormFieldGroup("About") {
+            usernameField
             textField(.firstName, label: "First name")
             textField(.middleName, label: "Middle name (optional)")
             textField(.lastName, label: "Last name")
@@ -185,6 +186,18 @@ extension EditProfileView {
             keyboardType: keyboardType,
             contentType: contentType,
             identifier: "field_\(key.rawValue)"
+        )
+    }
+
+    /// The profile link's username, with its availability check and the
+    /// note that old links stop working (`UsernameAvailability.swift`).
+    var usernameField: some View {
+        let snapshot = viewModel.fields[.username] ?? FormFieldState(id: "username", originalValue: "")
+        return UsernameFieldBlock(
+            checker: viewModel.usernameCheck,
+            text: Binding(get: { snapshot.value }, set: { viewModel.update(.username, to: $0) }),
+            serverError: snapshot.error,
+            isDirty: snapshot.isDirty
         )
     }
 
