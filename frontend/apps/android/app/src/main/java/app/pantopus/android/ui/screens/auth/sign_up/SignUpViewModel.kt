@@ -12,6 +12,7 @@ package app.pantopus.android.ui.screens.auth.sign_up
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.services.TokenAcceptApi
 import app.pantopus.android.data.auth.AccountType
 import app.pantopus.android.data.auth.AuthError
 import app.pantopus.android.data.auth.AuthRepository
@@ -19,6 +20,7 @@ import app.pantopus.android.data.auth.OAuthBrowserCommand
 import app.pantopus.android.data.auth.OAuthProvider
 import app.pantopus.android.data.auth.OAuthSessionStore
 import app.pantopus.android.ui.screens.auth.AuthValidation
+import app.pantopus.android.ui.screens.token_accept.parkedInvitationEmail
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -87,7 +89,13 @@ class SignUpViewModel
     constructor(
         private val authRepository: AuthRepository,
         savedStateHandle: SavedStateHandle,
+        private val invitations: TokenAcceptApi?,
     ) : ViewModel() {
+        internal constructor(
+            authRepository: AuthRepository,
+            savedStateHandle: SavedStateHandle,
+        ) : this(authRepository, savedStateHandle, null)
+
         data class UiState(
             val email: String = "",
             val password: String = "",
@@ -110,6 +118,8 @@ class SignUpViewModel
             val isSubmitting: Boolean = false,
             val topLevelError: AuthError? = null,
             val didSucceed: Boolean = false,
+            /** An address filled in for the person (an emailed invitation's); leaving it as it is isn't input. */
+            val suggestedEmail: String = "",
         ) {
             val passwordStrength: Int get() = AuthValidation.passwordStrength(password)
 
@@ -126,7 +136,17 @@ class SignUpViewModel
 
             /** Anything typed or chosen; closing an untouched form doesn't ask to discard (iOS `hasInput`). */
             val hasInput: Boolean get() =
-                listOf(email, password, confirmPassword, username, firstName, middleName, lastName, phoneNumber, inviteCode)
+                listOf(
+                    email.takeIf { it != suggestedEmail }.orEmpty(),
+                    password,
+                    confirmPassword,
+                    username,
+                    firstName,
+                    middleName,
+                    lastName,
+                    phoneNumber,
+                    inviteCode,
+                )
                     .any { it.isNotEmpty() } || dateOfBirth != null || agreedToTerms
 
             fun validate(field: SignUpField): String? =
@@ -190,6 +210,17 @@ class SignUpViewModel
 
         private val _uiState = MutableStateFlow(UiState(inviteCode = seededInviteCode))
         val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+        init {
+            // An emailed household invitation waiting for sign-in only works for its address, so Email starts with it
+            // (never over something the person already typed).
+            invitations?.let { api ->
+                viewModelScope.launch {
+                    val email = parkedInvitationEmail(api) ?: return@launch
+                    _uiState.update { if (it.email.isEmpty()) it.copy(email = email, suggestedEmail = email) else it }
+                }
+            }
+        }
 
         private val _browserAuth = Channel<OAuthBrowserCommand>(Channel.BUFFERED)
         val browserAuth = _browserAuth.receiveAsFlow()
