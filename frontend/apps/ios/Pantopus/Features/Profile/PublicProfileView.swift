@@ -372,7 +372,10 @@ public struct PublicProfileView: View {
                         onOpenGig: onOpenGig,
                         onOpenReviewer: onOpenProfile
                     )
-                    ReceivedReviewsSection(userId: payload.profile.id)
+                    // Launch cut #3 (Marketplace): no "Marketplace reviews" section, as on Android.
+                    if LaunchFeatures.marketplace {
+                        ReceivedReviewsSection(userId: payload.profile.id)
+                    }
                     // Launch cuts #1 + #2: the persona broadcasts feed ("No broadcasts
                     // yet … Follow") is hidden; the rest of the profile stays.
                     if payload.kind != .persona || Self.showsPersonaParts {
