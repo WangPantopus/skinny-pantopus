@@ -205,6 +205,16 @@ export default function NewSupportTrainPage() {
       setPreferences(d.dietary_preferences || []);
       setContactless(!!d.contactless_preferred);
       setSpecialInstructions(d.special_instructions || '');
+      // The support types picked on the first step, else the ones the draft read from the story,
+      // decide what helpers can sign up to bring; with neither, every kind of help stays on.
+      const modes: string[] = selectedModes.length > 0
+        ? selectedModes
+        : (Array.isArray(d.support_modes_requested) ? d.support_modes_requested : []);
+      if (modes.some((m) => m === 'meal' || m === 'takeout' || m === 'groceries')) {
+        setEnableMeals(modes.includes('meal'));
+        setEnableTakeout(modes.includes('takeout'));
+        setEnableGroceries(modes.includes('groceries'));
+      }
 
       const preset = normalizeGenerateSlotsPreset(d.suggested_schedule);
       const def = PRESET_SLOT_DEFAULTS[preset];
@@ -224,7 +234,7 @@ export default function NewSupportTrainPage() {
       setExpandedCard(null);
       setStep('review');
     },
-    [story],
+    [story, selectedModes],
   );
 
   const handleDraft = useCallback(async () => {
