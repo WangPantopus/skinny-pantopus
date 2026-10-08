@@ -21,8 +21,9 @@ interface HomeMemberRemovalApi {
         @Path("home") homeId: String,
     ): Response<ResponseBody>
 
+    // The server names the person (display_name) only when asked: older builds check these keys exactly.
     @POST("api/homes/member-removals/context")
-    @Headers("Cache-Control: no-cache, no-store")
+    @Headers("Cache-Control: no-cache, no-store", "X-Pantopus-Display-Names: 1")
     suspend fun context(
         @Body body: RequestBody,
         @Header("X-Pantopus-Session-Scope") session: String,

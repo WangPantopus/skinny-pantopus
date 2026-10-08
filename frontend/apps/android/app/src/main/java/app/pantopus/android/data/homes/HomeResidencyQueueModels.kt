@@ -4,16 +4,25 @@ import app.pantopus.android.core.identity.MadeUpUsername
 
 data class HomeResidencyQueueSession(val actorId: String, val sessionScope: String)
 
+/** A person's name worth showing: not blank and never a made-up username. */
+internal fun householdPersonName(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() && !MadeUpUsername.isMadeUp(it) }
+
 data class HomeResidencyQueueClaim(
     val id: String,
     val userId: String,
     val username: String?,
     val claimedRole: String?,
     val createdAt: String?,
+    /** The name the applicant shows neighbors, when the server sent it. */
+    val displayName: String? = null,
 ) {
-    // A made-up username (user_…) says nothing about the applicant, so it reads as "Applicant".
+    // The name first; a made-up username (user_…) says nothing about the applicant, so it reads as "Applicant".
     val applicantLabel: String get() =
-        MadeUpUsername.handle(username) ?: if (username.isNullOrEmpty()) "Applicant identity unavailable" else "Applicant"
+        householdPersonName(displayName)
+            ?: MadeUpUsername.handle(username)
+            ?: if (username.isNullOrEmpty()) "Applicant identity unavailable" else "Applicant"
+    val initials: String get() =
+        (householdPersonName(displayName) ?: MadeUpUsername.chosen(username))?.firstOrNull()?.uppercase() ?: "?"
     val roleLabel: String get() =
         when (claimedRole) {
             "household" -> "Requesting: Household"
