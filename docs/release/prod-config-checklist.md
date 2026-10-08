@@ -14,7 +14,7 @@ commands, and **check**: how to see that it worked.
   `~/.config/pantopus/hosted-secrets/staging.env` and `production.env` on the
   Mac (mode 600); provider keys come from each provider's console.
 
-Last checked: 2026-10-07 by L4.
+Last checked: 2026-10-08 by L4.
 
 ## 0. What's running today
 
@@ -28,7 +28,7 @@ Last checked: 2026-10-07 by L4.
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
 | Supabase | The April production project, a testing project, and `Pantopus-staging` (Free), reset to the canonical migrations on October 7 (S2). No production project yet (P2A). |
 | GitHub | `staging` has its secrets and variables and releases from `dev` (S5, S6). `production` has `BACKEND_DEPLOY_ENABLED=false` and `DB_MIGRATIONS_ENABLED=false` and no secrets, so each master push ends with "Backend deployment is disabled". `ios-release` and `android-release` have no secrets. |
-| AWS Lambdas | Staging stack `pantopus-seeder-staging` (October 7). The stack (`pantopus-seeder/deploy/template.yaml`) carries the seeder and the briefing, home-reminder, weather-alert, mail and job-trigger functions. No production stack yet (P8). |
+| AWS Lambdas | Staging stack `pantopus-seeder-staging` (October 7). The stack (`pantopus-seeder/deploy/template.yaml`) carries the seeder and the briefing, home-reminder, weather-alert, mail and job-trigger functions. **The April production stack `pantopus-seeder-production` (last deployed May 3) still runs** (checked October 8): its 14 EventBridge schedules read the April database through the secret `pantopus/seeder/production` every 5 to 15 minutes and send through `api.pantopus.com`, which answers 522, so nothing reaches anyone. At 01:00Z on October 8 its evening briefing tried three April users and failed. Pause it before P1 (start of section 3); P8 turns it into the production stack. The April `pantopus-seeder-dev` stack is inert: its functions were deleted in April, so its ten schedules have nothing to run. |
 
 **Reminders run on AWS Lambda.** Morning and evening briefings (the night-before
 pickup push rides the evening one), task and bill reminders, weather alerts and
@@ -368,6 +368,33 @@ the identity decision (Stripe Identity or a photo-ID check).
 
 Same shape as staging, with live vendors where D4 and D5 say so.
 
+### Before P1: pause the April Lambda stack (founder, now)
+
+The April stack `pantopus-seeder-production` still runs against the April
+database (section 0). Its sends fail while `api.pantopus.com` answers 522, but
+once P1 points that name at a working backend, or if the June container is ever
+started again, it would send April users briefings and reminders with April's
+code. Pause its 14 schedules; nothing is deleted:
+
+```bash
+for r in $(aws cloudformation describe-stack-resources --region us-west-2 --stack-name pantopus-seeder-production \
+    --query "StackResources[?ResourceType=='AWS::Events::Rule'].PhysicalResourceId" --output text); do
+  aws events disable-rule --region us-west-2 --name "$r"
+done
+```
+
+**Check:** the command below prints `14 DISABLED`, and 15 minutes later the
+CloudWatch log group `/aws/lambda/pantopus-briefing-scheduler-production` has no
+new run:
+
+```bash
+aws events list-rules --region us-west-2 --name-prefix pantopus- \
+  --query "Rules[?ends_with(Name,'-production')].State" --output text | tr '\t' '\n' | sort | uniq -c
+```
+
+To undo, run the loop with `enable-rule`. P8 turns the stack into the
+production one and switches the schedules back on.
+
 ### P1. Production address (founder)
 
 1. Cloudflare → `pantopus.com` DNS: set `api` to the Elastic IP. Default: **DNS
@@ -485,10 +512,41 @@ containers are healthy on the server.
 
 ### P8. Production scheduled jobs (founder runs, L4 prepared)
 
-As S8 with `pantopus/seeder/production`, `PANTOPUS_API_BASE_URL=https://api.pantopus.com`,
-the production `INTERNAL_API_KEY` and a production curator account:
-`sam build --use-container && sam deploy --config-env prod`, then subscribe your
-inbox to `pantopus-job-alarms-production` (stack `pantopus-seeder-production`).
+The April stack `pantopus-seeder-production` already exists, so
+`sam deploy --config-env prod` updates it in place: new code, the job trigger,
+the failure alarms and the Pacific-time reminder schedules. The stack never
+writes secret contents, so the secret `pantopus/seeder/production` keeps its
+April values (the April database and its service key) until you replace them.
+In this order:
+
+1. Make sure the April schedules are paused (start of section 3). While they
+   run, a new secret would let April's code act on the new production.
+2. Replace the secret's value as in S8 step 2, with the production values: the
+   production project's `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`,
+   `PANTOPUS_API_BASE_URL=https://api.pantopus.com`, the production
+   `INTERNAL_API_KEY` (in `hosted-secrets/production.env`), a production
+   curator account, `OPENAI_API_KEY`, `AIRNOW_API_KEY` and the WeatherKit keys:
+   ```bash
+   aws secretsmanager put-secret-value --secret-id pantopus/seeder/production --secret-string file://<private json file>
+   ```
+3. Deploy as in S8 step 1, ending with `sam deploy --config-env prod`.
+4. Switch the schedules back on. A deploy that doesn't change a schedule leaves
+   it paused:
+   ```bash
+   for r in $(aws cloudformation describe-stack-resources --region us-west-2 --stack-name pantopus-seeder-production \
+       --query "StackResources[?ResourceType=='AWS::Events::Rule'].PhysicalResourceId" --output text); do
+     aws events enable-rule --region us-west-2 --name "$r"
+   done
+   ```
+5. Subscribe your inbox to `pantopus-job-alarms-production` as in S8 step 4.
+
+**Check:** as S8 with `-production` names. Every rule in the stack is
+`ENABLED`; `aws scheduler list-schedules --region us-west-2` lists
+`pantopus-home-reminders-morning-production` and
+`pantopus-home-reminders-evening-production`; and the log of
+`pantopus-briefing-scheduler-production` shows requests to the database you
+chose in P2 (with P2A, the new project's `<ref>.supabase.co`, not the April
+`ankjdyvoduutkhhaxvhx`).
 
 ### P9. Production web (founder)
 
