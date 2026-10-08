@@ -69,7 +69,8 @@ interface OverviewTabProps {
   reviews: ReviewData[];
   userGigs: GigData[];
   gigsLoading: boolean;
-  onSkillRequest: () => void;
+  /** A skill's hire request; without one the skills are plain chips. */
+  onSkillRequest?: () => void;
   onViewPortfolio: () => void;
 }
 
@@ -92,16 +93,30 @@ export default function OverviewTab({
       <section className="bg-surface rounded-xl border border-app p-5">
         <h3 className="text-lg font-semibold text-app mb-3">Skills</h3>
         <div className="flex flex-wrap gap-2">
-          {skills.slice(0, 6).map((skill, index) => (
-            <button
-              key={`${skill}-${index}`}
-              onClick={onSkillRequest}
-              className="px-3 py-1.5 rounded-full bg-surface-muted text-app-strong text-sm border border-app hover:bg-surface-muted"
-            >
-              {skill}
-              {index < 3 && <span className="ml-1 text-[10px] text-app-secondary">Featured</span>}
-            </button>
-          ))}
+          {skills.slice(0, 6).map((skill, index) => {
+            const label = (
+              <>
+                {skill}
+                {index < 3 && <span className="ml-1 text-[10px] text-app-secondary">Featured</span>}
+              </>
+            );
+            return onSkillRequest ? (
+              <button
+                key={`${skill}-${index}`}
+                onClick={onSkillRequest}
+                className="px-3 py-1.5 rounded-full bg-surface-muted text-app-strong text-sm border border-app hover:bg-surface-muted"
+              >
+                {label}
+              </button>
+            ) : (
+              <span
+                key={`${skill}-${index}`}
+                className="px-3 py-1.5 rounded-full bg-surface-muted text-app-strong text-sm border border-app"
+              >
+                {label}
+              </span>
+            );
+          })}
           {skills.length === 0 && <p className="text-sm text-app-secondary">No skills listed yet.</p>}
         </div>
       </section>

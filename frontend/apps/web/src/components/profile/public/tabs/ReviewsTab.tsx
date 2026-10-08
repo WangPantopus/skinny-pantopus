@@ -5,6 +5,7 @@ import Image from 'next/image';
 import ReviewForm from '@/components/ReviewForm';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import MediaLightbox, { type LightboxImage } from '@/components/gig-detail/MediaLightbox';
+import { launchFeatures } from '@/lib/featureFlags';
 
 interface ReviewItem {
   id: string;
@@ -116,7 +117,8 @@ export default function ReviewsTab({
         />
       )}
 
-      {/* Role filter */}
+      {/* Role filter. Launch cut #4 (Open Gigs): no worker / task poster split; every review is listed. */}
+      {launchFeatures.openGigs && (
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setRoleFilter('all')} className={filterButtonClass(roleFilter === 'all')}>
           All ({reviews.length})
@@ -128,6 +130,7 @@ export default function ReviewsTab({
           As Task Poster ({posterCount})
         </button>
       </div>
+      )}
 
       {/* Review list */}
       {filteredReviews.length === 0 ? (

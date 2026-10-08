@@ -61,6 +61,14 @@ function numberField(value: unknown): number {
   return typeof value === 'number' ? value : 0;
 }
 
+// Static class names, so Tailwind keeps them.
+const TRUST_CHIP_COLUMNS: Record<number, string> = {
+  1: 'md:grid-cols-1',
+  2: 'md:grid-cols-2',
+  3: 'md:grid-cols-3',
+  4: 'md:grid-cols-4',
+};
+
 export default function ProfileHeader({
   profile,
   fullName,
@@ -91,6 +99,9 @@ export default function ProfileHeader({
   onReport,
 }: ProfileHeaderProps) {
   const router = useRouter();
+  const showRatingChip = launchFeatures.openGigs || displayReviewCount > 0;
+  const trustChipCount =
+    (showRatingChip ? 1 : 0) + (launchFeatures.openGigs ? 2 : 0) + (responseTimeLabel ? 1 : 0);
   // Only the person's own tagline: a stand-in line would read as their words.
   const tagline = stringField(profile.tagline);
   const avatarUrl = stringField(profile.profile_picture_url) || stringField(profile.avatar_url) || stringField(profile.profilePicture);
@@ -236,21 +247,28 @@ export default function ProfileHeader({
             </div>
           </div>
 
-          {/* Trust chips */}
-          <div className={`grid grid-cols-1 ${responseTimeLabel ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3 mt-6`}>
-            <TrustChip
-              title="Rating"
-              value={displayReviewCount > 0 ? `${displayRating.toFixed(1)} ★` : 'New'}
-              detail={displayReviewCount > 0 ? `${displayReviewCount} reviews` : 'Be their first review'}
-            />
-            <TrustChip title="Completed" value={gigsCompleted} detail="as worker" />
+          {/* Trust chips. Launch cut #4 (Open Gigs): no task count or task reliability, and a rating only once
+              there are reviews (they come from tasks), as in the apps. */}
+          {trustChipCount > 0 && (
+          <div className={`grid grid-cols-1 ${TRUST_CHIP_COLUMNS[trustChipCount]} gap-3 mt-6`}>
+            {showRatingChip && (
+              <TrustChip
+                title="Rating"
+                value={displayReviewCount > 0 ? `${displayRating.toFixed(1)} ★` : 'New'}
+                detail={displayReviewCount > 0 ? `${displayReviewCount} reviews` : 'Be their first review'}
+              />
+            )}
+            {launchFeatures.openGigs && <TrustChip title="Completed" value={gigsCompleted} detail="as worker" />}
             {responseTimeLabel && <TrustChip title="Response" value={responseTimeLabel} detail="typical response time" />}
-            <TrustChip
-              title="Reliability"
-              value={reliabilityLabel}
-              detail={reliabilityDetail}
-            />
+            {launchFeatures.openGigs && (
+              <TrustChip
+                title="Reliability"
+                value={reliabilityLabel}
+                detail={reliabilityDetail}
+              />
+            )}
           </div>
+          )}
         </section>
       </div>
     </>
