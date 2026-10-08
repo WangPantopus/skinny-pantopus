@@ -66,6 +66,10 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
   const socket = useSocket();
   const connected = useSocketConnected();
   const [counts, setCounts] = useState<BadgeCounts>(defaultCounts);
+  const countsRef = useRef<BadgeCounts>(defaultCounts);
+  useEffect(() => {
+    countsRef.current = counts;
+  }, [counts]);
   const fallbackRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   // Fallback polling when socket is disconnected
@@ -122,6 +126,30 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // badge:update carries only the unread total, so when it changes (a new notice, or one read
+  // here or on another device) the per-context split the inbox tabs and Personal bell show is
+  // fetched again.
+  const refreshNotificationContexts = useCallback(async () => {
+    try {
+      const res = (await api.notifications.getUnreadCount({ suppressDevErrorOverlay: true })) as {
+        count?: number;
+        total?: number;
+        byContext?: { personal?: number; audience?: number; platform?: number };
+      };
+      setCounts((prev) => ({
+        ...prev,
+        notifications: Number(res?.total ?? res?.count ?? prev.notifications) || 0,
+        notificationsByContext: {
+          personal: Number(res?.byContext?.personal ?? 0) || 0,
+          audience: Number(res?.byContext?.audience ?? 0) || 0,
+          platform: Number(res?.byContext?.platform ?? 0) || 0,
+        },
+      }));
+    } catch {
+      // The next update or poll corrects it.
+    }
+  }, []);
+
   const setUnreadMessages = useCallback((value: number | ((prev: number) => number)) => {
     setCounts((prev) => {
       const nextValue = typeof value === 'function' ? value(prev.unreadMessages) : value;
@@ -154,6 +182,9 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
     if (!socket) return;
 
     const handleBadgeUpdate = (data: Partial<BadgeCounts>) => {
+      const notificationsChanged = data?.notifications != null
+        && (Number(data.notifications) || 0) !== countsRef.current.notifications;
+      if (notificationsChanged && !data?.notificationsByContext) void refreshNotificationContexts();
       setCounts((prev) => ({
         ...prev,
         unreadMessages: Number(data?.unreadMessages ?? prev.unreadMessages) || 0,
@@ -177,7 +208,7 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
     return () => {
       socket.off('badge:update', handleBadgeUpdate);
     };
-  }, [socket]);
+  }, [socket, refreshNotificationContexts]);
 
   // Manage fallback polling based on connection state
   useEffect(() => {
