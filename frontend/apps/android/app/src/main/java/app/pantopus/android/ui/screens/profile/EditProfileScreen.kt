@@ -92,8 +92,9 @@ fun EditProfileScreen(
     val avatarUrl by viewModel.avatarUrl.collectAsStateWithLifecycle()
     val avatarInitial by viewModel.avatarInitial.collectAsStateWithLifecycle()
     val avatarState by viewModel.avatarState.collectAsStateWithLifecycle()
-    // Read here so a finished username check recomposes Save (`isValid` reads it too).
-    val usernameState by viewModel.usernameCheck.state.collectAsStateWithLifecycle()
+    // Read with `.value` here so a finished username check recomposes Save: with `by`, the read would sit
+    // behind `viewModel.isValid &&` below and be skipped while the check runs.
+    val usernameState = viewModel.usernameCheck.state.collectAsStateWithLifecycle().value
     // Skills ride `PUT /api/users/skills`, not the profile PATCH, but they
     // commit through the same Save (`backend/routes/users.js:2246`).
     // Read with `.value` here rather than `by`: `isDirty`, `dirtyFieldCount`,

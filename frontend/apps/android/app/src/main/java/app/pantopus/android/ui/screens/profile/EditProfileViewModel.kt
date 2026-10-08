@@ -412,6 +412,7 @@ class EditProfileViewModel
             _fields.value = map
             _skills.value = _savedSkills.value
             _skillDraft.value = ""
+            usernameCheck.reset(usernameCheck.current, usernameCheck.currentIsMadeUp)
         }
 
         fun acknowledgeDismiss() {
