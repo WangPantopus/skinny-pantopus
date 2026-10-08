@@ -192,6 +192,16 @@ data class CelebrationBanner(
     val body: String,
 )
 
+/** One organizer update on the train ("QA L3 owner · 2h" over the text). Mirrors iOS `TrainUpdateCard`. */
+data class TrainUpdateCard(
+    val id: String,
+    /** The organizer who posted it, or "Organizer" when they aren't named on the train. */
+    val author: String,
+    /** "just now", "5m ago", "2h ago", then "Oct 3", as the web's Updates tab. */
+    val timeLabel: String?,
+    val body: String,
+)
+
 /** Full render payload for the participant-facing Support Train detail. */
 data class SupportTrainDetailContent(
     val trainId: String,
@@ -221,6 +231,8 @@ data class SupportTrainDetailContent(
      */
     val exactAddress: String? = null,
     val deliveryInstructions: String? = null,
+    /** The organizers' updates, newest first (the train's latest 10). */
+    val updates: List<TrainUpdateCard> = emptyList(),
 ) {
     val isFullyCovered: Boolean get() = typeDates.isFullyCovered
 }

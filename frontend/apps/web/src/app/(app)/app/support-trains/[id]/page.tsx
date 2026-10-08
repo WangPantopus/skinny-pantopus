@@ -76,6 +76,12 @@ function displayOrganizerName(user: OrganizerUser | null | undefined): string {
   return user?.name || chosenUsername(user?.username) || 'Organizer';
 }
 
+// The organizer who posted an update: the train sends only its author_user_id.
+function updateAuthorName(train: SupportTrainWithOrganizers | null | undefined, authorUserId: unknown): string {
+  const organizers = Array.isArray(train?.organizers) ? train.organizers : [];
+  return displayOrganizerName(organizers.find((organizer) => organizer?.user?.id === authorUserId)?.user);
+}
+
 function getProfileHref(user: OrganizerUser | null | undefined): string | null {
   if (typeof user?.username !== 'string' || !user.username.trim()) return null;
   return `/${encodeURIComponent(user.username.trim())}`;
@@ -706,7 +712,7 @@ export default function SupportTrainDetailPage() {
                   >
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-semibold text-app-text">
-                        {u.author?.name || 'Organizer'}
+                        {u.author?.name || updateAuthorName(data, u.author_user_id)}
                       </span>
                       <span className="text-xs text-app-text-muted">
                         {formatTimeAgo(u.created_at)}

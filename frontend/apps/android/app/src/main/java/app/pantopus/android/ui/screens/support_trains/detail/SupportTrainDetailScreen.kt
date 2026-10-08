@@ -506,6 +506,12 @@ private fun LoadedBody(
             SectionOverline("The train")
             TypeDatesCard(content.typeDates)
 
+            UpdatesBlock(
+                updates = content.updates,
+                expanded = UPDATES_SECTION in expandedSections,
+                onToggleExpanded = { expandedSections = expandedSections.toggled(UPDATES_SECTION) },
+            )
+
             SectionOverline("Slot calendar")
             val signupsClosed = content.dock is SupportTrainDock.Closed
             CalendarCard(content.calendarDays, onSelectDate = { if (!signupsClosed) onSignUp() })
@@ -550,6 +556,65 @@ private fun LoadedBody(
                 onJoinAsBackup = onJoinAsBackup ?: {},
             )
         }
+    }
+}
+
+private const val UPDATES_SECTION = "updates"
+
+private fun Set<String>.toggled(id: String): Set<String> = if (id in this) this - id else this + id
+
+/**
+ * The organizers' updates, newest first. The latest shows; "See all N" lists the rest here.
+ * A helper opening the train from an update notification finds it near the top.
+ * Mirrors iOS `SupportTrainDetailView.updatesSection`.
+ */
+@Composable
+private fun UpdatesBlock(
+    updates: List<TrainUpdateCard>,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+) {
+    if (updates.isEmpty()) return
+    val action =
+        when {
+            updates.size < 2 -> null
+            expanded -> "Show fewer"
+            else -> "See all ${updates.size}"
+        }
+    SectionOverline("Updates", actionLabel = action, onAction = onToggleExpanded)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        (if (expanded) updates else updates.take(1)).forEach { UpdateCard(it) }
+    }
+}
+
+@Composable
+private fun UpdateCard(update: TrainUpdateCard) {
+    val shape = RoundedCornerShape(Radii.lg)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorder, shape)
+                .padding(Spacing.s3)
+                .semantics(mergeDescendants = true) {}
+                .testTag("supportTrainUpdateCard"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = update.author,
+                color = PantopusColors.appText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            update.timeLabel?.let {
+                Text(text = it, color = PantopusColors.appTextMuted, fontSize = 11.5.sp)
+            }
+        }
+        Text(text = update.body, color = PantopusColors.appText, fontSize = 13.5.sp)
     }
 }
 
