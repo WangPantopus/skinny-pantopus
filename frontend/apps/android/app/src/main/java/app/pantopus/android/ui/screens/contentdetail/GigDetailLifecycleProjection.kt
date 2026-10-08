@@ -69,15 +69,34 @@ private fun currentGigDock(
             status == "assigned" && viewer != null && viewer == gig.acceptedBy ->
                 ContentDetailDockButton("Start task", PantopusIcon.Play)
             status == "open" && !owner -> dock.primary
-            else -> {
-                val label =
-                    when (status) {
-                        "open" -> "Your task"
-                        "cancelled", "canceled" -> "Cancelled"
-                        else -> "Bidding closed"
-                    }
-                ContentDetailDockButton(label, PantopusIcon.Lock, enabled = false)
-            }
+            else -> ContentDetailDockButton(lockedDockLabel(gig, status, owner, viewer), PantopusIcon.Lock, enabled = false)
         }
     return ContentDetailDock(secondary, primary)
 }
+
+/**
+ * The locked dock names where the task stands for this viewer. Bidding is a launch cut, so
+ * "Bidding closed" described a step nobody takes; a helper who delivered waits on the poster,
+ * and a poster with work to review confirms it in the Task progress panel.
+ */
+private fun lockedDockLabel(
+    gig: GigDto,
+    status: String?,
+    owner: Boolean,
+    viewer: String?,
+): String =
+    when (status) {
+        "open" -> "Your task"
+        "cancelled", "canceled" -> "Cancelled"
+        "assigned" -> "Assigned"
+        "accepted", "awarded" -> "Awarded"
+        "in_progress" -> "In progress"
+        "completed" ->
+            when {
+                gig.ownerConfirmedAt != null -> "Completed"
+                owner -> "Awaiting your confirmation"
+                viewer != null && viewer == gig.acceptedBy -> "Waiting for the poster"
+                else -> "Completed"
+            }
+        else -> "Closed"
+    }
