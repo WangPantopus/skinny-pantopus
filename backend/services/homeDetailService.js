@@ -26,6 +26,11 @@ const OWNER_FIELDS = ['id', 'home_id', 'subject_type', 'subject_id', 'owner_stat
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const pick = (row, keys) => Object.fromEntries(keys.map(key => [key, row[key] ?? null]));
+// A read run alongside others: its value, or its error at the point the old one-by-one code threw it.
+const settledValue = result => {
+  if (result.status === 'rejected') throw result.reason;
+  return result.value;
+};
 function failure(code = 'HOME_DETAIL_UNAVAILABLE', statusCode = 503) {
   return Object.assign(new Error(code === 'HOME_MEMBER_HISTORY_DENIED'
     ? 'You do not have permission to view household history.' : 'Could not load this Home information. Please retry.'), { code, statusCode });
@@ -141,14 +146,28 @@ async function detail(homeId, actorId) {
       ? owners.filter(owner => owner.owner_status === 'verified'
         || (access.permissions.includes('ownership.manage') && ['pending', 'disputed'].includes(owner.owner_status))) : [];
     const primary = visibleOwners.find(owner => owner.is_primary_owner && owner.owner_status === 'verified' && owner.subject_type === 'user');
-    const owner = primary ? userRef(await checked(db.from('User').select(SAFE_CREATOR_SELECT).eq('id', primary.subject_id).maybeSingle()), primary.subject_id) : null;
-    const canDelete = (await deletion.deleteEligibility(homeId, actorId)).allowed;
+    // The primary owner's account and delete eligibility are independent reads,
+    // so they run together; a failure is reported in the same order as before.
+    const [ownerRead, deleteRead] = await Promise.allSettled([
+      primary ? checked(db.from('User').select(SAFE_CREATOR_SELECT).eq('id', primary.subject_id).maybeSingle()) : null,
+      deletion.deleteEligibility(homeId, actorId),
+    ]);
+    const owner = primary ? userRef(settledValue(ownerRead), primary.subject_id) : null;
+    const canDelete = settledValue(deleteRead).allowed;
     // A member or owner can change while this caller's grants remain unchanged.
     // Retire those held projections as well as rechecking caller authority.
-    if (JSON.stringify(await readOwners(homeId, actorId, access)) !== JSON.stringify(owners)
-      || (access.permissions.includes('members.view') && JSON.stringify(await readMembers(homeId)) !== JSON.stringify(occupants))
-      || JSON.stringify(await ownClaims(homeId, actorId)) !== JSON.stringify(claims)) throw failure();
-    return { home: { ...home, owner, occupants: await withDisplayNames(occupants), owners: visibleOwners.map(row => pick(row, OWNER_FIELDS)),
+    // The three rereads run together and are compared in their old order; the members' display names are read
+    // alongside them (they only replace display_name, after the comparison holds).
+    const [ownersAgain, membersAgain, claimsAgain, namedOccupants] = await Promise.allSettled([
+      readOwners(homeId, actorId, access),
+      access.permissions.includes('members.view') ? readMembers(homeId) : null,
+      ownClaims(homeId, actorId),
+      withDisplayNames(occupants),
+    ]);
+    if (JSON.stringify(settledValue(ownersAgain)) !== JSON.stringify(owners)
+      || (access.permissions.includes('members.view') && JSON.stringify(settledValue(membersAgain)) !== JSON.stringify(occupants))
+      || JSON.stringify(settledValue(claimsAgain)) !== JSON.stringify(claims)) throw failure();
+    return { home: { ...home, owner, occupants: settledValue(namedOccupants), owners: visibleOwners.map(row => pick(row, OWNER_FIELDS)),
       isOwner: access.isOwner, isOccupant: !!access.occupancy, isPendingOwner: mine?.owner_status === 'pending',
       ownership_status: mine?.owner_status || null, residency_status: access.occupancy?.verification_status || null,
       // F3b: 'household' when the verification came only from an invitation or a manager's approval.

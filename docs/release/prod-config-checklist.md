@@ -646,6 +646,22 @@ app-link files, robots.txt).
 - [ ] Monitoring: an uptime check on `https://api.pantopus.com/health` every
   minute (for example UptimeRobot or Better Stack, free tiers) alerting the
   founder's email; optional Slack alerts via `SLACK_ALERTS_WEBHOOK_URL`.
+- [ ] Log retention: CloudWatch keeps Lambda logs forever unless told otherwise,
+  and on October 8 every `pantopus-*` log group was set that way. The April
+  production ones hold about 110 MB, including April users' ids from the old
+  code's request logging. Keep 30 days on all of them, after P8 and again
+  whenever a function is added (it deletes older log lines, nothing else):
+  ```bash
+  for g in $(aws logs describe-log-groups --region us-west-2 --log-group-name-prefix /aws/lambda/pantopus- \
+      --query 'logGroups[].logGroupName' --output text); do
+    aws logs put-retention-policy --region us-west-2 --log-group-name "$g" --retention-in-days 30
+  done
+  ```
+  **Check:** this prints `[]` (on October 8 it listed all 27 groups):
+  ```bash
+  aws logs describe-log-groups --region us-west-2 --log-group-name-prefix /aws/lambda/pantopus- \
+    --query 'logGroups[?retentionInDays!=`30`].logGroupName'
+  ```
 - [ ] Rollback: the **Rollback Backend** workflow with the previous release
   digest from the deploy summary (see `docs/ci-cd.md`). L4 rehearsed the same
   deploy and rollback transaction locally on October 6: about 22 s per release,

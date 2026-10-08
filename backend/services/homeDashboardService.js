@@ -44,12 +44,21 @@ async function count(query) {
 const permissionKey = permissions => JSON.stringify([...permissions].sort());
 async function readAccess(homeId, actorId, permission = 'home.view') {
   const denied = permission === 'home.view' ? 'HOME_DASHBOARD_DENIED' : 'HOME_RESOURCE_DENIED';
-  const access = await getUserAccess(homeId, actorId);
-  if (!access.hasAccess || !access.permissions.includes(permission)) throw failure(denied, 403);
   // Use the established SQL context as well: it fences frozen/archived Homes,
   // disputed ownership pointers and private setup. Private task first-use stays
   // on its own exact collection capability; it is not shared dashboard access.
-  const { data: context } = await checked(db.rpc('home_record_context', { p_home_id: homeId, p_user_id: actorId }));
+  // It needs only the ids, so it is read alongside the access check (one
+  // database round trip, not two); outcomes keep their order: an access error,
+  // then a denial, then a failed context read.
+  const [accessRead, contextRead] = await Promise.allSettled([
+    getUserAccess(homeId, actorId),
+    checked(db.rpc('home_record_context', { p_home_id: homeId, p_user_id: actorId })),
+  ]);
+  if (accessRead.status === 'rejected') throw accessRead.reason;
+  const access = accessRead.value;
+  if (!access.hasAccess || !access.permissions.includes(permission)) throw failure(denied, 403);
+  if (contextRead.status === 'rejected') throw contextRead.reason;
+  const { data: context } = contextRead.value;
   if (!context || typeof context.allowed !== 'boolean' || typeof context.private !== 'boolean'
     || !Array.isArray(context.permissions)) throw failure();
   if (!context.allowed || context.private || !context.permissions.includes(permission)) throw failure(denied, 403);
