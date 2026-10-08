@@ -118,6 +118,16 @@ export default async function PublicPostPage({
                 {storeCta.label}
               </a>
             ) : null}
+            {accessRestricted ? (
+              // Signed-in visitors never see this page (the middleware opens the post in the app),
+              // so on a computer signing in is the way through.
+              <Link
+                href={authPageHref('/login', `/app/feed/post/${encodeURIComponent(id)}`)}
+                className="rounded-full border border-app px-5 py-2.5 text-sm font-semibold text-app hover:bg-surface-muted"
+              >
+                Sign In To View
+              </Link>
+            ) : null}
             <Link
               href="/"
               className="rounded-full border border-app px-5 py-2.5 text-sm font-semibold text-app hover:bg-surface-muted"
