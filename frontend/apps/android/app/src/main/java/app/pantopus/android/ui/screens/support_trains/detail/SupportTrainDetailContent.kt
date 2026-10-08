@@ -133,6 +133,10 @@ data class ReserveSlotOption(
     val slotLabel: String,
     /** Time-window caption, when the slot carries one. */
     val windowLabel: String?,
+    /** The slot's day ("2026-10-11"), so an arrival time is saved on that day. */
+    val slotDate: String? = null,
+    /** The window's start ("17:00:00"), where the arrival time starts. */
+    val windowStart: String? = null,
 )
 
 /**

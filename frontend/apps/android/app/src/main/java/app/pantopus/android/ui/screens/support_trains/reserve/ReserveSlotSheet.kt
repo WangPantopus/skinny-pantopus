@@ -7,6 +7,7 @@
     "PackageNaming",
     "UnusedPrivateMember",
 )
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package app.pantopus.android.ui.screens.support_trains.reserve
 
@@ -25,11 +26,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -61,6 +69,11 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * S1 — the helper sign-up flow the A10.9 detail screen was missing.
@@ -86,6 +99,8 @@ class ReserveSheetDraft(
     restaurantName: String = "",
     noteToRecipient: String = "",
     errorMessage: String? = null,
+    hasArrivalTime: Boolean = false,
+    arrivalTime: String = "",
 ) {
     var step by mutableStateOf(step)
     var slotId by mutableStateOf(slotId)
@@ -94,18 +109,32 @@ class ReserveSheetDraft(
     var restaurantName by mutableStateOf(restaurantName)
     var noteToRecipient by mutableStateOf(noteToRecipient)
     var errorMessage by mutableStateOf(errorMessage)
+    var hasArrivalTime by mutableStateOf(hasArrivalTime)
+
+    /** "17:30", the picked estimated arrival. */
+    var arrivalTime by mutableStateOf(arrivalTime)
 
     /** The helper chose how they'll help or typed something that closing the sheet would drop (not once signed up). */
     val hasEnteredInput: Boolean
         get() =
             step != ReserveStep.SUCCESS &&
-                (mode != null || listOf(dishTitle, restaurantName, noteToRecipient).any { it.isNotEmpty() })
+                (mode != null || hasArrivalTime || listOf(dishTitle, restaurantName, noteToRecipient).any { it.isNotEmpty() })
 
     companion object {
         val Saver =
             listSaver<ReserveSheetDraft, String?>(
                 save = {
-                    listOf(it.step.name, it.slotId, it.mode, it.dishTitle, it.restaurantName, it.noteToRecipient, it.errorMessage)
+                    listOf(
+                        it.step.name,
+                        it.slotId,
+                        it.mode,
+                        it.dishTitle,
+                        it.restaurantName,
+                        it.noteToRecipient,
+                        it.errorMessage,
+                        if (it.hasArrivalTime) "1" else "0",
+                        it.arrivalTime,
+                    )
                 },
                 restore = {
                     ReserveSheetDraft(
@@ -116,6 +145,8 @@ class ReserveSheetDraft(
                         restaurantName = it[4].orEmpty(),
                         noteToRecipient = it[5].orEmpty(),
                         errorMessage = it[6],
+                        hasArrivalTime = it.getOrNull(7) == "1",
+                        arrivalTime = it.getOrNull(8).orEmpty(),
                     )
                 },
             )
@@ -155,6 +186,8 @@ fun ReserveSlotSheet(
     var restaurantName by draft::restaurantName
     var noteToRecipient by draft::noteToRecipient
     var errorMessage by draft::errorMessage
+    var hasArrivalTime by draft::hasArrivalTime
+    var arrivalTime by draft::arrivalTime
 
     val selected = remember(slotId, options) { options.firstOrNull { it.id == slotId } }
     val selectedMode = remember(mode) { SupportTrainContributionMode.entries.firstOrNull { it.wire == mode } }
@@ -266,6 +299,16 @@ fun ReserveSlotSheet(
                             onValueChange = { restaurantName = it },
                         )
                     }
+                    ArrivalTimeField(
+                        enabled = hasArrivalTime,
+                        time = arrivalTime,
+                        onEnabledChange = { on ->
+                            hasArrivalTime = on
+                            // Start at the slot's window, not a blank: as on iOS.
+                            if (on && arrivalTime.isEmpty()) arrivalTime = defaultArrivalTime(selected?.windowStart)
+                        },
+                        onTimeChange = { arrivalTime = it },
+                    )
                     SheetField(
                         label = "Note to recipient",
                         value = noteToRecipient,
@@ -292,6 +335,7 @@ fun ReserveSlotSheet(
                         SummaryRow("Contributing", selectedMode?.label.orEmpty())
                         if (dishTitle.isNotBlank()) SummaryRow("Dish", dishTitle)
                         if (restaurantName.isNotBlank()) SummaryRow("Restaurant", restaurantName)
+                        if (hasArrivalTime) arrivalLabel(arrivalTime)?.let { SummaryRow("Estimated arrival", it) }
                         selected?.windowLabel?.let { SummaryRow("Time window", it) }
                     }
                     Text(
@@ -383,6 +427,8 @@ fun ReserveSlotSheet(
                                     dishTitle = dishTitle.takeIf { it.isNotBlank() },
                                     restaurantName = restaurantName.takeIf { it.isNotBlank() },
                                     noteToRecipient = noteToRecipient.takeIf { it.isNotBlank() },
+                                    estimatedArrivalAt =
+                                        if (hasArrivalTime) arrivalIso(selected?.slotDate, arrivalTime) else null,
                                 ),
                             ) { failure ->
                                 if (failure == null) step = ReserveStep.SUCCESS else errorMessage = failure
@@ -393,6 +439,99 @@ fun ReserveSlotSheet(
                 }
             },
         )
+    }
+}
+
+/** "17:00:00" → "17:00"; a slot without a window starts at the current time, as on iOS. */
+private fun defaultArrivalTime(windowStart: String?): String =
+    windowStart?.takeIf { it.length >= 5 && it[2] == ':' }?.take(5)
+        ?: LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm", Locale.US))
+
+/** "17:30" → "5:30 PM". */
+private fun arrivalLabel(time: String): String? =
+    runCatching { LocalTime.parse(time) }.getOrNull()?.format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))
+
+/** The picked time on the slot's day, in this phone's time zone, as iOS and the web send it. */
+internal fun arrivalIso(
+    slotDate: String?,
+    time: String,
+): String? {
+    val day = slotDate?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return null
+    val clock = runCatching { LocalTime.parse(time) }.getOrNull() ?: return null
+    return day.atTime(clock).atZone(ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US))
+}
+
+/** "Set an estimated arrival time" and, when on, the time (a dialog picks it), as the iOS sheet. */
+@Composable
+private fun ArrivalTimeField(
+    enabled: Boolean,
+    time: String,
+    onEnabledChange: (Boolean) -> Unit,
+    onTimeChange: (String) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(value = enabled, role = Role.Switch, onValueChange = onEnabledChange)
+                    .testTag("supportTrainReserveArrivalToggle"),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Set an estimated arrival time",
+                color = PantopusColors.appText,
+                fontSize = 13.5.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = enabled,
+                onCheckedChange = null,
+                colors =
+                    SwitchDefaults.colors(
+                        checkedTrackColor = PantopusColors.primary600,
+                        checkedThumbColor = PantopusColors.appTextInverse,
+                    ),
+            )
+        }
+        if (enabled) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Estimated arrival",
+                    color = PantopusColors.appText,
+                    fontSize = 15.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = { showPicker = true },
+                    modifier = Modifier.testTag("supportTrainReserveArrivalPicker"),
+                ) {
+                    Text(text = arrivalLabel(time) ?: "Pick a time", color = PantopusColors.primary600, fontSize = 15.sp)
+                }
+            }
+        }
+    }
+    if (showPicker) {
+        val clock = runCatching { LocalTime.parse(time) }.getOrNull() ?: LocalTime.of(17, 0)
+        val state = rememberTimePickerState(initialHour = clock.hour, initialMinute = clock.minute, is24Hour = false)
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPicker = false
+                    onTimeChange(String.format(Locale.US, "%02d:%02d", state.hour, state.minute))
+                }) { Text("Done") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("Cancel") }
+            },
+        ) {
+            Box(modifier = Modifier.padding(Spacing.s4)) {
+                TimePicker(state = state)
+            }
+        }
     }
 }
 
