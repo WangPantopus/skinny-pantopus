@@ -5,6 +5,7 @@ import Link from 'next/link';
 import * as api from '@pantopus/api';
 import TaskAttachmentList from './TaskAttachmentList';
 import { recurrenceStatusText, validAutomaticTaskRecurrence, type AutomaticTaskRecurrence } from './tasks/homeTaskModel';
+import { RETURN_REFRESH_MS, transientFailure } from './returnRefresh';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const statuses: Record<string, string> = { open: 'Open', in_progress: 'In progress', done: 'Done', canceled: 'Canceled' };
@@ -29,7 +30,7 @@ export default function HomeTaskNotificationDetail({ homeId, taskId }: { homeId:
     let invalidated = false;
     let generation = 0;
     let working = false;
-    let pendingReload = false;
+    let lastRead = 0, shown = false;
     let actorId: string | null = null;
     let bound: api.HomeTaskSessionScope | null = null;
     const token = api.getAuthToken();
@@ -51,15 +52,16 @@ export default function HomeTaskNotificationDetail({ homeId, taskId }: { homeId:
       } catch { retire(); return false; }
       return true;
     };
-    const visible = () => document.visibilityState !== 'hidden';
-    const active = (ticket: number) => current() && ticket === generation && visible();
-    const load = async () => {
-      if (working || !visible() || !current()) return;
+    const active = (ticket: number) => current() && ticket === generation;
+    // A background re-read (coming back to the page) keeps the task on screen until the newer answer arrives.
+    const load = async (background = false) => {
+      if (working || !current()) return;
       if (!uuid.test(homeId) || !uuid.test(taskId)) {
         setTask(null); setLoading(false); setError('This task link is invalid.'); return;
       }
       const ticket = ++generation;
-      working = true; setTask(null); setScope(null); setLoading(true); setError('');
+      working = true; lastRead = Date.now();
+      if (!background) { shown = false; setTask(null); setScope(null); setLoading(true); setError(''); }
       try {
         if (!actorId) {
           const profile = await api.users.getMyProfile();
@@ -82,31 +84,28 @@ export default function HomeTaskNotificationDetail({ homeId, taskId }: { homeId:
           })
           || !Object.hasOwn(statuses, result.task.status)) throw new Error('Invalid task response');
         bound = { ...proof };
-        setTask(result.task); setScope(bound);
+        shown = true; setTask(result.task); setScope(bound); setError('');
       } catch (failure) {
         if (!active(ticket)) return;
         const response = failure as { statusCode?: number; code?: string; data?: { code?: string } };
         if (response?.statusCode === 401 || response?.code === 'SESSION_SCOPE_CHANGED' || response?.data?.code === 'SESSION_SCOPE_CHANGED') retire();
+        else if (background && transientFailure(failure)) return;
         else {
-          setTask(null); setScope(null);
+          shown = false; setTask(null); setScope(null);
           setError(response?.statusCode === 403 || response?.statusCode === 404
             ? 'This task is unavailable or your access has changed.' : 'This task could not be loaded. Try again.');
         }
       } finally {
         working = false;
         if (mounted && !invalidated && ticket === generation) setLoading(false);
-        if (pendingReload && mounted && !invalidated && visible()) {
-          pendingReload = false;
-          void load();
-        }
       }
     };
     reload.current = () => { void load(); };
+    // Coming back keeps the task and re-reads it behind the scenes at most every 30 s: a network or server
+    // blip keeps it, a refusal shows why. An account or session change retires the page.
     const visibility = () => {
-      if (document.visibilityState === 'hidden') {
-        generation++; setTask(null); setScope(null); setLoading(false);
-      } else if (working) pendingReload = true;
-      else void load();
+      if (document.visibilityState === 'hidden' || working || Date.now() - lastRead < RETURN_REFRESH_MS) return;
+      void load(shown);
     };
     const sessionChanged = (event: StorageEvent) => {
       if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) retire();
