@@ -359,10 +359,7 @@ extension BlockedUsersViewModelTests {
         try await waitForRequest("/api/users/u_carol/block")
         await vm.unblock("ub1")
         let refresh = Task { await vm.refresh() }
-        for _ in 0..<100 {
-            if SequencedURLProtocol.capturedRequests.filter({ $0.url?.path == "/api/users/blocked" }).count == 2 { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await waitForRequest("/api/users/blocked", count: 2)
         XCTAssertTrue(SequencedURLProtocol.release("unblock"))
         await pending.value
         XCTAssertTrue(SequencedURLProtocol.release("list"))
@@ -372,12 +369,14 @@ extension BlockedUsersViewModelTests {
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "DELETE" }.count, 1)
     }
 
-    private func waitForRequest(_ path: String) async throws {
-        for _ in 0..<100 {
-            if SequencedURLProtocol.capturedRequests.contains(where: { $0.url?.path == path }) { return }
+    /// Waits for `count` requests to `path`. CI simulators can be slow, so it allows 5 s, and it fails
+    /// here instead of letting a test hang on a gate whose request never arrived.
+    private func waitForRequest(_ path: String, count: Int = 1) async throws {
+        for _ in 0..<500 {
+            if SequencedURLProtocol.capturedRequests.filter({ $0.url?.path == path }).count >= count { return }
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTFail("Expected request: \(path)")
+        XCTFail("Expected \(count) request(s): \(path)")
         throw URLError(.timedOut)
     }
 }
