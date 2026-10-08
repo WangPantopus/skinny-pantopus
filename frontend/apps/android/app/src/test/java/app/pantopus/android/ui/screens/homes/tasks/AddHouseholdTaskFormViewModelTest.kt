@@ -70,6 +70,7 @@ class AddHouseholdTaskFormViewModelTest {
         every { creation.pending } returns null
         every { creation.canClear } returns false
         every { access.isCurrent } answers { !invalidated.value }
+        every { access.actorId } returns "actor"
         every { access.invalidated } returns invalidated
         coEvery { access.requireCurrent() } coAnswers {
             currentCoroutineContext().ensureActive()
@@ -109,8 +110,9 @@ class AddHouseholdTaskFormViewModelTest {
             coEvery { creation.submit(capture(body)) } returns task
             val vm = vm()
             assertEquals(AddHouseholdTaskFormUiState.Editing, vm.state.value)
-            assertTrue(vm.memberListUnavailable.value)
-            assertTrue(vm.assignableMembers.value.isEmpty())
+            // A refused roster is expected (private setup, ordinary member): the viewer can still take the task.
+            assertFalse(vm.memberListUnavailable.value)
+            assertEquals(listOf("actor" to "Me"), vm.assignableMembers.value.map { it.id to it.displayName })
             assertNull(vm.selectedAssigneeId)
             vm.update(AddHouseholdTaskField.Title, "Restock towels")
             vm.save()
@@ -129,7 +131,7 @@ class AddHouseholdTaskFormViewModelTest {
             vm.resume()
             assertEquals(AddHouseholdTaskFormUiState.Editing, vm.state.value)
             assertFalse(vm.memberListUnavailable.value)
-            assertTrue(vm.assignableMembers.value.isEmpty())
+            assertEquals(listOf("actor"), vm.assignableMembers.value.map { it.id })
         }
 
     @Test fun denied_member_roster_preserves_an_existing_task_assignment_on_title_only_edit() =
@@ -138,7 +140,7 @@ class AddHouseholdTaskFormViewModelTest {
             val body = slot<HomeTaskEditPatch>()
             coEvery { access.edit("task", capture(body)) } returns task.copy(title = "Restock towels")
             val vm = vm(edit = true)
-            assertTrue(vm.memberListUnavailable.value)
+            assertFalse(vm.memberListUnavailable.value)
             assertEquals(task.assignedTo, vm.selectedAssigneeId)
             vm.update(AddHouseholdTaskField.Title, "Restock towels")
             vm.save()
