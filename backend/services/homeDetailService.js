@@ -179,17 +179,28 @@ async function propertyDetail(homeId, actorId) {
 async function members(homeId, actorId, { history = false } = {}) {
   return authority.withCurrentAccess({ homeId, actorId, permission: 'members.view' }, async access => {
     if (history && !access.permissions.includes('members.manage')) throw failure('HOME_MEMBER_HISTORY_DENIED', 403);
-    const occupants = await readMembers(homeId, { history });
-    const invites = access.permissions.includes('members.manage') ? await invitations.list(actorId, homeId) : [];
+    const manage = access.permissions.includes('members.manage');
+    // Members and invitations are independent reads, so they run together;
+    // a failure is reported in the same order as before.
+    const [occupantsRead, invitesRead] = await Promise.allSettled([
+      readMembers(homeId, { history }),
+      manage ? invitations.list(actorId, homeId) : [],
+    ]);
+    const occupants = settledValue(occupantsRead);
+    const invites = settledValue(invitesRead);
     const pendingInvites = invites.map(invite => {
       if (!uuid(invite.id) || invite.home_id !== homeId || typeof invite.proposed_role !== 'string') throw failure();
       return { id: invite.id, user_id: invite.invitee_user_id, role: invite.proposed_role, is_active: false,
         email: invite.invitee_email, name: invite.invitee_email || 'Invited user',
         invited_by: invite.inviter?.username || null, created_at: invite.created_at };
     });
-    if (JSON.stringify(await readMembers(homeId, { history })) !== JSON.stringify(occupants)) throw failure();
-    if (access.permissions.includes('members.manage')
-      && JSON.stringify(await invitations.list(actorId, homeId)) !== JSON.stringify(invites)) throw failure();
+    // Both rereads run together and are compared in their old order.
+    const [membersAgain, invitesAgain] = await Promise.allSettled([
+      readMembers(homeId, { history }),
+      manage ? invitations.list(actorId, homeId) : null,
+    ]);
+    if (JSON.stringify(settledValue(membersAgain)) !== JSON.stringify(occupants)) throw failure();
+    if (manage && JSON.stringify(settledValue(invitesAgain)) !== JSON.stringify(invites)) throw failure();
     return { occupants, pendingInvites };
   });
 }
