@@ -417,7 +417,8 @@ export default function ChatListPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         <PageHeader
           title="Messages"
-          subtitle={listFailed ? undefined : totalUnread > 0 ? `${totalUnread} unread` : `${conversations.length} ${conversations.length === 1 ? 'conversation' : 'conversations'}`}
+          // No count until the list has loaded: it read "0 conversations" while loading.
+          subtitle={loading || listFailed ? undefined : totalUnread > 0 ? `${totalUnread} unread` : `${conversations.length} ${conversations.length === 1 ? 'conversation' : 'conversations'}`}
           ctaLabel="New message"
           ctaOnClick={openNewChat}
         >
