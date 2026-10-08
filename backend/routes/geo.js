@@ -1,6 +1,6 @@
 // CST-01: every endpoint here proxies a per-request billed geocoding API.
 // They were previously mounted unauthenticated and unmetered, so anyone with
-// curl could run up the bill indefinitely. All three are now metered.
+// curl could run up the bill indefinitely. All of them are now metered.
 //
 // Authentication is deliberately NOT the control on /autocomplete and
 // /resolve. The signed-out acquisition funnel runs on exactly those two:
@@ -11,7 +11,8 @@
 // refresh-then-redirect, throwing anonymous visitors to /login. The
 // denial-of-wallet control is the meter, so anonymous callers keep access at a
 // tighter per-IP budget. /reverse has no signed-out caller and still requires
-// a session.
+// a session, and so do the place-tag routes (/places/nearby, /places/search):
+// only the signed-in composers call them.
 const express = require('express');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
@@ -273,7 +274,7 @@ router.get('/reverse', verifyToken, geocodeLimiter, async (req, res) => {
 // ── GET /geo/places/nearby?lat=..&lng=.. ─────────────────────
 // Named places (POIs) + locality around a point for the place-tag picker.
 
-router.get('/places/nearby', async (req, res) => {
+router.get('/places/nearby', verifyToken, geocodeLimiter, async (req, res) => {
   const startTime = process.hrtime.bigint();
   const ipHash = hashIp(req);
   const rawLng = req.query.lng ?? req.query.lon; // accept `lon` alias
@@ -348,7 +349,7 @@ router.get('/places/nearby', async (req, res) => {
 // ── GET /geo/places/search?q=..&lat=..&lng=.. ────────────────
 // Place-tag picker search; lat/lng are optional proximity hints.
 
-router.get('/places/search', async (req, res) => {
+router.get('/places/search', verifyToken, geocodeLimiter, async (req, res) => {
   const startTime = process.hrtime.bigint();
   const ipHash = hashIp(req);
   const q = (req.query.q || '').toString().trim();
