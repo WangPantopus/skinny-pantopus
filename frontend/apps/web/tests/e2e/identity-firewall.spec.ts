@@ -75,6 +75,8 @@ async function mockIdentityApi(page: Page) {
         id: 'user-1',
         email: 'maya@example.test',
         username: 'maya',
+        firstName: 'Maya',
+        lastName: 'Local',
         name: 'Maya Local',
         verified: true,
       });
