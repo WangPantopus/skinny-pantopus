@@ -11,6 +11,15 @@
 import SwiftUI
 
 extension TodaySkyPainter {
+    /// The day's first and last golden hour warm the horizon until dawn's or
+    /// dusk's own sky takes over: 0 outside them, up to 0.5 at the handover.
+    var goldenWarmth: Double {
+        guard moment.phase == .day else { return 0 }
+        let evening = (moment.minutes - (moment.sunset - 60)) / 20
+        let morning = (moment.sunrise + 60 - moment.minutes) / 20
+        return min(max(max(evening, morning), 0), 1) * 0.5
+    }
+
     /// One shooting star every few seconds across the upper right of the sky;
     /// with motion off, a single faint streak holds still.
     func paintMeteors(_ context: GraphicsContext, _ scene: Scene) {

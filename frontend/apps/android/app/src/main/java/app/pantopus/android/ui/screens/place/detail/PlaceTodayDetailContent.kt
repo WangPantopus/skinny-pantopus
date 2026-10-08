@@ -915,7 +915,15 @@ private fun TodayWeatherSection(
                 intel.section(PlaceSectionId.AIR_QUALITY)?.takeIf { it.isLive() }?.airQuality?.let {
                     SkyAir(it.index, it.categoryLabel, smoky = it.dominantPollutant == "pm25")
                 }
-            TodaySkyHero(data, intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset, pickups, air, onBins)
+            TodaySkyHero(
+                data,
+                intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset,
+                pickups,
+                air,
+                home = SkyHome.of(intel.section(PlaceSectionId.YOUR_HOME)?.yourHome?.homeType),
+                streetLights = SkyStreet.lights(intel.section(PlaceSectionId.BLOCK_DENSITY)?.blockDensity?.bucket?.name?.lowercase()),
+                onBins = onBins,
+            )
             PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf))
         } else {
             PlaceDetailFallbackCard(env)

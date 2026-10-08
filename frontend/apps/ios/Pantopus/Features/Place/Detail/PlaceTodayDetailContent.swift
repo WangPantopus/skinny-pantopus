@@ -157,7 +157,9 @@ struct PlaceTodayDetailContent: View {
                     data: data,
                     sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
                     pickups: calendarEvents,
-                    air: skyAir
+                    air: skyAir,
+                    home: SkyHome(vm.section(.yourHome, in: intel)?.yourHome?.homeType),
+                    streetLights: SkyStreet.lights(vm.section(.blockDensity, in: intel)?.blockDensity?.bucket.rawValue)
                 ) { withAnimation { proxy.scrollTo("todayAddressCalendar", anchor: .top) } }
                 PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
             } else {

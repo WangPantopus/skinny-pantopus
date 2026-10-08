@@ -33,6 +33,21 @@ import kotlin.math.sqrt
  * inputs always give the same picture, and [still] gives the motionless one.
  * Parity twin of iOS `TodaySkyPainter.swift` and `TodaySkyGround.swift`; the numbers match.
  */
+
+/** The scene's finer details: the meteor shower, smoke and rain, and the home and its street. */
+data class SkyDetails(
+    /** A meteor shower's peak night: shooting stars whatever the note says. */
+    val meteorShower: Boolean = false,
+    /** Wildfire smoke, 0 (none) to 0.85: an amber veil and a dim red sun. */
+    val smoke: Double = 0.0,
+    /** How hard it rains, 0 (a light shower) to 1 (a downpour). */
+    val rain: Double = 0.5,
+    /** The resident's kind of home (`TodaySkyHomes.kt`). */
+    val home: SkyHome = SkyHome.HOUSE,
+    /** Lights on the far hill after dusk, from the block's density bucket. */
+    val streetLights: Int = 0,
+)
+
 class TodaySkyPainter(
     private val condition: WeatherConditionCode,
     private val moment: SkyMoment,
@@ -41,14 +56,10 @@ class TodaySkyPainter(
     /** Today's note, when it has a picture: bins at the curb. */
     private val note: SkyNote?,
     private val season: SkySeason,
-    /** A meteor shower's peak night: shooting stars whatever the note says. */
-    private val meteorShower: Boolean,
     private val still: Boolean,
-    /** Wildfire smoke, 0 (none) to 0.85: an amber veil and a dim red sun. */
-    private val smoke: Double = 0.0,
-    /** How hard it rains, 0 (a light shower) to 1 (a downpour). */
-    private val rain: Double = 0.5,
+    private val details: SkyDetails = SkyDetails(),
 ) {
+    private val smoke = details.smoke
     private val weather = skyWeather(condition)
     private val night = moment.phase == SkyPalette.Phase.NIGHT
 
@@ -73,7 +84,7 @@ class TodaySkyPainter(
         with(scope) {
             paintSky(scene)
             if (night && clear) paintStars(scene)
-            if (night && clear && meteorShower) paintMeteors(scene, still)
+            if (night && clear && details.meteorShower) paintMeteors(scene, still)
             if (night) paintMoon(scene) else paintSun(scene)
             paintClouds(scene)
             paintRain(scene)
@@ -81,7 +92,7 @@ class TodaySkyPainter(
             if (condition == WeatherConditionCode.WIND) paintWind(scene)
             if (weather == SkyPalette.Weather.STORM && !still) paintLightning(scene)
             if (smoke > 0) paintSmoke(scene, smoke, night)
-            TodaySkyGround(scene, weather, moment, condition, temperature < 50, still, note?.bins.orEmpty(), season).paint(this)
+            TodaySkyGround(scene, weather, moment, condition, temperature < 50, still, note?.bins.orEmpty(), season, details).paint(this)
             // Fog hugs the ground, in front of the house and below the reading.
             paintFog(scene)
             paintScrim(scene)
@@ -231,7 +242,7 @@ class TodaySkyPainter(
                 condition == WeatherConditionCode.SLEET -> 40
                 else -> 70
             }
-        val count = (base * (0.6 + 0.8 * rain)).toInt()
+        val count = (base * (0.6 + 0.8 * details.rain)).toInt()
         val path = Path()
         repeat(count) {
             val start = random.next() * (scene.width + 40)

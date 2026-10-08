@@ -26,6 +26,9 @@ struct TodaySkyHero: View {
     var pickups: [PlaceCalendarEvent] = []
     /// The air reading: smoke veils the sky, and bad air leads the card.
     var air: SkyAir?
+    /// The resident's kind of home, and the far hill's lights after dusk.
+    var home: SkyHome = .house
+    var streetLights = 0
     /// Tapping the bins shows the pickup schedule.
     var onBins: (() -> Void)?
 
@@ -134,6 +137,8 @@ struct TodaySkyHero: View {
                 meteorShower: shower,
                 smoke: air?.smoke ?? 0,
                 rain: shown.rain,
+                home: home,
+                streetLights: streetLights,
                 still: !animating
             )
             Canvas { context, size in
@@ -150,7 +155,7 @@ struct TodaySkyHero: View {
                 Color.clear.frame(width: 52, height: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(TodaySkyGround.binsCenter(in: proxy.size, count: note.bins.count))
+            .position(TodaySkyGround.binsCenter(in: proxy.size, count: note.bins.count, home: home))
             .accessibilityLabel(note.spoken)
             .accessibilityHint("Shows your pickup schedule.")
             .accessibilityIdentifier("todaySkyBins")

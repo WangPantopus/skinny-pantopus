@@ -25,6 +25,8 @@ struct TodaySkyPainter {
     var smoke = 0.0
     /// How hard it rains, 0 (a light shower) to 1 (a downpour).
     var rain = 0.5
+    var home: SkyHome = .house
+    var streetLights = 0
     let still: Bool
 
     private var weather: SkyPalette.Weather {
@@ -56,7 +58,9 @@ struct TodaySkyPainter {
             cold: temperature < 50,
             still: still,
             bins: note?.bins ?? [],
-            season: season
+            season: season,
+            home: home,
+            streetLights: streetLights
         ).paint(context)
         // Fog hugs the ground, in front of the house and below the reading.
         paintFog(context, scene)
@@ -97,15 +101,6 @@ struct TodaySkyPainter {
             let raw = (base + (still ? 0 : time * speed)).truncatingRemainder(dividingBy: span)
             return raw < 0 ? raw + span : raw
         }
-    }
-
-    /// The day's first and last golden hour warm the horizon until dawn's or
-    /// dusk's own sky takes over: 0 outside them, up to 0.5 at the handover.
-    private var goldenWarmth: Double {
-        guard moment.phase == .day else { return 0 }
-        let evening = (moment.minutes - (moment.sunset - 60)) / 20
-        let morning = (moment.sunrise + 60 - moment.minutes) / 20
-        return min(max(max(evening, morning), 0), 1) * 0.5
     }
 
     private func paintSky(_ context: GraphicsContext, _ scene: Scene) {
