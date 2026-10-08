@@ -548,6 +548,35 @@ The founder decided on October 6 that Ballot is needed on the web as well as on 
 - Release check 1 still needs a person: every source and link, Vermont's Oct 1 statement, the two Mountain-time assumptions and the late-week wording. The real-address check with the configured providers and the device pass (the timeline on the Oregon, Hawaii and Utah days) are unchanged from §10.3.
 - Two limits, accepted: the repair stops at the first label it cannot improve, so on charts crowded beyond anything a real state has (more labels than any state's seven) a few collisions remain; and if the exact-point lookup fails with nothing cached, the Civic page's districts show their normal error state, and the governments row, which rides with them, is missing there while the Place card (served from its own cache) still shows its count.
 
+### 10.7 Rebase onto master and verification — October 8, 2026
+
+The founder asked for PR #429 to be rebased onto master with nothing lost on either side, verified again, repaired where needed and merged. The flag stays off; merging does not turn it on.
+
+**The rebase.** The branch's 38 commits were replayed onto master `55573503a`, which had moved 1,030 commits past the last merge (`9f8cf1a59`). As master kept moving, the finished branch was replayed twice more. Onto `e4d9421e8`, all 42 patches came out identical. Onto `6a5a47a70`, master's Today sky change (#1929) met the Android Today card: the card now follows master's new weather-section call, as before, and the other 41 patches are identical. The two merge commits from October 6 (`b47d732c2`, `e20e586cd`) are gone from the history; their conflict fixes, including `openBallot()` reading `detail?.calendarHomeId`, were redone where each commit first meets the newer code. Conflicts and how they were kept:
+
+- `routes/public.js`: master moved the preview into `buildPlacePreview`, which saved places share. The `/start` teaser now runs beside it on `GET /place` only, so a saved place's preview still carries no Ballot.
+- `placeSectionCache.js` (master's provider-timeout cooldown) and `placeIntelligenceService.js` (master's viewer rules and rent wiring): both sides kept.
+- iOS and Android Today (master's new weather card, radon and saved-place wiring): the Ballot card stays between Weather and "Good day to…" (iOS through the `ballotWeek` subview); `onOpenBallot` is passed through on both.
+- iOS `PlaceDashboardView` and Android `PlaceDetailScreen`, `PlaceMoneyCivicDetailContent`: master's new parameters and imports kept with the Ballot ones; `NEXT_STEPS.md`, the handoff and the shared types: both sides kept.
+
+A line audit compares the PR's change against its old base with the rebased branch's change against master (`6a5a47a70`): all 10,821 lines the PR added are present, and no master line is removed except at the two adapted spots (the teaser wiring in `public.js` and one Android line master re-indented). The old head is kept locally as `backup/pr429-pre-rebase-0c6d4428e`. The flag migration, renamed inside a merge commit before, is now `20261008180737_ballot_p0_flag.sql` (same SQL) so it sorts after master's newest; `scripts/db/check-migrations.cjs` passes.
+
+**Repairs** (each its own commit):
+
+1. **The stale limit holds during a cooldown.** Master's cache now skips a provider for two minutes after a timeout and serves any expired row meanwhile. During a Census cooldown that served governments rows past their 37-day limit (30-day TTL plus 7). The age check now gates both paths. Callers without a limit are unchanged.
+2. **No Ballot card for guests and service providers.** Master's Place rules (founder, October 8) give them public facts only and keep the home record from them. The card is the household's own: "Your ballot", and "Moved this year?" from the move-in date the household entered. A nonresident viewer now gets the plain Civic election row and districts, as before Ballot.
+
+**Verification** (on the branch as rebased onto `55573503a`). Local backend from this branch on the shared local database, with `ballot_p0` on only for this pass's test accounts (`beta_user_ids`). The global switch, which the anonymous teaser follows, was on from 18:25Z to 18:28Z, when only this backend ran Ballot code. Test homes: a synthetic Vancouver, WA home, and homes at the public buildings of Portland City Hall, Denver's City and County Building and Sacramento City Hall. Real Census lookups ran throughout.
+
+- **Checks.** Backend Jest: 342 suites and 6,633 tests passed; the privacy gates pass. Web: ESLint 0 errors, the type gate 0 errors, Jest 123 suites with 2,383 tests. iOS: SwiftLint strict (0 violations in 2,274 files), SwiftFormat, the icon and overline gates, and the Debug simulator build. Android: `assembleDebug`, ktlint and detekt.
+- **Web** (in-app browser): the Washington card, the governments sheet (story, finished frame, Escape, focus back on the button), the Civic page's "Your governments" row and election row, and "Moved this year?" on Today (opens the Secretary of State). The `/start` teaser at Vancouver City Hall, with the Civic group's "Next election" row left out. Oregon's Oct 13 and Oct 14 labels at desktop and 375 px widths, and dark mode. A guest's view of the same home has no card.
+- **iOS** (iPhone 17 simulator, iOS 27): the Washington card and governments story; Colorado's Today "Ballot week" card. "Open your ballot" lands on the home's dashboard from the dashboard (no second copy pushed) and from the Civic page. Also the Civic row, Oregon's card and its "Moved this year?" line on Today, and dark mode.
+- **Android** (API 34 emulator): the Washington card, the governments finished frame and "Moved this year?" on Today. Colorado's "Ballot week" card: "Open your ballot" pushes the dashboard from the Civic page, and Back returns there. Also the Civic row and Oregon's card. All three platforms draw Oregon's timeline the same way.
+
+**Found, not fixed.** On an iPhone 17 at the default text size, the governments view's finished frame hides the last caption line ("…are not counted yet.") under Done until the middle is scrolled. The same caveat is in the source line below Done, so nothing is lost. Android fits at its default size. The proposed repair scrolls the middle to its end when the story finishes or starts finished. It was written but not built: the Mac had under 6 GB free, and the build lock refuses builds below that. It is left for a follow-up.
+
+**Not verified.** CI on the rebased head (it runs on the PR); physical phones, push, VoiceOver and TalkBack; the Hawaii and Utah timeline days; address validation through the providers for these homes (they were seeded, then placed at the public buildings' coordinates). Release check 1 still needs a person: every source and link, Vermont's Oct 1, the two Mountain-time assumptions and the late-week wording.
+
 ## 11. Founder approvals needed before release
 
 **Items 1–6 approved by the founder on September 25, 2026.** Item 7 was approved on September 24. Item 8 records the government-counting decision made the same day.
