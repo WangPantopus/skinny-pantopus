@@ -6,6 +6,9 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainOrganizer
 import app.pantopus.android.data.api.models.support_trains.SupportTrainReservationDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
 import java.text.SimpleDateFormat
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -126,9 +129,9 @@ object ManageOrganizerProjection {
             val slot = reservation.slotId?.let { slotById[it] }
             val contribution =
                 listOfNotNull(
-                    reservation.contributionMode?.replaceFirstChar { it.uppercase() },
-                    reservation.dishTitle,
-                ).filter { it.isNotBlank() }.joinToString(" · ")
+                    contributionSummary(reservation),
+                    arrivalLabel(reservation.estimatedArrivalAt)?.let { "arrives $it" },
+                ).joinToString(" · ")
             ManageHelperRow(
                 id = reservation.id,
                 name = reservation.displayName,
@@ -139,6 +142,34 @@ object ManageOrganizerProjection {
                 exactAddressShared = reservation.exactAddressShared == true,
             )
         }
+    }
+
+    /**
+     * "Home-cooked meal: Lentil soup", "Takeout / delivery: Thai Palace": what the helper brings,
+     * named as the web train pages name it.
+     */
+    fun contributionSummary(reservation: SupportTrainReservationDto): String? {
+        val label =
+            when (val mode = reservation.contributionMode.orEmpty()) {
+                "" -> null
+                "cook" -> "Home-cooked meal"
+                "takeout" -> "Takeout / delivery"
+                "groceries" -> "Groceries"
+                else -> mode.replace('_', ' ')
+            }
+        val detail = listOf(reservation.dishTitle, reservation.restaurantName).firstOrNull { !it.isNullOrBlank() }
+        return listOfNotNull(label, detail).joinToString(": ").ifEmpty { null }
+    }
+
+    /** The helper's estimated arrival ("2026-10-12T00:30:00Z") as "5:30 pm" in this phone's time zone. */
+    fun arrivalLabel(iso: String?): String? {
+        if (iso.isNullOrBlank()) return null
+        return runCatching {
+            OffsetDateTime.parse(iso)
+                .atZoneSameInstant(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))
+                .lowercase(Locale.US)
+        }.getOrNull()
     }
 
     fun organizerRows(organizers: List<SupportTrainOrganizerRowDto>): List<ManageOrganizerRow> =

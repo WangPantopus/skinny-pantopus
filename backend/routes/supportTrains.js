@@ -3970,6 +3970,8 @@ router.get(
 
       return item;
     });
+    // The apps list these as sent: by slot day, with the query's signup order breaking ties.
+    result.sort((a, b) => (a.slot_date || '9999-12-31').localeCompare(b.slot_date || '9999-12-31'));
 
     res.json({ reservations: result, viewer_role: role });
   })
