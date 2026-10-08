@@ -5,6 +5,9 @@ interface ActivityTabProps {
   posts: Record<string, unknown>[];
   reviews: Record<string, unknown>[];
   loading: boolean;
+  /** The viewer blocked this person: a block hides both people's posts from each other. */
+  blocked?: boolean;
+  firstName?: string | null;
 }
 
 function audienceLabel(audience: unknown): string {
@@ -14,7 +17,7 @@ function audienceLabel(audience: unknown): string {
   return 'Post';
 }
 
-export default function ActivityTab({ gigs, posts, reviews, loading }: ActivityTabProps) {
+export default function ActivityTab({ gigs, posts, reviews, loading, blocked = false, firstName = null }: ActivityTabProps) {
   if (loading) {
     return (
       <div className="text-center py-12">
@@ -48,6 +51,18 @@ export default function ActivityTab({ gigs, posts, reviews, loading }: ActivityT
     })),
   ].sort((a, b) => new Date(String(b.date)).getTime() - new Date(String(a.date)).getTime());
 
+  // Never "No activity yet" or an invitation to say hi to someone the viewer blocked.
+  const hiddenNote = `You blocked ${firstName || 'this person'}. Neither of you sees the other's posts while the block is on.`;
+  if (blocked && items.length === 0) {
+    return (
+      <div className="text-center py-12 bg-surface rounded-xl border border-app">
+        <div className="text-6xl mb-4" aria-hidden="true">🔒</div>
+        <h3 className="text-lg font-semibold text-app mb-2">Posts hidden</h3>
+        <p className="text-app-secondary">{hiddenNote}</p>
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <div className="text-center py-12 bg-surface rounded-xl border border-app">
@@ -61,6 +76,7 @@ export default function ActivityTab({ gigs, posts, reviews, loading }: ActivityT
 
   return (
     <div className="bg-surface rounded-xl border border-app p-5 space-y-3">
+      {blocked && <p className="text-sm text-app-secondary">{hiddenNote}</p>}
       {items.map((item) => (
         <div key={item.id} className="rounded-lg border border-app p-3">
           <p className="text-xs uppercase tracking-wide text-app-secondary">{item.type}</p>
