@@ -33,9 +33,12 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceYourHomeData
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.place.PlacePresentation
+import app.pantopus.android.ui.screens.place.PlaceValueAccess
 import app.pantopus.android.ui.screens.place.components.PlaceChevron
 import app.pantopus.android.ui.screens.place.components.PlaceIconTile
+import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
 import app.pantopus.android.ui.screens.place.components.PlaceTileTone
+import app.pantopus.android.ui.screens.place.valueAccess
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -64,13 +67,7 @@ fun PlaceHomeDetailContent(intel: PlaceIntelligence) {
             FactsCard(data)
             PlaceSourceNote("County public records · estimate model", asOf)
 
-            PlaceDetailSectionLabel("Value")
-            ValueCard(data)
-            data.assessedValue?.let { AssessmentCard(it) }
-            PlaceSourceNote("County public records · estimate model", asOf)
-
-            PlaceDetailSectionLabel("Equity")
-            EquityCalculator(data.estimatedValue)
+            ValueSection(intel.valueAccess, data, asOf)
         } else {
             PlaceDetailSectionLabel("Your home")
             PlaceDetailFallbackCard(env)
@@ -86,6 +83,40 @@ fun PlaceHomeDetailContent(intel: PlaceIntelligence) {
         } else {
             PlaceDetailFallbackCard(systemsEnv)
         }
+    }
+}
+
+/**
+ * The value, assessment and equity are the confirmed owner's. A pending
+ * owner sees them waiting on the ownership review; renters and other
+ * household members see the Home's facts only.
+ */
+@Composable
+private fun ValueSection(
+    access: PlaceValueAccess,
+    data: PlaceYourHomeData,
+    asOf: String?,
+) {
+    when (access) {
+        PlaceValueAccess.SHOWN -> {
+            PlaceDetailSectionLabel("Value")
+            ValueCard(data)
+            data.assessedValue?.let { AssessmentCard(it) }
+            PlaceSourceNote("County public records · estimate model", asOf)
+
+            PlaceDetailSectionLabel("Equity")
+            EquityCalculator(data.estimatedValue)
+        }
+        PlaceValueAccess.PENDING -> {
+            PlaceDetailSectionLabel("Value")
+            PlaceLockedCard(
+                title = "Estimated value",
+                reason = "Available once your ownership is confirmed.",
+                cta = "Confirm ownership",
+                icon = PantopusIcon.Landmark,
+            )
+        }
+        PlaceValueAccess.HIDDEN -> Unit
     }
 }
 

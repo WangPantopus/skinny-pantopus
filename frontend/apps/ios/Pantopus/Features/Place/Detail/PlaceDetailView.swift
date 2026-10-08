@@ -68,12 +68,18 @@ struct PlaceDetailView: View {
         case .loading:
             PlaceDetailSkeleton()
         case let .loaded(intel):
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    groupContent(intel)
+            if intel.leavesOut(viewModel.group) {
+                // The server leaves out what doesn't apply to this viewer;
+                // a link to it gets a straight answer, not empty cards.
+                notForViewer(role: intel.viewer?.role)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        groupContent(intel)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, Spacing.s10)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, Spacing.s10)
             }
         case let .error(message):
             if viewModel.accessDenied {
@@ -82,6 +88,31 @@ struct PlaceDetailView: View {
                 ErrorState(message: message) { await viewModel.refresh() }
             }
         }
+    }
+
+    /// What a viewer is told on a detail page that isn't part of their view of a Home.
+    private func notForViewer(role: String?) -> some View {
+        let guest = role == "nonresident"
+        let headline = if !guest {
+            "Money signals are for the owner or renter"
+        } else if viewModel.group == .money {
+            "Money signals are for the household"
+        } else {
+            "Home records are for the household"
+        }
+        let subcopy = guest
+            ? "Guests and service providers see this address's public information: "
+            + "today, risk and readiness, the block and civic details."
+            : "Bill comparisons, rent and property-tax checks belong to whoever owns or rents this home. "
+            + "Your Place still shows the home's details, its risks and today's conditions."
+        let back = onBack
+        return EmptyState(
+            icon: .mapPin,
+            headline: headline,
+            subcopy: subcopy,
+            cta: .init(title: "Back to your Place") { back() }
+        )
+        .accessibilityIdentifier("place.detail.notForViewer")
     }
 
     @ViewBuilder
@@ -124,6 +155,23 @@ extension PlaceDetailViewModel {
     @ViewBuilder
     func fallbackCard(_ env: PlaceSectionEnvelope) -> some View {
         let cfg = PlacePresentation.config(for: env.id)
+        if env.access == .locked {
+            // Before verification every lock is the verify-by-mail step; a lock
+            // waiting on the ownership review (T3/T4) has nothing to tap.
+            PlaceLockedCard(
+                icon: cfg.icon,
+                title: cfg.title,
+                reason: PlacePresentation.lockReason(env),
+                cta: PlacePresentation.lockCta(env.band, verifiesFirst: verifiesFirst),
+                onTap: verifiesFirst || env.band == .d ? verifyAction : nil
+            )
+        } else {
+            liveOrUnavailableCard(env, cfg: cfg)
+        }
+    }
+
+    @ViewBuilder
+    private func liveOrUnavailableCard(_ env: PlaceSectionEnvelope, cfg: PlaceSectionDisplayConfig) -> some View {
         let state = PlacePresentation.cardState(env)
         let isLive = state == .loaded || state == .stale
         let reading = isLive ? PlacePresentation.reading(for: env) : PlaceSectionReading()

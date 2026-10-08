@@ -177,7 +177,11 @@ struct PlaceDashboardView: View {
                         messagesEntry(address: intel.place.label)
                     }
                     ForEach(intel.groups, id: \.group) { group in
-                        groupBlock(group, canVerify: !(intel.tier == .t3 && intel.verifyAvailable == false))
+                        groupBlock(
+                            group,
+                            canVerify: !(intel.tier == .t3 && intel.verifyAvailable == false),
+                            verifiesFirst: intel.verifiesFirst
+                        )
                     }
                     identityEntry
                     if isClaimed {
@@ -241,7 +245,7 @@ struct PlaceDashboardView: View {
 
     // MARK: - Group block
 
-    private func groupBlock(_ group: PlaceGroupBlock, canVerify: Bool) -> some View {
+    private func groupBlock(_ group: PlaceGroupBlock, canVerify: Bool, verifiesFirst: Bool) -> some View {
         let detail = PlaceDetailGroup.forGroup(group.group)
         return VStack(alignment: .leading, spacing: 9) {
             PlaceGroupLabel(text: group.label)
@@ -253,7 +257,8 @@ struct PlaceDashboardView: View {
                         onVerify: canVerify ? { showVerify = true } : nil,
                         onClaim: canVerify ? { showVerify = true } : nil,
                         onRetry: { Task { await viewModel.refresh() } },
-                        retrying: viewModel.isRefreshing
+                        retrying: viewModel.isRefreshing,
+                        verifiesFirst: verifiesFirst
                     )
                 }
             }

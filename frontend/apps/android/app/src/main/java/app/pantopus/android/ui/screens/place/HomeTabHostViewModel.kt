@@ -59,8 +59,7 @@ class HomeTabHostViewModel
                     _landing.value =
                         when (val result = homesRepository.myHomes()) {
                             is NetworkResult.Success -> {
-                                val homes = result.data.sharedHomes
-                                val primary = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
+                                val primary = landingHome(result.data.homes)
                                 if (primary != null) HomeLanding.PlaceDashboard(primary.id) else HomeLanding.Hub
                             }
                             is NetworkResult.Failure ->
@@ -86,8 +85,8 @@ class HomeTabHostViewModel
          */
         suspend fun replaceUnavailable(homeId: String): String? {
             relandOnReturn = false
-            val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.sharedHomes.orEmpty().filter { it.id != homeId }
-            val next = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
+            val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.homes.orEmpty().filter { it.id != homeId }
+            val next = landingHome(homes)
             _landing.value = next?.let { HomeLanding.PlaceDashboard(it.id) } ?: HomeLanding.Hub
             return next?.id
         }
@@ -101,10 +100,22 @@ class HomeTabHostViewModel
             if (_landing.value != HomeLanding.Hub || resolveJob?.isActive == true) return
             resolveJob =
                 viewModelScope.launch {
-                    val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.sharedHomes ?: return@launch
-                    val primary = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull() ?: return@launch
+                    val homes = (homesRepository.myHomes() as? NetworkResult.Success)?.data?.homes ?: return@launch
+                    val primary = landingHome(homes) ?: return@launch
                     if (_landing.value == HomeLanding.Hub) _landing.value = HomeLanding.PlaceDashboard(primary.id)
                 }
+        }
+
+        /**
+         * The Home the tab lands on: a shared Home (the primary owner's first), else the
+         * resident's own private setup, which is their Place until a household shares it
+         * (as on the web): public readings, with the Home's records waiting on verification.
+         */
+        private fun landingHome(homes: List<MyHome>): MyHome? {
+            val shared = homes.filter { it.hasValidListContext && it.hasSharedAccess }
+            return shared.firstOrNull { it.isPrimaryOwner == true }
+                ?: shared.firstOrNull()
+                ?: homes.firstOrNull { it.hasValidListContext && it.accessKind == "private_setup" }
         }
 
         private var relandOnReturn = false
