@@ -217,14 +217,13 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
       setValidatingAddress(false); setValidatedAddressId(null); setAddressCheckResult(null);
       setExistingHomeId(null); setIsClaimingExistingHome(false); setStep(1);
     };
-    const visibility = () => { if (document.visibilityState === 'hidden') retire(); };
+    // An account change or leaving the page starts the address over; switching to another tab or app
+    // and back keeps the step and the checked address.
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) retire(); };
     const unsubscribe = api.onTokenChange(retire);
     window.addEventListener('storage', storage); window.addEventListener('pagehide', retire);
-    document.addEventListener('visibilitychange', visibility);
     return () => { addressLifetime.current = false; invalidate(); unsubscribe();
-      window.removeEventListener('storage', storage); window.removeEventListener('pagehide', retire);
-      document.removeEventListener('visibilitychange', visibility); };
+      window.removeEventListener('storage', storage); window.removeEventListener('pagehide', retire); };
   }, []);
   const beginAddressOperation = (selection = false) => {
     const revision = ++addressRevision.current;
@@ -232,7 +231,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     try {
       const token = getAuthToken(), origin = api.getApiBaseUrl(), marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
       return () => {
-        try { return addressLifetime.current && (selection ? selectionRevision === addressSelectionRevision.current : revision === addressRevision.current) && document.visibilityState !== 'hidden'
+        try { return addressLifetime.current && (selection ? selectionRevision === addressSelectionRevision.current : revision === addressRevision.current)
           && !!token && getAuthToken() === token && api.getApiBaseUrl() === origin
           && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker; } catch { return false; }
       };
