@@ -779,7 +779,9 @@ class PublicProfileViewModel
                     // Launch cuts #1/#2 (Beacon + Personas): no "Persona" chip while personas are hidden.
                     tierLabel =
                         if (kind == PublicProfileKind.Persona && LaunchFeatures.beacon && LaunchFeatures.personas) "Persona" else null,
-                    isVerifiedNeighbor = kind == PublicProfileKind.Local,
+                    // The chip needs the verified home itself: unverified people get the
+                    // neighbor layout too while creators are cut.
+                    isVerifiedNeighbor = hasHomeResidency(profile),
                 )
             val stats = buildStatCells(profile)
             val reviewCards = buildReviewCards(profile)
@@ -983,10 +985,16 @@ class PublicProfileViewModel
          * blob is a Local (verified neighbor) profile; everyone else is
          * treated as a Persona (creator) profile. Backend doesn't ship
          * an explicit creator/local discriminator yet — this signal is
-         * the closest stable proxy.
+         * the closest stable proxy. While the creator side is cut for
+         * launch (Beacon + Personas) nobody is a creator: every person
+         * gets the neighbor layout, verified or not.
          */
         private fun derivedKind(profile: PublicProfileDto): PublicProfileKind =
-            if (hasHomeResidency(profile)) PublicProfileKind.Local else PublicProfileKind.Persona
+            when {
+                !(LaunchFeatures.beacon && LaunchFeatures.personas) -> PublicProfileKind.Local
+                hasHomeResidency(profile) -> PublicProfileKind.Local
+                else -> PublicProfileKind.Persona
+            }
 
         private fun buildBadges(profile: PublicProfileDto): List<IdentityPillarBadge> {
             val verified = profile.verified == true

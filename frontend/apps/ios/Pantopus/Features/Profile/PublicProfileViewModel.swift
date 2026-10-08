@@ -823,7 +823,9 @@ public final class PublicProfileViewModel {
             // No server field verifies a persona, so the chip names the kind only.
             // Launch cuts #1 + #2: no "Persona" chip while personas are hidden.
             tierLabel: kind == .persona && LaunchFeatures.beacon && LaunchFeatures.personas ? "Persona" : nil,
-            isVerifiedNeighbor: kind == .local
+            // The chip needs the verified home itself: unverified people get the
+            // neighbor layout too while creators are cut.
+            isVerifiedNeighbor: hasHomeResidency(profile)
         )
 
         var stats: [ProfileStatCell] = []
@@ -1007,9 +1009,12 @@ public final class PublicProfileViewModel {
     /// blob is a Local (verified neighbor) profile; everyone else is
     /// treated as a Persona (creator) profile. Backend doesn't ship an
     /// explicit creator/local discriminator yet — this signal is the
-    /// closest stable proxy.
+    /// closest stable proxy. While the creator side is cut for launch
+    /// (Beacon + Personas) nobody is a creator: every person gets the
+    /// neighbor layout, verified or not.
     private func derivedKind(from profile: PublicProfile) -> PublicProfileKind {
-        hasHomeResidency(profile) ? .local : .persona
+        guard LaunchFeatures.beacon, LaunchFeatures.personas else { return .local }
+        return hasHomeResidency(profile) ? .local : .persona
     }
 
     private func buildBadges(_ profile: PublicProfile) -> [IdentityPillarBadge] {
