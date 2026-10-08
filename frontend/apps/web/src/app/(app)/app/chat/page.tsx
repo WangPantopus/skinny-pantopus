@@ -16,6 +16,7 @@ import { useBadges } from '@/contexts/BadgeContext';
 import { queryKeys } from '@/lib/query-keys';
 import type { UnifiedConversationItem, ConversationTopic, User } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
+import { chosenUsername, usernameHandle } from '@pantopus/utils';
 
 type IncomingChatMessage = {
   room_id?: string;
@@ -416,7 +417,7 @@ export default function ChatListPage() {
                   // Name + avatar
                   const title = isRoom
                     ? (conv.room_name || (isHome ? 'Home Chat' : 'Group Chat'))
-                    : (conv.other_participant_name || conv.other_participant_username || 'Chat');
+                    : (conv.other_participant_name || chosenUsername(conv.other_participant_username) || 'Chat');
                   const avatarUrl = !isRoom ? conv.other_participant_avatar : null;
                   const preview = getLastMessagePreview(conv) || '';
                   const timeStr = conv.last_message_at ? formatTimeAgo(conv.last_message_at, 'full') : '';
@@ -566,8 +567,9 @@ export default function ChatListPage() {
                 ) : (
                   newChatResults.map((u) => {
                     const uid = String(u?.id || '');
-                    const name = u.name || u.firstName || u.username || 'User';
-                    const username = u?.username ? `@${u.username}` : '';
+                    // A made-up username (user_…) is never shown as a name or a handle.
+                    const name = u.name || u.firstName || chosenUsername(u.username) || 'Pantopus member';
+                    const username = usernameHandle(u?.username) || '';
                     const avatar = u?.profilePicture || u?.profile_picture_url;
                     const initials = name
                       .split(' ')

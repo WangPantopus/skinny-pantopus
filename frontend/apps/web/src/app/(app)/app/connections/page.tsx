@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/toast-store';
 import ErrorState from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/query-keys';
 import type { Relationship, ConnectionRequest, RelationshipUser } from '@pantopus/types';
+import { chosenUsername, usernameHandle } from '@pantopus/utils';
 
 type Tab = 'connections' | 'pending' | 'sent' | 'blocked';
 const TABS: readonly Tab[] = ['connections', 'pending', 'sent', 'blocked'];
@@ -370,7 +371,8 @@ function UserCard({
   actions: React.ReactNode;
 }) {
   if (!user) return null;
-  const displayName = user.name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : null) || user.username;
+  // A made-up username (user_…) is never shown as a name or a handle.
+  const displayName = user.name || (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : null) || chosenUsername(user.username) || 'Pantopus member';
 
   const identity = (
     <>
@@ -388,7 +390,7 @@ function UserCard({
       {/* Info */}
       <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-app-text truncate">{displayName}</h3>
-        <p className="text-sm text-app-text-secondary truncate">@{user.username}</p>
+        {usernameHandle(user.username) && <p className="text-sm text-app-text-secondary truncate">{usernameHandle(user.username)}</p>}
         {(user.city || user.state) && (
           <p className="text-xs text-app-text-muted mt-0.5">{[user.city, user.state].filter(Boolean).join(', ')}</p>
         )}

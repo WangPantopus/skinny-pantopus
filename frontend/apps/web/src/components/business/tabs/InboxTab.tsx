@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MessageCircle, AtSign, ChevronRight } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { formatTimeAgo } from '@pantopus/ui-utils';
+import { chosenUsername } from '@pantopus/utils';
 
 type Section = 'messages' | 'mentions';
 
@@ -86,7 +87,7 @@ export default function InboxTab({ businessId }: Props) {
           <div className="space-y-2">
             {rooms.map((room: any) => {
               // GET /api/chat/business/:id/rooms sends the other party and the last message as flat fields.
-              const title = room.other_participant_name || room.other_participant_username || room.room_name || 'Chat';
+              const title = room.other_participant_name || chosenUsername(room.other_participant_username) || room.room_name || 'Chat';
               const avatarUrl = room.other_participant_identity?.avatarUrl || null;
               const unread = room.unread_count > 0;
 
@@ -151,7 +152,7 @@ export default function InboxTab({ businessId }: Props) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-app-text truncate">{creator.name || creator.username || 'Someone'}</span>
+                      <span className="text-sm font-medium text-app-text truncate">{creator.name || chosenUsername(creator.username) || 'Someone'}</span>
                       {post.created_at && <span className="text-xs text-app-text-muted flex-shrink-0 ml-2">{formatTimeAgo(post.created_at)}</span>}
                     </div>
                     <p className="text-xs text-app-text-secondary truncate mt-0.5">{post.title || post.content}</p>

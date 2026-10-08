@@ -14,7 +14,7 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import FeedMediaImage from './FeedMediaImage';
 import LinkPreviewCard from './LinkPreviewCard';
 import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
+import { buildCanonicalShareUrlForPost, chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { lostFoundContactLabel } from './composer/LostFoundFields';
 import type { AudienceProfile, Post } from '@pantopus/types';
@@ -112,11 +112,12 @@ function PostCard({
   // / avatarUrl). The legacy post.creator slot still ships from the backend
   // via legacyCreatorFromAuthor, but new code reads from post.author so
   // retiring that bridge becomes safe.
+  // A made-up username (user_…) is never shown as the author's name.
   const creatorName =
     publicAuthor?.displayName ||
-    publicAuthor?.handle ||
+    chosenUsername(publicAuthor?.handle) ||
     post.creator?.name ||
-    post.creator?.username ||
+    chosenUsername(post.creator?.username) ||
     'Neighbor';
 
   const creatorAvatar =

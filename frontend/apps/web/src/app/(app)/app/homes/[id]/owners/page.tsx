@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import type { HomeOwner } from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import { chosenUsername } from '@pantopus/utils';
 
 // `color` is dark enough for small text on light surfaces (WCAG AA, 4.5:1);
 // `dark` is a lighter shade of the same hue, for text on dark mode's dark surfaces.
@@ -88,7 +89,7 @@ function OwnersContent() {
       ) : (
         <div className="space-y-2">
           {owners.map((owner) => {
-            const name = owner.user?.name || owner.user?.username || 'Unknown';
+            const name = owner.user?.name || chosenUsername(owner.user?.username) || 'Owner';
             const tier = TIER_META[owner.verification_tier] || TIER_META.weak;
             const TierIcon = tier.icon;
             const status = STATUS_BADGE[owner.owner_status] || STATUS_BADGE.pending;

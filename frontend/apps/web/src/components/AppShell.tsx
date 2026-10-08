@@ -38,6 +38,7 @@ const PostComposer = dynamic(() => import('@/components/feed/PostComposer'), {
 const MagicTaskComposerV2 = dynamic(() => import('@/components/magic-task-v2').then((m) => m.MagicTaskComposerV2), { ssr: false, loading: ComposerSkeleton });
 import FloatingChatWidget from '@/components/chat/FloatingChatWidget';
 import FloatingPromoModal from '@/components/ui/FloatingPromoModal';
+import NamePrompt from '@/components/profile/NamePrompt';
 import { toast } from '@/components/ui/toast-store';
 import useViewerHome from '@/hooks/useViewerHome';
 import usePromoTriggers from '@/hooks/usePromoTriggers';
@@ -48,6 +49,7 @@ import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
+import { chosenUsername } from '@pantopus/utils';
 
 // ── Constants ──────────────────────────────────────────────────
 const SIDEBAR_EXPANDED = 240;
@@ -239,7 +241,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   // ── Tile prefetch for home area ──────────────────────────────
   const { viewerHome } = useViewerHome();
-  usePromoTriggers(user);
+  // Promo cards wait while the one-time name prompt is open.
+  const [namePromptOpen, setNamePromptOpen] = useState(false);
+  usePromoTriggers(namePromptOpen ? null : user);
   useEffect(() => {
     if (viewerHome) {
       prefetchHomeTiles(viewerHome.lat, viewerHome.lng);
@@ -264,8 +268,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Derived ───────────────────────────────────────────────
-  const userInitial = user?.firstName?.[0]?.toUpperCase() || user?.name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'U';
-  const userName = user?.firstName || user?.name || user?.username || '';
+  // A made-up username (user_…) is never shown as the person's name.
+  const userInitial = user?.firstName?.[0]?.toUpperCase() || user?.name?.[0]?.toUpperCase() || chosenUsername(user?.username)?.[0]?.toUpperCase() || 'U';
+  const userName = user?.firstName || user?.name || chosenUsername(user?.username) || '';
   const profile = user as (User & { avatar_url?: string; profilePicture?: string }) | null;
   const avatarUrl = profile?.avatar_url ?? profile?.profilePicture ?? profile?.profile_picture_url ?? null;
 
@@ -595,6 +600,17 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <UnifiedFAB showHireHelp={launchFeatures.openGigs} onHireHelp={() => appDispatch({ type: 'SET_COMPOSER_OPEN', value: true })} hideOnPageFABRoutes />
       <FloatingChatWidget />
       <FloatingPromoModal />
+      {/* Asked once of an account with no name (sign-up didn't ask before October 2026). */}
+      <NamePrompt
+        user={user}
+        onOpenChange={setNamePromptOpen}
+        onSaved={(saved) => {
+          appDispatch({ type: 'SET_USER', value: user ? { ...user, ...saved } : saved });
+          // The Hub greeting and profile pages read the name from their own queries.
+          queryClient.invalidateQueries({ queryKey: queryKeys.hub() });
+          queryClient.invalidateQueries({ queryKey: ['profile'] });
+        }}
+      />
       {feedComposerOpen && (
         <>
           <div className="fixed inset-0 z-[70] bg-black/35 backdrop-blur-[2px]" onClick={() => appDispatch({ type: 'SET_FEED_COMPOSER_OPEN', value: false })} />

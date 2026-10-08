@@ -6,6 +6,7 @@ import Badge from './atoms/Badge';
 import TrustChip from './atoms/TrustChip';
 import ResidencyHomeBlock, { type ResidencyPayload } from './ResidencyHomeBlock';
 import { launchFeatures } from '@/lib/featureFlags';
+import { usernameHandle } from '@pantopus/utils';
 
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
 
@@ -126,7 +127,7 @@ export default function ProfileHeader({
             {/* Info */}
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl md:text-3xl font-bold text-app leading-tight">{fullName}</h1>
-              <p className="text-app-secondary">@{username}</p>
+              {usernameHandle(username) ? <p className="text-app-secondary">{usernameHandle(username)}</p> : null}
               <p className="text-sm text-app-secondary mt-1">{tagline}</p>
               <ResidencyHomeBlock residency={residency ?? undefined} />
 

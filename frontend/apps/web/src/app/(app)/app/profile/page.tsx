@@ -8,7 +8,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import type { User, UserProfile, Listing, GigListItem } from '@pantopus/types';
-import { buildUserProfilePath } from '@pantopus/utils';
+import { buildUserProfilePath, chosenUsername, usernameHandle } from '@pantopus/utils';
 import ResidencyHomeBlock from '@/components/profile/public/ResidencyHomeBlock';
 import ErrorState from '@/components/ui/ErrorState';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -184,7 +184,7 @@ export default function MyProfilePage() {
 
   const fullName = user.firstName && user.lastName 
     ? `${user.firstName} ${user.lastName}` 
-    : user.name || user.username || 'User';
+    : user.name || chosenUsername(user.username) || 'Pantopus user';
   
   const initial = fullName?.[0]?.toUpperCase() || 'U';
 
@@ -225,7 +225,7 @@ export default function MyProfilePage() {
                 )}
                 
                 <h2 className="text-2xl font-bold text-app text-center">{fullName}</h2>
-                <p className="text-app-muted">@{user.username}</p>
+                {usernameHandle(user.username) ? <p className="text-app-muted">{usernameHandle(user.username)}</p> : null}
                 
                 <div className="mt-2 w-full text-left">
                   <ResidencyHomeBlock residency={(user as UserProfile).residency} dense />

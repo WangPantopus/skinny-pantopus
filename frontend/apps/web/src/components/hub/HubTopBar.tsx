@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { Home, Plus, User, Building2 } from 'lucide-react';
 import type { HubHome, HubBusiness, Persona } from './types';
+import { chosenUsername } from '@pantopus/utils';
 
 export function getGreeting(): string {
   const h = new Date().getHours();
@@ -33,7 +34,8 @@ export default function HubTopBar({
   onSwitchHome, onSwitchPersona,
 }: HubTopBarProps) {
   const router = useRouter();
-  const firstName = userName?.split(' ')[0] || username;
+  // A made-up username is never a name: with no name, the greeting stands alone.
+  const firstName = userName?.split(' ')[0] || chosenUsername(username);
   const contextLine = activeHome ? activeHome.name : homes.length === 0 ? 'No home attached' : 'Select a home';
 
   return (
@@ -97,7 +99,7 @@ export default function HubTopBar({
       {/* Center: Greeting + context */}
       <div className="text-center flex-1 min-w-0">
         <h1 className="text-lg font-bold text-app-text dark:text-white truncate">
-          {getGreeting()}, {firstName}
+          {getGreeting()}{firstName ? `, ${firstName}` : ''}
         </h1>
         <p className="text-xs text-app-text-secondary dark:text-app-text-muted truncate">{contextLine}</p>
       </div>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRemoval } from './useRemoval';
 import { removalMessage, validRemovalInput, type RemovalSummary } from './removalModel';
+import { usernameHandle } from '@pantopus/utils';
 
 const button = 'rounded-lg border border-app-border px-3 py-2 text-sm font-medium disabled:opacity-50';
 const destructive = button + ' border-red-700 bg-red-700 text-white';
@@ -79,7 +80,8 @@ export default function MemberRemovalRecovery({ homeId, targetId, self = false }
 }
 function ReviewSummary({ summary, historical = false }: { summary: RemovalSummary; historical?: boolean }) {
   const t = summary.target;
-  const name = t.username ? `@${t.username}` : t.name || 'Selected household member';
+  // A made-up username (user_…) is never shown.
+  const name = usernameHandle(t.username) || t.name || 'Selected household member';
   return <dl className="space-y-2 text-sm">
     <div><dt className="font-medium">Home</dt><dd className="break-words">{summary.home.name || 'Selected Home'}</dd></div>
     <div><dt className="font-medium">Member</dt><dd className="break-words">{name}{t.is_self ? ' (you)' : ''}</dd></div>

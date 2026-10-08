@@ -23,6 +23,7 @@ import { EndorsementSummary, EndorsementButton } from '@/components/endorsement'
 import { toast } from '@/components/ui/toast-store';
 import { authPageHref } from '@/lib/auth-utils';
 import ErrorState from '@/components/ui/ErrorState';
+import { chosenUsername } from '@pantopus/utils';
 
 interface BusinessPublicProfileProps {
   username: string;
@@ -684,14 +685,14 @@ function ReviewsTab({ business, reviews }: { business: BusinessUser; reviews: Bu
           <div key={review.id} className="rounded-xl border border-app-border bg-app-surface p-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-8 h-8 rounded-full bg-app-surface-sunken flex items-center justify-center text-xs font-semibold text-app-text-secondary">
-                {(review.reviewer?.name || review.reviewer?.username || '?')[0].toUpperCase()}
+                {(review.reviewer?.name || chosenUsername(review.reviewer?.username) || '?')[0].toUpperCase()}
               </div>
               <div>
                 {review.reviewer?.username ? (
                   <UserIdentityLink
                     userId={review.reviewer?.id || null}
                     username={review.reviewer.username}
-                    displayName={review.reviewer?.name || review.reviewer.username}
+                    displayName={review.reviewer?.name || chosenUsername(review.reviewer.username) || 'Pantopus member'}
                     avatarUrl={review.reviewer?.profile_picture_url || null}
                     city={review.reviewer?.city || null}
                     state={review.reviewer?.state || null}

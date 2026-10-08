@@ -50,6 +50,7 @@ export type {
   SessionContext,
 } from './endpoints/authDevices';
 export * as users from './endpoints/users';
+export type { UsernameAvailability } from './endpoints/users';
 export * as gigs from './endpoints/gigs';
 export * as homes from './endpoints/homes';
 export type { MyHome, MyHomeOccupancy } from './endpoints/homes';

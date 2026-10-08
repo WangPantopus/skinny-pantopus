@@ -15,7 +15,7 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { formatTimeAgo as timeAgo, CHANGE_ORDER_STATUS_STYLES, statusClasses } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
-import { getErrorMessage } from '@pantopus/utils';
+import { getErrorMessage, chosenUsername } from '@pantopus/utils';
 
 // ─── Types ───
 
@@ -240,7 +240,7 @@ export default function ChangeOrdersSection({
                     <UserIdentityLink
                       userId={o.requester?.id || null}
                       username={o.requester.username}
-                      displayName={o.requester?.name || o.requester?.username || 'Someone'}
+                      displayName={o.requester?.name || chosenUsername(o.requester?.username) || 'Someone'}
                       avatarUrl={o.requester?.profile_picture_url || null}
                       city={o.requester?.city || null}
                       state={o.requester?.state || null}
@@ -248,7 +248,7 @@ export default function ChangeOrdersSection({
                     />
                   ) : (
                     // No requester means the person has deleted their account.
-                    <span>{o.requester ? o.requester.name || o.requester.username || 'Someone' : 'Former member'}</span>
+                    <span>{o.requester ? o.requester.name || chosenUsername(o.requester.username) || 'Someone' : 'Former member'}</span>
                   )}
                   <span>{o.created_at ? timeAgo(o.created_at) : ''}</span>
                 </div>

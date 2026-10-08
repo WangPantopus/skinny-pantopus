@@ -5,6 +5,7 @@ import { ClipboardList, ChevronLeft, Paintbrush, ShoppingCart, Hammer, Bell, Wre
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
 import { launchFeatures } from '@/lib/featureFlags';
+import { chosenUsername } from '@pantopus/utils';
 
 const PRIORITY_DOT: Record<string, string> = {
   urgent: 'bg-red-500',
@@ -69,7 +70,7 @@ export function TasksCardPreview({
 
   const getMemberName = (userId: string) => {
     const m = members.find((m) => m.user_id === userId);
-    return m?.display_name || m?.user?.displayName || m?.user?.handle || m?.username || null;
+    return m?.display_name || m?.user?.displayName || chosenUsername(m?.user?.handle) || chosenUsername(m?.username) || null;
   };
 
   return (
@@ -166,7 +167,7 @@ export default function TasksCard({
 
   const getMemberName = (userId: string) => {
     const m = members.find((m) => m.user_id === userId);
-    return m?.display_name || m?.user?.displayName || m?.user?.handle || m?.username || null;
+    return m?.display_name || m?.user?.displayName || chosenUsername(m?.user?.handle) || chosenUsername(m?.username) || null;
   };
 
   const SUB_TABS: { key: SubTab; label: string; count: number }[] = [

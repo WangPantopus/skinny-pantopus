@@ -17,7 +17,7 @@ import { CommentThread, EditPostDialog } from '@/components/feed';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import FeedMediaImage from '@/components/feed/FeedMediaImage';
 import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost, getErrorMessage } from '@pantopus/utils';
+import { buildCanonicalShareUrlForPost, getErrorMessage, chosenUsername } from '@pantopus/utils';
 import Image from 'next/image';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
@@ -369,9 +369,9 @@ export default function PostDetailPage() {
   const publicAuthor = post?.author || null;
   const creatorName =
     publicAuthor?.displayName ||
-    publicAuthor?.handle ||
+    chosenUsername(publicAuthor?.handle) ||
     post?.creator?.name ||
-    post?.creator?.username ||
+    chosenUsername(post?.creator?.username) ||
     'Neighbor';
   const creatorAvatarUrl =
     publicAuthor?.avatarUrl ||

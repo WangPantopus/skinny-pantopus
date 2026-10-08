@@ -1,5 +1,6 @@
 import * as api from '@pantopus/api';
 import { PendingSenderStore, type SenderSnapshot } from './PendingSenderStore';
+import { chosenUsername } from '@pantopus/utils';
 import { validInvitationSession, validSenderInput, validateSenderContext, validSenderOutcome, projectSenderOutcome, senderMessage,
   type SenderInput, type SenderSession, type SenderContext, type SenderDraft, type SenderOutcome } from './senderModel';
 type Store = Pick<PendingSenderStore, 'load' | 'save' | 'clear'>;
@@ -47,7 +48,7 @@ export class SenderController {
     catch (error) { if ((error as {statusCode?:number})?.statusCode === 401) this.retire(); }
     this.requireCurrent();
     if (profile && profile.id !== this.session.actor_id) throw new Error('Your account changed. Reload to continue.');
-    this.accountLabel = profile?.name || profile?.username || profile?.email || 'Your current account';
+    this.accountLabel = profile?.name || chosenUsername(profile?.username) || profile?.email || 'Your current account';
     this.store = storeForActor(this.session.actor_id);
     const saved = await this.store.load(); this.requireCurrent();
     this.snapshot = saved; this.attempted = !!saved; this.opened = true;

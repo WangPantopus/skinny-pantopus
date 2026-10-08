@@ -21,6 +21,7 @@ import GigCreationModal from '@/components/mailbox/GigCreationModal';
 import FamilyMailParty from '@/components/mailbox/FamilyMailParty';
 import CertifiedMailDetail from '@/components/mailbox/CertifiedMailDetail';
 import { launchFeatures } from '@/lib/featureFlags';
+import { chosenUsername } from '@pantopus/utils';
 
 /**
  * Mail item detail page — right pane on desktop, full page on mobile.
@@ -58,7 +59,7 @@ export default function ItemDetailPage() {
     api.users.getMyProfile().then(u => {
       if (cancelled) return;
       setCurrentUserId(u.id);
-      setCurrentUserName(u.name || u.username || 'You');
+      setCurrentUserName(u.name || chosenUsername(u.username) || 'You');
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);

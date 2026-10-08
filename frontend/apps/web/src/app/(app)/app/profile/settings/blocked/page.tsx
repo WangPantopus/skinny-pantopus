@@ -8,6 +8,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { chosenUsername, usernameHandle } from '@pantopus/utils';
 
 /**
  * N04 — this page lists three separate existing block contracts:
@@ -85,8 +86,9 @@ function BlockedContent() {
       personalRes.status === 'fulfilled' && personalLoaded
         ? ((personalRes.value as any)?.blocked || []).map((b: any) => ({
             id: b.id,
-            name: b.name || b.username || 'Unknown',
-            username: b.username || undefined,
+            // A made-up username (user_…) is never shown as a name or a handle.
+            name: b.name || chosenUsername(b.username) || 'Pantopus member',
+            username: chosenUsername(b.username) || undefined,
             avatarUrl: b.profile_picture_url || undefined,
             personalUserId: b.user_id,
           }))
@@ -103,9 +105,9 @@ function BlockedContent() {
                 name:
                   otherUser?.name ||
                   `${otherUser?.first_name || ''} ${otherUser?.last_name || ''}`.trim() ||
-                  otherUser?.username ||
-                  'Unknown',
-                username: otherUser?.username,
+                  chosenUsername(otherUser?.username) ||
+                  'Pantopus member',
+                username: chosenUsername(otherUser?.username) || undefined,
                 avatarUrl: otherUser?.profile_picture_url || otherUser?.avatar_url,
               };
             },
@@ -117,8 +119,8 @@ function BlockedContent() {
         ? scopedRes.value.blocks.map((b) => ({
             // Prefixed: this key must not be mistaken for a relationship id.
             id: `privacy-${b.id}`,
-            name: b.blocked?.name || b.blocked?.username || 'Unknown',
-            username: b.blocked?.username || undefined,
+            name: b.blocked?.name || chosenUsername(b.blocked?.username) || 'Pantopus member',
+            username: chosenUsername(b.blocked?.username) || undefined,
             avatarUrl: b.blocked?.profile_picture_url || undefined,
             privacyBlockId: b.id,
             scopeLabel: BLOCK_SCOPE_LABELS[b.block_scope] || b.block_scope,
@@ -326,7 +328,7 @@ function MutedSection({ getInitials }: { getInitials: (name: string) => string }
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-app-text truncate">{entry.name}</p>
-                {entry.username && <p className="text-xs text-app-text-secondary">@{entry.username}</p>}
+                {usernameHandle(entry.username) && <p className="text-xs text-app-text-secondary">{usernameHandle(entry.username)}</p>}
               </div>
               <button onClick={() => void unmute(entry)} disabled={!!unmuting}
                 className="px-4 py-2 border border-app-border text-app-text text-sm font-semibold rounded-lg hover:bg-app-hover disabled:opacity-50 transition min-w-[80px] flex items-center justify-center">

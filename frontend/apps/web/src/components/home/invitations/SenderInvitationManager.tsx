@@ -6,13 +6,16 @@ import QRCode from '@/components/ui/QRCode';
 import { homeInviteDates } from '@/lib/homeInviteDates';
 import { useSender } from './useSender';
 import { deliveryMessage, senderMessage, type SenderInput, type SenderPayload, type SenderInvitation } from './senderModel';
+import { chosenUsername } from '@pantopus/utils';
 const button='rounded-lg border border-app-border px-4 py-2 text-sm font-medium disabled:opacity-50';
 const primary=button+' bg-slate-900 text-white';
 const field='w-full rounded-lg border border-app-border bg-app-surface px-3 py-2 text-sm';
 const roles=[['tenant','Tenant / Roommate','member'],['spouse','Spouse / Partner (Co-admin)','admin'],['extended_family','Extended Family','member'],
   ['child','Child','restricted_member'],['airbnb_guest','Short Stay Guest','guest'],['cleaner_vendor','Cleaner / Vendor','guest']];
 function recipient(i:SenderInvitation){
-  if(i.invitee?.username) return i.invitee.name ? `${i.invitee.name} (@${i.invitee.username})` : `@${i.invitee.username}`;
+  // A made-up username (user_…) is never shown: the name alone, or the email.
+  const handle=chosenUsername(i.invitee?.username);
+  if(handle) return i.invitee?.name ? `${i.invitee.name} (@${handle})` : `@${handle}`;
   return i.invitee_email || i.invitee?.name || (i.invitee_user_id ? `Invited account unavailable (${i.invitee_user_id.slice(-8)})` : 'Anyone with the invitation link');
 }
 function invitationRole(i:SenderInvitation){

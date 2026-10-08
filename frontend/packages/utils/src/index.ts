@@ -165,6 +165,30 @@ export function buildPostAppUrl(postId: string): string {
   return `pantopus:///post/${encodeURIComponent(postId)}`;
 }
 
+// ── Made-up usernames ─────────────────────────────────────────
+// Nobody picks a username at sign-up, so the server makes one up: user_ plus
+// 12 random hex characters (20 when the short form collides). It says nothing
+// about the person, so it never stands in for their name and is never shown as
+// "@…". Same rule as backend/utils/personalUsername.js.
+const MADE_UP_USERNAME = /^user_(?:[0-9a-f]{12}|[0-9a-f]{20})$/;
+
+/** True for a username the server made up, never for one a person chose. */
+export function isMadeUpUsername(username: string | null | undefined): boolean {
+  return MADE_UP_USERNAME.test(String(username ?? '').trim());
+}
+
+/** The username when the person chose it; null for an empty or made-up one. */
+export function chosenUsername(username: string | null | undefined): string | null {
+  const value = String(username ?? '').trim().replace(/^@+/, '');
+  return value && !isMadeUpUsername(value) ? value : null;
+}
+
+/** "@username" for a username the person chose; null otherwise (show nothing). */
+export function usernameHandle(username: string | null | undefined): string | null {
+  const value = chosenUsername(username);
+  return value ? `@${value}` : null;
+}
+
 export function buildUserProfilePath(username: string): string {
   return `/u/${encodeURIComponent(username)}`;
 }

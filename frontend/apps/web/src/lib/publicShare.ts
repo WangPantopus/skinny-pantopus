@@ -1,13 +1,6 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
-import {
-  ANDROID_PLAY_STORE_URL,
-  API_BASE_URL,
-  APP_NAME,
-  APP_WEB_URL,
-  IOS_APP_STORE_APP_ID,
-  IOS_APP_STORE_URL,
-} from '@pantopus/utils';
+import { ANDROID_PLAY_STORE_URL, API_BASE_URL, APP_NAME, APP_WEB_URL, IOS_APP_STORE_APP_ID, IOS_APP_STORE_URL, chosenUsername } from '@pantopus/utils';
 
 const API_BASE = API_BASE_URL.replace(/\/+$/, '');
 
@@ -257,7 +250,8 @@ export function buildShareMetadata(opts: {
 
 export function displayNameForUser(user: any, fallback = 'Pantopus member'): string {
   if (!user || typeof user !== 'object') return fallback;
-  return user.name || user.first_name || user.firstName || user.username || fallback;
+  // A made-up username (user_…) is never shown as the person's name.
+  return user.name || user.first_name || user.firstName || chosenUsername(user.username) || fallback;
 }
 
 export function formatMoney(value: unknown): string | null {

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
-import { buildSupportTrainShareUrl } from '@pantopus/utils';
+import { buildSupportTrainShareUrl, chosenUsername } from '@pantopus/utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
@@ -72,7 +72,7 @@ function getOrganizerUser(
 }
 
 function displayOrganizerName(user: OrganizerUser | null | undefined): string {
-  return user?.name || user?.username || 'Organizer';
+  return user?.name || chosenUsername(user?.username) || 'Organizer';
 }
 
 function getProfileHref(user: OrganizerUser | null | undefined): string | null {

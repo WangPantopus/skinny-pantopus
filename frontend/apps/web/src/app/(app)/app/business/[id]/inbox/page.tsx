@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { ChatRoomWithDetails } from '@pantopus/types';
+import { chosenUsername } from '@pantopus/utils';
 
 type BusinessInboxRoom = ChatRoomWithDetails & {
   other_participant_name?: string | null;
@@ -52,7 +53,7 @@ export default function BusinessInboxPage() {
 
   const getRoomDate = (room: BusinessInboxRoom) => room.last_message_at || room.last_message?.created_at || null;
   const getRoomPreview = (room: BusinessInboxRoom) => room.last_message_preview || room.last_message?.message_text || 'No messages yet';
-  const getRoomName = (room: BusinessInboxRoom) => room.other_participant_name || room.other_participant_username || room.room_name || 'Chat';
+  const getRoomName = (room: BusinessInboxRoom) => room.other_participant_name || chosenUsername(room.other_participant_username) || room.room_name || 'Chat';
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">

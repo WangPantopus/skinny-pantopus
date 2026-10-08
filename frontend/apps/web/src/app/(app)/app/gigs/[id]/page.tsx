@@ -32,6 +32,7 @@ import PaymentSection from '@/components/gig-detail/PaymentSection';
 import { launchFeatures } from '@/lib/featureFlags';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { GigWithDetails, UserProfile } from '@pantopus/types';
+import { chosenUsername } from '@pantopus/utils';
 
 // ─── Lazy Leaflet mini map (SSR-disabled) ───────────────────────────
 // Same pattern as gigs-v2/[id]/page.tsx — dynamically imports react-leaflet only on the client.
@@ -277,7 +278,7 @@ export default function GigDetailsPage() {
     !poster;
   const posterDisplayName = isAnonymousPoster
     ? 'Anonymous'
-    : poster?.displayName || poster?.handle || 'Anonymous';
+    : poster?.displayName || chosenUsername(poster?.handle) || 'Anonymous';
   const posterInitial = isAnonymousPoster
     ? '?'
     : (posterDisplayName.trim()[0] || '?').toUpperCase();

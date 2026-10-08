@@ -47,6 +47,24 @@ export async function updateProfile(data: ProfileUpdateForm): Promise<{ user: Us
   return patch<{ user: User }>('/api/users/profile', data);
 }
 
+export interface UsernameAvailability {
+  /** The name as it would be saved: lowercase, without a leading @. */
+  username: string;
+  available: boolean;
+  /** Why not (or 'current' when it is already the person's own). */
+  reason?: 'invalid' | 'reserved' | 'taken' | 'current';
+  /** Ready-to-show sentence when it can't be used. */
+  message?: string;
+}
+
+/**
+ * Can the signed-in person change their username to this one?
+ * Route backend/routes/users.js `GET /api/users/username-availability`.
+ */
+export async function checkUsernameAvailability(username: string): Promise<UsernameAvailability> {
+  return get<UsernameAvailability>('/api/users/username-availability', { username });
+}
+
 /**
  * Add a skill to user profile
  */

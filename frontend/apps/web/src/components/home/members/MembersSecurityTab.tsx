@@ -14,6 +14,7 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import Image from 'next/image';
 import ErrorState from '@/components/ui/ErrorState';
 import { failureMessage, shareFailure } from '../share/shareFailure';
+import { chosenUsername } from '@pantopus/utils';
 
 // ---- Role config (shared with MembersPanel) ----
 
@@ -345,7 +346,7 @@ export default function MembersSecurityTab({
                 </p>
               </div>
               {pending.map((m) => {
-                const name = m.user?.name || m.user?.username || m.email || 'Invited';
+                const name = m.user?.name || chosenUsername(m.user?.username) || m.email || 'Invited';
                 return (
                   <div key={m.id || m.user_id} className="px-5 py-3 flex items-center gap-3 opacity-60">
                     <div className="w-10 h-10 rounded-full bg-app-surface-sunken flex items-center justify-center text-xs text-app-text-secondary flex-shrink-0">?</div>
@@ -540,11 +541,12 @@ function MemberRow({
   homeOwnerId?: string;
   onClick: () => void;
 }) {
-  const name = member.user?.displayName || member.user?.handle || member.user?.name || member.user?.username || member.name || member.username || 'Unknown';
+  // A made-up username (user_…) is never shown as a name or a handle.
+  const name = member.display_name || member.user?.displayName || chosenUsername(member.user?.handle) || member.user?.name || chosenUsername(member.user?.username) || member.name || chosenUsername(member.username) || 'Household member';
   const isOwner = member.user_id === homeOwnerId || member.role === 'owner' || member.role_base === 'owner';
   const { config } = resolveRole(member);
   const profilePic = member.user?.avatarUrl || member.user?.profile_picture_url || member.user?.avatar_url;
-  const handle = member.user?.handle || member.user?.username;
+  const handle = chosenUsername(member.user?.handle || member.user?.username);
   const joinedDate = member.start_at || member.created_at;
 
   return (
@@ -607,7 +609,7 @@ const ACTION_ICONS: Record<string, string> = {
 
 function AuditRow({ entry }: { entry: AuditEntry }) {
   const icon = ACTION_ICONS[entry.action] || '📝';
-  const actorName = entry.actor?.name || entry.actor?.username || 'System';
+  const actorName = entry.actor?.name || chosenUsername(entry.actor?.username) || 'System';
 
   return (
     <div className="px-4 py-3 flex items-start gap-3">
