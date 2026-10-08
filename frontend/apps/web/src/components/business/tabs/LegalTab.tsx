@@ -15,6 +15,8 @@ export default function LegalTab({ businessId, businessType }: Props) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ legal_name: '', tax_id_last4: '', support_email: '' });
   const [hasData, setHasData] = useState(false);
+  // Only the owner may read these; anyone else gets a 403 and no form.
+  const [forbidden, setForbidden] = useState(false);
   const fieldId = useId();
 
   // Nonprofit verification
@@ -49,8 +51,11 @@ export default function LegalTab({ businessId, businessType }: Props) {
       const data = result.private || {};
       setForm({ legal_name: data.legal_name || '', tax_id_last4: data.tax_id_last4 || '', support_email: data.support_email || '' });
       setHasData(!!data.business_user_id);
+      setForbidden(false);
     } catch (e: any) {
-      if (e?.status !== 403) toast.error(e?.message || 'Failed to load legal info');
+      // API errors carry statusCode (there is no `status`), so the 403 check never matched.
+      if (e?.statusCode === 403) setForbidden(true);
+      else toast.error(e?.message || 'Failed to load legal info');
     } finally {
       setLoading(false);
     }
@@ -108,6 +113,18 @@ export default function LegalTab({ businessId, businessType }: Props) {
   };
 
   if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-3 border-violet-600 border-t-transparent rounded-full" /></div>;
+
+  if (forbidden) {
+    return (
+      <div>
+        <h2 className="text-lg font-semibold text-app-text mb-4">Legal &amp; Finance</h2>
+        <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <Lock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+          <p className="text-xs text-amber-800">Only the business owner can see the legal and finance details.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
