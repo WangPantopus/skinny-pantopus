@@ -15,7 +15,7 @@ jest.mock('../../services/geo', () => ({
     const json = await res.json();
     const m = json && json.result && json.result.addressMatches && json.result.addressMatches[0];
     if (!m) return null;
-    const parts = m.matchedAddress.split(',').map((s) => s.trim()); // "2518 NW LACAMAS DR, CAMAS, WA, 98607"
+    const parts = m.matchedAddress.split(',').map((s) => s.trim()); // "2518 NW PANTOPUS LOOP, CAMAS, WA, 98607"
     const title = (t) => t.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase()).replace(/\b(Nw|Ne|Sw|Se|Dr|St|Ave|Blvd|Ct|Rd|Ln|Pl|Way)\b/g, (c) => c.toUpperCase());
     return {
       latitude: m.coordinates.y, longitude: m.coordinates.x,
@@ -28,7 +28,7 @@ jest.mock('../../services/propertyDataService', () => ({ isAvailable: () => fals
 const publicRouter = require('../../routes/public');
 
 const ADDRESSES = [
-  '2518 NW Lacamas Dr, Camas, WA 98607',
+  '2518 NW Pantopus Loop, Camas, WA 98607',
   '616 NE 4th Ave, Camas, WA 98607',          // Camas City Hall
   '625 NE 4th Ave, Camas, WA 98607',          // Camas Public Library
   '227 NE Lake Rd, Camas, WA 98607',          // Lacamas Lake Lodge, at the lake

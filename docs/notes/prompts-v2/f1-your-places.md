@@ -26,7 +26,7 @@ Each row: label · city, state and ZIP · saved date. The row Today uses comes f
 - Mom's house · Camas, WA 98607 · Saved Fri 4 Sep
 - The Blairmont rental · Vancouver, WA 98683 · Saved Fri 28 Aug
 - Sister's apartment · Portland, OR 97214 · Saved Sun 19 Jul
-- Worst case: Grandma and Grandpa's lake house on Lacamas Shores Drive · Camas, WA 98607 · Saved Wed 1 Jul
+- Worst case: Grandma and Grandpa's lake house on Pantopus Shores Drive · Camas, WA 98607 · Saved Wed 1 Jul
 Foot row: "+ Add a place".
 Saved-row menu, in this order: Open · Use for Today · Claim this address · Remove. The badged row never offers Use for Today.
 Chosen place: after Use for Today on Mom's house, the badge moves to that row, the row moves to the top, and the sentence reads "Today uses this place because you chose it." The status line reads "Today now uses Mom's house."

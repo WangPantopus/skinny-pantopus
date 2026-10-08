@@ -164,7 +164,7 @@ data class HomeMirrorDto(
     val owner: HomeMirrorOwnerDto? = null,
     val hidden: List<HomeMirrorHiddenDto> = emptyList(),
 ) {
-    /** "NW Lacamas Dr · Camas, WA" — the whole address line a neighbor gets. */
+    /** "NW Pantopus Loop · Camas, WA" — the whole address line a neighbor gets. */
     val addressLine: String
         get() {
             val place = listOfNotNull(home.city, home.state).filter { it.isNotBlank() }.joinToString(", ")

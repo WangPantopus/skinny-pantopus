@@ -71,7 +71,7 @@ Three things the reconciliation surfaced that are decisions, not bugs:
 7. **Android** — tabs, residency door, calendar card, founding tier, Just-moved card.
 
 ## The real-data aha audit (Camas, WA — 2026-09-01)
-The Phase 1.5 record deferred "run the aha rule against real addresses". Done, against the live public sources, for four points around **2518 NW Lacamas Dr, Camas, WA 98607** (the Lacamas Dr house, City Hall at 616 NE 4th Ave, the library at 625 NE 4th Ave, Lacamas Lake Lodge at 227 NE Lake Rd). Runner: `backend/tests/audit/ahaAudit.audit.js` — outside the normal suite by name, run with
+The Phase 1.5 record deferred "run the aha rule against real addresses". Done, against the live public sources, for four points around **2518 NW Pantopus Loop, Camas, WA 98607** (the Pantopus Loop house, City Hall at 616 NE 4th Ave, the library at 625 NE 4th Ave, Lacamas Lake Lodge at 227 NE Lake Rd). Runner: `backend/tests/audit/ahaAudit.audit.js` — outside the normal suite by name, run with
 
     npx jest --testMatch '**/tests/audit/*.audit.js' -i
 
@@ -80,7 +80,7 @@ It geocodes through the Census geocoder (no key), hits FEMA / USGS / USFS / EPA 
 ### What the audit found, and what changed
 | Layer | First reading | Why it was wrong | Fix |
 |---|---|---|---|
-| Wildfire | "Not classified as burnable (class null)" on a lot 300 m from Lacamas Lake's forest | USFS WHP is a 270 m raster; the pixel under a house is *developed*, not burnable. | `composeWildfire` now samples 8 points ~400 m out and reports the highest burnable class as `nearby_class`, `scope: 'nearby'`; Lacamas Dr reads **Low (class 2)**, downtown stays non-burnable. |
+| Wildfire | "Not classified as burnable (class null)" on a lot 300 m from Lacamas Lake's forest | USFS WHP is a 270 m raster; the pixel under a house is *developed*, not burnable. | `composeWildfire` now samples 8 points ~400 m out and reports the highest burnable class as `nearby_class`, `scope: 'nearby'`; Pantopus Loop reads **Low (class 2)**, downtown stays non-burnable. |
 | EPA sites | "22 permits within a mile" (raw count) | A permit count is not a hazard; the point is compliance. | `mapEchoFacilities` reads SNC flag, NC quarters, penalties, TRI; `notable` counts; the aha only leads on a violation. |
 | EPA sites (2) | Top site "NIGHTSHADE SHORT PLAT — significant noncompliance" would have scored 74 (alert) | It is a subdivision's **construction stormwater permit** (NAICS 23x): erosion-control paperwork, not emissions. | Facilities carry `construction`; an industrial SNC scores 74, a construction SNC 46 ("out of compliance with its stormwater permit"), and industrial sorts above construction at the same level. |
 | Seismic | "Category D" grade with a flat headline | Region-wide fact; the surprise is what it means. | Headline "Earthquake design category D: new homes here are built for high shaking", Cascadia/bolting detail. |

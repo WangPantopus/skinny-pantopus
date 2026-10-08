@@ -12,7 +12,7 @@ const { resetTables, seedTable } = require('../__mocks__/supabaseAdmin');
 const { loadHomeMirror } = require('../../services/homeMirror');
 const { serializeHomeForViewer, serializeOwnerForViewer, HIDDEN_FROM_OUTSIDERS } = require('../../serializers/homeProfileSerializer');
 
-const HOME = { id: 'h1', name: 'Yingpeng Wang household', address: '2518 NW Lacamas Dr', city: 'Camas', state: 'WA', zipcode: '98607', home_type: 'house', visibility: 'public_preview', owner_id: 'member', description: 'Gate code 1234', created_at: '2026-09-01T00:00:00Z' };
+const HOME = { id: 'h1', name: 'Yingpeng Wang household', address: '2518 NW Pantopus Loop', city: 'Camas', state: 'WA', zipcode: '98607', home_type: 'house', visibility: 'public_preview', owner_id: 'member', description: 'Gate code 1234', created_at: '2026-09-01T00:00:00Z' };
 const USER = { id: 'member', username: 'yp', name: 'Yingpeng Wang', first_name: 'Yingpeng', last_name: 'Wang', profile_picture_url: null };
 
 beforeEach(() => {
@@ -25,7 +25,7 @@ beforeEach(() => {
 it('shows a member the outsider view without account identity or private home details', async () => {
   const m = await loadHomeMirror({ homeId: 'h1', userId: 'member' });
   expect(m).toMatchObject({ surface: 'home', viewer: 'neighbor', discoverable: true });
-  expect(m.home).toMatchObject({ address: 'NW Lacamas Dr', address_redacted: true, zipcode: null, city: 'Camas', state: 'WA' });
+  expect(m.home).toMatchObject({ address: 'NW Pantopus Loop', address_redacted: true, zipcode: null, city: 'Camas', state: 'WA' });
   expect(JSON.stringify(m)).not.toMatch(/2518|98607|Wang|Gate code/);
   expect(m.owner).toBeNull();
   expect(m.hidden).toBe(HIDDEN_FROM_OUTSIDERS);
@@ -44,7 +44,7 @@ it('refuses non-members and unknown homes', async () => {
 
 it('the serializer reveals to insiders and every hidden item really is hidden from outsiders', () => {
   const inside = serializeHomeForViewer(HOME, { reveal: true });
-  expect(inside).toMatchObject({ address: '2518 NW Lacamas Dr', zipcode: '98607', address_redacted: false });
+  expect(inside).toMatchObject({ address: '2518 NW Pantopus Loop', zipcode: '98607', address_redacted: false });
   const outside = serializeHomeForViewer(HOME, { reveal: false });
   expect(outside.address).not.toMatch(/2518/);
   expect(outside.zipcode).toBeNull();
