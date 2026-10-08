@@ -182,6 +182,19 @@ final class DiscoverBusinessesViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = responses
     }
 
+    /// Polls for the refetch a chip, search or filter change starts, instead of sleeping a fixed
+    /// 100 ms: a busy CI simulator took longer and failed the assertions (up to 3 s here).
+    private func waitFor(_ condition: () -> Bool) async {
+        for _ in 0..<300 {
+            if condition() { return }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+    }
+
+    private func waitForRequest(after count: Int) async {
+        await waitFor { SequencedURLProtocol.capturedRequests.count > count }
+    }
+
     // MARK: - Lifecycle
 
     func testLoadEmptyTransitionsToEmptyState() async {
@@ -258,8 +271,10 @@ final class DiscoverBusinessesViewModelTests: XCTestCase {
         await vm.load()
 
         vm.selectChip(DiscoverBusinessesChip.handyman)
-        // Allow the refetch task to settle.
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        await waitFor {
+            if case let .loaded(sections, _) = vm.state { return sections.count == 1 }
+            return false
+        }
 
         XCTAssertEqual(vm.selectedChip, DiscoverBusinessesChip.handyman)
         guard case let .loaded(sections, _) = vm.state else {
@@ -281,7 +296,7 @@ final class DiscoverBusinessesViewModelTests: XCTestCase {
         let beforeCount = SequencedURLProtocol.capturedRequests.count
 
         vm.selectChip(DiscoverBusinessesChip.cleaning)
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        await waitForRequest(after: beforeCount)
 
         XCTAssertGreaterThan(
             SequencedURLProtocol.capturedRequests.count,
@@ -327,7 +342,7 @@ final class DiscoverBusinessesViewModelTests: XCTestCase {
 
         vm.setSearchText("tree")
         vm.submitSearch()
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        await waitForRequest(after: beforeCount)
 
         XCTAssertGreaterThan(
             SequencedURLProtocol.capturedRequests.count,
@@ -451,7 +466,7 @@ final class DiscoverBusinessesViewModelTests: XCTestCase {
             openNow: true,
             ratingFloor: 4
         ))
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        await waitForRequest(after: before)
 
         XCTAssertGreaterThan(SequencedURLProtocol.capturedRequests.count, before)
         let query = SequencedURLProtocol.capturedRequests.last?.url?.query ?? ""
@@ -470,9 +485,10 @@ final class DiscoverBusinessesViewModelTests: XCTestCase {
         ])
         let vm = makeVM()
         await vm.load()
+        let before = SequencedURLProtocol.capturedRequests.count
 
         vm.applyFilters(.default)
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        await waitForRequest(after: before)
 
         let query = SequencedURLProtocol.capturedRequests.last?.url?.query ?? ""
         XCTAssertFalse(query.contains("radius_miles="), query)
@@ -489,11 +505,13 @@ final class DiscoverBusinessesViewModelTests: XCTestCase {
         ])
         let vm = makeVM()
         await vm.load()
+        let afterLoad = SequencedURLProtocol.capturedRequests.count
         vm.selectChip(DiscoverBusinessesChip.handyman)
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        await waitForRequest(after: afterLoad)
 
+        let afterChip = SequencedURLProtocol.capturedRequests.count
         vm.applyFilters(DiscoverBusinessFilters(categories: ["home-services"]))
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        await waitForRequest(after: afterChip)
 
         let query = SequencedURLProtocol.capturedRequests.last?.url?.query ?? ""
         // The fine chip (handyman) and the coarse sheet category
