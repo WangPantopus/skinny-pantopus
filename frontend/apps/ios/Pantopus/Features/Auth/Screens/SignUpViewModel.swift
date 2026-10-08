@@ -150,8 +150,12 @@ public final class SignUpViewModel {
     /// Aggregate validity — true when every required field passes and
     /// terms are accepted. Drives the bottom CTA's enabled state.
     /// True once any field carries user input; drives the discard prompt.
+    /// An address filled in for the person (an emailed invitation's); leaving it as it is isn't input.
+    public var suggestedEmail = ""
+
     public var hasInput: Bool {
-        ![email, password, confirmPassword, username, firstName, middleName, lastName, phoneNumber, inviteCode]
+        let typedEmail = email == suggestedEmail ? "" : email
+        return ![typedEmail, password, confirmPassword, username, firstName, middleName, lastName, phoneNumber, inviteCode]
             .allSatisfy(\.isEmpty) || dateOfBirth != nil || agreedToTerms
     }
 
