@@ -199,6 +199,11 @@ export default function SupportTrainDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [reservationError, setReservationError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('needs');
+  // An update notification links here with ?tab=updates, so the update is what opens.
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'updates' || tab === 'details') setActiveTab(tab);
+  }, []);
   // Reservation id of the helper action in flight (Mark delivered / Leave slot).
   const [helperAction, setHelperAction] = useState<string | null>(null);
   const [reserveSlot, setReserveSlot] = useState<any>(null);
