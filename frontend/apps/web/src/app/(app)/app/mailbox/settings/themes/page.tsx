@@ -41,6 +41,14 @@ const RARITY_BG: Record<string, string> = {
   legendary: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
 };
 
+// The same rarity colors for text on a card, in both themes.
+const RARITY_TEXT: Record<string, string> = {
+  common: 'text-app-text-secondary',
+  uncommon: 'text-blue-700 dark:text-blue-300',
+  rare: 'text-purple-700 dark:text-purple-300',
+  legendary: 'text-amber-700 dark:text-amber-300',
+};
+
 // ── Stamp detail modal ───────────────────────────────────────
 
 function StampDetailModal({
@@ -123,30 +131,29 @@ function LockedStampCard({
   const progressPct = hasProgress ? Math.min(100, Math.round(((stamp.progress ?? 0) / (stamp.target ?? 1)) * 100)) : 0;
 
   return (
-    <div className="w-full rounded-xl border-2 border-app-border p-3 text-center opacity-60 relative">
-      {/* Lock overlay */}
-      <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-        <div className="w-8 h-8 rounded-full bg-gray-800/60 flex items-center justify-center">
-          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
+    <div className="w-full rounded-xl border-2 border-app-border p-3 text-center">
+      {/* Greyscale stamp under its lock. Only the picture is faded: fading the whole card left its text
+          at about 2.5:1 contrast, and a lock centered on the card covered the stamp's name. */}
+      <div className="relative w-16 h-16 mx-auto rounded-lg bg-app-surface-sunken flex items-center justify-center grayscale">
+        <span className="text-2xl opacity-40" aria-hidden="true">🏅</span>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-8 h-8 rounded-full bg-gray-800/60 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
         </div>
       </div>
 
-      {/* Greyscale stamp */}
-      <div className="w-16 h-16 mx-auto rounded-lg bg-app-surface-sunken flex items-center justify-center grayscale">
-        <span className="text-2xl opacity-40">🏅</span>
-      </div>
-
       <p className="text-xs font-semibold text-app-text-secondary mt-2 truncate">
-        {stamp.name}
+        <span className="sr-only">Locked: </span>{stamp.name}
       </p>
-      <p className={`text-[10px] capitalize mt-0.5 ${RARITY_BG[stamp.rarity]?.split(' ')[1] || 'text-app-text-muted'}`}>
+      <p className={`text-[10px] capitalize mt-0.5 ${RARITY_TEXT[stamp.rarity] || RARITY_TEXT.common}`}>
         {stamp.rarity}
       </p>
 
       {/* Earn condition */}
-      <p className="text-[10px] text-app-text-muted mt-1 truncate">
+      <p className="text-[10px] text-app-text-secondary mt-1 line-clamp-2">
         {stamp.description}
       </p>
 
@@ -159,7 +166,7 @@ function LockedStampCard({
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <p className="text-[10px] text-app-text-muted mt-0.5">
+          <p className="text-[10px] text-app-text-secondary mt-0.5">
             {stamp.progress} of {stamp.target}
           </p>
         </div>
