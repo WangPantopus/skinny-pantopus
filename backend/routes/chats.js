@@ -57,10 +57,14 @@ async function loadLocalIdentityMapForUsers(users) {
   }
   if (usersById.size === 0) return new Map();
 
-  const { data: profiles, error } = await supabaseAdmin
-    .from('LocalProfile')
-    .select(LOCAL_PROFILE_IDENTITY_SELECT)
-    .in('user_id', [...usersById.keys()]);
+  // The profiles and the verified-resident check are read together.
+  const [{ data: profiles, error }, residents] = await Promise.all([
+    supabaseAdmin
+      .from('LocalProfile')
+      .select(LOCAL_PROFILE_IDENTITY_SELECT)
+      .in('user_id', [...usersById.keys()]),
+    verifiedResidentUserIds([...usersById.keys()]),
+  ]);
 
   if (error) {
     logger.warn('chat.local_profile_identity_lookup_error', { error: error.message });
@@ -70,7 +74,6 @@ async function loadLocalIdentityMapForUsers(users) {
   for (const profile of profiles || []) {
     if (profile?.user_id) profilesByUserId.set(String(profile.user_id), profile);
   }
-  const residents = await verifiedResidentUserIds([...usersById.keys()]);
 
   const identitiesByUserId = new Map();
   for (const [userId, user] of usersById) {
@@ -2413,22 +2416,35 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     const mergeableParticipants = roomList.filter(p => p.room.type === 'direct' || p.room.type === 'gig');
     const groupHomeParticipants = roomList.filter(p => p.room.type === 'group' || p.room.type === 'home');
 
-    // Step 2: For mergeable rooms, find other participants
+    // Step 2: For mergeable rooms, find other participants. The messages and topics of steps 4-5
+    // don't depend on them, so they're fetched in the same round trip (previews for every listed
+    // room, including any that end up without a counterpart).
     const mergeableRoomIds = mergeableParticipants.map(p => p.room_id);
-    let allOtherParticipants = [];
-    if (mergeableRoomIds.length > 0) {
-      const { data: otherParts } = await supabaseAdmin
-        .from('ChatParticipant')
-        .select(`
-          room_id,
-          user_id,
-          user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)
-        `)
-        .in('room_id', mergeableRoomIds)
-        .neq('user_id', userId)
-        .eq('is_active', true);
-      allOtherParticipants = otherParts || [];
-    }
+    const previewRoomIds = [...mergeableRoomIds, ...groupHomeParticipants.map(p => p.room_id)];
+    const [{ data: otherParts }, { data: allConvMsgs }, { data: allTopics }] = await Promise.all([
+      mergeableRoomIds.length > 0
+        ? supabaseAdmin
+          .from('ChatParticipant')
+          .select(`
+            room_id,
+            user_id,
+            user:user_id(id, username, name, first_name, middle_name, last_name, profile_picture_url)
+          `)
+          .in('room_id', mergeableRoomIds)
+          .neq('user_id', userId)
+          .eq('is_active', true)
+        : Promise.resolve({ data: [] }),
+      previewRoomIds.length > 0
+        ? supabaseAdmin.rpc('get_room_previews', { p_room_ids: previewRoomIds })
+        : Promise.resolve({ data: [] }),
+      supabaseAdmin
+        .from('ConversationTopic')
+        .select('id, topic_type, topic_ref_id, title, status, last_activity_at, conversation_user_id_1, conversation_user_id_2')
+        .or(`conversation_user_id_1.eq.${userId},conversation_user_id_2.eq.${userId}`)
+        .eq('status', 'active')
+        .order('last_activity_at', { ascending: false }),
+    ]);
+    let allOtherParticipants = otherParts || [];
     // Leftover members of an assigned task's gig room don't stand in for its counterpart.
     const hiddenMembers = await hiddenGigRoomMembers(mergeableParticipants.map((p) => p.room), allOtherParticipants);
     allOtherParticipants = allOtherParticipants.filter((op) => !hiddenMembers.has(`${op.room_id}:${op.user_id}`));
@@ -2467,24 +2483,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       conv.total_unread += (p.unread_count || 0);
     }
 
-    // Step 4-5: Batch-fetch messages and topics (3 queries instead of 2N+M sequential)
-    const allConvRoomIds = [];
-    for (const [, conv] of conversationMap) allConvRoomIds.push(...conv.room_ids);
-    const groupRoomIds = groupHomeParticipants.map(p => p.room_id);
-    const allMergedRoomIds = [...allConvRoomIds, ...groupRoomIds];
-
-    const [{ data: allConvMsgs }, { data: allTopics }] = await Promise.all([
-      allMergedRoomIds.length > 0
-        ? supabaseAdmin.rpc('get_room_previews', { p_room_ids: allMergedRoomIds })
-        : Promise.resolve({ data: [] }),
-      supabaseAdmin
-        .from('ConversationTopic')
-        .select('id, topic_type, topic_ref_id, title, status, last_activity_at, conversation_user_id_1, conversation_user_id_2')
-        .or(`conversation_user_id_1.eq.${userId},conversation_user_id_2.eq.${userId}`)
-        .eq('status', 'active')
-        .order('last_activity_at', { ascending: false }),
-    ]);
-
+    // Step 4-5: Messages and topics, batch-fetched in step 2 (3 queries instead of 2N+M sequential)
     // Index previews by room_id (RPC returns exactly one row per room)
     const convMsgByRoom = await resolveRoomPreviewMap(allConvMsgs, req.requestId, 'unified_conversations');
     // Build lookup: other_user_id -> topics
