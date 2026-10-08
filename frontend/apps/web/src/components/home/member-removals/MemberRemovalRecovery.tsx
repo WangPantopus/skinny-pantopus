@@ -80,8 +80,8 @@ export default function MemberRemovalRecovery({ homeId, targetId, self = false }
 }
 function ReviewSummary({ summary, historical = false }: { summary: RemovalSummary; historical?: boolean }) {
   const t = summary.target;
-  // A made-up username (user_…) is never shown.
-  const name = usernameHandle(t.username) || t.name || 'Selected household member';
+  // Their name, else a username they chose; a made-up username (user_…) is never shown.
+  const name = t.display_name || usernameHandle(t.username) || t.name || 'Selected household member';
   return <dl className="space-y-2 text-sm">
     <div><dt className="font-medium">Home</dt><dd className="break-words">{summary.home.name || 'Selected Home'}</dd></div>
     <div><dt className="font-medium">Member</dt><dd className="break-words">{name}{t.is_self ? ' (you)' : ''}</dd></div>

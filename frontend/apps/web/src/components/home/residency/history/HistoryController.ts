@@ -1,4 +1,5 @@
 import * as api from '@pantopus/api';
+import { DISPLAY_NAMES_HEADER } from '../queue/queueModel';
 import { HISTORY_BASE, historyUUID, historySession, validateHistoryPage, validateHistoryDetail, olderThan,
   type HistoryItem, type HistorySession } from './historyModel';
 
@@ -52,7 +53,7 @@ export class HistoryController {
   private async get(path: string, after?: string) {
     this.requireCurrent();
     const response = await api.apiClient.get<unknown>(HISTORY_BASE + path, {
-      headers: { 'X-Pantopus-Session-Scope': this.session!.session_scope, 'Cache-Control': 'no-cache, no-store' },
+      headers: { 'X-Pantopus-Session-Scope': this.session!.session_scope, 'Cache-Control': 'no-cache, no-store', ...DISPLAY_NAMES_HEADER },
       ...(after ? { params: { after } } : {}),
     });
     this.requireCurrent();

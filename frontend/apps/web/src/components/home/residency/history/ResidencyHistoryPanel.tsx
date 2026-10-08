@@ -17,8 +17,8 @@ function Decision({ item, detailed = false }: { item: HistoryItem; detailed?: bo
     </div>
     <div className="space-y-1 border-t border-app-border pt-3 text-sm">
       <h3 className="font-medium">Request at last check</h3>
-      {usernameHandle(current.applicant?.username)
-        ? <p className="break-words">Current applicant: {usernameHandle(current.applicant?.username)}</p>
+      {current.applicant?.display_name || usernameHandle(current.applicant?.username)
+        ? <p className="break-words">Current applicant: {current.applicant?.display_name || usernameHandle(current.applicant?.username)}</p>
         : <p>Applicant name unavailable. Claim reference: {decision.claim_id.slice(-8)}</p>}
       <p>{claimStatus[current.claim_status]}</p>
       <p className="text-app-text-secondary">This recorded decision does not confirm current household access.</p>
