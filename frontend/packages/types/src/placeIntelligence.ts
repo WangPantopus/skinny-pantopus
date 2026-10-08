@@ -928,6 +928,20 @@ export interface PlaceGroupBlock {
 }
 
 /**
+ * Who is looking at a Home's Place. The role picks which sections apply
+ * (owners get value and the exemption check, renters the rent sections,
+ * other household members the Home's facts, guests and service providers
+ * public facts only); the stage picks what is locked.
+ */
+export interface PlaceViewer {
+  role: 'owner' | 'renter' | 'member' | 'nonresident';
+  /** setup: set up, not verified (T1) · claimed: household access (T3) · verified (T4). */
+  stage: 'setup' | 'claimed' | 'verified';
+  /** An owner whose ownership is still being confirmed is `pending`. */
+  ownership: 'confirmed' | 'pending' | 'none';
+}
+
+/**
  * GET /place/intelligence (and /place/preview at T0) — grouped
  * section envelopes for an address. `region_supported: false` drives
  * the "coming to your region" state for non-US addresses.
@@ -937,6 +951,8 @@ export interface PlaceIntelligence {
   tier: PlaceTier;
   /** Whether this viewer can start residency verification (false for guests and service providers). Omitted by older servers. */
   verify_available?: boolean;
+  /** Who is looking, on a Home's Place. Sections that don't apply to the role are left out. Omitted by older servers. */
+  viewer?: PlaceViewer;
   region_supported: boolean;
   /** ISO 8601. */
   generated_at: string;

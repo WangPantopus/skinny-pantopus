@@ -51,8 +51,8 @@ export interface PlaceDashboardViewProps {
   onSwitchHome?: (id: string) => void;
   /** Claim or verify another address. */
   onAddPlace?: () => void;
-  /** Route to claim a place (a Band B/C locked card, if any). */
-  onClaim?: () => void;
+  /** Verify a Home that's set up but not verified (T1) by mail. */
+  onVerifyByMail?: () => void;
 }
 
 export default function PlaceDashboardView({
@@ -68,7 +68,7 @@ export default function PlaceDashboardView({
   moveInDate = null,
   onSwitchHome,
   onAddPlace,
-  onClaim,
+  onVerifyByMail,
 }: PlaceDashboardViewProps) {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const openVerify = () => setVerifyOpen(true);
@@ -89,6 +89,11 @@ export default function PlaceDashboardView({
   // Guests and service providers aren't residents, so they get no verify prompts.
   const canVerify = !(tier === 'T3' && intelligence.verify_available === false);
   const showVerify = tier === 'T3' && canVerify;
+  // A Home set up but not yet verified (T1) is verified by mail next, so
+  // its locked cards go to the postcard rather than to another claim. At T3
+  // and T4 the only Band B/C lock is an owner-only item waiting for the
+  // ownership review, which nothing here can speed up, so it has no button.
+  const setupStage = tier === 'T1';
   const hasServerIdentity = intelligence.groups.some((g) => g.group === 'identity');
   const showIdentity = tier === 'T4' && !hasServerIdentity;
 
@@ -157,7 +162,13 @@ export default function PlaceDashboardView({
                       {group.sections
                         .filter((section) => !fold || !isUnavailableSection(section))
                         .map((section) => (
-                          <Fragment key={section.id}>{renderSection(section, { onOpen, onVerify: canVerify ? openVerify : undefined, onClaim: canVerify ? onClaim : undefined, onRetry, retrying })}</Fragment>
+                          <Fragment key={section.id}>{renderSection(section, {
+                            onOpen,
+                            onVerify: canVerify ? (setupStage ? onVerifyByMail : openVerify) : undefined,
+                            verifyFirst: setupStage,
+                            onRetry,
+                            retrying,
+                          })}</Fragment>
                         ))}
                       {fold ? <CoverageRow titles={unavailable.map((s) => sectionTitle(s.id))} reason={sharedReason} onOpen={onOpen} /> : null}
                     </>

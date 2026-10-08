@@ -4,12 +4,15 @@
 // incentives you may qualify for, the HUD rent band with your own
 // private rent, and property tax as a post-v1 "coming soon" row.
 // Bill benchmark / incentives / rent read from the contract.
+// The server leaves out what doesn't apply to the viewer: owners get the
+// exemption check and the owner tools below it, renters the rent sections.
 // ============================================================
 
 'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { RecordWatch } from '@pantopus/api';
@@ -32,7 +35,7 @@ import type {
 } from '@pantopus/types';
 import { Zap, BadgePercent, Building2, Landmark, PlusCircle, Lock, BadgeCheck, CircleAlert, CircleHelp, TrendingDown, Loader2, Ban, Users, ChevronRight } from 'lucide-react';
 import Chip, { type ChipVariant } from '@/components/archetypes/primitives/Chip';
-import { SectionCard, DetailHeader, DetailSectionLabel, SourceNote, ComingSoonRow, InfoNote } from '@/components/archetypes/place';
+import { SectionCard, LockedCard, DetailHeader, DetailSectionLabel, SourceNote, ComingSoonRow, InfoNote } from '@/components/archetypes/place';
 import { findPlaceSection, detailAddress } from './sections';
 import { usd, statusToState, apiErrorText } from './format';
 import { MoneyField, PrivacyNote, SkyButton, parseMoney, groupDigits } from './fields';
@@ -934,6 +937,7 @@ function RateWatchSection({ homeId, verified, canVerify }: { homeId: string; ver
 }
 
 export default function MoneyDetail({ intelligence, homeId }: { intelligence: PlaceIntelligence; homeId: string | null }) {
+  const router = useRouter();
   const bill = findPlaceSection(intelligence, 'bill_benchmark');
   const incentives = findPlaceSection(intelligence, 'incentives');
   const rent = findPlaceSection(intelligence, 'rent_band');
@@ -945,66 +949,104 @@ export default function MoneyDetail({ intelligence, homeId }: { intelligence: Pl
   const rentReady = rent && (rent.status === 'ready' || rent.status === 'stale' || rent.status === 'partial') && rent.data;
   const exemptionReady = exemption && exemption.access === 'available'
     && (exemption.status === 'ready' || exemption.status === 'stale') && exemption.data;
+  // Rate watch, deed alerts and the property-tax check are the owner's, like
+  // the exemption check. Older servers send no viewer and keep them for all.
+  const ownerTools = !intelligence.viewer || intelligence.viewer.role === 'owner';
+  // Set up but not verified (T1): the locks are the verify-by-mail step.
+  const verifyByMail = intelligence.tier === 'T1' && homeId
+    ? () => router.push(`/app/homes/${homeId}/verify-postcard?return=place`)
+    : undefined;
 
   return (
     <>
       <DetailHeader title="Money signals" address={detailAddress(intelligence.place)} />
       <div className="px-4 sm:px-5 pt-1 pb-16">
-        <DetailSectionLabel>Bill benchmark</DetailSectionLabel>
-        {billReady ? (
-          <BillBenchmark data={bill!.data as PlaceBillBenchmarkData} />
-        ) : (
-          <SectionCard icon={Zap} title="Bill benchmark" state={bill ? statusToState(bill.status) : 'unavailable'} caption={bill?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
-        )}
-        {/* The months the comparison actually covers, as the API reports them. */}
-        {bill?.source ? <SourceNote name={bill.source} asOf={billReady ? (bill!.data as PlaceBillBenchmarkData).period : undefined} /> : null}
+        {/* A section the server left out doesn't apply to this viewer: no heading, no empty card. */}
+        {bill ? (
+          <>
+            <DetailSectionLabel>Bill benchmark</DetailSectionLabel>
+            {bill.access === 'locked' ? (
+              <LockedCard icon={Zap} title="Bill benchmark" reason={bill.unavailable_reason ?? "Verify your address by mail to compare your bills with your neighbors'."} cta="Verify address" onCta={verifyByMail} />
+            ) : billReady ? (
+              <BillBenchmark data={bill.data as PlaceBillBenchmarkData} />
+            ) : (
+              <SectionCard icon={Zap} title="Bill benchmark" state={statusToState(bill.status)} caption={bill.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
+            )}
+            {/* The months the comparison actually covers, as the API reports them. */}
+            {bill.source && bill.access !== 'locked' ? <SourceNote name={bill.source} asOf={billReady ? (bill.data as PlaceBillBenchmarkData).period : undefined} /> : null}
+          </>
+        ) : null}
 
-        <DetailSectionLabel>Incentives you may qualify for</DetailSectionLabel>
-        {incReady ? (
-          <IncentivesList data={incentives!.data as PlaceIncentivesData} />
-        ) : (
-          <SectionCard icon={BadgePercent} title="Incentives" state={incentives ? statusToState(incentives.status) : 'unavailable'} caption={incentives?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
-        )}
-        {incentives?.source ? <SourceNote name={incentives.source} /> : null}
+        {incentives ? (
+          <>
+            <DetailSectionLabel>Incentives you may qualify for</DetailSectionLabel>
+            {incReady ? (
+              <IncentivesList data={incentives.data as PlaceIncentivesData} />
+            ) : (
+              <SectionCard icon={BadgePercent} title="Incentives" state={statusToState(incentives.status)} caption={incentives.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
+            )}
+            {incentives.source ? <SourceNote name={incentives.source} /> : null}
+          </>
+        ) : null}
 
-        <DetailSectionLabel>Rent</DetailSectionLabel>
-        {rentReady ? (
-          <RentBand data={rent!.data as PlaceRentBandData} homeId={homeId} />
-        ) : (
-          <SectionCard icon={Building2} title="Rent band" state={rent ? statusToState(rent.status) : 'unavailable'} caption={rent?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
-        )}
-        {rent?.source ? <SourceNote name={rent.source} asOf="FY 2026" /> : null}
+        {rent ? (
+          <>
+            <DetailSectionLabel>Rent</DetailSectionLabel>
+            {rentReady ? (
+              <RentBand data={rent.data as PlaceRentBandData} homeId={homeId} />
+            ) : (
+              <SectionCard icon={Building2} title="Rent band" state={statusToState(rent.status)} caption={rent.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
+            )}
+            {rent.source ? <SourceNote name={rent.source} asOf="FY 2026" /> : null}
+          </>
+        ) : null}
 
         {/* The county estimate above, the block reality here — read as a pair. */}
-        <DetailSectionLabel>What your block actually pays</DetailSectionLabel>
-        <RealRentSection section={realRent ?? null} homeId={homeId} />
-        {realRent && realRent.access !== 'locked' ? <SourceNote name={realRent.source ?? 'Pantopus · verified neighbors on your block'} /> : null}
+        {realRent ? (
+          <>
+            <DetailSectionLabel>What your block actually pays</DetailSectionLabel>
+            <RealRentSection section={realRent} homeId={homeId} />
+            {realRent.access !== 'locked' ? <SourceNote name={realRent.source ?? 'Pantopus · verified neighbors on your block'} /> : null}
+          </>
+        ) : null}
 
-        <DetailSectionLabel>Property-tax exemption</DetailSectionLabel>
-        {exemptionReady ? (
-          <ExemptionCard data={exemption!.data as PlaceExemptionCheckData} />
-        ) : (
-          <SectionCard
-            icon={Landmark}
-            title="Homestead exemption"
-            state={exemption && exemption.access === 'available' ? statusToState(exemption.status) : 'unavailable'}
-            caption={exemption?.unavailable_reason ?? undefined}
-            onRetry={() => window.location.reload()}
-          />
-        )}
-        {exemption?.source && exemptionReady ? <SourceNote name={exemption.source} /> : null}
+        {exemption ? (
+          <>
+            <DetailSectionLabel>Property-tax exemption</DetailSectionLabel>
+            {exemption.access === 'locked' ? (
+              // Before verification the lock is the verify-by-mail step; while
+              // ownership is reviewed, nothing here can speed it up.
+              <LockedCard icon={Landmark} title="Homestead exemption" reason={exemption.unavailable_reason ?? 'Available once your ownership is confirmed.'} cta="Verify address" onCta={verifyByMail} />
+            ) : exemptionReady ? (
+              <ExemptionCard data={exemption.data as PlaceExemptionCheckData} />
+            ) : (
+              <SectionCard
+                icon={Landmark}
+                title="Homestead exemption"
+                state={exemption.access === 'available' ? statusToState(exemption.status) : 'unavailable'}
+                caption={exemption.unavailable_reason ?? undefined}
+                onRetry={() => window.location.reload()}
+              />
+            )}
+            {exemption.source && exemptionReady ? <SourceNote name={exemption.source} /> : null}
+          </>
+        ) : null}
 
-        <DetailSectionLabel>Rate watch</DetailSectionLabel>
-        {homeId ? (
-          <RateWatchSection homeId={homeId} verified={intelligence.tier === 'T4'} canVerify={intelligence.verify_available !== false} />
-        ) : (
-          <ComingSoonRow icon={TrendingDown} title="Rate watch" sub="Claim your place to watch the market against your loan month" />
-        )}
-        <SourceNote name="Freddie Mac Primary Mortgage Market Survey" asOf="weekly" />
-        <ComingSoonRow icon={Landmark} title="Deed & lien alerts" sub="Know within days if anyone records against your home — only you can watch it" />
+        {ownerTools ? (
+          <>
+            <DetailSectionLabel>Rate watch</DetailSectionLabel>
+            {homeId ? (
+              <RateWatchSection homeId={homeId} verified={intelligence.tier === 'T4'} canVerify={intelligence.verify_available !== false} />
+            ) : (
+              <ComingSoonRow icon={TrendingDown} title="Rate watch" sub="Claim your place to watch the market against your loan month" />
+            )}
+            <SourceNote name="Freddie Mac Primary Mortgage Market Survey" asOf="weekly" />
+            <ComingSoonRow icon={Landmark} title="Deed & lien alerts" sub="Know within days if anyone records against your home — only you can watch it" />
 
-        <DetailSectionLabel>Property tax</DetailSectionLabel>
-        <ComingSoonRow icon={Landmark} title="Property tax check" sub="Your assessment vs nearby comps + how appeals work" />
+            <DetailSectionLabel>Property tax</DetailSectionLabel>
+            <ComingSoonRow icon={Landmark} title="Property tax check" sub="Your assessment vs nearby comps + how appeals work" />
+          </>
+        ) : null}
 
         <InfoNote>
           Everything here is informational, drawn from public data and your own entries. It isn&apos;t financial, tax, or legal advice, and amounts aren&apos;t guarantees.

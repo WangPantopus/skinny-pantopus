@@ -16,13 +16,14 @@ import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { MapPinned } from 'lucide-react';
+import type { PlaceGroup, PlaceViewer } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
 import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
 import { DetailHeader, PlaceHomeContext, placeHomeQuery } from '@/components/archetypes/place';
 import PlaceShell from '../PlaceShell';
-import { PLACE_DETAIL_BY_SLUG } from './sections';
+import { PLACE_DETAIL_BY_SLUG, placeSlugsNotForViewer } from './sections';
 import TodayDetail from './TodayDetail';
 import YourHomeDetail from './YourHomeDetail';
 import RiskDetail from './RiskDetail';
@@ -31,8 +32,22 @@ import MoneyDetail from './MoneyDetail';
 import CivicDetail from './CivicDetail';
 import IdentityDetail from './IdentityDetail';
 
-function DetailShell({ section, children }: { section: string; children: React.ReactNode }) {
-  return <PlaceShell active={section}>{children}</PlaceShell>;
+function DetailShell({ section, hidden, children }: { section: string; hidden?: string[]; children: React.ReactNode }) {
+  return <PlaceShell active={section} hidden={hidden}>{children}</PlaceShell>;
+}
+
+// What a viewer is told on a page that isn't part of their view of a Home.
+function notForViewer(group: PlaceGroup, role: PlaceViewer['role']): { title: string; description: string } {
+  if (role === 'nonresident') {
+    return {
+      title: group === 'money_signals' ? 'Money signals are for the household' : 'Home records are for the household',
+      description: "Guests and service providers see this address's public information: today, risk and readiness, the block and civic details.",
+    };
+  }
+  return {
+    title: 'Money signals are for the owner or renter',
+    description: "Bill comparisons, rent and property-tax checks belong to whoever owns or rents this home. Your Place still shows the home's details, its risks and today's conditions.",
+  };
 }
 
 function DetailSkeleton() {
@@ -239,9 +254,31 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
 
   const intelligence = intelQuery.data;
   const residentName = userQuery.data?.name || userQuery.data?.firstName || '';
+  const hidden = placeSlugsNotForViewer(intelligence);
+
+  // The server leaves out the groups that don't apply to this viewer; a
+  // link or bookmark to one gets a straight answer, not empty cards.
+  if (hidden.includes(section) && intelligence.viewer) {
+    const copy = notForViewer(meta.group, intelligence.viewer.role);
+    return (
+      <DetailShell section={section} hidden={hidden}>
+        <DetailHeader title={meta.title} />
+        <div className="px-4 sm:px-5">
+          <EmptyState
+            icon={MapPinned}
+            title={copy.title}
+            description={copy.description}
+            actionLabel="Back to your Place"
+            headingLevel={2}
+            onAction={() => router.push(`/app/place${placeHomeQuery(switchedHome)}`)}
+          />
+        </div>
+      </DetailShell>
+    );
+  }
 
   return (
-    <DetailShell section={section}>
+    <DetailShell section={section} hidden={hidden}>
       {meta.group === 'today' && <TodayDetail intelligence={intelligence} homeId={homeId} />}
       {meta.group === 'your_home' && <YourHomeDetail intelligence={intelligence} homeId={homeId} />}
       {meta.group === 'risk_readiness' && <RiskDetail intelligence={intelligence} homeId={homeId} />}
