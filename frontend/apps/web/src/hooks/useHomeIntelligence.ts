@@ -22,9 +22,11 @@ function useSummaryRead<T>(homeId: string | undefined, request: () => Promise<T>
   const capture = useCallback(() => {
     const opening = lifetime.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
     const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    // A hidden tab doesn't make a read stale (a card read while hidden would otherwise stay loading); an
+    // account, API origin or session change does.
     return () => !opening.retired && opening === lifetime.current && !!homeId && !!token
       && token === api.getAuthToken() && origin === api.getApiBaseUrl()
-      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) && document.visibilityState !== 'hidden';
+      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
   }, [homeId]);
   const load = useCallback(async (read = request) => {
     const current = capture(), sequence = ++revision.current;
