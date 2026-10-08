@@ -810,6 +810,14 @@ const MY_SIGNUP_STATUS: Record<string, string> = {
   confirmed: 'Delivery confirmed',
 };
 
+// The helper's estimated arrival as "5:30 pm" in this browser's time zone, as the organizer's table shows it.
+function arrivalLabel(iso: unknown): string | null {
+  if (typeof iso !== 'string' || !iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+}
+
 function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
   reservation: any;
   slot: any;
@@ -826,6 +834,7 @@ function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
       })
     : '';
   const contribution = contributionSummary(reservation);
+  const arrival = arrivalLabel(reservation.estimated_arrival_at);
   const isReserved = reservation.status === 'reserved';
 
   return (
@@ -836,7 +845,11 @@ function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
       {slot?.start_time && (
         <p className="text-xs text-app-text-secondary mt-0.5">{formatSlotWindow(slot.start_time, slot.end_time)}</p>
       )}
-      {contribution && <p className="text-xs text-app-text-secondary mt-0.5">{contribution}</p>}
+      {(contribution || arrival) && (
+        <p className="text-xs text-app-text-secondary mt-0.5">
+          {[contribution, arrival && `arrives ${arrival}`].filter(Boolean).join(' · ')}
+        </p>
+      )}
       <p className="text-xs font-medium text-primary-700 dark:text-primary-300 mt-1">
         {MY_SIGNUP_STATUS[reservation.status] || "You're signed up"}
       </p>
