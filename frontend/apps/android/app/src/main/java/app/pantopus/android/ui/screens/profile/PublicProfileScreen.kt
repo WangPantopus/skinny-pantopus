@@ -226,7 +226,8 @@ fun PublicProfileScreen(
                     onShare = { url ->
                         viewModel.setShowOverflow(false)
                         // Your own link still on a made-up username: offer to pick one first, once.
-                        if (loaded != null && loaded.isOwner && usernameShare.shouldAsk(loaded.profile.id, loaded.profile.username)) {
+                        val madeUp = loaded?.profile?.chosenUsername == null
+                        if (loaded != null && loaded.isOwner && usernameShare.shouldAsk(loaded.profile.id, madeUp)) {
                             usernameShare.open(loaded.profile.id, loaded.profile.username)
                         } else {
                             context.shareText(url)
@@ -417,6 +418,7 @@ internal fun PublicProfileLoadedFrame(
                         isVerified = content.header.isVerified,
                         avatarUrl = content.header.avatarUrl,
                         stats = content.stats.stats,
+                        avatarName = content.header.avatarName,
                     ) {
                         if (persona) {
                             // Launch cut #1/#2 (Beacon + Personas): no Beacon insights or persona editor.
@@ -562,6 +564,7 @@ internal fun LocalProfileLoadedFrame(
                         isVerified = content.header.isVerified,
                         avatarUrl = content.header.avatarUrl,
                         stats = content.stats.stats,
+                        avatarName = content.header.avatarName,
                     ) {
                         NeighborHeaderActions(
                             connection = connection,

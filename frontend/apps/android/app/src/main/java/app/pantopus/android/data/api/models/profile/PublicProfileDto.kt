@@ -53,14 +53,24 @@ data class PublicProfileDto(
     val reviews: List<PublicProfileReview> = emptyList(),
     val socialLinks: JsonValue? = null,
     val skills: List<String> = emptyList(),
+    /** True when the server made the username up (user_…, or the pre-October-7 kind built from the email address). */
+    val usernameIsGenerated: Boolean? = null,
 ) {
+    /** The username when the person chose it; null for a made-up one. */
+    val chosenUsername: String?
+        get() = if (usernameIsGenerated == true) null else MadeUpUsername.chosen(username)
+
+    /** False when the profile has neither a name nor a chosen username. */
+    val hasName: Boolean
+        get() = !name.isNullOrEmpty() || !firstName.isNullOrEmpty() || !lastName.isNullOrEmpty() || chosenUsername != null
+
     /** Best-effort display name. */
     val displayName: String
         get() {
             if (!name.isNullOrEmpty()) return name
             val combined = listOfNotNull(firstName, lastName).filter { it.isNotEmpty() }.joinToString(" ")
             if (combined.isNotEmpty()) return combined
-            return MadeUpUsername.handle(username) ?: "Pantopus member"
+            return chosenUsername?.let { "@$it" } ?: "Pantopus member"
         }
 
     /** "City, ST" if both present. */

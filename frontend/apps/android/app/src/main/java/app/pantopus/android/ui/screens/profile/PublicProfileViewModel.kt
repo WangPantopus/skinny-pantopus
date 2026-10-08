@@ -6,7 +6,6 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
-import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -114,7 +113,13 @@ data class PublicProfileHeader(
     val tierLabel: String? = null,
     /** P6.5 — Green "Verified neighbor" shield chip on Local profiles. */
     val isVerifiedNeighbor: Boolean = false,
-)
+    /** False when [displayName] is the stand-in for someone with no name: the avatar shows no initials. */
+    val hasName: Boolean = true,
+) {
+    /** What the avatar's initials come from: the name, or "" (a plain avatar) for someone with no name. */
+    val avatarName: String?
+        get() = if (hasName) null else ""
+}
 
 /** Render-ready payload emitted by [PublicProfileViewModel]. */
 data class PublicProfileContent(
@@ -770,8 +775,8 @@ class PublicProfileViewModel
             val header =
                 PublicProfileHeader(
                     displayName = profile.displayName,
-                    // A made-up username (user_…) is never shown as "@…" or in "Report @…".
-                    handle = MadeUpUsername.chosen(profile.username),
+                    // A made-up username is never shown as "@…" or in "Report @…".
+                    handle = profile.chosenUsername,
                     locality = profile.locality,
                     avatarUrl = profile.profilePictureUrl ?: profile.avatarUrl,
                     // No avatar check: `verified` is the account email flag that
@@ -785,6 +790,7 @@ class PublicProfileViewModel
                     // The chip needs the verified home itself: unverified people get the
                     // neighbor layout too while creators are cut.
                     isVerifiedNeighbor = hasHomeResidency(profile),
+                    hasName = profile.hasName,
                 )
             val stats = buildStatCells(profile)
             val reviewCards = buildReviewCards(profile)
