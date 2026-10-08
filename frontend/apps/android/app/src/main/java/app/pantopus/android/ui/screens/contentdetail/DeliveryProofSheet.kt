@@ -201,7 +201,7 @@ fun DeliveryProofSheetContent(
                 .testTag("deliveryProofSheet"),
     ) {
         if (submitted) {
-            SubmittedBody(photos = photos, note = note, onDismiss = onDismiss)
+            SubmittedBody(photos = photos, note = note, paid = paid, onDismiss = onDismiss)
         } else {
             EntryBody(
                 photos = photos,
@@ -551,7 +551,7 @@ private fun TrustLine(paid: Boolean) {
         Text(
             text =
                 if (paid) {
-                    "Payment is released once the poster confirms — usually within a few hours."
+                    "Once the poster confirms, your payment is held for 48 hours, then added to your wallet."
                 } else {
                     "The poster confirms the task once they've seen your proof."
                 },
@@ -567,6 +567,7 @@ private fun TrustLine(paid: Boolean) {
 private fun SubmittedBody(
     photos: List<DeliveryProofPhoto>,
     note: String,
+    paid: Boolean,
     onDismiss: () -> Unit,
 ) {
     Column(
@@ -600,15 +601,21 @@ private fun SubmittedBody(
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             Text(
-                text = "Delivery confirmed",
+                text = "Marked as delivered",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appText,
             )
             Text(
+                // The poster's confirmation captures the payment; the helper's share then waits out
+                // the 48-hour hold before it reaches the wallet (stripeService COOLING_OFF_MS).
                 text =
-                    "We’ve let the poster know. Payment releases once they confirm — " +
-                        "usually within a few hours.",
+                    if (paid) {
+                        "We’ve let the poster know. Once they confirm, your payment is held for 48 hours, " +
+                            "then added to your wallet."
+                    } else {
+                        "We’ve let the poster know. They confirm the task once they’ve seen your proof."
+                    },
                 fontSize = 13.5.sp,
                 color = PantopusColors.appTextSecondary,
                 textAlign = TextAlign.Center,
