@@ -373,6 +373,23 @@ public struct SlotSection: Equatable, Sendable, Identifiable {
 /// screen. The two designed variants are both expressible as this
 /// payload; the VM picks `populated` vs `fullyCovered` off
 /// `typeDates.isFullyCovered`.
+/// One organizer update on the train ("QA L3 owner · 2h" over the text).
+public struct TrainUpdateCard: Equatable, Sendable, Identifiable {
+    public let id: String
+    /// The organizer who posted it, or "Organizer" when they aren't named on the train.
+    public let author: String
+    /// "just now", "5m ago", "2h ago", then "Oct 3", as the web's Updates tab.
+    public let timeLabel: String?
+    public let body: String
+
+    public init(id: String, author: String, timeLabel: String?, body: String) {
+        self.id = id
+        self.author = author
+        self.timeLabel = timeLabel
+        self.body = body
+    }
+}
+
 public struct SupportTrainDetailContent: Equatable, Sendable {
     public let trainId: String
     public let recipient: RecipientCardContent
@@ -401,6 +418,8 @@ public struct SupportTrainDetailContent: Equatable, Sendable {
     /// verbatim, never persisted.
     public let exactAddress: String?
     public let deliveryInstructions: String?
+    /// The organizers' updates, newest first (the train's latest 10).
+    public let updates: [TrainUpdateCard]
 
     public struct CelebrationBanner: Equatable, Sendable {
         public let title: String
@@ -433,7 +452,8 @@ public struct SupportTrainDetailContent: Equatable, Sendable {
         ),
         viewerRole: SupportTrainViewerRole = .viewer,
         exactAddress: String? = nil,
-        deliveryInstructions: String? = nil
+        deliveryInstructions: String? = nil,
+        updates: [TrainUpdateCard] = []
     ) {
         self.trainId = trainId
         self.recipient = recipient
@@ -448,5 +468,6 @@ public struct SupportTrainDetailContent: Equatable, Sendable {
         self.viewerRole = viewerRole
         self.exactAddress = exactAddress
         self.deliveryInstructions = deliveryInstructions
+        self.updates = updates
     }
 }

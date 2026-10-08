@@ -364,8 +364,49 @@ extension SupportTrainDetailViewModel {
             exactAddress: dto.address?.singleLineLabel.isEmpty == false
                 ? dto.address?.singleLineLabel
                 : nil,
-            deliveryInstructions: dto.deliveryInstructions
+            deliveryInstructions: dto.deliveryInstructions,
+            updates: updateCards(dto.updates ?? [], organizers: organizers)
         )
+    }
+
+    /// The organizers' updates in the API's order (newest first), each signed by the organizer
+    /// who posted it. A made-up username is never shown; "Organizer" stands in, as on the web.
+    nonisolated static func updateCards(
+        _ updates: [SupportTrainUpdateDTO],
+        organizers: [SupportTrainOrganizerDTO]
+    ) -> [TrainUpdateCard] {
+        var names: [String: String] = [:]
+        for user in organizers.compactMap(\.user) where names[user.id] == nil {
+            if let name = user.name ?? MadeUpUsername.chosen(user.username) { names[user.id] = name }
+        }
+        return updates.compactMap { update in
+            let body = (update.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !body.isEmpty else { return nil }
+            return TrainUpdateCard(
+                id: update.id,
+                author: update.authorUserId.flatMap { names[$0] } ?? "Organizer",
+                timeLabel: updateTimeLabel(update.createdAt),
+                body: body
+            )
+        }
+    }
+
+    /// "just now", "5m ago", "2h ago", then "Oct 3", as the web train page's Updates tab.
+    nonisolated static func updateTimeLabel(_ iso: String?, now: Date = Date()) -> String? {
+        guard let iso, !iso.isEmpty else { return nil }
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fractional = parser.date(from: iso)
+        parser.formatOptions = [.withInternetDateTime]
+        guard let date = fractional ?? parser.date(from: iso) else { return nil }
+        let minutes = Int(max(0, now.timeIntervalSince(date)) / 60)
+        if minutes < 1 { return "just now" }
+        if minutes < 60 { return "\(minutes)m ago" }
+        if minutes < 60 * 24 { return "\(minutes / 60)h ago" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
     }
 
     /// Reservations only open on a published or active train; the server

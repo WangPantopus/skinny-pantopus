@@ -8,10 +8,13 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainContribut
 import app.pantopus.android.data.api.models.support_trains.SupportTrainDetailDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainModesDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainMyReservationDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainOrganizerDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainSlotDto
+import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateDto
 import app.pantopus.android.ui.components.SlotCalendarDay
 import app.pantopus.android.ui.components.SlotCalendarState
 import java.text.SimpleDateFormat
+import java.time.OffsetDateTime
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -91,7 +94,49 @@ object SupportTrainDetailProjection {
             viewerRole = viewerRole(dto),
             exactAddress = dto.address?.singleLineLabel?.takeIf { it.isNotBlank() },
             deliveryInstructions = dto.deliveryInstructions,
+            updates = updateCards(dto.updates.orEmpty(), organizers),
         )
+    }
+
+    /**
+     * The organizers' updates in the API's order (newest first), each signed by the organizer
+     * who posted it. A made-up username is never shown; "Organizer" stands in, as on the web.
+     */
+    fun updateCards(
+        updates: List<SupportTrainUpdateDto>,
+        organizers: List<SupportTrainOrganizerDto>,
+    ): List<TrainUpdateCard> {
+        val names = mutableMapOf<String, String>()
+        organizers.mapNotNull { it.organizerUser }.forEach { user ->
+            val name = user.name?.takeIf { it.isNotBlank() } ?: MadeUpUsername.chosen(user.username)
+            if (name != null && user.id !in names) names[user.id] = name
+        }
+        return updates.mapNotNull { update ->
+            val body = update.body?.trim().orEmpty()
+            if (body.isEmpty()) return@mapNotNull null
+            TrainUpdateCard(
+                id = update.id,
+                author = update.authorUserId?.let { names[it] } ?: "Organizer",
+                timeLabel = updateTimeLabel(update.createdAt),
+                body = body,
+            )
+        }
+    }
+
+    /** "just now", "5m ago", "2h ago", then "Oct 3", as the web train page's Updates tab. */
+    fun updateTimeLabel(
+        iso: String?,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): String? {
+        if (iso.isNullOrBlank()) return null
+        val posted = runCatching { OffsetDateTime.parse(iso).toInstant().toEpochMilli() }.getOrNull() ?: return null
+        val minutes = ((nowMillis - posted).coerceAtLeast(0) / 60_000).toInt()
+        return when {
+            minutes < 1 -> "just now"
+            minutes < 60 -> "${minutes}m ago"
+            minutes < 60 * 24 -> "${minutes / 60}h ago"
+            else -> SimpleDateFormat("MMM d", Locale.US).format(Date(posted))
+        }
     }
 
     private fun dock(
