@@ -10,6 +10,7 @@ import { buildSupportTrainShareUrl, chosenUsername } from '@pantopus/utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
+import { contributionSummary } from '@/components/support-trains/contributionLabels';
 import {
   Calendar,
   Clock,
@@ -788,12 +789,6 @@ export default function SupportTrainDetailPage() {
 
 // ─── Sub-components ─────────────────────────────────────────────────────
 
-const CONTRIBUTION_LABELS: Record<string, string> = {
-  cook: 'Home-cooked meal',
-  takeout: 'Takeout / delivery',
-  groceries: 'Groceries',
-};
-
 const MY_SIGNUP_STATUS: Record<string, string> = {
   reserved: "You're signed up",
   delivered: 'Marked delivered',
@@ -815,10 +810,7 @@ function MySignupRow({ reservation, slot, busy, onDelivered, onLeave }: {
         timeZone: 'UTC',
       })
     : '';
-  const contribution = [
-    CONTRIBUTION_LABELS[reservation.contribution_mode] || null,
-    reservation.dish_title || reservation.restaurant_name || null,
-  ].filter(Boolean).join(': ');
+  const contribution = contributionSummary(reservation);
   const isReserved = reservation.status === 'reserved';
 
   return (
@@ -1124,9 +1116,7 @@ function OwnerSignupCard({ row }: { row: OwnerSignupRow }) {
               <span className="font-normal text-app-text-muted">
                 {' '}
                 · {formatSlotSummary(slot)}
-                {reservation.contribution_mode
-                  ? ` · ${formatContributionMode(reservation.contribution_mode)}`
-                  : ''}
+                {contributionSummary(reservation) ? ` · ${contributionSummary(reservation)}` : ''}
               </span>
             </span>
           ))}

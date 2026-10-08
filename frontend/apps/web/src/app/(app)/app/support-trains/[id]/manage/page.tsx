@@ -7,6 +7,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { getAuthToken } from '@pantopus/api';
 import { buildSupportTrainShareUrl } from '@pantopus/utils';
 import ErrorState from '@/components/ui/ErrorState';
+import { CONTRIBUTION_LABELS } from '@/components/support-trains/contributionLabels';
 import {
   ArrowLeft,
   Copy,
@@ -379,8 +380,8 @@ export default function ManageSupportTrainPage() {
                     <td className="px-4 py-3 text-app-text font-medium">
                       {r.user?.name || r.guest_name || '—'}
                     </td>
-                    <td className="px-4 py-3 text-app-text-secondary capitalize">
-                      {r.contribution_mode}
+                    <td className="px-4 py-3 text-app-text-secondary">
+                      {CONTRIBUTION_LABELS[r.contribution_mode] || r.contribution_mode}
                     </td>
                     <td className="px-4 py-3 text-app-text-secondary">
                       {r.dish_title || r.restaurant_name || '—'}
