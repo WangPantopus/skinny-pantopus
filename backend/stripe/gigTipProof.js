@@ -184,6 +184,8 @@ function tipProviderParams(data) {
       payment_type: 'tip', platform_fee: '0', payee_stripe_account: original.stripe_account_id,
       tip_request_id: payment.id, payment_id: payment.id }, description: `Pantopus Tip - Gig ${payment.gig_id}` };
   if (original.payment_method_id) Object.assign(expected, { payment_method: original.payment_method_id, off_session: true, confirm: true });
+  // Cards only since migration 20261008084602; a payload frozen before it has no method list and is retried as saved.
+  if (original.provider_params && 'payment_method_types' in original.provider_params) expected.payment_method_types = ['card'];
   const canonical = value => value && typeof value === 'object' && !Array.isArray(value)
     ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
   if (!original.provider_started_at || !Number.isFinite(Date.parse(original.provider_started_at))
