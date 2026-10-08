@@ -242,28 +242,8 @@ extension PlaceSectionID: Decodable {
 
 // MARK: - Today section payloads
 
-/// Weather condition vocabulary. The server always ships a human
-/// `condition_label`, so `.unknown` still renders — it only loses the
-/// specific glyph.
-public enum WeatherConditionCode: String, Sendable, Hashable {
-    case clear
-    case partlyCloudy = "partly_cloudy"
-    case cloudy
-    case fog
-    case rain
-    case snow
-    case sleet
-    case thunderstorm
-    case wind
-    case unknown
-}
-
-extension WeatherConditionCode: Decodable {
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        self = WeatherConditionCode(rawValue: raw) ?? .unknown
-    }
-}
+// `WeatherConditionCode` lives in `WeatherConditionCode.swift`, shared with
+// the widget extension.
 
 public struct PlaceWeatherHour: Decodable, Sendable, Hashable {
     /// ISO 8601 timestamp for the hour.
