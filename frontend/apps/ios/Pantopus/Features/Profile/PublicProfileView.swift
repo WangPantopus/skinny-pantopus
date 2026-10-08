@@ -538,8 +538,11 @@ public struct PublicProfileView: View {
                 .opacity(viewModel.isConnectEnabled ? 1 : 0.7)
                 .accessibilityIdentifier("publicProfileConnectCta")
             }
-            BeaconHeaderPrimaryButton(title: "Message", icon: .messageSquare) {
-                onOpenMessages(payload.profile)
+            // Someone you blocked can't be messaged (the block says so); Settings unblocks.
+            if viewModel.connection != .blocked {
+                BeaconHeaderPrimaryButton(title: "Message", icon: .messageSquare) {
+                    onOpenMessages(payload.profile)
+                }
             }
         }
     }

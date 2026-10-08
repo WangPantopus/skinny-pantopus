@@ -456,16 +456,12 @@ internal fun PublicProfileLoadedFrame(
                                 }
                             }
                         } else {
-                            ConnectHeaderButton(
+                            NeighborHeaderActions(
                                 connection = connection,
                                 connectState = connectState,
                                 canFollow = follow.canFollow && follow.relationshipLoaded,
                                 onConnect = onConnect,
-                            )
-                            BeaconHeaderPrimaryButton(
-                                title = "Message",
-                                icon = PantopusIcon.MessageSquare,
-                                onClick = onMessage,
+                                onMessage = onMessage,
                             )
                         }
                     }
@@ -567,16 +563,12 @@ internal fun LocalProfileLoadedFrame(
                         avatarUrl = content.header.avatarUrl,
                         stats = content.stats.stats,
                     ) {
-                        ConnectHeaderButton(
+                        NeighborHeaderActions(
                             connection = connection,
                             connectState = connectState,
                             canFollow = follow.canFollow && follow.relationshipLoaded,
                             onConnect = onConnect,
-                        )
-                        BeaconHeaderPrimaryButton(
-                            title = "Message",
-                            icon = PantopusIcon.MessageSquare,
-                            onClick = onMessage,
+                            onMessage = onMessage,
                         )
                     }
                 }
@@ -638,6 +630,33 @@ internal fun LocalProfileLoadedFrame(
                 }
             }
         },
+    )
+}
+
+/**
+ * The Local header's two actions, Connect and Message (`beacon-primitives.jsx:268-272`).
+ * Message doesn't show for someone the viewer blocked: the block says you can't message
+ * each other, and Settings → Blocked users unblocks. Mirrors iOS `identityActions`.
+ */
+@Composable
+private fun NeighborHeaderActions(
+    connection: ProfileConnection,
+    connectState: PublicProfileActionState,
+    canFollow: Boolean,
+    onConnect: () -> Unit,
+    onMessage: () -> Unit,
+) {
+    ConnectHeaderButton(
+        connection = connection,
+        connectState = connectState,
+        canFollow = canFollow,
+        onConnect = onConnect,
+    )
+    if (connection == ProfileConnection.Blocked) return
+    BeaconHeaderPrimaryButton(
+        title = "Message",
+        icon = PantopusIcon.MessageSquare,
+        onClick = onMessage,
     )
 }
 
