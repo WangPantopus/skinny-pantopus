@@ -8,15 +8,16 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
+// Each stamp is earned when one count (metric) reaches its target; the gallery shows the same progress.
 const ALL_MILESTONES = [
-  { stamp_type: 'first_mail', name: 'First Mail', rarity: 'common', check: (counts) => counts.totalMail >= 1 },
-  { stamp_type: 'ten_items', name: 'Mail Regular', rarity: 'common', check: (counts) => counts.totalMail >= 10 },
-  { stamp_type: 'fifty_items', name: 'Mail Enthusiast', rarity: 'uncommon', check: (counts) => counts.totalMail >= 50 },
-  { stamp_type: 'hundred_items', name: 'Mail Centurion', rarity: 'rare', check: (counts) => counts.totalMail >= 100 },
+  { stamp_type: 'first_mail', name: 'First Mail', rarity: 'common', metric: 'totalMail', target: 1 },
+  { stamp_type: 'ten_items', name: 'Mail Regular', rarity: 'common', metric: 'totalMail', target: 10 },
+  { stamp_type: 'fifty_items', name: 'Mail Enthusiast', rarity: 'uncommon', metric: 'totalMail', target: 50 },
+  { stamp_type: 'hundred_items', name: 'Mail Centurion', rarity: 'rare', metric: 'totalMail', target: 100 },
   // Package tracking is cut for the first launch (household_extras): a package reads as plain mail, so
   // this stamp is neither awarded nor listed until the feature is back.
-  { stamp_type: 'first_package', name: 'Package Day', rarity: 'common', requires: 'household_extras', check: (counts) => counts.packages >= 1 },
-  { stamp_type: 'vault_organizer', name: 'Organized', rarity: 'common', check: (counts) => counts.vaultFiled >= 10 },
+  { stamp_type: 'first_package', name: 'Package Day', rarity: 'common', requires: 'household_extras', metric: 'packages', target: 1 },
+  { stamp_type: 'vault_organizer', name: 'Organized', rarity: 'common', metric: 'vaultFiled', target: 10 },
 ];
 const MILESTONES = ALL_MILESTONES.filter((m) => !m.requires || isLaunchFeatureEnabled(m.requires));
 
@@ -65,7 +66,7 @@ async function awardForUser(userId) {
   let awarded = 0;
   for (const milestone of MILESTONES) {
     if (earnedTypes.has(milestone.stamp_type)) continue;
-    if (!milestone.check(counts)) continue;
+    if (!(counts[milestone.metric] >= milestone.target)) continue;
 
     const { error } = await supabaseAdmin.from('Stamp').insert({
       user_id: userId,
@@ -129,3 +130,5 @@ async function stampAwarder(options = {}) {
 module.exports = stampAwarder;
 // The stamps this job can award; the gallery lists only these (plus any already earned).
 module.exports.AWARDED_STAMP_TYPES = new Set(MILESTONES.map((m) => m.stamp_type));
+// What each awardable stamp counts and needs, for the gallery's progress.
+module.exports.STAMP_GOALS = Object.fromEntries(MILESTONES.map((m) => [m.stamp_type, { metric: m.metric, target: m.target }]));

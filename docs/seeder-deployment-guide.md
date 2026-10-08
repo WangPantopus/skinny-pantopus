@@ -2,6 +2,8 @@
 
 Complete step-by-step guide to deploy and operate the Pantopus Community Content Seeder. This system automatically seeds local news, sports, weather alerts, events, and community content into The Pulse feed during cold-start, tapering off as organic community activity grows.
 
+> **Hosted staging and production (October 2026):** deploy with the [launch checklist](release/prod-config-checklist.md), steps S8 and P8, not the commands below. They cover the build script, the job-trigger and alarm resources, and the April production stack `pantopus-seeder-production`, which still exists and keeps its April secret values through a redeploy.
+
 ---
 
 ## Table of Contents

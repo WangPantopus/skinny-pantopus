@@ -15,6 +15,11 @@ const { getCache, setCache } = require('./cacheHelper');
 const PROVIDER = 'NOAA_ALERTS';
 const TTL_MINUTES = 10;
 const FETCH_TIMEOUT_MS = 5000;
+// After a timeout NWS is left alone for a while: while it's down, every
+// Today and Place load would otherwise wait the full timeout for the same
+// empty `error` answer, and a burst of retries only adds to its load.
+const TIMEOUT_COOLDOWN_MS = 2 * 60 * 1000;
+let timedOutUntil = 0;
 
 /**
  * @typedef {Object} WeatherAlert
@@ -81,6 +86,10 @@ async function fetchAlerts(lat, lng) {
     };
   }
 
+  if (Date.now() < timedOutUntil) {
+    return { alerts: [], source: 'error', fetchedAt: new Date().toISOString() };
+  }
+
   // 2. Fetch live from NWS
   try {
     const controller = new AbortController();
@@ -115,7 +124,8 @@ async function fetchAlerts(lat, lng) {
     };
   } catch (err) {
     if (err.name === 'AbortError') {
-      logger.warn('NOAA fetch timeout', { lat, lng });
+      timedOutUntil = Date.now() + TIMEOUT_COOLDOWN_MS;
+      logger.warn('NOAA fetch timeout', { lat, lng, cooldown_ms: TIMEOUT_COOLDOWN_MS });
     } else {
       logger.error('NOAA fetch error', { lat, lng, error: err.message });
     }

@@ -23,16 +23,23 @@ from src.pipeline.topic_dedup import (
 )
 from src.sources.registry import get_sources_from_db
 
+# Configure logging for Lambda (root logger must be set to INFO)
+logging.basicConfig(level=logging.INFO, force=True)
+# httpx logs every request URL at INFO, and Supabase filters carry full user
+# ids; keep them out of CloudWatch.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.fetcher")
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Fetcher Lambda entry point. Triggered every 2 hours by EventBridge."""
     try:
-        return _run(event, context)
+        result = _run(event, context)
     except Exception:
         log.exception("Fetcher handler failed with unhandled exception")
         return {"error": "unhandled_exception", "regions_processed": 0}
+    log.info("Run summary: %s", result)
+    return result
 
 
 def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:

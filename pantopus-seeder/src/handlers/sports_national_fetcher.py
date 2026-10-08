@@ -27,6 +27,11 @@ from src.sources.google_news import GoogleNewsSource
 from src.sources.rss import RssSource
 from src.sports.events_defaults import ensure_default_sports_events
 
+# Configure logging for Lambda (root logger must be set to INFO)
+logging.basicConfig(level=logging.INFO, force=True)
+# httpx logs every request URL at INFO, and Supabase filters carry full user
+# ids; keep them out of CloudWatch.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.sports_national_fetcher")
 
 # Region slug used on queue rows written by this fetcher. Not an entry in
@@ -161,10 +166,12 @@ _GLOBAL_EVENT_SITE_QUERIES: list[tuple[str, str, str, tuple[str, ...]]] = [
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Sports national fetcher entry point."""
     try:
-        return _run(event, context)
+        result = _run(event, context)
     except Exception:
         log.exception("Sports national fetcher failed with unhandled exception")
         return {"error": "unhandled_exception", "events_processed": 0}
+    log.info("Run summary: %s", result)
+    return result
 
 
 def _run(_event: dict[str, Any], _context: Any) -> dict[str, Any]:

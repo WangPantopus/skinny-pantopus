@@ -20,6 +20,11 @@ from src.pipeline.humanizer import humanize
 from src.pipeline.poster import authenticate_curator, curator_auth_client, post_to_pantopus
 from src.tapering.density_checker import allowed_categories, check_density, should_post_in_slot
 
+# Configure logging for Lambda (root logger must be set to INFO)
+logging.basicConfig(level=logging.INFO, force=True)
+# httpx logs every request URL at INFO, and Supabase filters carry full user
+# ids; keep them out of CloudWatch.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.poster")
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -31,10 +36,12 @@ _SLOT_TOLERANCE = 1
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Poster Lambda entry point. Triggered 3x/day by EventBridge at cadence times."""
     try:
-        return _run(event, context)
+        result = _run(event, context)
     except Exception:
         log.exception("Poster handler failed with unhandled exception")
         return {"error": "unhandled_exception", "regions_processed": 0}
+    log.info("Run summary: %s", result)
+    return result
 
 
 def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:

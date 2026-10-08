@@ -24,6 +24,11 @@ from src.pipeline.humanizer import humanize
 from src.pipeline.poster import authenticate_curator, curator_auth_client, post_to_pantopus
 from src.sports.events_defaults import ensure_default_sports_events
 
+# Configure logging for Lambda (root logger must be set to INFO)
+logging.basicConfig(level=logging.INFO, force=True)
+# httpx logs every request URL at INFO, and Supabase filters carry full user
+# ids; keep them out of CloudWatch.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("seeder.handlers.sports_poster")
 
 # Defaults used when a sports_events row does not explicitly set cadence caps.
@@ -74,10 +79,12 @@ _DEFAULT_FEATURED_MATCHUPS_BY_EVENT: dict[str, list[dict[str, Any]]] = {
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Sports national poster entry point."""
     try:
-        return _run(event, context)
+        result = _run(event, context)
     except Exception:
         log.exception("Sports poster handler failed with unhandled exception")
         return {"error": "unhandled_exception", "events_processed": 0}
+    log.info("Run summary: %s", result)
+    return result
 
 
 def _run(_event: dict[str, Any], _context: Any) -> dict[str, Any]:
