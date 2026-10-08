@@ -158,8 +158,9 @@ struct TodaySkyHero: View {
                 scene(moment: moment)
                 reading
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.height)
+            // At least 188 pt; taller only if the chips have to stack on a narrow phone,
+            // so the reading is never clipped. The ground stays at the bottom either way.
+            .frame(maxWidth: .infinity, minHeight: Self.height)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             // A hairline edge keeps a night sky from melting into the dark page.
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(
@@ -233,6 +234,7 @@ struct TodaySkyHero: View {
         .padding(.leading, 18)
         .padding(.top, 14)
         .padding(.trailing, 110)
+        .padding(.bottom, 36)
     }
 
     private var chipViews: some View {
