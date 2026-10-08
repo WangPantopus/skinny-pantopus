@@ -20,6 +20,8 @@ export default function InboxTab({ businessId }: Props) {
   const [matchedPosts, setMatchedPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
+  // A failed read is not "No messages yet": a role without inbox access gets a 403.
+  const [roomsFailure, setRoomsFailure] = useState<'forbidden' | 'failed' | null>(null);
 
   const loadRooms = async () => {
     setLoading(true);
@@ -27,7 +29,10 @@ export default function InboxTab({ businessId }: Props) {
       const result = await api.chat.getBusinessChatRooms(businessId);
       setRooms(result.rooms || []);
       setTotalUnread(result.totalUnread || 0);
-    } catch { /* ignore */ }
+      setRoomsFailure(null);
+    } catch (e: unknown) {
+      setRoomsFailure((e as { statusCode?: number } | null)?.statusCode === 403 ? 'forbidden' : 'failed');
+    }
     finally { setLoading(false); }
   };
 
@@ -77,6 +82,17 @@ export default function InboxTab({ businessId }: Props) {
 
       {loading ? (
         <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-3 border-violet-600 border-t-transparent rounded-full" /></div>
+      ) : section === 'messages' && roomsFailure ? (
+        <div className="text-center py-16">
+          <p className="text-sm font-medium text-app-text mb-1">
+            {roomsFailure === 'forbidden' ? "Your role can't see the business inbox" : "Couldn't load messages"}
+          </p>
+          {roomsFailure === 'forbidden' ? (
+            <p className="text-xs text-app-text-secondary">The business owner can change your role.</p>
+          ) : (
+            <button onClick={() => void loadRooms()} className="text-sm text-violet-600 hover:underline">Try again</button>
+          )}
+        </div>
       ) : section === 'messages' ? (
         rooms.length === 0 ? (
           <div className="text-center py-16">
