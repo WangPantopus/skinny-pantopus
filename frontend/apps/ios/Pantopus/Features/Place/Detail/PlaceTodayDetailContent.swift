@@ -70,7 +70,7 @@ struct PlaceTodayDetailContent: View {
     private func todaySections(proxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             firstUseCard(proxy: proxy)
-            weatherAndGoodDay
+            weatherAndGoodDay(proxy: proxy)
 
             addressCalendar
             homeRadon
@@ -132,12 +132,25 @@ struct PlaceTodayDetailContent: View {
         }
     }
 
+    /// The address calendar's upcoming dates, live or from the fallback load.
+    private var calendarEvents: [PlaceCalendarEvent] {
+        if let calendar = vm.section(.addressCalendar, in: intel), let data = calendar.addressCalendar,
+           [.ready, .stale, .partial].contains(calendar.status) {
+            return data.upcoming
+        }
+        return vm.fallbackCalendar?.upcoming ?? []
+    }
+
     @ViewBuilder
-    private var weatherAndGoodDay: some View {
+    private func weatherAndGoodDay(proxy: ScrollViewProxy) -> some View {
         if let weather = vm.section(.weather, in: intel) {
             PlaceDetailSectionLabel(text: "Weather")
             if let data = weather.weather, weather.status == .ready || weather.status == .stale {
-                TodaySkyHero(data: data, sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset)
+                TodaySkyHero(
+                    data: data,
+                    sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
+                    pickups: calendarEvents
+                ) { withAnimation { proxy.scrollTo("todayAddressCalendar", anchor: .top) } }
                 PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
             } else {
                 vm.fallbackCard(weather)

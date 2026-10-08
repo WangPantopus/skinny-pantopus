@@ -175,6 +175,21 @@ public enum SkyPalette {
     public static let smoke = SkyRGB(0xE6EBF5)
     public static let leafDay = SkyRGB(0xEAB308)
     public static let leafNight = SkyRGB(0xA08C5A)
+    /// Frost creeping in from the card's corners on a freezing morning.
+    public static let frost = SkyRGB(0xE8F4FF)
+
+    /// The round tree through the year, blended into the silhouette.
+    public static let treeSpring = SkyRGB(0x7BC67E)
+    public static let treeSummer = SkyRGB(0x3F8F4A)
+    public static let treeAutumn = SkyRGB(0xE07A2E)
+    public static let treeAutumnDeep = SkyRGB(0xB8432A)
+    public static let blossom = SkyRGB(0xF9A8D4)
+    public static let pine = SkyRGB(0x2F6B3F)
+
+    /// Bins at the curb: garbage, recycling, yard waste.
+    public static let binGarbage = SkyRGB(0x4B5563)
+    public static let binRecycling = SkyRGB(0x2563EB)
+    public static let binYard = SkyRGB(0x15803D)
 
     /// Snow-covered hills and house, day and night.
     public static let snowHillBackDay = SkyRGB(0xDCE5EF)

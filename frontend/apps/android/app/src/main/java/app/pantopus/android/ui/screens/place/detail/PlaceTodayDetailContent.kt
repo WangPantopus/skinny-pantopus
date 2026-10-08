@@ -64,6 +64,7 @@ import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.place.PlaceAddressCalendarData
 import app.pantopus.android.data.api.models.place.PlaceAirQualityData
+import app.pantopus.android.data.api.models.place.PlaceCalendarEvent
 import app.pantopus.android.data.api.models.place.PlaceGoodDayTile
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceLeadRadonData
@@ -128,7 +129,8 @@ fun PlaceTodayDetailContent(
     var pickupOpenTrigger by remember(viewModel?.calendarHomeId) { mutableStateOf(0) }
     var calendarFallback by remember(intel, viewModel?.calendarHomeId) { mutableStateOf<PlaceAddressCalendarData?>(null) }
     val calendar = intel.section(PlaceSectionId.ADDRESS_CALENDAR)
-    val needsPickup = (calendar?.addressCalendar?.takeIf { calendar.isLive() } ?: calendarFallback)?.needsPickupDay == true
+    val shownCalendar = calendar?.addressCalendar?.takeIf { calendar.isLive() } ?: calendarFallback
+    val needsPickup = shownCalendar?.needsPickupDay == true
     if (homeState != null) {
         HomeFirstUseCard(homeState, needsPickup, onPickup = {
             pickupOpenTrigger++
@@ -141,7 +143,8 @@ fun PlaceTodayDetailContent(
             }
         })
     }
-    TodayWeatherSection(intel)
+    val scope = rememberCoroutineScope()
+    TodayWeatherSection(intel, shownCalendar?.upcoming.orEmpty()) { scope.launch { calendarFocus.bringIntoView() } }
     intel.section(PlaceSectionId.GOOD_DAY_TO)?.let { env ->
         val data = env.goodDayTo
         if (data != null && env.isLive() && data.tiles.isNotEmpty()) {
@@ -898,12 +901,16 @@ private fun RadonDateField(
 }
 
 @Composable
-private fun TodayWeatherSection(intel: PlaceIntelligence) {
+private fun TodayWeatherSection(
+    intel: PlaceIntelligence,
+    pickups: List<PlaceCalendarEvent>,
+    onBins: () -> Unit,
+) {
     intel.section(PlaceSectionId.WEATHER)?.let { env ->
         PlaceDetailSectionLabel("Weather")
         val data = env.weather
         if (data != null && env.isLive()) {
-            TodaySkyHero(data, intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset)
+            TodaySkyHero(data, intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset, pickups, onBins)
             PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf))
         } else {
             PlaceDetailFallbackCard(env)

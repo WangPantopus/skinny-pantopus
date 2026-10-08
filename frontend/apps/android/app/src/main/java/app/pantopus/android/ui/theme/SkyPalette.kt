@@ -140,6 +140,22 @@ object SkyPalette {
     val leafDay = Color(0xFFEAB308)
     val leafNight = Color(0xFFA08C5A)
 
+    /** Frost creeping in from the card's corners on a freezing morning. */
+    val frost = Color(0xFFE8F4FF)
+
+    /** The round tree through the year, blended into the silhouette. */
+    val treeSpring = Color(0xFF7BC67E)
+    val treeSummer = Color(0xFF3F8F4A)
+    val treeAutumn = Color(0xFFE07A2E)
+    val treeAutumnDeep = Color(0xFFB8432A)
+    val blossom = Color(0xFFF9A8D4)
+    val pine = Color(0xFF2F6B3F)
+
+    /** Bins at the curb: garbage, recycling, yard waste. */
+    val binGarbage = Color(0xFF4B5563)
+    val binRecycling = Color(0xFF2563EB)
+    val binYard = Color(0xFF15803D)
+
     /** Snow-covered hills and house, day and night. */
     val snowHillBackDay = Color(0xFFDCE5EF)
     val snowHillFrontDay = Color(0xFFF3F6FA)
