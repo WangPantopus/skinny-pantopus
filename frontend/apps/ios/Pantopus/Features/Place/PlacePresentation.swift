@@ -405,8 +405,11 @@ enum PlacePresentation {
 
     // ── lock reason / CTA, by band ─────────────────────────────
 
-    static func lockCta(_ band: PlaceBand) -> String {
-        switch band {
+    /// Someone who already set the Home up verifies by mail next, so every
+    /// lock is that step, never another claim.
+    static func lockCta(_ band: PlaceBand, verifiesFirst: Bool = false) -> String {
+        if verifiesFirst { return "Verify address" }
+        return switch band {
         case .d: "Verify address"
         case .b, .c: "Claim home"
         case .a: "Create account"
@@ -416,6 +419,40 @@ enum PlacePresentation {
     static func lockReason(_ env: PlaceSectionEnvelope) -> String {
         if let r = env.unavailableReason, !r.isEmpty { return r }
         return env.band == .d ? "Verify your address to see this." : "Claim your place to see this."
+    }
+}
+
+// MARK: - Who is looking (the founder's Place rules, 2026-10-08)
+
+/// How the viewer sees the Home's value: the confirmed owner's, waiting on
+/// a pending owner, absent for renters and other household members.
+enum PlaceValueAccess {
+    case shown, pending, hidden
+}
+
+/// Mirrors the web and Android handling of `viewer`. Older servers send
+/// none, and then nothing is withheld client-side.
+extension PlaceIntelligence {
+    var valueAccess: PlaceValueAccess {
+        guard let viewer else { return .shown }
+        if viewer.role == "owner" { return viewer.ownership == "confirmed" ? .shown : .pending }
+        return .hidden
+    }
+
+    /// Rate watch, deed alerts and the property-tax check are the owner's, like the exemption check.
+    var ownerTools: Bool {
+        viewer == nil || viewer?.role == "owner"
+    }
+
+    /// Set up but not verified (T1): every lock is the verify-by-mail step, never another claim.
+    var verifiesFirst: Bool {
+        tier == .t1
+    }
+
+    /// The server left this detail page's group out for the viewer (a guest's Your home or Money signals).
+    func leavesOut(_ detail: PlaceDetailGroup) -> Bool {
+        guard viewer != nil, detail == .yourHome || detail == .money else { return false }
+        return !groups.contains { detail.groups.contains($0.group) }
     }
 }
 

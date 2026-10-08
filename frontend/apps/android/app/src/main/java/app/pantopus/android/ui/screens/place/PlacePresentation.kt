@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
+import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.data.api.models.place.RealRentState
 import app.pantopus.android.data.api.models.place.SeismicDesignCategory
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
@@ -60,6 +61,37 @@ data class PlaceVerifyLockedItem(
     val title: String,
     val reason: String,
 )
+
+// ── Who is looking (the founder's Place rules, 2026-10-08) ──────
+// Mirrors the web and iOS handling of `viewer`. Older servers send none,
+// and then nothing is withheld client-side.
+
+/** How the viewer sees the Home's value: the confirmed owner's, waiting on a pending owner, absent for others. */
+enum class PlaceValueAccess { SHOWN, PENDING, HIDDEN }
+
+val PlaceIntelligence.valueAccess: PlaceValueAccess
+    get() {
+        val who = viewer ?: return PlaceValueAccess.SHOWN
+        return when {
+            who.role == "owner" && who.ownership == "confirmed" -> PlaceValueAccess.SHOWN
+            who.role == "owner" -> PlaceValueAccess.PENDING
+            else -> PlaceValueAccess.HIDDEN
+        }
+    }
+
+/** Rate watch, deed alerts and the property-tax check are the owner's, like the exemption check. */
+val PlaceIntelligence.ownerTools: Boolean
+    get() = viewer == null || viewer.role == "owner"
+
+/** Set up but not verified (T1): every lock is the verify-by-mail step, never another claim. */
+val PlaceIntelligence.verifiesFirst: Boolean
+    get() = tier == PlaceTier.T1
+
+/** The server left this detail page's group out for the viewer (a guest's Your home or Money signals). */
+fun PlaceIntelligence.leavesOut(detail: PlaceDetailGroup): Boolean =
+    viewer != null &&
+        (detail == PlaceDetailGroup.YOUR_HOME || detail == PlaceDetailGroup.MONEY) &&
+        groups.none { it.groupId in detail.groups }
 
 object PlacePresentation {
     // ── formatting helpers ─────────────────────────────────────
@@ -432,7 +464,17 @@ object PlacePresentation {
 
     // ── lock reason / CTA, by band ─────────────────────────────
 
-    fun lockCta(env: PlaceSectionEnvelope): String =
+    fun lockCta(
+        env: PlaceSectionEnvelope,
+        verifiesFirst: Boolean = false,
+    ): String =
+        if (verifiesFirst) {
+            "Verify address"
+        } else {
+            lockCtaByBand(env)
+        }
+
+    private fun lockCtaByBand(env: PlaceSectionEnvelope): String =
         when (env.band) {
             app.pantopus.android.data.api.models.place.PlaceBand.D -> "Verify address"
             app.pantopus.android.data.api.models.place.PlaceBand.B,
