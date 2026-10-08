@@ -11,6 +11,8 @@ const primary = button + ' bg-blue-700 text-white';
 export default function MemberRemovalRecovery({ homeId, targetId, self = false }: { homeId?: string; targetId?: string; self?: boolean }) {
   const vm = useRemoval(JSON.stringify([homeId, targetId, self]));
   const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
+  // The person whose removal (or your own leaving) you just finished isn't offered again here.
+  const [finished, setFinished] = useState<string | null>(null);
   const draft = vm.pending, outcome = draft?.outcome, context = vm.context;
   const reviewToken = context?.decision_token;
   const reviewHeading = useRef<HTMLHeadingElement>(null), cancelHeading = useRef<HTMLParagraphElement>(null);
@@ -26,6 +28,11 @@ export default function MemberRemovalRecovery({ homeId, targetId, self = false }
   // Someone who has left can no longer read that Home's member list, so there is nothing to check.
   const leftHome = draft?.reviewed.target.is_self === true && outcome?.state === 'completed';
   const currentInput = draft ? { home_id: draft.home_id, target_user_id: draft.target_user_id } : context ? { home_id: context.home_id, target_user_id: context.target_user_id } : input;
+  const finishedHere = !!input && finished === `${input.home_id}:${input.target_user_id}`;
+  const finish = async (requestId: string) => {
+    const done = await vm.acknowledge(requestId);
+    if (done?.outcome?.state === 'completed') setFinished(`${done.home_id}:${done.target_user_id}`);
+  };
   return <div className="space-y-5">
     {vm.accountLabel && <p className="text-sm text-app-text-secondary">Signed in as {vm.accountLabel}</p>}
     {vm.error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{vm.error}</p>}
@@ -42,7 +49,7 @@ export default function MemberRemovalRecovery({ homeId, targetId, self = false }
             : outcome?.state === 'cancelled' ? <p role="status" className="text-sm">Nothing changed. This attempt was discarded before it took effect.</p>
               : outcome?.state === 'rejected' ? <p role="status" className="text-sm">{removalMessage(outcome.code)}</p>
                 : <p className="text-sm">We couldn’t confirm whether this went through. Check again, or try again.</p>}
-          {vm.canAcknowledge ? <button className={primary} disabled={vm.busy} onClick={() => void vm.acknowledge(draft.request_id)}>Done</button>
+          {vm.canAcknowledge ? <button className={primary} disabled={vm.busy} onClick={() => void finish(draft.request_id)}>Done</button>
             : <div className="flex flex-wrap gap-2">
               <button className={button} disabled={vm.busy} onClick={() => void vm.recover('status', draft.request_id)}>Check again</button>
               <button className={primary} disabled={vm.busy} onClick={() => void vm.recover('retry', draft.request_id)}>Try again</button>
@@ -64,10 +71,10 @@ export default function MemberRemovalRecovery({ homeId, targetId, self = false }
               <button className={destructive} disabled={vm.busy} onClick={() => void vm.submit(context.decision_token)}>{vm.busy ? 'Saving…' : context.target.is_self ? 'Leave Home' : 'Remove member'}</button></div>
           </section>
             : <section className="space-y-3 rounded-xl border border-app-border p-4">
-              {input ? <><p className="text-sm">Check the details before you confirm.</p><button ref={reviewStart} className={button} disabled={vm.busy} onClick={() => void vm.prepare(input)}>{self ? 'Leave this Home' : 'Remove this member'}</button></>
+              {input && !finishedHere ? <><p className="text-sm">Check the details before you confirm.</p><button ref={reviewStart} className={button} disabled={vm.busy} onClick={() => void vm.prepare(input)}>{self ? 'Leave this Home' : 'Remove this member'}</button></>
                 : <><h2 className="font-semibold">Nothing to finish here</h2><p className="text-sm">To remove someone, choose them in Members. To leave a Home, choose Leave in My Homes.</p></>}
             </section>}
-    {vm.ready && !vm.blocked && currentInput && !leftHome && <section aria-label="Member list" className="space-y-3 rounded-xl border border-app-border p-4">
+    {vm.ready && !vm.blocked && currentInput && !leftHome && !(self && finishedHere) && <section aria-label="Member list" className="space-y-3 rounded-xl border border-app-border p-4">
       <h2 className="font-semibold">Member list now</h2>
       {vm.roster.state === 'checked' ? <p role="status" className="text-sm">{vm.roster.listed ? 'This member is still in the member list.' : 'This member is no longer in the member list.'}</p>
         : vm.roster.state === 'unavailable' ? <p role="alert" className="text-sm text-amber-800">Couldn’t check the member list. Try again.</p>
