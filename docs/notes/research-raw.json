@@ -3708,7 +3708,7 @@
      "https://clevertap.com/blog/what-are-push-notification-character-limits/",
      "https://developer.apple.com/forums/thread/709671"
     ],
-    "implication": "Use one canonical string on every surface. Unconfirmed: title 'Unconfirmed: pickup tomorrow' (28 characters), body 'Recycling + garbage \u00b7 City of Camas schedule. Bins out tonight.' Confirmed: title 'Recycling + garbage tomorrow' (28), body 'Bins out tonight \u00b7 Lacamas Dr'. Air: title 'Unhealthy air: AQI 176' (22), body 'AirNow, 4:00 PM \u00b7 Lacamas Dr'. Draw the tray frames at true truncation so the caveat visibly survives.",
+    "implication": "Use one canonical string on every surface. Unconfirmed: title 'Unconfirmed: pickup tomorrow' (28 characters), body 'Recycling + garbage \u00b7 City of Camas schedule. Bins out tonight.' Confirmed: title 'Recycling + garbage tomorrow' (28), body 'Bins out tonight \u00b7 Pantopus Loop'. Air: title 'Unhealthy air: AQI 176' (22), body 'AirNow, 4:00 PM \u00b7 Pantopus Loop'. Draw the tray frames at true truncation so the caveat visibly survives.",
     "surfaceIds": [
      "f4-notification-primer",
      "f4-today-pickup-card",
@@ -3726,7 +3726,7 @@
      "https://developer.apple.com/app-store/review/guidelines/",
      "https://developer.android.com/develop/ui/views/notifications/build-notification"
     ],
-    "implication": "The push body carries a street-name label ('Lacamas Dr') or the user's nickname, with no house number, and only when the person has more than one place. Hidden-preview placeholders: 'Pickup reminder', 'Air quality alert', 'Household update'. The Android public version reads 'Pantopus \u00b7 Pickup reminder'. The full address and the 'Saved place \u00b7 Only you' chip appear on the landing screen, not in the tray.",
+    "implication": "The push body carries a street-name label ('Pantopus Loop') or the user's nickname, with no house number, and only when the person has more than one place. Hidden-preview placeholders: 'Pickup reminder', 'Air quality alert', 'Household update'. The Android public version reads 'Pantopus \u00b7 Pickup reminder'. The full address and the 'Saved place \u00b7 Only you' chip appear on the landing screen, not in the tray.",
     "surfaceIds": [
      "f4-today-pickup-card",
      "f1-today-air-band",
@@ -4040,15 +4040,15 @@
    },
    {
     "surfaceId": "f4-today-pickup-card",
-    "v1Decision": "Push title 'Recycling and garbage tomorrow \u2014 not yet confirmed' (about 50 characters); body 'Bins out tonight. 2418 NW Lacamas Dr.'",
+    "v1Decision": "Push title 'Recycling and garbage tomorrow \u2014 not yet confirmed' (about 50 characters); body 'Bins out tonight. 2418 NW Pantopus Loop.'",
     "researchSays": "Android: titles are one line and 30 characters or fewer, so the ending '\u2014 not yet confirmed' gets cut. Apple HIG and App Store Review 4.5.4: keep personal information such as a home address out of notifications, and provide a hidden-preview placeholder.",
-    "recommendation": "Title 'Unconfirmed: pickup tomorrow' (confirmed: 'Recycling + garbage tomorrow'). Body 'Bins out tonight \u00b7 Lacamas Dr' (street name only, and only when the person has more than one place). Placeholder 'Pickup reminder'. Add a 'That's My Day' notification action for the unconfirmed case."
+    "recommendation": "Title 'Unconfirmed: pickup tomorrow' (confirmed: 'Recycling + garbage tomorrow'). Body 'Bins out tonight \u00b7 Pantopus Loop' (street name only, and only when the person has more than one place). Placeholder 'Pickup reminder'. Add a 'That's My Day' notification action for the unconfirmed case."
    },
    {
     "surfaceId": "f1-today-air-band",
-    "v1Decision": "Push tray card: 'Air is unhealthy for sensitive groups at 2418 NW Lacamas Dr'. The alert landing marks 'the 101 threshold' on the bar.",
+    "v1Decision": "Push tray card: 'Air is unhealthy for sensitive groups at 2418 NW Pantopus Loop'. The alert landing marks 'the 101 threshold' on the bar.",
     "researchSays": "The title is about 59 characters, past Android's 30-character single-line limit, so the address or category is cut. Apple and App Review 4.5.4 say to keep home addresses off the lock screen. Separately, f4-notification-settings gives the person a threshold choice (101/151/201, with 151 selected), so a hard-coded 101 mark can contradict the rule that actually fired. Apple says urgency must be represented accurately.",
-    "recommendation": "Title 'Unhealthy air: AQI 118' (or the band name). Body 'AirNow, 4:00 PM \u00b7 Lacamas Dr'. Placeholder 'Air quality alert'. The bar marks the person's selected threshold and its crossing time. Set the iOS level by severity (Time Sensitive only at 151 or above)."
+    "recommendation": "Title 'Unhealthy air: AQI 118' (or the band name). Body 'AirNow, 4:00 PM \u00b7 Pantopus Loop'. Placeholder 'Air quality alert'. The bar marks the person's selected threshold and its crossing time. Set the iOS level by severity (Time Sensitive only at 151 or above)."
    },
    {
     "surfaceId": "f3-household-notifications",
@@ -5909,7 +5909,7 @@
    },
    {
     "surfaceId": "f7-widget-tap-landing",
-    "v1Decision": "Fixtures: 1420 NE Garfield St, rendered 'as of Monday 21 September 2026'. f1-today-tab (including its 'arrived from the widget' frame), f4-today-pickup-card, f1-today-air-band and f5-today-calendar-strip use 2418 NW Lacamas Dr on Monday 19 October 2026. x-place-file uses 2418 NW Sierra St on Sep 16 2026.",
+    "v1Decision": "Fixtures: 1420 NE Garfield St, rendered 'as of Monday 21 September 2026'. f1-today-tab (including its 'arrived from the widget' frame), f4-today-pickup-card, f1-today-air-band and f5-today-calendar-strip use 2418 NW Pantopus Loop on Monday 19 October 2026. x-place-file uses 2418 NW Sierra St on Sep 16 2026.",
     "researchSays": "Literal instruction following means each screen draws only the data it is given (Anthropic), and generators already vary between runs (NN/g). Screens that summarise one another can only be checked side by side if they share fixtures.",
     "recommendation": "Put one FIXTURES block (HOME A on one TODAY) in the preamble and use it in the widget, widget-tap landing, Today, pickup card, air band, calendar strip, date sheet and place file. Also resolve HOA dues ($265 / $285 / $385), the pickup weekday and hauler (Tuesday / Waste Connections vs Thursday / City of Camas), and 2416 vs 2418 NE Ingle Rd (f11-keeper-strip vs f4-briefing-optin-card)."
    },
@@ -6030,7 +6030,7 @@
      "https://developer.android.com/develop/ui/views/notifications/build-notification",
      "https://www.pewresearch.org/internet/2023/10/18/how-americans-view-data-privacy/"
     ],
-    "implication": "In push bodies use 'Lacamas Dr' or the saved label ('Mom's house'), never '2418 NW Lacamas Dr'. Hidden-preview text is 'Pickup reminder' or 'Air quality alert'. Android pushes get a public version with no place label. The widget already does this right ('Garfield St \u00b7 Camas'); push must match.",
+    "implication": "In push bodies use 'Pantopus Loop' or the saved label ('Mom's house'), never '2418 NW Pantopus Loop'. Hidden-preview text is 'Pickup reminder' or 'Air quality alert'. Android pushes get a public version with no place label. The widget already does this right ('Garfield St \u00b7 Camas'); push must match.",
     "surfaceIds": [
      "f4-today-pickup-card",
      "f1-today-air-band",
@@ -6495,15 +6495,15 @@
    },
    {
     "surfaceId": "f4-today-pickup-card",
-    "v1Decision": "Push title 'Recycling and garbage tomorrow \u2014 not yet confirmed'; push body 'Bins out tonight. 2418 NW Lacamas Dr.'",
+    "v1Decision": "Push title 'Recycling and garbage tomorrow \u2014 not yet confirmed'; push body 'Bins out tonight. 2418 NW Pantopus Loop.'",
     "researchSays": "Apple HIG: avoid sensitive or personal information in notifications and provide generic text for hidden previews. App Store 4.5.4: push should not carry sensitive personal information. Android supports a redacted public version. The long title also truncates the caveat.",
-    "recommendation": "Title: 'Recycling Tomorrow \u00b7 Unconfirmed'. Body: 'City of Camas schedule. Bins out tonight \u00b7 Lacamas Dr' (or the user's own label). Hidden-preview text: 'Pickup reminder'. Draw an Android public-version frame as well."
+    "recommendation": "Title: 'Recycling Tomorrow \u00b7 Unconfirmed'. Body: 'City of Camas schedule. Bins out tonight \u00b7 Pantopus Loop' (or the user's own label). Hidden-preview text: 'Pickup reminder'. Draw an Android public-version frame as well."
    },
    {
     "surfaceId": "f1-today-air-band",
-    "v1Decision": "Push tray card: 'Air is unhealthy for sensitive groups at 2418 NW Lacamas Dr'.",
+    "v1Decision": "Push tray card: 'Air is unhealthy for sensitive groups at 2418 NW Pantopus Loop'.",
     "researchSays": "Same HIG and App Store 4.5.4 guidance on personal information in notifications. HIG also says Time Sensitive is only for notifications relevant in the moment, and urgency must be represented accurately.",
-    "recommendation": "Use 'Air Unhealthy for Sensitive Groups \u00b7 Lacamas Dr' (or the saved label), with the AQI value and the source in the body. Specify that only a real threshold crossing may use the Time Sensitive level. The in-app landing keeps the full address and the 'Saved place \u00b7 Only you' chip."
+    "recommendation": "Use 'Air Unhealthy for Sensitive Groups \u00b7 Pantopus Loop' (or the saved label), with the AQI value and the source in the body. Specify that only a real threshold crossing may use the Time Sensitive level. The in-app landing keeps the full address and the 'Saved place \u00b7 Only you' chip."
    },
    {
     "surfaceId": "f3-household-notifications",

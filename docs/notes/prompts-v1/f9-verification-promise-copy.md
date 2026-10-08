@@ -15,7 +15,7 @@ THE NAMING RULE (the whole point): "Block Founder" is the PERMANENT RANK. "Found
 
 CONTENT (exact strings, this density):
 - Verify sheet unlock list: "Block Founder #3 — your permanent rank on this block" / "Founding Neighbor — one of the first 5 verified homes here" / "6 postcard invites a week instead of 3" / "The Nearby cells map in detail" / "Post to your block"
-- Post-verify success: "Verified — 2914 NW Lacamas Dr, Camas, WA 98607" / "You are Block Founder #3. That rank is permanent." / "Founding Neighbor, slot 2 of 5 — this window closes Nov 27, 2026." / "6 postcard invites this week — 3 base + 3 earned."
+- Post-verify success: "Verified — 2914 NW Pantopus Loop, Camas, WA 98607" / "You are Block Founder #3. That rank is permanent." / "Founding Neighbor, slot 2 of 5 — this window closes Nov 27, 2026." / "6 postcard invites this week — 3 base + 3 earned."
 - Place file Proof row, unverified: "Verify this address to become a Block Founder." — verified: "Verified Sep 8, 2026"
 - Just Moved card payoff line (iOS and Android): "Verify and you're Block Founder #3 here — permanently."
 - REMOVED, do not draw anywhere: "Permanent 0% marketplace fee"

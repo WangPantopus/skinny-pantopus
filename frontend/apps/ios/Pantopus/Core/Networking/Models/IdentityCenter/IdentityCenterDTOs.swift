@@ -261,7 +261,7 @@ public struct HomeMirrorDTO: Decodable, Sendable, Hashable {
         case viewerLabel = "viewer_label"
     }
 
-    /// "NW Lacamas Dr · Camas, WA" — the whole address line a neighbor gets.
+    /// "NW Pantopus Loop · Camas, WA" — the whole address line a neighbor gets.
     public var addressLine: String {
         let place = [home.city, home.state].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         return [home.address, place].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")

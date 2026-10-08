@@ -22,7 +22,7 @@ const MIRROR = {
   viewer: 'neighbor',
   viewer_label: 'A neighbor who is not in your household',
   discoverable: true,
-  home: { id: 'h1', name: 'Home', address: 'NW Lacamas Dr', address_redacted: true, city: 'Camas', state: 'WA', zipcode: null, home_type: 'house', visibility: 'public_preview', description: null, created_at: null },
+  home: { id: 'h1', name: 'Home', address: 'NW Pantopus Loop', address_redacted: true, city: 'Camas', state: 'WA', zipcode: null, home_type: 'house', visibility: 'public_preview', description: null, created_at: null },
   owner: { id: 'u1', username: 'yp', name: 'Yingpeng', profile_picture_url: null },
   hidden: [
     { key: 'house_number', label: 'Your house number and unit' },
@@ -46,7 +46,7 @@ it('renders the neighbor card from the API — street and first name — and the
   mirrorMock.mockResolvedValue(MIRROR);
   renderPage();
   expect(await screen.findByText('Yingpeng')).toBeInTheDocument();
-  expect(screen.getByTestId('mirror-address')).toHaveTextContent('NW Lacamas Dr · Camas, WA');
+  expect(screen.getByTestId('mirror-address')).toHaveTextContent('NW Pantopus Loop · Camas, WA');
   expect(screen.getByText(/street only, no house number/i)).toBeInTheDocument();
   for (const h of MIRROR.hidden) expect(screen.getByText(h.label)).toBeInTheDocument();
   // The promise sits under the card, and the page never invents a number.
