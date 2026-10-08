@@ -102,6 +102,7 @@ struct SignUpView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { seedInviteCode() }
+        .task { await seedInvitedEmail() }
         .onChange(of: viewModel.didSucceed) { _, succeeded in
             guard succeeded else { return }
             let email = viewModel.email.trimmingCharacters(in: .whitespaces).lowercased()
@@ -142,6 +143,14 @@ struct SignUpView: View {
               let code = inviteCode?.trimmingCharacters(in: .whitespacesAndNewlines),
               !code.isEmpty else { return }
         viewModel.inviteCode = code
+    }
+
+    /// An emailed household invitation waiting for sign-in only works for its address, so the Email field
+    /// starts with it, never over something the person already typed.
+    private func seedInvitedEmail() async {
+        guard viewModel.email.isEmpty, let email = await ParkedInvitationEmail.load(), viewModel.email.isEmpty else { return }
+        viewModel.email = email
+        viewModel.suggestedEmail = email
     }
 
     // MARK: - Field bindings
