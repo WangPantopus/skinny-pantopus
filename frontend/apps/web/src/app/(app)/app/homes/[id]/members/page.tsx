@@ -14,6 +14,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import ErrorState from '@/components/ui/ErrorState';
 import InviteMemberModal from '@/components/home/InviteMemberModal';
 import { failureMessage } from '@/components/home/share/shareFailure';
+import { RETURN_REFRESH_MS, transientFailure } from '@/components/home/returnRefresh';
 
 // Roles "Change role" can give, and each role's rank on the server (home_role_rank). Owners change
 // through the ownership flow, and a non-owner can only give roles below their own.
@@ -90,6 +91,8 @@ function MembersContent() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
   const generation = useRef(0);
+  const lastAttempt = useRef(0);
+  const inFlight = useRef(0);
   const pageConfirmation = useRef<ReturnType<typeof confirmStore.getSnapshot>>(null);
 
   const tabFromUrl = searchParams.get('tab');
@@ -104,31 +107,44 @@ function MembersContent() {
     if (dialog && confirmStore.getSnapshot() === dialog) confirmStore.close(false);
     setRoleMenuFor(null); setMembers([]); setMyAccess(null); setAuditLog([]); setAuditError(''); setAccessRequests([]); setRequestsError(''); setMembersError(''); setBusyRequestId(null);
   }, []);
-  const fetchData = useCallback(async () => {
+  // A full load clears the page first. A background re-check (coming back to the page) keeps it and applies
+  // only complete, verified answers; a refusal or an answer that doesn't verify reloads in full instead.
+  const fetchData = useCallback(async (background = false) => {
     if (!homeId) return;
-    retire();
+    if (!background) retire();
     const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
     const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     const current = () => generation.current === revision && api.getAuthToken() === token && api.getApiBaseUrl() === origin
-      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
-    setLoading(true);
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker;
+    lastAttempt.current = Date.now();
+    if (!background) setLoading(true);
+    inFlight.current++;
     const [membersRes, accessRes, auditRes, reqRes] = await Promise.allSettled([
       api.homeIam.getHomeMembers(homeId), api.homeIam.getMyHomeAccess(homeId),
       api.homeIam.getAuditLog(homeId), api.getHouseholdAccessRequests(homeId, { status: 'pending' }),
-    ]);
+    ]).finally(() => { inFlight.current--; });
     if (!current()) return;
+    const memberRows = (value: any) => {
+      const rows = value?.occupants || value?.members;
+      return Array.isArray(rows) && rows.every(m => m && m.home_id === homeId && typeof m.user_id === 'string' && m.is_active === true) ? rows : null;
+    };
+    const verifiedAccess = (access: any) => access?.hasAccess === true && Array.isArray(access.permissions) && access.permissions.every((p: unknown) => typeof p === 'string');
+    if (background) {
+      const settled = [membersRes, accessRes, auditRes, reqRes];
+      if (settled.some(r => r.status === 'rejected' && !transientFailure(r.reason))
+        || (membersRes.status === 'fulfilled' && !memberRows(membersRes.value))
+        || (accessRes.status === 'fulfilled' && !verifiedAccess(accessRes.value))) { void fetchData(); return; }
+      if (settled.some(r => r.status === 'rejected')) return;
+      setMembersError(''); setAuditError(''); setRequestsError('');
+    }
     if (membersRes.status === 'fulfilled') {
-      const val = membersRes.value as any;
-      const rows = val?.occupants || val?.members;
-      if (Array.isArray(rows) && rows.every(m => m && m.home_id === homeId && typeof m.user_id === 'string' && m.is_active === true)) setMembers(rows);
+      const rows = memberRows(membersRes.value);
+      if (rows) setMembers(rows);
       else setMembersError('The current member list could not be verified. Refresh to try again.');
     } else setMembersError((membersRes.reason as { statusCode?: number } | null)?.statusCode === 403
       ? 'You can’t see this household’s member list.'
       : 'The current member list could not be loaded. Refresh to check current household access.');
-    if (accessRes.status === 'fulfilled') {
-      const access = accessRes.value;
-      if (access?.hasAccess === true && Array.isArray(access.permissions) && access.permissions.every(p => typeof p === 'string')) setMyAccess(access);
-    }
+    if (accessRes.status === 'fulfilled' && verifiedAccess(accessRes.value)) setMyAccess(accessRes.value);
     if (auditRes.status === 'fulfilled') setAuditLog((auditRes.value as any)?.entries || (auditRes.value as any)?.log || []);
     else setAuditError(failureMessage(auditRes.reason, 'The audit log could not be loaded. Please try again.'));
     if (reqRes.status === 'fulfilled') setAccessRequests(reqRes.value.requests || []);
@@ -138,15 +154,23 @@ function MembersContent() {
 
   useEffect(() => {
     let disposed = false;
-    const refresh = () => { retire(); if (!disposed && document.visibilityState !== 'hidden') void fetchData(); };
-    const visibility = () => { if (document.visibilityState === 'hidden') retire(); else refresh(); };
+    // Another account's household must never show, so an account change clears the page and reloads it.
+    const refresh = () => { retire(); if (!disposed) void fetchData(); };
+    // Coming back keeps the page (and any open dialog) and re-checks it behind the scenes.
+    const resume = () => {
+      if (disposed || document.visibilityState === 'hidden' || inFlight.current > 0
+        || Date.now() - lastAttempt.current < RETURN_REFRESH_MS) return;
+      void fetchData(true);
+    };
+    // Leaving the page (or the back/forward cache keeping it) clears it; a restored page loads in full.
+    const pageshow = (event: PageTransitionEvent) => { if (event.persisted) refresh(); };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) refresh(); };
     const unsubscribe = api.onTokenChange(refresh);
-    window.addEventListener('focus', refresh); window.addEventListener('pageshow', visibility); window.addEventListener('pagehide', retire);
-    window.addEventListener('storage', storage); document.addEventListener('visibilitychange', visibility); void fetchData();
-    return () => { disposed = true; retire(); unsubscribe(); window.removeEventListener('focus', refresh);
-      window.removeEventListener('pageshow', visibility); window.removeEventListener('pagehide', retire);
-      window.removeEventListener('storage', storage); document.removeEventListener('visibilitychange', visibility); };
+    window.addEventListener('focus', resume); window.addEventListener('pageshow', pageshow); window.addEventListener('pagehide', retire);
+    window.addEventListener('storage', storage); document.addEventListener('visibilitychange', resume); void fetchData();
+    return () => { disposed = true; retire(); unsubscribe(); window.removeEventListener('focus', resume);
+      window.removeEventListener('pageshow', pageshow); window.removeEventListener('pagehide', retire);
+      window.removeEventListener('storage', storage); document.removeEventListener('visibilitychange', resume); };
   }, [fetchData, retire]);
 
   useEffect(() => {
@@ -376,7 +400,7 @@ function MembersContent() {
       ) : tab === 'requests' ? (
         canManage ? (
           requestsError ? (
-            <ErrorState message={requestsError} onRetry={fetchData} />
+            <ErrorState message={requestsError} onRetry={() => void fetchData()} />
           ) : accessRequests.length === 0 ? (
             <div className="text-center py-16 px-4">
               <Mail className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
@@ -439,7 +463,7 @@ function MembersContent() {
       ) : (
         <div className="space-y-2">
           {auditError ? (
-            <ErrorState message={auditError} onRetry={fetchData} />
+            <ErrorState message={auditError} onRetry={() => void fetchData()} />
           ) : auditLog.length === 0 ? (
             <div className="text-center py-16"><p className="text-sm text-app-text-secondary">No audit log entries</p></div>
           ) : auditLog.map((entry: any, idx: number) => (
