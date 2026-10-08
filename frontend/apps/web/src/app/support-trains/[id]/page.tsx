@@ -51,6 +51,8 @@ type SupportTrainWithOrganizers = {
 
 function supportModeLabel(key: string): string {
   if (key === 'home_cooked_meals') return 'Home-cooked meals';
+  // A slot's own mode (meal / takeout / groceries) uses this too; "meal" was shown as is.
+  if (key === 'meal') return 'Meal';
   if (key === 'takeout') return 'Takeout';
   if (key === 'groceries') return 'Groceries';
   if (key === 'gift_funds') return 'Gift funds';
