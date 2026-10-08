@@ -158,11 +158,12 @@ private struct TodaySunArcContent: View {
 /// The arc spans the card: horizon 12 pt above the bottom, peak 14 pt from the top.
 private enum SunArcGeometry {
     static func point(_ fraction: Double, in rect: CGRect) -> CGPoint {
+        // Doubles throughout: mixing CGFloat into cos/sin is ambiguous for Xcode 16's compiler.
         let theta = Double.pi * (1 - min(max(fraction, 0), 1))
-        let horizon = rect.maxY - 12
-        let rx = rect.width / 2 - 26
-        let ry = horizon - rect.minY - 14
-        return CGPoint(x: rect.midX + rx * cos(theta), y: horizon - ry * sin(theta))
+        let horizon = Double(rect.maxY) - 12
+        let rx = Double(rect.width) / 2 - 26
+        let ry = horizon - Double(rect.minY) - 14
+        return CGPoint(x: Double(rect.midX) + rx * cos(theta), y: horizon - ry * sin(theta))
     }
 }
 

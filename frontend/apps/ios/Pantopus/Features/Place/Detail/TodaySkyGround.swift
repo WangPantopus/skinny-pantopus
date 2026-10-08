@@ -128,8 +128,8 @@ struct TodaySkyGround {
     private func paintSmoke(_ context: GraphicsContext, at origin: CGPoint) {
         for index in 0..<3 {
             let progress = (scene.time * 0.35 + Double(index) / 3).truncatingRemainder(dividingBy: 1)
-            let x = origin.x + 11 + sin(progress * 5 + Double(index)) * 3 + progress * 10
-            let y = origin.y - 46 - progress * 34
+            let x = Double(origin.x) + 11 + sin(progress * 5 + Double(index)) * 3 + progress * 10
+            let y = Double(origin.y) - 46 - progress * 34
             let puff = TodaySkyPainter.circle(x, y, 3 + progress * 6)
             context.fill(puff, with: .color(SkyPalette.smoke.color(opacity: 0.35 * (1 - progress))))
         }

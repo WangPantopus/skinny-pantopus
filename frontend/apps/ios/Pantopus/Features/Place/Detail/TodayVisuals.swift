@@ -94,10 +94,12 @@ struct TodayAqiGauge: View {
 /// The dial: a half circle whose centre sits on the bottom edge.
 private enum GaugeGeometry {
     static func point(_ fraction: Double, in rect: CGRect) -> CGPoint {
-        let center = CGPoint(x: rect.midX, y: rect.maxY - 2)
-        let radius = min(rect.width / 2, rect.height) - 7
+        // Doubles throughout: mixing CGFloat into cos/sin is ambiguous for Xcode 16's compiler.
+        let centerX = Double(rect.midX)
+        let centerY = Double(rect.maxY) - 2
+        let radius = min(Double(rect.width) / 2, Double(rect.height)) - 7
         let theta = Double.pi * (1 + min(max(fraction, 0), 1))
-        return CGPoint(x: center.x + radius * cos(theta), y: center.y + radius * sin(theta))
+        return CGPoint(x: centerX + radius * cos(theta), y: centerY + radius * sin(theta))
     }
 }
 
