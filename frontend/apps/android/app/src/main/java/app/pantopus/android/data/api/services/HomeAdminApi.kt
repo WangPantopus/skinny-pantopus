@@ -8,9 +8,11 @@ import app.pantopus.android.data.api.models.homes.HomeAuditLogResponse
 import app.pantopus.android.data.api.models.homes.HomeVerificationAccessDto
 import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestActionResponse
 import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestsResponse
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -48,6 +50,13 @@ interface HomeAdminApi {
     suspend fun myAccess(
         @Path("id") homeId: String,
     ): HomeAccessDto
+
+    /** [myAccess] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/me")
+    suspend fun myAccessConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeAccessDto>
 
     /**
      * `GET /api/homes/:id/me` — same route

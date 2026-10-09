@@ -4,9 +4,11 @@ import app.pantopus.android.data.api.models.homes.InviteMemberRequest
 import app.pantopus.android.data.api.models.homes.InviteMemberResponse
 import app.pantopus.android.data.api.models.homes.OccupantsResponse
 import app.pantopus.android.data.api.models.homes.RemoveMemberResponse
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 
@@ -25,6 +27,13 @@ interface HomeMembersApi {
     suspend fun listOccupants(
         @Path("id") homeId: String,
     ): OccupantsResponse
+
+    /** [listOccupants] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/occupants")
+    suspend fun listOccupantsConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<OccupantsResponse>
 
     /**
      * `POST /api/homes/:id/invite` — route `backend/routes/home.js:5662`.
