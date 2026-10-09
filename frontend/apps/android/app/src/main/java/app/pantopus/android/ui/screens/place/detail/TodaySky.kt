@@ -352,7 +352,10 @@ private fun SkyReading(
     val fontScale = LocalDensity.current.fontScale
     val numeral = min(fontScale, 1.3f) / fontScale
     val shadow = TextStyle(shadow = Shadow(SkyPalette.black.copy(alpha = 0.28f), Offset(0f, 2f), 6f))
-    Column(modifier = Modifier.padding(start = 18.dp, top = 14.dp, end = 110.dp, bottom = 36.dp)) {
+    // Room below the chips for the slide hint (SkyScrubHint): its 14 sp line grows with the font
+    // size, so a fixed 36 dp put it on the last chip at the largest sizes. 36 dp at 100%.
+    val hintRoom = 22.dp + with(LocalDensity.current) { 14.sp.toDp() }
+    Column(modifier = Modifier.padding(start = 18.dp, top = 14.dp, end = 110.dp, bottom = hintRoom)) {
         Column(modifier = Modifier.clearAndSetSemantics { hourSemantics(model, hours, scrub) }) {
             // 14 sp bold (large text) in full white: it sits over the cloud deck on grey days.
             Text(
