@@ -135,9 +135,7 @@ public final class FeedContextBarViewModel {
             applyCurrent(payload.viewingLocation)
             // Saved places live on their own route; a failure there just
             // drops that section rather than blanking the sheet.
-            let saved: SavedPlacesListResponse? = try? await api.request(
-                SavedPlacesEndpoints.list()
-            )
+            let saved = try? await HomesStoreReads.savedPlaces(store: ScreenStore.store(for: api)).value
             let options = Self.options(payload: payload, savedPlaces: saved?.savedPlaces ?? [])
             sheetState = options.isEmpty ? .empty : .loaded(options)
         } catch {

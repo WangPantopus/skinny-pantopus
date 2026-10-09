@@ -262,7 +262,7 @@ public final class SavedPlacesStore {
 
     public func reload() async {
         do {
-            let response: SavedPlacesListResponse = try await api.request(SavedPlacesEndpoints.list())
+            let response = try await HomesStoreReads.savedPlaces(store: ScreenStore.store(for: api)).value
             saved = response.savedPlaces
             loaded = true
         } catch {
@@ -341,6 +341,7 @@ public final class SavedPlacesStore {
             if let i = saved.firstIndex(where: { $0.id == optimistic.id }) {
                 saved[i] = response.savedPlace
             }
+            HomesStoreReads.savedPlacesChanged(store: ScreenStore.store(for: api))
         } catch {
             saved.removeAll { $0.id == optimistic.id }
             toast = ToastMessage(text: "Couldn\u{2019}t save \(label).", kind: .error)
@@ -355,6 +356,7 @@ public final class SavedPlacesStore {
         undo = SavedPlaceUndo(dto: removed, index: index)
         do {
             try await api.request(SavedPlacesEndpoints.remove(id: id))
+            HomesStoreReads.savedPlacesChanged(store: ScreenStore.store(for: api))
         } catch {
             saved.insert(removed, at: min(index, saved.count))
             undo = nil
@@ -375,6 +377,7 @@ public final class SavedPlacesStore {
             if let i = saved.firstIndex(where: { $0.id == dto.id }) {
                 saved[i] = response.savedPlace
             }
+            HomesStoreReads.savedPlacesChanged(store: ScreenStore.store(for: api))
         } catch {
             saved.removeAll { $0.id == dto.id }
             toast = ToastMessage(text: "Couldn\u{2019}t restore \(dto.label).", kind: .error)
