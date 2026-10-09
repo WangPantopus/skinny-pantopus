@@ -211,6 +211,11 @@ class ConnectionsViewModel
                 field = value
                 applyState()
             }
+        var onOpenBlockedUsers: () -> Unit = {}
+            set(value) {
+                field = value
+                applyState()
+            }
         var onFindPeople: () -> Unit = {}
             set(value) {
                 field = value
@@ -489,11 +494,17 @@ class ConnectionsViewModel
                         headline = "No sent requests",
                         subcopy = "Requests you send will appear here until accepted or declined.",
                     )
+                // This tab lists blocked connections only; a block from a profile or a chat
+                // lives in Settings → Blocked users (as on the web), so say so and link there.
                 ConnectionsTab.BLOCKED ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Ban,
-                        headline = "No blocked users",
-                        subcopy = "People you block stop seeing your posts and can't message you.",
+                        headline = "No blocked connections",
+                        subcopy =
+                            "People you blocked from their profile or a chat are in Blocked users, " +
+                                "where you can unblock them.",
+                        ctaTitle = "Open Blocked users",
+                        onCta = { onOpenBlockedUsers() },
                         tint = PantopusColors.appSurfaceSunken,
                         accent = PantopusColors.appTextSecondary,
                     )
