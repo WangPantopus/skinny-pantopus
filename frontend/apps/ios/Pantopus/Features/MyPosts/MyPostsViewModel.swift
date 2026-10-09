@@ -225,6 +225,9 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
     // MARK: - Dependencies
 
     private let api: APIClient
+    /// Your posts as last read (A post: a minute), shown at once when the
+    /// screen opens again; your own post changes mark the copy out of date.
+    private let store: ScreenStore
     private let currentUserId: @MainActor () -> String?
     private let onOpenPost: @MainActor (MyPostDTO) -> Void
     private let onCompose: @MainActor () -> Void
@@ -290,7 +293,9 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         self.onCompose = onCompose
         self.onEditPost = onEditPost
         self.now = now
+        store = ScreenStore.store(for: api)
         saved = SavedPostsModel(api: api, onOpenPost: onOpenPost, now: now)
+        showStoredCopy()
     }
 
     /// Read the signed-in user's id from `AuthManager` for the default
@@ -308,7 +313,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
     public func load() async {
         if onSavedTab { return await saved.load() }
         if !loadedAtLeastOnce { ownState = .loading }
-        await fetch()
+        await fetch(force: false)
     }
 
     public func refresh() async {
@@ -317,7 +322,7 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         // posts. Drop the local archive overrides so the user doesn't
         // see stale optimistic state if they've been gone for a while.
         localArchiveOverrides.removeAll()
-        await fetch()
+        await fetch(force: true)
     }
 
     /// Footer reached: append the next (older) page. A failed page keeps
@@ -337,7 +342,25 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
 
     // MARK: - Fetching
 
-    private func fetch() async {
+    /// `GET /api/posts/user/:userId` with the owner's archived posts, `depth` rows deep.
+    private func listEndpoint(userId: String, depth: Int = MyPostsViewModel.pageSize) -> Endpoint {
+        PostsEndpoints.userPosts(userId: userId, limit: depth, includeArchived: true)
+    }
+
+    private func showStoredCopy() {
+        guard let userId = currentUserId(),
+              let copy = store.peek(listEndpoint(userId: userId), as: MyPostsResponse.self) else { return }
+        apply(copy.value)
+    }
+
+    private func apply(_ response: MyPostsResponse) {
+        posts = response.posts
+        nextPage = Self.nextPage(after: response)
+        loadedAtLeastOnce = true
+        rebuild()
+    }
+
+    private func fetch(force: Bool) async {
         fetchGeneration += 1
         let generation = fetchGeneration
         // No paging off the old cursor while the list is being replaced.
@@ -357,15 +380,16 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         // the list to its first page on every return and refresh.
         let depth = min(max(Self.pageSize, posts.count), Self.maxRefreshDepth)
         do {
-            let response: MyPostsResponse = try await api.request(
-                PostsEndpoints.userPosts(userId: userId, limit: depth, includeArchived: true)
-            )
+            let response = try await store.load(
+                listEndpoint(userId: userId, depth: depth),
+                as: MyPostsResponse.self,
+                kind: .post,
+                topics: [ScreenTopic.posts],
+                force: force
+            ).value
             guard generation == fetchGeneration else { return }
-            posts = response.posts
-            nextPage = Self.nextPage(after: response)
             loadingMore = false
-            loadedAtLeastOnce = true
-            rebuild()
+            apply(response)
         } catch {
             guard generation == fetchGeneration else { return }
             loadingMore = false
