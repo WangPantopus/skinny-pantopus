@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.services.NotificationPreferencesApi
 import app.pantopus.android.data.api.services.PlaceApi
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.data.homes.HomeTasksRepository
+import app.pantopus.android.data.store.ScreenStore
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -186,6 +187,7 @@ class AuthInterceptorsTest {
                 Retrofit.Builder().baseUrl(server.url("/"))
                     .client(client()).addConverterFactory(MoshiConverterFactory.create(moshi))
                     .build().create(HomeTasksApi::class.java),
+                mockk<ScreenStore>(relaxed = true),
             )
         for (operation in listOf("list", "create", "edit", "delete")) {
             var credentials = starting

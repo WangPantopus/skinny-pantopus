@@ -104,6 +104,13 @@ final class PlaceDetailViewModel {
         await fetch(quietly: false, force: true)
     }
 
+    /// A change signal concerns this page's copy: one of its topics (`today`,
+    /// `home:{id}`, `place:{id}`), or its kind after a reconnect.
+    func isAffected(by note: Notification) -> Bool {
+        PlaceStoreReads.topics(homeId: homeId, savedPlaceId: savedPlaceId).contains { note.names(topic: $0) }
+            || note.names(kind: storeKind)
+    }
+
     private var storeKind: ScreenDataKind {
         group == .today ? .today : .place
     }

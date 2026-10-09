@@ -40,7 +40,7 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeTaskAccessTest {
-    private val repository = mockk<HomeTasksRepository>()
+    private val repository = mockk<HomeTasksRepository>(relaxUnitFun = true)
     private val identity = HomeClaimScopeTestFixture()
     private lateinit var scope: CoroutineScope
     private lateinit var access: HomeTaskAccess
