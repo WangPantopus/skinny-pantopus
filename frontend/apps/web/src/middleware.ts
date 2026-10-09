@@ -178,6 +178,12 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Launch cut #10 (Mailbox): the mailbox itself, with any scope or drawer in
+  // its query, opens Messages, which took its tab. Its other pages land on Place.
+  if (!launchFeatures.mailbox && /^\/app\/mailbox\/?$/.test(pathname)) {
+    return NextResponse.redirect(new URL('/app/chat', req.url));
+  }
+
   // Launch cut: app pages of a hidden feature send signed-in users to Place.
   if (pathname.startsWith('/app') && isLaunchCutPath(pathname)) {
     return NextResponse.redirect(new URL('/app/place', req.url));

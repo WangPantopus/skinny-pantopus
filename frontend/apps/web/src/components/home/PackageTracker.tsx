@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Mailbox, Truck, Package, CheckCircle, Home, MailOpen, Mail } from 'lucide-react';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const STATUS_CONFIG: Record<string, { icon: ReactNode; label: string; color: string }> = {
   expected: { icon: <Mailbox className="w-5 h-5" />, label: 'Expected', color: 'text-blue-600' },
@@ -64,7 +65,8 @@ export default function PackageTracker({
           {packages.map((pkg) => {
             const cfg = STATUS_CONFIG[pkg.status] || STATUS_CONFIG.expected;
             const sourceMatch = String(pkg.delivery_instructions || '').match(/MAILBOX_FANOUT:([0-9a-f-]{36})/i);
-            const sourceMailId = sourceMatch?.[1] || null;
+            // Launch cut #10 (Mailbox): no link to the hidden mail item.
+            const sourceMailId = launchFeatures.mailbox ? sourceMatch?.[1] || null : null;
             return (
               <div
                 id={`home-package-${pkg.id}`}

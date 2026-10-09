@@ -593,7 +593,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* Four-tab IA on phone-width web: Place · Today · Nearby · Mail as a
+      {/* Four-tab IA on phone-width web: Place · Today · Nearby · Messages as a
           bottom bar (the sidebar carries it at md+). Business context keeps
           its own navigation. */}
       {showMobileTabs && <MobileTabBar unread={chatUnread} />}
@@ -711,9 +711,9 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
     router.prefetch('/app/nearby');
   }, [router]);
 
-  // Mail — the mailbox plus the Messages inbox (chat lives inside Mail).
+  // Messages — the conversation list (the mailbox too, while Mailbox is on).
   const prefetchMail = useCallback(() => {
-    router.prefetch('/app/mailbox');
+    if (launchFeatures.mailbox) router.prefetch('/app/mailbox');
     router.prefetch('/app/chat');
     queryClient.prefetchQuery({
       queryKey: queryKeys.conversations(),
@@ -742,16 +742,19 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
 
   return (
     <div className="space-y-0.5">
-      {/* Four-tab IA (wedge Phase 1.5): Place · Today · Nearby · Mail —
+      {/* Four-tab IA (wedge Phase 1.5): Place · Today · Nearby · Messages —
           every tab alive at zero density. Today is the briefing; Nearby is
           social discovery at /app/nearby (Pulse / Beacons / Marketplace /
-          Tasks open behind its meter); Mail holds the mailbox AND the
-          Messages inbox (chat routes stay at /app/chat). Hub and the my-x
-          screens keep their routes (deep links resolve) but leave the nav. */}
+          Tasks open behind its meter); Messages is the conversation list at
+          /app/chat (launch cut #10: while Mailbox is on, the tab is Mail and
+          holds the mailbox too). Hub and the my-x screens keep their routes
+          (deep links resolve) but leave the nav. */}
       <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place') || isActive('/app/hub')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
       <SidebarItem icon={NavIcons.today} label="Today" active={startsWith('/app/today') || startsWith('/app/hub/today')} onClick={() => go('/app/today')} onPrefetch={prefetchToday} showLabel={showLabels} testId="sidebar-today" />
       <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/connections') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/nearby')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
-      <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox') || startsWith('/app/chat')} onClick={() => go('/app/mailbox?scope=personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />
+      {launchFeatures.mailbox
+        ? <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox') || startsWith('/app/chat')} onClick={() => go('/app/mailbox?scope=personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />
+        : <SidebarItem icon={NavIcons.messages} label="Messages" active={startsWith('/app/chat')} onClick={() => go('/app/chat')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />}
       {/* Launch cut #5 (Public scheduling): the Scheduling entry is hidden. */}
       {webFeatureFlags.scheduling && launchFeatures.publicScheduling ? <SidebarItem icon={NavIcons.scheduling} label="Scheduling" active={startsWith('/app/scheduling')} onClick={() => go('/app/scheduling')} onPrefetch={prefetchScheduling} showLabel={showLabels} testId="sidebar-scheduling" /> : null}
       {/* Launch cut #1 (Beacon): Audience and My Beacon are hidden (My Beacon is also #2). */}
@@ -799,16 +802,19 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
       {/* Launch cut #7 (Household extras): Bills and Packages are hidden. */}
       {launchFeatures.householdExtras ? <SidebarItem icon={HomeIcons.bills} label="Bills" active={isTabActive('bills')} onClick={() => goTab('bills')} accent="emerald" showLabel={showLabels} /> : null}
       <SidebarItem icon={HomeIcons.members} label="Members" active={isTabActive('members')} onClick={() => goTab('members')} accent="emerald" showLabel={showLabels} />
-      <SidebarItem
-        icon={HomeIcons.mailbox}
-        label="Mailbox"
-        onClick={() => {
-          router.push(`/app/mailbox?scope=home&homeId=${homeId}`);
-          onNavigate();
-        }}
-        accent="emerald"
-        showLabel={showLabels}
-      />
+      {/* Launch cut #10 (Mailbox): the home's mailbox is hidden. */}
+      {launchFeatures.mailbox ? (
+        <SidebarItem
+          icon={HomeIcons.mailbox}
+          label="Mailbox"
+          onClick={() => {
+            router.push(`/app/mailbox?scope=home&homeId=${homeId}`);
+            onNavigate();
+          }}
+          accent="emerald"
+          showLabel={showLabels}
+        />
+      ) : null}
       {/* Launch cuts #5 + #7: the Home scheduling hub is hidden. */}
       {webFeatureFlags.scheduling && launchFeatures.publicScheduling && launchFeatures.householdExtras ? (
         <SidebarItem
