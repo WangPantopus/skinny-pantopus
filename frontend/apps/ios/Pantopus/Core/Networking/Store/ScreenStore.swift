@@ -57,6 +57,9 @@ final class ScreenStore {
     @ObservationIgnored private var seeds: [Key: any Sendable] = [:]
     @ObservationIgnored private var seedOrder: [Key] = []
     @ObservationIgnored private var counts: [String: Int] = [:]
+    /// When each topic (or `kind:<kind>`) was last marked out of date, for
+    /// readers that keep a short-lived answer of their own.
+    @ObservationIgnored private var marks: [String: Date] = [:]
     @ObservationIgnored var observedAccount: String?
     @ObservationIgnored var backgroundedAt: Date?
     @ObservationIgnored var observers: [NSObjectProtocol] = []
@@ -223,61 +226,6 @@ final class ScreenStore {
         key(for: endpoint).flatMap { revisions[$0] } ?? 0
     }
 
-    // MARK: - Out of date and removal
-
-    /// Marks every entry carrying one of `topics` out of date (contract
-    /// section 8). They stay on screen and refresh when next shown.
-    func markStale(topics: Set<String>) {
-        let topics = Set(topics.map { $0.lowercased() })
-        for (key, entry) in entries where !entry.topics.isDisjoint(with: topics) {
-            entry.staleMark = true
-            bump(key)
-        }
-    }
-
-    /// Marks every entry of these kinds out of date (a socket reconnect marks
-    /// Household, Messages and Notifications entries).
-    func markStale(kinds: Set<ScreenDataKind>) {
-        for (key, entry) in entries where kinds.contains(entry.kind) {
-            entry.staleMark = true
-            bump(key)
-        }
-    }
-
-    func markAllStale() {
-        markStale(kinds: Set(ScreenDataKind.allCases))
-    }
-
-    func remove(_ endpoint: Endpoint) {
-        if let key = key(for: endpoint) { remove(key) }
-    }
-
-    /// Sign-out, a revoked session, an account switch or deletion, Clear
-    /// cache: everything goes, and replies already in flight are dropped.
-    func wipe() {
-        generation += 1
-        for flight in inFlight.values {
-            flight.task.cancel()
-        }
-        inFlight.removeAll()
-        entries.removeAll()
-        revisions.removeAll()
-        seeds.removeAll()
-        seedOrder.removeAll()
-    }
-
-    /// The memory warning: keep only what screens used in the last minute
-    /// (what's on screen), drop the rest.
-    func trimForMemoryWarning() {
-        let cutoff = now().addingTimeInterval(-60)
-        for (key, entry) in entries where entry.lastUsed < cutoff && inFlight[key] == nil {
-            entries[key] = nil
-            revisions[key] = nil
-        }
-        seeds.removeAll()
-        seedOrder.removeAll()
-    }
-
     /// Phase 1 measurement: how often each kind's window was hit, revalidated
     /// (304), refreshed (200) or failed.
     var windowCounts: [String: Int] {
@@ -413,6 +361,70 @@ final class ScreenStore {
     }
 }
 
+// MARK: - Out of date and removal
+
+extension ScreenStore {
+    /// Marks every entry carrying one of `topics` out of date (contract
+    /// section 8). They stay on screen and refresh when next shown.
+    func markStale(topics: Set<String>) {
+        let topics = Set(topics.map { $0.lowercased() })
+        for topic in topics {
+            marks[topic] = now()
+        }
+        for (key, entry) in entries where !entry.topics.isDisjoint(with: topics) {
+            entry.staleMark = true
+            bump(key)
+        }
+    }
+
+    /// Marks every entry of these kinds out of date (a socket reconnect marks
+    /// Household, Messages and Notifications entries).
+    func markStale(kinds: Set<ScreenDataKind>) {
+        for kind in kinds {
+            marks["kind:\(kind.rawValue)"] = now()
+        }
+        for (key, entry) in entries where kinds.contains(entry.kind) {
+            entry.staleMark = true
+            bump(key)
+        }
+    }
+
+    func markAllStale() {
+        markStale(kinds: Set(ScreenDataKind.allCases))
+    }
+
+    func remove(_ endpoint: Endpoint) {
+        if let key = key(for: endpoint) { remove(key) }
+    }
+
+    /// Sign-out, a revoked session, an account switch or deletion, Clear
+    /// cache: everything goes, and replies already in flight are dropped.
+    func wipe() {
+        generation += 1
+        for flight in inFlight.values {
+            flight.task.cancel()
+        }
+        inFlight.removeAll()
+        entries.removeAll()
+        revisions.removeAll()
+        seeds.removeAll()
+        seedOrder.removeAll()
+        marks.removeAll()
+    }
+
+    /// The memory warning: keep only what screens used in the last minute
+    /// (what's on screen), drop the rest.
+    func trimForMemoryWarning() {
+        let cutoff = now().addingTimeInterval(-60)
+        for (key, entry) in entries where entry.lastUsed < cutoff && inFlight[key] == nil {
+            entries[key] = nil
+            revisions[key] = nil
+        }
+        seeds.removeAll()
+        seedOrder.removeAll()
+    }
+}
+
 // MARK: - Seeds
 
 extension ScreenStore {
@@ -430,5 +442,16 @@ extension ScreenStore {
 
     func seeded<Value: Sendable>(_ endpoint: Endpoint, as _: Value.Type = Value.self) -> Value? {
         key(for: endpoint).flatMap { seeds[$0] as? Value }
+    }
+}
+
+// MARK: - Answers kept outside the store
+
+extension ScreenStore {
+    /// Whether any of `topics`, or every entry of `kind`, was marked out of
+    /// date after `date` (Today's radon card keeps its own answer).
+    func wasMarked(topics: Set<String>, kind: ScreenDataKind, since date: Date) -> Bool {
+        let names = topics.map { $0.lowercased() } + ["kind:\(kind.rawValue)"]
+        return names.contains { (marks[$0] ?? .distantPast) > date }
     }
 }
