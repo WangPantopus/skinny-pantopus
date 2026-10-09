@@ -562,6 +562,12 @@ public extension ManageTrainViewModel {
         actionError = nil
     }
 
+    /// A change made here: the screen store's copies of this train (its
+    /// detail) and of the trains lists are out of date.
+    func markTrainChanged() {
+        ScreenStore.store(for: api).markStale(topics: [ScreenTopic.supportTrain(supportTrainId), ScreenTopic.supportTrains])
+    }
+
     // MARK: - Plumbing
 
     @discardableResult
@@ -589,6 +595,7 @@ public extension ManageTrainViewModel {
             } else {
                 _ = try await api.request(endpoint, as: EmptyResponse.self)
             }
+            markTrainChanged()
             await load()
             toast = success
             return true

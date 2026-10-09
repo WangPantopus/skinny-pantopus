@@ -86,10 +86,13 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
     }
 
     public private(set) var state: ListOfRowsState = .loading
+    public var refreshFailureMessage: String?
+    public private(set) var staleNotice: String?
 
     // MARK: - Dependencies
 
-    private let api: APIClient
+    /// The screen store (Instant Screens): trains are fresh for a minute.
+    private let store: ScreenStore
     private let onStartTrain: @MainActor () -> Void
     private let onOpenTrain: @MainActor (String) -> Void
     private let onSearch: @MainActor () -> Void
@@ -130,26 +133,38 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
         }
     ) {
-        self.api = api
+        store = ScreenStore.store(for: api)
         self.onStartTrain = onStartTrain
         self.onOpenTrain = onOpenTrain
         self.onSearch = onSearch
         self.locationProvider = locationProvider
         self.locationRequester = locationRequester
         self.openLocationSettings = openLocationSettings
+        // The store's copy of My trains shows in the first frame.
+        if let copy = store.peek(Self.mineEndpoint, as: SupportTrainsListResponse.self) {
+            mine = copy.value.supportTrains
+            staleNotice = copy.refreshNotice
+            loadedOnce = true
+            rebuild()
+        }
+    }
+
+    /// The trains you organize, help with or were invited to.
+    private static var mineEndpoint: Endpoint {
+        SupportTrainsEndpoints.mine()
     }
 
     // MARK: - Lifecycle
 
     public func load() async {
-        // After the first load, each appearance re-reads quietly, so a train
-        // deleted or re-statused from its detail or Manage screen doesn't linger.
+        // Coming back keeps the rows; they re-read quietly once a minute old
+        // (Support Trains' fresh window) or when a train changed here.
         if !loadedOnce { state = .loading }
-        await fetchBoth()
+        await fetchBoth(force: false)
     }
 
     public func refresh() async {
-        await fetchBoth()
+        await fetchBoth(force: true)
     }
 
     public func loadMoreIfNeeded() async {
@@ -169,17 +184,17 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
             rebuild()
             return
         }
-        _ = await fetchNearby(at: loc)
+        _ = await fetchNearby(at: loc, force: false)
         rebuild()
     }
 
     // MARK: - Fetching
 
-    private func fetchBoth() async {
-        async let mineTask = fetchMine()
-        async let nearbyTask = fetchNearby()
+    private func fetchBoth(force: Bool) async {
+        async let mineTask = fetchMine(force: force)
+        async let nearbyTask = fetchNearby(force: force)
         let (mineOk, nearbyOk) = await (mineTask, nearbyTask)
-        if !mineOk && !nearbyOk {
+        if !mineOk && !nearbyOk && !loadedOnce {
             state = .error(message: "Couldn't load support trains. Try again.")
             return
         }
@@ -187,21 +202,36 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
         rebuild()
     }
 
-    private func fetchMine() async -> Bool {
+    private func fetchMine(force: Bool) async -> Bool {
         do {
-            let response: SupportTrainsListResponse = try await api.request(
-                SupportTrainsEndpoints.mine()
+            let snapshot = try await store.load(
+                Self.mineEndpoint,
+                as: SupportTrainsListResponse.self,
+                kind: .supportTrain,
+                topics: [ScreenTopic.supportTrains],
+                force: force
             )
-            mine = response.supportTrains
+            mine = snapshot.value.supportTrains
+            staleNotice = snapshot.refreshNotice
             mineFailed = false
             return true
+        } catch is CancellationError {
+            return true
         } catch {
-            mineFailed = true
-            return false
+            // A failed refresh keeps the trains on screen; with nothing to
+            // show, the tab says it couldn't load.
+            guard loadedOnce, !ScreenStore.isRefusal(error) else {
+                mine = []
+                mineFailed = true
+                return false
+            }
+            if force { refreshFailureMessage = "Couldn't refresh your support trains." }
+            staleNotice = store.peek(Self.mineEndpoint, as: SupportTrainsListResponse.self)?.refreshNotice
+            return true
         }
     }
 
-    private func fetchNearby() async -> Bool {
+    private func fetchNearby(force: Bool) async -> Bool {
         // A reload starts over: after a trip to Settings, "Use my location" may work now.
         locationRequestFailed = false
         guard let loc = await locationProvider() else {
@@ -211,19 +241,26 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
             nearby = []
             return true
         }
-        return await fetchNearby(at: loc)
+        return await fetchNearby(at: loc, force: force)
     }
 
-    private func fetchNearby(at loc: (latitude: Double, longitude: Double)) async -> Bool {
+    private func fetchNearby(at loc: (latitude: Double, longitude: Double), force: Bool) async -> Bool {
         nearbyNeedsLocation = false
         do {
-            let response: SupportTrainsNearbyResponse = try await api.request(
-                SupportTrainsEndpoints.nearby(latitude: loc.latitude, longitude: loc.longitude)
-            )
+            let response = try await store.load(
+                SupportTrainsEndpoints.nearby(latitude: loc.latitude, longitude: loc.longitude),
+                as: SupportTrainsNearbyResponse.self,
+                kind: .supportTrain,
+                force: force
+            ).value
             nearby = response.supportTrains
             nearbyFailed = false
             return true
+        } catch is CancellationError {
+            return true
         } catch {
+            // Trains already on the Nearby tab stay through a failed refresh.
+            guard nearby.isEmpty || ScreenStore.isRefusal(error) else { return true }
             nearby = []
             nearbyFailed = true
             return false
@@ -312,10 +349,12 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
         default: mineFailed ? "Couldn't load your support trains. Try again." : nil
         }
     }
+}
 
-    // MARK: - Mapping
+// MARK: - Mapping
 
-    private func rowModel(for train: SupportTrainListItemDTO) -> RowModel {
+private extension SupportTrainsViewModel {
+    func rowModel(for train: SupportTrainListItemDTO) -> RowModel {
         // The My-trains feed doesn't (yet) project `support_train_type` —
         // `SupportTrainType.from(nil)` returns `.generic` so the leading
         // tile reads as a neutral mutual-aid glyph instead of mis-labeling
@@ -408,82 +447,5 @@ public final class SupportTrainsViewModel: ListOfRowsDataSource {
         let left = max(0, total - filled)
         if left == 0 { return "\(filled) / \(total) slots" }
         return "\(filled) / \(total) slots · \(left) open"
-    }
-}
-
-// MARK: - Train type palette
-
-/// Per-archetype tile palette. The icon + gradient pair drives the
-/// 40pt leading tile rendered by `RowLeading.categoryGradientIcon`.
-public enum SupportTrainType: Sendable, Hashable, CaseIterable {
-    case meals
-    case rides
-    case childcare
-    case petcare
-    case errands
-    case visits
-    case generic
-
-    /// Backend `support_train_type` enum mirror. Falls back to
-    /// `.generic` when the column is empty so My-trains rows (which
-    /// don't yet project the type column) render a neutral mutual-aid
-    /// glyph instead of mis-labeling every train as "Meal train". The
-    /// Nearby RPC populates the field and the tile lights up.
-    public static func from(_ raw: String?) -> SupportTrainType {
-        switch raw ?? "" {
-        case "meal_support", "meals": .meals
-        case "ride_support", "rides": .rides
-        case "childcare": .childcare
-        case "pet_care", "petcare", "pet": .petcare
-        case "errands", "errand_support": .errands
-        case "visits", "visit_support": .visits
-        default: .generic
-        }
-    }
-
-    public var label: String {
-        switch self {
-        case .meals: "Meal train"
-        case .rides: "Ride train"
-        case .childcare: "Childcare"
-        case .petcare: "Pet care"
-        case .errands: "Errand train"
-        case .visits: "Visit train"
-        case .generic: "Support train"
-        }
-    }
-
-    public var icon: PantopusIcon {
-        switch self {
-        case .meals: .utensils
-        case .rides: .navigation
-        case .childcare: .baby
-        case .petcare: .pawPrint
-        case .errands: .shoppingBag
-        case .visits: .heart
-        case .generic: .handCoins
-        }
-    }
-
-    /// Per-archetype gradient pulled from existing category / identity
-    /// tokens — no hex literals at the call site. Designers can later
-    /// promote any of these to first-class tokens if reused elsewhere.
-    public var gradient: GradientPair {
-        switch self {
-        case .meals:
-            GradientPair(start: Theme.Color.handyman, end: Theme.Color.error)
-        case .rides:
-            GradientPair(start: Theme.Color.primary500, end: Theme.Color.primary700)
-        case .childcare:
-            GradientPair(start: Theme.Color.warning, end: Theme.Color.handyman)
-        case .petcare:
-            GradientPair(start: Theme.Color.error, end: Theme.Color.business)
-        case .errands:
-            GradientPair(start: Theme.Color.business, end: Theme.Color.goods)
-        case .visits:
-            GradientPair(start: Theme.Color.error, end: Theme.Color.business)
-        case .generic:
-            GradientPair(start: Theme.Color.appTextSecondary, end: Theme.Color.appTextStrong)
-        }
     }
 }

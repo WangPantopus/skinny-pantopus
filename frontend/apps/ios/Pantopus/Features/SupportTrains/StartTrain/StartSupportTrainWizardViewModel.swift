@@ -466,6 +466,8 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
                 SupportTrainsEndpoints.publish(supportTrainId: created.id),
                 as: EmptyResponse.self
             )
+            // My trains (the screen store's copy) gains the new train.
+            ScreenStore.store(for: api).markStale(topics: [ScreenTopic.supportTrains])
             step = .success
         } catch {
             // Launching is several calls. If a later one fails, remove the
@@ -504,6 +506,7 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         leftoverTrainId = nil
         publishedTrainId = trainId
         launchError = nil
+        ScreenStore.store(for: api).markStale(topics: [ScreenTopic.supportTrains])
         step = .success
     }
 
