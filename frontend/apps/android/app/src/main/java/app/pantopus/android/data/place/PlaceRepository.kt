@@ -45,6 +45,7 @@ import app.pantopus.android.data.api.models.place.SetUnlistedRemovalRequest
 import app.pantopus.android.data.api.models.place.UnlistedRemovalResponse
 import app.pantopus.android.data.api.models.place.UnlistedRemovalStatus
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.AIApi
 import app.pantopus.android.data.api.services.BlockFoundersApi
@@ -60,6 +61,9 @@ import app.pantopus.android.data.api.services.ResidencyClaimsApi
 import app.pantopus.android.data.api.services.ResidencyLettersApi
 import app.pantopus.android.data.api.services.UnlistedApi
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.Stored
 import okhttp3.ResponseBody
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -90,6 +94,7 @@ class PlaceRepository
         private val aiApi: AIApi,
         private val geoApi: GeoApi,
         private val homesApi: HomesApi,
+        private val store: ScreenStore,
     ) {
         /** Address typeahead for the signed-out funnel (keyless). */
         suspend fun geoAutocomplete(query: String): NetworkResult<GeoAutocompleteResponse> = safeApiCall { geoApi.autocomplete(query) }
@@ -123,6 +128,18 @@ class PlaceRepository
                             ?.takeIf { it.isNotEmpty() }
                             ?.joinToString(",") { it.raw },
                 )
+            }
+
+        /**
+         * A home's Today through the screens' store: only the sections Today renders ([StoreKeys.TODAY_SECTIONS]),
+         * shown at once while fresh (10 minutes) and revalidated with the stored ETag after that.
+         */
+        suspend fun todayStored(
+            homeId: String,
+            force: Boolean = false,
+        ): Stored<PlaceIntelligence> =
+            store.read(StoreKeys.today(homeId), force) { etag ->
+                conditionalApiCall { placeApi.intelligenceConditional(homeId, StoreKeys.todaySectionsQuery, etag) }
             }
 
         /** The anonymous, address-only T0 preview (no account required). */

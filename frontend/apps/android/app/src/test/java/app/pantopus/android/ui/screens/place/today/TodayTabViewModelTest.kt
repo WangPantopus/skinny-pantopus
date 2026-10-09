@@ -21,6 +21,7 @@ import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.hub.HubRepository
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import io.mockk.coEvery
@@ -59,6 +60,8 @@ class TodayTabViewModelTest {
     @Before fun setup() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         coEvery { homes.myHomes() } returns NetworkResult.Success(MyHomesResponse(emptyList(), null))
+        // Today reads My Homes through the screens' store.
+        coEvery { homes.myHomesStored(any()) } returns Stored(MyHomesResponse(emptyList(), null), fetchedAt = System.currentTimeMillis())
         coEvery { saved.list() } returns NetworkResult.Success(SavedPlacesListResponse(listOf(place)))
         coEvery { saved.today(place.id) } returns NetworkResult.Success(mockk<PlaceIntelligence>())
         coEvery { hub.todayDetail() } returns

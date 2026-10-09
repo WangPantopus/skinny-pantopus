@@ -114,6 +114,28 @@ private const val RADON_MORNING_HOUR = 9
 private const val RADON_REMINDER_DAYS = 14L
 private const val RADON_DISMISS_DAYS = 30L
 
+/**
+ * What the radon and first-use cards last knew, per home, for one screen's lifetime: a card built again (coming back
+ * to the tab, the app returning from the background) starts from it while it is read again, so it doesn't grow from
+ * "One thing…" to "Two things…" a moment after showing.
+ */
+class RadonTodayMemory {
+    internal val byHome = mutableMapOf<String, RadonSnapshot>()
+}
+
+internal data class RadonSnapshot(
+    val task: HomeTaskDto?,
+    val canCreate: Boolean,
+    val loaded: Boolean,
+    val firstUseDismissed: Boolean,
+    val dismissedUntil: Long,
+    /** When the tasks were read (wall clock). */
+    val readAt: Long,
+)
+
+/** Contract §4 "Homes and household": a household's tasks are fresh for 2 minutes. */
+private const val RADON_TASKS_FRESH_MS = 2 * 60 * 1000L
+
 /** How current the alert check on screen is (contract §4, Today alerts). */
 enum class TodayAlertsCheck {
     /** Checked within the last 30 minutes: show the alerts, or the all-clear. */
@@ -141,10 +163,11 @@ fun PlaceTodayDetailContent(
     radonContext: (suspend () -> Unit)? = null,
     onOpenBallot: (() -> Unit)? = null,
     alertsCheck: TodayAlertsCheck = TodayAlertsCheck.CURRENT,
+    radonMemory: RadonTodayMemory? = null,
 ) {
     val homeState =
         if (radonFactory != null && pilotEvents != null && radonContext != null) {
-            rememberHomeTodayState(intel, viewModel, radonFactory, pilotEvents, radonContext)
+            rememberHomeTodayState(intel, viewModel, radonFactory, pilotEvents, radonContext, radonMemory)
         } else {
             null
         }
@@ -607,6 +630,7 @@ private class RadonTodayState(
     private val events: PilotEvents,
     private val preferences: DataStore<Preferences>,
     val hasRadon: Boolean,
+    private val memory: RadonTodayMemory?,
 ) {
     val lifetime = CoroutineScope(parent.coroutineContext + Job(parent.coroutineContext[Job]))
     private var active = true
@@ -632,6 +656,22 @@ private class RadonTodayState(
 
     /** The viewer can't read the household's tasks (e.g. a guest): the card isn't theirs to answer. */
     var noTaskAccess by mutableStateOf(false)
+
+    init {
+        // Start from what the card showed last time; load() reads it again.
+        memory?.byHome?.get(homeId)?.let { last ->
+            task = last.task
+            canCreate = last.canCreate
+            loaded = last.loaded
+            firstUseDismissed = last.firstUseDismissed
+            dismissedUntil = last.dismissedUntil
+            preferencesLoaded = true
+        }
+    }
+
+    private fun keepSnapshot(readAt: Long = memory?.byHome?.get(homeId)?.readAt ?: 0L) {
+        memory?.byHome?.set(homeId, RadonSnapshot(task, canCreate, loaded, firstUseDismissed, dismissedUntil, readAt))
+    }
     val hidden get() = noTaskAccess || (task == null && dismissedUntil > Instant.now().toEpochMilli())
 
     private suspend fun requireCurrent() {
@@ -646,7 +686,8 @@ private class RadonTodayState(
         lifetime.cancel()
     }
 
-    suspend fun load() {
+    /** Reads the card's preferences and the home's tasks; [force] reads the tasks even inside their fresh window. */
+    suspend fun load(force: Boolean = false) {
         try {
             requireCurrent()
             val saved = preferences.data.first()
@@ -654,7 +695,15 @@ private class RadonTodayState(
             firstUseDismissed = saved[booleanPreferencesKey("firstUse.dismissed.$homeId")] ?: false
             dismissedUntil = saved[longPreferencesKey("radonCard.dismissedUntil.$homeId")] ?: 0L
             preferencesLoaded = true
-            if (!hasRadon) return
+            if (!hasRadon) {
+                keepSnapshot()
+                return
+            }
+            val readAt = memory?.byHome?.get(homeId)?.readAt ?: 0L
+            if (!force && loaded && System.currentTimeMillis() - readAt in 0 until RADON_TASKS_FRESH_MS) {
+                keepSnapshot()
+                return
+            }
             val response = coordinator.access.list()
             requireCurrent()
             checkNotNull(response.collectionCapabilities)
@@ -662,6 +711,7 @@ private class RadonTodayState(
             canCreate = response.collectionCapabilities.canCreate
             loaded = true
             error = null
+            keepSnapshot(readAt = System.currentTimeMillis())
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: NetworkError) {
@@ -672,6 +722,8 @@ private class RadonTodayState(
             canCreate = false
             noTaskAccess = failure.code == HTTP_FORBIDDEN
             error = if (noTaskAccess) null else "Couldn't check your home's radon tasks. Try again."
+            // Access ended or the read failed: nothing stale is shown next time.
+            memory?.byHome?.remove(homeId)
         } catch (_: Exception) {
             if (runCatching { requireCurrent() }.isFailure) return
             loaded = false
@@ -738,7 +790,7 @@ private class RadonTodayState(
             requireCurrent()
             sheet = null
             retained = null
-            load()
+            load(force = true)
             requireCurrent()
             if (kind != "change") {
                 events.send(
@@ -767,6 +819,7 @@ private class RadonTodayState(
         preferences.edit { it[booleanPreferencesKey("firstUse.dismissed.$homeId")] = true }
         requireCurrent()
         firstUseDismissed = true
+        keepSnapshot()
     }
 
     suspend fun clearRadonDismissal() {
@@ -774,6 +827,7 @@ private class RadonTodayState(
         preferences.edit { it.remove(longPreferencesKey("radonCard.dismissedUntil.$homeId")) }
         requireCurrent()
         dismissedUntil = 0L
+        keepSnapshot()
     }
 
     suspend fun dismiss() {
@@ -782,6 +836,7 @@ private class RadonTodayState(
         preferences.edit { it[longPreferencesKey("radonCard.dismissedUntil.$homeId")] = until }
         requireCurrent()
         dismissedUntil = until
+        keepSnapshot()
         events.send(
             PilotEvents.Event.SuggestionDecision,
             mapOf("suggestion" to "radon_test", "decision" to "not_now"),
@@ -797,6 +852,7 @@ private fun rememberHomeTodayState(
     factory: HomeTaskCreationFactory,
     events: PilotEvents,
     contextGuard: suspend () -> Unit,
+    memory: RadonTodayMemory?,
 ): RadonTodayState? {
     val homeId = actions?.calendarHomeId ?: return null
     val hasRadon = intel.section(PlaceSectionId.LEAD_RADON)?.leadRadon?.radonZone in 1..3
@@ -806,7 +862,7 @@ private fun rememberHomeTodayState(
     var paused by remember(homeId) { mutableStateOf(false) }
     val state =
         remember(homeId, intel, epoch) {
-            RadonTodayState(homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon)
+            RadonTodayState(homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon, memory)
         }
     DisposableEffect(state) { onDispose { state.close() } }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {

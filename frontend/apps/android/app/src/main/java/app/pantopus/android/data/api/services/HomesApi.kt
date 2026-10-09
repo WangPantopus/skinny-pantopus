@@ -69,9 +69,11 @@ import app.pantopus.android.data.api.models.homes.UploadEvidenceResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -86,6 +88,12 @@ interface HomesApi {
     /** `GET /api/homes/my-homes` — route `backend/routes/home.js:1464`. */
     @GET("api/homes/my-homes")
     suspend fun myHomes(): MyHomesResponse
+
+    /** [myHomes] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/my-homes")
+    suspend fun myHomesConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<MyHomesResponse>
 
     /** `GET /api/homes/primary` — the actor's primary Home card (`homeListService.read` with `primary`). */
     @GET("api/homes/primary")
