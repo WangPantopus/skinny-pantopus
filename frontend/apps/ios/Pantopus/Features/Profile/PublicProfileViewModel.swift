@@ -314,6 +314,10 @@ public final class PublicProfileViewModel {
     /// `POST /api/users/:userId/block`.
     public private(set) var blockState: PublicProfileActionState = .idle
 
+    /// True while this account's own block (`UserBlock`) of the person is in
+    /// place: the overflow offers Unblock instead of Block.
+    public private(set) var isBlockedByViewer: Bool = false
+
     /// Drives the privacy handshake sheet for Persona follow/unlock.
     public var showFollowHandshake: Bool = false
     public var handshakePreselectedTierRank: Int?
@@ -632,6 +636,7 @@ public final class PublicProfileViewModel {
             // which is what drops the Connect / Follow row
             // (`src/app/user/[id].tsx:322`).
             connection = .blocked
+            isBlockedByViewer = true
             toastMessage = "User blocked"
         } catch let error as APIError {
             let message = friendlyMessage(for: error)
@@ -642,6 +647,34 @@ public final class PublicProfileViewModel {
             blockState = .failed(message: "Something went wrong")
             toastMessage = "Couldn't block this user"
             logger.warning("Block failed: \(error)")
+        }
+    }
+
+    /// Lift this account's own block (`DELETE /api/users/:userId/block`,
+    /// blocks.js:105), as Settings → Blocked users does, then load the profile
+    /// again so posts, Follow and Connect come back.
+    public func unblock() async {
+        guard blockState != .inFlight else { return }
+        blockState = .inFlight
+        do {
+            _ = try await client.request(
+                BlocksEndpoints.unblock(userId: resolvedUserId),
+                as: EmptyResponse.self
+            )
+            blockState = .idle
+            isBlockedByViewer = false
+            connection = .none
+            toastMessage = "User unblocked"
+            await fetch()
+        } catch let error as APIError {
+            let message = friendlyMessage(for: error)
+            blockState = .failed(message: message)
+            toastMessage = message
+            logger.warning("Unblock failed: \(error)")
+        } catch {
+            blockState = .failed(message: "Something went wrong")
+            toastMessage = "Couldn't unblock this user"
+            logger.warning("Unblock failed: \(error)")
         }
     }
 
@@ -712,7 +745,8 @@ public final class PublicProfileViewModel {
                     BlocksEndpoints.blocked,
                     as: UserBlocksResponse.self
                 )
-                if personal.blocked.contains(where: { $0.userId == id }) {
+                isBlockedByViewer = personal.blocked.contains { $0.userId == id }
+                if isBlockedByViewer {
                     canFollow = false
                     isFollowing = false
                     connection = .blocked
