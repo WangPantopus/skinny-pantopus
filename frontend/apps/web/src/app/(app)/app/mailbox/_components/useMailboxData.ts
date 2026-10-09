@@ -10,6 +10,7 @@ import { toast, toastStore } from '@/components/ui/toast-store';
 import { mailboxKeys } from '@/lib/mailbox-queries';
 import type { MailItem, Summary, MailScope, MailType, AvailableHome } from './mailbox-types';
 import { DELIVERABLE_TYPE_META } from './mailbox-constants';
+import { fetchMe } from '@/lib/me';
 
 // Long enough to reach Undo after a delete; Recently deleted keeps it for 30 days.
 const UNDO_TOAST_MS = 8000;
@@ -119,7 +120,7 @@ export default function useMailboxData() {
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
-        const profile = await api.users.getMyProfile();
+        const profile = await fetchMe();
         setCurrentUserId(profile?.id || '');
       } catch { setCurrentUserId(''); }
     };

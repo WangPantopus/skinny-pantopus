@@ -3,6 +3,7 @@ import { PendingSenderStore, type SenderSnapshot } from './PendingSenderStore';
 import { chosenUsername } from '@pantopus/utils';
 import { validInvitationSession, validSenderInput, validateSenderContext, validSenderOutcome, projectSenderOutcome, senderMessage,
   type SenderInput, type SenderSession, type SenderContext, type SenderDraft, type SenderOutcome } from './senderModel';
+import { fetchMe } from '@/lib/me';
 type Store = Pick<PendingSenderStore, 'load' | 'save' | 'clear'>;
 const base = '/api/homes/invitations/sender';
 const UNKNOWN = 'We couldn’t confirm the result. Your last invitation is kept: check again, try again, or discard this attempt.';
@@ -44,7 +45,7 @@ export class SenderController {
     if (!validInvitationSession(response.data?.session)) throw new Error('Your signed-in session could not be checked.');
     this.session = response.data.session;
     let profile: Awaited<ReturnType<typeof api.users.getMyProfile>> | null = null;
-    try { profile = await api.users.getMyProfile(); }
+    try { profile = await fetchMe(); }
     catch (error) { if ((error as {statusCode?:number})?.statusCode === 401) this.retire(); }
     this.requireCurrent();
     if (profile && profile.id !== this.session.actor_id) throw new Error('Your account changed. Reload to continue.');

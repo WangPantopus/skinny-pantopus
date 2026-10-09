@@ -25,6 +25,7 @@ import PlaceDashboardView from './PlaceDashboardView';
 import PlaceDashboardSkeleton from './PlaceDashboardSkeleton';
 import PlaceShell from './PlaceShell';
 import SetupBanner from '@/components/hub/SetupBanner';
+import { usePrimaryHome } from '@/lib/primaryHome';
 
 const REDIRECT_TO = encodeURIComponent('/app/place');
 
@@ -76,12 +77,7 @@ export default function PlaceDashboard() {
   const setupSteps = hubQuery.data?.setup?.steps ?? [];
 
   // 1) Resolve the resident's primary home (the default place).
-  const homeQuery = useQuery({
-    queryKey: queryKeys.placePrimaryHome(),
-    queryFn: async () => api.homes.getPrimaryHome(),
-    enabled: authed,
-    staleTime: 60_000,
-  });
+  const homeQuery = usePrimaryHome({ enabled: authed });
 
   // 1b) The resident's full list of places — powers the multi-home
   // switcher. Supplementary: it never gates the dashboard, so if it

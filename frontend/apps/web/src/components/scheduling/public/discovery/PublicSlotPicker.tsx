@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import type { BookingSlot, PublicEventType } from "@pantopus/types";
-import { hasActiveSession, publicBooking, users } from "@pantopus/api";
+import { hasActiveSession, publicBooking } from "@pantopus/api";
 import { buildBookingEventPath } from "@pantopus/utils";
 import {
   SlotPicker,
@@ -24,6 +24,7 @@ import {
 } from "@/components/scheduling";
 import WaitlistJoinSheet from "@/components/scheduling/bookings-extras/WaitlistJoinSheet";
 import { durationLabel, locationIcon } from "./discoveryUtils";
+import { fetchMe } from "@/lib/me";
 
 interface PublicSlotPickerProps {
   slug: string;
@@ -57,8 +58,7 @@ export default function PublicSlotPicker({
   useEffect(() => {
     if (!waitlistOpen || viewer || !hasActiveSession()) return;
     let alive = true;
-    users
-      .getMyProfile()
+    fetchMe()
       .then((me) => {
         if (!alive) return;
         setViewer({

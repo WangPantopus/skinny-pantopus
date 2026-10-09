@@ -58,6 +58,8 @@ export const queryKeys = {
   postDetail: (id: string) => ['posts', 'detail', id] as const,
 
   // ── Profiles ──────────────────────────────────────────────
+  /** Your own profile (GET /api/users/profile); read it through lib/me.ts. */
+  me: () => ['me'] as const,
   profile: (username: string) =>
     ['profile', username] as const,
 

@@ -1,8 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import * as api from '@pantopus/api';
-import { queryKeys } from '@/lib/query-keys';
+import { usePrimaryHome } from '@/lib/primaryHome';
 
 // The Map page's placeholder centre ("Camas, WA"). It stays the fallback for a
 // Home without a stored location, so the Map renders exactly as before.
@@ -17,11 +15,7 @@ const FALLBACK_CENTER = { lat: 45.5945, lng: -122.4065 };
  * has no stored coordinates, and these pages need the Home id regardless.
  */
 export default function useMailboxHome() {
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: queryKeys.placePrimaryHome(),
-    queryFn: async () => api.homes.getPrimaryHome(),
-    staleTime: 60_000,
-  });
+  const { data, isLoading, isError, refetch } = usePrimaryHome();
   const home = data?.home ?? null;
   const coordinates = home?.location?.coordinates; // PostGIS order: [lng, lat]
   const place = [home?.city, home?.state].filter(Boolean).join(', ');

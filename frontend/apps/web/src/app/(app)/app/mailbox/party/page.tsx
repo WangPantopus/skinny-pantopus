@@ -4,8 +4,9 @@ import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import * as api from '@pantopus/api';
-import { getAuthToken, getMyProfile } from '@pantopus/api';
+import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import { fetchMe } from '@/lib/me';
 import FamilyMailParty from '@/components/mailbox/FamilyMailParty';
 
 function PartyContent() {
@@ -26,7 +27,7 @@ function PartyContent() {
     setLoading(true);
     Promise.all([
       api.mailboxV2.getMailItem(mailId),
-      getMyProfile(),
+      fetchMe(),
     ])
       .then(([mailResult, profileResult]) => {
         setMail(mailResult.mail);

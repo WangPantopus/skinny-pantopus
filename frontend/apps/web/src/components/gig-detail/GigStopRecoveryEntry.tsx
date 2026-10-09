@@ -5,6 +5,7 @@ import * as api from '@pantopus/api';
 import type { GigStopRequest } from '@pantopus/api';
 import GigStopDialog from './GigStopDialog';
 import { GIG_STOP_RECOVERY_CHANGE, readStopRequest, sameStopRequest, stopId, stopRecoveryKey } from './gigStopRecovery';
+import { fetchMe } from '@/lib/me';
 
 /** Recovery does not depend on a live Gig projection or the current assignment. */
 export default function GigStopRecoveryEntry({ gigId }: { gigId: string }) {
@@ -73,7 +74,7 @@ export default function GigStopRecoveryEntry({ gigId }: { gigId: string }) {
         if (marker === undefined) marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
         if (!token || !stopId(gigId)) return;
         if (!isCurrent()) return;
-        const profile = await api.users.getMyProfile();
+        const profile = await fetchMe();
         if (!isCurrent()) return;
         if (!stopId(profile.id)) { fail(); return; }
         actorId = profile.id;
