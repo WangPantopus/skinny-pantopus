@@ -43,6 +43,27 @@ export function keepHomeDashboardCopy<State>(client: QueryClient, homeId: string
   client.setQueryData(queryKeys.homeDashboard(homeId), copy);
 }
 
+/** Drops the copy and the summary cards kept with it. */
 export function dropHomeDashboardCopy(client: QueryClient, homeId: string): void {
-  client.removeQueries({ queryKey: queryKeys.homeDashboard(homeId), exact: true });
+  client.removeQueries({ queryKey: queryKeys.homeDashboard(homeId) });
+}
+
+// The dashboard's summary cards (health, checklist, property, activity) are kept beside the copy and
+// go with it. Bill trends are never kept (contract §5: bills are sensitive).
+export type HomeSummaryName = 'health' | 'checklist' | 'property' | 'timeline';
+
+/** A summary card as last shown and when it was read, only while the dashboard's copy is kept. */
+export function readHomeSummaryCopy<T>(client: QueryClient, homeId: string, name: HomeSummaryName): { data: T; at: number } | null {
+  if (!readHomeDashboardCopy(client, homeId)) return null;
+  const key = queryKeys.homeSummary(homeId, name);
+  const data = client.getQueryData<T>(key);
+  return data == null ? null : { data, at: client.getQueryState(key)?.dataUpdatedAt ?? 0 };
+}
+
+export function keepHomeSummaryCopy<T>(client: QueryClient, homeId: string, name: HomeSummaryName, data: T): void {
+  client.setQueryData(queryKeys.homeSummary(homeId, name), data);
+}
+
+export function dropHomeSummaryCopy(client: QueryClient, homeId: string, name: HomeSummaryName): void {
+  client.removeQueries({ queryKey: queryKeys.homeSummary(homeId, name), exact: true });
 }

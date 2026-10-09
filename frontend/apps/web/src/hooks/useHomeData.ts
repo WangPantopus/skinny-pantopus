@@ -48,6 +48,8 @@ export interface UseHomeDataReturn extends HomeDataEntities {
   /** The page shows the copy kept from your last visit while access is checked again: the
    * sensitive parts (access codes, emergency info, documents, bills) aren't there yet. */
   fromCopy: boolean;
+  /** The access shown allows keeping a copy (owners and household roles without an end date). */
+  keepsCopy: boolean;
   can: (perm: string) => boolean;
   refresh: () => Promise<void>;
   refreshEntity: (entity: keyof HomeDataEntities) => Promise<void>;
@@ -508,6 +510,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
     summaryCounts: visibleState.summaryCounts,
     entityErrors: visibleState.entityErrors,
     fromCopy: visibleState.fromCopy,
+    keepsCopy: keepsHomeCopy(visibleState.shownAccess),
     can,
     refresh,
     refreshEntity,
