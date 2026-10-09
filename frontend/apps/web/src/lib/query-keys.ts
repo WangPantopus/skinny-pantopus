@@ -74,6 +74,8 @@ export const queryKeys = {
 
   // ── Homes ─────────────────────────────────────────────────
   homeDetail: (id: string) => ['homes', 'detail', id] as const,
+  /** A Home's dashboard as last shown, with the access it was shown with; components/home/homeDashboardCopy.ts. */
+  homeDashboard: (id: string) => ['homes', 'dashboard', id] as const,
 
   // ── Place (address-led home intelligence) ─────────────────
   placePrimaryHome: () => ['place', 'primary-home'] as const,
