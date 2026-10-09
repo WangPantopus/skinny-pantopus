@@ -285,6 +285,12 @@ Vercel → the Pantopus project:
 - Domains: assign `staging.pantopus.com` to the `dev` branch, then change its
   Cloudflare record to Vercel's CNAME (DNS only). The September staging site on
   the server can then be retired.
+- Automatic deployments: `frontend/apps/web/vercel.json` lets only `dev`
+  deploy. The Hobby plan allows 100 deployments in any 24 hours, and a preview
+  of every pull-request push and every merge to `master` (over 100 merges on
+  October 8 alone) used them up, so the `dev` push that releases staging could
+  not deploy. CI builds the production web app for every web change instead
+  (the "Production build" step).
 
 **Check:** `https://staging.pantopus.com` loads, sign-in works, and the browser's
 network panel shows API calls going to `/api/...` on the same origin (Next.js
@@ -557,6 +563,10 @@ Vercel Production environment variables: `NEXT_PUBLIC_API_URL=https://api.pantop
 and, once the new store listings exist, `NEXT_PUBLIC_IOS_APP_STORE_URL`,
 `NEXT_PUBLIC_IOS_APP_STORE_APP_ID` and `NEXT_PUBLIC_ANDROID_PLAY_STORE_URL`
 (today's defaults point at the April apps). Production branch `master`.
+Before this step L4 adds `"master": true` under `git.deploymentEnabled` in
+`frontend/apps/web/vercel.json` (S7); without it `master` never deploys. Keep
+the Vercel account on Pro from here, or production and staging deployments
+share the 100-a-day Hobby limit.
 
 **Check:** `https://pantopus.com` shows the new home page; sign-in works;
 `https://pantopus.com/.well-known/apple-app-site-association` returns JSON;
@@ -580,10 +590,19 @@ app-link files, robots.txt).
 
 ### iOS (TestFlight, then App Store)
 
-- [ ] Founder: turn on the **Sign in with Apple** capability for the App ID
-  `app.pantopus.ios` (before `match` creates the App Store profile), then the
-  App Store Connect app record for `app.pantopus.ios` (name per D2), an App
-  Store Connect API key, a private `match` repository and password.
+- [ ] Founder: in Certificates, Identifiers & Profiles register the App Group
+  `group.app.pantopus.ios` and two App IDs: `app.pantopus.ios` with **Sign in
+  with Apple**, **Push Notifications**, **Associated Domains** (app links and
+  saved passwords) and **App Groups** (that group), and
+  `app.pantopus.ios.widgets` (the home-screen widget, which ships inside the
+  app) with **App Groups** (the same group). Do this before `match` creates the
+  App Store profiles, because a profile only carries the capabilities its App ID
+  had then. Then the App Store Connect app record for `app.pantopus.ios` (name
+  per D2), an App Store Connect API key, a private `match` repository and
+  password. Create both profiles once on the Mac, from `frontend/apps/ios`:
+  `bundle exec fastlane match appstore --app_identifier app.pantopus.ios,app.pantopus.ios.widgets`
+  (CI runs `match` read-only). The release lanes sign both targets with these
+  profiles (`app_store_signing` in the Fastfile).
   Secrets in the GitHub `ios-release` environment: `STRIPE_PUBLISHABLE_KEY`,
   `MATCH_GIT_URL`, `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`,
   `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
@@ -692,6 +711,7 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
 | `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
+| `CENSUS_API_KEY` | required for area facts | required for area facts | free Census key (api.census.gov/data/key_signup.html); the Census API refuses keyless calls, so without it Place's "Homes here", the address preview's area facts and the tract medians are unavailable (checked on staging October 9) |
 | `OPENAI_API_KEY` | required for AI features | required for AI features | OpenAI project with a budget cap |
 | `OPENAI_CHAT_MODEL`, `OPENAI_DRAFT_MODEL` | `gpt-6-luna` | `gpt-6-luna` | the model the streams verify against locally (a reasoning model: code paths pass `max_completion_tokens`, no custom `temperature`) |
 | `PROPERTY_SUGGESTIONS_LLM_MODEL`, `MAGIC_TASK_AI_MODEL` | unset | unset | their defaults (`gpt-4o-mini`, `gpt-4o`) match how those calls are written; a reasoning model there rejects `max_tokens`/`temperature` |

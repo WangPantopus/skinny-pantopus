@@ -249,6 +249,18 @@ targets:
       # cannot import the app module.
       - path: Pantopus/Core/LiveActivity/GigActivityAttributes.swift
       - path: Pantopus/Core/Widgets/GigWidgetSnapshot.swift
+      # "Today at your address": its snapshot, and the living sky the Today
+      # tab draws (the widget draws the same picture, still).
+      - path: Pantopus/Core/Widgets/TodayWidgetSnapshot.swift
+      - path: Pantopus/Core/Networking/Models/Place/WeatherConditionCode.swift
+      - path: Pantopus/Core/Design/SkyPalette.swift
+      - path: Pantopus/Features/Place/Detail/SkyMoment.swift
+      - path: Pantopus/Features/Place/Detail/SkyNote.swift
+      - path: Pantopus/Features/Place/Detail/TodaySkyPainter.swift
+      - path: Pantopus/Features/Place/Detail/TodaySkyGround.swift
+      - path: Pantopus/Features/Place/Detail/TodaySkyMoments.swift
+      - path: Pantopus/Features/Place/Detail/TodaySkyHomes.swift
+      - path: Pantopus/Features/Place/Detail/SkyWind.swift
       # First-launch scope: the "Tasks near me" widget reads the same
       # launch-feature switches as the app (open_gigs).
       - path: Pantopus/Core/Environment/LaunchFeatures.swift

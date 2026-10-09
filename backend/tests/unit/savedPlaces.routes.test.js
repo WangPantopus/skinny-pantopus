@@ -49,7 +49,8 @@ it('upserts once per account and never creates a household, claim, or membership
     expect(today.body.groups[0].sections.find((section) => section.id === 'address_calendar')).toBeUndefined();
     expect(JSON.stringify(today.body)).not.toContain('private-rule');
     expect(JSON.stringify(today.body)).not.toContain('public-rule');
-    expect(today.body.groups[0].sections.find((section) => section.id === 'alerts').status).toBe('unavailable');
+    // A provider that failed is a retryable error, not "not available here".
+    expect(today.body.groups[0].sections.find((section) => section.id === 'alerts').status).toBe('error');
   }
   expect(queries.mock.calls.every(([table]) => table === 'SavedPlace')).toBe(true);
   queries.mockRestore();

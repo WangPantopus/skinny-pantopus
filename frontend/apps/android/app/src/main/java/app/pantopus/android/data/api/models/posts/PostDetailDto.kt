@@ -30,7 +30,7 @@ data class PostCreatorDto(
             if (!name.isNullOrEmpty()) return name
             val combined = listOfNotNull(firstName, lastName).filter { it.isNotEmpty() }.joinToString(" ")
             if (combined.isNotEmpty()) return combined
-            if (!handle.isNullOrBlank()) return "@$handle"
+            MadeUpUsername.handle(handle)?.let { return it }
             MadeUpUsername.handle(username)?.let { return it }
             return "Pantopus user"
         }

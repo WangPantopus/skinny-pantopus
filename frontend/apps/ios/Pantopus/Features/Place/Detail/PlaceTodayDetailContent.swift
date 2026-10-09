@@ -21,6 +21,9 @@ import UserNotifications
 struct PlaceTodayDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    /// Takes the Ballot P0 card's "Open your ballot" to the Place card;
+    /// without it the button is left out.
+    var onOpenBallot: (() -> Void)?
     var showHomeRadon = false
     @Environment(RootTabModel.self) private var rootTabs
     @Environment(\.scenePhase) private var scenePhase
@@ -38,10 +41,16 @@ struct PlaceTodayDetailContent: View {
         return section.status == .unavailable && vm.fallbackCalendar?.needsPickupDay == true
     }
 
-    init(intel: PlaceIntelligence, vm: PlaceDetailViewModel, showHomeRadon: Bool = false) {
+    init(
+        intel: PlaceIntelligence,
+        vm: PlaceDetailViewModel,
+        showHomeRadon: Bool = false,
+        onOpenBallot: (() -> Void)? = nil
+    ) {
         self.intel = intel
         self.vm = vm
         self.showHomeRadon = showHomeRadon
+        self.onOpenBallot = onOpenBallot
     }
 
     /// Order (matches Android): what it is like now, what to do with it,
@@ -132,6 +141,13 @@ struct PlaceTodayDetailContent: View {
         }
     }
 
+    /// The air reading for the sky: smoke veils it, and bad air leads the card.
+    private var skyAir: SkyAir? {
+        guard let section = vm.section(.airQuality, in: intel), section.status == .ready || section.status == .stale,
+              let air = section.airQuality else { return nil }
+        return SkyAir(aqi: air.index, label: air.categoryLabel, smoky: air.dominantPollutant == "pm25")
+    }
+
     /// The address calendar's upcoming dates, live or from the fallback load.
     private var calendarEvents: [PlaceCalendarEvent] {
         if let calendar = vm.section(.addressCalendar, in: intel), let data = calendar.addressCalendar,
@@ -144,18 +160,35 @@ struct PlaceTodayDetailContent: View {
     @ViewBuilder
     private func weatherAndGoodDay(proxy: ScrollViewProxy) -> some View {
         if let weather = vm.section(.weather, in: intel) {
-            PlaceDetailSectionLabel(text: "Weather")
+            HStack(alignment: .bottom, spacing: 8) {
+                PlaceDetailSectionLabel(text: "Weather")
+                if let data = weather.weather, weather.status == .ready || weather.status == .stale, !intel.place.city.isEmpty {
+                    SkyShareLink(card: SkyShareCard(
+                        weather: data,
+                        sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
+                        air: skyAir,
+                        city: intel.place.city,
+                        date: .now
+                    ))
+                    .padding(.trailing, 4)
+                }
+            }
             if let data = weather.weather, weather.status == .ready || weather.status == .stale {
                 TodaySkyHero(
                     data: data,
                     sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
-                    pickups: calendarEvents
+                    pickups: calendarEvents,
+                    air: skyAir,
+                    home: SkyHome(vm.section(.yourHome, in: intel)?.yourHome?.homeType),
+                    streetLights: SkyStreet.lights(vm.section(.blockDensity, in: intel)?.blockDensity?.bucket.rawValue)
                 ) { withAnimation { proxy.scrollTo("todayAddressCalendar", anchor: .top) } }
                 PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
             } else {
                 vm.fallbackCard(weather)
             }
         }
+
+        ballotWeek
 
         // Verdicts, not readings. Silent when there is nothing to
         // answer — an empty verdict row is worse than no row.
@@ -169,6 +202,20 @@ struct PlaceTodayDetailContent: View {
                 name: "Derived from today's conditions",
                 asOf: PlacePresentation.fmtTime(goodDay.asOf)
             )
+        }
+    }
+
+    /// Ballot P0 (ballot_p0): ballot week and "Moved this year?", only when
+    /// the server says either applies. Sits between Weather and the verdict
+    /// row, as it did before master split this view into sections.
+    @ViewBuilder
+    private var ballotWeek: some View {
+        if let election = vm.section(.civicElection, in: intel),
+           election.status == .ready,
+           let card = election.civicElection?.ballotCard,
+           BallotTodayCard.applies(card) {
+            BallotTodayCard(card: card, onOpenBallot: onOpenBallot)
+                .padding(.top, Spacing.s4)
         }
     }
 

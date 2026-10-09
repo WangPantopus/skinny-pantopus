@@ -248,7 +248,8 @@ class MeViewModel
                         .filter { it.isNotEmpty() }
                         .joinToString(" ")
                 }
-            val displayName = name.ifEmpty { "Pantopus user" }
+            // No name yet (the one-time name dialog was skipped): no stand-in; the header offers "Add your name".
+            val displayName = name
             val tagline = profile.tagline?.takeIf { it.isNotEmpty() } ?: profile.bio
             val activityValue = "${stats?.totalGigsCompleted ?: profile.gigsCompleted ?: 0}"
             val residencyVerified = profile.residency?.get("verified") == true
@@ -257,9 +258,9 @@ class MeViewModel
             return MeIdentityContent(
                 identity = MeIdentity.Personal,
                 displayName = displayName,
-                initials = initials(displayName),
-                // A made-up username (user_…) is never shown as the handle.
-                handle = MadeUpUsername.handle(profile.username).orEmpty(),
+                initials = if (displayName.isEmpty()) "" else initials(displayName),
+                // A made-up username (user_…, or the pre-October-7 kind built from the email) is never shown.
+                handle = if (profile.usernameIsGenerated == true) "" else MadeUpUsername.handle(profile.username).orEmpty(),
                 locality = localityOf(profile),
                 tagline = tagline,
                 verified = residencyVerified,

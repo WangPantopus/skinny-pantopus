@@ -269,8 +269,8 @@ describe('GET /api/public/place', () => {
       weatherProvider.fetchWeather.mockRejectedValue(new Error('Weather unavailable'));
       alertsProvider.fetchAlerts.mockResolvedValue({ alerts: [], provider: 'NOAA', source: 'error' });
       const failed = Object.fromEntries((await composeTodayForPoint(45.51, -122.65)).map((section) => [section.id, section]));
-      expect(failed.weather).toMatchObject({ status: 'unavailable', source: 'Source unavailable', data: null });
-      expect(failed.alerts).toMatchObject({ status: 'unavailable', source: 'Source unavailable', data: null });
+      expect(failed.weather).toMatchObject({ status: 'error', source: 'Source unavailable', data: null });
+      expect(failed.alerts).toMatchObject({ status: 'error', source: 'Source unavailable', data: null });
     });
 
     it('never shows a zero on the density card — below the floor it is an invitation', async () => {
@@ -294,7 +294,7 @@ describe('GET /api/public/place', () => {
       expect(byId(res.body).block_density.data.founding_open).toBe(false);
     });
 
-    it('degrades a single slow provider to unavailable within the budget — the rest stay ready', async () => {
+    it('degrades a single slow provider to a retryable error within the budget — the rest stay ready', async () => {
       process.env.PLACE_PREVIEW_SECTION_BUDGET_MS = '40';
       installFetch({ hang: 'imagery.geoplatform.gov' });
       const started = Date.now();
@@ -302,8 +302,7 @@ describe('GET /api/public/place', () => {
       expect(res.status).toBe(200);
       expect(Date.now() - started).toBeLessThan(3000);
       const m = byId(res.body);
-      expect(m.wildfire.status).toBe('unavailable');
-      expect(m.wildfire.unavailable_reason).toMatch(/Still loading/);
+      expect(m.wildfire.status).toBe('error');
       expect(m.seismic.status).toBe('ready');
       expect(m.weather.status).toBe('ready');
     });
@@ -782,4 +781,140 @@ test('the money lead is always whole dollars, even from fractional premiums', as
   // And the headline must not print a stray decimal.
   expect(lead.headline).not.toMatch(/\.\d/);
   expect(lead.headline).toMatch(/\$481–\$1,244 a year/);
+});
+
+// ── Ballot P0 teaser (docs/ballot-implementation-plan-2026-09-24.md §5.3) ──
+// Anonymous, so it follows the flag's global switch only. It uses the
+// coordinates, calls the geocoder live and writes nothing.
+describe('the Ballot P0 teaser', () => {
+  const featureFlagService = require('../services/featureFlagService');
+  const CAMAS = {
+    latitude: 45.5871, longitude: -122.3995, city: 'Camas', state: 'WA', zipcode: '98607', address: '415 NE Everett St',
+  };
+  const WA_GEOGRAPHIES = {
+    result: {
+      geographies: {
+        'Census Tracts': [{ GEOID: '53011040910', STATE: '53', COUNTY: '011', TRACT: '040910' }],
+        States: [{ GEOID: '53', NAME: 'Washington', STATE: '53' }],
+        Counties: [{ GEOID: '53011', NAME: 'Clark County', STATE: '53', COUNTY: '011' }],
+        'Incorporated Places': [{ GEOID: '5310180', NAME: 'Camas city' }],
+        'Unified School Districts': [{ GEOID: '5301410', NAME: 'Camas School District' }],
+        '119th Congressional Districts': [{ NAME: 'Congressional District 3', BASENAME: '3' }],
+      },
+    },
+  };
+  const enableGlobally = () => seedTable('FeatureFlag', [{
+    flag_name: 'ballot_p0', enabled_globally: true, enabled_for_internal_team: false, beta_user_ids: [],
+  }]);
+
+  beforeEach(() => {
+    featureFlagService.invalidateFlagCache();
+    jest.useFakeTimers({ now: new Date('2026-09-24T19:00:00.000Z'), advanceTimers: true });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('is absent while the flag is off', async () => {
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('ballot_teaser');
+  });
+
+  it('Washington: a minimum count, the next deadline and an official source, with no new cache row', async () => {
+    enableGlobally();
+    geo.forwardGeocode.mockResolvedValue({ ...CAMAS });
+    const base = global.fetch;
+    global.fetch = jest.fn((url) => (String(url).includes('geocoding.geo.census.gov')
+      ? Promise.resolve(mockResp(WA_GEOGRAPHIES))
+      : base(url)));
+
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '415 NE Everett St, Camas' });
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body.ballot_teaser).toMatchObject({
+      coverage: 'supported',
+      state: 'WA',
+      headline: 'Your address sits inside at least 5 governments.',
+      next_deadline: { key: 'register_online_mail', lead: 'Register or update by Oct 26.', days_left: 32, detail: 'In person through Election Day.' },
+      primary_action: { kind: 'governments', label: 'See your governments' },
+      source_line: 'Dates: Washington Secretary of State · Boundaries: Census Bureau',
+    });
+    expect(res.body.ballot_teaser.governments.items.map((g) => g.name)).toEqual([
+      'United States', 'The state', 'Clark County', 'Camas School District', 'City of Camas',
+    ]);
+    // The teaser's lookup is live: no home-keyed row and nothing that
+    // carries the typed address.
+    for (const row of getTable('PlaceSectionCache')) {
+      expect(row.section_id).not.toBe('_ballot_governments');
+      expect(row.cache_key).not.toContain('home:');
+      expect(row.cache_key.toLowerCase()).not.toContain('everett');
+    }
+  });
+
+  it('keeps the answer for the same point in memory only, with the time it was made', async () => {
+    enableGlobally();
+    geo.forwardGeocode.mockResolvedValue({ ...CAMAS, latitude: 45.6301, longitude: -122.4301 });
+    const base = global.fetch;
+    global.fetch = jest.fn((url) => (String(url).includes('geocoding.geo.census.gov')
+      ? Promise.resolve(mockResp(WA_GEOGRAPHIES))
+      : base(url)));
+    const ask = () => request(buildApp()).get('/api/public/place').query({ address: '17 NE Cache Way, Camas' });
+    const boundaryLookups = () => global.fetch.mock.calls.filter(([url]) => String(url).includes('layers=all')).length;
+
+    const first = await ask();
+    expect(first.body.ballot_teaser.looked_up_at).toEqual(expect.any(String));
+    const before = boundaryLookups();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const second = await ask();
+    // No second trip to the geocoder, and the card does not look fresher than it is.
+    expect(boundaryLookups()).toBe(before);
+    expect(second.body.ballot_teaser.looked_up_at).toBe(first.body.ballot_teaser.looked_up_at);
+    expect(second.body.ballot_teaser.governments.count).toBe(5);
+    for (const row of getTable('PlaceSectionCache')) expect(row.section_id).not.toBe('_ballot_governments');
+  });
+
+  it('ends its boundary lookup with the preview budget instead of leaving it running', async () => {
+    enableGlobally();
+    const savedBudget = process.env.PLACE_PREVIEW_SECTION_BUDGET_MS;
+    process.env.PLACE_PREVIEW_SECTION_BUDGET_MS = '60';
+    geo.forwardGeocode.mockResolvedValue({ ...CAMAS, latitude: 45.6501, longitude: -122.4501 });
+    const base = global.fetch;
+    const signals = [];
+    global.fetch = jest.fn((url, init) => {
+      if (!String(url).includes('layers=all')) return base(url, init);
+      signals.push(init.signal);
+      // Never answers; ends on abort, or on its own after 300 ms so nothing lingers.
+      return new Promise((resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        setTimeout(() => reject(new Error('gave up')), 300);
+      });
+    });
+    try {
+      const res = await request(buildApp()).get('/api/public/place').query({ address: '9 NE Budget Way, Camas' });
+      expect(res.status).toBe(200);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(signals.length).toBeGreaterThan(0);
+      expect(signals.some((signal) => signal.aborted)).toBe(true);
+    } finally {
+      if (savedBudget === undefined) delete process.env.PLACE_PREVIEW_SECTION_BUDGET_MS;
+      else process.env.PLACE_PREVIEW_SECTION_BUDGET_MS = savedBudget;
+    }
+  });
+
+  it('outside the pilot: the election date and Vote.gov, never a count', async () => {
+    enableGlobally();
+    geo.forwardGeocode.mockResolvedValue({
+      latitude: 30.2672, longitude: -97.7431, city: 'Austin', state: 'TX', zipcode: '78701', address: '100 Congress Ave',
+    });
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '100 Congress Ave, Austin' });
+    expect(res.body.ballot_teaser).toMatchObject({
+      coverage: 'links_only',
+      state: 'TX',
+      headline: 'The general election is November 3.',
+      governments: null,
+      next_deadline: null,
+      primary_action: { kind: 'link', label: 'Check your registration', url: 'https://vote.gov/' },
+    });
+  });
 });

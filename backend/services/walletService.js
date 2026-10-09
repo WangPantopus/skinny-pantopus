@@ -190,6 +190,29 @@ async function findWithdrawalByKey(idempotencyKey) {
   return data;
 }
 
+const money = (cents) => `$${(cents / 100).toFixed(2)}`;
+
+/**
+ * Tells the person that money in their wallet went toward what they still owed for a payment refunded or taken back
+ * by the payer's bank after it reached the wallet.
+ */
+async function notifyDebtCollected(userId, { collected, remaining }) {
+  const { createNotification } = require('./notificationService');
+  await createNotification({
+    userId,
+    type: 'dispute_resolved',
+    title: remaining > 0 ? `${money(collected)} went toward what you owe` : 'What you owed is paid off',
+    body: remaining > 0
+      ? `${money(collected)} from your wallet went toward a payment that was refunded or disputed after it reached you. `
+        + `${money(remaining)} is still owed and comes out of your next earnings; withdrawals wait until then.`
+      : `${money(collected)} from your wallet paid off what you owed for a payment that was refunded or disputed after `
+        + 'it reached you. You can withdraw again.',
+    icon: '📋',
+    link: '/app/wallet',
+    metadata: { collected_cents: collected, remaining_cents: remaining },
+  });
+}
+
 class WalletService {
 
   // ============ WALLET LIFECYCLE ============
@@ -293,6 +316,55 @@ class WalletService {
     return { disputed, held };
   }
 
+  // ============ WHAT IS OWED (refunded or disputed income) ============
+
+  /**
+   * Pays what this user still owes for payments refunded, or lost to a dispute, after the income reached their
+   * wallet (PaymentRefundRecovery debts), from the wallet's balance, oldest first. While anything is owed, nothing is
+   * withdrawable (founder decision 2026-10-09). The person hears when money went to it, unless the caller says so itself.
+   * @returns {Promise<{collected: number, remaining: number, cleared: number}>} cents
+   */
+  async collectDebts(userId, { notify = true } = {}) {
+    const { data, error } = await supabaseAdmin.rpc('collect_wallet_refund_debts', { p_user_id: userId });
+    if (error || !data || data.error) {
+      logger.error('Wallet debt collection failed', { userId, error: error?.message || data?.error });
+      throw new Error('Failed to settle what is owed');
+    }
+    const result = {
+      collected: Number(data.collected) || 0,
+      remaining: Number(data.remaining) || 0,
+      cleared: Number(data.cleared) || 0,
+    };
+    if (result.collected > 0) {
+      logger.info('Wallet debt collected', { userId, ...result });
+      if (notify) {
+        notifyDebtCollected(userId, result).catch((err) => {
+          logger.warn('Debt collection notice skipped', { userId, error: err.message });
+        });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * What this user still owes for payments refunded, or lost to a dispute, after the income reached their wallet.
+   * It comes out of their next income first, so it is not withdrawable. Read-only: collectDebts takes it.
+   * @returns {Promise<number>} cents
+   */
+  async getOpenDebt(userId) {
+    const { data, error } = await supabaseAdmin
+      .from('PaymentRefundRecovery')
+      .select('debt_amount, Payment!inner(payee_id)')
+      .eq('kind', 'wallet')
+      .gt('debt_amount', 0)
+      .eq('Payment.payee_id', userId);
+    if (error) {
+      logger.error('Failed to read what is owed', { userId, error: error.message });
+      throw new Error('Failed to check what is owed');
+    }
+    return (data || []).reduce((sum, row) => sum + Number(row.debt_amount || 0), 0);
+  }
+
   // ============ WITHDRAWALS (Earned funds → Bank) ============
 
   /**
@@ -341,6 +413,15 @@ class WalletService {
     // column is null), so a repeated key would hit the unique key and fail. Look the row up first.
     const earlier = await findWithdrawalByKey(idempotencyKey);
     if (earlier) return settleRepeatedWithdrawal(earlier, { userId, amount, stripe, stripeAccount, idempotencyKey });
+
+    // What is still owed for refunded or disputed income is paid from the balance first; while any is owed, nothing
+    // can be withdrawn.
+    const debt = await this.collectDebts(userId);
+    if (debt.remaining > 0) {
+      throw Object.assign(new Error('Withdrawals wait until what is owed is paid'), {
+        code: 'DEBT_OPEN', owedCents: debt.remaining,
+      });
+    }
 
     // Money the payer's bank is disputing stays in the wallet until the dispute is settled.
     const hold = await this.getDisputeHold(userId);

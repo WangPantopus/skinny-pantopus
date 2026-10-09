@@ -18,8 +18,9 @@ import kotlin.math.sin
 
 /*
  * The sky's rarer pictures, each drawn only when it's true: shooting stars on a
- * meteor shower's peak night, and frost creeping in from the card's corners when
- * it's freezing. Parity twin of iOS `TodaySkyMoments.swift`; the numbers match.
+ * meteor shower's peak night, frost creeping in from the card's corners when
+ * it's freezing, and a veil of wildfire smoke. Parity twin of iOS
+ * `TodaySkyMoments.swift`; the numbers match.
  */
 
 /** One shooting star every few seconds across the upper right of the sky; with motion off, a single faint streak holds still. */
@@ -50,6 +51,23 @@ internal fun DrawScope.paintMeteors(
         cap = StrokeCap.Round,
     )
     drawCircle(SkyPalette.white.copy(alpha = fade), 1.6f, head)
+}
+
+/** Wildfire smoke: a veil over the whole sky, thickest toward the horizon. */
+internal fun DrawScope.paintSmoke(
+    scene: SkyScene,
+    smoke: Double,
+    night: Boolean,
+) {
+    val haze = if (night) SkyPalette.smokeHazeNight else SkyPalette.smokeHaze
+    drawRect(
+        Brush.verticalGradient(
+            listOf(haze.copy(alpha = (smoke * 0.45).toFloat()), haze.copy(alpha = (smoke * 0.85).toFloat())),
+            startY = 0f,
+            endY = scene.horizon + 10f,
+        ),
+        size = Size(scene.width, scene.height),
+    )
 }
 
 /** Frost from three corners (never the top left, where the reading sits): a pale haze and a few crystals with side shoots. */

@@ -42,10 +42,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -75,7 +77,21 @@ object SkyScrub {
             }.sortedBy { it.time }
             .take(24)
 
-    /** The reading for that hour: its temperature and sky, and that day's high and low. */
+    /** How hard it rains then, 0..1: the nearest forecast hour's chance of rain. */
+    fun rain(
+        hourly: List<PlaceWeatherHour>,
+        at: ZonedDateTime,
+    ): Double {
+        val nearest =
+            hourly
+                .mapNotNull { hour ->
+                    runCatching { Instant.parse(hour.time) }.getOrNull()?.let { abs(Duration.between(it, at.toInstant()).seconds) to hour }
+                }.minByOrNull { it.first }
+                ?.second
+        return (nearest?.precipChance ?: 50.0) / 100
+    }
+
+    /** The reading for that hour: its temperature, sky and wind (blowing from where it blows now), and that day's high and low. */
     fun weather(
         data: PlaceWeatherData,
         picked: SkyScrubHour,
@@ -88,6 +104,7 @@ object SkyScrub {
             feelsLikeF = null,
             highF = day?.highF ?: data.highF,
             lowF = day?.lowF ?: data.lowF,
+            windMph = picked.hour.windMph,
             hourly = emptyList(),
         )
     }
@@ -117,6 +134,12 @@ object SkyScrub {
             "${if (snowy(picked)) "Snow" else "Rain"} ${picked.hour.precipChance.roundToInt()}%"
         }
 
+    /**
+     * The hour's chip beside the high and low, as shown and as spoken: its chance of rain, otherwise
+     * its wind from 15 mph. One chip, so the row keeps its height while sliding.
+     */
+    fun chip(picked: SkyScrubHour): Pair<String, String>? = precipChip(picked)?.let { it to it } ?: SkyWind.chip(picked.hour.windMph)
+
     private fun time(
         picked: SkyScrubHour,
         now: ZonedDateTime,
@@ -133,7 +156,7 @@ object SkyScrub {
         now: ZonedDateTime,
     ): String = time(picked, now).uppercase()
 
-    /** "3 PM: 68°, Partly cloudy, 40% chance of rain." */
+    /** "3 PM: 68°, Partly cloudy, 40% chance of rain, wind 22 miles per hour." */
     fun spoken(
         picked: SkyScrubHour,
         now: ZonedDateTime,
@@ -143,6 +166,7 @@ object SkyScrub {
         if (picked.hour.precipChance >= 10) {
             parts += "${picked.hour.precipChance.roundToInt()}% chance of ${if (snowy(picked)) "snow" else "rain"}"
         }
+        SkyWind.chip(picked.hour.windMph)?.let { parts += it.second }
         return parts.joinToString(", ") + "."
     }
 }

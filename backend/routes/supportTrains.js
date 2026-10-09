@@ -26,6 +26,12 @@ const stripeService = require('../stripe/stripeService');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+
+/** A row with a joined `User`, minus a made-up username (`user_…`, or the older kind built from the email). */
+function withChosenUsername(row) {
+  if (!row?.User) return row;
+  return { ...row, User: { ...row.User, username: chosenUsernameOrNull(row.User.username) } };
+}
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 const { applyLocationPrecision } = require('../utils/locationPrivacy');
 const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
@@ -1371,7 +1377,7 @@ router.get(
       user: o.User
         ? {
             id: o.User.id,
-            username: o.User.username,
+            username: chosenUsernameOrNull(o.User.username),
             name: o.User.name,
             profile_picture_url: o.User.profile_picture_url,
           }
@@ -1969,7 +1975,7 @@ router.get(
       author: u.User
         ? {
             id: u.User.id,
-            username: u.User.username,
+            username: chosenUsernameOrNull(u.User.username),
             name: u.User.name,
             profile_picture_url: u.User.profile_picture_url,
           }
@@ -2374,7 +2380,7 @@ router.get(
         item.contributor = c.User
           ? {
               id: c.User.id,
-              username: c.User.username,
+              username: chosenUsernameOrNull(c.User.username),
               name: c.User.name,
               profile_picture_url: c.User.profile_picture_url,
             }
@@ -2457,7 +2463,7 @@ router.get(
       return res.status(500).json({ error: 'INTERNAL', message: 'Failed to list invites.' });
     }
 
-    res.json({ invites: data || [] });
+    res.json({ invites: (data || []).map(withChosenUsername) });
   })
 );
 
@@ -3633,7 +3639,7 @@ router.patch(
         : value === reservation[key]
     );
     // A lost reply may be retried with the original version. Never write it twice.
-    if (unchanged) return res.json({ ...reservation, slot_date: reservation.Slot?.slot_date || null });
+    if (unchanged) return res.json({ ...withChosenUsername(reservation), slot_date: reservation.Slot?.slot_date || null });
     const { data: updated, error: writeError } = await supabaseAdmin
       .from('SupportTrainReservation')
       .update(patch)
@@ -3649,7 +3655,7 @@ router.patch(
     if (!updated) {
       return res.status(409).json({ error: 'CONFLICT', message: 'This signup changed. Pull down to refresh the signup list, then edit again.' });
     }
-    res.json({ ...updated, slot_date: updated.Slot?.slot_date || null });
+    res.json({ ...withChosenUsername(updated), slot_date: updated.Slot?.slot_date || null });
   })
 );
 
@@ -3956,7 +3962,7 @@ router.get(
         user: r.User
           ? {
               id: r.User.id,
-              username: r.User.username,
+              username: chosenUsernameOrNull(r.User.username),
               name: r.User.name,
               profile_picture_url: r.User.profile_picture_url,
             }
@@ -4156,7 +4162,7 @@ router.get(
       user: o.User
         ? {
             id: o.User.id,
-            username: o.User.username,
+            username: chosenUsernameOrNull(o.User.username),
             name: o.User.name,
             profile_picture_url: o.User.profile_picture_url,
           }
@@ -4184,7 +4190,7 @@ router.get(
           role: 'primary',
           user: {
             id: organizerUser.id,
-            username: organizerUser.username,
+            username: chosenUsernameOrNull(organizerUser.username),
             name: organizerUser.name,
             profile_picture_url: organizerUser.profile_picture_url,
           },

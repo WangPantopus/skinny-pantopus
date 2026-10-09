@@ -16,6 +16,8 @@ interface TeamTabProps {
 export default function TeamTab({ businessId, access, onUpdate }: TeamTabProps) {
   const [seats, setSeats] = useState<SeatListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed read is not "No seats yet": a role without team access gets a 403.
+  const [loadFailure, setLoadFailure] = useState<'forbidden' | 'failed' | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [editingSeat, setEditingSeat] = useState<SeatListItem | null>(null);
 
@@ -25,9 +27,9 @@ export default function TeamTab({ businessId, access, onUpdate }: TeamTabProps) 
     try {
       const res = await api.businessSeats.getBusinessSeats(businessId);
       setSeats(res.seats || []);
+      setLoadFailure(null);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to load seats';
-      toast.error(msg);
+      setLoadFailure((e as { statusCode?: number } | null)?.statusCode === 403 ? 'forbidden' : 'failed');
     } finally {
       setLoading(false);
     }
@@ -104,13 +106,34 @@ export default function TeamTab({ businessId, access, onUpdate }: TeamTabProps) 
         <div className="rounded-xl border border-app bg-surface p-8 text-center">
           <div className="text-app-secondary text-sm">Loading seats…</div>
         </div>
+      ) : loadFailure ? (
+        <div className="rounded-xl border border-app bg-surface p-10 text-center">
+          <p className="text-sm font-medium text-app mb-1">
+            {loadFailure === 'forbidden' ? "Your role can't see the team" : "Couldn't load the team"}
+          </p>
+          {loadFailure === 'forbidden' ? (
+            <p className="text-xs text-app-secondary">The business owner can change your role.</p>
+          ) : (
+            <button
+              onClick={() => {
+                setLoading(true);
+                void fetchSeats();
+              }}
+              className="text-sm text-violet-600 hover:underline"
+            >
+              Try again
+            </button>
+          )}
+        </div>
       ) : seats.length === 0 ? (
         <div className="rounded-xl border border-app bg-surface p-10 text-center">
           <div className="w-12 h-12 rounded-xl bg-surface-muted flex items-center justify-center mx-auto mb-3">
             <Users className="w-6 h-6 text-app-secondary" />
           </div>
           <p className="text-sm font-medium text-app mb-1">No seats yet</p>
-          <p className="text-xs text-app-secondary mb-4">Create a seat and invite someone to join.</p>
+          <p className="text-xs text-app-secondary mb-4">
+            {canManage ? 'Create a seat and invite someone to join.' : 'Nobody else has a seat yet.'}
+          </p>
           {canManage && (
             <button
               onClick={() => setShowInvite(true)}

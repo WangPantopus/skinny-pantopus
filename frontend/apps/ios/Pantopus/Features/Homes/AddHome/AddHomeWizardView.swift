@@ -95,6 +95,7 @@ public struct AddHomeWizardView: View {
         }
         .onAppear {
             restoreIfNeeded()
+            viewModel.applyInitialSearchQuery()
             Task { await viewModel.resumeCreation() }
             // Fire the initial step view event since transitions only
             // fire on user-driven step changes after this point.

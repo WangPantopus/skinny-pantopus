@@ -18,7 +18,6 @@ export default function SettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
   // Settings state
@@ -70,25 +69,29 @@ export default function SettingsPage() {
     loadSettings();
   }, [loadSettings]);
 
-  const handleSaveSettings = async () => {
-    if (saving || !user) return;
-    setSaving(true);
-    try {
-      const settings = {
-        email_notifications: emailNotifications,
-        push_notifications: pushNotifications,
-        profile_visibility: profileVisibility,
-        show_email: showEmail,
-        show_phone: showPhone,
-      };
-
-      await api.users.updateProfile(settings as Record<string, unknown>);
-      toast.success('Settings saved successfully');
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save settings');
-    } finally {
-      setSaving(false);
-    }
+  // Each switch and the visibility menu saves when it changes; a bottom "Save Settings" button
+  // lost every change made without it. Saves run one after another, so an older "on" can't land
+  // after a newer "off" (as on Notification Preferences), and only the newest save of a setting
+  // may undo the screen.
+  const saveSeq = useRef<Record<string, number>>({});
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const saveSetting = (
+    field: 'email_notifications' | 'push_notifications' | 'profile_visibility' | 'show_email' | 'show_phone',
+    value: boolean | string,
+    revert: () => void,
+  ) => {
+    const seq = (saveSeq.current[field] ?? 0) + 1;
+    saveSeq.current[field] = seq;
+    saveQueue.current = saveQueue.current.then(async () => {
+      try {
+        await api.users.updateProfile({ [field]: value } as Record<string, unknown>);
+        if (saveSeq.current[field] === seq) toast.success('Saved');
+      } catch (err: unknown) {
+        if (saveSeq.current[field] !== seq) return;
+        revert();
+        toast.error(err instanceof Error ? err.message : "Couldn't save that setting");
+      }
+    });
   };
 
   const handleLogout = async () => {
@@ -206,13 +209,21 @@ export default function SettingsPage() {
                 label="Email Notifications"
                 description="Receive email updates, like your monthly summary"
                 checked={emailNotifications}
-                onChange={setEmailNotifications}
+                onChange={(value) => {
+                  const previous = emailNotifications;
+                  setEmailNotifications(value);
+                  saveSetting('email_notifications', value, () => setEmailNotifications(previous));
+                }}
               />
               <ToggleSetting
                 label="Push Notifications"
                 description="Receive push notifications on your device"
                 checked={pushNotifications}
-                onChange={setPushNotifications}
+                onChange={(value) => {
+                  const previous = pushNotifications;
+                  setPushNotifications(value);
+                  saveSetting('push_notifications', value, () => setPushNotifications(previous));
+                }}
               />
               <button
                 onClick={() => router.push('/app/settings/notifications')}
@@ -243,7 +254,12 @@ export default function SettingsPage() {
                 <select
                   id="settings-profile-visibility"
                   value={profileVisibility}
-                  onChange={(e) => setProfileVisibility(e.target.value)}
+                  onChange={(e) => {
+                    const previous = profileVisibility;
+                    const value = e.target.value;
+                    setProfileVisibility(value);
+                    saveSetting('profile_visibility', value, () => setProfileVisibility(previous));
+                  }}
                   className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="public">Public - Anyone can view</option>
@@ -255,13 +271,21 @@ export default function SettingsPage() {
                 label="Show Email on Profile"
                 description="Display your email address on your public profile"
                 checked={showEmail}
-                onChange={setShowEmail}
+                onChange={(value) => {
+                  const previous = showEmail;
+                  setShowEmail(value);
+                  saveSetting('show_email', value, () => setShowEmail(previous));
+                }}
               />
               <ToggleSetting
                 label="Show Phone Number"
                 description="Display your phone number on your public profile"
                 checked={showPhone}
-                onChange={setShowPhone}
+                onChange={(value) => {
+                  const previous = showPhone;
+                  setShowPhone(value);
+                  saveSetting('show_phone', value, () => setShowPhone(previous));
+                }}
               />
               <button
                 onClick={() => router.push('/app/profile/settings/privacy')}
@@ -403,15 +427,6 @@ export default function SettingsPage() {
               </a>
             </div>
           </div>
-
-          {/* Save Button */}
-          <button
-            onClick={handleSaveSettings}
-            disabled={saving}
-            className="w-full bg-primary-600 text-white py-3 rounded-lg hover:bg-primary-700 font-semibold disabled:opacity-50 transition"
-          >
-            {saving ? 'Saving…' : 'Save Settings'}
-          </button>
 
           {/* Danger Zone */}
           <div className="bg-red-50 rounded-xl border border-red-200 p-6">

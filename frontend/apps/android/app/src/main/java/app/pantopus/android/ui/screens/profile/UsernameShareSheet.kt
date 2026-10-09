@@ -20,7 +20,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.users.ProfileUpdateRequest
 import app.pantopus.android.data.api.net.NetworkResult
@@ -72,11 +71,11 @@ class UsernameShareViewModel
         private val _form = MutableStateFlow<UsernameShareForm?>(null)
         val form: StateFlow<UsernameShareForm?> = _form.asStateFlow()
 
-        /** True when [userId]'s link still uses a made-up [username] and this device hasn't asked yet. */
+        /** True when [userId]'s link still uses a made-up username and this device hasn't asked yet. */
         fun shouldAsk(
             userId: String,
-            username: String,
-        ): Boolean = MadeUpUsername.isMadeUp(username) && !prefs.getBoolean(askedKey(userId), false)
+            usernameIsMadeUp: Boolean,
+        ): Boolean = usernameIsMadeUp && !prefs.getBoolean(askedKey(userId), false)
 
         fun open(
             userId: String,

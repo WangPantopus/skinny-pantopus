@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.owners.transfer
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.HomeDetail
 import app.pantopus.android.data.api.models.homes.OwnerDto
 import app.pantopus.android.data.api.models.homes.TransferOwnerRequest
@@ -409,7 +410,7 @@ class TransferOwnershipViewModel
 
         private fun displayName(owner: OwnerDto): String {
             owner.user?.name?.takeIf { it.isNotBlank() }?.let { return it }
-            owner.user?.username?.takeIf { it.isNotBlank() }?.let { return "@$it" }
+            MadeUpUsername.handle(owner.user?.username)?.let { return it }
             return "Owner · ${owner.subjectId.takeLast(4)}"
         }
 

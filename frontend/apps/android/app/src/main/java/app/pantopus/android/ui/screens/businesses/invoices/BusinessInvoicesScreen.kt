@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.businesses.InvoiceRecipientDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.OfflineBannerHost
@@ -612,7 +613,9 @@ private fun RecipientPicker(
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                     )
-                    Text(text = "@${recipient.username}", color = PantopusColors.appTextSecondary, fontSize = 11.5.sp, maxLines = 1)
+                    MadeUpUsername.handle(recipient.username)?.let { handle ->
+                        Text(text = handle, color = PantopusColors.appTextSecondary, fontSize = 11.5.sp, maxLines = 1)
+                    }
                 }
                 Box(
                     modifier =
@@ -685,7 +688,9 @@ private fun RecipientPicker(
                                 maxLines = 1,
                             )
                             Text(
-                                text = "@${person.username} · ${relationLabel(person.relation)}",
+                                text =
+                                    listOfNotNull(MadeUpUsername.handle(person.username), relationLabel(person.relation))
+                                        .joinToString(" · "),
                                 color = PantopusColors.appTextSecondary,
                                 fontSize = 11.5.sp,
                                 maxLines = 1,

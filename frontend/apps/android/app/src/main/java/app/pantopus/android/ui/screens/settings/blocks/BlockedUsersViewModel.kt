@@ -386,7 +386,7 @@ class BlockedUsersViewModel
             return RowModel(
                 id = mutedRowId(entityId),
                 title = mute.name,
-                subtitle = mute.username?.let { "@$it" },
+                subtitle = MadeUpUsername.handle(mute.username),
                 template = RowTemplate.AvatarKebab,
                 leading =
                     RowLeading.AvatarWithBadge(

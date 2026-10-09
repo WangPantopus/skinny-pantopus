@@ -189,7 +189,10 @@ final class MarketplaceViewModelTests: XCTestCase {
         ]
         let vm = MarketplaceViewModel(api: makeAPI(), location: location)
         let initialLoad = Task { await vm.load() }
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        // The slow response must go to the initial load: wait until its request is in flight
+        // instead of sleeping 100 ms, which a busy CI simulator outran (the chip's fetch then
+        // took the slow 3-row response).
+        await waitFor { !SequencedURLProtocol.capturedRequests.isEmpty }
         await vm.selectCategory(.free)
         await initialLoad.value
         XCTAssertEqual(vm.activeCategory, .free)
@@ -199,6 +202,14 @@ final class MarketplaceViewModelTests: XCTestCase {
         }
         XCTAssertEqual(rows.count, 1, "Stale 3-row initial response must not win.")
         XCTAssertTrue(rows.first?.isFree ?? false)
+    }
+
+    /// Polls up to 3 s for `condition` (the request a test is waiting on), instead of a fixed sleep.
+    private func waitFor(_ condition: () -> Bool) async {
+        for _ in 0..<300 {
+            if condition() { return }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
     }
 
     // MARK: - Pagination

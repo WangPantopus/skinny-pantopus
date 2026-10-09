@@ -1391,18 +1391,27 @@ async function redeemResumeGrant({ grant, device, dpop, req }) {
   if (!authUser) return invalid;
   if (authUser.banned_until && new Date(authUser.banned_until).getTime() > Date.now()) return invalid;
 
-  // Single-use: whoever flips used_at wins.
-  const consumed = await authSessionService.consumeResumeGrant(row.id);
-  if (!consumed) return invalid;
-
+  // The session is minted before the grant is spent: when Supabase Auth is busy (its verify limit is
+  // shared app-wide on hosted) or down, the grant stays for the device's next try.
   let minted;
   try {
     minted = await authSessionService.mintSessionForUser({ userId, email: authUser.email });
   } catch (err) {
-    logger.error('auth.resume.mint_failed', { userId, error: err.message });
+    logger.error('auth.resume.mint_failed', { userId, error: err.message, busy: Boolean(err.authBusy) });
+    if (err.authBusy) {
+      return { ok: false, status: 503, code: 'RESUME_UNAVAILABLE', error: 'Sign-in is busy right now. Please try again in a minute.' };
+    }
+    await authSessionService.consumeResumeGrant(row.id);
     return { ok: false, status: 503, code: 'RESUME_UNAVAILABLE', error: 'Could not restore your session. Please sign in again.' };
   }
   const supabaseSession = minted.session;
+
+  // Single-use: whoever flips used_at wins; a losing request signs out the session it minted.
+  const consumed = await authSessionService.consumeResumeGrant(row.id);
+  if (!consumed) {
+    await authSessionService.signOutSupabase(supabaseSession.access_token, 'local', { source: 'resume_grant_spent' });
+    return invalid;
+  }
 
   const previousDevice = row.device_id ? await getDevice(row.device_id) : null;
   const upserted = await upsertDeviceForKey({

@@ -1135,22 +1135,29 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
 
     // Mail has no delivered_at/read columns (created_at and viewed are the
     // delivery time and read state); a failed read must not become "no mail".
+    // New means what the drawer badges count: unread and still in Incoming
+    // (not archived, filed or dismissed), here limited to today.
     const { data: newMail, error: newErr } = await supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('recipient_user_id', userId)
       .is('deleted_at', null)
+      .eq('viewed', false)
+      .eq('archived', false)
+      .in('lifecycle', ['delivered', 'opened'])
       .gte('created_at', todayStart.toISOString())
       .order('created_at', { ascending: false });
     if (newErr) throw newErr;
 
-    // Get needs attention (unread, overdue, certified)
+    // Get needs attention (unread, overdue, certified), from what is still in Incoming
     const { data: attention, error: attentionErr } = await supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('recipient_user_id', userId)
       .is('deleted_at', null)
       .eq('viewed', false)
+      .eq('archived', false)
+      .in('lifecycle', ['delivered', 'opened'])
       .in('category', ['certified', 'government', 'bill', 'legal'])
       .order('created_at', { ascending: false })
       .limit(5);

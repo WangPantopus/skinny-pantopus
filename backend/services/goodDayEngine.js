@@ -147,7 +147,7 @@ function rangeOf(windowHours, pick) {
 
 // ── Tiles ───────────────────────────────────────────────────
 
-function openWindowsTile({ aqi, hours, timezone }) {
+function openWindowsTile({ aqi, hours, timezone, now }) {
   if (!aqi || !isNum(aqi.index)) return null;
   const index = aqi.index;
 
@@ -183,6 +183,26 @@ function openWindowsTile({ aqi, hours, timezone }) {
   const tempPhrase = temps
     ? (temps.lo === temps.hi ? `${temps.lo}°F` : `${temps.lo}–${temps.hi}°F`)
     : null;
+  const air = `AQI ${index}${aqi.category_label ? ` (${aqi.category_label.toLowerCase()})` : ''}${tempPhrase ? ` and ${tempPhrase}` : ''}`;
+
+  // Open now only when the window starts with the next hour. In the evening the
+  // longest window is often tomorrow's; "Yes — until 5pm" at 6pm reads as "open
+  // them now", so name its start and day instead, as the Run tile does.
+  if (window.from !== hours[0]) {
+    const from = hourLabel(window.from.time, timezone);
+    const todayDate = now ? localHourAndDate(now.toISOString(), timezone)?.date : null;
+    const startDay = localHourAndDate(window.from.time, timezone);
+    const day = startDay && todayDate && startDay.date !== todayDate ? 'Tomorrow ' : '';
+    const span = from && until && from !== until ? `${from}–${until}` : (from || until);
+    return {
+      id: 'open_windows',
+      label: 'Open windows',
+      glyph: '🪟',
+      verdict: moderate ? 'caution' : 'yes',
+      answer: day ? `${day}${span}` : `From ${from || span}`,
+      because: `${air} ${day ? 'tomorrow ' : ''}from ${from || span}${until && until !== from ? ` to ${until}` : ''}.`,
+    };
+  }
 
   return {
     id: 'open_windows',
@@ -190,7 +210,7 @@ function openWindowsTile({ aqi, hours, timezone }) {
     glyph: '🪟',
     verdict: moderate ? 'caution' : 'yes',
     answer: until ? `Yes — until ${until}` : 'Yes',
-    because: `AQI ${index}${aqi.category_label ? ` (${aqi.category_label.toLowerCase()})` : ''}${tempPhrase ? ` and ${tempPhrase}` : ''}${until ? ` through ${until}` : ''}.`,
+    because: `${air}${until ? ` through ${until}` : ''}.`,
   };
 }
 
@@ -360,7 +380,7 @@ function buildGoodDayTiles({ weather, aqi, timezone, homeType, now = new Date() 
   const todayStr = days[0] ? days[0].date : null;
 
   const tiles = [
-    openWindowsTile({ aqi, hours, timezone }),
+    openWindowsTile({ aqi, hours, timezone, now }),
     runTile({ hours, timezone, now, sun }),
     washCarTile({ days, todayStr }),
     waterLawnTile({ days, todayStr, homeType }),

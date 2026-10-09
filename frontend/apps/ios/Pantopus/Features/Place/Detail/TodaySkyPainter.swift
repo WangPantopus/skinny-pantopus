@@ -21,6 +21,16 @@ struct TodaySkyPainter {
     var season: SkySeason = .summer
     /// A meteor shower's peak night: shooting stars whatever the note says.
     var meteorShower = false
+    /// Wildfire smoke, 0 (none) to 0.85: an amber veil and a dim red sun.
+    var smoke = 0.0
+    /// How hard it rains, 0 (a light shower) to 1 (a downpour).
+    var rain = 0.5
+    var home: SkyHome = .house
+    var streetLights = 0
+    /// Sustained wind, mph (that hour's while sliding), and where it blows
+    /// from ("SW"); nil when the forecast didn't say (`SkyWind.swift`).
+    var windMph: Double?
+    var windFrom: String?
     let still: Bool
 
     private var weather: SkyPalette.Weather {
@@ -31,27 +41,34 @@ struct TodaySkyPainter {
         moment.phase == .night
     }
 
-    func paint(_ context: GraphicsContext, size: CGSize, time: Double) {
-        let scene = Scene(size: size, time: still ? 2 : time, sky: SkyPalette.sky(moment.phase, weather))
+    /// `rise` (0...1) lifts the sun or moon into its place as the card loads;
+    /// `drift` lowers the stars, sun or moon and clouds as the card scrolls away.
+    func paint(_ context: GraphicsContext, size: CGSize, time: Double, rise: Double = 1, drift: Double = 0) {
+        let scene = Scene(size: size, time: still ? 2 : time, sky: SkyPalette.sky(moment.phase, weather), rise: rise)
         let clear = weather == .clear || weather == .partly
         paintSky(context, scene)
-        if night, clear { paintStars(context, scene) }
-        if night, clear, meteorShower { paintMeteors(context, scene) }
-        if night { paintMoon(context, scene) } else { paintSun(context, scene) }
-        paintClouds(context, scene)
+        var far = context
+        far.translateBy(x: 0, y: drift)
+        if night, clear { paintStars(far, scene) }
+        if night, clear, meteorShower { paintMeteors(far, scene) }
+        if night { paintMoon(far, scene) } else { paintSun(far, scene) }
+        paintClouds(far, scene)
         paintRain(context, scene)
         paintSnow(context, scene)
-        if condition == .wind { paintWind(context, scene) }
+        if wind.streaks > 0 { paintWind(context, scene) }
         if weather == .storm, !still { paintLightning(context, scene) }
+        if smoke > 0 { paintSmoke(context, scene) }
         TodaySkyGround(
             scene: scene,
             weather: weather,
             moment: moment,
-            condition: condition,
             cold: temperature < 50,
             still: still,
             bins: note?.bins ?? [],
-            season: season
+            season: season,
+            home: home,
+            streetLights: streetLights,
+            wind: wind
         ).paint(context)
         // Fog hugs the ground, in front of the house and below the reading.
         paintFog(context, scene)
@@ -74,6 +91,8 @@ struct TodaySkyPainter {
         let size: CGSize
         let time: Double
         let sky: SkyPalette.Sky
+        /// 0 below its place, 1 in it.
+        var rise = 1.0
 
         var width: Double {
             size.width
@@ -92,15 +111,6 @@ struct TodaySkyPainter {
             let raw = (base + (still ? 0 : time * speed)).truncatingRemainder(dividingBy: span)
             return raw < 0 ? raw + span : raw
         }
-    }
-
-    /// The day's first and last golden hour warm the horizon until dawn's or
-    /// dusk's own sky takes over: 0 outside them, up to 0.5 at the handover.
-    private var goldenWarmth: Double {
-        guard moment.phase == .day else { return 0 }
-        let evening = (moment.minutes - (moment.sunset - 60)) / 20
-        let morning = (moment.sunrise + 60 - moment.minutes) / 20
-        return min(max(max(evening, morning), 0), 1) * 0.5
     }
 
     private func paintSky(_ context: GraphicsContext, _ scene: Scene) {
@@ -133,15 +143,21 @@ struct TodaySkyPainter {
         // The sun rides the right half of the sky: low at dawn and dusk, high at noon.
         let fraction = moment.dayFraction
         let x = scene.width * (0.56 + 0.32 * fraction)
-        let y = scene.horizon - 18 - sin(.pi * fraction) * (scene.horizon - 58)
+        let y = scene.horizon - 18 - sin(.pi * fraction) * (scene.horizon - 58) + (1 - scene.rise) * 44
         // In the golden hour the sun warms and a wide halo of gold spreads around it.
         let golden = goldenWarmth
-        let core = moment.phase == .dawn || moment.phase == .dusk
+        let warm = moment.phase == .dawn || moment.phase == .dusk
             ? SkyPalette.sunLow
             : SkyPalette.sunHigh.mixed(with: SkyPalette.sunLow, by: golden * 2)
+        // Through smoke the sun is a dim red disc without rays.
+        let core = warm.mixed(with: SkyPalette.smokeSun, by: smoke * 1.2)
         let veiled = weather != .clear && weather != .partly
-        glow(context, scene, Glow(center: CGPoint(x: x, y: y), radius: 78, color: core, opacity: veiled ? 0.22 : 0.45))
+        glow(context, scene, Glow(center: CGPoint(x: x, y: y), radius: smoke > 0 ? 56 : 78, color: core, opacity: veiled ? 0.22 : 0.45))
         guard !veiled else { return }
+        if smoke > 0 {
+            context.fill(Self.circle(x, y, 16), with: .color(core.color(opacity: 0.9)))
+            return
+        }
         if golden > 0 {
             glow(context, scene, Glow(center: CGPoint(x: x, y: y), radius: 130, color: SkyPalette.sunLow, opacity: golden * 0.7))
         }
@@ -163,7 +179,7 @@ struct TodaySkyPainter {
     private func paintMoon(_ context: GraphicsContext, _ scene: Scene) {
         guard weather != .wet, weather != .snow, weather != .storm else { return }
         let x = scene.width * 0.8
-        let y = 50.0
+        let y = 50.0 + (1 - scene.rise) * 44
         let veiled = weather == .overcast || weather == .fog
         // A full moon lights up more of the sky.
         let full = abs(moment.moonPhase - 0.5) < 0.034
@@ -195,7 +211,8 @@ struct TodaySkyPainter {
             case .dusk: SkyPalette.cloudDusk
             case .day: SkyPalette.white
             }
-            let sway = { (offset: Double) in still ? 0 : sin(scene.time * 0.18 + offset) * 12 }
+            let wind = wind
+            let sway = { (offset: Double) in still ? 0 : sin(scene.time * wind.swayPace + offset) * wind.sway }
             cloud(context, Puff(x: scene.width * 0.5 + sway(0), y: 70, width: 96, color: tint, opacity: night ? 0.9 : 0.88))
             cloud(context, Puff(x: scene.width * 0.74 + sway(2), y: 92, width: 120, color: tint, opacity: night ? 0.95 : 0.97))
         } else if weather != .clear {
@@ -214,9 +231,10 @@ struct TodaySkyPainter {
                 DeckCloud(start: 0.5, y: 60, width: 150, speed: 9, upper: false),
                 DeckCloud(start: 0.82, y: 50, width: 120, speed: 9, upper: false)
             ]
+            let pace = wind.cloudPace * wind.toward
             for layer in layers {
                 let span = scene.width + layer.width
-                let x = scene.drift(layer.start * span, speed: layer.speed, span: span, still: still) - layer.width
+                let x = scene.drift(layer.start * span, speed: layer.speed * pace, span: span, still: still) - layer.width
                 cloud(
                     context,
                     Puff(x: x, y: layer.y, width: layer.width, color: layer.upper ? deck : lower, opacity: layer.upper ? 0.95 : 0.9)
@@ -228,19 +246,25 @@ struct TodaySkyPainter {
     private func paintRain(_ context: GraphicsContext, _ scene: Scene) {
         guard weather == .wet || weather == .storm else { return }
         var random = SkyRandom(seed: 11)
-        let count = weather == .storm ? 90 : condition == .sleet ? 40 : 70
+        // Sideways for each point fallen; the drops start further upwind to cover the card.
+        let slant = wind.slant * wind.toward
+        let spread = scene.height * abs(slant)
+        let from = slant > 0 ? -spread - 10 : -10.0
+        // Fewer streaks for a passing shower, more for a downpour.
+        let base = Double(weather == .storm ? 90 : condition == .sleet ? 40 : 70) * (0.6 + 0.8 * rain)
+        let count = Int(base * (scene.width + spread) / scene.width)
         var path = Path()
         for _ in 0..<count {
-            let start = random.next() * (scene.width + 40)
+            let start = from + random.next() * (scene.width + spread + 20)
             let speed = 380 + random.next() * 160
             let length = 9 + random.next() * 7
             let offset = random.next() * scene.height
             let span = scene.height + length
             let fall = (offset + (still ? 0 : scene.time * speed)).truncatingRemainder(dividingBy: span)
             let y = fall - length
-            let x = start - (y + length) * 0.22
+            let x = start + (y + length) * slant
             path.move(to: CGPoint(x: x, y: y))
-            path.addLine(to: CGPoint(x: x - length * 0.22, y: y + length))
+            path.addLine(to: CGPoint(x: x + length * slant, y: y + length))
         }
         let color = night ? SkyPalette.rainNight.color(opacity: 0.45) : SkyPalette.rainDay.color(opacity: 0.55)
         context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
@@ -249,9 +273,13 @@ struct TodaySkyPainter {
     private func paintSnow(_ context: GraphicsContext, _ scene: Scene) {
         guard weather == .snow || condition == .sleet else { return }
         var random = SkyRandom(seed: 23)
-        let count = condition == .sleet ? 26 : 55
+        // Flakes blow sideways as they fall, so they start further upwind.
+        let slant = wind.slant * wind.toward
+        let spread = scene.height * abs(slant)
+        let from = slant > 0 ? -spread : 0.0
+        let count = Int(Double(condition == .sleet ? 26 : 55) * (scene.width + spread) / scene.width)
         for _ in 0..<count {
-            let start = random.next() * scene.width
+            let start = from + random.next() * (scene.width + spread)
             let speed = 18 + random.next() * 24
             let radius = 1 + random.next() * 1.7
             let offset = random.next() * scene.height
@@ -261,7 +289,7 @@ struct TodaySkyPainter {
             let opacity = 0.65 + random.next() * 0.3
             let moving = still ? 0 : scene.time
             let y = (offset + moving * speed).truncatingRemainder(dividingBy: scene.height + 8) - 4
-            let x = start + sin(moving * frequency + phase) * amplitude
+            let x = start + (y + 4) * slant + sin(moving * frequency + phase) * amplitude
             context.fill(Self.circle(x, y, radius), with: .color(SkyPalette.white.color(opacity: opacity)))
         }
     }
@@ -283,59 +311,9 @@ struct TodaySkyPainter {
         }
     }
 
-    private func paintWind(_ context: GraphicsContext, _ scene: Scene) {
-        var random = SkyRandom(seed: 31)
-        let moving = still ? 0 : scene.time
-        for _ in 0..<4 {
-            let span = scene.width + 60
-            let speed = 55 + random.next() * 35
-            let base = 40 + random.next() * 90
-            let phase = random.next() * 6.28
-            let x = scene.drift(random.next() * span, speed: speed, span: span, still: still) - 30
-            var leaf = context
-            leaf.translateBy(x: x, y: base + sin(moving * 2 + phase) * 8)
-            leaf.rotate(by: .radians(moving * 3 + phase))
-            let color = night ? SkyPalette.leafNight.color(opacity: 0.7) : SkyPalette.leafDay.color(opacity: 0.85)
-            leaf.fill(Path(ellipseIn: CGRect(x: -4, y: -2, width: 8, height: 4)), with: .color(color))
-        }
-        var streaks = Path()
-        for index in 0..<4 {
-            let span = scene.width + 160
-            let x = scene.drift(Double(index) * 0.27 * span, speed: 70 + Double(index) * 12, span: span, still: still) - 120
-            let y = 40 + Double(index) * 26
-            streaks.move(to: CGPoint(x: x, y: y))
-            streaks.addCurve(
-                to: CGPoint(x: x + 110, y: y),
-                control1: CGPoint(x: x + 40, y: y - 6),
-                control2: CGPoint(x: x + 70, y: y + 6)
-            )
-        }
-        let color = SkyPalette.white.color(opacity: night ? 0.28 : 0.5)
-        context.stroke(streaks, with: .color(color), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-    }
-
     /// A soft double flash about every seven seconds: well under the three
     /// flashes a second that photosensitivity guidance allows, and never
     /// drawn with Reduce Motion (the painter is `still` then).
-    private func paintLightning(_ context: GraphicsContext, _ scene: Scene) {
-        let period = 7.0
-        let cycle = (scene.time / period).rounded(.down)
-        let local = scene.time - cycle * period
-        var random = SkyRandom(seed: UInt32(truncatingIfNeeded: 100 + Int(cycle)))
-        let strike = 1 + random.next() * 4
-        let since = local - strike
-        let opacity: Double = if since >= 0, since < 0.09 { 0.28 } else if since >= 0.17, since < 0.25 { 0.18 } else { 0 }
-        guard opacity > 0 else { return }
-        context.fill(Path(CGRect(origin: .zero, size: scene.size)), with: .color(SkyPalette.lightning.color(opacity: opacity)))
-        let x = scene.width * (0.35 + random.next() * 0.5)
-        var bolt = Path()
-        bolt.move(to: CGPoint(x: x, y: 40))
-        bolt.addLine(to: CGPoint(x: x - 8, y: 70))
-        bolt.addLine(to: CGPoint(x: x + 4, y: 72))
-        bolt.addLine(to: CGPoint(x: x - 6, y: scene.horizon - 20))
-        context.stroke(bolt, with: .color(SkyPalette.bolt.color(opacity: 0.9)), lineWidth: 2)
-    }
-
     /// Darkens the left of the sky so the white reading keeps its contrast:
     /// with it every scene gives the temperature and condition (large text)
     /// at least 3:1 and "NOW" 4.5:1; the chips carry their own backing.
@@ -365,8 +343,9 @@ extension TodaySkyPainter {
 
     private func glow(_ context: GraphicsContext, _ scene: Scene, _ glow: Glow) {
         let gradient = Gradient(colors: [glow.color.color(opacity: glow.opacity), glow.color.color(opacity: 0)])
+        // Taller than the card, so a drifted glow never shows its edge.
         context.fill(
-            Path(CGRect(origin: .zero, size: scene.size)),
+            Path(CGRect(x: 0, y: -80, width: scene.width, height: scene.height + 160)),
             with: .radialGradient(gradient, center: glow.center, startRadius: 0, endRadius: glow.radius)
         )
     }

@@ -71,6 +71,8 @@ fun BeaconIdentityBlock(
     avatarUrl: String?,
     stats: List<ProfileStatCell>,
     modifier: Modifier = Modifier,
+    // The avatar's initials come from this; "" (someone with no name) shows a plain avatar.
+    avatarName: String? = null,
     actions: @Composable () -> Unit,
 ) {
     val accent = accentFor(identity)
@@ -89,7 +91,7 @@ fun BeaconIdentityBlock(
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Box(modifier = Modifier.size(72.dp)) {
                 AvatarWithIdentityRing(
-                    name = name,
+                    name = avatarName ?: name,
                     imageUrl = avatarUrl,
                     identity = avatarIdentity(identity),
                     ringProgress = 1f,

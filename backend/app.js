@@ -573,6 +573,9 @@ server.listen(PORT, HOST, async () => {
   // requiring an environment change and a redeploy.
   require('./utils/addressRolloutFlags').startRolloutFlagRefresh();
 
+  // Usernames made up from email addresses before October 7 stay hidden wherever a name or handle shows.
+  if (process.env.NODE_ENV !== 'test') require('./utils/legacyUsernames').startLegacyUsernameRefresh();
+
   // Start pg-boss queue workers (Tier 2 jobs)
   // Set PGBOSS_ENABLED=false when running a separate worker container.
   let pgBossBackedJobsStarted = false;

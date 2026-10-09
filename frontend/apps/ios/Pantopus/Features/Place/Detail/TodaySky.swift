@@ -14,101 +14,6 @@
 
 import SwiftUI
 
-// MARK: - Moment (time of day, sun and moon)
-
-/// Where the day is at this address: phase, how far the sun has
-/// travelled, and the moon's phase.
-struct SkyMoment: Equatable {
-    let phase: SkyPalette.Phase
-    /// 0 at sunrise, 1 at sunset, clamped.
-    let dayFraction: Double
-    /// 11 pm to 5 am: only one window stays lit.
-    let lateNight: Bool
-    /// 0 new moon, 0.5 full, back toward 1 at the next new moon.
-    let moonPhase: Double
-    /// Minutes past local midnight now, at sunrise and at sunset.
-    let minutes: Double
-    let sunrise: Double
-    let sunset: Double
-
-    /// Sunrise and sunset arrive as local wall-clock times ("2026-10-07T07:15")
-    /// and can be a day old just after midnight; only their clock times are
-    /// used, which drift by a couple of minutes a day.
-    static func at(_ now: Date, sunrise: String?, sunset: String?, calendar: Calendar = .autoupdatingCurrent) -> SkyMoment {
-        let parts = calendar.dateComponents([.hour, .minute, .second], from: now)
-        let minutes = Double(parts.hour ?? 12) * 60 + Double(parts.minute ?? 0) + Double(parts.second ?? 0) / 60
-        var rise = clockMinutes(sunrise, calendar: calendar) ?? 390
-        var set = clockMinutes(sunset, calendar: calendar) ?? 1110
-        if set <= rise {
-            rise = 390
-            set = 1110
-        }
-        let phase: SkyPalette.Phase = if minutes >= rise - 30, minutes < rise + 40 {
-            .dawn
-        } else if minutes >= rise + 40, minutes < set - 40 {
-            .day
-        } else if minutes >= set - 40, minutes < set + 30 {
-            .dusk
-        } else {
-            .night
-        }
-        return SkyMoment(
-            phase: phase,
-            dayFraction: min(max((minutes - rise) / (set - rise), 0), 1),
-            lateNight: minutes >= 23 * 60 || minutes < 5 * 60,
-            moonPhase: moonPhase(at: now),
-            minutes: minutes,
-            sunrise: rise,
-            sunset: set
-        )
-    }
-
-    /// Minutes past midnight of a sunrise/sunset string. A bare wall-clock
-    /// time is taken as written; a zoned instant is read in the local zone.
-    static func clockMinutes(_ raw: String?, calendar: Calendar = .autoupdatingCurrent) -> Double? {
-        guard let raw, let tee = raw.firstIndex(of: "T") else { return nil }
-        let clock = raw[raw.index(after: tee)...]
-        let zoned = clock.contains("Z") || clock.contains("+") || clock.dropFirst(5).contains("-")
-        if zoned, let date = PlacePresentation.parseISO(raw) {
-            let parts = calendar.dateComponents([.hour, .minute], from: date)
-            return Double(parts.hour ?? 0) * 60 + Double(parts.minute ?? 0)
-        }
-        let fields = clock.prefix(5).split(separator: ":")
-        guard fields.count == 2, let hour = Double(fields[0]), let minute = Double(fields[1]),
-              (0..<24).contains(hour), (0..<60).contains(minute) else { return nil }
-        return hour * 60 + minute
-    }
-
-    /// "5:38 PM" for minutes past local midnight, in the person's own clock style.
-    static func clockText(_ minutes: Double, calendar: Calendar = .autoupdatingCurrent) -> String {
-        let midnight = calendar.startOfDay(for: Date())
-        return midnight.addingTimeInterval(minutes * 60).formatted(date: .omitted, time: .shortened)
-    }
-
-    /// The moon's age as a fraction of the 29.53-day synodic month, from the
-    /// new moon of 6 January 2000 (Julian day 2451550.1).
-    static func moonPhase(at date: Date) -> Double {
-        let julianDay = date.timeIntervalSince1970 / 86400 + 2_440_587.5
-        let cycles = (julianDay - 2_451_550.1) / 29.530588853
-        let fraction = cycles - cycles.rounded(.down)
-        return fraction < 0 ? fraction + 1 : fraction
-    }
-}
-
-extension SkyPalette.Weather {
-    init(_ code: WeatherConditionCode) {
-        switch code {
-        case .clear, .wind: self = .clear
-        case .partlyCloudy: self = .partly
-        case .cloudy, .unknown: self = .overcast
-        case .fog: self = .fog
-        case .rain, .sleet: self = .wet
-        case .snow: self = .snow
-        case .thunderstorm: self = .storm
-        }
-    }
-}
-
 // MARK: - The hero card
 
 /// The "Now" reading drawn over the living sky. Touch and hold, then
@@ -119,6 +24,11 @@ struct TodaySkyHero: View {
     /// The address calendar's upcoming dates: on the evening before a
     /// household pickup the bins stand at the curb.
     var pickups: [PlaceCalendarEvent] = []
+    /// The air reading: smoke veils the sky, and bad air leads the card.
+    var air: SkyAir?
+    /// The resident's kind of home, and the far hill's lights after dusk.
+    var home: SkyHome = .house
+    var streetLights = 0
     /// Tapping the bins shows the pickup schedule.
     var onBins: (() -> Void)?
 
@@ -131,6 +41,14 @@ struct TodaySkyHero: View {
     @State private var appeared = false
     /// The forecast hour slid to, an index into the hours ahead; nil is now.
     @State private var scrub: Int?
+    /// When the card appeared or got new data: the sun or moon rises into place.
+    @State private var shownAt = Date.distantPast
+    /// How far the card has scrolled above the top of the page: the sky's far
+    /// layer lags behind (a gentle parallax).
+    @State private var hidden: CGFloat = 0
+    /// The card's height at rest, kept while sliding: an hour with fewer chips
+    /// never shrinks the card under the finger.
+    @State private var restHeight: CGFloat = 0
 
     private var animating: Bool {
         !reduceMotion && !lowPower && scenePhase == .active && onScreen && appeared
@@ -143,18 +61,27 @@ struct TodaySkyHero: View {
             let hours = SkyScrub.hours(data.hourly, after: minute.date)
             let picked = scrub.flatMap { hours.indices.contains($0) ? hours[$0] : nil }
             let nowMoment = SkyMoment.at(minute.date, sunrise: sun?.sunrise, sunset: sun?.sunset)
-            let nowNote = SkyNote.pick(now: minute.date, moment: nowMoment, weather: data, pickups: pickups)
+            let nowNote = SkyNote.pick(now: minute.date, moment: nowMoment, weather: data, pickups: pickups, air: air)
             let when = picked?.date ?? minute.date
             let shown = picked.map { SkyScrub.weather(data, at: $0) } ?? data
             let moment = picked == nil ? nowMoment : SkyMoment.at(when, sunrise: sun?.sunrise, sunset: sun?.sunset)
-            let note = picked == nil ? nowNote : SkyNote.pick(now: when, moment: moment, weather: shown, pickups: pickups)
+            let note = picked == nil ? nowNote : SkyNote.pick(now: when, moment: moment, weather: shown, pickups: pickups, air: air)
             let sky = SkyPalette.sky(moment.phase, SkyPalette.Weather(shown.conditionCode))
+            // A new hour, phase or kind of weather crossfades in.
+            let key = SceneKey(hour: picked?.date, phase: moment.phase, sky: SkyPalette.Weather(shown.conditionCode))
             ZStack(alignment: .topLeading) {
                 scene(
-                    SkyScene(moment: moment, weather: shown, note: note, season: SkySeason.at(when)),
-                    shower: SkyNote.meteors(now: when, moment: moment, calendar: .autoupdatingCurrent) != nil
+                    SkyScene(
+                        moment: moment,
+                        weather: shown,
+                        note: note,
+                        season: SkySeason.at(when),
+                        rain: SkyScrub.rain(data.hourly, at: when)
+                    ),
+                    shower: SkyNote.meteors(now: when, moment: moment, calendar: .autoupdatingCurrent) != nil,
+                    rises: picked == nil
                 )
-                .id(picked?.date)
+                .id(key)
                 .transition(.opacity)
                 TodaySkyReading(
                     reading: SkyReadingModel(now: data, note: nowNote, picked: picked, at: minute.date),
@@ -165,10 +92,13 @@ struct TodaySkyHero: View {
                 if let scrub, picked != nil { SkyScrubTrack(index: scrub, count: hours.count) }
                 SkyScrubHint(hours: hours.count, scrubbing: scrub != nil)
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: picked?.date)
-            // At least 188 pt; taller only if the chips have to stack on a narrow phone,
+            .animation(reduceMotion ? nil : .easeInOut(duration: picked == nil ? 0.6 : 0.18), value: key)
+            // At least 188 pt; taller only if the chips wrap onto a second row,
             // so the reading is never clipped. The ground stays at the bottom either way.
-            .frame(maxWidth: .infinity, minHeight: Self.height)
+            .frame(maxWidth: .infinity, minHeight: scrub == nil ? Self.height : max(Self.height, restHeight))
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                if scrub == nil { restHeight = height }
+            }
             // Behind the crossfade between two hours, so the page never shows through.
             .background(sky.mid.color)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -180,12 +110,17 @@ struct TodaySkyHero: View {
             .shadow(color: sky.mid.color(opacity: 0.28), radius: 14, y: 6)
             .modifier(SkyScrubGesture(scrub: $scrub, hours: hours.count, reduceMotion: reduceMotion))
         }
-        .onAppear { appeared = true }
+        .onAppear {
+            appeared = true
+            shownAt = .now
+        }
+        .onChange(of: data) { shownAt = .now }
         .onDisappear { appeared = false }
         .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
             lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
         .modifier(ScrollVisibility(onScreen: $onScreen))
+        .onGeometryChange(for: CGFloat.self) { max(0, -$0.frame(in: .scrollView).minY).rounded() } action: { hidden = $0 }
         // A container, so the bins button keeps its own identifier.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("todaySkyHero")
@@ -198,10 +133,21 @@ struct TodaySkyHero: View {
         let weather: PlaceWeatherData
         let note: SkyNote?
         let season: SkySeason
+        /// 0...1, from the forecast hour's chance of rain.
+        let rain: Double
     }
 
-    private func scene(_ shown: SkyScene, shower: Bool) -> some View {
+    private struct SceneKey: Hashable {
+        let hour: Date?
+        let phase: SkyPalette.Phase
+        let sky: SkyPalette.Weather
+    }
+
+    private func scene(_ shown: SkyScene, shower: Bool, rises: Bool) -> some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !animating)) { frame in
+            // Eased over 0.9 s; in place at once without motion or while sliding.
+            let progress = animating && rises ? min(max(frame.date.timeIntervalSince(shownAt) / 0.9, 0), 1) : 1
+            let rise = 1 - pow(1 - progress, 3)
             let painter = TodaySkyPainter(
                 condition: shown.weather.conditionCode,
                 moment: shown.moment,
@@ -209,10 +155,23 @@ struct TodaySkyHero: View {
                 note: shown.note,
                 season: shown.season,
                 meteorShower: shower,
+                smoke: air?.smoke ?? 0,
+                rain: shown.rain,
+                home: home,
+                streetLights: streetLights,
+                windMph: shown.weather.windMph,
+                windFrom: shown.weather.windDirection,
                 still: !animating
             )
             Canvas { context, size in
-                painter.paint(context, size: size, time: frame.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 86400))
+                painter.paint(
+                    context,
+                    size: size,
+                    time: frame.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 86400),
+                    rise: rise,
+                    // A third of the way behind, never more than 60 pt, and not with Reduce Motion.
+                    drift: reduceMotion ? 0 : min(Double(hidden) * 0.3, 60)
+                )
             }
         }
         .accessibilityHidden(true)
@@ -225,7 +184,7 @@ struct TodaySkyHero: View {
                 Color.clear.frame(width: 52, height: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(TodaySkyGround.binsCenter(in: proxy.size, count: note.bins.count))
+            .position(TodaySkyGround.binsCenter(in: proxy.size, count: note.bins.count, home: home))
             .accessibilityLabel(note.spoken)
             .accessibilityHint("Shows your pickup schedule.")
             .accessibilityIdentifier("todaySkyBins")
@@ -256,20 +215,25 @@ struct SkyReadingModel {
         let current = data.conditionLabel.isEmpty ? reading : "\(reading), \(data.conditionLabel)"
         spoken = note.map { "\($0.spoken) \(current)" } ?? current
         value = picked.map { SkyScrub.spoken($0, now: now) } ?? ""
-        // High/low and feels-like (or an hour's chance of rain), each in a dark glass
-        // chip: they sit near the bright horizon, where white text alone can't keep 4.5:1.
+        // High/low, feels-like (or an hour's chance of rain or its wind) and the wind
+        // from 15 mph, each in a dark glass chip: they sit near the bright horizon,
+        // where white text alone can't keep 4.5:1.
         var chips: [String] = []
         var said: [String] = []
         if let hi = shown.highF, let lo = shown.lowF {
             chips.append("H \(Int(hi.rounded()))° · L \(Int(lo.rounded()))°")
             said.append("High \(Int(hi.rounded()))°, low \(Int(lo.rounded()))°")
         }
-        if let picked, let chip = SkyScrub.precipChip(picked) {
-            chips.append(chip)
-            said.append(chip)
+        if let picked, let chip = SkyScrub.chip(picked) {
+            chips.append(chip.text)
+            said.append(chip.spoken)
         } else if picked == nil, let feels = shown.feelsLikeF {
             chips.append("Feels like \(Int(feels.rounded()))°")
             said.append("feels like \(Int(feels.rounded()))°")
+        }
+        if picked == nil, let wind = SkyWind.chip(shown.windMph) {
+            chips.append(wind.text)
+            said.append(wind.spoken)
         }
         self.chips = chips
         spokenChips = said.joined(separator: ", ")
@@ -313,12 +277,10 @@ struct TodaySkyReading: View {
             .accessibilityLabel(reading.spoken)
             .modifier(HourAdjuster(hours: hours, scrub: $scrub, value: reading.value))
             if !reading.chips.isEmpty {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 6) { chipViews }
-                    VStack(alignment: .leading, spacing: 4) { chipViews }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(reading.spokenChips)
+                // Onto a second row rather than truncated: the wind chip, a narrow phone.
+                FilterSheetFlowLayout(spacing: 6) { chipViews }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(reading.spokenChips)
             }
         }
         .lineLimit(1)

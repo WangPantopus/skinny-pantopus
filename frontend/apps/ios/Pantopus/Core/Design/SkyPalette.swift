@@ -177,6 +177,11 @@ public enum SkyPalette {
     public static let leafNight = SkyRGB(0xA08C5A)
     /// Frost creeping in from the card's corners on a freezing morning.
     public static let frost = SkyRGB(0xE8F4FF)
+    /// Wildfire smoke: the amber veil by day, a brown one at night, and the
+    /// dim red sun seen through it.
+    public static let smokeHaze = SkyRGB(0xC8A27A)
+    public static let smokeHazeNight = SkyRGB(0x5A4636)
+    public static let smokeSun = SkyRGB(0xF0743E)
 
     /// The round tree through the year, blended into the silhouette.
     public static let treeSpring = SkyRGB(0x7BC67E)

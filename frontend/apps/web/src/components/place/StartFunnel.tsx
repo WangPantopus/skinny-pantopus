@@ -58,6 +58,8 @@ import { authPageHref } from '@/lib/auth-utils';
 import { launchFeatures } from '@/lib/featureFlags';
 import PrivacyPromise from './PrivacyPromise';
 import AddressAutocomplete, { type SelectedAddress } from './AddressAutocomplete';
+import BallotTeaser from '@/components/ballot/BallotTeaser';
+import { ballotTeaserData } from '@/components/ballot/BallotCard';
 
 
 // ── Brand lockup + static region pill ───────────────────────
@@ -353,12 +355,12 @@ function money(n?: number | null): string | null {
   if (n == null || !Number.isFinite(n)) return null;
   return `$${Math.round(n).toLocaleString('en-US')}`;
 }
-function LegacyFreeTiles({ preview, onWall }: { preview: PlacePreview; onWall: () => void }) {
+function LegacyFreeTiles({ preview, onWall, stack }: { preview: PlacePreview; onWall: () => void; stack: boolean }) {
   const free = preview.free;
   if (!free) return null;
   return (
     <>
-      <Group label="Risk & readiness">
+      <Group label="Risk & readiness" stack={stack}>
         {free.flood.status === 'ready' ? (
           <SectionCard
             icon={Waves}
@@ -371,7 +373,7 @@ function LegacyFreeTiles({ preview, onWall }: { preview: PlacePreview; onWall: (
           <SectionCard icon={Waves} title="Flood" state="unavailable" />
         )}
       </Group>
-      <Group label="Your block">
+      <Group label="Your block" stack={stack}>
         <DensityCard bucket={free.density.bucket} label={free.density.label} ctaLabel="Claim this address and be one of the first here" onCta={onWall} />
         {free.area.status === 'ready' ? (
           <SectionCard
@@ -396,20 +398,26 @@ function LegacyFreeTiles({ preview, onWall }: { preview: PlacePreview; onWall: (
 
 // Exported for the /dev/start-preview fixture page (design QA + the aha
 // audit without a live backend).
-export function PreviewBody({ preview, onWall, onRetry, retrying }: {
+export function PreviewBody({ preview, onWall, onRetry, retrying, stack = false }: {
   preview: PlacePreview;
   onWall: () => void;
   /** Re-reads the preview when a section failed to load ("Try again"). */
   onRetry?: () => void;
   retrying?: boolean;
+  /** One card per row at every width (the funnel's phone-width column). */
+  stack?: boolean;
 }) {
   const sections: PlaceSection[] = preview.sections ?? [];
   const locked = preview.locked ?? [];
   const aha = preview.aha;
   const ahaSection = aha?.section_id ? sections.find((s) => s.id === aha.section_id) : undefined;
 
+  // Ballot P0: the teaser carries the election, so the Civic group leaves
+  // out its "Next election" row, as the Place dashboard does.
+  const teaser = ballotTeaserData(preview.ballot_teaser);
+  const shown = teaser ? sections.filter((s) => s.id !== 'civic_election') : sections;
   const groups = GROUP_ORDER
-    .map((g) => ({ g, items: sections.filter((s) => s.group === g) }))
+    .map((g) => ({ g, items: shown.filter((s) => s.group === g) }))
     .filter((x) => x.items.length > 0);
 
   return (
@@ -428,10 +436,20 @@ export function PreviewBody({ preview, onWall, onRetry, retrying }: {
         />
       ) : null}
 
-      {sections.length === 0 ? <LegacyFreeTiles preview={preview} onWall={onWall} /> : null}
+      {/* Ballot P0 (ballot_p0): the election card under the aha, per the
+          guide §5.8 — the aha ranking itself is unchanged. */}
+      {teaser ? (
+        <BallotTeaser
+          teaser={teaser}
+          address={preview.place?.address || 'This address'}
+          className="mb-6"
+        />
+      ) : null}
+
+      {sections.length === 0 ? <LegacyFreeTiles preview={preview} onWall={onWall} stack={stack} /> : null}
 
       {groups.map(({ g, items }) => (
-        <Group key={g} label={GROUP_LABEL[g]}>
+        <Group key={g} label={GROUP_LABEL[g]} stack={stack}>
           {items.map((env) => {
             if (env.id === 'block_density') {
               const d = env.data as PlaceBlockDensityData | null;
@@ -451,7 +469,7 @@ export function PreviewBody({ preview, onWall, onRetry, retrying }: {
       ))}
 
       {locked.length > 0 ? (
-        <Group label="Claim it to see">
+        <Group label="Claim it to see" stack={stack}>
           {locked.map((s: PlacePreviewLockedSection) => (
             <LockedCard key={s.id} icon={Home} title={s.title} reason={s.reason} cta="Claim this address" onCta={onWall} />
           ))}
@@ -797,6 +815,7 @@ export default function StartFunnel() {
                 onWall={goWall}
                 onRetry={() => { void previewQuery.refetch(); }}
                 retrying={previewQuery.isFetching}
+                stack
               />
               <div className="h-4" />
             </div>

@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('./logger');
 const verificationAge = require('./verificationAge');
-const { chosenUsernameOrNull, isGeneratedUsername } = require('./personalUsername');
+const { chosenUsernameOrNull, isKnownMadeUpUsername } = require('./personalUsername');
 
 /**
  * Which of these users are verified residents, for the public "verified_resident" badge: an ACTIVE HomeOccupancy
@@ -112,7 +112,7 @@ function fullNameFromUserParts(user) {
 // holds the made-up username as its display name, and that is never shown as the person's name.
 function nameText(value) {
   const text = cleanIdentityText(value);
-  return text && !isGeneratedUsername(text) ? text : null;
+  return text && !isKnownMadeUpUsername(text) ? text : null;
 }
 
 // Public local identity policy: seed profiles with a readable name first and

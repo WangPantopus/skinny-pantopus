@@ -6,7 +6,8 @@ struct PendingPlaceView: View {
     var onDone: () -> Void
     var onToday: () -> Void
     var onSavedPlaces: () -> Void
-    var onSetUpHome: () -> Void
+    /// Opens Add Home with the saved address already searched.
+    var onSetUpHome: (String) -> Void
 
     var body: some View {
         ScrollView {
@@ -25,7 +26,7 @@ struct PendingPlaceView: View {
                         PrimaryButton(title: "See Today", action: onToday)
                             .accessibilityIdentifier("place.arrival.today")
                         Button("View saved places", action: onSavedPlaces)
-                        Button("Set up a Home", action: onSetUpHome)
+                        Button("Set up a Home") { onSetUpHome(draft.label) }
                         Button("Continue exploring", action: onDone)
                     } else {
                         PrimaryButton(

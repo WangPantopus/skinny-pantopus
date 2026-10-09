@@ -133,6 +133,7 @@ fun AddHomeWizardScreen(
     }
 
     LaunchedEffect(Unit) {
+        viewModel.applyInitialSearchQuery()
         viewModel.resumeCreation()
         // Fire the initial step view; subsequent transitions emit
         // their own ScreenAddHomeWizardStepViewed events from the VM.

@@ -5,6 +5,7 @@ package app.pantopus.android.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -26,6 +27,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.theme.PantopusColors
+import app.pantopus.android.ui.theme.PantopusIcon
+import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.SubcomposeAsyncImage
@@ -134,18 +137,24 @@ private fun AvatarInitials(
     name: String,
     identity: IdentityPillar,
 ) {
-    Box(
+    BoxWithConstraints(
         modifier =
             Modifier
                 .fillMaxSize()
                 .background(identity.backgroundColor),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = initials(name),
-            style = PantopusTextStyle.small,
-            color = identity.color,
-        )
+        val initials = initials(name)
+        if (initials.isEmpty()) {
+            // No name: a plain avatar, not a stand-in letter.
+            PantopusIconImage(icon = PantopusIcon.User, contentDescription = null, size = maxWidth * 0.45f, tint = identity.color)
+        } else {
+            Text(
+                text = initials,
+                style = PantopusTextStyle.small,
+                color = identity.color,
+            )
+        }
     }
 }
 

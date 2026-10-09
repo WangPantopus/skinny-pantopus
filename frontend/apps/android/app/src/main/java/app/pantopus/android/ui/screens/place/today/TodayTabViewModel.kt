@@ -18,6 +18,7 @@ import app.pantopus.android.data.hub.HubRepository
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.data.widget.TodayWidgetStore
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskCreationFactory
 import app.pantopus.android.ui.screens.place.detail.AddressCalendarActions
@@ -61,9 +62,15 @@ class TodayTabViewModel
         AddressCalendarActions {
         @Inject lateinit var pilotEvents: PilotEvents
 
+        /** The home-screen widget shows what Today last showed (unit tests build this without Hilt). */
+        @Inject lateinit var todayWidget: TodayWidgetStore
+
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
         val state: StateFlow<TodayTabUiState> = _state.asStateFlow()
-        private var homeId: String? = null
+
+        /** The home this tab shows, once resolved. */
+        var homeId: String? = null
+            private set
         override val calendarHomeId: String? get() = homeId
         val radonContext: suspend () -> Unit
             get() {
@@ -176,6 +183,9 @@ class TodayTabViewModel
                             is NetworkResult.Success -> TodayTabUiState.Loaded(result.data, calendarHomeId = id)
                             is NetworkResult.Failure -> TodayTabUiState.Error(result.error.displayMessage("Couldn't load today."))
                         }
+                    if (result is NetworkResult.Success && ::todayWidget.isInitialized) {
+                        todayWidget.write(result.data.todayWidgetSnapshot())
+                    }
                 }
         }
 
@@ -185,7 +195,13 @@ class TodayTabViewModel
             if (!current(version)) return null
             val result = repo.addressCalendar(id)
             if (!current(version) || homeId != id) return null
-            return (result as? NetworkResult.Success)?.data?.calendar
+            val calendar = (result as? NetworkResult.Success)?.data?.calendar
+            // The calendar section was down: the widget gets the dates Today now shows.
+            val loaded = _state.value as? TodayTabUiState.Loaded
+            if (calendar != null && loaded != null && ::todayWidget.isInitialized) {
+                todayWidget.write(loaded.intelligence.todayWidgetSnapshot(calendar))
+            }
+            return calendar
         }
 
         private suspend fun current(version: Long): Boolean {
@@ -230,6 +246,7 @@ class TodayTabViewModel
             val matches = checkSavedAnchor(place)
             if (!current(version)) return
             _state.value = TodayTabUiState.Loaded(intelligence, savedPlace = place, savedAnchorMatches = matches)
+            if (::todayWidget.isInitialized) todayWidget.write(intelligence.todayWidgetSnapshot())
             if (!matches) return
             val preferences = preferencesRepository.preferences()
             if (!current(version)) return

@@ -74,12 +74,15 @@ import app.pantopus.android.data.api.models.place.WeatherAlertSeverity
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.ui.components.GhostButton
+import app.pantopus.android.ui.screens.ballot.BallotPlacement
+import app.pantopus.android.ui.screens.ballot.BallotTodayCard
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskCreationFactory
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -91,6 +94,7 @@ import java.net.HttpURLConnection.HTTP_FORBIDDEN
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 /** The row shows at most five tiles; the rest stay in the group page. */
@@ -109,6 +113,10 @@ private const val RADON_MORNING_HOUR = 9
 private const val RADON_REMINDER_DAYS = 14L
 private const val RADON_DISMISS_DAYS = 30L
 
+/**
+ * [onOpenBallot] takes the Ballot P0 card's "Open your ballot" to the
+ * Place card; without it the button is left out.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlaceTodayDetailContent(
@@ -117,6 +125,7 @@ fun PlaceTodayDetailContent(
     radonFactory: HomeTaskCreationFactory? = null,
     pilotEvents: PilotEvents? = null,
     radonContext: (suspend () -> Unit)? = null,
+    onOpenBallot: (() -> Unit)? = null,
 ) {
     val homeState =
         if (radonFactory != null && pilotEvents != null && radonContext != null) {
@@ -145,6 +154,11 @@ fun PlaceTodayDetailContent(
     }
     val scope = rememberCoroutineScope()
     TodayWeatherSection(intel, shownCalendar?.upcoming.orEmpty()) { scope.launch { calendarFocus.bringIntoView() } }
+    // Ballot P0 (ballot_p0): ballot week and "Moved this year?", only when
+    // the server says either applies.
+    BallotPlacement.today(intel)?.let { card ->
+        BallotTodayCard(card = card, onOpenBallot = onOpenBallot, modifier = Modifier.padding(top = Spacing.s4))
+    }
     intel.section(PlaceSectionId.GOOD_DAY_TO)?.let { env ->
         val data = env.goodDayTo
         if (data != null && env.isLive() && data.tiles.isNotEmpty()) {
@@ -900,6 +914,12 @@ private fun RadonDateField(
     )
 }
 
+/** The air reading for the sky: smoke veils it, and bad air leads the card. */
+private fun skyAir(intel: PlaceIntelligence): SkyAir? =
+    intel.section(PlaceSectionId.AIR_QUALITY)?.takeIf { it.isLive() }?.airQuality?.let {
+        SkyAir(it.index, it.categoryLabel, smoky = it.dominantPollutant == "pm25")
+    }
+
 @Composable
 private fun TodayWeatherSection(
     intel: PlaceIntelligence,
@@ -907,10 +927,32 @@ private fun TodayWeatherSection(
     onBins: () -> Unit,
 ) {
     intel.section(PlaceSectionId.WEATHER)?.let { env ->
-        PlaceDetailSectionLabel("Weather")
         val data = env.weather
+        Row(verticalAlignment = Alignment.Bottom) {
+            Box(modifier = Modifier.weight(1f)) { PlaceDetailSectionLabel("Weather") }
+            if (data != null && env.isLive() && intel.place.city.isNotEmpty()) {
+                SkyShareLink(
+                    SkyShareCard(
+                        data,
+                        intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset,
+                        skyAir(intel),
+                        intel.place.city,
+                        ZonedDateTime.now(),
+                    ),
+                )
+            }
+        }
         if (data != null && env.isLive()) {
-            TodaySkyHero(data, intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset, pickups, onBins)
+            val air = skyAir(intel)
+            TodaySkyHero(
+                data,
+                intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset,
+                pickups,
+                air,
+                home = SkyHome.of(intel.section(PlaceSectionId.YOUR_HOME)?.yourHome?.homeType),
+                streetLights = SkyStreet.lights(intel.section(PlaceSectionId.BLOCK_DENSITY)?.blockDensity?.bucket?.name?.lowercase()),
+                onBins = onBins,
+            )
             PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf))
         } else {
             PlaceDetailFallbackCard(env)

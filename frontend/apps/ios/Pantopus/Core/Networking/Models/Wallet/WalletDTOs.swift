@@ -26,6 +26,9 @@ public struct WalletBalanceResponse: Decodable, Sendable, Hashable {
         public let frozen: Bool
         public let lifetimeWithdrawals: Int?
         public let lifetimeReceived: Int?
+        /// Still owed for a payment refunded or disputed after it reached the
+        /// wallet; the next earnings pay it, and withdrawals wait until then.
+        public var owedCents: Int?
 
         private enum CodingKeys: String, CodingKey {
             case id
@@ -34,6 +37,7 @@ public struct WalletBalanceResponse: Decodable, Sendable, Hashable {
             case frozen
             case lifetimeWithdrawals = "lifetime_withdrawals"
             case lifetimeReceived = "lifetime_received"
+            case owedCents = "owed_cents"
         }
     }
 }

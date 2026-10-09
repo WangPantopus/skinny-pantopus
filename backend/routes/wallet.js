@@ -59,14 +59,19 @@ router.get('/', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const wallet = await walletService.getOrCreateWallet(userId);
-    // `balance` is what can be withdrawn: money held for an open payment dispute is not in it.
-    const hold = await walletService.getDisputeHold(userId);
+    // `balance` is what can be withdrawn: money held for an open payment dispute is not in it, nor what is still owed
+    // for a refunded or disputed payment (the next withdrawal or income pays that first).
+    const [hold, owedCents] = await Promise.all([
+      walletService.getDisputeHold(userId),
+      walletService.getOpenDebt(userId),
+    ]);
 
     res.json({
       wallet: {
         id: wallet.id,
-        balance: Math.max(0, wallet.balance - hold.cents),
+        balance: Math.max(0, wallet.balance - hold.cents - owedCents),
         held_by_dispute: hold.cents,
+        owed_cents: owedCents,
         currency: wallet.currency,
         frozen: wallet.frozen,
         lifetime_withdrawals: wallet.lifetime_withdrawals,
@@ -101,6 +106,13 @@ router.post('/withdraw', verifyToken, validate(withdrawSchema), async (req, res)
   } catch (err) {
     logger.error('Withdrawal error', { error: err.message, userId: req.user.id });
 
+    if (err.code === 'DEBT_OPEN') {
+      return res.status(400).json({
+        error: `Withdrawals are paused: $${(err.owedCents / 100).toFixed(2)} is still owed for a payment that was refunded `
+          + 'or disputed after it reached your wallet. Your next earnings pay it first.',
+        code: 'debt_open',
+      });
+    }
     if (err.code === 'FUNDS_ON_HOLD') {
       return res.status(400).json({
         error: `$${(err.holdCents / 100).toFixed(2)} of your balance is on hold while a payment dispute is open. `

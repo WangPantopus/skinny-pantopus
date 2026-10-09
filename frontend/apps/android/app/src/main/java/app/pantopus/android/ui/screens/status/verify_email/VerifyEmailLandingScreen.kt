@@ -61,6 +61,8 @@ object VerifyEmailLandingTags {
     const val SUCCESS = "verifyEmail.successView"
     const val CONTINUE = "verifyEmail.continueBtn"
     const val EXPIRED = "verifyEmail.expiredView"
+    const val UNAVAILABLE = "verifyEmail.unavailableView"
+    const val RETRY = "verifyEmail.retryBtn"
     const val RESEND = "verifyEmail.resendBtn"
     const val DIFFERENT_EMAIL = "verifyEmail.differentEmailBtn"
     const val TRUST_FOOTER = "verifyEmail.trustFooter"
@@ -116,6 +118,7 @@ fun VerifyEmailLandingScreen(
                     state = state,
                     onContinue = onContinue,
                     onResend = viewModel::resend,
+                    onRetry = viewModel::retry,
                     onUseDifferentEmail = onUseDifferentEmail,
                 )
                 Spacer(modifier = Modifier.height(Spacing.s10))
@@ -141,6 +144,7 @@ private fun PhaseBody(
     state: VerifyEmailLandingViewModel.UiState,
     onContinue: () -> Unit,
     onResend: () -> Unit,
+    onRetry: () -> Unit,
     onUseDifferentEmail: () -> Unit,
 ) {
     when (state.phase) {
@@ -219,6 +223,27 @@ private fun PhaseBody(
                         onClick = onUseDifferentEmail,
                     )
                 }
+            }
+
+        VerifyEmailLandingViewModel.Phase.Unavailable ->
+            StatePanel(
+                stateTag = VerifyEmailLandingTags.UNAVAILABLE,
+                halo = StatusHalo(tone = HaloCircleTone.Info, icon = PantopusIcon.Clock),
+                headline = "We couldn't check your link",
+                body = AnnotatedString(state.unavailableMessage),
+                pill =
+                    StatusWaitingPill(
+                        text = "Link still works",
+                        icon = PantopusIcon.Link,
+                        tone = StatusPillTone.Neutral,
+                    ),
+            ) {
+                PrimaryButton(
+                    label = "Try again",
+                    icon = PantopusIcon.RefreshCw,
+                    tag = VerifyEmailLandingTags.RETRY,
+                    onClick = onRetry,
+                )
             }
     }
 }

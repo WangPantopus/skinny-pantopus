@@ -11,6 +11,7 @@ package app.pantopus.android.ui.screens.homes.claim_review
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.HomeClaimComparisonClaimDto
 import app.pantopus.android.data.api.models.homes.HomeClaimComparisonDto
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimDto
@@ -709,7 +710,7 @@ class HomeClaimReviewViewModel
                 fallback: String = "Claimant",
             ): String {
                 name?.takeIf { it.isNotEmpty() }?.let { return it }
-                username?.takeIf { it.isNotEmpty() }?.let { return "@$it" }
+                MadeUpUsername.handle(username)?.let { return it }
                 return fallback
             }
 

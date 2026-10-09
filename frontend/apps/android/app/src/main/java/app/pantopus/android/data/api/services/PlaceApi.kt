@@ -25,8 +25,13 @@ interface PlaceApi {
      * `sections` as a comma-joined id list to lazy-load a subset (e.g.
      * a detail page refreshing only its own group); null ⇒ the full
      * launch set. Route `backend/routes/placeIntelligence.js:37`.
+     *
+     * Every request carries `ballot=1`, the client opt-in for the Ballot P0
+     * payload (the server adds the `civic_election` card and `civic_districts`
+     * governments only when it is present and `ballot_p0` is on for the
+     * viewer), so a build without Ballot never sees Ballot semantics.
      */
-    @GET("api/homes/{id}/intelligence")
+    @GET("api/homes/{id}/intelligence?ballot=1")
     suspend fun intelligence(
         @Path("id") homeId: String,
         @Query("sections") sections: String? = null,

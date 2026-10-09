@@ -622,9 +622,12 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   // ── Derived state ──
 
   const isOwnProfile = currentUser?.id === profile.id || currentUser?.username === profile.username;
-  const fullName = profile.firstName && profile.lastName
+  // The server says when the username was made up (user_…, or the pre-October-7 kind built from the email).
+  const chosenHandle = profile.usernameIsGenerated ? null : chosenUsername(profile.username);
+  const realName = profile.firstName && profile.lastName
     ? `${profile.firstName} ${profile.lastName}`
-    : profile.name || chosenUsername(profile.username) || 'Pantopus member';
+    : profile.name || chosenHandle;
+  const fullName = realName || 'Pantopus member';
 
   const displayRating = reviewStats.average || profile.average_rating || 0;
   const displayReviewCount = reviewStats.total || profile.review_count || 0;
@@ -690,6 +693,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       <ProfileHeader
         profile={profile}
         fullName={fullName}
+        hasName={Boolean(realName)}
+        handle={chosenHandle}
         residency={residency}
         showOwnerOnly={showOwnerOnly}
         ownerPreviewContext={ownerPreviewContext}
@@ -742,7 +747,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
             reviews={reviews}
             userGigs={userGigs}
             gigsLoading={gigsLoading}
-            onSkillRequest={handleRequestHire}
+            onSkillRequest={launchFeatures.openGigs ? handleRequestHire : undefined}
             onViewPortfolio={() => setActiveTab('portfolio')}
           />
         )}
@@ -794,11 +799,18 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         )}
 
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 mt-6">
-          <div className="space-y-4">
-            <ReliabilityPanel profile={profile} reliabilityLabel={reliabilityLabel} reliabilityScore={hasReliabilityHistory ? reliabilityScore : null} />
-          </div>
+          {/* Launch cut #4 (Open Gigs): no task reliability, and a skill hires no one, as in the apps. */}
+          {launchFeatures.openGigs && (
+            <div className="space-y-4">
+              <ReliabilityPanel profile={profile} reliabilityLabel={reliabilityLabel} reliabilityScore={hasReliabilityHistory ? reliabilityScore : null} />
+            </div>
+          )}
           <AboutCard profile={profile} residency={residency} />
-          <SkillsCard skills={featuredSkills} onAction={showOwnerOnly ? () => router.push('/app/profile/edit') : handleRequestHire} ownerView={showOwnerOnly} />
+          <SkillsCard
+            skills={featuredSkills}
+            onAction={showOwnerOnly ? () => router.push('/app/profile/edit') : launchFeatures.openGigs ? handleRequestHire : undefined}
+            ownerView={showOwnerOnly}
+          />
         </div>
       </main>
 

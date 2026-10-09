@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ChangeLocationModal from '@/components/hub/ChangeLocationModal';
 import {
@@ -30,6 +30,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
 import type { HubToday } from '@pantopus/types';
+import BallotTodaySection, { useBallotToday } from '@/components/ballot/BallotTodaySection';
 
 // ── Icon helpers ─────────────────────────────────────────────────
 
@@ -100,6 +101,9 @@ function freshnessLabel(fetchedAt: string): string {
 
 export default function HubTodayPage() {
   const router = useRouter();
+  // /app/today is a tab (bottom bar, sidebar): nothing to go back to. The Back
+  // arrow stays on /app/hub/today, which a card or the morning push opens.
+  const isTab = usePathname() === '/app/today';
   const queryClient = useQueryClient();
   const [showLocationPicker, setShowLocationPicker] = useState(false);
 
@@ -120,6 +124,10 @@ export default function HubTodayPage() {
     enabled: hasToken,
   });
 
+  // Ballot P0 (ballot_p0): read alongside the briefing, not after it; sends
+  // nothing for a viewer who does not have the flag.
+  const ballot = useBallotToday(hasToken);
+
   const today = query.data ?? null;
   const loading = !mounted || (query.isPending && hasToken);
   const error = query.error instanceof Error ? query.error.message : '';
@@ -130,13 +138,15 @@ export default function HubTodayPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.back()}
-              className="p-1.5 hover:bg-app-hover rounded-lg transition"
-              aria-label="Back"
-            >
-              <ArrowLeft className="w-5 h-5 text-app-text" />
-            </button>
+            {!isTab && (
+              <button
+                onClick={() => router.back()}
+                className="p-1.5 hover:bg-app-hover rounded-lg transition"
+                aria-label="Back"
+              >
+                <ArrowLeft className="w-5 h-5 text-app-text" />
+              </button>
+            )}
             <h1 className="text-xl font-bold text-app-text">Today</h1>
           </div>
           <button
@@ -184,8 +194,11 @@ export default function HubTodayPage() {
 
         {/* Empty */}
         {!loading && !error && (!today || today.display_mode === 'hidden') && (
-          <div className="rounded-xl border border-app bg-surface dark:bg-surface-dark p-8 text-center">
-            <p className="text-sm text-app-text-secondary">No briefing available right now.</p>
+          <div className="space-y-4">
+            <div className="rounded-xl border border-app bg-surface dark:bg-surface-dark p-8 text-center">
+              <p className="text-sm text-app-text-secondary">No briefing available right now.</p>
+            </div>
+            <BallotTodaySection data={ballot} />
           </div>
         )}
 
@@ -283,6 +296,9 @@ export default function HubTodayPage() {
                 </div>
               )}
             </div>
+
+            {/* Ballot P0 (ballot_p0): ballot week and "Moved this year?" */}
+            <BallotTodaySection data={ballot} />
 
             {/* Alerts */}
             {today.alerts.length > 0 && (

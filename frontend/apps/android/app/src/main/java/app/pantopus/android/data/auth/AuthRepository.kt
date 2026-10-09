@@ -105,6 +105,11 @@ sealed class AuthError(
         val detail: String,
     ) : AuthError(detail)
 
+    /** A 5xx from a check that can simply be repeated (the email link wasn't used). */
+    data class TemporarilyUnavailable(
+        val detail: String,
+    ) : AuthError(detail)
+
     data object Unknown : AuthError("Something went wrong. Please try again.")
 }
 
@@ -494,7 +499,9 @@ class AuthRepository
                     observability.track("auth.session_resume_invalid", mapOf("status" to status.toString()))
                     ResumeOutcome.GrantRejected
                 } else {
-                    ResumeOutcome.Transient(AuthError.ServerError("Server error $status.").message)
+                    // A 503 says why (sign-in busy: the server kept the grant for another try).
+                    val reason = AuthErrorBodyParser.parse(e.errorBodyString())?.error?.takeIf { it.isNotBlank() }
+                    ResumeOutcome.Transient(reason ?: AuthError.ServerError("Server error $status.").message)
                 }
             } catch (_: IOException) {
                 ResumeOutcome.Transient(AuthError.NetworkError.message)
@@ -1438,11 +1445,14 @@ private object AuthErrorMapper {
                 val status = t.code()
                 if (status == 429) return AuthError.RateLimited
                 val raw = t.response()?.errorBody()?.string().orEmpty()
-                val message = extractMessage(raw) ?: raw
+                val message = extractMessage(raw)
                 if (status >= 500) {
-                    AuthError.ServerError(message.ifBlank { "Server error $status." })
+                    // Pantopus or its sign-in service busy: the link wasn't used and can be tried again.
+                    AuthError.TemporarilyUnavailable(
+                        message ?: "We couldn't check your link just now. It still works: try again in a minute.",
+                    )
                 } else {
-                    AuthError.ServerError(message.ifBlank { "Request failed ($status)." })
+                    AuthError.ServerError((message ?: raw).ifBlank { "Request failed ($status)." })
                 }
             }
             else -> AuthError.Unknown

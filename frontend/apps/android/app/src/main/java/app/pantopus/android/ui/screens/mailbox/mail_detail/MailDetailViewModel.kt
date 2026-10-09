@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.mailbox.MailDetail
 import app.pantopus.android.data.api.models.mailbox.MailRemovedDto
 import app.pantopus.android.data.api.models.mailbox.v2.BookletDetailDto
@@ -979,7 +980,7 @@ class MailDetailViewModel
                 // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
                 val trust = MailTrust.fromRaw(detail.senderTrust)
                 val senderDisplayName = resolveSenderName(detail)
-                val senderMeta = detail.sender?.username?.let { "@$it" } ?: detail.senderAddress
+                val senderMeta = MadeUpUsername.handle(detail.sender?.username) ?: detail.senderAddress
                 val senderTypeLabel =
                     senderTypeLabel(
                         category = category,

@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotateRad
 import androidx.compose.ui.graphics.drawscope.withTransform
-import app.pantopus.android.data.api.models.place.WeatherConditionCode
 import app.pantopus.android.ui.theme.SkyPalette
 import app.pantopus.android.ui.theme.SkyPalette.mixed
 import kotlin.math.sin
@@ -22,21 +21,26 @@ import kotlin.math.sin
 /**
  * The bottom of the living sky: two hills, the resident's house and two trees as silhouettes in the
  * horizon's own colour. Windows glow after dusk (one stays lit late at night), the chimney smokes
- * below 50°F, snow caps the roof and hills, and the trees lean in the wind.
+ * below 50°F, snow caps the roof and hills, and the trees lean and the smoke bends in the wind.
  * Parity twin of iOS `TodaySkyGround.swift`.
  */
 internal class TodaySkyGround(
     private val scene: SkyScene,
     private val weather: SkyPalette.Weather,
     private val moment: SkyMoment,
-    private val condition: WeatherConditionCode,
+    /** How the trees lean and the chimney smoke bends (`SkyWind.kt`). */
+    private val wind: SkyWind,
     private val cold: Boolean,
     private val still: Boolean,
     /** Bins at the curb, in order: "garbage", "recycling", "yard_waste". */
     private val bins: List<String> = emptyList(),
     private val season: SkySeason = SkySeason.SUMMER,
+    /** The home's kind and the far hill's lights. */
+    details: SkyDetails = SkyDetails(),
 ) {
     private val night = moment.phase == SkyPalette.Phase.NIGHT
+    private val home = details.home
+    private val streetLights = details.streetLights
 
     private class Tones(
         val backHill: Color,
@@ -77,6 +81,7 @@ internal class TodaySkyGround(
                 close()
             }
         drawPath(back, tones.backHill)
+        if (streetLights > 0 && (moment.phase == SkyPalette.Phase.DUSK || night)) paintStreetLights(scene, streetLights)
         val front =
             Path().apply {
                 moveTo(0f, y + 14)
@@ -88,9 +93,14 @@ internal class TodaySkyGround(
             }
         drawPath(front, tones.frontHill)
         val house = Offset(w * 0.7f, y + 7)
-        paintHouse(tones, house)
+        when (home) {
+            SkyHome.HOUSE -> paintHouse(tones, house)
+            SkyHome.TOWNHOUSE -> paintTownhouses(HomeLight(scene, moment), tones.house, house)
+            SkyHome.APARTMENT -> paintApartment(HomeLight(scene, moment), tones.house, house)
+            SkyHome.MOBILE -> paintMobileHome(HomeLight(scene, moment), tones.house, house)
+        }
         if (bins.isNotEmpty()) paintBins(tones, house)
-        if (cold && !still) paintSmoke(house)
+        if (cold && !still && home.chimney) paintSmoke(house)
         paintTrees(tones, house)
     }
 
@@ -99,7 +109,7 @@ internal class TodaySkyGround(
         tones: Tones,
         origin: Offset,
     ) {
-        val right = origin.x - 27
+        val right = origin.x - home.halfWidth - 2
         // At the curb: a little in front of the house.
         val base = origin.y + 8
         if (moment.phase == SkyPalette.Phase.DUSK || night) {
@@ -174,12 +184,14 @@ internal class TodaySkyGround(
         drawRect(door, Offset(x - 3, y - 11), Size(6f, 11f))
     }
 
-    /** Three puffs rising from the chimney on a loop. */
+    /** Three puffs rising from the chimney on a loop: straight up when it's calm, bent over and kept low in a strong wind. */
     private fun DrawScope.paintSmoke(origin: Offset) {
+        val drift = if (wind.calm) 0.0 else wind.toward * (2 + wind.mph * 0.8)
+        val rise = 34 * (1 - 0.45 * wind.strength)
         repeat(3) { index ->
             val progress = (scene.time * 0.35 + index / 3.0) % 1.0
-            val x = origin.x + 11 + sin(progress * 5 + index) * 3 + progress * 10
-            val y = origin.y - 46 - progress * 34
+            val x = origin.x + 11 + sin(progress * 5 + index) * 3 + progress * drift
+            val y = origin.y - 46 - progress * rise
             drawCircle(
                 SkyPalette.smoke.copy(alpha = (0.35 * (1 - progress)).toFloat()),
                 (3 + progress * 6).toFloat(),
@@ -189,16 +201,18 @@ internal class TodaySkyGround(
     }
 
     /**
-     * A round tree and a pine to the right of the house; both lean in the wind. The round tree
-     * blossoms in spring, turns in autumn and is bare in winter.
+     * A round tree and a pine to the right of the house; both lean with the wind and sway in its
+     * gusts (a still lean with motion off). The round tree blossoms in spring, turns in autumn and
+     * is bare in winter.
      */
     private fun DrawScope.paintTrees(
         tones: Tones,
         origin: Offset,
     ) {
-        val lean = if (condition == WeatherConditionCode.WIND && !still) (sin(scene.time * 2.2) * 0.08).toFloat() else 0f
+        val lean = wind.lean(scene.time, still).toFloat()
         withTransform({
-            translate(origin.x + 36, origin.y + 2)
+            // Beside the home, however wide it is.
+            translate(origin.x + 11 + home.halfWidth, origin.y + 2)
             rotateRad(lean, pivot = Offset.Zero)
         }) {
             drawRect(tones.house, Offset(-1.5f, -12f), Size(3f, 12f))
@@ -211,7 +225,7 @@ internal class TodaySkyGround(
             }
         }
         withTransform({
-            translate(origin.x + 60, origin.y + 3)
+            translate(origin.x + 35 + home.halfWidth, origin.y + 3)
             rotateRad(lean * 0.7f, pivot = Offset.Zero)
         }) {
             drawRect(tones.house, Offset(-1.5f, -7f), Size(3f, 8f))
@@ -271,12 +285,14 @@ internal class TodaySkyGround(
         }
     }
 
-    /** Two leaves drifting down from the canopy on a loop. */
+    /** Two leaves drifting down from the canopy on a loop, carried downwind. */
     private fun DrawScope.paintFallingLeaves() {
+        val carry = wind.toward * wind.strength * 16
         repeat(2) { index ->
             val progress = (scene.time * 0.22 + index * 0.5) % 1.0
+            val flutter = sin(progress * 9 + index) * 4
             withTransform({
-                translate((6 - index * 12 + sin(progress * 9 + index) * 4).toFloat(), (-20 + progress * 22).toFloat())
+                translate((6 - index * 12 + flutter + carry * progress).toFloat(), (-20 + progress * 22).toFloat())
                 rotateRad((progress * 6 + index).toFloat(), pivot = Offset.Zero)
             }) {
                 val alpha = (if (night) 0.4f else 0.85f) * (1 - progress.toFloat() * 0.7f)
@@ -291,9 +307,10 @@ internal class TodaySkyGround(
             width: Float,
             height: Float,
             count: Int,
+            home: SkyHome = SkyHome.HOUSE,
         ): Offset =
             // Horizon (34 above the bottom), down 7 to the house's ground line and 8 more to the curb,
             // then up 5 to the bins' middle.
-            Offset(width * 0.7f - 27 - (count * 9f - 2) / 2, height - 34 + 7 + 8 - 5)
+            Offset(width * 0.7f - home.halfWidth - 2 - (count * 9f - 2) / 2, height - 34 + 7 + 8 - 5)
     }
 }

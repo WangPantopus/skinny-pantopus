@@ -113,6 +113,11 @@ public final class AuthErrorViewModel {
                 headline: "Something went wrong",
                 body: "We hit a snag on our end. Give it another try."
             )
+        case .temporarilyUnavailable:
+            AuthErrorCopy(
+                headline: "Pantopus is busy",
+                body: "Give it a minute and try again."
+            )
         case .unknown:
             AuthErrorCopy(
                 headline: "Something went wrong",
@@ -128,7 +133,7 @@ public final class AuthErrorViewModel {
         switch error {
         case .emailAlreadyExists, .invalidCredentials, .weakPassword:
             false
-        case .networkError, .rateLimited, .serverError, .unknown:
+        case .networkError, .rateLimited, .serverError, .temporarilyUnavailable, .unknown:
             true
         }
     }

@@ -17,6 +17,7 @@ import {
   summarizeText,
 } from '@/lib/publicShare';
 import OpenInAppButton from '@/components/public-share/OpenInAppButton';
+import { authPageHref } from '@/lib/auth-utils';
 import SlotSignupButton from '@/components/public-share/SlotSignupButton';
 import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
 
@@ -68,8 +69,10 @@ function getOrganizerUser(
 }
 
 function getProfileHref(user: OrganizerUser | null | undefined): string | null {
-  if (typeof user?.username !== 'string' || !user.username.trim()) return null;
-  return `/${encodeURIComponent(user.username.trim())}`;
+  const handle = typeof user?.username === 'string' ? user.username.trim() : '';
+  if (handle) return `/${encodeURIComponent(handle)}`;
+  // The server leaves out a made-up username; the profile page also opens by id.
+  return user?.id ? `/${encodeURIComponent(user.id)}` : null;
 }
 
 function initialsForName(value: string): string {
@@ -217,6 +220,15 @@ export default async function PublicSupportTrainPage({
               >
                 Try Again
               </a>
+            ) : null}
+            {accessRestricted ? (
+              // Signed-in visitors never see this page (the middleware opens the train in the app).
+              <Link
+                href={authPageHref('/login', `/app/support-trains/${encodeURIComponent(id)}`)}
+                className="rounded-full border border-app px-5 py-2.5 text-sm font-semibold text-app hover:bg-surface-muted"
+              >
+                Sign In To View
+              </Link>
             ) : null}
             <Link
               href="/"

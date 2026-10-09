@@ -124,6 +124,20 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- "Today at your address" home-screen widget: the Today tab's living sky and one useful
+             line, from the snapshot TodayWidgetStore keeps; a tap opens pantopus://today. -->
+        <receiver
+            android:name=".widget.TodayWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_today_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_today_info" />
+        </receiver>
+
         <!-- P6c — "Tasks near me" home-screen widget. Reads the snapshot
              WidgetSnapshotStore persists after each successful feed
              fetch; row taps deep-link pantopus://gigs/<id> (the Phase 6b

@@ -19,8 +19,8 @@ import kotlin.math.roundToInt
  * One true, timely line for the Now card ("🌕 FULL MOON TONIGHT" in place of
  * "NOW"), and the season for the tree in the scene. A note is shown only when
  * it is true for this address right now: the household's own pickup day, a
- * freezing forecast, a meteor shower's peak night, the moon's phase, a
- * solstice or equinox, the week's warmest day, golden hour.
+ * freezing forecast, strong wind, a meteor shower's peak night, the moon's
+ * phase, a solstice or equinox, the week's warmest day, golden hour.
  * Parity twin of iOS `TodaySkyNotes.swift`.
  */
 
@@ -46,6 +46,8 @@ data class SkyNote(
         EQUINOX,
         WARMEST_DAY,
         GOLDEN_HOUR,
+        AIR,
+        WIND,
     }
 
     companion object {
@@ -55,11 +57,16 @@ data class SkyNote(
             moment: SkyMoment,
             weather: PlaceWeatherData,
             pickups: List<PlaceCalendarEvent>,
+            air: SkyAir? = null,
         ): SkyNote? {
             val sky = skyWeather(weather.conditionCode)
             val clear = sky == SkyPalette.Weather.CLEAR || sky == SkyPalette.Weather.PARTLY
-            return bins(now, moment, pickups)
+            // Unhealthy air (151+) comes first; air for sensitive groups after the bins.
+            return air?.takeIf { it.aqi >= 151 }?.let { air(it) }
+                ?: bins(now, moment, pickups)
+                ?: air(air)
                 ?: frost(weather, moment)
+                ?: strongWind(weather)
                 ?: (if (clear) meteors(now, moment) else null)
                 ?: moon(moment, clear)
                 ?: solsticeOrEquinox(now)
@@ -108,6 +115,16 @@ data class SkyNote(
                     .minOfOrNull { it.tempF }
                     ?.takeIf { moment.minutes >= 15 * 60 && it <= 32 } ?: return null
             return SkyNote(Kind.FROST, "❄️ FROST TONIGHT", "Frost likely tonight, down to ${low.roundToInt()}°.")
+        }
+
+        /** Air at 101 or worse: "🌫️ SMOKY AIR · AQI 168" when smoke leads it. */
+        fun air(air: SkyAir?): SkyNote? {
+            if (air == null || air.aqi < 101) return null
+            return SkyNote(
+                Kind.AIR,
+                "${if (air.smoky) "🌫️ SMOKY AIR" else "😷 POOR AIR"} · AQI ${air.aqi}",
+                "${air.label}, air quality index ${air.aqi}.",
+            )
         }
 
         /** The major showers' peak nights, by the date the night starts (the night of D into D + 1). */
@@ -210,6 +227,37 @@ data class SkyNote(
                 .ofSecondOfDay((minutes * 60).toLong().coerceIn(0L, 86_399L))
                 .format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
     }
+}
+
+/**
+ * Sustained wind of 30 mph or more (about where wind advisories start), now or in the next six hours:
+ * rare, and a reason to secure loose things.
+ */
+private fun strongWind(weather: PlaceWeatherData): SkyNote? {
+    weather.windMph?.takeIf { it >= 30 }?.let {
+        return SkyNote(SkyNote.Kind.WIND, "💨 STRONG WIND NOW", "Strong wind now, ${it.roundToInt()} miles per hour.")
+    }
+    val peak = weather.hourly.take(6).mapNotNull { it.windMph }.maxOrNull()?.takeIf { it >= 30 } ?: return null
+    return SkyNote(
+        SkyNote.Kind.WIND,
+        "💨 STRONG WIND AHEAD",
+        "Strong wind ahead, up to ${peak.roundToInt()} miles per hour in the next six hours.",
+    )
+}
+
+/**
+ * The air reading the sky and its note need: the index, its label, and whether fine particles
+ * (in the Northwest, wildfire smoke) lead it.
+ */
+data class SkyAir(
+    val aqi: Int,
+    /** "Unhealthy for sensitive groups". */
+    val label: String,
+    val smoky: Boolean,
+) {
+    /** How thick the smoke looks: none below 101, up to 0.85 from 301. */
+    val smoke: Double
+        get() = if (!smoky || aqi < 101) 0.0 else minOf(0.85, 0.35 + (aqi - 101) / 400.0)
 }
 
 /** Northern-hemisphere seasons as a tree shows them: blossom, leaf, colour, bare. */

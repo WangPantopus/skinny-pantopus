@@ -22,6 +22,7 @@ const request = require('supertest');
 const { resetTables, seedTable, setRpcMock } = require('./__mocks__/supabaseAdmin');
 const { encodeGeohash } = require('../utils/geohash');
 
+const featureFlagService = require('../services/featureFlagService');
 const providerOrchestrator = require('../services/context/providerOrchestrator');
 const neighborhoodProfileService = require('../services/ai/neighborhoodProfileService');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
@@ -178,6 +179,7 @@ jest.setTimeout(30000);
 describe('GET /api/homes/:id/intelligence', () => {
   let app;
   const savedAttomKey = process.env.ATTOM_API_KEY;
+  const savedFetch = global.fetch;
 
   beforeEach(() => {
     resetTables();
@@ -191,12 +193,18 @@ describe('GET /api/homes/:id/intelligence', () => {
     providerOrchestrator.getHubToday.mockResolvedValue(defaultHubToday());
     neighborhoodProfileService.getProfile.mockResolvedValue(defaultNeighborhoodProfile());
     propertyIntelligenceService.getProfile.mockReset();
+    // No network (see the header): a provider call the mocks above don't cover
+    // fails at once. A real one can hit its 8 s timeout on a slow CI runner,
+    // and a timeout cools that section down for the rest of this file, which
+    // the Ballot tests (their clock is fixed in the past) see as never ending.
+    global.fetch = jest.fn(() => Promise.reject(new Error('no network in this test')));
     app = buildApp();
   });
 
   afterAll(() => {
     if (savedAttomKey === undefined) delete process.env.ATTOM_API_KEY;
     else process.env.ATTOM_API_KEY = savedAttomKey;
+    global.fetch = savedFetch;
   });
 
   // ── Regression: the Today section used to hardcode `hourly: []`,
@@ -247,8 +255,8 @@ describe('GET /api/homes/:id/intelligence', () => {
 
       // Rows without a usable temperature are dropped, not rendered as gaps.
       expect(w.data.hourly).toEqual([
-        { time: '2026-06-07T10:00:00.000Z', temp_f: 63, condition_code: 'partly_cloudy', precip_chance: 5 },
-        { time: '2026-06-07T11:00:00.000Z', temp_f: 65, condition_code: 'rain', precip_chance: 70 },
+        { time: '2026-06-07T10:00:00.000Z', temp_f: 63, condition_code: 'partly_cloudy', precip_chance: 5, wind_mph: null },
+        { time: '2026-06-07T11:00:00.000Z', temp_f: 65, condition_code: 'rain', precip_chance: 70, wind_mph: null },
       ]);
 
       // A day missing either bound is dropped — the contract types both as numbers.
@@ -711,6 +719,89 @@ describe('GET /api/homes/:id/intelligence', () => {
       expect(realRent.data.rent_median).toBeNull();
       expect(realRent.data.rent_p25).toBeNull();
       expect(realRent.data.sample_size).toBeNull();
+    });
+  });
+
+  // ── Ballot (docs/ballot-implementation-plan-2026-09-24.md): the payload is
+  // for apps that ask for it (`ballot=1`) AND users the flag allows. An older
+  // app never asks, so it never sees a Ballot field (an after-election card
+  // would read "In 0 days" there). The route decides once, from req.user.
+  describe('Ballot opt-in (ballot=1)', () => {
+    const OREGON = {
+      result: {
+        geographies: {
+          States: [{ GEOID: '41', NAME: 'Oregon', STATE: '41' }],
+          Counties: [{ GEOID: '41051', NAME: 'Multnomah County', STATE: '41', COUNTY: '051' }],
+          'Incorporated Places': [{ GEOID: '4159000', NAME: 'Portland city', STATE: '41', PLACE: '59000' }],
+        },
+      },
+    };
+    const getSection = async (id, query = '', user = USER) => {
+      const res = await request(app)
+        .get(`/api/homes/${HOME_ID}/intelligence?sections=${id}${query}`)
+        .set('x-test-user-id', user);
+      expect(res.status).toBe(200);
+      return sectionsById(res.body)[id];
+    };
+    const flagFor = (betaUserIds, enabledGlobally = false) => seedTable('FeatureFlag', [{
+      flag_name: 'ballot_p0', enabled_globally: enabledGlobally, enabled_for_internal_team: false, beta_user_ids: betaUserIds,
+    }]);
+
+    beforeEach(() => {
+      featureFlagService.invalidateFlagCache();
+      seedHome();
+      // The card reads the real clock: fix only the date, inside Oregon's season.
+      jest.useFakeTimers({
+        now: new Date('2026-10-05T19:00:00.000Z'),
+        doNotFake: ['nextTick', 'setImmediate', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'clearImmediate', 'queueMicrotask', 'performance', 'hrtime'],
+      });
+      global.fetch = jest.fn((url) => Promise.resolve(String(url).includes('geocoding.geo.census.gov')
+        ? { ok: true, status: 200, json: () => Promise.resolve(OREGON) }
+        : { ok: false, status: 500, json: () => Promise.resolve(null) }));
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      jest.useRealTimers();
+      delete global.fetch;
+      featureFlagService.invalidateFlagCache();
+    });
+
+    test('an app that did not ask for Ballot gets the pre-Ballot section, even with the flag on for everyone', async () => {
+      flagFor([], true);
+      const env = await getSection('civic_election');
+      expect(env.status).toBe('unavailable');
+      expect(env.data ?? null).toBeNull();
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    test('ballot=1 without the flag for this user is the pre-Ballot section too', async () => {
+      flagFor([OTHER]);
+      const env = await getSection('civic_election', '&ballot=1');
+      expect(env.status).toBe('unavailable');
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    test('ballot=1 with the flag gives the Your ballot card, and the governments on the Civic page', async () => {
+      flagFor([USER]);
+      const card = await getSection('civic_election', '&ballot=1');
+      expect(card.status).toBe('ready');
+      expect(card.data).toMatchObject({ coverage: 'supported', state: 'OR', election_id: '2026-11-03-general', phase: 'in_season' });
+      const civic = await getSection('civic_districts', '&ballot=1');
+      expect(civic.data.governments).toMatchObject({ count: 4, count_is_minimum: true });
+      // …and only when asked: the same page without ballot=1 carries no governments.
+      const plain = await getSection('civic_districts');
+      expect(plain.data).not.toHaveProperty('governments');
+    });
+
+    test('the flag is evaluated once per request, from the signed-in user, and only for ballot=1', async () => {
+      flagFor([USER]);
+      const isEnabled = jest.spyOn(featureFlagService, 'isFeatureEnabled');
+      await getSection('civic_election');
+      expect(isEnabled).not.toHaveBeenCalled();
+      await getSection('civic_election', '&ballot=1');
+      expect(isEnabled).toHaveBeenCalledTimes(1);
+      expect(isEnabled).toHaveBeenCalledWith('ballot_p0', expect.objectContaining({ id: USER }));
     });
   });
 });

@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -93,6 +95,11 @@ fun TodaySkyHero(
     sun: PlaceSunriseSunsetData?,
     /** The address calendar's upcoming dates: on the evening before a household pickup the bins stand at the curb. */
     pickups: List<PlaceCalendarEvent> = emptyList(),
+    /** The air reading: smoke veils the sky, and bad air leads the card. */
+    air: SkyAir? = null,
+    /** The resident's kind of home, and the far hill's lights after dusk. */
+    home: SkyHome = SkyHome.HOUSE,
+    streetLights: Int = 0,
     /** Tapping the bins shows the pickup schedule. */
     onBins: (() -> Unit)? = null,
 ) {
@@ -105,17 +112,24 @@ fun TodaySkyHero(
     val now = rememberMinuteClock()
     val hours = remember(data.hourly, now) { SkyScrub.hours(data.hourly, now) }
     val scrub = rememberSkyScrub(reduced)
+    // When the card appeared or got new data: the sun or moon rises into place.
+    val shownAt = remember(data) { System.currentTimeMillis() }
     val picked = scrub.index?.let { hours.getOrNull(it) }
-    val current = SkyView.at(now, null, data, sun, pickups)
-    val shown = if (picked == null) current else SkyView.at(now, picked, data, sun, pickups)
+    val current = SkyView.at(now, null, data, sun, pickups, air)
+    val shown = if (picked == null) current else SkyView.at(now, picked, data, sun, pickups, air)
     val sky = SkyPalette.sky(shown.moment.phase, skyWeather(shown.weather.conditionCode))
+    // How far the card has scrolled above the top of the page (dp): the sky's far layer lags behind.
+    val hidden = remember { mutableFloatStateOf(0f) }
+    // The card's height at rest (dp), kept while sliding: an hour with fewer chips never shrinks the card under the finger.
+    var restHeight by remember { mutableFloatStateOf(0f) }
+    val pxPerDp = LocalDensity.current.density
     val shape = RoundedCornerShape(20.dp)
     Box(
         modifier =
             Modifier
                 .fillMaxWidth()
                 // Grows with large fonts instead of clipping the reading; the ground stays at the bottom.
-                .heightIn(min = 188.dp)
+                .heightIn(min = cardMinHeight(scrub.index != null, restHeight))
                 .shadow(elevation = 10.dp, shape = shape, ambientColor = sky.mid, spotColor = sky.mid)
                 .clip(shape)
                 // Behind the crossfade between two hours, so the page never shows through.
@@ -125,50 +139,89 @@ fun TodaySkyHero(
                 .onGloballyPositioned {
                     val bounds = it.boundsInWindow()
                     onScreen = bounds.bottom > 0f && bounds.top < screenHeight
+                    // The scroll container clips the bounds, so the difference is what's scrolled away.
+                    hidden.floatValue = ((bounds.top - it.positionInWindow().y) / pxPerDp).coerceAtLeast(0f)
+                    if (scrub.index == null) restHeight = it.size.height / pxPerDp
                 }.skyScrubGesture(hours.size, scrub)
                 .testTag("todaySkyHero"),
     ) {
+        // A new hour, phase or kind of weather crossfades in.
         Crossfade(
-            targetState = picked,
+            targetState = shown,
             modifier = Modifier.matchParentSize(),
-            animationSpec = tween(if (reduced) 0 else 180),
-            label = "skyHour",
-        ) { hour ->
-            val painter = (if (hour == picked) shown else SkyView.at(now, hour, data, sun, pickups)).painter(!animating)
+            animationSpec =
+                tween(
+                    if (reduced) {
+                        0
+                    } else if (picked == null) {
+                        600
+                    } else {
+                        180
+                    },
+                ),
+            label = "skyScene",
+        ) { view ->
+            val painter = view.painter(!animating, home, streetLights)
             Canvas(modifier = Modifier.fillMaxSize().clearAndSetSemantics { }) {
                 val t = time.doubleValue
                 val perDp = density
+                // Eased over 0.9 s; in place at once without motion or while sliding.
+                val progress = if (animating && view.time == now) ((System.currentTimeMillis() - shownAt) / 900f).coerceIn(0f, 1f) else 1f
+                val rise = 1 - (1 - progress) * (1 - progress) * (1 - progress)
                 withTransform({ scale(perDp, perDp, pivot = Offset.Zero) }) {
-                    painter.paint(this, size.width / perDp, size.height / perDp, t)
+                    // A third of the way behind, never more than 60 dp, and not with animations off.
+                    val drift = if (reduced) 0f else (hidden.floatValue * 0.3f).coerceAtMost(60f)
+                    painter.paint(this, size.width / perDp, size.height / perDp, t, rise, drift)
                 }
             }
         }
         SkyReading(SkyReadingModel.of(data, current.note, picked, now), hours.size, scrub)
         // The bins only stand at the curb now, not in an hour slid to.
         val bins = current.note?.takeIf { picked == null && it.bins.isNotEmpty() }
-        if (bins != null && onBins != null) BinsTarget(bins, onBins)
+        if (bins != null && onBins != null) BinsTarget(bins, home, onBins)
         scrub.index?.takeIf { picked != null }?.let { SkyScrubTrack(it, hours.size) }
         SkyScrubHint(hours.size, scrubbing = scrub.index != null)
     }
 }
 
-/** What the card shows at a moment: now, or the forecast [hour] slid to. */
-private class SkyView(
+/** At least 188 dp; while sliding, the card's height at rest, so an hour with fewer chips never shrinks it under the finger. */
+private fun cardMinHeight(
+    scrubbing: Boolean,
+    rest: Float,
+) = if (scrubbing) maxOf(188f, rest).dp else 188.dp
+
+/** What the card shows at a moment: now, or a forecast hour slid to. */
+private data class SkyView(
     val time: ZonedDateTime,
     val weather: PlaceWeatherData,
     val moment: SkyMoment,
     val note: SkyNote?,
+    val air: SkyAir?,
+    /** 0..1, from the forecast hour's chance of rain. */
+    val rain: Double,
 ) {
-    fun painter(still: Boolean) =
-        TodaySkyPainter(
-            condition = weather.conditionCode,
-            moment = moment,
-            temperature = weather.currentTempF,
-            note = note,
-            season = SkySeason.at(time.toLocalDate()),
-            meteorShower = SkyNote.meteors(time, moment) != null,
-            still = still,
-        )
+    fun painter(
+        still: Boolean,
+        home: SkyHome,
+        streetLights: Int,
+    ) = TodaySkyPainter(
+        condition = weather.conditionCode,
+        moment = moment,
+        temperature = weather.currentTempF,
+        note = note,
+        season = SkySeason.at(time.toLocalDate()),
+        still = still,
+        details =
+            SkyDetails(
+                meteorShower = SkyNote.meteors(time, moment) != null,
+                smoke = air?.smoke ?: 0.0,
+                rain = rain,
+                home = home,
+                streetLights = streetLights,
+                windMph = weather.windMph,
+                windFrom = weather.windDirection,
+            ),
+    )
 
     companion object {
         fun at(
@@ -177,11 +230,13 @@ private class SkyView(
             data: PlaceWeatherData,
             sun: PlaceSunriseSunsetData?,
             pickups: List<PlaceCalendarEvent>,
+            air: SkyAir?,
         ): SkyView {
             val time = hour?.time ?: now
             val weather = hour?.let { SkyScrub.weather(data, it) } ?: data
             val moment = SkyMoment.at(time, sun?.sunrise, sun?.sunset)
-            return SkyView(time, weather, moment, SkyNote.pick(time, moment, weather, pickups))
+            val note = SkyNote.pick(time, moment, weather, pickups, air)
+            return SkyView(time, weather, moment, note, air, SkyScrub.rain(data.hourly, time))
         }
     }
 }
@@ -190,10 +245,11 @@ private class SkyView(
 @Composable
 private fun BoxScope.BinsTarget(
     note: SkyNote,
+    home: SkyHome,
     onBins: () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.matchParentSize()) {
-        val center = TodaySkyGround.binsCenter(maxWidth.value, maxHeight.value, note.bins.size)
+        val center = TodaySkyGround.binsCenter(maxWidth.value, maxHeight.value, note.bins.size, home)
         Box(
             modifier =
                 Modifier
@@ -258,21 +314,30 @@ private class SkyReadingModel(
         }
 
         /**
-         * High/low and feels-like (or an hour's chance of rain), each in a dark glass chip: they sit near
-         * the bright horizon, where white text alone can't keep 4.5:1 on a light sky. Also as spoken.
+         * High/low, feels-like (or an hour's chance of rain or its wind) and the wind from 15 mph, each in a
+         * dark glass chip: they sit near the bright horizon, where white text alone can't keep 4.5:1 on a
+         * light sky. Each as shown and as spoken.
          */
         private fun chips(
             shown: PlaceWeatherData,
             picked: SkyScrubHour?,
         ): Pair<List<String>, String> {
-            val range = if (shown.highF != null && shown.lowF != null) shown.highF.roundToInt() to shown.lowF.roundToInt() else null
-            val extra = if (picked != null) SkyScrub.precipChip(picked) else shown.feelsLikeF?.let { "Feels like ${it.roundToInt()}°" }
-            val spoken =
-                listOfNotNull(
-                    range?.let { "High ${it.first}°, low ${it.second}°" },
-                    extra?.replaceFirstChar { if (picked == null) it.lowercaseChar() else it },
-                ).joinToString(", ")
-            return listOfNotNull(range?.let { "H ${it.first}° · L ${it.second}°" }, extra) to spoken
+            val range =
+                if (shown.highF != null && shown.lowF != null) {
+                    val (high, low) = shown.highF.roundToInt() to shown.lowF.roundToInt()
+                    "H $high° · L $low°" to "High $high°, low $low°"
+                } else {
+                    null
+                }
+            val extra =
+                if (picked != null) {
+                    SkyScrub.chip(picked)
+                } else {
+                    shown.feelsLikeF?.roundToInt()?.let { "Feels like $it°" to "feels like $it°" }
+                }
+            val wind = if (picked == null) SkyWind.chip(shown.windMph) else null
+            val chips = listOfNotNull(range, extra, wind)
+            return chips.map { it.first } to chips.joinToString(", ") { it.second }
         }
     }
 }
@@ -373,7 +438,7 @@ private fun Modifier.noteGlass(): Modifier =
         )
     }
 
-/** High/low and feels-like in dark glass chips; they wrap onto a second line rather than truncate. */
+/** High/low, feels-like and the wind in dark glass chips; they wrap onto a second line rather than truncate. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SkyChips(

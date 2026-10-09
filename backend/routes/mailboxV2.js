@@ -330,7 +330,8 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
 
     // Web drawer filter: the same fields the web row shows as unread, urgent and starred.
     if (filter === 'unread') {
-      query = query.is('opened_at', null);
+      // Unread: opened in neither the drawer view (opened_at) nor the Mail page or the apps (viewed).
+      query = query.is('opened_at', null).eq('viewed', false);
     } else if (filter === 'urgent') {
       query = query.in('urgency', ['time_sensitive', 'overdue', 'due_soon']);
     } else if (filter === 'starred') {

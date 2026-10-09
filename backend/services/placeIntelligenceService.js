@@ -49,7 +49,7 @@ const realRentService = require('./realRentService');
 const { locationFromCoordinates } = require('./context/locationResolver');
 
 const HOME_SELECT =
-  'id, owner_id, address, address2, city, state, zipcode, map_center_lat, map_center_lng, year_built, sq_ft, bedrooms, bathrooms, lot_sq_ft, home_type';
+  'id, owner_id, address, address2, city, state, zipcode, map_center_lat, map_center_lng, year_built, sq_ft, bedrooms, bathrooms, lot_sq_ft, home_type, move_in_date';
 
 // k-anon density bucket labels (mirror @pantopus/types PLACE_DENSITY_LABELS).
 const DENSITY_LABELS = {
@@ -247,9 +247,9 @@ function finiteNumber(value) {
 }
 
 // The contract's hourly strip wants { time, temp_f, condition_code,
-// precip_chance }; the provider speaks { datetime_utc, temp_f,
-// condition_code, precip_chance_pct }. Rows without a usable timestamp or
-// temperature are dropped rather than rendered as gaps in the strip.
+// precip_chance, wind_mph }; the provider speaks { datetime_utc, temp_f,
+// condition_code, precip_chance_pct, wind_mph }. Rows without a usable
+// timestamp or temperature are dropped rather than rendered as gaps in the strip.
 function mapWeatherHours(hourly) {
   if (!Array.isArray(hourly)) return [];
   const out = [];
@@ -265,9 +265,22 @@ function mapWeatherHours(hourly) {
       // keeps 0. The ENGINE input below deliberately keeps null instead —
       // that is where an absent probability was being read as "dry".
       precip_chance: finiteNumber(h.precip_chance_pct) ?? 0,
+      // null when the provider gave no speed: unknown, never "calm".
+      wind_mph: finiteNumber(h.wind_mph),
     });
   }
   return out;
+}
+
+// Both providers report where the wind comes FROM as a 16-point compass
+// label ("SW"); anything else reads as unknown.
+const COMPASS_POINTS = new Set([
+  'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+  'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW',
+]);
+function compassOrNull(direction) {
+  const d = String(direction || '').trim().toUpperCase();
+  return COMPASS_POINTS.has(d) ? d : null;
 }
 
 // The contract types high_f/low_f as non-null numbers, so a day missing
@@ -366,11 +379,15 @@ const AQI_STALE_MS = 3 * 60 * 60 * 1000;
 // unavailable; an EMPTY array is still "ready": "No active alerts").
 // `aqiMissing` says why `aqi` is null: 'error' when the provider failed
 // (a retryable error, never a coverage claim), 'no_reading' when it answered
-// with no monitor near the point, otherwise unknown.
+// with no monitor near the point, otherwise unknown. `weatherMissing` and
+// `alertsMissing` = 'error' do the same for those two.
 // `hub` / `home` feed the good-day verdicts and are absent for the
 // anonymous point snapshot (that section then reads unavailable and the
 // preview simply does not list it).
-function buildTodayEnvelopes({ weather, aqi, aqiMissing = null, alerts, weatherProvider, alertsProvider, asOf = null, hub = null, home = null }) {
+function buildTodayEnvelopes({
+  weather, aqi, aqiMissing = null, weatherMissing = null, alerts, alertsMissing = null,
+  weatherProvider, alertsProvider, asOf = null, hub = null, home = null,
+}) {
   const out = [];
 
   if (weather) {
@@ -385,12 +402,16 @@ function buildTodayEnvelopes({ weather, aqi, aqiMissing = null, alerts, weatherP
         feels_like_f: weather.feels_like_f ?? null,
         high_f: weather.high_f,
         low_f: weather.low_f,
+        wind_mph: finiteNumber(weather.wind_mph),
+        wind_direction: compassOrNull(weather.wind_direction),
         hourly: mapWeatherHours(weather.hourly),
         daily: mapWeatherDays(weather.daily),
       },
     }));
   } else {
-    out.push(serializePlaceSection('weather', { access: 'available', status: 'unavailable' }));
+    out.push(serializePlaceSection('weather', {
+      access: 'available', status: weatherMissing === 'error' ? 'error' : 'unavailable',
+    }));
   }
 
   if (aqi) {
@@ -435,7 +456,9 @@ function buildTodayEnvelopes({ weather, aqi, aqiMissing = null, alerts, weatherP
       access: 'available', asOf, source: todayProviderLabel(alertsProvider), status: 'ready', data: { active },
     }));
   } else {
-    out.push(serializePlaceSection('alerts', { access: 'available', status: 'unavailable' }));
+    out.push(serializePlaceSection('alerts', {
+      access: 'available', status: alertsMissing === 'error' ? 'error' : 'unavailable',
+    }));
   }
 
   // Verdicts, derived from what the two sections above already fetched —
@@ -495,10 +518,28 @@ async function composeToday(userId, home, hub) {
   });
 }
 
+// Settles with the provider's answer, or rejects once `ms` has passed. The
+// provider call itself keeps running and fills its cache for the next look.
+function withinBudget(promise, ms) {
+  if (!(ms > 0)) return promise;
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('over budget')), ms);
+    if (timer && typeof timer.unref === 'function') timer.unref();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 // Today for a POINT (no user, no home) — the anonymous preview's daily
 // snapshot. Calls the same providers the Hub uses, straight from a
 // lat/lng; each degrades on its own. Never throws.
-async function composeTodayForPoint(lat, lng) {
+//
+// `budgetMs` (the preview's per-section budget) applies to each provider on
+// its own, so one slow source fails only its own section: on October 8 the
+// Weather Service's alerts hung until their 5 s timeout and took weather and
+// air quality down with them. A provider that failed or ran out of time reads
+// as a retryable error, never as "not available for your area".
+async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
   // Required lazily: the providers pull in WeatherKit's JWT/logger chain,
   // which the dashboard route's test harness doesn't load — and the
   // preview is the only caller that needs them from here.
@@ -506,9 +547,9 @@ async function composeTodayForPoint(lat, lng) {
   const { fetchAQI } = require('./context/aqiProvider');
   const { fetchAlerts } = require('./context/alertsProvider');
   const [weatherResult, aqiResult, alertsResult] = await Promise.allSettled([
-    fetchWeather(lat, lng),
-    fetchAQI(lat, lng),
-    fetchAlerts(lat, lng),
+    withinBudget(fetchWeather(lat, lng), budgetMs),
+    withinBudget(fetchAQI(lat, lng), budgetMs),
+    withinBudget(fetchAlerts(lat, lng), budgetMs),
   ]);
   const w = weatherResult.status === 'fulfilled' ? weatherResult.value : null;
   const a = aqiResult.status === 'fulfilled' ? aqiResult.value : null;
@@ -522,6 +563,8 @@ async function composeTodayForPoint(lat, lng) {
         feels_like_f: w.current.feels_like_f ?? null,
         high_f: (w.daily && w.daily[0] && w.daily[0].high_f) ?? null,
         low_f: (w.daily && w.daily[0] && w.daily[0].low_f) ?? null,
+        wind_mph: w.current.wind_mph ?? null,
+        wind_direction: w.current.wind_direction ?? null,
         hourly: w.hourly,
         daily: w.daily,
       }
@@ -546,7 +589,9 @@ async function composeTodayForPoint(lat, lng) {
     weather,
     aqi,
     aqiMissing,
+    weatherMissing: !w || w.source === 'error' ? 'error' : null,
     alerts,
+    alertsMissing: !al || al.source === 'error' ? 'error' : null,
     weatherProvider: w?.provider,
     alertsProvider: al?.provider,
     asOf: (w && w.fetchedAt) || (a && a.fetchedAt) || new Date().toISOString(),
@@ -1043,8 +1088,8 @@ const COMPOSER_SECTIONS = [
   { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
   { ids: ['rent_band'], run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId, access }) => composeRealRent(home, tier, userId, !nonResidentViewer(access)) },
-  { ids: ['civic_districts'], run: ({ home }) => placeSectionAdapters.composeCivicDistricts(home) },
-  { ids: ['civic_election'], run: ({ home }) => placeSectionAdapters.composeCivicElection(home) },
+  { ids: ['civic_districts'], run: ({ home, ballot }) => placeSectionAdapters.composeCivicDistricts(home, { ballot }) },
+  { ids: ['civic_election'], run: ({ home, ballot }) => placeSectionAdapters.composeCivicElection(home, { ballot }) },
 ];
 
 // ── Per-home privacy → the place address ref (§ homePrivacy) ──
@@ -1080,9 +1125,13 @@ function buildPlaceRef(home, privacy) {
  * @param {object} params.access  Result of checkHomePermission (hasAccess, isOwner, occupancy).
  * @param {string[]} [params.sectionIds]  Optional subset of PLACE_SECTION_IDS to compose
  *                                        (already validated by the route); omitted ⇒ all.
+ * @param {boolean} [params.ballot]  The request opted in to Ballot (`ballot=1`) AND `ballot_p0`
+ *                                   is on for the user — decided once by the route, so the
+ *                                   composers never read the flag (or the User row) themselves.
+ *                                   Guests and service providers never get Ballot fields.
  * @returns {Promise<object|null>} The PlaceIntelligence response, or null if the home is missing.
  */
-async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
+async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false }) {
   // Owner-only sections depend on whether the viewer's ownership is still
   // pending; read it alongside the Home.
   const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
@@ -1146,9 +1195,13 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds }) {
 
   // An unreadable privacy row fails closed for the one toggle this payload
   // honors: the unit stays hidden, and the rest of Place still loads.
+  // Ballot is the household's own card: "Your ballot", and "Moved this year?"
+  // from the move-in date the household entered. Guests and service providers
+  // see public facts only, so they keep the plain election row and districts.
+  const ballotOn = Boolean(ballot) && viewer.role !== 'nonresident';
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
-    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access })),
+    ...runs.map(({ run }) => run({ home, userId, tier, hubPromise, access, ballot: ballotOn })),
   ]);
 
   const composed = {};

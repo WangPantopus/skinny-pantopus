@@ -4,7 +4,7 @@
 export { default as TrustBadge } from './TrustBadge';
 export { default as UrgencyIndicator } from './UrgencyIndicator';
 export { default as DrawerBadge } from './DrawerBadge';
-export { default as MailItemCard } from './MailItemCard';
+export { default as MailItemCard, isMailRead } from './MailItemCard';
 export { default as MailItemDetail } from './MailItemDetail';
 export { default as AIElfStrip } from './AIElfStrip';
 export { default as CounterBanner } from './CounterBanner';

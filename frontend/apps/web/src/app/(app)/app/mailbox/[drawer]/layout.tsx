@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { BundleItem } from '@/types/mailbox';
 import { useDrawerItems, useMarkItemOpened } from '@/lib/mailbox-queries';
-import { MailItemCard, BundleCard, OfferCard, EmptyState } from '@/components/mailbox';
+import { MailItemCard, BundleCard, OfferCard, EmptyState, isMailRead } from '@/components/mailbox';
 import ErrorState from '@/components/ui/ErrorState';
 
 // ── Types ────────────────────────────────────────────────────
@@ -185,8 +185,8 @@ export default function DrawerLayout({
   }, [allItems, debouncedSearch]);
 
   // ── Split into unread/read ──────────────────────────────
-  const unreadItems = filteredItems.filter(item => !item.opened_at);
-  const readItems = filteredItems.filter(item => !!item.opened_at);
+  const unreadItems = filteredItems.filter(item => !isMailRead(item));
+  const readItems = filteredItems.filter(item => isMailRead(item));
   const hasNewItems = unreadItems.length > 0 && readItems.length > 0;
 
   return (
