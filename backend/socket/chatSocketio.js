@@ -8,7 +8,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const badgeService = require('../services/badgeService');
 const notificationService = require('../services/notificationService');
-const { isBlocked } = require('../services/blockService');
+const { isBlocked, blockedUserIds } = require('../services/blockService');
 const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
 const { setGauge } = require('../services/chatMetrics');
 // Persistent login (design §6.4): the same JWT decode helper verifyToken
@@ -218,6 +218,25 @@ async function buildSocketReactionSummaryMap(messageIds, requestingUserId) {
 // Store user rooms: { userId: Set([roomId1, roomId2]) }
 const userRooms = new Map();
 
+// ============ PRESENCE ============
+// `user:online` / `user:offline` reach only the people who share a
+// conversation with the user (the chat rooms their sockets joined), and never
+// anyone either of them has blocked. Everyone else never learns when someone
+// comes and goes. A failed block read sends nothing; this never throws.
+async function emitPresence(socket, event, userId, roomIds) {
+  const rooms = Array.from(roomIds || []).filter(Boolean);
+  if (rooms.length === 0) return;
+  try {
+    const blockedSocketIds = [];
+    for (const otherUserId of await blockedUserIds(userId)) {
+      for (const socketId of connectedUsers.get(otherUserId) || []) blockedSocketIds.push(socketId);
+    }
+    socket.to(rooms).except(blockedSocketIds).emit(event, { userId });
+  } catch (err) {
+    logger.warn('Presence not sent', { userId, event, error: err.message });
+  }
+}
+
 module.exports = (io) => {
   // Initialize badge + notification services with io + connectedUsers references
   badgeService.init(io, connectedUsers);
@@ -339,6 +358,12 @@ module.exports = (io) => {
 
           // Send initial room list
           socket.emit('rooms:list', openRooms);
+
+          // Notify user is online only when first active socket connects, and
+          // only to the conversations it just joined (see emitPresence).
+          if (!wasOnline && socket.connected) {
+            await emitPresence(socket, 'user:online', userId, openRooms.map((room) => room.id));
+          }
         }
       } catch (err) {
         logger.error('Error loading user rooms', { sessionId, userId, error: err.message });
@@ -347,11 +372,6 @@ module.exports = (io) => {
 
     // Send initial badge counts immediately on connect
     badgeService.emitBadgeUpdate(userId);
-
-    // Notify user is online only when first active socket connects
-    if (!wasOnline) {
-      socket.broadcast.emit('user:online', { userId });
-    }
     
     // Every event's arguments come from the client. Hand each handler an object payload and a callable ack, and keep
     // its errors here: app.js exits the API on any uncaught exception or unhandled rejection.
@@ -768,6 +788,8 @@ module.exports = (io) => {
         socketId: socket.id,
       });
       
+      // The conversations to tell, captured before the user's rooms are forgotten.
+      const presenceRooms = stillOnline ? null : userRooms.get(userId);
       if (!stillOnline) {
         userRooms.delete(userId);
       }
@@ -782,9 +804,10 @@ module.exports = (io) => {
         logger.error('Error cleaning typing indicators', { sessionId, userId, error: err.message });
       }
       
-      // Notify user is offline only when last socket disconnects
-      if (!stillOnline) {
-        socket.broadcast.emit('user:offline', { userId });
+      // Notify user is offline only when last socket disconnects (and no new
+      // one connected while the typing rows were cleaned up)
+      if (!stillOnline && !connectedUsers.has(userId)) {
+        await emitPresence(socket, 'user:offline', userId, presenceRooms);
       }
     });
     

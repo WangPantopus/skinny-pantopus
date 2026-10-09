@@ -174,7 +174,9 @@ function seedData() {
       const userId = params.p_user_id;
       const participants = getTable('ChatParticipant')
         .filter(p => p.user_id === userId && p.is_active);
+      // The real RPC returns the room id as `id`.
       const rooms = participants.map(p => ({
+        id: p.room_id,
         room_id: p.room_id,
         room_type: p.room?.type || 'direct',
       }));
@@ -488,8 +490,13 @@ describe('Reconnect', () => {
 // ============================================================
 
 describe('Online/offline events', () => {
-  test('user:online fires on first connect, user:offline on last disconnect', async () => {
+  test('user:online fires on first connect, user:offline on last disconnect, only for shared conversations', async () => {
+    // U2 shares ROOM_1 with U1; U3 shares no conversation with U1.
     const observer = await connect(TOKEN_U2);
+    const outsider = await connect(TOKEN_U3);
+    const outsiderEvents = [];
+    outsider.on('user:online', (data) => outsiderEvents.push(['online', data.userId]));
+    outsider.on('user:offline', (data) => outsiderEvents.push(['offline', data.userId]));
 
     // Listen for online event
     const onlinePromise = waitForEvent(observer, 'user:online');
@@ -510,6 +517,10 @@ describe('Online/offline events', () => {
 
     const offlineEvent = await offlinePromise;
     expect(offlineEvent.userId).toBe(U1);
+
+    // Presence never reaches someone outside U1's conversations.
+    await new Promise(r => setTimeout(r, 200));
+    expect(outsiderEvents).toEqual([]);
   });
 });
 
