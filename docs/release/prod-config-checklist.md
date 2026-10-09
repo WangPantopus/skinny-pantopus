@@ -590,10 +590,19 @@ app-link files, robots.txt).
 
 ### iOS (TestFlight, then App Store)
 
-- [ ] Founder: turn on the **Sign in with Apple** capability for the App ID
-  `app.pantopus.ios` (before `match` creates the App Store profile), then the
-  App Store Connect app record for `app.pantopus.ios` (name per D2), an App
-  Store Connect API key, a private `match` repository and password.
+- [ ] Founder: in Certificates, Identifiers & Profiles register the App Group
+  `group.app.pantopus.ios` and two App IDs: `app.pantopus.ios` with **Sign in
+  with Apple**, **Push Notifications**, **Associated Domains** (app links and
+  saved passwords) and **App Groups** (that group), and
+  `app.pantopus.ios.widgets` (the home-screen widget, which ships inside the
+  app) with **App Groups** (the same group). Do this before `match` creates the
+  App Store profiles, because a profile only carries the capabilities its App ID
+  had then. Then the App Store Connect app record for `app.pantopus.ios` (name
+  per D2), an App Store Connect API key, a private `match` repository and
+  password. Create both profiles once on the Mac, from `frontend/apps/ios`:
+  `bundle exec fastlane match appstore --app_identifier app.pantopus.ios,app.pantopus.ios.widgets`
+  (CI runs `match` read-only). The release lanes sign both targets with these
+  profiles (`app_store_signing` in the Fastfile).
   Secrets in the GitHub `ios-release` environment: `STRIPE_PUBLISHABLE_KEY`,
   `MATCH_GIT_URL`, `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`,
   `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
