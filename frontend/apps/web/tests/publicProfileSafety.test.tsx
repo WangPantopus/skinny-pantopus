@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import PublicProfileClient from '@/app/[username]/PublicProfileClient';
 import { toast } from '@/components/ui/toast-store';
@@ -22,8 +23,14 @@ jest.mock('@/components/profile/public/cards', () => ({ ReliabilityPanel: () => 
 jest.mock('@/components/profile/public/tabs', () => Object.fromEntries(
   ['OverviewTab', 'ServicesTab', 'MissionsTab', 'PortfolioTab', 'ActivityTab', 'ReviewsTab', 'OwnerInsightsTab', 'OwnerSettingsTab'].map(k => [k, () => null]),
 ));
+// The profile keeps what a person shares in the session's query cache.
+let client: QueryClient;
+function Providers({ children }: { children: React.ReactNode }) {
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
 beforeEach(() => {
   jest.clearAllMocks();
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   (api.users.getMyProfile as jest.Mock).mockResolvedValue({ id: 'viewer', username: 'viewer' });
   (api.users.getRelationshipStatus as jest.Mock).mockResolvedValue({ following: false, relationship: 'none' });
   (api.blocks.getBlockedUsers as jest.Mock).mockResolvedValue({ blocked: [] });
@@ -34,7 +41,7 @@ beforeEach(() => {
   (api.users.reportUser as jest.Mock).mockResolvedValue({ message: 'Reported' });
 });
 async function openProfile() {
-  render(<PublicProfileClient username="bob" initialProfile={{ id: 'bob', username: 'bob', name: 'Bob' } as never} />);
+  render(<PublicProfileClient username="bob" initialProfile={{ id: 'bob', username: 'bob', name: 'Bob' } as never} />, { wrapper: Providers });
   await waitFor(() => expect(api.users.getRelationshipStatus).toHaveBeenCalled());
   fireEvent.click(screen.getByText('⋯'));
 }
@@ -88,7 +95,7 @@ test('profile navigation retires pending confirmation and allows the new target 
   (api.blocks.blockUser as jest.Mock).mockResolvedValue({ success: true });
   const bob = { id: 'bob', username: 'bob', name: 'Bob' };
   const carol = { id: 'carol', username: 'carol', name: 'Carol' };
-  const view = render(<PublicProfileClient username="bob" initialProfile={bob as never} />);
+  const view = render(<PublicProfileClient username="bob" initialProfile={bob as never} />, { wrapper: Providers });
   await waitFor(() => expect(api.users.getRelationshipStatus).toHaveBeenCalled());
   fireEvent.click(screen.getByText('⋯'));
   fireEvent.click(screen.getByRole('button', { name: 'Block user' }));
@@ -101,7 +108,7 @@ test('profile navigation retires pending confirmation and allows the new target 
 });
 
 test('profile navigation closes a report for the previous target', async () => {
-  const view = render(<PublicProfileClient username="bob" initialProfile={{ id: 'bob', username: 'bob', name: 'Bob' } as never} />);
+  const view = render(<PublicProfileClient username="bob" initialProfile={{ id: 'bob', username: 'bob', name: 'Bob' } as never} />, { wrapper: Providers });
   await waitFor(() => expect(api.users.getRelationshipStatus).toHaveBeenCalled());
   fireEvent.click(screen.getByText('⋯'));
   fireEvent.click(screen.getByRole('button', { name: 'Report profile' }));

@@ -10,10 +10,14 @@
 //  `If-None-Match` so unchanged data costs a 304. Replies that land after an
 //  account switch, a sign-out or a wipe are dropped.
 //
-//  This is the memory layer. The saved copy on the phone (section 7) reads and
-//  writes through the same entries later. Value types and the account and
-//  lifecycle observation are in `ScreenStoreSupport.swift`.
+//  Reads go memory, then the saved copy on the phone (`ScreenStoreDisk`,
+//  section 7), then the network. Value types and the account and lifecycle
+//  observation are in `ScreenStoreSupport.swift`.
 //
+
+// The store, its saved copy and its seeds share private state; keeping them
+// in one file keeps that state private.
+// swiftlint:disable file_length
 
 import Foundation
 import Logging
@@ -22,7 +26,7 @@ import Observation
 @Observable
 @MainActor
 final class ScreenStore {
-    static let shared = ScreenStore()
+    static let shared = ScreenStore(disk: .shared)
 
     /// Server + account + method + path + sorted query. Tokens never appear in keys.
     struct Key: Hashable, CustomStringConvertible {
@@ -39,6 +43,7 @@ final class ScreenStore {
 
     /// The memory limits of contract section 6.
     static let maxEntries = 200
+    static let maxSeeds = 300
     static let unusedLifetime: TimeInterval = 30 * 60
     /// Coming back to the app after this long marks every copy out of date.
     static let backgroundStaleAfter: TimeInterval = 15 * 60
@@ -51,21 +56,36 @@ final class ScreenStore {
 
     @ObservationIgnored private var entries: [Key: ScreenStoreEntry] = [:]
     @ObservationIgnored private var inFlight: [Key: InFlight] = [:]
+    /// Rows another screen already shows (a feed card's post), by the key of
+    /// the detail read they stand in for. Memory only, never fresh or saved.
+    @ObservationIgnored private var seeds: [Key: any Sendable] = [:]
+    @ObservationIgnored private var seedOrder: [Key] = []
     @ObservationIgnored private var counts: [String: Int] = [:]
+    /// When each topic (or `kind:<kind>`) was last marked out of date, for
+    /// readers that keep a short-lived answer of their own.
+    @ObservationIgnored private var marks: [String: Date] = [:]
     @ObservationIgnored var observedAccount: String?
     @ObservationIgnored var backgroundedAt: Date?
     @ObservationIgnored var observers: [NSObjectProtocol] = []
     @ObservationIgnored let now: @Sendable () -> Date
     @ObservationIgnored private let injectedAPI: APIClient?
     @ObservationIgnored private let injectedAuth: AuthManager?
+    /// The saved copy on the phone; nil for private stores (tests, previews).
+    @ObservationIgnored let disk: ScreenStoreDisk?
     @ObservationIgnored private let logger = Logger(label: "app.pantopus.ios.ScreenStore")
 
     /// - Parameters: `api` / `auth` for tests; the live app resolves the shared
     ///   instances lazily (with the app lock on, `APIClient.shared` is created
     ///   only after unlock).
-    init(api: APIClient? = nil, auth: AuthManager? = nil, now: @escaping @Sendable () -> Date = { Date() }) {
+    init(
+        api: APIClient? = nil,
+        auth: AuthManager? = nil,
+        disk: ScreenStoreDisk? = nil,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) {
         injectedAPI = api
         injectedAuth = auth
+        self.disk = disk
         self.now = now
         observedAccount = Self.account(of: auth ?? AuthManager.shared)
         observeAccount()
@@ -92,7 +112,7 @@ final class ScreenStore {
     /// re-check: never for sensitive data, and for household data only when
     /// the viewer is an owner or household member.
     func peek<Value: Decodable & Sendable>(_ endpoint: Endpoint, as type: Value.Type = Value.self) -> ScreenSnapshot<Value>? {
-        guard let key = key(for: endpoint), let entry = entries[key], entry.showsBeforeRecheck,
+        guard let key = key(for: endpoint), let entry = entry(for: key), entry.showsBeforeRecheck,
               let value = decoded(entry, as: type) else { return nil }
         entry.lastUsed = now()
         return snapshot(entry, value)
@@ -105,8 +125,10 @@ final class ScreenStore {
     /// - A 304 keeps the copy and resets its time; a 200 replaces it.
     /// - A 403 or 404 deletes the copy and rethrows (the screen shows the
     ///   server's answer); a 401 runs the existing sign-in flow in `APIClient`.
-    /// - A network error, or a 200 that `failedIf` rejects, keeps the copy,
-    ///   marks the failure and rethrows; a screen with content stays as it is.
+    /// - A network error keeps the copy and marks the failure; a quiet read
+    ///   then answers with that copy (if it may show before a re-check), a
+    ///   forced one rethrows. A 200 that `failedIf` rejects does the same but
+    ///   always rethrows; a screen with content stays as it is.
     /// - A reply that lands after a wipe or an account change throws
     ///   `CancellationError` and writes nothing.
     /// - `showsBeforeRecheck` decides from the reply whether the copy may show
@@ -128,7 +150,9 @@ final class ScreenStore {
             let value: Value = try await api.request(endpoint)
             return ScreenSnapshot(value: value, fetchedAt: now(), isFresh: true, refreshFailed: false, kind: kind)
         }
-        if !force, let entry = entries[key], isFresh(entry), let value = decoded(entry, as: type) {
+        // Memory, then the saved copy (its ETag makes an unchanged reply a 304).
+        let held = entry(for: key)
+        if !force, let entry = held, isFresh(entry), let value = decoded(entry, as: type) {
             entry.lastUsed = now()
             count("hit", kind)
             return snapshot(entry, value)
@@ -141,8 +165,14 @@ final class ScreenStore {
             try dropIfLate(start)
             if Self.isRefusal(error) {
                 remove(key)
-            } else {
-                markFailed(key, kind)
+                throw error
+            }
+            markFailed(key, kind)
+            // A quiet read that can't reach the server answers with the copy it
+            // has (marked failed: offline, the saved copy opens the screen); a
+            // forced one (pull to refresh, Try again) says it failed.
+            if !force, let entry = held ?? entries[key], entry.showsBeforeRecheck, let value = decoded(entry, as: type) {
+                return snapshot(entry, value)
             }
             throw error
         }
@@ -150,6 +180,7 @@ final class ScreenStore {
         if fetched.status == 304, let entry = entries[key], let value = decoded(entry, as: type) {
             let shows = showsBeforeRecheck?(value) ?? true
             entry.confirm(at: now(), kind: kind, topics: topics, expiresAt: expiresAt, showsBeforeRecheck: shows)
+            save(key, entry)
             bump(key)
             count("304", kind)
             return snapshot(entry, value)
@@ -173,6 +204,7 @@ final class ScreenStore {
         entry.confirm(at: now(), kind: kind, topics: topics, expiresAt: expiresAt, showsBeforeRecheck: shows)
         entry.decoded[ObjectIdentifier(type)] = value
         entries[key] = entry
+        save(key, entry)
         enforceLimits()
         bump(key)
         count("200", kind)
@@ -216,57 +248,6 @@ final class ScreenStore {
     /// Observing this re-renders a view when the entry changes.
     func revision(for endpoint: Endpoint) -> Int {
         key(for: endpoint).flatMap { revisions[$0] } ?? 0
-    }
-
-    // MARK: - Out of date and removal
-
-    /// Marks every entry carrying one of `topics` out of date (contract
-    /// section 8). They stay on screen and refresh when next shown.
-    func markStale(topics: Set<String>) {
-        let topics = Set(topics.map { $0.lowercased() })
-        for (key, entry) in entries where !entry.topics.isDisjoint(with: topics) {
-            entry.staleMark = true
-            bump(key)
-        }
-    }
-
-    /// Marks every entry of these kinds out of date (a socket reconnect marks
-    /// Household, Messages and Notifications entries).
-    func markStale(kinds: Set<ScreenDataKind>) {
-        for (key, entry) in entries where kinds.contains(entry.kind) {
-            entry.staleMark = true
-            bump(key)
-        }
-    }
-
-    func markAllStale() {
-        markStale(kinds: Set(ScreenDataKind.allCases))
-    }
-
-    func remove(_ endpoint: Endpoint) {
-        if let key = key(for: endpoint) { remove(key) }
-    }
-
-    /// Sign-out, a revoked session, an account switch or deletion, Clear
-    /// cache: everything goes, and replies already in flight are dropped.
-    func wipe() {
-        generation += 1
-        for flight in inFlight.values {
-            flight.task.cancel()
-        }
-        inFlight.removeAll()
-        entries.removeAll()
-        revisions.removeAll()
-    }
-
-    /// The memory warning: keep only what screens used in the last minute
-    /// (what's on screen), drop the rest.
-    func trimForMemoryWarning() {
-        let cutoff = now().addingTimeInterval(-60)
-        for (key, entry) in entries where entry.lastUsed < cutoff && inFlight[key] == nil {
-            entries[key] = nil
-            revisions[key] = nil
-        }
     }
 
     /// Phase 1 measurement: how often each kind's window was hit, revalidated
@@ -377,6 +358,7 @@ final class ScreenStore {
 
     private func remove(_ key: Key) {
         entries[key] = nil
+        unsave(key)
         bump(key)
     }
 
@@ -401,5 +383,172 @@ final class ScreenStore {
     private func count(_ event: String, _ kind: ScreenDataKind) {
         counts["\(kind.rawValue).\(event)", default: 0] += 1
         logger.debug("store \(event) \(kind.rawValue)")
+    }
+}
+
+// MARK: - Out of date, writing and removal
+
+extension ScreenStore {
+    /// Marks every entry carrying one of `topics` out of date (contract
+    /// section 8). They stay on screen and refresh when next shown.
+    func markStale(topics: Set<String>) {
+        let topics = Set(topics.map { $0.lowercased() })
+        for topic in topics {
+            marks[topic] = now()
+        }
+        for (key, entry) in entries where !entry.topics.isDisjoint(with: topics) {
+            entry.staleMark = true
+            bump(key)
+        }
+    }
+
+    /// Marks every entry of these kinds out of date (a socket reconnect marks
+    /// Household, Messages and Notifications entries).
+    func markStale(kinds: Set<ScreenDataKind>) {
+        for kind in kinds {
+            marks["kind:\(kind.rawValue)"] = now()
+        }
+        for (key, entry) in entries where kinds.contains(entry.kind) {
+            entry.staleMark = true
+            bump(key)
+        }
+    }
+
+    func markAllStale() {
+        markStale(kinds: Set(ScreenDataKind.allCases))
+    }
+
+    func remove(_ endpoint: Endpoint) {
+        if let key = key(for: endpoint) { remove(key) }
+    }
+
+    /// Keeps a reply a screen read itself (the Home dashboard's access check
+    /// reads 403 answers too, so it can't go through `load`).
+    func put(_ endpoint: Endpoint, data: Data, kind: ScreenDataKind, topics: Set<String>, showsBeforeRecheck: Bool) {
+        guard kind != .sensitive, let key = key(for: endpoint) else { return }
+        let entry = ScreenStoreEntry(data: data, etag: nil, kind: kind, at: now())
+        entry.confirm(at: now(), kind: kind, topics: topics, expiresAt: nil, showsBeforeRecheck: showsBeforeRecheck)
+        entries[key] = entry
+        save(key, entry)
+        enforceLimits()
+        bump(key)
+    }
+
+    /// Sign-out, a revoked session, an account switch or deletion, Clear
+    /// cache: everything goes, and replies already in flight are dropped.
+    func wipe() {
+        generation += 1
+        for flight in inFlight.values {
+            flight.task.cancel()
+        }
+        inFlight.removeAll()
+        entries.removeAll()
+        revisions.removeAll()
+        seeds.removeAll()
+        seedOrder.removeAll()
+        marks.removeAll()
+        // The app's own store (not a test's) also owns the images on the phone.
+        if let disk {
+            disk.removeAll()
+            PantopusImagePipeline.shared.removeAll()
+        }
+    }
+
+    /// The memory warning: keep only what screens used in the last minute
+    /// (what's on screen), drop the rest.
+    func trimForMemoryWarning() {
+        let cutoff = now().addingTimeInterval(-60)
+        for (key, entry) in entries where entry.lastUsed < cutoff && inFlight[key] == nil {
+            entries[key] = nil
+            revisions[key] = nil
+        }
+        seeds.removeAll()
+        seedOrder.removeAll()
+    }
+}
+
+// MARK: - Seeds
+
+extension ScreenStore {
+    /// A list's row that stands in for `endpoint`'s detail until that read
+    /// answers (a post opened from the feed shows the feed's card at once).
+    func seed(_ value: some Sendable, for endpoint: Endpoint) {
+        guard let key = key(for: endpoint) else { return }
+        if seeds.updateValue(value, forKey: key) == nil { seedOrder.append(key) }
+        guard seedOrder.count > Self.maxSeeds else { return }
+        for old in seedOrder.prefix(seedOrder.count - Self.maxSeeds) {
+            seeds[old] = nil
+        }
+        seedOrder.removeFirst(seedOrder.count - Self.maxSeeds)
+    }
+
+    func seeded<Value: Sendable>(_ endpoint: Endpoint, as _: Value.Type = Value.self) -> Value? {
+        key(for: endpoint).flatMap { seeds[$0] as? Value }
+    }
+}
+
+// MARK: - Answers kept outside the store
+
+extension ScreenStore {
+    /// Whether any of `topics`, or every entry of `kind`, was marked out of
+    /// date after `date` (Today's radon card keeps its own answer).
+    func wasMarked(topics: Set<String>, kind: ScreenDataKind, since date: Date) -> Bool {
+        let names = topics.map { $0.lowercased() } + ["kind:\(kind.rawValue)"]
+        return names.contains { (marks[$0] ?? .distantPast) > date }
+    }
+}
+
+// MARK: - The saved copy (contract sections 5 to 7)
+
+extension ScreenStore {
+    /// The entry in memory, else the saved copy on the phone. A saved copy is
+    /// never fresh: it shows at once and is re-checked once.
+    private func entry(for key: Key) -> ScreenStoreEntry? {
+        if let entry = entries[key] { return entry }
+        guard let disk, let saved = disk.read(folder: folder(for: key), file: file(for: key), now: now()),
+              let kind = ScreenDataKind(rawValue: saved.kind), kind.savedOnPhone else { return nil }
+        let entry = ScreenStoreEntry(data: saved.data, etag: saved.etag, kind: kind, at: saved.fetchedAt)
+        entry.topics = Set(saved.topics)
+        entry.expiresAt = saved.expiresAt
+        entry.staleMark = true
+        entry.lastUsed = now()
+        entries[key] = entry
+        enforceLimits()
+        count("saved", kind)
+        return entry
+    }
+
+    /// Writes an entry the phone may keep: never sensitive data, and household
+    /// data only while it may show before the re-check. A copy that may no
+    /// longer be kept is deleted instead.
+    private func save(_ key: Key, _ entry: ScreenStoreEntry) {
+        guard let disk else { return }
+        guard entry.kind.savedOnPhone, entry.kind.tier != .household || entry.showsBeforeRecheck else {
+            disk.remove(folder: folder(for: key), file: file(for: key))
+            return
+        }
+        let saved = SavedScreenEntry(
+            schema: SavedScreenEntry.currentSchema,
+            build: disk.build,
+            kind: entry.kind.rawValue,
+            fetchedAt: entry.fetchedAt,
+            etag: entry.etag,
+            topics: entry.topics.sorted(),
+            expiresAt: entry.expiresAt,
+            data: entry.data
+        )
+        disk.write(saved, folder: folder(for: key), file: file(for: key))
+    }
+
+    private func unsave(_ key: Key) {
+        disk?.remove(folder: folder(for: key), file: file(for: key))
+    }
+
+    private func folder(for key: Key) -> String {
+        disk?.folder(server: key.server, account: key.account) ?? ""
+    }
+
+    private func file(for key: Key) -> String {
+        disk?.file(method: key.method, path: key.path, query: key.query) ?? ""
     }
 }

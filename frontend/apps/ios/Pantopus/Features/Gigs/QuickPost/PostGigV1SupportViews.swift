@@ -231,7 +231,7 @@ struct PostGigV1PhotoTile: View {
             } else {
                 // Edit-mode prefill carries no bytes — fetch the stored
                 // attachment URL, glyph placeholder while it loads.
-                AsyncImage(url: URL(string: url)) { image in
+                CachedAsyncImage(url: URL(string: url)) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)

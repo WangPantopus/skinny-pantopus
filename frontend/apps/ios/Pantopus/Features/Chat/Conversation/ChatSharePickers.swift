@@ -103,7 +103,7 @@ struct ChatShareListingPickerSheet: View {
                         } label: {
                             HStack(spacing: Spacing.s3) {
                                 if let imageURL = listing.imageURL, let url = URL(string: imageURL) {
-                                    AsyncImage(url: url) { phase in
+                                    CachedAsyncImage(url: url) { phase in
                                         switch phase {
                                         case let .success(image):
                                             image.resizable().scaledToFill()

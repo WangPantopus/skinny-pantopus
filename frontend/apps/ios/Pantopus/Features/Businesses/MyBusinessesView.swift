@@ -233,7 +233,7 @@ private struct BusinessLogoTile: View {
                 RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
                     .fill(model.pending ? Theme.Color.warningSolid : model.category.fill)
                 if let url = model.logoURL {
-                    AsyncImage(url: url) { image in
+                    CachedAsyncImage(url: url) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         glyph

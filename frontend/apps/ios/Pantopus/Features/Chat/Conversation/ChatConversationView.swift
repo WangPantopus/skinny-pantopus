@@ -2385,7 +2385,7 @@ private struct ChatLinkPreviewCard: View {
         Button { openURL(metadata.url) } label: {
             VStack(alignment: .leading, spacing: Spacing.s0) {
                 if let imageURL = metadata.imageURL {
-                    AsyncImage(url: imageURL) { phase in
+                    CachedAsyncImage(url: imageURL) { phase in
                         switch phase {
                         case let .success(image):
                             image.resizable().scaledToFill()
@@ -2789,7 +2789,7 @@ private struct ChatBubbleRow: View {
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 6)], spacing: 6) {
                 ForEach(imageURLs, id: \.absoluteString) { url in
-                    AsyncImage(url: url) { phase in
+                    CachedAsyncImage(url: url) { phase in
                         switch phase {
                         case let .success(image): image.resizable().scaledToFill()
                         case .failure: PhotoBubblePlaceholder()
@@ -2879,7 +2879,7 @@ private struct ChatBubbleRow: View {
     @ViewBuilder
     private func imageBody(_ url: URL?) -> some View {
         if let url {
-            AsyncImage(url: url) { phase in
+            CachedAsyncImage(url: url) { phase in
                 switch phase {
                 case let .success(image): image.resizable().scaledToFill()
                 case .failure: PhotoBubblePlaceholder()

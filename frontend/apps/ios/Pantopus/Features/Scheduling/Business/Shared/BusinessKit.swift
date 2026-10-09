@@ -217,7 +217,7 @@ struct BizAvatar: View {
         ZStack {
             Circle().fill(tint)
             if let imageURL, let url = URL(string: imageURL) {
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     if let image = phase.image {
                         image.resizable().scaledToFill()
                     } else {

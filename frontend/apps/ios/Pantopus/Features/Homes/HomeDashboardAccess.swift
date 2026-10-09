@@ -34,6 +34,9 @@ struct HomeDashboardAuthoritySnapshot {
     let verificationStatus: String?
     let fingerprint: Data
     let expiresAt: Date?
+    /// The reply as received, kept as the dashboard's access copy for owners
+    /// and household roles (Instant Screens decision 3).
+    let body: Data
 }
 
 @MainActor
@@ -52,13 +55,15 @@ final class HomeDashboardAccess {
         scope.isCurrent
     }
 
+    /// `GET /api/homes/:id/dashboard-access` (`backend/routes/home.js:4343`).
+    static func endpoint(homeId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/dashboard-access", cachePolicy: .reloadIgnoringLocalAndRemoteCacheData)
+    }
+
     func read() async throws -> HomeDashboardAuthoritySnapshot {
         try scope.requireCurrent()
         guard UUID(uuidString: homeId) != nil else { throw APIError.invalidResponse }
-        let response = try await api.requestDataResponse(
-            Endpoint(method: .get, path: "/api/homes/\(homeId)/dashboard-access", cachePolicy: .reloadIgnoringLocalAndRemoteCacheData),
-            includingForbidden: true
-        )
+        let response = try await api.requestDataResponse(Self.endpoint(homeId: homeId), includingForbidden: true)
         try scope.requireCurrent()
         try Task.checkCancellation()
         guard let body = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
@@ -84,7 +89,8 @@ final class HomeDashboardAccess {
                 verificationKind: nil,
                 verificationStatus: nil,
                 fingerprint: fingerprint,
-                expiresAt: expiresAt
+                expiresAt: expiresAt,
+                body: response.data
             )
         }
         guard response.response.statusCode == 403, !hasAccess, permissions.isEmpty else { throw APIError.invalidResponse }
@@ -107,7 +113,8 @@ final class HomeDashboardAccess {
             verificationKind: pending ? kind : nil,
             verificationStatus: pending ? status : nil,
             fingerprint: fingerprint,
-            expiresAt: nil
+            expiresAt: nil,
+            body: response.data
         )
     }
 }

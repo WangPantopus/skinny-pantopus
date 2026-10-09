@@ -118,6 +118,9 @@ enum ScreenTopic {
     static let notifications = "notifications"
     static let profileMe = "profile:me"
     static let mail = "mail"
+    /// Client-only: the trains lists (My trains, Nearby). Marked by your own
+    /// train changes here; the server signals single trains (`supporttrain:`).
+    static let supportTrains = "supporttrains"
 
     static func home(_ homeId: String) -> String {
         "home:\(homeId.lowercased())"
