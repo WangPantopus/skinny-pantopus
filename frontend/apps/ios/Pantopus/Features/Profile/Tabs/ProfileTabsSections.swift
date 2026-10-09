@@ -238,7 +238,7 @@ private struct PortfolioCard: View {
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                 .fill(Theme.Color.appSurfaceSunken)
             if let url = item.imageURL {
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().scaledToFill()
@@ -740,7 +740,7 @@ private struct GigReviewCard: View {
                     HStack(spacing: Spacing.s2) {
                         ForEach(review.mediaURLs, id: \.self) { url in
                             Button { onOpenMedia(url) } label: {
-                                AsyncImage(url: url) { phase in
+                                CachedAsyncImage(url: url) { phase in
                                     switch phase {
                                     case let .success(image):
                                         image.resizable().scaledToFill()
@@ -818,7 +818,7 @@ private struct ProfileMediaViewer: View {
             .padding(Spacing.s4)
 
             if let url {
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().scaledToFit()

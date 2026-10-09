@@ -224,7 +224,7 @@ private struct ReceivedReviewRowView: View {
         ZStack {
             Circle().fill(Theme.Color.appSurfaceSunken)
             if let url = row.avatarURL {
-                AsyncImage(url: url) { image in
+                CachedAsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     initialsText

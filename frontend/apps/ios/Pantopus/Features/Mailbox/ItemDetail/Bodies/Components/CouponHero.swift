@@ -149,7 +149,7 @@ private struct BrandTile: View {
                         .stroke(Theme.Color.warningLight, lineWidth: 1)
                 )
             if let url = brandLogoURL {
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().scaledToFit().padding(Spacing.s1)

@@ -104,7 +104,7 @@ struct UniversalSearchRow: View {
 
     @ViewBuilder private var leading: some View {
         if let url = result.imageURL {
-            AsyncImage(url: url) { phase in
+            CachedAsyncImage(url: url) { phase in
                 if let image = phase.image {
                     image.resizable().scaledToFill()
                 } else {

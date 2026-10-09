@@ -145,7 +145,7 @@ struct ChatListingOfferCardView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if let imageURL = card.imageURL {
                     ZStack(alignment: .topTrailing) {
-                        AsyncImage(url: imageURL) { phase in
+                        CachedAsyncImage(url: imageURL) { phase in
                             switch phase {
                             case let .success(image):
                                 image.resizable().scaledToFill()

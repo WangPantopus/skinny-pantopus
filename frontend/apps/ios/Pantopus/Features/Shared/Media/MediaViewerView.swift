@@ -90,7 +90,7 @@ public struct MediaViewerView: View {
     }
 
     private func viewerImage(_ url: URL) -> some View {
-        AsyncImage(url: url) { phase in
+        CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
             switch phase {
             case let .success(image):
                 image.resizable().scaledToFit()
