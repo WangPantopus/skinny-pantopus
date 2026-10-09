@@ -424,7 +424,10 @@ production one and switches the schedules back on.
    transfer the new project to a separate organization first; Supabase plans
    apply to the whole organization. **Before transferring April logins or
    sending production traffic, upgrade the organization holding the new project
-   to Pro and confirm daily backups are available.**
+   to Pro and confirm daily backups are available.** The two planned 100 MB
+   Storage buckets also require Pro: Supabase's Free global upload limit cannot
+   exceed 50 MB. Set the global Storage file-size limit to at least 100 MB
+   before setting those bucket limits.
    Point-in-time recovery is optional.
 2. From a dedicated production worktree based on the latest `master`, after its
    CI is green, use the CLI version pinned in S2. Do not relink the staging
@@ -461,7 +464,11 @@ production one and switches the schedules back on.
    Stop if either `test` fails or the dry run cannot connect; the project must
    be linked to the expected ref through its IPv4 pooler before any push.
    Never use `db reset --linked` or `--include-seed` on production.
-3. Storage buckets and the S3 access key as in S2.
+3. Storage buckets and the S3 access key as in S2. The private 25 MB
+   `home-documents` bucket can be created on Free. For the 100 MB private
+   `gig-completion` and public `pantopus-uploads` buckets, upgrade first and
+   verify the global Storage limit; do not silently substitute 50 MB limits.
+   See [Supabase's file limits](https://supabase.com/docs/guides/storage/uploads/file-limits).
 4. Transfer April logins and matching app profiles only after the private
    export and isolated rehearsal in [the Auth transfer runbook](production-auth-transfer.md).
    Check matching IDs, email/password and OAuth sign-in, and new-app access
