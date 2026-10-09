@@ -36,8 +36,8 @@ export function markTopic(client: QueryClient, topic: string): void {
       mark(client, queryKeys.placeMyHomes());
       mark(client, queryKeys.hub());
       break;
-    case 'home': // its dashboard copy and summary cards
-      if (id) mark(client, queryKeys.homeDashboard(id));
+    case 'home': // its dashboard copy and summary cards, and its property details
+      if (id) { mark(client, queryKeys.homeDashboard(id)); mark(client, queryKeys.homePropertyDetails(id)); }
       break;
     case 'place': // that home's Place sections
       if (id) void client.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'place' && query.queryKey.includes(id) });

@@ -678,10 +678,19 @@ public final class PulseFeedViewModel {
         )
     }
 
+    /// Each card stands in for its post's detail until that read answers
+    /// (a post opened from the feed shows at once; Instant Screens).
+    private func seedPostDetails(_ posts: [FeedPostDTO]) {
+        for post in posts where post.userId != nil {
+            store.seed(post, for: PostsEndpoints.detail(id: post.id))
+        }
+    }
+
     private func applyFirstPage(_ response: FeedResponse, area: FeedArea, query: FeedQuery, viewingLocation: ViewingLocationDTO?) {
         lastArea = area
         lastQuery = query
         loadedItems = response.posts
+        seedPostDetails(response.posts)
         postsLoaded = true
         needsArea = response.requiresViewingLocation == true
         // With no area chosen the server names the place it fell back to; when the feed looked around the
@@ -759,6 +768,7 @@ public final class PulseFeedViewModel {
             // Seeded/system cards can repeat across pages — dedupe by id.
             let known = Set(loadedItems.map(\.id))
             loadedItems += response.posts.filter { !known.contains($0.id) }
+            seedPostDetails(response.posts)
             applyPagination(response.pagination)
             rebuildLoadedState()
         } catch {
