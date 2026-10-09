@@ -26,6 +26,9 @@ struct TodaySkyHero: View {
     var pickups: [PlaceCalendarEvent] = []
     /// The air reading: smoke veils the sky, and bad air leads the card.
     var air: SkyAir?
+    /// The resident's kind of home, and the far hill's lights after dusk.
+    var home: SkyHome = .house
+    var streetLights = 0
     /// Tapping the bins shows the pickup schedule.
     var onBins: (() -> Void)?
 
@@ -38,6 +41,8 @@ struct TodaySkyHero: View {
     @State private var appeared = false
     /// The forecast hour slid to, an index into the hours ahead; nil is now.
     @State private var scrub: Int?
+    /// When the card appeared or got new data: the sun or moon rises into place.
+    @State private var shownAt = Date.distantPast
 
     private var animating: Bool {
         !reduceMotion && !lowPower && scenePhase == .active && onScreen && appeared
@@ -67,7 +72,8 @@ struct TodaySkyHero: View {
                         season: SkySeason.at(when),
                         rain: SkyScrub.rain(data.hourly, at: when)
                     ),
-                    shower: SkyNote.meteors(now: when, moment: moment, calendar: .autoupdatingCurrent) != nil
+                    shower: SkyNote.meteors(now: when, moment: moment, calendar: .autoupdatingCurrent) != nil,
+                    rises: picked == nil
                 )
                 .id(key)
                 .transition(.opacity)
@@ -95,7 +101,11 @@ struct TodaySkyHero: View {
             .shadow(color: sky.mid.color(opacity: 0.28), radius: 14, y: 6)
             .modifier(SkyScrubGesture(scrub: $scrub, hours: hours.count, reduceMotion: reduceMotion))
         }
-        .onAppear { appeared = true }
+        .onAppear {
+            appeared = true
+            shownAt = .now
+        }
+        .onChange(of: data) { shownAt = .now }
         .onDisappear { appeared = false }
         .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
             lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
@@ -123,8 +133,11 @@ struct TodaySkyHero: View {
         let sky: SkyPalette.Weather
     }
 
-    private func scene(_ shown: SkyScene, shower: Bool) -> some View {
+    private func scene(_ shown: SkyScene, shower: Bool, rises: Bool) -> some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !animating)) { frame in
+            // Eased over 0.9 s; in place at once without motion or while sliding.
+            let progress = animating && rises ? min(max(frame.date.timeIntervalSince(shownAt) / 0.9, 0), 1) : 1
+            let rise = 1 - pow(1 - progress, 3)
             let painter = TodaySkyPainter(
                 condition: shown.weather.conditionCode,
                 moment: shown.moment,
@@ -134,10 +147,17 @@ struct TodaySkyHero: View {
                 meteorShower: shower,
                 smoke: air?.smoke ?? 0,
                 rain: shown.rain,
+                home: home,
+                streetLights: streetLights,
                 still: !animating
             )
             Canvas { context, size in
-                painter.paint(context, size: size, time: frame.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 86400))
+                painter.paint(
+                    context,
+                    size: size,
+                    time: frame.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 86400),
+                    rise: rise
+                )
             }
         }
         .accessibilityHidden(true)
@@ -150,7 +170,7 @@ struct TodaySkyHero: View {
                 Color.clear.frame(width: 52, height: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .position(TodaySkyGround.binsCenter(in: proxy.size, count: note.bins.count))
+            .position(TodaySkyGround.binsCenter(in: proxy.size, count: note.bins.count, home: home))
             .accessibilityLabel(note.spoken)
             .accessibilityHint("Shows your pickup schedule.")
             .accessibilityIdentifier("todaySkyBins")

@@ -95,6 +95,9 @@ fun TodaySkyHero(
     pickups: List<PlaceCalendarEvent> = emptyList(),
     /** The air reading: smoke veils the sky, and bad air leads the card. */
     air: SkyAir? = null,
+    /** The resident's kind of home, and the far hill's lights after dusk. */
+    home: SkyHome = SkyHome.HOUSE,
+    streetLights: Int = 0,
     /** Tapping the bins shows the pickup schedule. */
     onBins: (() -> Unit)? = null,
 ) {
@@ -107,6 +110,8 @@ fun TodaySkyHero(
     val now = rememberMinuteClock()
     val hours = remember(data.hourly, now) { SkyScrub.hours(data.hourly, now) }
     val scrub = rememberSkyScrub(reduced)
+    // When the card appeared or got new data: the sun or moon rises into place.
+    val shownAt = remember(data) { System.currentTimeMillis() }
     val picked = scrub.index?.let { hours.getOrNull(it) }
     val current = SkyView.at(now, null, data, sun, pickups, air)
     val shown = if (picked == null) current else SkyView.at(now, picked, data, sun, pickups, air)
@@ -146,19 +151,22 @@ fun TodaySkyHero(
                 ),
             label = "skyScene",
         ) { view ->
-            val painter = view.painter(!animating)
+            val painter = view.painter(!animating, home, streetLights)
             Canvas(modifier = Modifier.fillMaxSize().clearAndSetSemantics { }) {
                 val t = time.doubleValue
                 val perDp = density
+                // Eased over 0.9 s; in place at once without motion or while sliding.
+                val progress = if (animating && view.time == now) ((System.currentTimeMillis() - shownAt) / 900f).coerceIn(0f, 1f) else 1f
+                val rise = 1 - (1 - progress) * (1 - progress) * (1 - progress)
                 withTransform({ scale(perDp, perDp, pivot = Offset.Zero) }) {
-                    painter.paint(this, size.width / perDp, size.height / perDp, t)
+                    painter.paint(this, size.width / perDp, size.height / perDp, t, rise)
                 }
             }
         }
         SkyReading(SkyReadingModel.of(data, current.note, picked, now), hours.size, scrub)
         // The bins only stand at the curb now, not in an hour slid to.
         val bins = current.note?.takeIf { picked == null && it.bins.isNotEmpty() }
-        if (bins != null && onBins != null) BinsTarget(bins, onBins)
+        if (bins != null && onBins != null) BinsTarget(bins, home, onBins)
         scrub.index?.takeIf { picked != null }?.let { SkyScrubTrack(it, hours.size) }
         SkyScrubHint(hours.size, scrubbing = scrub.index != null)
     }
@@ -174,18 +182,26 @@ private data class SkyView(
     /** 0..1, from the forecast hour's chance of rain. */
     val rain: Double,
 ) {
-    fun painter(still: Boolean) =
-        TodaySkyPainter(
-            condition = weather.conditionCode,
-            moment = moment,
-            temperature = weather.currentTempF,
-            note = note,
-            season = SkySeason.at(time.toLocalDate()),
-            meteorShower = SkyNote.meteors(time, moment) != null,
-            still = still,
-            smoke = air?.smoke ?: 0.0,
-            rain = rain,
-        )
+    fun painter(
+        still: Boolean,
+        home: SkyHome,
+        streetLights: Int,
+    ) = TodaySkyPainter(
+        condition = weather.conditionCode,
+        moment = moment,
+        temperature = weather.currentTempF,
+        note = note,
+        season = SkySeason.at(time.toLocalDate()),
+        still = still,
+        details =
+            SkyDetails(
+                meteorShower = SkyNote.meteors(time, moment) != null,
+                smoke = air?.smoke ?: 0.0,
+                rain = rain,
+                home = home,
+                streetLights = streetLights,
+            ),
+    )
 
     companion object {
         fun at(
@@ -209,10 +225,11 @@ private data class SkyView(
 @Composable
 private fun BoxScope.BinsTarget(
     note: SkyNote,
+    home: SkyHome,
     onBins: () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.matchParentSize()) {
-        val center = TodaySkyGround.binsCenter(maxWidth.value, maxHeight.value, note.bins.size)
+        val center = TodaySkyGround.binsCenter(maxWidth.value, maxHeight.value, note.bins.size, home)
         Box(
             modifier =
                 Modifier

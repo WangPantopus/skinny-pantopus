@@ -33,6 +33,7 @@ import app.pantopus.android.data.api.models.place.WeatherConditionCode
 import app.pantopus.android.data.widget.TodayWidgetSnapshot
 import app.pantopus.android.data.widget.TodayWidgetStore
 import app.pantopus.android.ui.screens.place.detail.SkyAir
+import app.pantopus.android.ui.screens.place.detail.SkyDetails
 import app.pantopus.android.ui.screens.place.detail.SkyMoment
 import app.pantopus.android.ui.screens.place.detail.SkyNote
 import app.pantopus.android.ui.screens.place.detail.SkySeason
@@ -146,9 +147,12 @@ class TodayWidgetProvider : AppWidgetProvider() {
                 temperature = snapshot?.weather?.tempF ?: MILD_F,
                 note = SkyNote.bins(now, moment, pickups),
                 season = SkySeason.at(now.toLocalDate()),
-                meteorShower = SkyNote.meteors(now, moment) != null,
                 still = true,
-                smoke = snapshot?.air?.let { SkyAir(it.aqi, it.label, it.smoky == true).smoke } ?: 0.0,
+                details =
+                    SkyDetails(
+                        meteorShower = SkyNote.meteors(now, moment) != null,
+                        smoke = snapshot?.air?.let { SkyAir(it.aqi, it.label, it.smoky == true).smoke } ?: 0.0,
+                    ),
             )
         val bitmap = ImageBitmap(width, height)
         CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
