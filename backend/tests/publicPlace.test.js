@@ -269,8 +269,8 @@ describe('GET /api/public/place', () => {
       weatherProvider.fetchWeather.mockRejectedValue(new Error('Weather unavailable'));
       alertsProvider.fetchAlerts.mockResolvedValue({ alerts: [], provider: 'NOAA', source: 'error' });
       const failed = Object.fromEntries((await composeTodayForPoint(45.51, -122.65)).map((section) => [section.id, section]));
-      expect(failed.weather).toMatchObject({ status: 'unavailable', source: 'Source unavailable', data: null });
-      expect(failed.alerts).toMatchObject({ status: 'unavailable', source: 'Source unavailable', data: null });
+      expect(failed.weather).toMatchObject({ status: 'error', source: 'Source unavailable', data: null });
+      expect(failed.alerts).toMatchObject({ status: 'error', source: 'Source unavailable', data: null });
     });
 
     it('never shows a zero on the density card — below the floor it is an invitation', async () => {
@@ -294,7 +294,7 @@ describe('GET /api/public/place', () => {
       expect(byId(res.body).block_density.data.founding_open).toBe(false);
     });
 
-    it('degrades a single slow provider to unavailable within the budget — the rest stay ready', async () => {
+    it('degrades a single slow provider to a retryable error within the budget — the rest stay ready', async () => {
       process.env.PLACE_PREVIEW_SECTION_BUDGET_MS = '40';
       installFetch({ hang: 'imagery.geoplatform.gov' });
       const started = Date.now();
@@ -302,8 +302,7 @@ describe('GET /api/public/place', () => {
       expect(res.status).toBe(200);
       expect(Date.now() - started).toBeLessThan(3000);
       const m = byId(res.body);
-      expect(m.wildfire.status).toBe('unavailable');
-      expect(m.wildfire.unavailable_reason).toMatch(/Still loading/);
+      expect(m.wildfire.status).toBe('error');
       expect(m.seismic.status).toBe('ready');
       expect(m.weather.status).toBe('ready');
     });

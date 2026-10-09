@@ -15,8 +15,8 @@
 // Two rules the route relies on:
 //   • Each section carries its own time budget (PLACE_PREVIEW_SECTION_
 //     BUDGET_MS, default 3500). A slow provider degrades ONLY its own
-//     section to `unavailable`; the underlying fetch keeps running so
-//     the shared PlaceSectionCache is warm for the next visitor.
+//     section to a retryable `error`; the underlying fetch keeps running
+//     so the shared PlaceSectionCache is warm for the next visitor.
 //   • No cache key ever contains the typed address — adapters key by
 //     geohash / county / state, and the synthetic "home" passed to them
 //     is identified by its geohash-6 cell, never by the search.
@@ -67,7 +67,9 @@ function previewDensityLabel(bucket, foundingOpen = true) {
   return PREVIEW_DENSITY_LABELS[b];
 }
 
-const SLOW_REASON = 'Still loading from the source. Check back in a moment.';
+// Today's composer applies the budget to each of its providers itself and
+// settles by then; the race around it only catches something unexpected.
+const TODAY_RACE_GRACE_MS = 500;
 
 function sectionBudgetMs() {
   const n = Number(process.env.PLACE_PREVIEW_SECTION_BUDGET_MS);
@@ -92,8 +94,12 @@ function withBudget(run, ms, fallback) {
   return Promise.race([attempt, timeout]);
 }
 
-const unavailable = (ids, reason = SLOW_REASON) =>
-  () => ids.map((id) => serializePlaceSection(id, { status: 'unavailable', unavailableReason: reason }));
+// A section that ran out of time or failed is a retryable error ("Couldn't
+// load this · Try again" on every client), not "not available for your area":
+// the source covers the point, it just didn't answer in time, and its fetch
+// keeps running, so a retry a moment later usually finds it cached.
+const failed = (ids) =>
+  () => ids.map((id) => serializePlaceSection(id, { status: 'error' }));
 
 // ── Remote Band-A layers for a point ─────────────────────────
 // Returns envelopes for the layers that need a provider round-trip.
@@ -130,16 +136,20 @@ async function composePreviewSections({ lat, lng, city = null, state = null, res
   };
   const ms = sectionBudgetMs();
   const tasks = [
-    withBudget(() => placeIntelligenceService.composeTodayForPoint(lat, lng), ms, unavailable(['weather', 'air_quality', 'alerts'])),
-    withBudget(() => adapters.composeSunriseSunset(home), ms, unavailable(['sunrise_sunset'])),
-    withBudget(() => adapters.composeSeismic(home), ms, unavailable(['seismic'])),
-    withBudget(() => adapters.composeWildfire(home), ms, unavailable(['wildfire'])),
-    withBudget(() => adapters.composeLeadRadon(home), ms, unavailable(['lead_radon'])),
-    withBudget(() => adapters.composeDrinkingWater(home), ms, unavailable(['drinking_water'])),
-    withBudget(() => adapters.composeEnvironmentalHazards(home), ms, unavailable(['environmental_hazards'])),
-    withBudget(() => adapters.composeRentBand(home), ms, unavailable(['rent_band'])),
-    withBudget(() => adapters.composeCivicDistricts(home), ms, unavailable(['civic_districts'])),
-    withBudget(() => adapters.composeCivicElection(home), ms, unavailable(['civic_election'])),
+    withBudget(
+      () => placeIntelligenceService.composeTodayForPoint(lat, lng, { budgetMs: ms }),
+      ms + TODAY_RACE_GRACE_MS,
+      failed(['weather', 'air_quality', 'alerts']),
+    ),
+    withBudget(() => adapters.composeSunriseSunset(home), ms, failed(['sunrise_sunset'])),
+    withBudget(() => adapters.composeSeismic(home), ms, failed(['seismic'])),
+    withBudget(() => adapters.composeWildfire(home), ms, failed(['wildfire'])),
+    withBudget(() => adapters.composeLeadRadon(home), ms, failed(['lead_radon'])),
+    withBudget(() => adapters.composeDrinkingWater(home), ms, failed(['drinking_water'])),
+    withBudget(() => adapters.composeEnvironmentalHazards(home), ms, failed(['environmental_hazards'])),
+    withBudget(() => adapters.composeRentBand(home), ms, failed(['rent_band'])),
+    withBudget(() => adapters.composeCivicDistricts(home), ms, failed(['civic_districts'])),
+    withBudget(() => adapters.composeCivicElection(home), ms, failed(['civic_election'])),
   ];
   const settled = await Promise.all(tasks);
   return settled.flat();
