@@ -86,6 +86,24 @@ data class MyHome(
             }
 }
 
+/** Household roles (founder decision 3): everyone who lives in or runs the home, not guests or service providers. */
+private val HOUSEHOLD_ROLE_BASES = setOf("owner", "admin", "manager", "lease_resident", "member", "restricted_member")
+
+/**
+ * Founder decision 3 (Instant Screens contract §5, the Household tier): owners and household roles see the last copy
+ * of this home's screens while their access is re-checked, and so does the person whose own private setup it is.
+ * Guests, service providers and any access with an end date wait for the server.
+ */
+val MyHome.showsCopyBeforeRecheck: Boolean
+    get() =
+        hasValidListContext &&
+            occupancy?.endAt == null &&
+            when (accessKind) {
+                "private_setup" -> true
+                "shared" -> hasSharedAccess && roleBase in HOUSEHOLD_ROLE_BASES
+                else -> false
+            }
+
 /** Human-readable area label for the compose target picker. */
 fun MyHome.areaLabel(): String {
     val parts = listOfNotNull(city, state).map { it.trim() }.filter { it.isNotEmpty() }
