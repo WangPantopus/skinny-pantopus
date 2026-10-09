@@ -433,8 +433,10 @@ production one and switches the schedules back on.
    password in a private `0600` file outside the repository, as
    `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`; never paste either into
    chat or a command argument. Scope the token to `pantopus-production` only,
-   with Read access to Project Settings, API Keys and API Key Secrets; leave
-   all other permissions off. The environment token overrides the saved
+   with Read access to Project Settings, API Keys, API Key Secrets, and
+   Database → Connection Pooling; leave all other permissions off. The last
+   permission lets the CLI discover the IPv4 pooler endpoint on networks
+   without IPv6. The environment token overrides the saved
    staging login. The founder loads that file only in this terminal session.
    Nothing should be connected to the new project yet; if a production backend
    or worker already points at it, stop it first. Verify that the linked ref is
@@ -449,12 +451,15 @@ production one and switches the schedules back on.
    : "${SUPABASE_DB_PASSWORD:?missing production database password}"
    sb link --project-ref falmvysvndmwtfxsrxek
    test "$(cat supabase/.temp/project-ref)" = falmvysvndmwtfxsrxek
+   test -s supabase/.temp/pooler-url
    sb db push --linked --skip-vault --dry-run
    # Founder only, after checking the dry run and project ref:
    sb db push --linked --skip-vault
    sb migration list --linked
    unset SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD
    ```
+   Stop if either `test` fails or the dry run cannot connect; the project must
+   be linked to the expected ref through its IPv4 pooler before any push.
    Never use `db reset --linked` or `--include-seed` on production.
 3. Storage buckets and the S3 access key as in S2.
 4. Transfer April logins and matching app profiles only after the private
