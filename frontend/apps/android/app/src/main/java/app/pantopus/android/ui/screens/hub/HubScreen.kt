@@ -62,6 +62,8 @@ fun HubScreen(
     viewModel: HubViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Instant Screens: only a pull or Retry with the hub on screen shows the indicator; the hub never blanks for it.
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     ReportContentShown("hub", state is HubUiState.Populated || state is HubUiState.FirstRun)
     val discoveryFilter by viewModel.discoveryFilter.collectAsStateWithLifecycle()
     val discoveryLoading by viewModel.discoveryLoading.collectAsStateWithLifecycle()
@@ -78,7 +80,7 @@ fun HubScreen(
 
     val pullState =
         rememberPullRefreshState(
-            refreshing = state is HubUiState.Skeleton,
+            refreshing = refreshing,
             onRefresh = viewModel::refresh,
         )
 
@@ -118,7 +120,7 @@ fun HubScreen(
             is HubUiState.Error -> ErrorLayout(current.message, viewModel::refresh)
         }
         PullRefreshIndicator(
-            refreshing = state is HubUiState.Skeleton,
+            refreshing = refreshing,
             state = pullState,
             modifier = Modifier.align(Alignment.TopCenter),
             contentColor = PantopusColors.primary600,

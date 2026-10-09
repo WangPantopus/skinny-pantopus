@@ -14,12 +14,13 @@ import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubSetup
 import app.pantopus.android.data.api.models.hub.HubUser
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.hub.HubRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowHighlight
 import app.pantopus.android.ui.theme.PantopusIcon
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -44,6 +45,8 @@ class RecentActivityViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         // The launch cut drops activity into hidden features (listings); these tests pin every row.
         LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
+        // The list reads the Hub's overview through the screens' store; no copy before the first read here.
+        every { repo.overviewCopy() } returns null
     }
 
     @After
@@ -121,8 +124,8 @@ class RecentActivityViewModelTest {
     @Test
     fun load_populated_renders_row_per_activity_item() =
         runTest {
-            coEvery { repo.overview() } returns
-                NetworkResult.Success(
+            coEvery { repo.overviewStored(any()) } returns
+                Stored(
                     hub(
                         listOf(
                             activity("1", route = "/gigs/g_1"),
@@ -130,6 +133,7 @@ class RecentActivityViewModelTest {
                             activity("3", route = "/app/homes/h_1/dashboard"),
                         ),
                     ),
+                    fetchedAt = System.currentTimeMillis(),
                 )
             val vm = RecentActivityViewModel(repo)
             vm.load()
@@ -143,7 +147,7 @@ class RecentActivityViewModelTest {
     @Test
     fun load_empty_shows_designed_empty_state() =
         runTest {
-            coEvery { repo.overview() } returns NetworkResult.Success(hub(emptyList()))
+            coEvery { repo.overviewStored(any()) } returns Stored(hub(emptyList()), fetchedAt = System.currentTimeMillis())
             val vm = RecentActivityViewModel(repo)
             vm.load()
             val state = vm.state.value
@@ -156,7 +160,7 @@ class RecentActivityViewModelTest {
     @Test
     fun load_failure_transitions_to_error() =
         runTest {
-            coEvery { repo.overview() } returns NetworkResult.Failure(NetworkError.Server(500, "boom"))
+            coEvery { repo.overviewStored(any()) } returns Stored(failure = NetworkError.Server(500, "boom"))
             val vm = RecentActivityViewModel(repo)
             vm.load()
             val state = vm.state.value
