@@ -14,7 +14,7 @@ import { useDesktopNotifications } from '@/hooks/useDesktopNotifications';
 import { NavIcons, HomeIcons, BusinessIcons } from '@/lib/icons';
 import MobileTabBar from '@/components/MobileTabBar';
 import { PantopusMark } from '@/components/brand/PantopusMark';
-import UnifiedFAB from '@/components/UnifiedFAB';
+import UnifiedFAB, { routeHasFab } from '@/components/UnifiedFAB';
 import dynamic from 'next/dynamic';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
@@ -581,7 +581,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* ═══════════════════════════════════════════════════════
        *  MAIN CONTENT
        * ═══════════════════════════════════════════════════════ */}
-      <main className={`pt-14 min-h-screen transition-[margin-left] duration-200 ease-in-out relative z-0${showMobileTabs ? ' pb-20' : ''}`} style={contentStyle}>
+      {/* Phones: pb-20 clears the tab bar; where the quick-actions button floats
+          above it (its top edge 144 px up), pb-40 lets the last row scroll clear. */}
+      <main className={`pt-14 min-h-screen transition-[margin-left] duration-200 ease-in-out relative z-0${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
         {!isOnline && (
           <div role="status" className="sticky top-14 z-40 flex items-center justify-center gap-2 bg-amber-500/95 px-3 py-1.5 text-xs font-semibold text-white">
             <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

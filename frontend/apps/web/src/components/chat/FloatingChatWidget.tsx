@@ -55,14 +55,16 @@ export default function FloatingChatWidget() {
     setActiveChat(null);
   };
 
-  // Closed: show chat bubble
+  // Closed: show chat bubble. Tablet and desktop only (md:flex): on a phone the
+  // 360 px panel ran off the screen and the bubble covered the page, while the
+  // header's Messages icon and the Mail tab already open chat with its badge.
   if (view === 'closed') {
     return (
       <button
         type="button"
         aria-label="Open messages panel"
         onClick={() => setView('list')}
-        className="fixed bottom-[calc(6rem+var(--fab-lift,0px))] right-6 z-40 w-14 h-14 rounded-full bg-primary-600 text-white shadow-lg hover:bg-primary-700 hover:shadow-xl transition-all duration-200 flex items-center justify-center"
+        className="fixed bottom-[calc(6rem+var(--fab-lift,0px))] right-6 z-40 w-14 h-14 rounded-full bg-primary-600 text-white shadow-lg hover:bg-primary-700 hover:shadow-xl transition-all duration-200 hidden md:flex items-center justify-center"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -79,7 +81,7 @@ export default function FloatingChatWidget() {
   // Panel (list or chat view)
   return (
     <div
-      className="fixed bottom-[calc(6rem+var(--fab-lift,0px))] right-6 z-40 w-[360px] h-[500px] bg-surface rounded-2xl shadow-2xl border border-app flex flex-col overflow-hidden transition-all duration-200 ease-in-out"
+      className="fixed bottom-[calc(6rem+var(--fab-lift,0px))] right-6 z-40 w-[360px] h-[500px] bg-surface rounded-2xl shadow-2xl border border-app hidden md:flex flex-col overflow-hidden transition-all duration-200 ease-in-out"
       onWheel={(e) => e.stopPropagation()}
     >
       {view === 'list' ? (

@@ -30,6 +30,17 @@ export interface UnifiedFABAction {
  */
 const ROUTES_WITH_PAGE_FAB = ['/app/homes/'];
 
+/**
+ * Chat has its own composer and "New message"; on a phone the button sat on
+ * the composer's Send button. No quick-actions button there at all.
+ */
+const ROUTES_WITHOUT_FAB = ['/app/chat'];
+
+/** Whether a quick-actions button (global or page-level) floats over this route. */
+export function routeHasFab(pathname: string): boolean {
+  return !ROUTES_WITHOUT_FAB.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+}
+
 interface UnifiedFABProps {
   /** Extra context-specific actions to prepend (e.g. home dashboard actions) */
   contextActions?: UnifiedFABAction[];
@@ -80,8 +91,8 @@ export default function UnifiedFAB({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [open]);
 
-  // Hide global FAB on routes that render their own page-level FAB
-  if (hideOnPageFABRoutes && ROUTES_WITH_PAGE_FAB.some((r) => pathname.startsWith(r))) {
+  // Hide global FAB on routes that render their own page-level FAB, or none
+  if (hideOnPageFABRoutes && (ROUTES_WITH_PAGE_FAB.some((r) => pathname.startsWith(r)) || !routeHasFab(pathname))) {
     return null;
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ChangeLocationModal from '@/components/hub/ChangeLocationModal';
 import {
@@ -101,6 +101,9 @@ function freshnessLabel(fetchedAt: string): string {
 
 export default function HubTodayPage() {
   const router = useRouter();
+  // /app/today is a tab (bottom bar, sidebar): nothing to go back to. The Back
+  // arrow stays on /app/hub/today, which a card or the morning push opens.
+  const isTab = usePathname() === '/app/today';
   const queryClient = useQueryClient();
   const [showLocationPicker, setShowLocationPicker] = useState(false);
 
@@ -135,13 +138,15 @@ export default function HubTodayPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.back()}
-              className="p-1.5 hover:bg-app-hover rounded-lg transition"
-              aria-label="Back"
-            >
-              <ArrowLeft className="w-5 h-5 text-app-text" />
-            </button>
+            {!isTab && (
+              <button
+                onClick={() => router.back()}
+                className="p-1.5 hover:bg-app-hover rounded-lg transition"
+                aria-label="Back"
+              >
+                <ArrowLeft className="w-5 h-5 text-app-text" />
+              </button>
+            )}
             <h1 className="text-xl font-bold text-app-text">Today</h1>
           </div>
           <button
