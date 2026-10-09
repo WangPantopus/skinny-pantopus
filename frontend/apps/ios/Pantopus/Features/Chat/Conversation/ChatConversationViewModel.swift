@@ -390,6 +390,10 @@ public final class ChatConversationViewModel {
     }
 
     private let api: APIClient
+    /// The thread as last seen this session, kept in memory only (messages
+    /// never reach the phone's storage, contract choice 4) and wiped with
+    /// the store at sign-out.
+    private let store: ScreenStore
     private let socket: SocketClient
     private let uploader: MultipartUploader
     private let aiClient: any AIChatStreaming
@@ -508,6 +512,7 @@ public final class ChatConversationViewModel {
         self.scrollToMessageId = scrollToMessageId
         self.gigId = gigId
         self.api = api
+        store = ScreenStore.store(for: api)
         self.socket = socket
         self.uploader = uploader
         self.aiClient = aiClient
@@ -542,6 +547,7 @@ public final class ChatConversationViewModel {
         initialTopic = nil
         gigId = nil
         api = .shared
+        store = .shared
         socket = .shared
         uploader = .shared
         aiClient = AIChatStreamClient.shared
@@ -576,8 +582,11 @@ public final class ChatConversationViewModel {
             return
         }
         await restoreAIConversationIfNeeded()
+        // Reopening a thread seen earlier this session: its messages at once,
+        // then the newest page merged in quietly.
+        let recalled = recallThread()
         await loadTopicsIfNeeded()
-        await fetch(.reload)
+        await fetch(recalled ? .merge : .reload)
         subscribeToSockets()
         prefetchDirectRoomIfNeeded()
         loadGigContextIfNeeded()
@@ -1119,6 +1128,7 @@ public final class ChatConversationViewModel {
     }
 
     public func teardown() {
+        rememberThread()
         emitTypingStopIfNeeded()
         markReadTask?.cancel()
         typingClearTask?.cancel()
@@ -2374,5 +2384,60 @@ public final class ChatConversationViewModel {
 
     private func friendlyMessage(_ error: any Error) -> String {
         (error as? APIError)?.errorDescription ?? "Couldn't load this conversation."
+    }
+}
+
+// MARK: - The thread kept in memory (Instant Screens)
+
+/// The newest messages of a thread and its paging position, as the screen
+/// last showed them. Memory only: never written to the phone's storage.
+struct ChatThreadMemory {
+    let messages: [ChatMessageDTO]
+    let oldestCursor: String?
+    let hasMore: Bool
+}
+
+extension ChatConversationViewModel {
+    /// How many of a thread's newest messages are kept for reopening it.
+    static let rememberedMessages = 100
+
+    /// The newest page's request, which keys the kept thread. A thread opened
+    /// for a topic still being created, at a searched message, or the assistant
+    /// starts from the server as before.
+    private var threadMemoryEndpoint: Endpoint? {
+        guard initialTopic == nil, scrollToMessageId == nil else { return nil }
+        return switch mode {
+        case let .room(roomId): ChatEndpoints.roomMessages(roomId: roomId, before: nil)
+        case let .person(otherUserId):
+            ChatEndpoints.conversationMessages(otherUserId: otherUserId, before: nil, topicId: selectedTopicId)
+        case .ai: nil
+        }
+    }
+
+    /// Shows the kept thread, if there is one. True when it did.
+    private func recallThread() -> Bool {
+        guard let endpoint = threadMemoryEndpoint,
+              let memory = store.seeded(endpoint, as: ChatThreadMemory.self), !memory.messages.isEmpty
+        else { return false }
+        messages = memory.messages
+        oldestCursor = memory.oldestCursor
+        hasMore = memory.hasMore
+        rebuild()
+        return true
+    }
+
+    /// Keeps the newest messages for the next opening (leaving the screen).
+    private func rememberThread() {
+        guard let endpoint = threadMemoryEndpoint, !messages.isEmpty else { return }
+        let kept = Array(messages.suffix(Self.rememberedMessages))
+        let trimmed = kept.count < messages.count
+        store.seed(
+            ChatThreadMemory(
+                messages: kept,
+                oldestCursor: trimmed ? Self.paginationCursor(for: kept.first) : oldestCursor,
+                hasMore: trimmed || hasMore
+            ),
+            for: endpoint
+        )
     }
 }
