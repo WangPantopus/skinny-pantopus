@@ -10,8 +10,9 @@ import {
   type ReactNode,
 } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import { getAuthToken, onTokenChange } from '@pantopus/api';
+import { clearAuthSession, getAuthToken, onTokenChange, refreshAuthSession } from '@pantopus/api';
 import { API_BASE_URL } from '@pantopus/utils';
+import { SESSION_ENDED_NOTICE_KEY, hardNavigate } from '@/lib/session-refresh';
 
 // ── Context ──────────────────────────────────────────────────
 
@@ -36,6 +37,28 @@ function getSocketBaseUrl(): string {
   // Production: same origin as the page so httpOnly `pantopus_access` is sent on the handshake.
   if (isLocalDevHost) return API_BASE_URL;
   return window.location.origin;
+}
+
+/**
+ * The server revoked this browser's session (`auth:session_revoked`: signed out
+ * from another device, Sign out everywhere, a password change, this device
+ * removed) and dropped the socket. The frame is a hint: a refresh confirms it
+ * (and the refused refresh clears the cookies the server no longer honors), so
+ * the page leaves for sign-in now instead of on its next failed request.
+ */
+async function confirmRevokedSession(reason: unknown, reconnect: () => void): Promise<void> {
+  const result = await refreshAuthSession({ trigger: 'session_revoked' });
+  if (result.status === 'success') {
+    reconnect();
+    return;
+  }
+  // Unreachable, or this tab already signed out or switched accounts: the next request decides.
+  if (result.status !== 'invalid') return;
+  const kind = reason === 'password_change' || reason === 'password_reset' ? 'password' : 'revoked';
+  try { window.sessionStorage.setItem(SESSION_ENDED_NOTICE_KEY, `${kind}:${Date.now()}`); } catch { /* sign-in still opens */ }
+  await clearAuthSession();
+  const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  hardNavigate(`/login?redirectTo=${encodeURIComponent(returnTo)}`);
 }
 
 // ── Provider ─────────────────────────────────────────────────
@@ -144,6 +167,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setConnected(false);
     });
 
+    nextSocket.on('auth:session_revoked', (payload?: { reason?: string }) => {
+      // A sign-out in this browser revokes its own session too; the tab that
+      // signed out navigates and the other tabs retire on the storage event.
+      if (socketRef.current !== nextSocket || payload?.reason === 'logout') return;
+      void confirmRevokedSession(payload?.reason, replaceSession);
+    });
+
     return () => {
       nextSocket.disconnect();
       if (socketRef.current === nextSocket) {
@@ -154,7 +184,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       socketRef.current = null;
       setConnected(false);
     };
-  }, [authToken, sessionRevision]);
+  }, [authToken, sessionRevision, replaceSession]);
 
   return (
     <SocketContext.Provider value={{ socket, connected }}>
