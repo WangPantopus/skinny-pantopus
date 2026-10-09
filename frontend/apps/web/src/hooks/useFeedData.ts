@@ -466,7 +466,10 @@ export function useFeedData({
       patchPostInFeedCaches(queryClient, postId, { userHasLiked: res.liked, like_count: res.likeCount });
     },
     onError: (_err, _vars, context) => {
-      if (context) updatePostsInCache(context.toggleLike);
+      if (!context) return;
+      // A refused like rolls back and says so (Instant Screens: pending taps never fail silently).
+      updatePostsInCache(context.toggleLike);
+      showToast("Couldn't update your like. Try again.");
     },
     onSettled: (_data, _err, { postId }) => {
       setLikingIds((prev) => {
@@ -503,13 +506,17 @@ export function useFeedData({
   });
 
   // One toggle per post at a time: a second click while the first is in flight would undo it.
-  const savingIds = useRef<Set<string>>(new Set());
+  // The card shows the save as pending until the server confirms it.
+  const savingRef = useRef<Set<string>>(new Set());
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const handleSave = useCallback((postId: string) => {
-    if (savingIds.current.has(postId)) return;
-    savingIds.current.add(postId);
+    if (savingRef.current.has(postId)) return;
+    savingRef.current.add(postId);
+    setSavingIds(new Set(savingRef.current));
     saveMutation.mutate({ postId, saved: !(postsRef.current.find((p) => p.id === postId)?.userHasSaved ?? false) }, {
       onSettled: () => {
-        savingIds.current.delete(postId);
+        savingRef.current.delete(postId);
+        setSavingIds(new Set(savingRef.current));
       },
     });
   }, [saveMutation]);
@@ -619,6 +626,7 @@ export function useFeedData({
     hasMore,
     isPosting,
     likingIds,
+    savingIds,
     placeEligible,
     eligibilityReason,
     sentinelRef,
