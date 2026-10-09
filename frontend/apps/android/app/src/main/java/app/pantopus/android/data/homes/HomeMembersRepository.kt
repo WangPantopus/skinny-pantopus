@@ -45,11 +45,21 @@ open class HomeMembersRepository
         open suspend fun invite(
             homeId: String,
             request: InviteMemberRequest,
-        ): NetworkResult<InviteMemberResponse> = safeApiCall { api.invite(homeId, request) }
+        ): NetworkResult<InviteMemberResponse> = safeApiCall { api.invite(homeId, request) }.also { changed(homeId, it) }
 
         /** `DELETE /api/homes/:id/members/:userId`. */
         open suspend fun remove(
             homeId: String,
             userId: String,
-        ): NetworkResult<RemoveMemberResponse> = safeApiCall { api.removeMember(homeId, userId) }
+        ): NetworkResult<RemoveMemberResponse> = safeApiCall { api.removeMember(homeId, userId) }.also { changed(homeId, it) }
+
+        /** Own edit: this Home's stored screens, and the lists that name it, read again on their next use. */
+        private fun changed(
+            homeId: String,
+            result: NetworkResult<*>,
+        ) {
+            if (result !is NetworkResult.Success) return
+            store.markStale("home:$homeId")
+            store.markStale("homes")
+        }
     }

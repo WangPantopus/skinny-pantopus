@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "TooManyFunctions", "LongMethod")
+@file:Suppress("PackageNaming", "TooManyFunctions", "LongMethod", "LargeClass")
 
 package app.pantopus.android.ui.screens.homes.members
 
@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.homes.HomeAuditEntryDto
 import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestDto
 import app.pantopus.android.data.api.models.homes.InvitationDto
 import app.pantopus.android.data.api.models.homes.OccupantDto
+import app.pantopus.android.data.api.models.homes.OccupantsResponse
 import app.pantopus.android.data.api.models.homes.PendingInviteDto
 import app.pantopus.android.data.api.models.homes.actionLabel
 import app.pantopus.android.data.api.models.homes.actorDisplayName
@@ -23,6 +24,11 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBackground
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBadgeSize
 import app.pantopus.android.ui.screens.shared.list_of_rows.CompactButtonVariant
@@ -43,6 +49,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.VerticalAction
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,6 +62,15 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import javax.inject.Inject
+
+/** One read of the members screen: the roster is required; the rest is best-effort or for managers. */
+private data class MembersReads(
+    val access: HomeAccessDto?,
+    val roster: Stored<OccupantsResponse>,
+    val invitations: Pair<List<PendingInviteDto>, String?>,
+    val requests: List<HouseholdAccessRequestDto>,
+    val audit: List<HomeAuditEntryDto>,
+)
 
 /** Nav arg key for the home id consumed via [SavedStateHandle]. */
 const val MEMBERS_LIST_HOME_ID_KEY = "homeId"
@@ -155,9 +171,33 @@ class MembersListViewModel
         private val adminRepo: HomeAdminRepository,
         private val auth: AuthRepository,
         private val sender: HomeInvitationSenderFactory,
+        gates: HomeCopyGateFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         val homeId: String = savedStateHandle[MEMBERS_LIST_HOME_ID_KEY] ?: ""
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate =
+            gates.create(
+                homeId,
+                listOf(
+                    StoreKeys.homeMe(homeId),
+                    StoreKeys.homeOccupants(homeId),
+                    StoreKeys.homeAccessRequests(homeId),
+                    StoreKeys.homeAuditLog(homeId),
+                ),
+            )
+
+        /** Pull to refresh is reading while the rows stay (Instant Screens): the pull indicator only. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        /** False while the rows come from a stored copy: invitations are never stored, so Pending waits for the read. */
+        private var invitationsKnown = false
 
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
@@ -220,14 +260,25 @@ class MembersListViewModel
                 )
             }
 
-        /** Idempotent — re-running won't refetch once content is loaded. */
+        /**
+         * Screen entry and every return (Instant Screens): owners and household roles see the stored roster at once,
+         * and the store answers a fresh copy without a request or revalidates an older one quietly.
+         */
         fun load() {
-            if (loadedOnce || loadInFlight) return
-            reload()
+            if (loadInFlight) return
+            if (!loadedOnce && gate.showsCopy) showStoredCopy()
+            reload(force = false)
         }
 
-        /** Pull-to-refresh / retry. */
-        fun refresh() = reload()
+        /** Pull-to-refresh / retry: read now. */
+        fun refresh() {
+            _refreshing.value = loadedOnce
+            reload(force = true)
+        }
+
+        override fun onCleared() {
+            gate.leave()
+        }
 
         /** Recovery has its own protected original; retire the current list before presenting it. */
         fun retireForRemovalRecovery() {
@@ -365,11 +416,29 @@ class MembersListViewModel
             }
         }
 
-        private fun reload() {
+        private fun reload(force: Boolean) {
             val generation = ++readGeneration
-            retireSnapshot()
+            if (!loadedOnce) retireSnapshot()
             loadInFlight = true
-            viewModelScope.launch { fetch(generation) }
+            viewModelScope.launch { fetch(generation, force) }
+        }
+
+        /** The stored roster, access and manager queues; invitations stay unknown until the read. */
+        private fun showStoredCopy() {
+            val roster = repo.storedOccupants(homeId) ?: return
+            val stored = adminRepo.storedMyAccess(homeId)
+            val canManage = stored?.canManageMembers == true
+            access = stored
+            occupants = roster.occupants.filter { it.isActive }
+            pendingInvites = emptyList()
+            invitationReadError = null
+            invitationsKnown = false
+            accessRequests = if (canManage) adminRepo.storedHouseholdAccessRequests(homeId)?.requests.orEmpty() else emptyList()
+            auditEntries = if (canManage) adminRepo.storedAuditLog(homeId)?.entries.orEmpty() else emptyList()
+            readError = null
+            rosterConfirmed = true
+            loadedOnce = true
+            applyState()
         }
 
         private fun retireSnapshot() {
@@ -382,63 +451,93 @@ class MembersListViewModel
             auditEntries = emptyList()
             readError = null
             loadedOnce = false
+            invitationsKnown = false
             applyState()
         }
 
-        /** Every endpoint contributes to one current-session snapshot, published only by the latest read. */
-        private suspend fun fetch(generation: Long = ++readGeneration) =
-            coroutineScope {
+        /**
+         * Every endpoint contributes to one current-session snapshot, published only by the latest read. The roster
+         * and the viewer's access are read side by side, then the manager's queues side by side (invitations stay a
+         * direct read). [force] reads now; otherwise the store answers fresh copies (owners and household roles).
+         * Whatever is on screen stays until the new snapshot replaces it.
+         */
+        private suspend fun fetch(
+            generation: Long = ++readGeneration,
+            force: Boolean = true,
+        ) = coroutineScope {
+            if (generation != readGeneration) return@coroutineScope
+            loadInFlight = true
+            val session = sender.session(this)
+            try {
+                session.requireCurrent()
+                val fromCopy = gate.showsCopy && !force
+                var reads = readAll(fromCopy)
+                // Household access ended meanwhile: whatever came from a copy is read again now.
+                if (fromCopy && !gate.showsCopy) reads = readAll(fromCopy = false)
+                session.requireCurrent()
                 if (generation != readGeneration) return@coroutineScope
-                retireSnapshot()
-                loadInFlight = true
-                val session = sender.session(this)
-                try {
-                    session.requireCurrent()
-                    val nextAccess =
-                        when (val me = adminRepo.myAccess(homeId)) {
-                            is NetworkResult.Success -> me.data
-                            is NetworkResult.Failure -> null
-                        }
-                    val roster = repo.listOccupants(homeId)
-                    if (roster is NetworkResult.Failure) {
-                        session.requireCurrent()
-                        if (generation == readGeneration) {
-                            val refused = roster.error is NetworkError.Forbidden
-                            publishReadFailure(roster.error.displayMessage("Couldn't load the list."), refused)
-                        }
-                        return@coroutineScope
-                    }
-                    val nextOccupants = (roster as NetworkResult.Success).data.occupants.filter { it.isActive }
-                    val canManage = nextAccess?.canManageMembers == true
-                    val nextInvitations = fetchSenderInvitations(canManage)
-                    val confirmedManage = canManage && nextInvitations.second == null
-                    val nextRequests = fetchAccessRequests(confirmedManage)
-                    val nextAudit = fetchAuditLog(confirmedManage)
-                    session.requireCurrent()
-                    if (generation != readGeneration) return@coroutineScope
-                    access = nextAccess.takeUnless { canManage && !confirmedManage }
-                    occupants = nextOccupants
-                    pendingInvites = nextInvitations.first
-                    invitationReadError = nextInvitations.second
-                    accessRequests = nextRequests
-                    auditEntries = nextAudit
-                    readError = null
-                    memberListRefused = false
-                    rosterConfirmed = true
-                    loadedOnce = true
-                    if (_selectedTab.value in setOf(MembersTab.REQUESTS, MembersTab.AUDIT) && !confirmedManage) {
-                        _selectedTab.value = MembersTab.MEMBERS
-                    }
-                    applyState()
-                } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    if (generation == readGeneration) publishReadFailure("Current members could not be loaded. Retry to refresh this Home.")
-                } finally {
-                    if (generation == readGeneration) loadInFlight = false
-                    coroutineContext.cancelChildren()
+                _refreshing.value = false
+                publish(reads)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (generation == readGeneration) publishReadFailure("Current members could not be loaded. Retry to refresh this Home.")
+            } finally {
+                if (generation == readGeneration) {
+                    loadInFlight = false
+                    _refreshing.value = false
                 }
+                coroutineContext.cancelChildren()
             }
+        }
+
+        private suspend fun readAll(fromCopy: Boolean): MembersReads =
+            coroutineScope {
+                val force = !fromCopy
+                val recheck = async { gate.recheck(force) }
+                val meRead = async { adminRepo.myAccessStored(homeId, force) }
+                val rosterRead = async { repo.listOccupantsStored(homeId, force) }
+                val me = meRead.await().data
+                val roster = rosterRead.await()
+                val canManage = me?.canManageMembers == true
+                val invitations = async { fetchSenderInvitations(canManage) }
+                val requests =
+                    async {
+                        if (canManage) adminRepo.householdAccessRequestsStored(homeId, force).data?.requests.orEmpty() else emptyList()
+                    }
+                val audit = async { if (canManage) adminRepo.auditLogStored(homeId, force).data?.entries.orEmpty() else emptyList() }
+                recheck.await()
+                MembersReads(me, roster, invitations.await(), requests.await(), audit.await())
+            }
+
+        private fun publish(reads: MembersReads) {
+            val roster = reads.roster.data
+            if (roster == null) {
+                // Nothing to show, or the server refused this viewer (the store dropped the copy).
+                val error = reads.roster.failure ?: NetworkError.NotFound
+                publishReadFailure(error.displayMessage("Couldn't load the list."), refused = error is NetworkError.Forbidden)
+                return
+            }
+            val canManage = reads.access?.canManageMembers == true
+            val confirmedManage = canManage && reads.invitations.second == null
+            access = reads.access.takeUnless { canManage && !confirmedManage }
+            occupants = roster.occupants.filter { it.isActive }
+            pendingInvites = reads.invitations.first
+            invitationReadError = reads.invitations.second
+            invitationsKnown = true
+            accessRequests = if (confirmedManage) reads.requests else emptyList()
+            auditEntries = if (confirmedManage) reads.audit else emptyList()
+            readError = null
+            memberListRefused = false
+            rosterConfirmed = true
+            loadedOnce = true
+            if (_selectedTab.value in setOf(MembersTab.REQUESTS, MembersTab.AUDIT) && !confirmedManage) {
+                _selectedTab.value = MembersTab.MEMBERS
+            }
+            applyState()
+            _refreshNotice.value =
+                RefreshNotice(reads.roster.fetchedAt, ::refresh).takeIf { reads.roster.showsRefreshFailure(StoreKind.HOMES) }
+        }
 
         private fun publishReadFailure(
             message: String,
@@ -471,26 +570,6 @@ class MembersListViewModel
             }
         }
 
-        private suspend fun fetchAccessRequests(canManage: Boolean): List<HouseholdAccessRequestDto> =
-            if (!canManage) {
-                emptyList()
-            } else {
-                when (val result = adminRepo.householdAccessRequests(homeId)) {
-                    is NetworkResult.Success -> result.data.requests
-                    is NetworkResult.Failure -> emptyList()
-                }
-            }
-
-        private suspend fun fetchAuditLog(canManage: Boolean): List<HomeAuditEntryDto> =
-            if (!canManage) {
-                emptyList()
-            } else {
-                when (val result = adminRepo.auditLog(homeId)) {
-                    is NetworkResult.Success -> result.data.entries
-                    is NetworkResult.Failure -> emptyList()
-                }
-            }
-
         // ─── Buckets ──────────────────────────────────────────────
 
         private fun membersBucket(): List<OccupantDto> = occupants.filter { MemberRole.parse(it.role) !in MemberRole.guestRoles }
@@ -505,7 +584,7 @@ class MembersListViewModel
                     ListOfRowsTab(
                         id = MembersTab.PENDING,
                         label = "Pending",
-                        count = pendingInvites.size.takeIf { rosterConfirmed && invitationReadError == null },
+                        count = pendingInvites.size.takeIf { rosterConfirmed && invitationsKnown && invitationReadError == null },
                     ),
                 )
                 if (canManageMembers) {
@@ -539,9 +618,11 @@ class MembersListViewModel
                 _state.value = ListOfRowsUiState.Error(checkNotNull(readError))
                 return
             }
-            if (_selectedTab.value == MembersTab.PENDING && invitationReadError != null) {
+            if (_selectedTab.value == MembersTab.PENDING && (!invitationsKnown || invitationReadError != null)) {
                 _tabs.value = makeTabs()
-                _state.value = ListOfRowsUiState.Error(checkNotNull(invitationReadError))
+                // Invitations are never stored: Pending waits for the read while the other tabs show the copy.
+                _state.value =
+                    if (invitationsKnown) ListOfRowsUiState.Error(checkNotNull(invitationReadError)) else ListOfRowsUiState.Loading
                 return
             }
 

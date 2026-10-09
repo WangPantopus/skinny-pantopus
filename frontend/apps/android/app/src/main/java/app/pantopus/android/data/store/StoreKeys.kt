@@ -2,11 +2,14 @@ package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
+import app.pantopus.android.data.api.models.homes.HomeAuditLogResponse
 import app.pantopus.android.data.api.models.homes.HomeDetailResponse
 import app.pantopus.android.data.api.models.homes.HomeOwnershipSecurityResponse
 import app.pantopus.android.data.api.models.homes.HomePrivacyResponse
+import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestsResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.OccupantsResponse
+import app.pantopus.android.data.api.models.homes.OwnersResponse
 import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
@@ -15,6 +18,7 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResp
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
+@Suppress("TooManyFunctions") // One function per stored endpoint.
 object StoreKeys {
     /** My Homes: one source for every screen that lists the viewer's homes. */
     val myHomes = StoreKey<MyHomesResponse>("api/homes/my-homes", kind = StoreKind.HOMES, topics = setOf("homes"))
@@ -115,4 +119,26 @@ object StoreKeys {
             kind = StoreKind.HOMES,
             topics = setOf("home:$homeId", "place:$homeId"),
         )
+
+    /** A Home's pending household access requests (managers). */
+    fun homeAccessRequests(homeId: String) =
+        StoreKey<HouseholdAccessRequestsResponse>(
+            "api/homes/$homeId/household-access-requests",
+            mapOf("status" to "pending"),
+            kind = StoreKind.HOMES,
+            topics = setOf("home:$homeId"),
+        )
+
+    /** The first page of a Home's audit log (managers). */
+    fun homeAuditLog(homeId: String) =
+        StoreKey<HomeAuditLogResponse>(
+            "api/homes/$homeId/audit-log",
+            mapOf("limit" to "50", "offset" to "0"),
+            kind = StoreKind.HOMES,
+            topics = setOf("home:$homeId"),
+        )
+
+    /** A Home's owners. */
+    fun homeOwners(homeId: String) =
+        StoreKey<OwnersResponse>("api/homes/$homeId/owners", kind = StoreKind.HOMES, topics = setOf("home:$homeId", "homes"))
 }

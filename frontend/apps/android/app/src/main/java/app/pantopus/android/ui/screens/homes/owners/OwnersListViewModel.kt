@@ -8,12 +8,18 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.OwnerDto
+import app.pantopus.android.data.api.models.homes.OwnersResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeOwnersRepository
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBackground
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBadgeSize
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
@@ -30,6 +36,8 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -76,9 +84,22 @@ class OwnersListViewModel
         private val repo: HomeOwnersRepository,
         private val adminRepo: HomeAdminRepository,
         authRepository: AuthRepository,
+        gates: HomeCopyGateFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         val homeId: String = savedStateHandle[OWNERS_LIST_HOME_ID_KEY] ?: ""
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate = gates.create(homeId, listOf(StoreKeys.homeOwners(homeId), StoreKeys.homeMe(homeId)))
+        private var readGeneration = 0L
+
+        /** Pull to refresh is reading while the rows stay (Instant Screens): the pull indicator only. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
         /** Drives the "You" chip on the viewer's own row. Resolved
          *  eagerly from [AuthRepository] state at construction. */
@@ -104,14 +125,24 @@ class OwnersListViewModel
          *  optimistic-remove rollback. */
         private var owners: List<OwnerDto> = emptyList()
 
-        /** Idempotent — re-running won't refetch once content is loaded. */
+        /**
+         * Screen entry and every return (Instant Screens): owners see the stored roster at once, and the store
+         * answers a fresh copy without a request or revalidates an older one quietly.
+         */
         fun load() {
-            if (_state.value is ListOfRowsUiState.Loaded && owners.isNotEmpty()) return
-            reload()
+            if (_access.value == null && gate.showsCopy) showStoredCopy()
+            reload(force = false)
         }
 
-        /** Pull-to-refresh / retry. */
-        fun refresh() = reload()
+        /** Pull-to-refresh / retry: read now. */
+        fun refresh() {
+            _refreshing.value = _access.value != null
+            reload(force = true)
+        }
+
+        override fun onCleared() {
+            gate.leave()
+        }
 
         /** Backend doesn't paginate /owners. */
         fun loadMoreIfNeeded() = Unit
@@ -175,7 +206,7 @@ class OwnersListViewModel
          * simplest correct behaviour is to refetch so the new pending
          * row appears in the right order.
          */
-        fun handleInviteCompleted() = reload()
+        fun handleInviteCompleted() = reload(force = true)
 
         /** Optimistic remove + rollback on failure. */
         fun removeOwner(ownerId: String) {
@@ -199,42 +230,76 @@ class OwnersListViewModel
             }
         }
 
-        private fun reload() {
-            _access.value = null
-            _state.value = ListOfRowsUiState.Loading
+        private fun showStoredCopy() {
+            val stored = repo.storedList(homeId) ?: return
+            val access = adminRepo.storedMyAccess(homeId) ?: return
+            _access.value = access
+            owners = stored.owners
+            applyState()
+        }
+
+        private fun reload(force: Boolean) {
+            val generation = ++readGeneration
+            if (_access.value == null) _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
-                when (val result = repo.list(homeId)) {
-                    is NetworkResult.Success -> {
-                        when (val accessResult = adminRepo.myAccess(homeId)) {
-                            is NetworkResult.Success -> {
-                                _access.value = accessResult.data
-                                owners = result.data.owners
-                                applyState()
-                            }
-                            is NetworkResult.Failure -> {
-                                _state.value =
-                                    ListOfRowsUiState.Error(
-                                        accessResult.error.displayMessage("Couldn't load owner permissions."),
-                                    )
-                            }
-                        }
-                    }
-                    is NetworkResult.Failure -> {
-                        _state.value =
-                            if (result.error is NetworkError.Forbidden) {
-                                // Not (or no longer) an owner, e.g. right after transferring
-                                // the Home: a retry can't change that, so say so plainly.
-                                ListOfRowsUiState.Empty(
-                                    icon = PantopusIcon.Shield,
-                                    headline = "You're not an owner of this Home",
-                                    subcopy = "Only the Home's owners can see its owners and transfers.",
-                                )
-                            } else {
-                                ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
-                            }
-                    }
+                val fromCopy = gate.showsCopy && !force
+                var reads = readAll(fromCopy)
+                // Household access ended meanwhile: whatever came from a copy is read again now.
+                if (fromCopy && !gate.showsCopy) reads = readAll(fromCopy = false)
+                if (generation != readGeneration) return@launch
+                _refreshing.value = false
+                publish(reads.first, reads.second)
+            }
+        }
+
+        /** The roster and the viewer's access, read side by side with the access re-check. */
+        private suspend fun readAll(fromCopy: Boolean): Pair<Stored<OwnersResponse>, Stored<HomeAccessDto>> =
+            coroutineScope {
+                val force = !fromCopy
+                val recheck = async { gate.recheck(force) }
+                val roster = async { repo.listStored(homeId, force) }
+                val access = async { adminRepo.myAccessStored(homeId, force) }
+                recheck.await()
+                roster.await() to access.await()
+            }
+
+        private fun publish(
+            roster: Stored<OwnersResponse>,
+            access: Stored<HomeAccessDto>,
+        ) {
+            val list = roster.data
+            val viewer = access.data
+            when {
+                list != null && viewer != null -> {
+                    _access.value = viewer
+                    owners = list.owners
+                    applyState()
+                }
+                list != null -> {
+                    _access.value = null
+                    _state.value =
+                        ListOfRowsUiState.Error(
+                            (access.failure ?: NetworkError.NotFound).displayMessage("Couldn't load owner permissions."),
+                        )
+                }
+                roster.failure is NetworkError.Forbidden -> {
+                    _access.value = null
+                    // Not (or no longer) an owner, e.g. right after transferring
+                    // the Home: a retry can't change that, so say so plainly.
+                    _state.value =
+                        ListOfRowsUiState.Empty(
+                            icon = PantopusIcon.Shield,
+                            headline = "You're not an owner of this Home",
+                            subcopy = "Only the Home's owners can see its owners and transfers.",
+                        )
+                }
+                else -> {
+                    _access.value = null
+                    _state.value =
+                        ListOfRowsUiState.Error((roster.failure ?: NetworkError.NotFound).displayMessage("Couldn't load the list."))
                 }
             }
+            _refreshNotice.value = RefreshNotice(roster.fetchedAt, ::refresh).takeIf { roster.showsRefreshFailure(StoreKind.HOMES) }
         }
 
         private fun applyState() {

@@ -36,8 +36,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -91,9 +93,12 @@ fun OwnersListScreen(
     viewModel: OwnersListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_owners", state.showsContent())
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
     val removalError by viewModel.removalError.collectAsStateWithLifecycle()
     val access by viewModel.access.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
     var removeTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     val refreshAfterTransfer = rememberRefreshAfterTransfer { viewModel.refresh() }
@@ -131,6 +136,8 @@ fun OwnersListScreen(
                 topBarAction = viewModel.topBarAction,
                 fab = if (access?.can("ownership.manage") == true) viewModel.fab else null,
                 onBack = onBack,
+                refreshing = refreshing,
+                refreshNotice = refreshNotice,
             )
         }
         if (access?.can("ownership.transfer") == true) {

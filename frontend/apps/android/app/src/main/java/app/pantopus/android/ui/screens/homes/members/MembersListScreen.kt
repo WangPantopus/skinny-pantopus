@@ -19,8 +19,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -49,10 +51,13 @@ fun MembersListScreen(
     viewModel: MembersListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_members", state.showsContent())
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
     var inviting by remember { mutableStateOf<HomeInvitationSenderTarget?>(null) }
     var removeTarget by remember { mutableStateOf<HomeMemberRemovalTarget?>(null) }
@@ -124,6 +129,8 @@ fun MembersListScreen(
                     null
                 },
             onBack = onBack,
+            refreshing = refreshing,
+            refreshNotice = refreshNotice,
         )
     }
 
