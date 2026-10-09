@@ -116,7 +116,10 @@ export default function PulseStream() {
   const showVerify = intelQuery.data?.tier === 'T3';
 
   // ── States ───────────────────────────────────────────────
-  if (!mounted || !authed) {
+  // Coming back shows what this tab already loaded in the first frame; the skeleton is only for
+  // nothing at all (a fresh page load starts with an empty cache, like the server).
+  const kept = pulseQuery.data !== undefined;
+  if (!kept && (!mounted || !authed)) {
     return (
       <StreamShell>
         <DetailHeader title="Today's Pulse" backHref="/app/place" />
@@ -125,7 +128,8 @@ export default function PulseStream() {
     );
   }
 
-  if (homeQuery.isError) {
+  // A failed refresh keeps the stream on screen (contract §3); errors show only with nothing to show.
+  if (homeQuery.isError && !kept) {
     return (
       <StreamShell>
         <DetailHeader title="Today's Pulse" backHref="/app/place" />
@@ -153,7 +157,7 @@ export default function PulseStream() {
     );
   }
 
-  if (homeQuery.isPending || pulseQuery.isPending) {
+  if (!kept && (homeQuery.isPending || pulseQuery.isPending)) {
     return (
       <StreamShell>
         <DetailHeader title="Today's Pulse" address={address} backHref="/app/place" />
@@ -162,7 +166,7 @@ export default function PulseStream() {
     );
   }
 
-  if (pulseQuery.isError || !pulseQuery.data) {
+  if (!pulseQuery.data) {
     // A 403 means this account can't see the place: say so, without a retry.
     const denied = (pulseQuery.error as { statusCode?: number } | null)?.statusCode === 403;
     return (
