@@ -24,6 +24,7 @@ import InquiryChatDrawer from '@/components/discover/InquiryChatDrawer';
 import { useAreaPicker } from '@/hooks/useAreaPicker';
 import { useFeedPreferences } from '@/hooks/useFeedPreferences';
 import { useFeedData, type FilterType } from '@/hooks/useFeedData';
+import { useNewPostsPill } from '@/hooks/useNewPostsPill';
 import { useActiveSportsEvents } from '@/hooks/useActiveSportsEvents';
 import {
   PLACE_TOPICS, SPORTS_MODES,
@@ -55,9 +56,12 @@ export default function FeedPage() {
   const handleReport = useCallback((postId: string) => setReportPostId(postId), []);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
 
+  // Each message stays its full 3 seconds: an earlier message's timer doesn't cut a newer one short.
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 3000);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 3000);
   }, []);
 
   const area = useAreaPicker(showToast);
@@ -204,8 +208,15 @@ export default function FeedPage() {
 
   // ── Feed virtualizer ──────────────────────────────────────
   const feedScrollRef = useRef<HTMLDivElement>(null);
+  // New posts above the reading position wait behind a pill (Instant Screens).
+  const listed = useNewPostsPill(feed.posts, {
+    listKey: [feed.surface, feed.filter, feed.topic ?? '', feed.sportsMode ?? '', feed.eventKey ?? '',
+      area.viewingLat ?? '', area.viewingLng ?? '', area.radiusMiles ?? ''].join('|'),
+    scrollRef: feedScrollRef,
+    currentUserId: feed.user?.id,
+  });
   const virtualizer = useVirtualizer({
-    count: feed.posts.length,
+    count: listed.posts.length,
     getScrollElement: () => feedScrollRef.current,
     estimateSize: () => 400,
     overscan: 5,
@@ -216,14 +227,14 @@ export default function FeedPage() {
     const lastItem = virtualizer.getVirtualItems().at(-1);
     if (!lastItem) return;
     if (
-      lastItem.index >= feed.posts.length - 1 &&
+      lastItem.index >= listed.posts.length - 1 &&
       feed.hasMore &&
       !feed.loading &&
       !feed.loadingMore
     ) {
       feed.loadFeed(false);
     }
-  }, [virtualizer.getVirtualItems(), feed.hasMore, feed.loading, feed.loadingMore, feed.posts.length, feed.loadFeed]);
+  }, [virtualizer.getVirtualItems(), feed.hasMore, feed.loading, feed.loadingMore, listed.posts.length, feed.loadFeed]);
 
   const rootClassName = viewMode === 'map'
     ? 'h-[calc(100vh-64px)] bg-app flex flex-col'
@@ -526,6 +537,18 @@ export default function FeedPage() {
                   className="overflow-y-auto"
                   style={{ height: 'calc(100vh - 200px)' }}
                 >
+                  {listed.newCount > 0 && (
+                    // Zero height: it floats over the list without moving a card.
+                    <div className="sticky top-2 z-10 h-0 flex items-start justify-center pointer-events-none">
+                      <button
+                        type="button"
+                        onClick={listed.showNewPosts}
+                        className="pointer-events-auto px-3 py-1.5 rounded-full text-xs border border-app-border-strong bg-surface text-app-text-strong hover-bg-app shadow-sm"
+                      >
+                        {listed.newCount === 1 ? '1 new post' : `${listed.newCount} new posts`} <span aria-hidden="true">↑</span>
+                      </button>
+                    </div>
+                  )}
                   <div
                     style={{
                       height: virtualizer.getTotalSize(),
@@ -534,7 +557,7 @@ export default function FeedPage() {
                     }}
                   >
                     {virtualizer.getVirtualItems().map((virtualRow) => {
-                      const post = feed.posts[virtualRow.index];
+                      const post = listed.posts[virtualRow.index];
                       return (
                         <div
                           key={post.id}
@@ -565,6 +588,7 @@ export default function FeedPage() {
                               onSolved={feed.handleSolved}
                               currentUserId={feed.user?.id}
                               isLiking={feed.likingIds.has(post.id)}
+                              isSaving={feed.savingIds.has(post.id)}
                               surface={feed.surface}
                               showToast={showToast}
                             />
