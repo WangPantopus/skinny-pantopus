@@ -10,6 +10,8 @@ interface WalletData {
   frozen: boolean;
   lifetime_withdrawals: number;
   lifetime_received: number;
+  /** Still owed for a payment refunded or disputed after it reached the wallet; paid from the next earnings. */
+  owed_cents?: number;
 }
 
 interface WalletBalanceCardProps {
@@ -105,6 +107,12 @@ export default function WalletBalanceCard({
         <div>
           <p className="text-emerald-100 text-sm font-medium">Earnings Balance</p>
           <p className="text-3xl font-bold mt-1">{formattedBalance}</p>
+          {(walletData?.owed_cents ?? 0) > 0 && (
+            <p className="text-white text-xs font-medium mt-1" data-testid="wallet-owed">
+              ${((walletData?.owed_cents ?? 0) / 100).toFixed(2)} still owed for a refunded or disputed payment. Your next
+              earnings pay it first.
+            </p>
+          )}
           {walletData?.frozen && (
             <p className="text-red-200 text-xs mt-1 flex items-center gap-1">
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">

@@ -26,6 +26,22 @@ const { createNotification } = require('../services/notificationService');
 const { sendAlert, SEVERITY } = require('../services/alertingService');
 const logger = require('../utils/logger');
 
+/**
+ * New income pays what the payee still owes for refunded or disputed payments first (founder decision 2026-10-09).
+ * The release already committed; a failure here leaves the debt for the next income or withdrawal, which collect
+ * again, so it never fails the release.
+ */
+async function collectDebtsAfterIncome(payeeId, paymentId) {
+  try {
+    return (await walletService.collectDebts(payeeId)).collected;
+  } catch (err) {
+    logger.warn('processPendingTransfers: debt collection after release failed', {
+      paymentId, payeeId, error: err.message,
+    });
+    return 0;
+  }
+}
+
 // The transaction rechecks exact income proof and serializes with refunds.
 async function reconcileWalletRelease(paymentId) {
   const { data, error } = await supabaseAdmin.rpc('reconcile_payment_wallet_release', { p_payment_id: paymentId });
@@ -218,6 +234,7 @@ async function processPendingTransfers() {
           // Money, in-app notices and delivery events committed together. The
           // durable relay sends the same notification after a process restart.
           successCount++;
+          await collectDebtsAfterIncome(payment.payee_id, payment.id);
           continue;
         } else {
           if (invoicePayment && !(await confirmInvoiceForRelease(payment))) { skipCount++; continue; }
@@ -274,6 +291,9 @@ async function processPendingTransfers() {
         }
 
         successCount++;
+        const paidTowardDebt = await collectDebtsAfterIncome(payment.payee_id, payment.id);
+        // Money that went straight to what the payee owed isn't withdrawable; its own notice says where it went.
+        const withdrawLine = paidTowardDebt > 0 ? '' : ' You can withdraw to your bank anytime.';
 
         // Booking payments have no gig. Keep their notices on invitee-accessible
         // booking pages instead of producing a /gigs/null destination. An invoice's notices point at the invoice
@@ -302,10 +322,10 @@ async function processPendingTransfers() {
           type: 'payout_sent',
           title: `${amountFormatted} added to your wallet`,
           body: invoicePayment
-            ? 'An invoice payment has been added to your Pantopus wallet. You can withdraw to your bank anytime.'
+            ? `An invoice payment has been added to your Pantopus wallet.${withdrawLine}`
             : isBooking
-              ? 'Your booking payment has been added to your Pantopus wallet. You can withdraw to your bank anytime.'
-              : `Your payment for "${gigTitle}" has been added to your Pantopus wallet. You can withdraw to your bank anytime.`,
+              ? `Your booking payment has been added to your Pantopus wallet.${withdrawLine}`
+              : `Your payment for "${gigTitle}" has been added to your Pantopus wallet.${withdrawLine}`,
           icon: '💰',
           link: invoicePayment ? '/app/wallet' : '/app/settings/payments',
           metadata: {

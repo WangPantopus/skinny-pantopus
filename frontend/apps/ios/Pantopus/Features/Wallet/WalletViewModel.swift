@@ -418,8 +418,8 @@ public final class WalletViewModel {
     /// an Express account, and the screen hides those sections rather than
     /// showing fixture bank details / YTD earnings. `payoutAccount` *is*
     /// populated from the real Connect status, which is what makes the
-    /// "Open Stripe Dashboard" action reachable. `holdState` stays nil
-    /// because the hold banner copy is Stripe-specific.
+    /// "Open Stripe Dashboard" action reachable. `holdState` is the A10.10
+    /// hold frame, shown while something is still owed (`owed_cents`).
     public static func makeContent(
         balance: WalletBalanceResponse,
         transactions: [WalletTransactionDTO],
@@ -445,7 +445,7 @@ public final class WalletViewModel {
             payoutMethod: nil,
             payoutAccount: payoutAccount(from: connectAccount),
             taxDocs: nil,
-            holdState: nil,
+            holdState: holdState(owedCents: balance.wallet.owedCents ?? 0),
             payoutsEnabled: payoutsEnabled,
             lifetimeEarned: balance.wallet.lifetimeReceived.map(centsToCurrency),
             lifetimeWithdrawn: balance.wallet.lifetimeWithdrawals.map(centsToCurrency),
@@ -453,6 +453,22 @@ public final class WalletViewModel {
             hasBalance: balance.wallet.balance > 0,
             withdrawalRecovery: withdrawalRecovery,
             withdrawalRecoveryCount: withdrawalRecoveryCount
+        )
+    }
+
+    /// The hold frame while something is still owed for a payment refunded or
+    /// disputed after it reached the wallet: the next earnings pay it first,
+    /// and withdrawals wait until it's paid. `nil` when nothing is owed.
+    static func holdState(owedCents: Int) -> WalletHoldState? {
+        guard owedCents > 0 else { return nil }
+        let owed = centsToCurrency(owedCents)
+        return WalletHoldState(
+            bannerHeadline: "Withdrawals paused",
+            bannerBody: "\(owed) is still owed for a payment that was refunded or disputed after it reached "
+                + "your wallet. Your next earnings pay it first.",
+            heroBannerHeadline: "\(owed) still owed",
+            heroBannerBody: "Paid from your next earnings.",
+            withdrawFootnote: "Withdrawals open again once what's owed is paid."
         )
     }
 

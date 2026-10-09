@@ -759,15 +759,21 @@ async function notifyDisputeCreated({ userId, gigId, gigTitle, role, invoiceId }
 /**
  * Notify user about a dispute resolution.
  */
-async function notifyDisputeResolved({ userId, gigId, gigTitle, won, invoiceId, isProvider }) {
+async function notifyDisputeResolved({ userId, gigId, gigTitle, won, invoiceId, isProvider, owedCents = 0, collectedCents = 0 }) {
   const subject = invoiceId ? 'an invoice' : `"${gigTitle || 'a gig'}"`;
+  // A lost dispute the payee's wallet couldn't cover: they owe the rest, paid from their next earnings.
+  const owed = !won && isProvider && owedCents > 0 ? `$${(owedCents / 100).toFixed(2)}` : null;
+  const taken = collectedCents > 0 ? `$${(collectedCents / 100).toFixed(2)} came out of your wallet and ` : '';
   return createNotification({
     userId,
     type: 'dispute_resolved',
     title: won ? 'Dispute resolved in your favor' : 'Dispute resolved',
     body: won
       ? `The dispute for ${subject} was resolved in your favor.`
-      : `The dispute for ${subject} has been resolved. Funds have been adjusted.`,
+      : owed
+        ? `The payer's bank kept the money for ${subject}. ${taken}${owed} is still owed; it comes out of your next `
+          + 'earnings, and withdrawals wait until it is paid.'
+        : `The dispute for ${subject} has been resolved. Funds have been adjusted.`,
     icon: won ? '✅' : '📋',
     link: invoiceId ? (isProvider ? '/app/wallet' : `/app/invoice/${invoiceId}`) : `/gigs/${gigId}`,
     metadata: invoiceId ? { invoice_id: invoiceId, won } : { gig_id: gigId, won },
