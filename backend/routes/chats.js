@@ -2471,6 +2471,13 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { limit = 100 } = req.query;
     const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
+    // Only what's new (Instant Screens contract §8): `since` (an ISO time) keeps the rows with a message, a read
+    // mark, a new room or topic activity after it. `total` and `totalUnread` still count every row.
+    const sinceRaw = typeof req.query.since === 'string' ? req.query.since.trim() : '';
+    const sinceMs = sinceRaw ? Date.parse(sinceRaw) : null;
+    if (sinceRaw && (!/^\d{4}-\d{2}-\d{2}T/.test(sinceRaw) || !Number.isFinite(sinceMs))) {
+      return res.status(400).json({ error: 'invalid since' });
+    }
 
     // Step 1: Get all rooms the user participates in (active only)
     const { data: myParticipants, error: partErr } = await supabaseAdmin
@@ -2628,7 +2635,21 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       return tb - ta;
     });
 
-    const visibleConversations = conversations.slice(0, lim);
+    let listed = conversations;
+    if (sinceMs !== null) {
+      const newer = (value) => Boolean(value) && Date.parse(value) > sinceMs;
+      const participantByRoom = new Map(roomList.map((p) => [String(p.room_id), p]));
+      const roomChanged = (roomId) => {
+        const p = participantByRoom.get(String(roomId));
+        return newer(convMsgByRoom[roomId]?.created_at) || newer(p?.last_read_at)
+          || newer(p?.room?.updated_at) || newer(p?.room?.created_at);
+      };
+      listed = conversations.filter((conv) => (conv._type === 'room'
+        ? roomChanged(conv.id)
+        : (conv.room_ids || []).some(roomChanged) || (conv.topics || []).some((t) => newer(t.last_activity_at))));
+    }
+
+    const visibleConversations = listed.slice(0, lim);
     const visibleRoomIds = [];
     for (const conv of visibleConversations) {
       if (conv._type === 'room') {
