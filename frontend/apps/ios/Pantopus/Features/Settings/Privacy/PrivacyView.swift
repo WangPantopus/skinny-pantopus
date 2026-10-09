@@ -51,6 +51,10 @@ public struct PrivacyView: View {
                 }
             }
             .pantopusAnimation(.componentState, value: viewModel.toast?.text)
+            // Your privacy settings changed on another device (`profile:me`).
+            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.profileMe) }, perform: {
+                await viewModel.refreshFromSignal()
+            })
     }
 }
 

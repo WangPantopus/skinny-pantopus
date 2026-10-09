@@ -72,6 +72,9 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
     /// A PATCH is in flight — the radios/toggle ignore taps meanwhile,
     /// matching RN's `privacySaving` guard.
     private var searchPrivacySaving = false
+    /// Counts the changes made here, so a read that was out while one was
+    /// made drops its older reply.
+    private var searchPrivacyEdits = 0
 
     // MARK: - Account deletion
 
@@ -156,10 +159,23 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         state = .loaded(groups())
     }
 
+    /// `profile:me` while the screen is open (a change on another device, or
+    /// this phone's own change coming back): re-read the search privacy. Not
+    /// while a change saves or the account is being deleted, and a failed
+    /// re-read keeps the values on screen.
+    public func refreshFromSignal() async {
+        guard !searchPrivacySaving, !isDeleteSheetPresented, !isDeletingAccount else { return }
+        await fetchSearchPrivacy(keepsShown: !searchPrivacyLoadFailed)
+        state = .loaded(groups())
+    }
+
     /// `GET /api/privacy/settings` — `backend/routes/privacy.js:50`.
     /// A failure never blanks the screen: RN keeps every other card and
-    /// swaps the search-privacy helper for the "couldn't load" line.
-    private func fetchSearchPrivacy() async {
+    /// swaps the search-privacy helper for the "couldn't load" line
+    /// (`keepsShown`: the values on screen stay instead). A reply that a
+    /// change made here meanwhile is newer than is dropped.
+    private func fetchSearchPrivacy(keepsShown: Bool = false) async {
+        let edits = searchPrivacyEdits
         do {
             let response = try await store.load(
                 PrivacyEndpoints.settings,
@@ -167,8 +183,10 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
                 kind: .you,
                 topics: [ScreenTopic.profileMe]
             ).value
+            guard edits == searchPrivacyEdits else { return }
             apply(response)
         } catch {
+            guard edits == searchPrivacyEdits, !keepsShown else { return }
             searchPrivacyLoadFailed = true
         }
     }
@@ -245,6 +263,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         let previous = searchVisibility
         searchVisibility = next
         searchPrivacySaving = true
+        searchPrivacyEdits += 1
         state = .loaded(groups())
         do {
             let response: PrivacySettingsResponse = try await api.request(
@@ -274,6 +293,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         let previous = findableByName
         findableByName = next
         searchPrivacySaving = true
+        searchPrivacyEdits += 1
         state = .loaded(groups())
         do {
             let response: PrivacySettingsResponse = try await api.request(

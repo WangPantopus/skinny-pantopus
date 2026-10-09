@@ -29,6 +29,8 @@ struct PlaceDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.load() }
+        // The home or today's conditions changed: the open page re-reads, its copy staying shown.
+        .refreshesOnStoreChange(affects: { viewModel.isAffected(by: $0) }, perform: { await viewModel.refreshIfStale() })
         .sheet(isPresented: $viewModel.showVerify) {
             PlaceVerifySheet(
                 address: verifyAddress,
