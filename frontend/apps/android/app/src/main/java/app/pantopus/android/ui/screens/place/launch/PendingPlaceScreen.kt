@@ -30,7 +30,8 @@ fun PendingPlaceScreen(
     onDone: () -> Unit,
     onToday: () -> Unit,
     onSavedPlaces: () -> Unit,
-    onSetUpHome: () -> Unit,
+    /** Opens Add Home with the saved address already searched. */
+    onSetUpHome: (String?) -> Unit,
     onRetryPreview: () -> Unit,
 ) {
     Column(
@@ -57,7 +58,7 @@ fun PendingPlaceScreen(
                 modifier = Modifier.fillMaxWidth().testTag("place.arrival.today"),
             )
             TextButton(onClick = onSavedPlaces) { Text("View saved places") }
-            TextButton(onClick = onSetUpHome) { Text("Set up a Home") }
+            TextButton(onClick = { onSetUpHome(state.draft?.label) }) { Text("Set up a Home") }
             TextButton(onClick = onDone) { Text("Continue exploring") }
         } else {
             PrimaryButton(

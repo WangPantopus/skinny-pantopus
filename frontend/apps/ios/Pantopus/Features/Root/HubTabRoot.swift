@@ -18,6 +18,9 @@ public enum HubRoute: Hashable {
     /// T6.5e (P19.5) Mailbox Vault — saved mail list. Personal pillar.
     case mailboxVault
     case addHome
+    /// Add Home with its address search started from a saved address
+    /// ("Set up a Home" after saving a place privately).
+    case addHomeAt(address: String)
     case joinHome(homeId: String)
     /// A12.1 — "Find or Add Home" discovery. Search public-preview
     /// homes, start a claim on one, add a missing address, or paste an
@@ -3192,7 +3195,7 @@ public struct HubTabRoot: View {
                 // From the signed-in "Save a place" entry the list is already
                 // underneath; return to it rather than stacking a second one.
                 onSavedPlaces: { path.contains(.savedPlaces) ? pop() : push(.savedPlaces) },
-                onSetUpHome: { push(.addHome) }
+                onSetUpHome: { address in push(.addHomeAt(address: address)) }
             )
         case .savePlace:
             PlaceLaunchView(
@@ -3428,9 +3431,12 @@ public struct HubTabRoot: View {
                 onBack: { pop() },
                 onNav: { nav in handleWaitingRoomNav(nav, homeId: homeId) }
             )
-        case .addHome, .joinHome:
+        case .addHome, .addHomeAt, .joinHome:
             AddHomeWizardView(
-                viewModel: AddHomeWizardViewModel(requiredHomeId: route.homeEntryTarget),
+                viewModel: AddHomeWizardViewModel(
+                    requiredHomeId: route.homeEntryTarget,
+                    initialSearchQuery: route.addHomeSearchQuery
+                ),
                 onOpenHomes: {
                     path.removeAll { $0.isHomeEntry || $0 == .myHomes }
                     path.append(.myHomes)
@@ -3772,9 +3778,14 @@ extension HubRoute {
         return nil
     }
 
+    var addHomeSearchQuery: String? {
+        if case let .addHomeAt(address) = self { return address }
+        return nil
+    }
+
     var isHomeEntry: Bool {
         switch self {
-        case .addHome, .joinHome: true
+        case .addHome, .addHomeAt, .joinHome: true
         default: false
         }
     }

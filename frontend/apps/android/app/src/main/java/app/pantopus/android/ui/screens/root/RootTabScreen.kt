@@ -460,9 +460,13 @@ private object ChildRoutes {
     const val MY_HOMES = "homes/my-homes"
     const val MY_CLAIMS = "homes/my-claims"
     const val ADD_HOME = "homes/add"
-    const val ADD_HOME_WITH_TARGET = "$ADD_HOME?joinHome={joinHome}"
+    const val ADD_HOME_WITH_TARGET = "$ADD_HOME?joinHome={joinHome}&address={address}"
 
     fun joinHome(homeId: String): String = "$ADD_HOME?joinHome=$homeId"
+
+    /** Add Home with its address search started from a saved address (null: a blank Add Home). */
+    fun addHomeAt(address: String?): String =
+        if (address.isNullOrBlank()) ADD_HOME else "$ADD_HOME?address=${android.net.Uri.encode(address)}"
 
     /**
      * A12.1 — "Find or Add Home" discovery. Search public-preview homes,
@@ -2624,7 +2628,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 navController.navigateToRootTab(PantopusRoute.Today, restoreState = false)
                             },
                             onSavedPlaces = { navController.navigate(ChildRoutes.SAVED_PLACES) },
-                            onSetUpHome = { navController.navigate(ChildRoutes.ADD_HOME) },
+                            onSetUpHome = { address -> navController.navigate(ChildRoutes.addHomeAt(address)) },
                             onRetryPreview = placeHostVm::loadPreview,
                         )
                     } else {
@@ -6352,9 +6356,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     navController.navigateToRootTab(PantopusRoute.Today, restoreState = false)
                                 },
                                 onSavedPlaces = { closeArrival() },
-                                onSetUpHome = {
+                                onSetUpHome = { address ->
                                     closeArrival()
-                                    navController.navigate(ChildRoutes.ADD_HOME)
+                                    navController.navigate(ChildRoutes.addHomeAt(address))
                                 },
                                 onRetryPreview = arrivalVm::loadPreview,
                             )
@@ -6751,6 +6755,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     arguments =
                         listOf(
                             navArgument("joinHome") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            navArgument("address") {
                                 type = NavType.StringType
                                 nullable = true
                                 defaultValue = null

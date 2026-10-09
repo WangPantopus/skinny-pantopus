@@ -73,6 +73,10 @@ final class AddHomeWizardViewModel: WizardModel {
 
     /// Single search query used by the A12.1 step-1 typeahead.
     private(set) var homeSearchQuery: String = ""
+    /// See `applyInitialSearchQuery()`; nil once applied.
+    private var initialSearchQuery: String?
+    /// The search `applyInitialSearchQuery()` ran: left untouched, it isn't progress to discard.
+    private var prefilledSearchQuery: String?
     /// Candidate id selected from nearby results or autocomplete.
     private(set) var selectedHomeID: String?
     private(set) var searchResults: [GeoSuggestion] = []
@@ -191,6 +195,7 @@ final class AddHomeWizardViewModel: WizardModel {
         api: APIClient = .shared,
         initialState: AddHomeFormState = .empty,
         requiredHomeId: String? = nil,
+        initialSearchQuery: String? = nil,
         identity: (() -> String?)? = nil,
         creationActorId: String? = nil,
         creationStore: (any PendingHomeCreationStoring)? = nil,
@@ -204,6 +209,7 @@ final class AddHomeWizardViewModel: WizardModel {
     ) {
         self.api = api
         self.requiredHomeId = requiredHomeId?.lowercased()
+        self.initialSearchQuery = initialSearchQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
         let sessionScope = HomeClaimSessionScope(api: api, identity: identity)
         scope = sessionScope
         let actor: String = if let creationActorId {
@@ -225,6 +231,16 @@ final class AddHomeWizardViewModel: WizardModel {
         form = initialState
         isManualEntry = initialState.address != AddHomeAddressFields()
         homeSearchQuery = initialState.address.street
+    }
+
+    /// The saved address "Set up a Home" came from: searched once on first appearance,
+    /// unless a restored draft already filled the form. The person still picks the match.
+    func applyInitialSearchQuery() {
+        guard let query = initialSearchQuery, !query.isEmpty else { return }
+        initialSearchQuery = nil
+        guard form == .empty, homeSearchQuery.isEmpty else { return }
+        prefilledSearchQuery = query
+        updateSearchQuery(query)
     }
 
     /// Replace the in-memory form state from scene storage on first
@@ -1324,7 +1340,7 @@ final class AddHomeWizardViewModel: WizardModel {
         currentStep != .success
             && (
                 selectedHomeID != nil
-                    || !homeSearchQuery.isEmpty
+                    || (!homeSearchQuery.isEmpty && homeSearchQuery != prefilledSearchQuery)
                     || [form.address.street, form.address.unit, form.address.city, form.address.state, form.address.zipCode]
                     .contains { !$0.isEmpty }
             )

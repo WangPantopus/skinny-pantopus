@@ -46,6 +46,9 @@ public enum YouRoute: Hashable {
     case legal
     case legalContent(LegalDocument)
     case addHome
+    /// Add Home with its address search started from a saved address
+    /// ("Set up a Home" after saving a place privately).
+    case addHomeAt(address: String)
     case joinHome(homeId: String)
     /// A12.1 — "Find or Add Home" discovery. Mirrors RN
     /// `src/app/homes/find.tsx`.
@@ -1255,9 +1258,12 @@ public struct YouTabRoot: View {
             LegalContentView(document: doc) {
                 if !path.isEmpty { path.removeLast() }
             }
-        case .addHome, .joinHome:
+        case .addHome, .addHomeAt, .joinHome:
             AddHomeWizardView(
-                viewModel: AddHomeWizardViewModel(requiredHomeId: route.homeEntryTarget),
+                viewModel: AddHomeWizardViewModel(
+                    requiredHomeId: route.homeEntryTarget,
+                    initialSearchQuery: route.addHomeSearchQuery
+                ),
                 onOpenHomes: {
                     path.removeAll { $0.isHomeEntry || $0 == .myHomes }
                     path.append(.myHomes)
@@ -1992,7 +1998,7 @@ public struct YouTabRoot: View {
                     }
                 },
                 onSavedPlaces: { pop() },
-                onSetUpHome: { path.append(.addHome) }
+                onSetUpHome: { address in path.append(.addHomeAt(address: address)) }
             )
         case .savedPlaces:
             SavedPlacesView(
@@ -3006,9 +3012,14 @@ extension YouRoute {
         return nil
     }
 
+    var addHomeSearchQuery: String? {
+        if case let .addHomeAt(address) = self { return address }
+        return nil
+    }
+
     var isHomeEntry: Bool {
         switch self {
-        case .addHome, .joinHome: true
+        case .addHome, .addHomeAt, .joinHome: true
         default: false
         }
     }
