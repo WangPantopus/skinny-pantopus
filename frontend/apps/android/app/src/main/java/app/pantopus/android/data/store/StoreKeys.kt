@@ -5,6 +5,8 @@ import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
+import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
+import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
@@ -108,6 +110,15 @@ object StoreKeys {
             kind = StoreKind.PLACE,
             topics = setOf("place:$homeId", "home:$homeId", StoreTopics.HOMES),
         )
+
+    /**
+     * The Nearby tab's density meter and map cells (contract §4 "Nearby": fresh 2 minutes). They follow the viewer's
+     * place, so a home added, left or verified marks them through `homes`.
+     */
+    val neighborhoodMeter =
+        StoreKey<NeighborhoodMeter>("api/neighborhood/meter", kind = StoreKind.NEARBY, topics = setOf(StoreTopics.HOMES))
+    val neighborhoodCells =
+        StoreKey<NeighborhoodCells>("api/neighborhood/cells", kind = StoreKind.NEARBY, topics = setOf(StoreTopics.HOMES))
 
     /** The bell's unread count (kind Notifications: fresh 30 seconds, never saved on the phone). */
     val notificationsUnreadCount =
