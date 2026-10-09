@@ -3,6 +3,7 @@ import React from 'react';
 import fs from 'fs';
 import path from 'path';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mockRedirect = jest.fn((path: string) => {
   throw new Error(`NEXT_REDIRECT:${path}`);
@@ -357,7 +358,8 @@ describe('Profiles & Privacy web pages', () => {
       show_phone: false,
     });
 
-    render(<SettingsPage />);
+    // Settings reads your profile from the session's query cache (lib/me.ts).
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><SettingsPage /></QueryClientProvider>);
 
     expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Profiles & Privacy' })).not.toBeInTheDocument();

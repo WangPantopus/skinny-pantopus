@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronRight, Shield, Eye, Search, UserX } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -12,57 +12,56 @@ import type {
   SearchVisibilityLevel,
   ProfileVisibilityLevel,
 } from '@pantopus/types';
+import { setPrivacySettings, usePrivacySettings } from '@/lib/me';
+
+type PrivacyForm = Pick<UserPrivacySettings, 'search_visibility' | 'show_gig_history' | 'show_neighborhood' | 'show_home_affiliation'>;
 
 export default function PrivacySettingsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [_settings, setSettings] = useState<UserPrivacySettings | null>(null);
-
-  // Form state
-  const [searchVisibility, setSearchVisibility] = useState<SearchVisibilityLevel>('everyone');
-  const [showGigHistory, setShowGigHistory] = useState<ProfileVisibilityLevel>('public');
-  const [showNeighborhood, setShowNeighborhood] = useState<ProfileVisibilityLevel>('followers');
-  const [showHomeAffiliation, setShowHomeAffiliation] = useState<ProfileVisibilityLevel>('followers');
-
-  const loadSettings = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const token = getAuthToken();
-      if (!token) { router.push('/login'); return; }
-
-      const res = await api.privacy.getPrivacySettings();
-      const s = res.settings;
-      setSettings(s);
-      setSearchVisibility(s.search_visibility);
-      setShowGigHistory(s.show_gig_history);
-      setShowNeighborhood(s.show_neighborhood);
-      setShowHomeAffiliation(s.show_home_affiliation);
-    } catch {
-      // Never show the form on defaults: saving it would overwrite the real
-      // settings with the most public ones.
-      setLoadError("We couldn't load your privacy settings. Check your connection and try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
+  // The session cookie is readable only in the browser: until mount, the page
+  // renders what the cache already has (nothing on a fresh load), like the server.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const signedIn = mounted && !!getAuthToken();
   useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
+    if (mounted && !getAuthToken()) router.push('/login');
+  }, [mounted, router]);
+
+  // Your privacy settings are one shared entry (lib/me.ts), so coming back shows them at once.
+  // Never show the form on defaults: saving it would overwrite the real
+  // settings with the most public ones.
+  const settingsQuery = usePrivacySettings({ enabled: signedIn });
+  const saved = settingsQuery.data ?? null;
+  const loadError = !saved && settingsQuery.isError
+    ? "We couldn't load your privacy settings. Check your connection and try again."
+    : null;
+  const loading = !saved && (!loadError || settingsQuery.isFetching);
+  const loadSettings = () => { void settingsQuery.refetch(); };
+  const [saving, setSaving] = useState(false);
+
+  // The form shows your saved settings, with the changes you haven't saved yet over them.
+  const [draft, setDraft] = useState<Partial<PrivacyForm>>({});
+  const searchVisibility = (draft.search_visibility ?? saved?.search_visibility ?? 'everyone') as SearchVisibilityLevel;
+  const showGigHistory = (draft.show_gig_history ?? saved?.show_gig_history ?? 'public') as ProfileVisibilityLevel;
+  const showNeighborhood = (draft.show_neighborhood ?? saved?.show_neighborhood ?? 'followers') as ProfileVisibilityLevel;
+  const showHomeAffiliation = (draft.show_home_affiliation ?? saved?.show_home_affiliation ?? 'followers') as ProfileVisibilityLevel;
+  const edit = (change: Partial<PrivacyForm>) => setDraft((current) => ({ ...current, ...change }));
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await api.privacy.updatePrivacySettings({
+      const sent: PrivacyForm = {
         search_visibility: searchVisibility,
         show_gig_history: showGigHistory,
         show_neighborhood: showNeighborhood,
         show_home_affiliation: showHomeAffiliation,
-      });
-      setSettings(res.settings);
+      };
+      const res = await api.privacy.updatePrivacySettings(sent);
+      setPrivacySettings(res.settings);
+      // A change made while this save was on the way stays in the form.
+      setDraft((current) => Object.fromEntries(
+        Object.entries(current).filter(([field, value]) => sent[field as keyof PrivacyForm] !== value),
+      ) as Partial<PrivacyForm>);
       toast.success('Privacy settings saved');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to save settings';
@@ -141,7 +140,7 @@ export default function PrivacySettingsPage() {
                 <select
                   id="privacy-search-visibility"
                   value={searchVisibility}
-                  onChange={(e) => setSearchVisibility(e.target.value as SearchVisibilityLevel)}
+                  onChange={(e) => edit({ search_visibility: e.target.value as SearchVisibilityLevel })}
                   className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="everyone">Everyone</option>
@@ -164,21 +163,21 @@ export default function PrivacySettingsPage() {
                 label="Gig history"
                 description="Who can see your completed gigs"
                 value={showGigHistory}
-                onChange={(v) => setShowGigHistory(v as ProfileVisibilityLevel)}
+                onChange={(v) => edit({ show_gig_history: v as ProfileVisibilityLevel })}
                 options={VISIBILITY_OPTIONS}
               />
               <SelectSetting
                 label="Neighborhood"
                 description="Who can see your general area"
                 value={showNeighborhood}
-                onChange={(v) => setShowNeighborhood(v as ProfileVisibilityLevel)}
+                onChange={(v) => edit({ show_neighborhood: v as ProfileVisibilityLevel })}
                 options={VISIBILITY_OPTIONS}
               />
               <SelectSetting
                 label="Home affiliation"
                 description="Who can see which home you belong to"
                 value={showHomeAffiliation}
-                onChange={(v) => setShowHomeAffiliation(v as ProfileVisibilityLevel)}
+                onChange={(v) => edit({ show_home_affiliation: v as ProfileVisibilityLevel })}
                 options={VISIBILITY_OPTIONS}
               />
             </div>
