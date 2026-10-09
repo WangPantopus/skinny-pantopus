@@ -221,6 +221,14 @@ final class HomeDashboardViewModel {
     private let homeId: String
     private let api: APIClient
     private let authority: HomeDashboardAccess
+    /// The screen store (Instant Screens). Owners and household roles keep a
+    /// copy of this dashboard there (decision 3); nobody else does.
+    private let store: ScreenStore
+    /// The screen shows the last copy while the access is re-checked; writes
+    /// here wait for that re-check.
+    private(set) var showingCopy = false
+    /// The re-check couldn't reach the server while the copy is on screen.
+    var refreshFailureMessage: String?
     private var generation = 0
     private var visible = false
     private var accessFingerprint: Data?
@@ -241,11 +249,17 @@ final class HomeDashboardViewModel {
     }
 
     var canEditChecklist: Bool {
-        visible && isCurrent && accessUnexpired && access?.can("home.edit") == true
+        visible && isCurrent && accessUnexpired && accessFingerprint != nil && access?.can("home.edit") == true
     }
 
     func can(_ permission: String) -> Bool {
         visible && isCurrent && accessUnexpired && access?.can(permission) == true
+    }
+
+    /// What the screen shows follows the access on screen (the copy's until
+    /// the re-check answers), including in the first frame before it's visible.
+    func shows(_ permission: String) -> Bool {
+        isCurrent && accessUnexpired && access?.can(permission) == true
     }
 
     /// Launch cut #7 (Household extras): the dashboard actions that open bills,
@@ -275,18 +289,36 @@ final class HomeDashboardViewModel {
         return permissions[action].map(can) ?? false
     }
 
-    func suspend() {
+    /// Leaving the screen. With `keepingCopy` (a sub-screen opened on top),
+    /// an owner's or household member's dashboard stays as it was, scroll
+    /// and tab included, and is re-checked on return (decision 3); its
+    /// sensitive parts and writes wait for that re-check. Everyone else, and
+    /// the app leaving the foreground, starts blank again.
+    func suspend(keepingCopy: Bool = false) {
         generation += 1
         visible = false
-        clearPrivateData()
+        guard keepingCopy, let access, Self.isHousehold(access, expiresAt: accessExpiresAt), detailData != nil else {
+            clearPrivateData()
+            return
+        }
+        expiryTask?.cancel()
+        expiryTask = nil
+        accessFingerprint = nil
+        showingCopy = true
+        billReadID = UUID()
+        billTrends = .loading
+        pendingChecklistItemIds = []
+        rebuild()
     }
 
     func retireSession() {
         suspend()
+        dropCopy()
         state = .error(message: "Your session changed. Reopen this Home to continue.")
     }
 
     private func clearPrivateData() {
+        showingCopy = false
         expiryTask?.cancel()
         expiryTask = nil
         accessExpiresAt = nil
@@ -331,6 +363,7 @@ final class HomeDashboardViewModel {
     private func retireAccess(_ revision: Int) {
         guard visible, generation == revision else { return }
         generation += 1
+        dropCopy()
         clearPrivateData()
         state = .error(message: "Home access changed or could not be confirmed. Reload to check current access.")
     }
@@ -347,6 +380,10 @@ final class HomeDashboardViewModel {
         self.homeId = homeId
         self.api = api
         authority = HomeDashboardAccess(homeId: homeId, api: api, identity: identity)
+        store = ScreenStore.store(for: api)
+        // Reopening a Home: an owner's or household member's last copy is the
+        // first frame; the access re-check runs when the screen activates.
+        if HomeDashboardSampleData.state(for: homeId) == nil { showCopy() }
     }
 
     func activate(ifCurrent revision: Int) async {
@@ -367,77 +404,219 @@ final class HomeDashboardViewModel {
         }
         generation += 1
         let revision = generation
-        clearPrivateData()
+        // Owners and household roles see the last copy while their access is
+        // re-checked below (decision 3); everyone else starts blank.
+        if !showingCopy {
+            clearPrivateData()
+            showCopy()
+        }
         guard isCurrent else {
+            dropCopy()
+            clearPrivateData()
             state = .error(message: "Your session changed. Reopen this Home to continue.")
             return
         }
         do {
-            let opening = try await authority.read()
-            try requireCurrent(revision)
-            guard let currentAccess = opening.access, currentAccess.can("home.view") else {
-                // Only the exact task collection can admit private first use or
-                // a separately granted task route. No inferred owner capability.
-                let collection = try? await HomeTaskAccess(homeId: homeId, api: api).list()
-                try requireCurrent(revision)
-                let final = try await authority.read()
-                try requireCurrent(revision)
-                guard final.fingerprint == opening.fingerprint else { throw APIError.invalidResponse }
-                canCreateTask = collection?.collectionCapabilities?.canCreate == true
-                state = .limited(HomeDashboardLimitedContent(
-                    verificationKind: opening.verificationKind,
-                    verificationStatus: opening.verificationStatus,
-                    canOpenTasks: collection != nil
-                ))
-                return
-            }
-            watchExpiry(opening.expiresAt, revision: revision)
-            try requireCurrent(revision)
-            var detail: HomeDetail?
-            var dashboard: HomeDashboardResponse?
-            // Typed task groups preserve the prior iOS runtime-crash repair.
-            try await withThrowingTaskGroup(of: CoreReadResult.self) { group in
-                group.addTask { [self] in
-                    let result: HomeDetailResponse = try await api.request(HomesEndpoints.detail(homeId: homeId))
-                    return .detail(result.home)
-                }
-                group.addTask { [self] in
-                    let result: HomeDashboardResponse = try await api.request(HomeDashboardEndpoints.dashboard(homeId: homeId))
-                    return .dashboard(result)
-                }
-                for try await result in group {
-                    switch result {
-                    case let .detail(value): detail = value
-                    case let .dashboard(value): dashboard = value
-                    }
-                }
-            }
-            try requireCurrent(revision)
-            guard let detail, let dashboard, detail.base.id == homeId, dashboard.home?.id == homeId,
-                  Set(dashboard.myAccess?.permissions ?? []) == Set(currentAccess.permissions),
-                  dashboard.myAccess?.isOwner == currentAccess.isOwner else { throw APIError.invalidResponse }
-            let collection = currentAccess.can("tasks.view") ? try? await HomeTaskAccess(homeId: homeId, api: api).list() : nil
-            try requireCurrent(revision)
-            let final = try await authority.read()
-            try requireCurrent(revision)
-            guard final.fingerprint == opening.fingerprint else { throw APIError.invalidResponse }
-            accessFingerprint = final.fingerprint
-            access = currentAccess
-            detailData = detail
-            dashboardData = dashboard
-            canCreateTask = collection?.collectionCapabilities?.canCreate == true
-            rebuild()
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask { [self] in await loadHealthScore() }
-                group.addTask { [self] in await loadChecklist() }
-                group.addTask { [self] in await loadPropertyValue() }
-                group.addTask { [self] in await loadBillTrends() }
-            }
+            try await recheck(revision)
         } catch {
             guard visible, revision == generation else { return }
+            // No answer (offline, timed out, server busy): an owner's or household
+            // member's copy stays, its writes still waiting. Anything else clears.
+            if showingCopy, Self.isUnreachable(error) {
+                refreshFailureMessage = "Couldn't reach Pantopus. Showing this Home as you last saw it."
+                return
+            }
+            dropCopy()
             clearPrivateData()
             state = .error(message: "Current Home information could not be confirmed. Reload to try again.")
         }
+    }
+
+    /// The access check, then the Home and its dashboard read with it, then
+    /// the access checked again; only then does the screen take them.
+    private func recheck(_ revision: Int) async throws {
+        let opening = try await authority.read()
+        try requireCurrent(revision)
+        guard let currentAccess = opening.access, currentAccess.can("home.view") else {
+            // Refused: nothing of the copy stays.
+            dropCopy()
+            clearPrivateData()
+            try await showLimited(opening, revision: revision)
+            return
+        }
+        // Only an owner's or household member's open-ended access keeps a
+        // copy; anyone else's dashboard is read fresh every time.
+        let household = Self.isHousehold(currentAccess, expiresAt: opening.expiresAt)
+        if !household, showingCopy || store.peek(HomeDashboardAccess.endpoint(homeId: homeId), as: HomeAccessDTO.self) != nil {
+            dropCopy()
+            clearPrivateData()
+        }
+        watchExpiry(opening.expiresAt, revision: revision)
+        try requireCurrent(revision)
+        let (detail, dashboard) = try await readCore(household: household)
+        try requireCurrent(revision)
+        guard let detail, let dashboard, detail.base.id == homeId, dashboard.home?.id == homeId,
+              Set(dashboard.myAccess?.permissions ?? []) == Set(currentAccess.permissions),
+              dashboard.myAccess?.isOwner == currentAccess.isOwner else { throw APIError.invalidResponse }
+        let collection = currentAccess.can("tasks.view") ? try? await HomeTaskAccess(homeId: homeId, api: api).list() : nil
+        try requireCurrent(revision)
+        let final = try await authority.read()
+        try requireCurrent(revision)
+        guard final.fingerprint == opening.fingerprint else { throw APIError.invalidResponse }
+        if household {
+            store.put(
+                HomeDashboardAccess.endpoint(homeId: homeId),
+                data: final.body,
+                kind: .homes,
+                topics: [ScreenTopic.home(homeId)],
+                showsBeforeRecheck: true
+            )
+        }
+        showingCopy = false
+        accessFingerprint = final.fingerprint
+        access = currentAccess
+        detailData = detail
+        dashboardData = dashboard
+        canCreateTask = collection?.collectionCapabilities?.canCreate == true
+        rebuild()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { [self] in await loadHealthScore() }
+            group.addTask { [self] in await loadChecklist() }
+            group.addTask { [self] in await loadPropertyValue() }
+            group.addTask { [self] in await loadBillTrends() }
+        }
+    }
+
+    /// No shared access: only the exact task collection can admit private
+    /// first use or a separately granted task route. No inferred owner capability.
+    private func showLimited(_ opening: HomeDashboardAuthoritySnapshot, revision: Int) async throws {
+        let collection = try? await HomeTaskAccess(homeId: homeId, api: api).list()
+        try requireCurrent(revision)
+        let final = try await authority.read()
+        try requireCurrent(revision)
+        guard final.fingerprint == opening.fingerprint else { throw APIError.invalidResponse }
+        canCreateTask = collection?.collectionCapabilities?.canCreate == true
+        state = .limited(HomeDashboardLimitedContent(
+            verificationKind: opening.verificationKind,
+            verificationStatus: opening.verificationStatus,
+            canOpenTasks: collection != nil
+        ))
+    }
+
+    /// The Home and its dashboard, read at once (typed task groups preserve
+    /// the prior iOS runtime-crash repair). An owner's or household member's
+    /// replies stay in the screen store as the copy.
+    private func readCore(household: Bool) async throws -> (HomeDetail?, HomeDashboardResponse?) {
+        let detailGate: @Sendable (HomeDetailResponse) -> Bool = { _ in household }
+        let dashboardGate: @Sendable (HomeDashboardResponse) -> Bool = { _ in household }
+        var detail: HomeDetail?
+        var dashboard: HomeDashboardResponse?
+        try await withThrowingTaskGroup(of: CoreReadResult.self) { group in
+            group.addTask { [self] in
+                let result = try await store.load(
+                    HomesEndpoints.detail(homeId: homeId),
+                    as: HomeDetailResponse.self,
+                    kind: .homes,
+                    topics: [ScreenTopic.home(homeId)],
+                    force: true,
+                    showsBeforeRecheck: detailGate
+                ).value
+                return .detail(result.home)
+            }
+            group.addTask { [self] in
+                let result = try await store.load(
+                    HomeDashboardEndpoints.dashboard(homeId: homeId),
+                    as: HomeDashboardResponse.self,
+                    kind: .homes,
+                    topics: [ScreenTopic.home(homeId)],
+                    force: true,
+                    showsBeforeRecheck: dashboardGate
+                ).value
+                return .dashboard(result)
+            }
+            for try await result in group {
+                switch result {
+                case let .detail(value): detail = value
+                case let .dashboard(value): dashboard = value
+                }
+            }
+        }
+        return (detail, dashboard)
+    }
+
+    // MARK: - The copy (Instant Screens decision 3)
+
+    /// Owners and household roles (owner, admin, manager, lease resident,
+    /// member, restricted member) whose access doesn't end. Guests, service
+    /// providers and expiring access never get a copy.
+    static func isHousehold(_ access: HomeAccessDTO, expiresAt: Date?) -> Bool {
+        guard expiresAt == nil, access.hasAccess else { return false }
+        let household: Set = ["owner", "admin", "manager", "lease_resident", "member", "restricted_member"]
+        return access.isOwner || household.contains((access.roleBase ?? "").lowercased())
+    }
+
+    private static func isUnreachable(_ error: any Error) -> Bool {
+        switch error as? APIError {
+        case .transport, .server, .retriesExhausted: true
+        default: error is URLError
+        }
+    }
+
+    /// Shows the last copy, if this account kept one for this Home: the
+    /// access, the Home, its dashboard and the cards read beside them. Bill
+    /// trends are never kept; document and bill counts and emergency info
+    /// aren't shown from it (`rebuild`).
+    @discardableResult
+    private func showCopy() -> Bool {
+        guard let copyAccess = store.peek(HomeDashboardAccess.endpoint(homeId: homeId), as: HomeAccessDTO.self)?.value,
+              copyAccess.can("home.view"), Self.isHousehold(copyAccess, expiresAt: nil),
+              let detail = store.peek(HomesEndpoints.detail(homeId: homeId), as: HomeDetailResponse.self)?.value.home,
+              let dashboard = store.peek(HomeDashboardEndpoints.dashboard(homeId: homeId), as: HomeDashboardResponse.self)?.value,
+              detail.base.id == homeId, dashboard.home?.id == homeId,
+              Set(dashboard.myAccess?.permissions ?? []) == Set(copyAccess.permissions)
+        else { return false }
+        access = copyAccess
+        detailData = detail
+        dashboardData = dashboard
+        showingCopy = true
+        healthScore = copyCard(HomeDashboardEndpoints.healthScore(homeId: homeId, force: true))
+        checklist = copyCard(HomeDashboardEndpoints.seasonalChecklist(homeId: homeId))
+        propertyValue = copyCard(HomeDashboardEndpoints.propertyValue(homeId: homeId))
+        rebuild()
+        return true
+    }
+
+    private func copyCard<Value: Decodable & Sendable>(_ endpoint: Endpoint) -> HomeIntelligenceCardState<Value> {
+        store.peek(endpoint, as: Value.self).map { .loaded($0.value) } ?? .loading
+    }
+
+    /// The access was refused, changed or couldn't be confirmed: the copy goes.
+    private func dropCopy() {
+        showingCopy = false
+        for endpoint in [
+            HomeDashboardAccess.endpoint(homeId: homeId),
+            HomesEndpoints.detail(homeId: homeId),
+            HomeDashboardEndpoints.dashboard(homeId: homeId),
+            HomeDashboardEndpoints.healthScore(homeId: homeId, force: true),
+            HomeDashboardEndpoints.seasonalChecklist(homeId: homeId),
+            HomeDashboardEndpoints.propertyValue(homeId: homeId)
+        ] {
+            store.remove(endpoint)
+        }
+    }
+
+    /// The cards' reads keep their copy beside the dashboard's, under the same rule.
+    private func cardRead<Value: Decodable & Sendable>(_ endpoint: Endpoint, as _: Value.Type) async throws -> Value {
+        let household = access.map { Self.isHousehold($0, expiresAt: accessExpiresAt) } ?? false
+        let gate: @Sendable (Value) -> Bool = { _ in household }
+        return try await store.load(
+            endpoint,
+            as: Value.self,
+            kind: .homes,
+            topics: [ScreenTopic.home(homeId)],
+            force: true,
+            showsBeforeRecheck: gate
+        ).value
     }
 
     private enum CoreReadResult {
@@ -483,7 +662,7 @@ final class HomeDashboardViewModel {
         guard let result = await authorizedCard(
             permissions: ["home.view", "maintenance.view", "finance.view", "members.view", "docs.view", "sensitive.view"],
             {
-                let value = try await self.api.request(
+                let value = try await self.cardRead(
                     HomeDashboardEndpoints.healthScore(homeId: self.homeId, force: true),
                     as: HomeHealthScoreDTO.self
                 )
@@ -498,7 +677,7 @@ final class HomeDashboardViewModel {
 
     private func loadChecklist() async {
         guard let result = await authorizedCard(permissions: ["home.view"], {
-            let value = try await self.api.request(
+            let value = try await self.cardRead(
                 HomeDashboardEndpoints.seasonalChecklist(homeId: self.homeId),
                 as: SeasonalChecklistDTO.self
             )
@@ -511,7 +690,7 @@ final class HomeDashboardViewModel {
 
     private func loadPropertyValue() async {
         guard let result = await authorizedCard(permissions: ["home.view"], {
-            let value = try await self.api.request(
+            let value = try await self.cardRead(
                 HomeDashboardEndpoints.propertyValue(homeId: self.homeId),
                 as: HomePropertyValueDTO.self
             )
@@ -598,7 +777,7 @@ final class HomeDashboardViewModel {
     }
 
     var canChangeBillSharing: Bool {
-        can("home.edit")
+        can("home.edit") && accessFingerprint != nil
     }
 
     /// The anonymous neighborhood comparison is opt-in per Home (as on the
@@ -704,7 +883,7 @@ final class HomeDashboardViewModel {
                 securityBanner: Self.securityBanner(
                     state: detailData.securityState,
                     claimWindowEndsAt: detailData.claimWindowEndsAt,
-                    canInviteCoOwner: can("ownership.manage")
+                    canInviteCoOwner: shows("ownership.manage")
                 )
             ))
         }
@@ -716,7 +895,10 @@ final class HomeDashboardViewModel {
         isVerifiedOwner: Bool,
         securityBanner: HomeSecurityBannerContent?
     ) -> HomeDashboardContent {
-        let counts = dashboardData?.counts
+        // Document and bill counts and emergency info never show from a copy.
+        let counts = showingCopy ? dashboardData?.counts.withoutSensitiveCounts : dashboardData?.counts
+        var overview = HomeDashboardProjection.overview(dashboard: dashboardData, health: showingCopy ? nil : healthScore.value)
+        if showingCopy { overview = overview.checkingEmergency }
         return HomeDashboardContent(
             address: address,
             verified: verified,
@@ -725,14 +907,11 @@ final class HomeDashboardViewModel {
                 // Launch cut #7 (Household extras): the Packages and Bills stats are hidden.
                 if $0.id != "tasks", !LaunchFeatures.householdExtras { return false }
                 let permission = ["packages": "packages.view", "bills": "finance.view", "tasks": "tasks.view"][$0.id]
-                return permission.map(can) ?? false
+                return permission.map(shows) ?? false
             },
             quickActions: HomeDashboardProjection.quickActions(counts: counts, access: access),
             tabs: HomeDashboardProjection.gatedTabs(access: access),
-            overview: HomeDashboardProjection.overview(
-                dashboard: dashboardData,
-                health: healthScore.value
-            ),
+            overview: overview,
             attentionSummary: nil,
             securityBanner: securityBanner
         )
@@ -797,5 +976,35 @@ final class HomeDashboardViewModel {
                 action: .noAction
             )
         }
+    }
+}
+
+// MARK: - The copy's sensitive parts
+
+private extension HomeDashboardCountsDTO {
+    /// Document and bill counts are sensitive: a copy shows them as zero
+    /// until the re-check reads them again.
+    var withoutSensitiveCounts: HomeDashboardCountsDTO {
+        HomeDashboardCountsDTO(
+            tasksOpen: tasksOpen,
+            issuesOpen: issuesOpen,
+            billsDue: 0,
+            packagesExpected: packagesExpected,
+            documents: 0,
+            eventsUpcoming: eventsUpcoming,
+            membersActive: membersActive,
+            pets: pets
+        )
+    }
+}
+
+private extension HomeDashboardOverviewContent {
+    /// Emergency info is sensitive: shown as being checked until the re-check.
+    var checkingEmergency: HomeDashboardOverviewContent {
+        HomeDashboardOverviewContent(
+            upcoming: upcoming,
+            activity: activity,
+            emergency: HomeDashboardEmergencyInfo(title: "Emergency info", body: "Checking emergency info…", isConfigured: false)
+        )
     }
 }

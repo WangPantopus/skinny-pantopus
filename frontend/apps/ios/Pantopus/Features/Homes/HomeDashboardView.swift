@@ -203,8 +203,11 @@ struct HomeDashboardView: View {
         .task { await viewModel.activate(ifCurrent: viewModel.activationRevision) }
         .onDisappear { isVisible = false
             showsInviteOwner = false
-            viewModel.suspend()
+            // A sub-screen on top: an owner's or household member's dashboard
+            // stays as it was and is re-checked on return (decision 3).
+            viewModel.suspend(keepingCopy: true)
         }
+        .refreshFailureToast($viewModel.refreshFailureMessage)
         .onChange(of: scenePhase) { _, phase in
             guard isVisible else { return }
             if phase == .active {
@@ -314,8 +317,8 @@ struct HomeDashboardView: View {
                                         onOpenPropertyDetails: { if viewModel.can("home.view") { onOpenPropertyDetails?(homeId) } },
                                         onOpenIssues: viewModel.can("maintenance.view")
                                             ? onOpenIssues.map { openIssues in { openIssues(homeId) } } : nil,
-                                        canViewActivity: viewModel.can("security.manage"),
-                                        canViewEmergency: viewModel.can("sensitive.view")
+                                        canViewActivity: viewModel.shows("security.manage"),
+                                        canViewEmergency: viewModel.shows("sensitive.view")
                                     )
                                 }
                             }
