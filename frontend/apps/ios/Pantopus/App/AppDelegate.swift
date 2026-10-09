@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // them again whenever a row came back on screen.
         URLCache.shared = URLCache(memoryCapacity: 32 * 1024 * 1024, diskCapacity: 256 * 1024 * 1024)
         try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
+        APIClient.removeLegacyDiskCache()
         MainActor.assumeIsolated {
             Observability.shared.start(environment: AppEnvironment.current)
             // Product analytics (PostHog). No-ops until POSTHOG_API_KEY is set,

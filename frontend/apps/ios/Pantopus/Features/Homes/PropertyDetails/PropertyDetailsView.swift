@@ -12,6 +12,8 @@
 //    .mismatch — amber banner · flagged Bedrooms row · sticky CTA
 //
 
+// swiftlint:disable file_length
+
 import CoreLocation
 import MapKit
 import SwiftUI
@@ -47,6 +49,11 @@ public struct PropertyDetailsView: View {
             .background(Theme.Color.appBg.ignoresSafeArea())
             .accessibilityIdentifier("propertyDetails")
             .task { await viewModel.load() }
+            // Someone changed this Home (`sync:changed`) or the socket came back: re-check the open
+            // details, which stay on screen meanwhile (Instant Screens).
+            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.home(viewModel.homeId), kind: .place) }, perform: {
+                await viewModel.load()
+            })
     }
 
     @ViewBuilder private var content: some View {

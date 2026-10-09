@@ -32,6 +32,11 @@ public struct HomeSettingsView: View {
             )
         )
         .accessibilityIdentifier("homeSettings")
+        // Someone changed this Home (`sync:changed`) or the socket came back: re-check the open index,
+        // the rows staying on screen meanwhile (Instant Screens).
+        .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.home(viewModel.homeId), kind: .homes) }, perform: {
+            await viewModel.load()
+        })
     }
 }
 
