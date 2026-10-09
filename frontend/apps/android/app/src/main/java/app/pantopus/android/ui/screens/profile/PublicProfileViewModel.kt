@@ -862,9 +862,8 @@ class PublicProfileViewModel
                 gigsPosted > 0 ->
                     stats += ProfileStatCell(id = "gigs", value = "$gigsPosted", label = "Gigs")
             }
-            if (stats.isEmpty()) {
-                stats += ProfileStatCell(id = "placeholder", value = "—", label = "Activity")
-            }
+            // No reviews or rating yet: no stats row (BeaconIdentityBlock hides an empty one)
+            // rather than a "— Activity" cell that reads as a broken stat.
             return stats
         }
 
