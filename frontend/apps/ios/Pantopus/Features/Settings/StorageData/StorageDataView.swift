@@ -112,9 +112,7 @@ struct StorageDataView: View {
                     "Pages load from the internet the next time you open them."
             )
 
-            Text("Automatic cleanup")
-                .pantopusTextStyle(.overline)
-                .textCase(.uppercase)
+            Text("Automatic cleanup", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .padding(.top, Spacing.s2)
             limitRow
@@ -202,7 +200,7 @@ private struct StorageMeter: View {
                 segment(sizes?.photos ?? 0, scale: scale, color: Self.photosColor)
                 segment(sizes?.savedPages ?? 0, scale: scale, color: Self.pagesColor)
                 segment(sizes?.drafts ?? 0, scale: scale, color: Self.draftsColor)
-                Spacer(minLength: 0)
+                Spacer(minLength: Spacing.s0)
             }
         }
         .frame(height: 10)

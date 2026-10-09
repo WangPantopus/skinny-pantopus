@@ -383,7 +383,7 @@ public struct BodyReactionsBody: View {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 ForEach(0..<min(count, 3), id: \.self) { _ in
                     HStack(alignment: .top, spacing: Spacing.s3) {
-                        Shimmer(width: 32, height: 32, cornerRadius: 16)
+                        Shimmer(width: 32, height: 32, cornerRadius: Radii.xl)
                         VStack(alignment: .leading, spacing: 7) {
                             Shimmer(width: 120, height: 11, cornerRadius: Radii.xs)
                             Shimmer(height: 11, cornerRadius: Radii.xs)
