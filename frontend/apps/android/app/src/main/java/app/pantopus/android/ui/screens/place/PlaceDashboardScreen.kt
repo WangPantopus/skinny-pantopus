@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.api.models.place.BallotGovernments
 import app.pantopus.android.data.api.models.place.PlaceGroupBlock
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
@@ -79,7 +80,7 @@ const val PLACE_DASHBOARD_HOME_ID_KEY = "homeId"
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 fun PlaceDashboardScreen(
     homeId: String,
     onOpenSection: (homeId: String, slug: String) -> Unit,
@@ -99,6 +100,7 @@ fun PlaceDashboardScreen(
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("place", state is PlaceDashboardUiState.Loaded)
     val unreadCount by viewModel.unreadCount.collectAsStateWithLifecycle()
     // A Home this account can no longer read (left, removed, deleted): the Place tab moves on.
     LaunchedEffect(state) {
