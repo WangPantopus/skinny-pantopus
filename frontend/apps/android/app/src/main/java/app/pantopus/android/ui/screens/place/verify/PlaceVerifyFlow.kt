@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.tenant.TenantRepository
 import app.pantopus.android.ui.components.PrimaryButton
@@ -101,11 +102,16 @@ private val VERIFY_BENEFITS =
             "Proof you live here",
             "Your verified badge, a residency letter, and a shareable Residency Pass",
         ),
-        VerifyBenefit(
-            PantopusIcon.Mailbox,
-            "Your mailbox and your rank",
-            "The digital mailbox opens, and you take a permanent Block Founder number",
-        ),
+        // Launch cut #10 (Mailbox): while it is off, verifying gives the rank only.
+        if (LaunchFeatures.mailbox) {
+            VerifyBenefit(
+                PantopusIcon.Mailbox,
+                "Your mailbox and your rank",
+                "The digital mailbox opens, and you take a permanent Block Founder number",
+            )
+        } else {
+            VerifyBenefit(PantopusIcon.Flag, "Your rank on the block", "You take a permanent Block Founder number")
+        },
         VerifyBenefit(
             PantopusIcon.MessageCircle,
             "What only verified neighbors see",

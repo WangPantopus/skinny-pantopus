@@ -138,6 +138,8 @@ enum class NavigationDrawerDestination {
                 DiscoverNeighbors -> LaunchFeatures.businessDirectory && LaunchFeatures.openGigs && LaunchFeatures.marketplace
                 // Launch cut #7 (Household extras): bills and package tracking.
                 HomeBills, HomePackages -> LaunchFeatures.householdExtras
+                // Launch cut #10 (Mailbox): the personal and home mailbox rows.
+                Mailbox, HomeMailbox -> LaunchFeatures.mailbox
                 else -> true
             }
 }

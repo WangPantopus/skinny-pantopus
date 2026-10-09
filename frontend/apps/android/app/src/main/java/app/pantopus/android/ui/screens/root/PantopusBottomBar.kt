@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -42,7 +43,7 @@ import app.pantopus.android.ui.theme.Spacing
  * Custom bottom bar matching the Pantopus design spec: 78dp tall, semi-
  * transparent white surface with a 12dp backdrop blur on API 31+, a 1dp
  * top border, 4 evenly-spaced tabs, active tint `primary600`, inactive
- * tint `appTextSecondary`. The [PantopusRoute.Messages] tab accepts a badge count.
+ * tint `appTextSecondary`. A tab with a count in [badges] (Messages: unread messages) draws a badge.
  * The app draws edge to edge, so the surface extends under the system
  * navigation bar and the tabs sit above it.
  *
@@ -118,18 +119,19 @@ private fun TabItem(
                 .testTag("tab.${route.path.substringAfterLast('/')}")
                 .semantics {
                     selected = isSelected
-                    contentDescription = route.label
+                    contentDescription = if (badge > 0) "${route.label}, $badge unread" else route.label
                 },
     ) {
-        Box(contentAlignment = Alignment.TopEnd) {
+        Box {
             PantopusIconImage(
                 icon = route.icon,
                 contentDescription = null,
                 size = 22.dp,
                 tint = tint,
             )
-            if (route is PantopusRoute.Messages && badge > 0) {
-                InboxBadge(count = badge, modifier = Modifier.padding(start = Spacing.s3))
+            if (badge > 0) {
+                // Over the icon's top-right corner; the offset keeps the icon and label centered.
+                InboxBadge(count = badge, modifier = Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-4).dp))
             }
         }
         Spacer(Modifier.size(Spacing.s1))
@@ -158,7 +160,7 @@ private fun InboxBadge(
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = count.coerceAtMost(99).toString(),
+            text = if (count > 99) "99+" else count.toString(),
             style = PantopusTextStyle.caption.copy(fontSize = 9.sp),
             color = Color.White,
         )

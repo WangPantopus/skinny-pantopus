@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -122,7 +123,8 @@ private fun TopBar(onCompose: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Chat",
+            // Launch cut #10 (Mailbox): this list is the Messages tab, so it carries the tab's name.
+            text = if (LaunchFeatures.mailbox) "Chat" else "Messages",
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.appText,
