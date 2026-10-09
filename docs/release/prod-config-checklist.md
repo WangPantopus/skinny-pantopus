@@ -26,7 +26,7 @@ Last checked: 2026-10-08 by L4.
 | `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
 | April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The live website links to both. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
-| Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9. Auth transfer, Storage buckets and managed daily backups are still pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
+| Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9, and the private `home-documents` bucket is configured. Auth transfer, the two 100 MB buckets, the S3 key and managed daily backups are pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
 | GitHub | `staging` has its secrets and variables and releases from `dev` (S5, S6). `production` has `BACKEND_DEPLOY_ENABLED=false` and `DB_MIGRATIONS_ENABLED=false` and no secrets, so each master push ends with "Backend deployment is disabled". `ios-release` and `android-release` have no secrets. |
 | AWS Lambdas | Staging stack `pantopus-seeder-staging` (October 7). The stack (`pantopus-seeder/deploy/template.yaml`) carries the seeder and the briefing, home-reminder, weather-alert, mail and job-trigger functions. **The April production stack `pantopus-seeder-production` (last deployed May 3) still runs** (checked October 8): its 14 EventBridge schedules read the April database through the secret `pantopus/seeder/production` every 5 to 15 minutes and send through `api.pantopus.com`, which answers 522, so nothing reaches anyone. At 01:00Z on October 8 its evening briefing tried three April users and failed. Pause it before P1 (start of section 3); P8 turns it into the production stack. The April `pantopus-seeder-dev` stack is inert: its functions were deleted in April, so its ten schedules have nothing to run. |
 
@@ -487,14 +487,19 @@ push, and the three buckets exist with the right privacy.
 `falmvysvndmwtfxsrxek` from the dedicated production worktree. Read-only
 verification found 148 matching local and remote migration versions, no
 local-only or remote-only versions, and no pending migration in a fresh dry run.
-The Storage buckets, S3 access key, Auth transfer and backup upgrade remain to
-be done.
+The two 100 MB Storage buckets, S3 access key, Auth transfer and backup
+upgrade remain to be done.
 
 **Plan decision, October 9:** stay on Free for now. Defer the two 100 MB
 buckets and April login import until the founder chooses to upgrade. The
 private 25 MB `home-documents` bucket can be prepared on Free. Do not point
 production traffic at the new project while existing logins remain only in
 the April project.
+
+**Storage status, October 9:** the founder created `home-documents`. A
+read-only Storage API check confirmed it is private with a 26,214,400-byte
+(25 MiB) file-size limit. `gig-completion` and `pantopus-uploads` are absent,
+as planned.
 
 ### P2B. Production database: adopt the April project (only if D3 says so)
 
