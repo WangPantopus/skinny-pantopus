@@ -6,9 +6,9 @@
  * this module instead of reading process.env directly.
  *
  * Behaviour:
- *   - In production (NODE_ENV === 'production') the three vendor API keys
- *     (Google, Smarty, Lob) are REQUIRED.  If any are missing the process
- *     exits with a clear error message.
+ *   - In production the vendor keys are required unless the production-only
+ *     DEFER_ADDRESS_PROVIDER_SETUP switch is enabled for a limited launch.
+ *     Missing providers then stay unavailable; mock mail is never used.
  *   - In development/test mode missing keys are tolerated.  Providers
  *     should call `config.isProviderAvailable('google')` etc. and fall
  *     back to mock behaviour when false.
@@ -179,8 +179,7 @@ const PRODUCTION_REQUIRED = [
   { key: 'SMARTY_AUTH_ID', label: 'Smarty auth-id', provider: 'smarty' },
   { key: 'SMARTY_AUTH_TOKEN', label: 'Smarty auth-token', provider: 'smarty' },
   { key: 'LOB_API_KEY', label: 'Lob API key', provider: 'lob' },
-  // Without this the webhook handler skips signature verification entirely
-  // and accepts any unauthenticated POST (routes/lobWebhook.js).
+  // Without this the webhook handler rejects all deliveries.
   { key: 'LOB_WEBHOOK_SECRET', label: 'Lob webhook signing secret', provider: 'lob' },
 ];
 
@@ -194,6 +193,8 @@ const PRODUCTION_REQUIRED = [
 function validate() {
   const isProd = process.env.NODE_ENV === 'production';
   const isStaging = process.env.APP_ENV === 'staging';
+  const deferProviderSetup = isProd && process.env.APP_ENV === 'production'
+    && envBool('DEFER_ADDRESS_PROVIDER_SETUP');
   require('./stagingRuntime').validateStagingRuntime();
   const missing = [];
 
@@ -204,7 +205,11 @@ function validate() {
   }
 
   const expectedLobEnv = isStaging ? 'test' : 'live';
-  if (isProd && config.lob.env !== expectedLobEnv) {
+  if (isProd && config.lob.apiKey && !config.lob.apiKey.startsWith(isStaging ? 'test_' : 'live_')) {
+    logger.error('Address verification configuration error: Lob key does not match the environment.');
+    process.exit(1);
+  }
+  if (isProd && (!deferProviderSetup || config.lob.apiKey) && config.lob.env !== expectedLobEnv) {
     logger.error(
       `Address verification configuration error: LOB_ENV must be '${expectedLobEnv}' ` +
       `for ${isStaging ? 'staging' : 'production'}.`,
@@ -222,8 +227,13 @@ function validate() {
     process.exit(1);
   }
 
-  if (isProd && missing.length > 0) {
-    const list = missing.map((m) => `  - ${m.key} (${m.label})`).join('\n');
+  // A configured live Lob sender must have a signing secret before it can
+  // accept delivery receipts, even during the limited launch.
+  const fatalMissing = deferProviderSetup
+    ? missing.filter((req) => req.key === 'LOB_WEBHOOK_SECRET' && config.lob.apiKey)
+    : missing;
+  if (isProd && fatalMissing.length > 0) {
+    const list = fatalMissing.map((m) => `  - ${m.key} (${m.label})`).join('\n');
     logger.error(
       `Address verification configuration error: missing required environment variables in production:\n${list}\n` +
       'Set these variables or switch to NODE_ENV=development for mock providers.',
@@ -233,11 +243,11 @@ function validate() {
 
   // Log status for each provider
   const status = {
-    google: isProviderAvailable('google') ? 'live' : 'mock/disabled',
+    google: isProviderAvailable('google') ? 'live' : (isProd ? 'disabled' : 'mock/disabled'),
     googlePlaces: config.rollout.enablePlaceProvider
       ? (config.googlePlaces.apiKey ? 'shadow-configured' : 'shadow-misconfigured')
       : 'disabled',
-    smarty: isProviderAvailable('smarty') ? 'live' : 'mock/disabled',
+    smarty: isProviderAvailable('smarty') ? 'live' : (isProd ? 'disabled' : 'mock/disabled'),
     secondaryAddress: config.rollout.enableSecondaryProvider
       ? (isProviderAvailable('smarty') ? 'shadow-configured' : 'shadow-misconfigured')
       : 'disabled',
@@ -248,7 +258,7 @@ function validate() {
             : 'shadow-misconfigured'
         )
       : 'disabled',
-    lob: isProviderAvailable('lob') ? (config.lob.env === 'live' ? 'live' : 'test') : 'mock',
+    lob: isProviderAvailable('lob') ? (config.lob.env === 'live' ? 'live' : 'test') : (isProd ? 'disabled' : 'mock'),
   };
 
   logger.info('Address verification configuration loaded', {
@@ -269,7 +279,11 @@ function validate() {
     rollout: config.rollout,
   });
 
-  if (!isProd && missing.length > 0) {
+  if (deferProviderSetup && missing.length > 0) {
+    logger.warn('Production address providers deferred; affected validation and mail flows are unavailable', {
+      missing: missing.map((m) => m.key),
+    });
+  } else if (!isProd && missing.length > 0) {
     const providers = [...new Set(missing.map((m) => m.provider))];
     logger.info(
       `Dev mode: ${providers.join(', ')} provider(s) will use mock/fallback behaviour ` +

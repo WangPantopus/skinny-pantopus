@@ -6,7 +6,8 @@
  *
  * Provider selection:
  *   - LOB_API_KEY set → LobMailProvider
- *   - Otherwise       → MockMailProvider (logs code to console)
+ *   - Otherwise in local development → MockMailProvider (logs code to console)
+ *   - Otherwise in hosted environments → LobMailProvider, which refuses to send
  *
  * Usage:
  *   const mailVendorService = require('./mailVendorService');
@@ -27,7 +28,9 @@ class MailVendorService {
    * @returns {object} provider with sendPostcard / getJobStatus methods
    */
   getProvider() {
-    if (lobMailProvider.isAvailable()) {
+    if (lobMailProvider.isAvailable()
+      || process.env.NODE_ENV === 'production'
+      || ['staging', 'production'].includes(process.env.APP_ENV)) {
       return lobMailProvider;
     }
     return mockMailProvider;
@@ -48,6 +51,12 @@ class MailVendorService {
    * @returns {Promise<{success: boolean, error?: string, vendorJobId?: string}>}
    */
   async dispatchPostcard(jobId, code) {
+    if ((process.env.NODE_ENV === 'production'
+      || ['staging', 'production'].includes(process.env.APP_ENV))
+      && !lobMailProvider.isAvailable()) {
+      return { success: false, deliveryUnknown: false, error: 'Mail provider is not configured' };
+    }
+
     // ── 1. Fetch the job ────────────────────────────────────
     const { data: job, error: jobErr } = await supabaseAdmin
       .from('MailVerificationJob')

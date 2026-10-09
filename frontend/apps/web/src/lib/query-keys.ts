@@ -26,6 +26,10 @@ export const queryKeys = {
   conversations: () => ['conversations'] as const,
   chatMessages: (roomId: string) =>
     ['chat', 'messages', roomId] as const,
+  chatTopics: (otherUserId: string) =>
+    ['chat', 'topics', otherUserId] as const,
+  chatRoom: (roomId: string, asBusinessUserId?: string) =>
+    ['chat', 'room', roomId, asBusinessUserId ?? 'me'] as const,
 
   // ── Notifications ──────────────────────────────────────────
   notifications: () => ['notifications'] as const,
@@ -56,6 +60,7 @@ export const queryKeys = {
 
   // ── Posts ──────────────────────────────────────────────────
   postDetail: (id: string) => ['posts', 'detail', id] as const,
+  postComments: (id: string) => ['posts', 'comments', id] as const,
 
   // ── Profiles ──────────────────────────────────────────────
   /** Your own profile (GET /api/users/profile); read it through lib/me.ts. */

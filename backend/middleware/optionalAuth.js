@@ -15,6 +15,7 @@ const { isAuthRetryableFetchError } = require('@supabase/supabase-js');
 const supabase = require('../config/supabase');
 const logger = require('../utils/logger');
 const authSessionService = require('../services/authSessionService');
+const { verifyAccessToken } = require('../services/accessTokenVerifier');
 
 // ── Token → user cache (15 s TTL) ──────────────────────────────
 const TOKEN_CACHE_TTL = 15_000;
@@ -82,11 +83,12 @@ async function optionalAuth(req, _res, next) {
       return next();
     }
 
-    // Verify with Supabase
-    const { data, error } = await supabase.auth.getUser(token);
+    // Verify on this server, or with Supabase when that can't decide (services/accessTokenVerifier.js)
+    const verified = await verifyAccessToken(token, { authClient: supabase });
 
-    if (error || !data?.user) {
-      if (!isRejection(error)) {
+    if (!verified.ok) {
+      const error = verified.error;
+      if (verified.reason === 'busy' || (error && !isRejection(error))) {
         logger.debug('optionalAuth: auth service unreachable, treating as anonymous', { status: error?.status });
         setCache(token, UNREACHABLE);
         return next();
@@ -95,6 +97,7 @@ async function optionalAuth(req, _res, next) {
       req.authRejected = true;
       return next();
     }
+    const data = { user: verified.user };
 
     // Persistent login (design §6.4): a revoked AuthSession reads as
     // anonymous on soft-auth routes too (same 15-s cache as verifyToken).
