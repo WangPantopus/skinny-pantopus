@@ -11,9 +11,12 @@ package app.pantopus.android.ui.screens.support_trains
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.support_trains.SupportTrainListItemDto
-import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.location.LocationProvider
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
@@ -123,6 +126,15 @@ class SupportTrainsViewModel
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
 
+        /** A read is running while the rows stay (Instant Screens): the pull indicator only. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+        private var mineStored: Stored<SupportTrainsListResponse> = Stored()
+
         private val _selectedTab = MutableStateFlow(SupportTrainsTab.MINE)
         val selectedTab: StateFlow<String> = _selectedTab.asStateFlow()
 
@@ -172,13 +184,15 @@ class SupportTrainsViewModel
         /** Set by the screen: open this app's system settings. */
         var onOpenLocationSettings: () -> Unit = {}
 
-        fun load() {
-            // After the first load, each return re-reads quietly, so a train
-            // deleted or re-statused from its detail or Manage screen doesn't linger.
-            reload(showLoading = !loadedOnce)
-        }
+        /**
+         * Tab entry and every return (Instant Screens): the store answers from a fresh copy (a minute) without a
+         * request and revalidates an older one, so a train deleted or re-statused from its detail or Manage screen
+         * still doesn't linger. The rows never drop to the skeleton once shown.
+         */
+        fun load() = reload(force = false)
 
-        fun refresh() = reload()
+        /** Pull to refresh and Try again: read now. */
+        fun refresh() = reload(force = true)
 
         fun selectTab(id: String) {
             if (_selectedTab.value == id) return
@@ -186,13 +200,18 @@ class SupportTrainsViewModel
             applyState()
         }
 
-        private fun reload(showLoading: Boolean = true) {
-            if (showLoading) _state.value = ListOfRowsUiState.Loading
+        private fun reload(force: Boolean) {
+            if (!loadedOnce) _state.value = ListOfRowsUiState.Loading
+            // Only a pull (or Try again) over rows shows the pull indicator; a return reads quietly or not at all.
+            _refreshing.value = force && loadedOnce
             viewModelScope.launch {
-                val mineDeferred = async { fetchMine() }
-                val nearbyDeferred = async { fetchNearby() }
+                val mineDeferred = async { fetchMine(force) }
+                val nearbyDeferred = async { fetchNearby(force) }
                 val mineOk = mineDeferred.await()
                 val nearbyOk = nearbyDeferred.await()
+                _refreshing.value = false
+                _refreshNotice.value =
+                    RefreshNotice(mineStored.fetchedAt, ::refresh).takeIf { mineStored.showsRefreshFailure(StoreKind.SUPPORT_TRAINS) }
                 if (!mineOk && !nearbyOk) {
                     _state.value =
                         ListOfRowsUiState.Error("Couldn't load support trains. Try again.")
@@ -203,20 +222,17 @@ class SupportTrainsViewModel
             }
         }
 
-        private suspend fun fetchMine(): Boolean =
-            when (val result = repo.mine()) {
-                is NetworkResult.Success -> {
-                    mine = result.data.supportTrains
-                    mineFailed = false
-                    true
-                }
-                is NetworkResult.Failure -> {
-                    mineFailed = true
-                    false
-                }
-            }
+        /** True when there are rows to show: a fresh copy, or the stored one when the read failed. */
+        private suspend fun fetchMine(force: Boolean): Boolean {
+            val stored = repo.mineStored(force)
+            mineStored = stored
+            val data = stored.data
+            mine = data?.supportTrains.orEmpty()
+            mineFailed = data == null
+            return data != null
+        }
 
-        private suspend fun fetchNearby(): Boolean {
+        private suspend fun fetchNearby(force: Boolean): Boolean {
             // A reload starts over: after a trip to Settings, "Use my location" may work now.
             locationRequestFailed = false
             val loc =
@@ -226,23 +242,18 @@ class SupportTrainsViewModel
                     nearbyRows = emptyList()
                     return true
                 }
-            return fetchNearby(loc)
+            return fetchNearby(loc, force)
         }
 
-        private suspend fun fetchNearby(loc: Pair<Double, Double>): Boolean {
+        private suspend fun fetchNearby(
+            loc: Pair<Double, Double>,
+            force: Boolean,
+        ): Boolean {
             nearbyNeedsLocation = false
-            return when (val result = repo.nearby(latitude = loc.first, longitude = loc.second)) {
-                is NetworkResult.Success -> {
-                    nearbyRows = result.data.supportTrains
-                    nearbyFailed = false
-                    true
-                }
-                is NetworkResult.Failure -> {
-                    nearbyRows = emptyList()
-                    nearbyFailed = true
-                    false
-                }
-            }
+            val data = repo.nearbyStored(latitude = loc.first, longitude = loc.second, force = force).data
+            nearbyRows = data?.supportTrains.orEmpty()
+            nearbyFailed = data == null
+            return data != null
         }
 
         /**
@@ -255,7 +266,7 @@ class SupportTrainsViewModel
                 if (fix == null) {
                     locationRequestFailed = true
                 } else {
-                    fetchNearby(fix.latitude to fix.longitude)
+                    fetchNearby(fix.latitude to fix.longitude, force = true)
                 }
                 applyState()
             }

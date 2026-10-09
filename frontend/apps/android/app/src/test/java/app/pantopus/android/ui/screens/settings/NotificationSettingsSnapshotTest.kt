@@ -12,8 +12,8 @@ import app.cash.paparazzi.Paparazzi
 import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListScreen
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
@@ -97,7 +97,7 @@ class NotificationSettingsSnapshotTest {
     }
 
     private fun viewModel(prefs: NotificationPreferences): NotificationSettingsViewModel {
-        coEvery { repository.preferences() } returns NetworkResult.Success(prefs)
+        coEvery { repository.preferencesStored(any()) } returns Stored(prefs, fetchedAt = System.currentTimeMillis())
         return NotificationSettingsViewModel(repository).apply { load() }
     }
 
