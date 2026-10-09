@@ -9,9 +9,10 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import { setNotificationPreferences, useNotificationPreferences } from '@/lib/me';
 import type { LucideIcon } from 'lucide-react';
 import type {
   PlaceIntelligence,
@@ -442,37 +443,24 @@ function GoodDayRow({ data }: { data: PlaceGoodDayData }) {
 const BRIEFING_TIMES = ['06:30', '07:00', '07:30', '08:00', '08:30'];
 
 function BriefingOptIn() {
-  const [show, setShow] = useState(false);
-  const [time, setTime] = useState('07:30');
+  // Your notification preferences, shared with Settings (lib/me.ts). Reads go
+  // through the api client, not a raw fetch: cookie-session writes need the
+  // x-csrf-token header the client injects, and the reads gain its
+  // 401-refresh handling. A failed read simply means no prompt — never a
+  // broken card.
+  const preferences = useNotificationPreferences().data;
+  // Ask only when it is off AND we have never asked. Both a yes and a no stamp
+  // `daily_briefing_prompted_at`, so this never returns.
+  const ask = !!preferences && !preferences.daily_briefing_enabled && !preferences.daily_briefing_prompted_at;
+  const [chosenTime, setTime] = useState<string | null>(null);
+  const time = chosenTime ?? preferences?.daily_briefing_time_local ?? '07:30';
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<'on' | 'off' | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        // Through the api client, not a raw fetch: cookie-session writes
-        // need the x-csrf-token header the client injects, and the reads
-        // gain its 401-refresh handling.
-        const { preferences } = await api.hub.getHubPreferences();
-        // Ask only when it is off AND we have never asked. Both a yes and a
-        // no stamp `daily_briefing_prompted_at`, so this never returns.
-        if (cancelled) return;
-        if (!preferences?.daily_briefing_enabled && !preferences?.daily_briefing_prompted_at) {
-          if (preferences?.daily_briefing_time_local) setTime(preferences.daily_briefing_time_local);
-          setShow(true);
-        }
-      } catch {
-        // A failed preference read simply means no prompt — never a broken card.
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   async function answer(enabled: boolean) {
     setBusy(true);
     try {
-      await api.hub.updateHubPreferences({
+      const saved = await api.hub.updateHubPreferences({
         daily_briefing_enabled: enabled,
         ...(enabled ? { daily_briefing_time_local: time } : {}),
         daily_briefing_prompted: true,
@@ -480,7 +468,7 @@ function BriefingOptIn() {
       // Success state only AFTER the server accepted the write — a raw
       // fetch here used to 403 on CSRF and show "briefing on" anyway.
       setDone(enabled ? 'on' : 'off');
-      setShow(false);
+      setNotificationPreferences(saved.preferences);
     } catch {
       toast.error('That didn’t save — try again.');
     } finally {
@@ -495,7 +483,7 @@ function BriefingOptIn() {
       </div>
     );
   }
-  if (!show) return null;
+  if (!ask || done) return null;
 
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px] flex flex-col gap-3">

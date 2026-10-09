@@ -372,8 +372,11 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
                     subtext: "Daily mailbox digest",
                     control: .toggle(isOn: prefs.mailSummaryEnabled)
                 )
-                // Launch cut #1 (Beacon): no Beacon push toggle.
-            ].filter { $0.id != RowID.beaconPush || LaunchFeatures.beacon }
+                // Launch cut #1 (Beacon): no Beacon push toggle; launch cut #10
+                // (Mailbox): no mail summary.
+            ].filter {
+                ($0.id != RowID.beaconPush || LaunchFeatures.beacon) && ($0.id != RowID.mailSummary || LaunchFeatures.mailbox)
+            }
         )
     }
 

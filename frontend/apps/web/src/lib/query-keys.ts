@@ -60,10 +60,15 @@ export const queryKeys = {
 
   // ── Posts ──────────────────────────────────────────────────
   postDetail: (id: string) => ['posts', 'detail', id] as const,
+  postComments: (id: string) => ['posts', 'comments', id] as const,
 
   // ── Profiles ──────────────────────────────────────────────
   /** Your own profile (GET /api/users/profile); read it through lib/me.ts. */
   me: () => ['me'] as const,
+  /** Your notification preferences (GET /api/hub/preferences); lib/me.ts. */
+  notificationPreferences: () => ['me', 'notification-preferences'] as const,
+  /** Your privacy settings (GET /api/privacy/settings); lib/me.ts. */
+  privacySettings: () => ['me', 'privacy'] as const,
   profile: (username: string) =>
     ['profile', username] as const,
 

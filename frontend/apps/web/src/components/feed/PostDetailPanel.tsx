@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,6 +18,7 @@ import LinkPreviewCard from './LinkPreviewCard';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
 import { buildCanonicalShareUrlForPost, chosenUsername } from '@pantopus/utils';
 import { removePostFromFeedCaches } from '@/hooks/useFeedData';
+import { usePostDetail } from '@/hooks/usePostDetail';
 import type { Post, PostComment as PostCommentType } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 
@@ -61,16 +62,19 @@ export default function PostDetailPanel({
   const queryClient = useQueryClient();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  const [post, setPost] = useState<Post | null>(initialPost);
-  const [comments, setComments] = useState<PostCommentType[]>([]);
-  const [loading, setLoading] = useState(false);
+  // The post and its comments come from the shared cache (hooks/usePostDetail):
+  // the card's copy shows at once, a post opened before shows with its comments.
+  const detail = usePostDetail(postId, { enabled: open, seed: initialPost });
+  const post: Post | null = open ? detail.post : null;
+  const comments: PostCommentType[] = open ? detail.comments : [];
+  const { setPost, setComments, postQuery, commentsQuery } = detail;
+  const loading = open && postQuery.isFetching;
   const [commentPosting, setCommentPosting] = useState(false);
   const [toast, setToast] = useState('');
   /** Index into `post.media_urls` when viewing full-screen image; `null` = closed */
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const targetVersion = useRef(0);
-  const readVersion = useRef(0);
 
   useEffect(() => {
     targetVersion.current += 1;
@@ -87,75 +91,18 @@ export default function PostDetailPanel({
     }, 2500);
   };
 
-  const loadPost = useCallback(async (id: string) => {
-    const target = targetVersion.current;
-    const read = ++readVersion.current;
-    const isCurrent = () => target === targetVersion.current && read === readVersion.current;
-    setLoading(true);
-    try {
-      const [postRes, commentsRes] = await Promise.allSettled([
-        api.posts.getPost(id),
-        api.posts.getComments(id),
-      ]);
-      if (!isCurrent()) return;
-
-      // Deleted, or no longer visible to you: say so rather than showing the card's copy as a live post,
-      // and stop the feed listing it.
-      const readStatus = postRes.status === 'rejected' ? statusOf(postRes.reason) : undefined;
-      if (readStatus === 404 || readStatus === 403) {
-        setPost(null);
-        setComments([]);
-        removePostFromFeedCaches(queryClient, id);
-        return;
-      }
-
-      if (postRes.status === 'fulfilled') {
-        setPost(postRes.value.post);
-      }
-
-      if (commentsRes.status === 'fulfilled') {
-        setComments(commentsRes.value.comments || []);
-      } else if (postRes.status === 'fulfilled') {
-        setComments(postRes.value.post.comments || []);
-      }
-
-      if (postRes.status === 'rejected' && commentsRes.status === 'rejected') {
-        if (!initialPost) {
-          setPost(null);
-          setComments([]);
-        }
-        console.warn('Failed to load post detail panel data', {
-          postError: postRes.reason,
-          commentsError: commentsRes.reason,
-        });
-      } else {
-        if (postRes.status === 'rejected') {
-          console.warn('Failed to refresh post details', postRes.reason);
-        }
-        if (commentsRes.status === 'rejected') {
-          console.warn('Failed to refresh post comments', commentsRes.reason);
-          showToast('Could not refresh comments. Close and reopen this post to retry.');
-        }
-      }
-    } catch (err) {
-      if (!isCurrent()) return;
-      console.warn('Unexpected panel load error', err);
-    } finally {
-      if (isCurrent()) setLoading(false);
-    }
-  }, [initialPost, queryClient]);
-
+  // Deleted, or no longer visible to you: say so rather than showing the card's
+  // copy as a live post, and stop the feed listing it.
+  const postStatus = statusOf(postQuery.error);
   useEffect(() => {
-    if (open && postId) {
-      setPost(initialPost || null);
-      setComments(initialPost?.comments || []);
-      void loadPost(postId);
-    } else {
-      setPost(null);
-      setComments([]);
-    }
-    return () => { readVersion.current += 1; };
-  }, [currentUserId, initialPost, loadPost, open, postId]);
+    if (open && postId && (postStatus === 404 || postStatus === 403)) removePostFromFeedCaches(queryClient, postId);
+  }, [open, postId, postStatus, queryClient]);
+
+  // A refresh of the comments that failed keeps the ones shown and says so.
+  const commentsRefreshFailed = open && commentsQuery.isError && commentsQuery.data !== undefined;
+  useEffect(() => {
+    if (commentsRefreshFailed) showToast('Could not refresh comments. Close and reopen this post to retry.');
+  }, [commentsRefreshFailed, commentsQuery.errorUpdatedAt]);
 
   useEffect(() => {
     if (!open) {

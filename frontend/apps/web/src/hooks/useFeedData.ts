@@ -77,6 +77,9 @@ function buildFeedKey(
  * in My pulse then shows on its feed card when you come back; a stale card's next click would undo it.
  */
 export function patchPostInFeedCaches(queryClient: QueryClient, postId: string, patch: Partial<Post>) {
+  // The post's own kept copy (usePostDetail) takes the change too.
+  queryClient.setQueryData<{ post: Post | null; complete: boolean }>(queryKeys.postDetail(postId), (old) =>
+    old?.post ? { ...old, post: { ...old.post, ...patch } } : old);
   queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ['feed'] }, (old) => {
     if (!old) return old;
     return {

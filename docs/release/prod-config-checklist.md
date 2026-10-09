@@ -66,10 +66,7 @@ Each has a default that the steps below follow until you change it here.
   store builds then carry the matching `pk_test_` key (L4 adjusts the Android
   release guard, which demands `pk_live_`). A real card fails in test mode
   instead of being charged.
-- [x] **D5 Postcards.** Decided October 6, as recommended. Production won't start without Lob live settings:
-  `LOB_ENV=live`, a live key, the webhook secret and a real return address
-  (`LOB_FROM_*`; the defaults are a placeholder San Francisco address). Default:
-  provide them before production (step P5). Staging uses Lob test mode.
+- [x] **D5 Postcards.** Updated by the founder October 9: defer Lob, Google Address Validation and Smarty setup for the first public web release. Set `DEFER_ADDRESS_PROVIDER_SETUP=true` in the production backend only. Missing providers stay unavailable; no mock postcard may be sent or reported as sent. New address validation, Add Home without a fresh cached validation, and mail verification/invitations will fail until the providers are configured. When enabling Lob, provide `LOB_ENV=live`, a `live_` key, its webhook secret and a real return address (`LOB_FROM_*`; the defaults are a placeholder San Francisco address), then remove the deferral switch. Staging still requires its test providers.
 - [ ] **D6 Email.** Open (October 6): the founder is checking which email service is already paid for; use that one if it does SMTP. Default: Postmark SMTP for backend email and for Supabase
   Auth email, sending from `pantopus.com` with SPF, DKIM and DMARC.
 - [x] **D7 Error monitoring.** Decided October 6, as recommended. Default: off. Sentry and PostHog keys are optional
@@ -545,13 +542,14 @@ Write `~/pantopus/.env.prod` as in S4 from `hosted-secrets/production.env` and
 Appendix A's production column. **First move the June file aside**
 (`mv .env.prod .env.prod.june-2026`): the deploy reads `.env.prod` for the new
 containers, and none of the June settings (old database, old keys) may carry
-over. Then run S4's checks against `.env.prod`, including the Smarty lookup.
+over. Then run S4's checks against `.env.prod`; skip the Smarty lookup only
+while `DEFER_ADDRESS_PROVIDER_SETUP=true` and Smarty keys are absent.
 
 ### P6. GitHub `production` environment and first release (founder)
 
 Only after P1 to P5: the release needs the server's address, a database with
-every migration, Auth, and `.env.prod` (production startup refuses to run
-without the live Lob settings, D5). Same secrets as S5 with production values
+every migration, Auth, and `.env.prod` (use the explicit provider deferral in
+D5 if the live keys are not ready). Same secrets as S5 with production values
 (the production project's ref and database password); variables
 `BACKEND_API_BIND=127.0.0.1:8000`, `SUPABASE_SESSION_POOLER_HOST` from the
 production project's **Connect** dialog and `DB_MIGRATIONS_ENABLED=true` (P2A's
@@ -577,8 +575,9 @@ containers are healthy on the server.
   `https://api.pantopus.com/api/webhooks/stripe`, events as listed in
   `backend/stripe/stripeWebhooks.js`; put its signing secret in
   `STRIPE_WEBHOOK_SECRET`.
-- Lob (live): webhook `https://api.pantopus.com/api/v1/webhooks/lob`; its
-  secret in `LOB_WEBHOOK_SECRET`.
+- Lob (live, when mail is enabled): webhook
+  `https://api.pantopus.com/api/v1/webhooks/lob`; its secret in
+  `LOB_WEBHOOK_SECRET`.
 
 ### P8. Production scheduled jobs (founder runs, L4 prepared)
 
@@ -770,8 +769,9 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `TRUST_PROXY` | `1` | `1` (or `2` behind Cloudflare's proxy, P1) | |
 | `INTERNAL_API_KEY`, `CSRF_SECRET`, `STEP_UP_SECRET`, `LOCATION_JITTER_SECRET`, `EMAIL_INBOUND_HMAC_SECRET`, `HOME_POSTCARD_CODE_KEYS_JSON`, `HOME_POSTCARD_CODE_ACTIVE_KEY` | gen | gen | `hosted-secrets/` |
 | `EDGE_PROXY_SECRET` | gen | gen | `hosted-secrets/`; the same value goes into Vercel (S7, P9) |
-| `GOOGLE_ADDRESS_VALIDATION_API_KEY`, `GOOGLE_PLACES_API_KEY` | required | required | Google Cloud (restrict to the server's IP) |
-| `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active; S4 checks it) |
+| `GOOGLE_ADDRESS_VALIDATION_API_KEY`, `GOOGLE_PLACES_API_KEY` | required | deferred for first web release | Google Cloud (restrict to the server's IP) |
+| `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | deferred for first web release | Smarty (subscription must be active; S4 checks it) |
+| `DEFER_ADDRESS_PROVIDER_SETUP` | unset | `true` until the live Google, Smarty and Lob settings are ready; then remove | production-only startup switch, D5 |
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
 | `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
@@ -779,10 +779,10 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `OPENAI_API_KEY` | required for AI features | required for AI features | OpenAI project with a budget cap |
 | `OPENAI_CHAT_MODEL`, `OPENAI_DRAFT_MODEL` | `gpt-6-luna` | `gpt-6-luna` | the model the streams verify against locally (a reasoning model: code paths pass `max_completion_tokens`, no custom `temperature`) |
 | `PROPERTY_SUGGESTIONS_LLM_MODEL`, `MAGIC_TASK_AI_MODEL` | unset | unset | their defaults (`gpt-4o-mini`, `gpt-4o`) match how those calls are written; a reasoning model there rejects `max_tokens`/`temperature` |
-| `LOB_ENV` | `test` | `live` | D5 |
-| `LOB_API_KEY` | `test_…` | `live_…` | Lob |
-| `LOB_WEBHOOK_SECRET` | Lob test webhook | Lob live webhook | Lob → Webhooks |
-| `LOB_FROM_NAME`, `LOB_FROM_ADDRESS_LINE1`, `LOB_FROM_CITY`, `LOB_FROM_STATE`, `LOB_FROM_ZIP` | test address | real return address | D5 |
+| `LOB_ENV` | `test` | `live` when Lob is enabled | D5 |
+| `LOB_API_KEY` | `test_…` | deferred; `live_…` when enabled | Lob |
+| `LOB_WEBHOOK_SECRET` | Lob test webhook | deferred; live webhook secret when enabled | Lob → Webhooks |
+| `LOB_FROM_NAME`, `LOB_FROM_ADDRESS_LINE1`, `LOB_FROM_CITY`, `LOB_FROM_STATE`, `LOB_FROM_ZIP` | test address | real return address before enabling mail | D5 |
 | `STRIPE_SECRET_KEY` | `sk_test_…` (required) | per D4 | Stripe |
 | `STRIPE_PUBLISHABLE_KEY` | `pk_test_…` | per D4 | Stripe |
 | `STRIPE_WEBHOOK_SECRET` | test endpoint's `whsec_…` | per D4 | Stripe → Webhooks (P7) |
@@ -799,9 +799,12 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `LAUNCH_FEATURES` | empty | empty | launch cuts stay off |
 | `HOUSEHOLD_CLAIM_V2_READ_PATHS`, `HOUSEHOLD_CLAIM_PARALLEL_SUBMISSION`, `HOUSEHOLD_CLAIM_CHALLENGE_FLOW`, `HOUSEHOLD_CLAIM_ADMIN_COMPARE` | `true` | `true` | the ownership-claim behaviour the apps were verified against locally (a second claimant on a Home gets a parallel claim, not a refusal); unset, all four default to `false`, the older claim path |
 
-Startup refuses a production process without `CSRF_SECRET`, `STEP_UP_SECRET`,
-the Google, Smarty and Lob keys, `LOB_WEBHOOK_SECRET` and the right `LOB_ENV`,
-and refuses staging without test Lob and Stripe keys.
+Startup still requires `CSRF_SECRET` and `STEP_UP_SECRET`. By default it also
+requires Google, Smarty and live Lob settings. Only the explicit production
+deferral permits those providers to be absent; a configured Lob sender still
+requires its live key, `LOB_ENV=live` and webhook secret. Staging still requires
+test Lob and Stripe keys. Provider deferral does not cover other production
+settings such as Supabase, SMTP or payment configuration.
 
 ## Appendix B. Costs (prices checked September 22, 2026)
 
