@@ -20,6 +20,13 @@
 //  (`src/app/homes/[id]/settings/index.tsx:89-108`) — which PATCHes
 //  `/api/homes/:id`. Everything else is still navigation.
 //
+//  Instant Screens: the Home (shared with the dashboard), its occupants and
+//  your access go through the screen store (Homes, 2 minutes, topic
+//  `home:{id}`), so coming back from a sub-screen shows the index at once
+//  and asks again only once it is out of date. Only an owner's or household
+//  member's open-ended access, as the Home dashboard last confirmed it, sees
+//  the copy before the re-check (`HomeCopyGate`).
+//
 
 import Foundation
 import Observation
@@ -56,6 +63,8 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
     public private(set) var footerCaption: String?
 
     public private(set) var state: GroupedListState = .loading
+    public var refreshFailureMessage: String?
+    public private(set) var staleNotice: String?
 
     public let homeId: String
     /// Identity strip above the first group. Seeded from sample for
@@ -98,6 +107,7 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
     /// Non-nil → preview / test seam (project the sample frame, no fetch).
     private let sampleFrame: HomeSettingsSampleData.Frame?
     private let client: APIClient
+    private let store: ScreenStore
 
     /// Row subtexts resolved for the active frame. The seeded path fills
     /// every slot from the sample fixture; the live path fills only the
@@ -144,12 +154,15 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         self.homeId = homeId
         sampleFrame = frame
         self.client = client
+        store = ScreenStore.store(for: client)
         self.onNavigate = onNavigate
         let resolved = frame ?? HomeSettingsSampleData.frame(forHomeId: homeId)
         self.frame = resolved
         identity = HomeSettingsSampleData.identity(for: resolved)
         footerCaption = HomeSettingsSampleData.footer(for: resolved)
         subtexts = Self.sampleSubtexts(for: resolved)
+        // The store's copy shows in the first frame (Instant Screens), for household access only.
+        if frame == nil { showCopy() }
     }
 
     public func load() async {
@@ -164,29 +177,44 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
             return
         }
 
-        state = .loading
+        await fetch(force: false)
+    }
+
+    private var showsContent: Bool {
+        if case .loaded = state { return true }
+        return false
+    }
+
+    /// The index as last read, when it may show before the re-check.
+    private func showCopy() {
+        if let copy = HomeSettingsStoreReads.copy(homeId: homeId, store: store) { show(copy) }
+    }
+
+    private func show(_ reads: HomeSettingsReads) {
+        apply(detail: reads.detail, occupants: reads.occupants, access: reads.access)
+        staleNotice = reads.refreshNotice
+        state = .loaded(groups())
+    }
+
+    private func fetch(force: Bool) async {
+        let household = HomeCopyGate.showsCopy(homeId: homeId, store: store)
+        // Without household access in hand, every visit waits for the server.
+        let read = force || !household
+        if !read { showCopy() }
+        if !showsContent { state = .loading }
         do {
-            // Member counts + viewer access are best-effort — a failure on
-            // either still lets the identity card + navigation render.
-            async let detailRequest = client.request(
-                HomesEndpoints.detail(homeId: homeId),
-                as: HomeDetailResponse.self
-            )
-            async let occupantsResult = client.perform(
-                HomesEndpoints.listOccupants(homeId: homeId),
-                as: OccupantsResponse.self
-            )
-            async let accessResult = client.perform(
-                HomeAdminEndpoints.myAccess(homeId: homeId),
-                as: HomeAccessDTO.self
-            )
-            let detail = try await detailRequest
-            let occupants = try? await (occupantsResult).get()
-            let access = try? await (accessResult).get()
-            apply(detail: detail.home, occupants: occupants, access: access)
-            state = .loaded(groups())
+            try await show(HomeSettingsStoreReads.read(homeId: homeId, store: store, force: read, household: household))
+        } catch is CancellationError {
+            return
         } catch {
-            state = .error(message: "We couldn't load this home's settings. Check your connection and try again.")
+            let message = "We couldn't load this home's settings. Check your connection and try again."
+            guard showsContent, !ScreenStore.isRefusal(error) else {
+                state = .error(message: message)
+                return
+            }
+            // The index stays; the "Couldn't refresh" line says how old it is.
+            if force { refreshFailureMessage = message }
+            staleNotice = store.peek(HomesEndpoints.detail(homeId: homeId), as: HomeDetailResponse.self)?.refreshNotice
         }
     }
 
@@ -237,7 +265,9 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
                 as: UpdateHomeResponse.self
             )
             isRenaming = false
-            await load()
+            // Your rename: this Home's entries and the home lists are out of date.
+            store.markStale(topics: [ScreenTopic.home(homeId), ScreenTopic.homes])
+            await fetch(force: true)
         } catch {
             renameError = (error as? APIError)?.errorDescription
                 ?? "Couldn't rename this home. Try again."
