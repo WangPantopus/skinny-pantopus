@@ -37,15 +37,18 @@ struct TodaySkyPainter {
         moment.phase == .night
     }
 
-    /// `rise` (0...1) lifts the sun or moon into its place as the card loads.
-    func paint(_ context: GraphicsContext, size: CGSize, time: Double, rise: Double = 1) {
+    /// `rise` (0...1) lifts the sun or moon into its place as the card loads;
+    /// `drift` lowers the stars, sun or moon and clouds as the card scrolls away.
+    func paint(_ context: GraphicsContext, size: CGSize, time: Double, rise: Double = 1, drift: Double = 0) {
         let scene = Scene(size: size, time: still ? 2 : time, sky: SkyPalette.sky(moment.phase, weather), rise: rise)
         let clear = weather == .clear || weather == .partly
         paintSky(context, scene)
-        if night, clear { paintStars(context, scene) }
-        if night, clear, meteorShower { paintMeteors(context, scene) }
-        if night { paintMoon(context, scene) } else { paintSun(context, scene) }
-        paintClouds(context, scene)
+        var far = context
+        far.translateBy(x: 0, y: drift)
+        if night, clear { paintStars(far, scene) }
+        if night, clear, meteorShower { paintMeteors(far, scene) }
+        if night { paintMoon(far, scene) } else { paintSun(far, scene) }
+        paintClouds(far, scene)
         paintRain(context, scene)
         paintSnow(context, scene)
         if condition == .wind { paintWind(context, scene) }
@@ -356,8 +359,9 @@ extension TodaySkyPainter {
 
     private func glow(_ context: GraphicsContext, _ scene: Scene, _ glow: Glow) {
         let gradient = Gradient(colors: [glow.color.color(opacity: glow.opacity), glow.color.color(opacity: 0)])
+        // Taller than the card, so a drifted glow never shows its edge.
         context.fill(
-            Path(CGRect(origin: .zero, size: scene.size)),
+            Path(CGRect(x: 0, y: -80, width: scene.width, height: scene.height + 160)),
             with: .radialGradient(gradient, center: glow.center, startRadius: 0, endRadius: glow.radius)
         )
     }

@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -116,6 +118,9 @@ fun TodaySkyHero(
     val current = SkyView.at(now, null, data, sun, pickups, air)
     val shown = if (picked == null) current else SkyView.at(now, picked, data, sun, pickups, air)
     val sky = SkyPalette.sky(shown.moment.phase, skyWeather(shown.weather.conditionCode))
+    // How far the card has scrolled above the top of the page (dp): the sky's far layer lags behind.
+    val hidden = remember { mutableFloatStateOf(0f) }
+    val pxPerDp = LocalDensity.current.density
     val shape = RoundedCornerShape(20.dp)
     Box(
         modifier =
@@ -132,6 +137,8 @@ fun TodaySkyHero(
                 .onGloballyPositioned {
                     val bounds = it.boundsInWindow()
                     onScreen = bounds.bottom > 0f && bounds.top < screenHeight
+                    // The scroll container clips the bounds, so the difference is what's scrolled away.
+                    hidden.floatValue = ((bounds.top - it.positionInWindow().y) / pxPerDp).coerceAtLeast(0f)
                 }.skyScrubGesture(hours.size, scrub)
                 .testTag("todaySkyHero"),
     ) {
@@ -159,7 +166,9 @@ fun TodaySkyHero(
                 val progress = if (animating && view.time == now) ((System.currentTimeMillis() - shownAt) / 900f).coerceIn(0f, 1f) else 1f
                 val rise = 1 - (1 - progress) * (1 - progress) * (1 - progress)
                 withTransform({ scale(perDp, perDp, pivot = Offset.Zero) }) {
-                    painter.paint(this, size.width / perDp, size.height / perDp, t, rise)
+                    // A third of the way behind, never more than 60 dp, and not with animations off.
+                    val drift = if (reduced) 0f else (hidden.floatValue * 0.3f).coerceAtMost(60f)
+                    painter.paint(this, size.width / perDp, size.height / perDp, t, rise, drift)
                 }
             }
         }

@@ -43,6 +43,9 @@ struct TodaySkyHero: View {
     @State private var scrub: Int?
     /// When the card appeared or got new data: the sun or moon rises into place.
     @State private var shownAt = Date.distantPast
+    /// How far the card has scrolled above the top of the page: the sky's far
+    /// layer lags behind (a gentle parallax).
+    @State private var hidden: CGFloat = 0
 
     private var animating: Bool {
         !reduceMotion && !lowPower && scenePhase == .active && onScreen && appeared
@@ -111,6 +114,7 @@ struct TodaySkyHero: View {
             lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
         .modifier(ScrollVisibility(onScreen: $onScreen))
+        .onGeometryChange(for: CGFloat.self) { max(0, -$0.frame(in: .scrollView).minY).rounded() } action: { hidden = $0 }
         // A container, so the bins button keeps its own identifier.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("todaySkyHero")
@@ -156,7 +160,9 @@ struct TodaySkyHero: View {
                     context,
                     size: size,
                     time: frame.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 86400),
-                    rise: rise
+                    rise: rise,
+                    // A third of the way behind, never more than 60 pt, and not with Reduce Motion.
+                    drift: reduceMotion ? 0 : min(Double(hidden) * 0.3, 60)
                 )
             }
         }

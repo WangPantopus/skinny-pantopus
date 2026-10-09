@@ -73,22 +73,28 @@ class TodaySkyPainter(
             0f
         }
 
-    /** [rise] (0..1) lifts the sun or moon into its place as the card loads. */
+    /**
+     * [rise] (0..1) lifts the sun or moon into its place as the card loads; [drift] lowers the stars,
+     * sun or moon and clouds as the card scrolls away.
+     */
     fun paint(
         scope: DrawScope,
         width: Float,
         height: Float,
         time: Double,
         rise: Float = 1f,
+        drift: Float = 0f,
     ) {
         val scene = SkyScene(width, height, if (still) 2.0 else time, SkyPalette.sky(moment.phase, weather), rise)
         val clear = weather == SkyPalette.Weather.CLEAR || weather == SkyPalette.Weather.PARTLY
         with(scope) {
             paintSky(scene)
-            if (night && clear) paintStars(scene)
-            if (night && clear && details.meteorShower) paintMeteors(scene, still)
-            if (night) paintMoon(scene) else paintSun(scene)
-            paintClouds(scene)
+            translate(0f, drift) {
+                if (night && clear) paintStars(scene)
+                if (night && clear && details.meteorShower) paintMeteors(scene, still)
+                if (night) paintMoon(scene) else paintSun(scene)
+                paintClouds(scene)
+            }
             paintRain(scene)
             paintSnow(scene)
             if (condition == WeatherConditionCode.WIND) paintWind(scene)
@@ -382,9 +388,11 @@ class TodaySkyPainter(
         color: Color,
         opacity: Float,
     ) {
+        // Taller than the card, so a drifted glow never shows its edge.
         drawRect(
             brush = Brush.radialGradient(listOf(color.copy(alpha = opacity), color.copy(alpha = 0f)), center = center, radius = radius),
-            size = Size(scene.width, scene.height),
+            topLeft = Offset(0f, -80f),
+            size = Size(scene.width, scene.height + 160),
         )
     }
 
