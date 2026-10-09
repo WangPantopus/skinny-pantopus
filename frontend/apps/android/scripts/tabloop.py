@@ -4,7 +4,8 @@
 Place -> Today -> Nearby -> Messages -> back to Place, N rounds; optionally a cold start first and the loop
 again in airplane mode. Per tab it prints:
   - requests per visit, read from the local backend's log (lines "<ISO time> [info]: GET /api/... {..okhttp..}")
-  - "content ms": tap to content on screen, from the debug build's ISPerf lines (core/perf/ScreenTiming.kt)
+  - "content ms": tap to the content that stayed on screen, from the debug build's ISPerf lines
+    (core/perf/ScreenTiming.kt); "blanks": how often content the visit showed dropped to a skeleton or an error
   - "settled ms": tap to the visit's last HTTP reply on the phone (debug HTTP log lines)
 It never prints tokens, ids or response bodies.
 
@@ -110,12 +111,18 @@ def summarize(log_path, visits, events, detail):
     for v in visits:
         reqs = backend_requests(log_path, v["t0"], v["t1"])
         http = [e for e in events if e[1] == "HTTP" and v["t0"] <= e[0] < v["t1"]]
-        perf = [e for e in events if e[1] == "ISPerf" and v["t0"] <= e[0] < v["t1"] and e[2].startswith("content")]
+        perf = [e for e in events if e[1] == "ISPerf" and v["t0"] <= e[0] < v["t1"] and e[2].split(" ")[0] in ("content", "blank")]
         settled = (max(e[0] for e in http) - v["t0"]) if http else 0
-        since = [int(m.group(1)) for e in perf if (m := re.search(r"sinceTap=(\d+)", e[2]))]
-        content = since[0] if since else ((min(e[0] for e in perf) - v["t0"]) if perf else None)
-        rows.setdefault((v["note"], v["tab"]), []).append((len(reqs), settled, content, reqs))
-    print(f"{'run':9} {'tab':11} {'visits':>6} {'req/visit':>9} {'first':>5} {'later':>5} {'content ms':>11} {'settled ms':>11}")
+        blanks = sum(1 for e in perf if e[2].startswith("blank"))
+        # The content that stayed: the visit's last content line, unless the screen ended blank (skeleton or error).
+        last = perf[-1] if perf else None
+        content = None
+        if last and last[2].startswith("content"):
+            m = re.search(r"sinceTap=(\d+)", last[2])
+            content = int(m.group(1)) if m else last[0] - v["t0"]
+        rows.setdefault((v["note"], v["tab"]), []).append((len(reqs), settled, content, reqs, blanks))
+    print(f"{'run':9} {'tab':11} {'visits':>6} {'req/visit':>9} {'first':>5} {'later':>5} {'content ms':>11} {'blanks':>6} "
+          f"{'no content':>10} {'settled ms':>11}")
     for (note, tab), vals in rows.items():
         req = [v[0] for v in vals]
         later = req[1:]
@@ -123,11 +130,12 @@ def summarize(log_path, visits, events, detail):
         print(f"{note:9} {tab:11} {len(vals):>6} {statistics.mean(req):>9.1f} {req[0]:>5} "
               f"{(statistics.mean(later) if later else 0):>5.1f} "
               f"{(statistics.median(content) if content else float('nan')):>11.0f} "
+              f"{sum(v[4] for v in vals):>6} {sum(1 for v in vals if v[2] is None):>10} "
               f"{statistics.median([v[1] for v in vals]):>11.0f}")
     if detail:
         for (note, tab), vals in rows.items():
             for i, v in enumerate(vals):
-                print(f"  {note} {tab} visit {i + 1}: content {v[2]} ms, {v[0]} requests: {', '.join(v[3])}")
+                print(f"  {note} {tab} visit {i + 1}: content {v[2]} ms, {v[4]} blanks, {v[0]} requests: {', '.join(v[3])}")
 
 
 def main():
