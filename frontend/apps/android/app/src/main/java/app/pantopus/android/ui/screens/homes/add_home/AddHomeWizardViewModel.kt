@@ -209,6 +209,10 @@ open class AddHomeWizardViewModel
         private var retainsDraft = true
         private var addressRevision = 0L
         private var addressJob: Job? = null
+
+        /** The search [applyInitialSearchQuery] ran: left untouched, it isn't progress to discard. */
+        private var prefilledSearchQuery: String? = null
+
         private val _state =
             MutableStateFlow(
                 restoreFormState().let { form ->
@@ -368,6 +372,20 @@ open class AddHomeWizardViewModel
         }
 
         fun retryAddressSearch() = updateSearchQuery(_state.value.homeSearchQuery)
+
+        /**
+         * The saved address "Set up a Home" came from (nav arg `address`): searched once on first
+         * appearance, unless a restored draft already filled the form. The person still picks the match.
+         */
+        fun applyInitialSearchQuery() {
+            val query = savedStateHandle.get<String>(KEY_INITIAL_ADDRESS)?.trim().orEmpty()
+            if (query.isEmpty()) return
+            savedStateHandle.remove<String>(KEY_INITIAL_ADDRESS)
+            val current = _state.value
+            if (current.form != AddHomeFormState.EMPTY || current.homeSearchQuery.isNotEmpty()) return
+            prefilledSearchQuery = query
+            updateSearchQuery(query)
+        }
 
         fun clearSearchQuery() = updateSearchQuery("")
 
@@ -1421,7 +1439,7 @@ open class AddHomeWizardViewModel
                     step != AddHomeStep.Success &&
                         (
                             state.selectedHomeId != null ||
-                                state.homeSearchQuery.isNotEmpty() ||
+                                (state.homeSearchQuery.isNotEmpty() && state.homeSearchQuery != prefilledSearchQuery) ||
                                 listOf(
                                     state.form.address.street, state.form.address.unit, state.form.address.city,
                                     state.form.address.state, state.form.address.zipCode,
@@ -1487,6 +1505,10 @@ open class AddHomeWizardViewModel
             private val REFUSAL_CODES = setOf(400, 422, 429)
             private const val MIN_SEARCH_CHARACTERS = 3
             private const val SEARCH_DEBOUNCE_MILLIS = 300L
+
+            /** Nav arg of `homes/add?address=…` ("Set up a Home" from a saved address). */
+            private const val KEY_INITIAL_ADDRESS = "address"
+
             private const val KEY_SCOPE = "addHome.sessionScope"
             private const val KEY_STEP = "addHome.step"
             private const val KEY_STREET = "addHome.street"
