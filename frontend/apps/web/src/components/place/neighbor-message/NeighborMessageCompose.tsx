@@ -31,6 +31,7 @@ import { DetailHeader, IconTile } from '@/components/archetypes/place';
 import { detailAddress } from '@/components/place/detail/sections';
 import VerifyPromptSheet from '@/components/place/VerifyPromptSheet';
 import NeighborMessageComposeView, { type ComposeRecipient } from './NeighborMessageComposeView';
+import { usePrimaryHome } from '@/lib/primaryHome';
 
 const REDIRECT_TO = encodeURIComponent('/app/place/neighbor-message');
 
@@ -66,12 +67,7 @@ export default function NeighborMessageCompose() {
   }, [mounted, router]);
   const authed = mounted && !!getAuthToken();
 
-  const homeQuery = useQuery({
-    queryKey: queryKeys.placePrimaryHome(),
-    queryFn: () => api.homes.getPrimaryHome(),
-    enabled: authed,
-    staleTime: 60_000,
-  });
+  const homeQuery = usePrimaryHome({ enabled: authed });
   const home = homeQuery.data?.home ?? null;
   const homeId = home?.id ?? null;
 

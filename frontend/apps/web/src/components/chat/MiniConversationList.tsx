@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import * as api from '@pantopus/api';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UnifiedConversationItem, ConversationTopic } from '@pantopus/types';
 import { getInitials } from '@pantopus/ui-utils';
 import { useSocketEvent } from '../../hooks/useSocket';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername } from '@pantopus/utils';
+import { conversationsQuery, type ConversationsReply } from '@/lib/conversations';
+import { useMe } from '@/lib/me';
 
 interface MiniConversationListProps {
   onSelectConversation: (chat: {
@@ -33,33 +35,31 @@ function timeAgo(dateStr: string | null | undefined): string {
 }
 
 export default function MiniConversationList({ onSelectConversation }: MiniConversationListProps) {
-  const [conversations, setConversations] = useState<UnifiedConversationItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The same Messages list the Messages page shows (lib/conversations.ts):
+  // opening the widget again shows it at once and refreshes quietly.
+  const queryClient = useQueryClient();
+  const listQuery = useQuery(conversationsQuery());
+  const conversations = (listQuery.data?.conversations ?? []) as UnifiedConversationItem[];
+  const loading = listQuery.isPending;
+  const error = listQuery.isError && !listQuery.data ? 'Failed to load conversations' : null;
+  const fetchConversations = useCallback(() => { void listQuery.refetch(); }, [listQuery]);
+  const myId = useMe().data?.id;
 
-  const fetchConversations = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.chat.getUnifiedConversations({ limit: 50 });
-      setConversations((result?.conversations || []) as UnifiedConversationItem[]);
-    } catch {
-      setError('Failed to load conversations');
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchConversations(); }, [fetchConversations]);
-
-  // Real-time: when a new message arrives, update preview and bump to top
+  // Real-time: when a new message arrives, update preview and bump to top.
+  // (The widget is never open on /app/chat, whose page applies the same update.)
   useSocketEvent('message:new', useCallback((msg: Record<string, any>) => {
     if (!msg?.room_id) return;
     const roomId = String(msg.room_id);
     const msgText = (msg.message_text as string) || (msg.message as string) || '';
     const createdAt = (msg.created_at as string) || new Date().toISOString();
+    // Your own messages (sent from another tab or device) are never unread.
+    const senderId = String(msg.user_id || msg.sender_id || msg?.sender?.id || '');
+    const isOwn = !!myId && senderId === String(myId);
 
     let shouldReload = false;
-    setConversations(prev => {
+    queryClient.setQueryData<ConversationsReply>(conversationsQuery().queryKey, (old) => {
+      if (!old) return old;
+      const prev = (old.conversations || []) as UnifiedConversationItem[];
       const idx = prev.findIndex(conv =>
         conv._type === 'room'
           ? String(conv.id) === roomId
@@ -68,22 +68,25 @@ export default function MiniConversationList({ onSelectConversation }: MiniConve
 
       if (idx === -1) {
         shouldReload = true;
-        return prev;
+        return old;
       }
 
       const updated = { ...prev[idx] };
       updated.last_message_preview = msgText.substring(0, 100) || '[Attachment]';
       updated.last_message_at = createdAt;
-      updated.total_unread = (updated.total_unread || 0) + 1;
+      if (!isOwn) updated.total_unread = (updated.total_unread || 0) + 1;
 
-      const next = [updated as UnifiedConversationItem, ...prev.filter((_, i) => i !== idx)];
-      return next;
+      return {
+        ...old,
+        conversations: [updated as UnifiedConversationItem, ...prev.filter((_, i) => i !== idx)],
+        totalUnread: Number(old.totalUnread || 0) + (isOwn ? 0 : 1),
+      };
     });
 
     if (shouldReload) {
-      void fetchConversations();
+      void queryClient.invalidateQueries({ queryKey: conversationsQuery().queryKey });
     }
-  }, [fetchConversations]));
+  }, [queryClient, myId]));
 
   if (loading) {
     return (

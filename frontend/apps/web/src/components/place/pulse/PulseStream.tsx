@@ -29,6 +29,7 @@ import { DetailHeader, PlaceHomeContext } from '@/components/archetypes/place';
 import { detailAddress } from '@/components/place/detail/sections';
 import PulseStreamView from './PulseStreamView';
 import PlaceShell from '../PlaceShell';
+import { usePrimaryHome } from '@/lib/primaryHome';
 
 const REDIRECT_TO = encodeURIComponent('/app/place/pulse');
 
@@ -84,12 +85,7 @@ export default function PulseStream() {
   const authed = mounted && !!getAuthToken();
 
   // 1) Resolve the resident's primary home (the default place).
-  const homeQuery = useQuery({
-    queryKey: queryKeys.placePrimaryHome(),
-    queryFn: async () => api.homes.getPrimaryHome(),
-    enabled: authed,
-    staleTime: 60_000,
-  });
+  const homeQuery = usePrimaryHome({ enabled: authed });
 
   // The switcher's place (?home=) when there is one, else the primary home.
   const switchedHome = useContext(PlaceHomeContext);

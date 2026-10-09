@@ -108,6 +108,15 @@ function currentRequestSession(): string {
   return `${_authChangeSequence}:${marker}`;
 }
 
+/**
+ * A non-secret marker that changes whenever this browser's signed-in session
+ * does (sign-in, sign-out, an account switch, here or in another tab). Caches
+ * compare it so data from another session is never read back.
+ */
+export function authSessionMarker(): string {
+  return currentRequestSession();
+}
+
 function requestSessionChanged(request?: InternalAxiosRequestConfig): boolean {
   const marker = (request as SessionBoundRequest | undefined)?._authSessionMarker;
   return _isWeb && marker !== undefined && marker !== currentRequestSession();

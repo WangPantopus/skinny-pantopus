@@ -18,6 +18,7 @@ import ImageLightbox from './ImageLightbox';
 import MessageReactionBar from './MessageReactionBar';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { launchFeatures } from '@/lib/featureFlags';
+import { fetchMe } from '@/lib/me';
 
 // Launch cut #4 (Open Gigs): bidding is hidden, so the pre-bid chat limit does not point to it.
 const PRE_BID_LIMIT_MESSAGE = launchFeatures.openGigs
@@ -55,7 +56,7 @@ export default function ChatRoomView({
   useEffect(() => {
     (async () => {
       try {
-        const userData = await api.users.getMyProfile() as { id?: string };
+        const userData = await fetchMe() as { id?: string };
         setCurrentUserId(userData?.id || null);
       } catch {}
     })();

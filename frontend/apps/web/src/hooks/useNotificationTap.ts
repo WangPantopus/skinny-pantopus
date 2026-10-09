@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { Notification } from '@pantopus/types';
+import { fetchMe } from '@/lib/me';
 
 /** Keep an awaited notification interaction within its opening account and view. */
 export function useNotificationTap(enabled = true) {
@@ -42,7 +43,7 @@ export function useNotificationTap(enabled = true) {
     };
     if (!current() || !notification.user_id) return;
     try {
-      const profile = await api.users.getMyProfile();
+      const profile = await fetchMe();
       if (!current() || profile.id !== notification.user_id) return;
     } catch { return; }
     if (!notification.is_read) {

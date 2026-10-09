@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
+const compression = require('compression');
 const fs = require('fs');
 const dotenvPath = fs.existsSync('.env') ? '.env' : '.env.dev';
 require('dotenv').config({ path: dotenvPath });
@@ -235,6 +236,13 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
 
 // Cookie parsing (AUTH-3.3) — after body parsers, after webhook routes
 app.use(cookieParser());
+
+// Compress JSON answers over 1 KB for clients that accept it (the apps' HTTP stacks and browsers do, and decompress
+// transparently). Only JSON: event streams must flush as they go, and files keep their own encoding.
+const JSON_TYPE = /^application\/(?:[\w.+-]+\+)?json\b/i;
+app.use(compression({
+  filter: (req, res) => JSON_TYPE.test(String(res.getHeader('Content-Type') || '')) && compression.filter(req, res),
+}));
 
 // NOTE: CSRF protection is applied per-route AFTER verifyToken (which
 // sets req._authMethod). See verifyToken.js for the combined middleware.

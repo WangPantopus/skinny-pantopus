@@ -3,6 +3,7 @@ import type { ResidencyReviewAction, ResidencyReviewRole, ResidencyReview } from
 import { PendingResidencyReviewStore, type ResidencyReviewSnapshot } from './PendingResidencyReviewStore';
 import { UUID, validReview, validReceipt, canDecide, type PendingResidencyReview } from './residencyReviewModel';
 import { chosenUsername } from '@pantopus/utils';
+import { fetchMe } from '@/lib/me';
 
 /** Opening account/session, current ordinary authority and one original per Home. */
 export class ResidencyReviewController {
@@ -32,7 +33,7 @@ export class ResidencyReviewController {
   async open() {
     this.current();
     if (!UUID.test(this.homeId) || (this.requestedClaim && !UUID.test(this.requestedClaim))) throw new Error('This claim link is invalid.');
-    const profile = await api.users.getMyProfile(); this.current();
+    const profile = await fetchMe(); this.current();
     if (!UUID.test(profile.id)) throw new Error('Your account could not be verified.');
     this.actorId = profile.id;
     this.store = new PendingResidencyReviewStore(this.origin, this.actorId, this.homeId);

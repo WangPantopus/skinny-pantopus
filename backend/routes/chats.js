@@ -326,6 +326,83 @@ function getVisibleMessagePreview(message) {
   return getAttachmentPreviewLabel(message.attachments || []);
 }
 
+// ── message:new ──────────────────────────────────────────────────────
+// Each active member hears a new message on all their devices, with what their
+// conversation list needs to update the row in place (Instant Screens contract
+// §8): `other_user_id` for a person-to-person chat (direct and task rooms, which
+// the lists merge into one row per person), `preview`, and `unread_for` where
+// the server knows that row's unread count exactly. A recipient's person row
+// just gains one; the sender's own devices never count their message, and when
+// their row isn't certain `other_user_id` stays out so the list reloads. Nobody
+// outside the room's active members hears it.
+
+// The sender's unread count on their row for `otherUserId`: every open direct and
+// task room the two share, as the unified list adds them up, without the room
+// just written to (the sender's own message is never unread to them).
+async function personRowUnread(userId, otherUserId, sentRoomId) {
+  const { data: mine, error } = await supabaseAdmin
+    .from('ChatParticipant')
+    .select('room_id, unread_count, room:room_id!inner(id, type, gig_id)')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .in('room.type', ['direct', 'gig']);
+  if (error || !Array.isArray(mine)) throw new Error(error?.message || 'rooms unavailable');
+  const candidates = mine.filter((row) => String(row.room_id) !== String(sentRoomId));
+  if (candidates.length === 0) return 0;
+  const [{ data: shared, error: sharedError }, closed] = await Promise.all([
+    supabaseAdmin
+      .from('ChatParticipant')
+      .select('room_id')
+      .eq('user_id', otherUserId)
+      .eq('is_active', true)
+      .in('room_id', candidates.map((row) => row.room_id)),
+    closedGigRoomIds(candidates.map((row) => row.room), userId),
+  ]);
+  if (sharedError || !Array.isArray(shared)) throw new Error(sharedError?.message || 'rooms unavailable');
+  const sharedIds = new Set(shared.map((row) => String(row.room_id)));
+  return candidates
+    .filter((row) => sharedIds.has(String(row.room_id)) && !closed.has(String(row.room_id)))
+    .reduce((sum, row) => sum + (Number(row.unread_count) || 0), 0);
+}
+
+async function emitNewMessage(io, { room, message, actorUserId, identityUserId }) {
+  const { connectedUsers } = require('../socket/chatSocketio');
+  const { data: members, error } = await supabaseAdmin
+    .from('ChatParticipant')
+    .select('user_id, unread_count')
+    .eq('room_id', room.id)
+    .eq('is_active', true);
+  if (error || !Array.isArray(members)) throw new Error(error?.message || 'members unavailable');
+  const actor = String(actorUserId);
+  const identity = String(identityUserId);
+  const others = members.filter((row) => ![actor, identity].includes(String(row.user_id)));
+  // Leftover members of an assigned task's room hear nothing, as with its pushes and badges.
+  const recipients = new Set(await gigRoomRecipients(room, others.map((row) => String(row.user_id))));
+  const personChat = room.type === 'direct' || room.type === 'gig';
+  const base = { ...message };
+  const preview = getVisibleMessagePreview(message);
+  if (typeof preview === 'string') base.preview = preview;
+  const emitTo = (userId, payload) => {
+    for (const socketId of connectedUsers.get(userId) || []) io.to(socketId).emit('message:new', payload);
+  };
+  for (const row of others) {
+    const userId = String(row.user_id);
+    if (!recipients.has(userId)) continue;
+    emitTo(userId, personChat
+      ? { ...base, other_user_id: identity }
+      : { ...base, unread_for: Number(row.unread_count) || 0 });
+  }
+  let own = base;
+  if (!personChat) {
+    own = { ...base, unread_for: 0 };
+  } else if (identity === actor && recipients.size === 1) {
+    const [counterpart] = recipients;
+    const unread = await personRowUnread(actor, counterpart, room.id).catch(() => null);
+    if (unread !== null) own = { ...base, other_user_id: counterpart, unread_for: unread };
+  }
+  emitTo(actor, own);
+}
+
 async function resolveRoomPreviewMap(roomPreviews, requestId, logContext) {
   const previewMap = {};
   const deletedRoomIds = [];
@@ -1855,7 +1932,13 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     // Strip actor_user_id from broadcast — it's internal business data.
     const io = req.app.get('io');
     if (io) {
-      io.to(roomId).emit('message:new', serializeChatMessageForViewer(message));
+      const broadcast = serializeChatMessageForViewer(message);
+      emitNewMessage(io, { room, message: broadcast, actorUserId: userId, identityUserId: senderUserId })
+        .catch((emitError) => {
+          // Without the members, the room still hears it as before (the lists reload).
+          logger.warn('message_new_personal_failed', { requestId, roomId, error: emitError.message });
+          io.to(roomId).emit('message:new', broadcast);
+        });
     }
 
     const sideEffectStamp = new Date().toISOString();

@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import * as api from "@pantopus/api";
 import type { ScopeOwners } from "./owners";
+import { fetchPrimaryHome } from "@/lib/primaryHome";
 
 function shortName(value: string | null | undefined, max = 22): string {
   const s = (value || "").trim();
@@ -34,7 +35,7 @@ export function useScopeOwners(): { owners: ScopeOwners; loading: boolean } {
     (async () => {
       const next = initial();
       try {
-        const { home } = await api.homes.getPrimaryHome();
+        const { home } = await fetchPrimaryHome();
         if (home?.id) {
           next.home = {
             owner: { ownerType: "home", homeId: home.id },

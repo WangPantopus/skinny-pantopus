@@ -219,22 +219,31 @@ describe('POST /api/chat/messages', () => {
     expect(messages[0].message).toBe('Hello world!');
   });
 
-  test('broadcasts message via socket.io to the room', async () => {
+  test("sends message:new to each member's open connections, with their conversation row", async () => {
     const { app, mockIo } = createApp();
+    const { connectedUsers } = require('../../socket/chatSocketio');
+    connectedUsers.set(U2, new Set(['socket-u2']));
+    try {
+      await request(app)
+        .post('/api/chat/messages')
+        .set('Authorization', 'Bearer test-token')
+        .send({
+          roomId: ROOM_D,
+          messageText: 'Socket test',
+          messageType: 'text',
+        });
+      // Delivered after the reply, once the room's members are read.
+      for (let i = 0; i < 50 && !mockIo.emit.mock.calls.length; i += 1) await new Promise((r) => setTimeout(r, 5));
 
-    await request(app)
-      .post('/api/chat/messages')
-      .set('Authorization', 'Bearer test-token')
-      .send({
-        roomId: ROOM_D,
-        messageText: 'Socket test',
-        messageType: 'text',
-      });
-
-    expect(mockIo.to).toHaveBeenCalledWith(ROOM_D);
-    expect(mockIo.emit).toHaveBeenCalledWith('message:new', expect.objectContaining({
-      message: 'Socket test',
-    }));
+      expect(mockIo.to).toHaveBeenCalledWith('socket-u2');
+      expect(mockIo.emit).toHaveBeenCalledWith('message:new', expect.objectContaining({
+        message: 'Socket test',
+        preview: 'Socket test',
+        other_user_id: U1,
+      }));
+    } finally {
+      connectedUsers.delete(U2);
+    }
   });
 
   test('emits badge update to all room participants', async () => {

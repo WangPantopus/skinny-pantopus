@@ -5,6 +5,7 @@ import { validPendingRecurrence, validRecurrenceState, validRecurrenceReceipt,
 import { TASK_UUID, validTask, validTaskFields, taskPatchMatches, validRetainedTaskCreate,
   type HomeTask, type HomeTaskPatch, type RetainedTaskCreate, type TaskCollection,
   type TaskResponse, type TaskCreationResponse } from './homeTaskModel';
+import { fetchMe } from '@/lib/me';
 
 export class TaskCreationFailure extends Error {
   readonly canAcknowledge: boolean;
@@ -71,7 +72,7 @@ export class HomeTaskClient {
   private async identify(revision: number) {
     this.requireCurrent(revision);
     if (!this.actor) {
-      const profile = await this.request(() => api.users.getMyProfile(), revision);
+      const profile = await this.request(() => fetchMe(), revision);
       if (!TASK_UUID.test(profile.id) || (this.scope && this.scope.actor_id !== profile.id)) {
         this.retire(); throw api.taskSessionChanged();
       }

@@ -22,6 +22,7 @@ const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const { getHubToday, clearHubTodayCache } = require('../services/context/providerOrchestrator');
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
+const { stableEtag } = require('../utils/stableEtag');
 const { recordFunnelEvent, APP_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
@@ -692,8 +693,10 @@ router.get('/today', verifyToken, async (req, res) => {
     const result = await getHubToday(req.user.id);
     // Revalidate on every read (the ETag keeps an unchanged payload cheap): the
     // payload is the viewer's own area and home signals, so a device cache must
-    // never hand it to the next account or keep it after an area change.
+    // never hand it to the next account or keep it after an area change. The
+    // ETag leaves out the build timestamps, so unchanged content answers 304.
     res.set('Cache-Control', 'private, no-cache');
+    res.set('ETag', stableEtag(result));
     res.json(result);
   } catch (err) {
     logger.error('Hub today error', { error: err.message, userId: req.user.id });
