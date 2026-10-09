@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.homes.HomeTaskSessionDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeTasksRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import io.mockk.coEvery
@@ -35,7 +36,7 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HouseholdTaskDetailViewModelTest {
-    private val repository = mockk<HomeTasksRepository>()
+    private val repository = mockk<HomeTasksRepository>(relaxUnitFun = true)
     private val identity = HomeClaimScopeTestFixture()
     private val server = HomeTaskSessionDto("user-1", "home", "a".repeat(64))
     private val task = HomeTaskDto("task", "home", "chore", "Private title", capabilities = HomeTaskCapabilitiesDto(true, true, true))
@@ -49,7 +50,18 @@ class HouseholdTaskDetailViewModelTest {
                 SavedStateHandle(mapOf("homeId" to "home", "taskId" to "task")),
             )
         coEvery { repository.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(HomeTaskResponse(task, server))
+        // The screens' store hands back what the endpoint answered (Instant Screens).
+        coEvery { repository.getHomeTaskStored(any(), any(), any(), any(), any()) } coAnswers {
+            repository.getHomeTask(firstArg(), secondArg(), thirdArg(), arg(3)).stored()
+        }
     }
+
+    /** What the screens' store hands back for a read with this outcome. */
+    private fun <T : Any> NetworkResult<T>.stored(): Stored<T> =
+        when (this) {
+            is NetworkResult.Success -> Stored(data, fetchedAt = System.currentTimeMillis())
+            is NetworkResult.Failure -> Stored(failure = error)
+        }
 
     @After fun teardown() {
         Dispatchers.resetMain()

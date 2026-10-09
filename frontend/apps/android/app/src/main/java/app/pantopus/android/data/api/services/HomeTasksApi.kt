@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import okhttp3.RequestBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -29,6 +30,7 @@ import retrofit2.http.Tag
  * (per-home chores), not the posted-to-neighbours gig list reached
  * via `me.gigs`.
  */
+@Suppress("TooManyFunctions")
 interface HomeTasksApi {
     @GET("api/homes/{id}/tasks/{taskId}/recurrence")
     @Headers("Cache-Control: no-store")
@@ -55,6 +57,15 @@ interface HomeTasksApi {
         @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): GetHomeTasksResponse
 
+    /** [getHomeTasks] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/tasks")
+    suspend fun getHomeTasksConditional(
+        @Path("id") homeId: String,
+        @Header("x-pantopus-session-scope") expectedSession: String?,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard?,
+        @Header("If-None-Match") etag: String?,
+    ): Response<GetHomeTasksResponse>
+
     @GET("api/homes/{id}/tasks/{taskId}")
     suspend fun getHomeTask(
         @Path("id") homeId: String,
@@ -62,6 +73,16 @@ interface HomeTasksApi {
         @Header("x-pantopus-session-scope") expectedSession: String? = null,
         @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): HomeTaskResponse
+
+    /** [getHomeTask] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/tasks/{taskId}")
+    suspend fun getHomeTaskConditional(
+        @Path("id") homeId: String,
+        @Path("taskId") taskId: String,
+        @Header("x-pantopus-session-scope") expectedSession: String?,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard?,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeTaskResponse>
 
     /** `POST /api/homes/:id/tasks` — route `backend/routes/home.js:4238`. */
     @POST("api/homes/{id}/tasks")

@@ -52,7 +52,7 @@ internal class TaskCreateMemoryStore : PendingHomeTaskCreateStore {
 }
 
 internal class HomeTaskCreationTestFixture {
-    val repository = mockk<HomeTasksRepository>()
+    val repository = mockk<HomeTasksRepository>(relaxUnitFun = true)
     val identity =
         HomeClaimScopeTestFixture().apply {
             accounts.value = CREATE_ACTOR

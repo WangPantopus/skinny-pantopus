@@ -17,9 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 
 /**
  * Concrete Household tasks list screen wired to
@@ -43,11 +46,14 @@ fun HouseholdTasksListScreen(
     viewModel: HouseholdTasksListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_tasks", state.showsContent())
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
     val banner by viewModel.banner.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
     var deleteTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
@@ -88,6 +94,8 @@ fun HouseholdTasksListScreen(
             fab = viewModel.fab(),
             onBack = onBack,
             banner = banner,
+            refreshing = refreshing,
+            refreshNotice = refreshNotice,
         )
     }
 
