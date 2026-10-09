@@ -376,7 +376,9 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         let (acceptedResult, pendingResult) = await (acceptedTask, pendingTask)
         let (sentResult, blockedResult) = await (sentTask, blockedTask)
         if !acceptedResult, !pendingResult, !sentResult, !blockedResult {
-            // Everything failed → surface the error banner.
+            // Everything failed → surface the error banner. Its Try again calls
+            // load(), so nothing counts as loaded until a fetch succeeds.
+            loadedOnce = false
             state = .error(message: "Couldn't load your connections. Try again.")
             return
         }
