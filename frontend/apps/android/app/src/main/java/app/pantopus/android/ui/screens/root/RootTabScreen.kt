@@ -43,6 +43,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.ui.components.ErrorState
@@ -2171,7 +2172,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // appended by NotificationDispatcher from the push title).
                 // Land on the Messages tab first so Back pops to the chat
                 // list, then push the thread itself.
-                navController.navigateToRootTab(PantopusRoute.Messages)
+                navController.navigateToRootTab(PantopusRoute.messagesTab)
                 // A direct room with one other person opens that person's
                 // thread (Report / Block in its details); anything else, or a
                 // failed read, opens the room exactly as before.
@@ -2702,7 +2703,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                         navController.navigate(ChildRoutes.DISCOVER_BUSINESSES)
                                     is HubNavigationIntent.JumpBackTapped ->
                                         if (intent.item.route.startsWith("/app/chat")) {
-                                            navController.navigateToRootTab(PantopusRoute.Messages)
+                                            navController.navigateToRootTab(PantopusRoute.messagesTab)
                                         } else {
                                             navController.navigate(routeForJumpBackIn(intent.item))
                                         }
@@ -2711,7 +2712,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     // resolver.
                                     is HubNavigationIntent.StatusItemTapped ->
                                         if (intent.item.route.startsWith("/app/chat")) {
-                                            navController.navigateToRootTab(PantopusRoute.Messages)
+                                            navController.navigateToRootTab(PantopusRoute.messagesTab)
                                         } else {
                                             navController.navigate(
                                                 routeForJumpBackIn(
@@ -2760,6 +2761,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Mail.path) {
+                    // Mailbox is off for launch (contract §9): this tab is Messages, the conversation list itself.
+                    if (!LaunchFeatures.mailbox) {
+                        return@composable InboxScreen(
+                            onOpenConversation = { row -> navController.navigate(ChildRoutes.chatConversation(row)) },
+                            onCompose = { navController.navigate(ChildRoutes.NEW_MESSAGE) },
+                            onOpenSearch = { navController.navigate(ChildRoutes.CHAT_SEARCH) },
+                        )
+                    }
                     MailboxRootScreen(
                         onOpenMail = { mailId ->
                             navController.navigate(ChildRoutes.mailboxItemDetail(mailId))
@@ -4603,6 +4612,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.MAILBOX_ITEM_DETAIL,
                     arguments = listOf(navArgument(MAILBOX_ITEM_DETAIL_MAIL_ID_KEY) { type = NavType.StringType }),
                 ) { entry ->
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // T6.5b (P20) — generic A17.1 mail detail. P21-P23 will
                     // add package / coupon / booklet / certified variants on
                     // top of the same shared shell.
@@ -4816,12 +4826,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.DISAMBIGUATE_MAIL,
                     arguments = listOf(navArgument(DISAMBIGUATE_MAIL_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     DisambiguateMailFormScreen(onClose = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.MAIL_ROUTING_QUEUE) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     MailRoutingQueueScreen(onClose = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.MAILBOX_VAULT) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // T6.5e (P19.5) — Mailbox Vault list-of-rows surface.
                     VaultListScreen(
                         onOpenItem = { mailId ->
@@ -5096,7 +5109,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 )
                             }
                         },
-                        onOpenInbox = { navController.navigateToRootTab(PantopusRoute.Messages) },
+                        onOpenInbox = { navController.navigateToRootTab(PantopusRoute.messagesTab) },
                         onViewOffers = { dto ->
                             navController.navigate(ChildRoutes.listingOffers(dto.id, dto.title))
                         },
@@ -5765,6 +5778,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.CEREMONIAL_MAIL) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // Launch cut #8 (Mail extras): hidden for the first launch.
                     if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Letters", navController)
                     CeremonialMailWizardScreen(
@@ -5784,6 +5798,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // Launch cut #8 (Mail extras): hidden for the first launch.
                     if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Letters", navController)
                     CeremonialMailOpenScreen(
@@ -5953,6 +5968,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.MAILBOX_SEARCH) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     MailboxSearchScreen(
                         onOpenMail = { mailId ->
                             navController.navigate(ChildRoutes.mailboxItemDetail(mailId))
@@ -6377,6 +6393,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     }
                 }
                 composable(ChildRoutes.MAILBOX_ROOT) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     MailboxRootScreen(
                         onOpenMail = { mailId ->
                             navController.navigate(ChildRoutes.mailboxItemDetail(mailId))
@@ -6398,6 +6415,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.MAILBOX_PARTY) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // Launch cut #8 (Mail extras): hidden for the first launch.
                     if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Mail party", navController)
                     MailPartyScreen(
@@ -6410,11 +6428,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.MAILBOX_COMMUNITY) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // Launch cut #8 (Mail extras): hidden for the first launch.
                     if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Community mail", navController)
                     CommunityMailScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.MAILBOX_HOME_RECORDS) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     HomeRecordsScreen(
                         onBack = { navController.popBackStack() },
                         onOpenMail = { mailId ->
@@ -6423,15 +6443,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.MAILBOX_MAP) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     MailboxMapScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.MAILBOX_VACATION) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     VacationHoldScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = ChildRoutes.MAIL_DAY,
                     arguments = listOf(navArgument(MAIL_DAY_VARIANT_KEY) { type = NavType.StringType }),
                 ) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // No scanner, Mail Day history or setup flow exists yet, so
                     // Mail Day hides those controls instead of offering dead taps.
                     MailDayScreen(onClose = { navController.popBackStack() })
@@ -6439,12 +6462,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // ---- Batch 2 (B1.6) routing seam. Swap each body for the real
                 // screen when the matching A.x screen ships. ----
                 composable(ChildRoutes.STAMPS) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     StampsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = ChildRoutes.MAIL_TASK,
                     arguments = listOf(navArgument(ChildRoutes.MAIL_TASK_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // A17.12 — Mail-derived task detail. Source-mail + next-up
                     // taps push the originating mail item onto this same stack.
                     MailTaskScreen(
@@ -6472,6 +6497,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // A17.12 (list) — every mail-linked task, plus the
                     // create-from-mail form when the route carries a mail id.
                     MailTaskListScreen(
@@ -6491,6 +6517,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.TRANSLATION,
                     arguments = listOf(navArgument(ChildRoutes.TRANSLATION_MAIL_ID_KEY) { type = NavType.StringType }),
                 ) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // Launch cut #8 (Mail extras): hidden for the first launch.
                     if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Mail translation", navController)
                     MailTranslationScreen(
@@ -6508,6 +6535,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     if (!LaunchFeatures.householdExtras) return@composable LaunchCutPlaceholder("Package unboxing", navController)
                     // A17.14 — the capture flow loads the real `MailPackage` row for
                     // the routed mail id and every action writes to the p2 package
@@ -6533,6 +6561,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                         ),
                 ) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     // Launch cut #4 (Open Gigs): hidden for the first launch.
                     if (!LaunchFeatures.openGigs) return@composable LaunchCutPlaceholder("Ask a neighbor", navController)
                     // A17.8 → "Ask a Neighbor" — posts the package-help gig via
@@ -6544,6 +6573,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.EARN) {
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
                     if (!LaunchFeatures.mailExtras) return@composable LaunchCutPlaceholder("Earn", navController)
                     EarnScreen(
                         onBack = { navController.popBackStack() },
@@ -7027,6 +7057,13 @@ private fun LaunchCutPlaceholder(
 
 /** The placeholder title for a link [DeepLinkRouter.isLaunchAvailable] turned away. */
 private fun launchCutLabel(destination: DeepLinkRouter.Destination): String =
+    when {
+        // Mailbox is off for launch (contract §9): every mailbox link and mail push lands here.
+        !LaunchFeatures.mailbox && LaunchFeature.MAILBOX in DeepLinkRouter.launchFeaturesFor(destination) -> "Mailbox"
+        else -> launchCutFeatureLabel(destination)
+    }
+
+private fun launchCutFeatureLabel(destination: DeepLinkRouter.Destination): String =
     when (destination) {
         is DeepLinkRouter.Destination.Listing -> "Marketplace"
         is DeepLinkRouter.Destination.Gig -> "Posting tasks"

@@ -16,6 +16,7 @@ const { setGauge } = require('../services/chatMetrics');
 // exposes as `decodeSessionClaims` (verifyToken.js delegates to it), the 15-s
 // session-state cache and the `session_revoked` event that kicks sockets.
 const authSessionService = require('../services/authSessionService');
+const { verifyAccessToken } = require('../services/accessTokenVerifier');
 
 // Store connected users: { userId: Set<socketId> }
 const connectedUsers = new Map();
@@ -266,15 +267,15 @@ module.exports = (io) => {
         return next(new Error('Authentication required'));
       }
       
-      // Verify token with Supabase
-      const { data, error } = await supabaseAdmin.auth.getUser(token);
-      
-      if (error || !data.user) {
-        return next(new Error('Invalid token'));
+      // Verify the token on this server, or with Supabase when that can't decide (accessTokenVerifier)
+      const verified = await verifyAccessToken(token, { authClient: supabaseAdmin });
+      if (!verified.ok) {
+        return next(new Error(verified.reason === 'busy' ? 'Authentication unavailable' : 'Invalid token'));
       }
+      const data = { user: verified.user };
 
-      // Persistent login: decode session_id / iat (getUser already accepted the
-      // token) and refuse revoked sessions / tokens older than the user's
+      // Persistent login: decode session_id / iat (the token was verified
+      // above) and refuse revoked sessions / tokens older than the user's
       // sessions_valid_after watermark — same policy as verifyToken.
       const claims = authSessionService.sessionClaimsFromAccessToken(token);
       socket.authSessionId = claims?.id || null;

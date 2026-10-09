@@ -32,6 +32,7 @@ const {
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const rateLimit = require('express-rate-limit');
+const { pipeline } = require('stream/promises');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const CHAT_DELETED_REDACT_DAYS = Math.max(parseInt(process.env.CHAT_DELETED_REDACT_DAYS || '180', 10) || 180, 1);
 const REDACTED_DELETED_MESSAGE = '[deleted message]';
@@ -2471,6 +2472,13 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { limit = 100 } = req.query;
     const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
+    // Only what's new (Instant Screens contract §8): `since` (an ISO time) keeps the rows with a message, a read
+    // mark, a new room or topic activity after it. `total` and `totalUnread` still count every row.
+    const sinceRaw = typeof req.query.since === 'string' ? req.query.since.trim() : '';
+    const sinceMs = sinceRaw ? Date.parse(sinceRaw) : null;
+    if (sinceRaw && (!/^\d{4}-\d{2}-\d{2}T/.test(sinceRaw) || !Number.isFinite(sinceMs))) {
+      return res.status(400).json({ error: 'invalid since' });
+    }
 
     // Step 1: Get all rooms the user participates in (active only)
     const { data: myParticipants, error: partErr } = await supabaseAdmin
@@ -2628,7 +2636,21 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       return tb - ta;
     });
 
-    const visibleConversations = conversations.slice(0, lim);
+    let listed = conversations;
+    if (sinceMs !== null) {
+      const newer = (value) => Boolean(value) && Date.parse(value) > sinceMs;
+      const participantByRoom = new Map(roomList.map((p) => [String(p.room_id), p]));
+      const roomChanged = (roomId) => {
+        const p = participantByRoom.get(String(roomId));
+        return newer(convMsgByRoom[roomId]?.created_at) || newer(p?.last_read_at)
+          || newer(p?.room?.updated_at) || newer(p?.room?.created_at);
+      };
+      listed = conversations.filter((conv) => (conv._type === 'room'
+        ? roomChanged(conv.id)
+        : (conv.room_ids || []).some(roomChanged) || (conv.topics || []).some((t) => newer(t.last_activity_at))));
+    }
+
+    const visibleConversations = listed.slice(0, lim);
     const visibleRoomIds = [];
     for (const conv of visibleConversations) {
       if (conv._type === 'room') {
@@ -2945,6 +2967,9 @@ router.get('/messages/:messageId/reactions', verifyToken, async (req, res) => {
 
 // Allow auth token via query param for contexts where headers can't be set
 // (e.g. React Native <Image source={{ uri }}> or <a href> downloads).
+// The chat image types an upload accepts (s3Service ALLOWED_IMAGE_TYPES; never SVG): served from this API.
+const STREAMED_CHAT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/heic', 'image/heif']);
+
 function tokenFromQuery(req, _res, next) {
   if (!req.headers.authorization && !req.cookies?.pantopus_access && req.query.token) {
     req.headers.authorization = `Bearer ${req.query.token}`;
@@ -2994,17 +3019,40 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to access this file' });
     }
 
-    // Generate a 15-minute signed URL and redirect
-    const signedUrl = await s3Service.getPresignedDownloadUrl(file.file_path, 900);
-
-    // Update access tracking (fire-and-forget)
-    supabaseAdmin
+    const trackAccess = () => supabaseAdmin
       .from('File')
       .update({ access_count: (file.access_count || 0) + 1, last_accessed_at: new Date().toISOString() })
       .eq('id', fileId)
       .then(() => {})
       .catch(() => {});
 
+    // Photos are served here, under this stable address, after the same membership check: a chat file's
+    // bytes never change under its id, so the apps' image caches keep it (private, a year, immutable) and a
+    // repeat ask answers 304. A browser signed in by cookie keeps no copy on disk (Instant Screens contract §5).
+    if (STREAMED_CHAT_IMAGE_TYPES.has(file.mime_type)) {
+      res.set('Cache-Control', req._authMethod === 'cookie' ? 'private, no-store' : 'private, max-age=31536000, immutable');
+      res.set('ETag', `"chat-file-${file.id}"`);
+      if (req.fresh) return res.status(304).end();
+      let object;
+      try {
+        object = await s3Service.getObjectStream(file.file_path);
+      } catch (storageErr) {
+        if (storageErr?.name === 'NoSuchKey' || storageErr?.$metadata?.httpStatusCode === 404) {
+          return res.status(404).json({ error: 'File not found' });
+        }
+        throw storageErr;
+      }
+      res.type(file.mime_type);
+      if (Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
+      trackAccess();
+      return pipeline(object.body, res).catch((streamErr) => {
+        logger.warn('Chat file stream ended early', { requestId: req.requestId, fileId, error: streamErr.message });
+      });
+    }
+
+    // Videos and documents: a 15-minute signed link (range requests, never cached automatically).
+    const signedUrl = await s3Service.getPresignedDownloadUrl(file.file_path, 900);
+    trackAccess();
     res.redirect(302, signedUrl);
   } catch (err) {
     logger.error('Chat file download error', { requestId: req.requestId, userId: req.user?.id, fileId: req.params.fileId, error: err.message });
