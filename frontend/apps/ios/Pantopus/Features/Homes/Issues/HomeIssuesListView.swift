@@ -30,6 +30,11 @@ public struct HomeIssuesListView: View {
         ListOfRowsView(dataSource: viewModel)
             .accessibilityIdentifier("homeIssuesList")
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+            // Someone changed this Home (`sync:changed`) or the socket came back: re-check the open list,
+            // the rows staying on screen meanwhile (Instant Screens).
+            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.home(homeId), kind: .homes) }, perform: {
+                await viewModel.load()
+            })
             .onChange(of: viewModel.pendingEvent) { _, event in
                 handle(event)
             }

@@ -26,14 +26,11 @@ The avatar pipeline reads/writes this cache so scrolling through lists
 of avatars doesn't re-decode the same images frame-after-frame.
 
 ### 3. Existing P3 wins
-- URLSession built with `URLSessionConfiguration.default` — HTTP/2 +
+- URLSession built with `URLSessionConfiguration.ephemeral` — HTTP/2 +
   TLS session resumption are on by default; we explicitly didn't
-  override either.
-- `URLCache(memoryCapacity: 10 MB, diskCapacity: 50 MB)` keyed by
-  Cache-Control + ETag (`APIClient.swift:71-76`) — the Hub payload
-  comes back with a 304 + cached body when the backend hasn't changed,
-  so the populated state can render with zero network blocking on
-  return visits.
+  override either. Its `URLCache` is in memory only (API replies carry
+  private data and never go to disk); it still honours Cache-Control +
+  ETag within a launch.
 - All decodable DTOs use explicit `CodingKeys` rather than
   `keyDecodingStrategy = .convertFromSnakeCase` (`APIClient.swift:65`
   — comment explains). The trade-off is hand-typed key tables in
