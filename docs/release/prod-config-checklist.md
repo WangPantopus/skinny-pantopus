@@ -490,6 +490,12 @@ local-only or remote-only versions, and no pending migration in a fresh dry run.
 The Storage buckets, S3 access key, Auth transfer and backup upgrade remain to
 be done.
 
+**Plan decision, October 9:** stay on Free for now. Defer the two 100 MB
+buckets and April login import until the founder chooses to upgrade. The
+private 25 MB `home-documents` bucket can be prepared on Free. Do not point
+production traffic at the new project while existing logins remain only in
+the April project.
+
 ### P2B. Production database: adopt the April project (only if D3 says so)
 
 Don't run any of this until L4 has rehearsed it on a copy:
