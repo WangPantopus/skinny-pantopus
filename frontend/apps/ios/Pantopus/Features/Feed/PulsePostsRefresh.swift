@@ -13,7 +13,11 @@ public extension Notification.Name {
 }
 
 public enum PulsePostsRefresh {
+    /// Lists on screen refetch; the store's copies of post lists are marked
+    /// out of date, so a list opened later reads again too.
+    @MainActor
     public static func notifyPostsDidChange() {
+        ScreenStore.shared.markStale(topics: [ScreenTopic.posts])
         NotificationCenter.default.post(name: .pulsePostsDidChange, object: nil)
     }
 }

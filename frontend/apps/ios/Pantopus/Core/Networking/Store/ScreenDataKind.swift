@@ -121,6 +121,9 @@ enum ScreenTopic {
     /// Client-only: the trains lists (My trains, Nearby). Marked by your own
     /// train changes here; the server signals single trains (`supporttrain:`).
     static let supportTrains = "supporttrains"
+    /// Client-only: lists of posts (the Pulse feed's first page, My posts,
+    /// Saved). Marked by your own post changes here (`PulsePostsRefresh`).
+    static let posts = "posts"
 
     static func home(_ homeId: String) -> String {
         "home:\(homeId.lowercased())"
