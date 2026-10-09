@@ -1,0 +1,286 @@
+package app.pantopus.android.data.store
+
+import android.content.ComponentCallbacks2
+import android.content.Context
+import android.content.res.Configuration
+import android.os.SystemClock
+import app.pantopus.android.BuildConfig
+import app.pantopus.android.data.api.net.Conditional
+import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.auth.TokenStorage
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
+import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Provider
+import javax.inject.Singleton
+
+/** Contract §6 "Memory": at most this many entries… */
+private const val MAX_ENTRIES = 200
+
+/** …and an entry nobody has used for 30 minutes goes. */
+private const val IDLE_MS = 30 * 60 * 1000L
+
+/**
+ * The app's one cache of server replies for screens (Instant Screens contract §6): a [StateFlow] per [StoreKey],
+ * scoped to this server and the signed-in account. Screens read from here and never keep their own copy.
+ *
+ * - **Read:** the copy in memory shows at once; a request goes out only when the copy is out of date (its kind's
+ *   "fresh for" window passed, or a topic marked it) or the read is forced (pull to refresh, Retry).
+ * - **One request per key:** concurrent reads share the one in flight, which finishes even if the screen that
+ *   started it leaves, so the next visit finds the reply.
+ * - **Conditional:** a read sends the stored ETag; a 304 keeps the copy and counts it as checked now.
+ * - **Failures:** a 403 or 404 deletes the entry, so the screen shows the server's answer; any other failure keeps
+ *   the copy and marks it.
+ * - **Late replies are dropped:** a reply that lands after [wipe], or after the account or session changed, never
+ *   writes into the new state (generation number plus the account and session marker captured at the start).
+ * - **Memory:** at most [MAX_ENTRIES] entries, unused ones go after 30 minutes, and a memory warning trims the store
+ *   to what screens are showing.
+ *
+ * Sensitive replies (contract §5) never enter the store: their screens keep calling the repository directly.
+ */
+@Singleton
+class ScreenStore
+    @Inject
+    constructor(
+        @ApplicationContext context: Context,
+        private val tokens: TokenStorage,
+        private val auth: Provider<AuthRepository>,
+    ) {
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        // Least recently used first (access order); guarded by itself.
+        private val slots = LinkedHashMap<String, Slot>(MAX_ENTRIES, LOAD_FACTOR, true)
+        private var generation = 0L
+
+        private class Slot(
+            val key: StoreKey<*>,
+        ) {
+            val state = MutableStateFlow(Stored<Any>())
+            var etag: String? = null
+            var stale = false
+            var inFlight: Deferred<Unit>? = null
+            var lastUsed = SystemClock.elapsedRealtime()
+
+            val removable: Boolean get() = state.subscriptionCount.value == 0 && inFlight?.isActive != true
+        }
+
+        init {
+            context.registerComponentCallbacks(
+                object : ComponentCallbacks2 {
+                    // Every level but "the UI went away" is the phone asking for memory back.
+                    override fun onTrimMemory(level: Int) {
+                        if (level != ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) trimToVisible()
+                    }
+
+                    override fun onConfigurationChanged(newConfig: Configuration) = Unit
+
+                    @Deprecated("Deprecated in Java")
+                    override fun onLowMemory() = trimToVisible()
+                },
+            )
+        }
+
+        /** The entry's live state, for a screen to collect. Asking sends nothing; [read] fills it. */
+        fun <T : Any> state(key: StoreKey<T>): StateFlow<Stored<T>> {
+            val account = accountId() ?: return MutableStateFlow(Stored())
+            return synchronized(slots) { slotLocked(key, account).state }.cast()
+        }
+
+        /** The entry as it is now, without a request. */
+        fun <T : Any> peek(key: StoreKey<T>): Stored<T> = state(key).value
+
+        /**
+         * Returns the copy when it is fresh; otherwise reads it (sharing a read already in flight) and returns what the
+         * store holds afterwards. [force] reads even a fresh copy (pull to refresh, Retry, after an own edit). [fetch]
+         * gets the stored ETag (null without a copy) and calls the endpoint through `conditionalApiCall`.
+         */
+        suspend fun <T : Any> read(
+            key: StoreKey<T>,
+            force: Boolean = false,
+            fetch: suspend (etag: String?) -> NetworkResult<Conditional<T>>,
+        ): Stored<T> {
+            val account = accountId() ?: return readSignedOut(fetch)
+            val (slot, job) =
+                synchronized(slots) {
+                    val slot = slotLocked(key, account)
+                    val current = slot.state.value
+                    if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
+                    val running = slot.inFlight?.takeIf { it.isActive }
+                    if (running != null) return@synchronized slot to running
+                    val gen = generation
+                    val identity = identity()
+                    val etag = slot.etag.takeIf { current.data != null }
+                    slot.state.value = current.copy(refreshing = true)
+                    val job = scope.async { settle(slot, fetchSafely(fetch, etag), gen, identity) }
+                    slot.inFlight = job
+                    slot to job
+                }
+            try {
+                job.await()
+            } catch (cancelled: CancellationException) {
+                // A wipe cancels reads in flight; only the caller's own cancellation goes on up.
+                if (!currentCoroutineContext().isActive) throw cancelled
+            }
+            return slot.state.value.cast()
+        }
+
+        /** Marks every entry carrying [topic] out of date (contract §8): the next read of it sends a request. */
+        fun markStale(topic: String) {
+            synchronized(slots) { slots.values.forEach { if (topic in it.key.topics) it.stale = true } }
+        }
+
+        /** Marks every entry of [kinds] out of date, e.g. the household ones after a socket reconnect. */
+        fun markStale(kinds: Set<StoreKind>) {
+            synchronized(slots) { slots.values.forEach { if (it.key.kind in kinds) it.stale = true } }
+        }
+
+        /** Drops one entry, e.g. after the item was deleted. */
+        fun remove(key: StoreKey<*>) {
+            val account = accountId() ?: return
+            synchronized(slots) {
+                slots.remove("$account|${key.id}")?.let { slot ->
+                    slot.inFlight?.cancel()
+                    slot.state.value = Stored()
+                }
+            }
+        }
+
+        /**
+         * Sign-out (every path through `AuthRepository.finishLocalSignOut`), a revoked or ended session, an account
+         * switch or deletion, and Clear cache: everything goes, and the generation moves so replies already in flight
+         * can't write into the new state.
+         */
+        fun wipe() {
+            synchronized(slots) {
+                generation++
+                slots.values.forEach { slot ->
+                    slot.inFlight?.cancel()
+                    slot.state.value = Stored()
+                }
+                slots.clear()
+            }
+        }
+
+        /** Contract §6: when the phone warns about memory, keep only what screens are showing. */
+        fun trimToVisible() {
+            synchronized(slots) { slots.values.removeAll { it.removable } }
+        }
+
+        private fun slotLocked(
+            key: StoreKey<*>,
+            account: String,
+        ): Slot {
+            val now = SystemClock.elapsedRealtime()
+            val slot = slots.getOrPut("$account|${key.id}") { Slot(key) }
+            slot.lastUsed = now
+            val iterator = slots.values.iterator()
+            while (iterator.hasNext()) {
+                val candidate = iterator.next()
+                val idle = now - candidate.lastUsed > IDLE_MS
+                if (candidate !== slot && (idle || slots.size > MAX_ENTRIES) && candidate.removable) iterator.remove()
+            }
+            return slot
+        }
+
+        private suspend fun <T : Any> fetchSafely(
+            fetch: suspend (etag: String?) -> NetworkResult<Conditional<T>>,
+            etag: String?,
+        ): NetworkResult<Conditional<T>> =
+            try {
+                fetch(etag)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (
+                @Suppress("TooGenericExceptionCaught") error: Exception,
+            ) {
+                // A guard that refused to send (session changed mid-read) or a bug: the copy stays.
+                Timber.w(error, "store read failed")
+                NetworkResult.Failure(NetworkError.Transport(error))
+            }
+
+        private fun <T : Any> settle(
+            slot: Slot,
+            result: NetworkResult<Conditional<T>>,
+            gen: Long,
+            identity: String?,
+        ) {
+            synchronized(slots) {
+                // Late reply: the store was wiped, or another account or session signed in meanwhile.
+                if (gen != generation || identity != identity()) return
+                val previous = slot.state.value
+                val now = System.currentTimeMillis()
+                slot.state.value =
+                    when (result) {
+                        is NetworkResult.Success ->
+                            when (val reply = result.data) {
+                                is Conditional.Fresh -> {
+                                    slot.etag = reply.etag
+                                    slot.stale = false
+                                    Stored(reply.data, fetchedAt = now)
+                                }
+                                Conditional.NotModified -> {
+                                    slot.stale = false
+                                    previous.copy(fetchedAt = now, refreshing = false, failure = null)
+                                }
+                            }
+                        is NetworkResult.Failure ->
+                            if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) {
+                                // Access ended: the entry goes at once and the screen shows the server's answer.
+                                slot.etag = null
+                                Stored(failure = result.error)
+                            } else {
+                                previous.copy(refreshing = false, failure = result.error)
+                            }
+                    }
+                if (BuildConfig.DEBUG) Timber.tag("ISStore").d("%s → %s", slot.key.id.replace(UUID, ":id"), slot.state.value.describe())
+            }
+        }
+
+        private suspend fun <T : Any> readSignedOut(fetch: suspend (etag: String?) -> NetworkResult<Conditional<T>>): Stored<T> =
+            when (val result = fetchSafely(fetch, null)) {
+                is NetworkResult.Success ->
+                    when (val reply = result.data) {
+                        is Conditional.Fresh -> Stored(reply.data, fetchedAt = System.currentTimeMillis())
+                        Conditional.NotModified -> Stored()
+                    }
+                is NetworkResult.Failure -> Stored(failure = result.error)
+            }
+
+        private fun accountId(): String? = (auth.get().state.value as? AuthRepository.State.SignedIn)?.user?.id
+
+        /** Server, account and session marker: never a token, never logged. */
+        private fun identity(): String? = accountId()?.let { "${BuildConfig.PANTOPUS_API_BASE_URL}|$it|${tokens.sessionMarker()}" }
+
+        private companion object {
+            const val LOAD_FACTOR = 0.75f
+        }
+    }
+
+@Suppress("UNCHECKED_CAST")
+private fun <T : Any> Stored<Any>.cast(): Stored<T> = this as Stored<T>
+
+@Suppress("UNCHECKED_CAST")
+private fun <T : Any> StateFlow<Stored<Any>>.cast(): StateFlow<Stored<T>> = this as StateFlow<Stored<T>>
+
+private val UUID = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+/** Debug log text: what the entry holds, never its content. */
+private fun Stored<*>.describe(): String =
+    when {
+        data != null && failure != null -> "copy kept, read failed (${failure.code ?: "network"})"
+        data != null -> "fresh copy"
+        failure != null -> "no copy (${failure.code ?: "network"})"
+        else -> "empty"
+    }
