@@ -432,7 +432,9 @@ production one and switches the schedules back on.
    production Supabase access token and puts it and the new project's database
    password in a private `0600` file outside the repository, as
    `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`; never paste either into
-   chat or a command argument. The environment token overrides the saved
+   chat or a command argument. Scope the token to `pantopus-production` only,
+   with Read access to Project Settings, API Keys and API Key Secrets; leave
+   all other permissions off. The environment token overrides the saved
    staging login. The founder loads that file only in this terminal session.
    Nothing should be connected to the new project yet; if a production backend
    or worker already points at it, stop it first. Verify that the linked ref is
@@ -446,7 +448,7 @@ production one and switches the schedules back on.
    : "${SUPABASE_ACCESS_TOKEN:?missing production token}"
    : "${SUPABASE_DB_PASSWORD:?missing production database password}"
    sb link --project-ref falmvysvndmwtfxsrxek
-   sb projects list
+   test "$(cat supabase/.temp/project-ref)" = falmvysvndmwtfxsrxek
    sb db push --linked --skip-vault --dry-run
    # Founder only, after checking the dry run and project ref:
    sb db push --linked --skip-vault
