@@ -2,7 +2,6 @@
 
 package app.pantopus.android.data.auth
 
-import app.pantopus.android.data.api.net.ApiOrigin
 import app.pantopus.android.data.api.net.NonRetriableIOException
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
@@ -39,11 +38,9 @@ class AuthenticatedDispatchGuardInterceptor(private val tokens: TokenStorage) : 
 }
 
 /**
- * OkHttp interceptor that attaches `Authorization: Bearer <token>` to every
- * request of the main client that goes to the API origin ([ApiOrigin]). The
- * same client loads Coil images from any host, and those go out without it
- * (the platform / device headers are stamped by [DeviceIdentityInterceptor],
- * which runs on BOTH clients).
+ * OkHttp interceptor that attaches `Authorization: Bearer <token>` on every
+ * request of the main client (the platform / device headers are stamped by
+ * [DeviceIdentityInterceptor], which runs on BOTH clients).
  *
  * Persistent login (CONTRACT §"Client behaviour"): before an authenticated
  * request goes out, the access token's stored `expiresAt` is checked and a
@@ -70,15 +67,11 @@ class AuthInterceptor
     constructor(
         private val tokenStorage: TokenStorage,
         private val authRepositoryProvider: dagger.Lazy<AuthRepository>,
-        private val apiOrigin: ApiOrigin,
     ) : Interceptor {
         fun dispatchGuardInterceptor(): Interceptor = AuthenticatedDispatchGuardInterceptor(tokenStorage)
 
         override fun intercept(chain: Interceptor.Chain): Response {
             val original = chain.request()
-            // Another host (an og:image, a storage URL) never gets the token, so a 401
-            // or 403 from it can't start a refresh, a sign-out or a step-up either.
-            if (!apiOrigin.matches(original.url)) return chain.proceed(original)
             val token =
                 runBlocking {
                     val guard = original.tag(AuthenticatedDispatchGuard::class.java)

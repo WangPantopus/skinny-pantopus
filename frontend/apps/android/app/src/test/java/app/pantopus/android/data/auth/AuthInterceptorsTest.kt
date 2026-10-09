@@ -4,7 +4,6 @@ import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatchJsonAdapter
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
-import app.pantopus.android.data.api.net.ApiOrigin
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.services.HomeTasksApi
@@ -68,8 +67,8 @@ class AuthInterceptorsTest {
     private fun client(): OkHttpClient =
         OkHttpClient
             .Builder()
-            .addInterceptor(DeviceIdentityInterceptor(identity, ApiOrigin(server.url("/"))))
-            .addInterceptor(AuthInterceptor(storage, lazyRepo, ApiOrigin(server.url("/"))))
+            .addInterceptor(DeviceIdentityInterceptor(identity))
+            .addInterceptor(AuthInterceptor(storage, lazyRepo))
             .addNetworkInterceptor(AuthenticatedDispatchGuardInterceptor(storage))
             .addInterceptor(StepUpInterceptor(registry))
             .build()
