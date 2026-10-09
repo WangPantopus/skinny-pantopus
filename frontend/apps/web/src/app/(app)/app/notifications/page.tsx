@@ -17,6 +17,10 @@ import { isLaunchCutNotification, launchFeatures } from '@/lib/featureFlags';
 import type { Notification } from '@pantopus/types';
 import NotificationRow from './NotificationRow';
 import { toast } from '@/components/ui/toast-store';
+import { useFirstPageRefresh } from '@/lib/firstPageRefresh';
+
+// Contract §4: the notifications list is fresh for 30 seconds.
+const NOTIFICATIONS_FRESH_MS = 30_000;
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', {
@@ -107,6 +111,8 @@ export default function NotificationsPage() {
   }, [notifKey]);
 
   // ── Notifications list: useInfiniteQuery (30 per page) ──────
+  // Back after the fresh window, the list refreshes its first page, not every page it had.
+  useFirstPageRefresh(notifKey, NOTIFICATIONS_FRESH_MS);
   const notifQuery = useInfiniteQuery<NotificationsPage, Error, InfiniteData<NotificationsPage>, typeof notifKey, NotificationPageParam>({
     queryKey: notifKey,
     initialPageParam: INITIAL_PAGE_PARAM,
@@ -202,7 +208,7 @@ export default function NotificationsPage() {
       if (!lastPage?.hasMore || lastPage.incomplete) return undefined;
       return lastPage.nextPageParam;
     },
-    staleTime: 30_000,
+    staleTime: NOTIFICATIONS_FRESH_MS,
   });
 
   // Derived state (preserves the useState shape consumed by the JSX below)
