@@ -833,13 +833,14 @@ async function notifyConnectionRequest({ addresseeUserId, requesterName, request
 /**
  * Notify a user their connection request was accepted.
  */
-async function notifyConnectionAccepted({ requesterUserId, accepterName, accepterId, accepterUsername }) {
+async function notifyConnectionAccepted({ requesterUserId, accepterName, accepterId }) {
   return createNotification({
     userId: requesterUserId,
     type: 'connection_accepted',
     title: `${accepterName} accepted your connection request`,
     icon: '🤝',
-    link: `/${accepterUsername || accepterId}`,
+    // By id: a username may be one the server made up (part of an email address), and it can change.
+    link: `/${accepterId}`,
     metadata: { user_id: accepterId },
   });
 }
