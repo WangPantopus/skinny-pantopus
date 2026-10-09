@@ -37,6 +37,7 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:manageSpaceActivity="app.pantopus.android.ui.screens.settings.storage.ManageSpaceActivity"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Pantopus"
@@ -95,6 +96,16 @@
                 <data android:scheme="pantopus" />
             </intent-filter>
         </activity>
+
+        <!-- Settings → Apps → Pantopus → Storage → "Manage space" opens Storage & data
+             (Instant Screens contract §7, android:manageSpaceActivity above). Exported because
+             system Settings only offers "Manage space" for an activity it can resolve; it has
+             no intent filter and shows only sizes and a Clear cache that asks first. -->
+        <activity
+            android:name=".ui.screens.settings.storage.ManageSpaceActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Pantopus" />
 
         <receiver
             android:name=".push.ReminderActionReceiver"
