@@ -22,6 +22,7 @@ import { CloudOff, ShieldCheck } from 'lucide-react';
 import type { NeighborhoodPulse } from '@pantopus/types';
 import { DetailHeader, TextButton } from '@/components/archetypes/place';
 import VerifyPromptSheet from '../VerifyPromptSheet';
+import { launchFeatures } from '@/lib/featureFlags';
 import { rankPulse, type SignalTone, type StreamSignal } from './ranking';
 
 // ── Signal tile — the glyph that carries the signal's tone ──────
@@ -174,7 +175,7 @@ export default function PulseStreamView({
       icon={ShieldCheck}
       tone="sky"
       title="Verify your address"
-      detail="Message neighbors, get your verified badge, and unlock your mailbox."
+      detail={launchFeatures.mailbox ? 'Message neighbors, get your verified badge, and unlock your mailbox.' : 'Message neighbors and get your verified badge.'}
       action={{ label: 'Verify address', onClick: () => setVerifyOpen(true) }}
     />
   ) : null;

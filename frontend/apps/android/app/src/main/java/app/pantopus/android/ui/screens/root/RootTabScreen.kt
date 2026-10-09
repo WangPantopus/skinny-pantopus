@@ -5457,6 +5457,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             findPeopleLauncher.launch(null)
                         },
                         onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
+                        onOpenBlockedUsers = { navController.navigate(ChildRoutes.SETTINGS_BLOCKED_USERS) },
                     )
                 }
                 composable(ChildRoutes.DISCOVER_HUB) {

@@ -27,10 +27,12 @@ import {
   MessageCircle,
   BadgeCheck,
   Mailbox,
+  Award,
   Clock,
 } from 'lucide-react';
 import BottomSheet from '@/components/ui/BottomSheet';
 import { IconTile } from '@/components/archetypes/place';
+import { launchFeatures } from '@/lib/featureFlags';
 
 export interface VerifyPromptSheetProps {
   open: boolean;
@@ -84,7 +86,10 @@ const METHODS: Method[] = [
 // that open), framed as a promise (no chevrons; not tappable).
 const BENEFITS: { icon: LucideIcon; label: string; sub: string }[] = [
   { icon: BadgeCheck, label: 'Proof you live here', sub: 'Your verified badge, a residency letter, and a shareable Residency Pass' },
-  { icon: Mailbox, label: 'Your mailbox and your rank', sub: 'The digital mailbox opens, and you take a permanent Block Founder number' },
+  // Launch cut #10 (Mailbox): only the rank while the mailbox is hidden.
+  launchFeatures.mailbox
+    ? { icon: Mailbox, label: 'Your mailbox and your rank', sub: 'The digital mailbox opens, and you take a permanent Block Founder number' }
+    : { icon: Award, label: 'Your rank on the block', sub: 'You take a permanent Block Founder number' },
   { icon: MessageCircle, label: 'What only verified neighbors see', sub: 'Real rents on your block, neighbor messages, the Fridge Card, rate watch' },
 ];
 

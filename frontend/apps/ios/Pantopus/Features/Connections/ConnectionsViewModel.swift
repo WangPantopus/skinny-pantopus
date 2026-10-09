@@ -201,6 +201,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
     private let onMessage: @MainActor (ConnectionsChatTarget) -> Void
     private let onFindPeople: @MainActor () -> Void
     private let onOpenProfile: @MainActor (String) -> Void
+    private let onOpenBlockedUsers: @MainActor () -> Void
     private let now: @Sendable () -> Date
     private let calendar: Calendar
     private let timeZone: TimeZone
@@ -217,6 +218,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         onMessage: @escaping @MainActor (ConnectionsChatTarget) -> Void = { _ in },
         onFindPeople: @escaping @MainActor () -> Void = {},
         onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
+        onOpenBlockedUsers: @escaping @MainActor () -> Void = {},
         now: @escaping @Sendable () -> Date = { Date() },
         calendar: Calendar = .current,
         timeZone: TimeZone = .current
@@ -226,6 +228,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         self.onMessage = onMessage
         self.onFindPeople = onFindPeople
         self.onOpenProfile = onOpenProfile
+        self.onOpenBlockedUsers = onOpenBlockedUsers
         self.now = now
         self.calendar = calendar
         self.timeZone = timeZone
@@ -516,10 +519,17 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
                 subcopy: "Requests you send will appear here until accepted or declined."
             )
         case ConnectionsTab.blocked:
+            // This tab lists blocked connections only; a block from a profile or a chat
+            // lives in Settings → Blocked users (as on the web), so say so and link there.
             ListOfRowsState.EmptyContent(
                 icon: .ban,
-                headline: "No blocked users",
-                subcopy: "People you block stop seeing your posts and can't message you.",
+                headline: "No blocked connections",
+                subcopy: "People you blocked from their profile or a chat are in Blocked users, "
+                    + "where you can unblock them.",
+                ctaTitle: "Open Blocked users",
+                onCTA: { [weak self] in
+                    Task { @MainActor in self?.onOpenBlockedUsers() }
+                },
                 tint: Theme.Color.appSurfaceSunken,
                 accent: Theme.Color.appTextSecondary
             )

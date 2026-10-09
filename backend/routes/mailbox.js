@@ -18,6 +18,7 @@ const s3 = require('../services/s3Service');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // ============ VALIDATION SCHEMAS ============
@@ -2027,6 +2028,9 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       // ── Notify non-user recipient (non-blocking) ────────────
       const claimLink = `${ESCROW_CLAIM_LINK_BASE}/${escrowMail.id}?token=${escrowClaimToken}`;
       (async () => {
+        // Launch cuts #8 and #10: no email or text about a letter goes to anyone while writing letters
+        // (mail_extras) or the mailbox is off.
+        if (skipForLaunchCut(['mailbox', 'mail_extras'], 'escrowLetterNotice')) return;
         try {
           const senderName = senderDisplayName;
           const notifBody = `${senderName} sent you a letter to your home. Open it on Pantopus: ${claimLink}`;

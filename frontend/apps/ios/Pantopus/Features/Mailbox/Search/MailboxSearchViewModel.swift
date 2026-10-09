@@ -34,11 +34,23 @@ final class MailboxSearchViewModel {
     private(set) var isLoading: Bool = true
 
     /// No-results payload for the shell's empty phase.
-    let emptyState = EmptyStateContent(
-        icon: .search,
-        headline: "No matching mail",
-        subcopy: "Try a different sender, subject, or category."
-    )
+    /// Set when the mailbox couldn't be read: an empty result then says so
+    /// instead of claiming no mail matches.
+    private(set) var loadFailed = false
+
+    var emptyState: EmptyStateContent {
+        loadFailed
+            ? EmptyStateContent(
+                icon: .alertCircle,
+                headline: "Couldn't search your mail",
+                subcopy: "Check your connection, then go back and open search again."
+            )
+            : EmptyStateContent(
+                icon: .search,
+                headline: "No matching mail",
+                subcopy: "Try a different sender, subject, or category."
+            )
+    }
 
     /// Pop the search surface — wired to the shell's back control.
     let onCancel: @Sendable () -> Void
@@ -61,7 +73,8 @@ final class MailboxSearchViewModel {
     }
 
     /// Fetch the corpus once. Repeat calls (e.g. a re-entered `.task`)
-    /// are no-ops so typing doesn't trigger refetches.
+    /// are no-ops so typing doesn't trigger refetches; after a failed read
+    /// the next one tries again.
     func load() async {
         guard !didLoad else { return }
         isLoading = true
@@ -70,12 +83,14 @@ final class MailboxSearchViewModel {
                 MailboxEndpoints.list(archived: false, limit: corpusLimit, offset: 0)
             )
             corpus = response.mail
+            loadFailed = false
+            didLoad = true
         } catch {
-            // The shell has no error phase; an unreachable mailbox simply
-            // yields no matches rather than spinning forever.
+            // The shell has no error phase: no results, and the empty state
+            // says the mailbox couldn't be read (not "No matching mail").
             corpus = []
+            loadFailed = true
         }
-        didLoad = true
         isLoading = false
         recompute()
     }

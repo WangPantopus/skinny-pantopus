@@ -35,6 +35,7 @@ fun MailboxSearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.configureNavigation(onOpenMail = onOpenMail)
@@ -48,11 +49,19 @@ fun MailboxSearchScreen(
         results = results,
         isLoading = isLoading,
         emptyState =
-            EmptyStateContent(
-                icon = PantopusIcon.Search,
-                headline = "No matching mail",
-                subcopy = "Try a different sender, subject, or category.",
-            ),
+            if (loadFailed) {
+                EmptyStateContent(
+                    icon = PantopusIcon.AlertCircle,
+                    headline = "Couldn't search your mail",
+                    subcopy = "Check your connection, then go back and open search again.",
+                )
+            } else {
+                EmptyStateContent(
+                    icon = PantopusIcon.Search,
+                    headline = "No matching mail",
+                    subcopy = "Try a different sender, subject, or category.",
+                )
+            },
         row = { mail ->
             Box(
                 modifier =

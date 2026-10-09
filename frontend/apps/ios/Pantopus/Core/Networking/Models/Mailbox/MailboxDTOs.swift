@@ -183,7 +183,9 @@ public struct MailKeyFact: Decodable, Sendable, Hashable {
 /// `GET /api/mailbox` envelope — route `backend/routes/mailbox.js:1306`.
 public struct MailboxListResponse: Decodable, Sendable, Hashable {
     public let mail: [MailItem]
-    public let count: Int
+    /// `GET /api/mailbox` doesn't send `count` (its totals are in `pagination`);
+    /// requiring it made every decode fail, so Mail search never had mail to search.
+    public let count: Int?
 }
 
 /// `GET /api/mailbox/:id` envelope — route `backend/routes/mailbox.js:1466`.

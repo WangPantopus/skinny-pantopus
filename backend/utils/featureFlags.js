@@ -20,7 +20,7 @@ function isPersonaBroadcastEnabled() {
   return isPersonaEnabled() && enabled('PERSONA_BROADCAST_ENABLED');
 }
 
-// First-launch scope (founder direction, 2026-09-27). These eight features are
+// First-launch scope (founder direction, 2026-09-27). These features are
 // hidden for the first launch; their code stays. A feature is OFF unless its
 // key is listed in LAUNCH_FEATURES (comma-separated, or "all"). The same keys
 // drive the web app (NEXT_PUBLIC_LAUNCH_FEATURES) and the native apps.
@@ -34,6 +34,7 @@ const LAUNCH_FEATURE_KEYS = [
   'household_extras', // 7. Polls, packages, pet section, family calendar, bill management
   'mail_extras', // 8. Letters, e-signing, community mail, event invitations by mail
   'gift_funds', // 9. Support Train gift funds (no app can take a contribution yet)
+  'mailbox', // 10. The mailbox: received mail, Mail Day, vault, vacation hold, Stamps (2026-10-09)
 ];
 
 function isLaunchFeatureEnabled(key) {
@@ -68,7 +69,7 @@ function skipForLaunchCut(keys, senderName) {
 // Notification types that only a cut feature produces. While the feature is
 // off, createNotification drops them and the notification list, unread counts
 // and Hub activity leave them out. Types an in-scope flow can also produce
-// (task lifecycle, payments, scheduling, mail delivery) are deliberately absent.
+// (task lifecycle, payments, scheduling) are deliberately absent.
 const LAUNCH_NOTIFICATION_TYPE_FEATURES = {
   // 1–2. Beacon and personas: the audience stream and Beacon billing.
   persona_follow: ['beacon', 'personas'],
@@ -115,9 +116,17 @@ const LAUNCH_NOTIFICATION_TYPE_FEATURES = {
   // 7. Household extras: bill reminders.
   bill_reminder: ['household_extras'],
   // 8. Mail extras: letters sent to a contact (escrow).
-  mail_escrow_expired: ['mail_extras'],
-  mail_escrow_claimed: ['mail_extras'],
-  mail_claimed: ['mail_extras'],
+  mail_escrow_expired: ['mailbox', 'mail_extras'],
+  mail_escrow_claimed: ['mailbox', 'mail_extras'],
+  mail_claimed: ['mailbox', 'mail_extras'],
+  // 10. Mailbox: delivery notices, Mail Day, urgent and interrupt pushes, and a
+  // Home letter another member deleted or dismissed.
+  mail_delivered: ['mailbox'],
+  mail_new: ['mailbox'],
+  mail_summary: ['mailbox'],
+  mail_urgent: ['mailbox'],
+  mail_interrupt: ['mailbox'],
+  home_mail_removed: ['mailbox'],
 };
 
 // The audience stream (context 'audience') is Beacon/persona only.

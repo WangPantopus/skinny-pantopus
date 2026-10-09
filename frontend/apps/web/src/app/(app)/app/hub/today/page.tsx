@@ -29,6 +29,7 @@ import {
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
+import { withoutLaunchCutTodayRows } from '@/lib/featureFlags';
 import type { HubToday } from '@pantopus/types';
 import BallotTodaySection, { useBallotToday } from '@/components/ballot/BallotTodaySection';
 
@@ -134,7 +135,7 @@ export default function HubTodayPage() {
   // nothing for a viewer who does not have the flag.
   const ballot = useBallotToday(hasToken);
 
-  const today = query.data ?? null;
+  const today = query.data ? withoutLaunchCutTodayRows(query.data) : null;
   const loading = !mounted || (query.isPending && hasToken);
   const error = query.error instanceof Error ? query.error.message : '';
 

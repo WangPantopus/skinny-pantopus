@@ -1,6 +1,6 @@
 'use client';
 
-// MobileTabBar — the four-tab IA (Place · Today · Nearby · Mail) as a
+// MobileTabBar — the four-tab IA (Place · Today · Nearby · Messages) as a
 // bottom bar on phone-width web. Native gets these tabs on day one; on
 // mobile web they used to hide behind the hamburger, which made the app
 // read as a single long page. Desktop keeps the sidebar (AppShell).
@@ -8,6 +8,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { NavIcons } from '@/lib/icons';
+import { launchFeatures } from '@/lib/featureFlags';
 
 type Tab = {
   key: 'place' | 'today' | 'nearby' | 'mail';
@@ -23,7 +24,11 @@ export const MOBILE_TABS: Tab[] = [
   { key: 'place', label: 'Place', href: '/app/place', icon: NavIcons.place, matches: (p) => starts(p, '/app/place', '/app/hub', '/app/homes') && !starts(p, '/app/hub/today') },
   { key: 'today', label: 'Today', href: '/app/today', icon: NavIcons.today, matches: (p) => starts(p, '/app/today', '/app/hub/today') },
   { key: 'nearby', label: 'Nearby', href: '/app/nearby', icon: NavIcons.nearby, matches: (p) => starts(p, '/app/nearby', '/app/neighborhood', '/app/feed', '/app/beacons', '/app/connections', '/app/gigs', '/app/marketplace') },
-  { key: 'mail', label: 'Mail', href: '/app/mailbox?scope=personal', icon: NavIcons.mail, matches: (p) => starts(p, '/app/mailbox', '/app/chat') },
+  // Launch cut #10 (Mailbox): the fourth tab is Messages, the conversation
+  // list itself. Its key stays `mail` so tests and tools keep working.
+  launchFeatures.mailbox
+    ? { key: 'mail', label: 'Mail', href: '/app/mailbox?scope=personal', icon: NavIcons.mail, matches: (p) => starts(p, '/app/mailbox', '/app/chat') }
+    : { key: 'mail', label: 'Messages', href: '/app/chat', icon: NavIcons.messages, matches: (p) => starts(p, '/app/chat') },
 ];
 
 export function activeMobileTab(pathname: string): Tab['key'] | null {

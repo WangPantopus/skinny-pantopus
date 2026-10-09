@@ -167,10 +167,11 @@ export default function NotificationPreferencesPage() {
             value={prefs.home_reminders_enabled} onChange={(v) => update({ home_reminders_enabled: v })} />
           <ToggleRow icon={<Briefcase className="w-5 h-5" />}
             title="Gig Updates" subtitle="Active gig status changes"
-            value={prefs.gig_updates_enabled} onChange={(v) => update({ gig_updates_enabled: v })} />
-          <ToggleRow icon={<Mail className="w-5 h-5" />}
+            value={prefs.gig_updates_enabled} onChange={(v) => update({ gig_updates_enabled: v })} last={!launchFeatures.mailbox} />
+          {/* Launch cut #10 (Mailbox): no mailbox digest. */}
+          {launchFeatures.mailbox && <ToggleRow icon={<Mail className="w-5 h-5" />}
             title="Mail Summary" subtitle="Daily mailbox digest"
-            value={prefs.mail_summary_enabled} onChange={(v) => update({ mail_summary_enabled: v })} last />
+            value={prefs.mail_summary_enabled} onChange={(v) => update({ mail_summary_enabled: v })} last />}
         </Section>
 
         {/* Launch cut #1 (Beacon): Beacon notifications are hidden. */}

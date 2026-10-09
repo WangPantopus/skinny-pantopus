@@ -84,6 +84,7 @@ import {
   type StatusDotTone,
 } from '@/components/archetypes/place';
 import type { HeroVariant } from '@/components/archetypes/place';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // ── formatting helpers ──────────────────────────────────────
 function money(n: number | null | undefined): string | null {
@@ -661,11 +662,12 @@ export interface VerifyLockedItem {
 export const VERIFY_LOCKED_SECTIONS: VerifyLockedItem[] = [
   { icon: MessageCircle, title: 'Neighbor messaging', reason: 'Verify your address to message neighbors.' },
   { icon: BadgeCheck, title: 'Verified badge', reason: 'Verify your address to get your verified badge.' },
-  {
+  // Launch cut #10 (Mailbox): the mailbox isn't something verifying opens.
+  ...(launchFeatures.mailbox ? [{
     icon: Mailbox,
     title: 'Your mailbox',
     reason: 'Verify your address for your mailbox — packages, civic notices, and permits.',
-  },
+  }] : []),
 ];
 
 export function renderVerifyLocked(onVerify: () => void): ReactNode {

@@ -8,6 +8,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const badgeService = require('../services/badgeService');
 const notificationService = require('../services/notificationService');
+const syncChangedService = require('../services/syncChangedService');
 const { isBlocked, blockedUserIds } = require('../services/blockService');
 const { closedGigRoomIds, isGigRoomClosedTo, isRoomClosedForWrites } = require('../services/chatGigRoomAccess');
 const { setGauge } = require('../services/chatMetrics');
@@ -241,6 +242,9 @@ module.exports = (io) => {
   // Initialize badge + notification services with io + connectedUsers references
   badgeService.init(io, connectedUsers);
   notificationService.init(io, connectedUsers);
+  // Instant Screens: database changes (NOTIFY sync_changed) → 'sync:changed' to the people they concern
+  syncChangedService.init(io, connectedUsers);
+  syncChangedService.start();
   // Persistent login: disconnect sockets of revoked sessions
   subscribeSessionRevocation(io);
   // ============ MIDDLEWARE ============
