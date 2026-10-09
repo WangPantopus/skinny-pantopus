@@ -10,8 +10,10 @@ import app.pantopus.android.data.api.models.homedashboard.HomeSettingsUpdateResp
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemDto
 import app.pantopus.android.data.api.models.homedashboard.UpdateSeasonalChecklistItemRequest
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.PATCH
 import retrofit2.http.Path
@@ -41,6 +43,13 @@ interface HomeDashboardApi {
         @Path("id") homeId: String,
         @Query("include_health_score") includeHealthScore: Boolean? = null,
     ): HomeDashboardResponse
+
+    /** [dashboard] (without the health score) for the screens' store: a 304 means the copy is current. */
+    @GET("api/homes/{id}/dashboard")
+    suspend fun dashboardConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeDashboardResponse>
 
     /**
      * `GET /api/homes/:id/health-score` — route `backend/routes/home.js:7482`.

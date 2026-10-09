@@ -18,6 +18,12 @@
 //    Scheduled → status `scheduled` | `in_progress`
 //    History   → status `resolved` | `canceled` (the server's `HomeIssue.status`)
 //
+//  Instant Screens: the list and the viewer's access go through the screen
+//  store (Homes, 2 minutes, topic `home:{id}`), so coming back shows them in
+//  the first frame and asks again only once they are out of date. Only an
+//  owner's or household member's open-ended access, as the Home dashboard
+//  last confirmed it, sees the copy before the re-check (`HomeCopyGate`).
+//
 
 // swiftlint:disable file_length type_body_length
 
@@ -109,6 +115,8 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
     }
 
     private(set) var state: ListOfRowsState = .loading
+    var refreshFailureMessage: String?
+    private(set) var staleNotice: String?
 
     /// One-shot navigation/presentation signal consumed by the view.
     var pendingEvent: HomeIssuesEvent? {
@@ -140,40 +148,89 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
 
     private let homeId: String
     private let api: APIClient
+    private let store: ScreenStore
 
     init(homeId: String, api: APIClient = .shared) {
         self.homeId = homeId
         self.api = api
+        store = ScreenStore.store(for: api)
+        // The store's copy shows in the first frame (Instant Screens), for household access only.
+        if HomeCopyGate.showsCopy(homeId: homeId, store: store),
+           let copy = store.peek(listEndpoint, as: HomeIssuesResponse.self) {
+            access = store.peek(accessEndpoint, as: HomeAccessDTO.self)?.value
+            show(copy)
+        }
     }
 
     // MARK: - Load
 
     func load() async {
-        if case .loading = state {} else { state = .loading }
-        await fetch()
+        await fetch(force: false)
     }
 
     func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     func loadMoreIfNeeded() async {} // `/issues` is not paginated.
 
-    private func fetch() async {
+    private var listEndpoint: Endpoint {
+        HomeIssuesEndpoints.list(homeId: homeId)
+    }
+
+    private var accessEndpoint: Endpoint {
+        HomeAdminEndpoints.myAccess(homeId: homeId)
+    }
+
+    private func fetch(force: Bool) async {
+        let household = HomeCopyGate.showsCopy(homeId: homeId, store: store)
+        let listGate: @Sendable (HomeIssuesResponse) -> Bool = { _ in household }
+        let accessGate: @Sendable (HomeAccessDTO) -> Bool = { _ in household }
+        let topics: Set<String> = [ScreenTopic.home(homeId)]
         do {
-            let response: HomeIssuesResponse = try await api.request(
-                HomeIssuesEndpoints.list(homeId: homeId)
-            )
-            access = try? await api.request(HomeAdminEndpoints.myAccess(homeId: homeId), as: HomeAccessDTO.self)
-            issues = response.issues
+            // Without household access in hand, every visit waits for the server.
+            try await store.show(
+                listEndpoint,
+                as: HomeIssuesResponse.self,
+                kind: .homes,
+                topics: topics,
+                force: force || !household,
+                showsBeforeRecheck: listGate
+            ) { show($0) }
+            access = try? await store.load(
+                accessEndpoint,
+                as: HomeAccessDTO.self,
+                kind: .homes,
+                topics: topics,
+                force: force || !household,
+                showsBeforeRecheck: accessGate
+            ).value
             rebuildState()
+        } catch is CancellationError {
+            return
         } catch {
-            issues = nil
-            state = .error(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't load this home's issues."
-            )
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load this home's issues."
+            guard state.showsContent, !ScreenStore.isRefusal(error) else {
+                issues = nil
+                state = .error(message: message)
+                return
+            }
+            // The rows stay; a pull to refresh says it failed.
+            if force { refreshFailureMessage = message }
+            staleNotice = store.peek(listEndpoint, as: HomeIssuesResponse.self)?.refreshNotice
         }
+    }
+
+    private func show(_ snapshot: ScreenSnapshot<HomeIssuesResponse>) {
+        staleNotice = snapshot.refreshNotice
+        issues = snapshot.value.issues
+        rebuildState()
+    }
+
+    /// After your own change: the Home's entries are out of date, and this list reads again.
+    private func reloadAfterWrite() async {
+        store.markStale(topics: [ScreenTopic.home(homeId)])
+        await fetch(force: true)
     }
 
     // MARK: - Mutations
@@ -201,7 +258,7 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
                 )
             ) as HomeIssueResponse
             pendingCreate = nil
-            await fetch()
+            await reloadAfterWrite()
             return true
         } catch {
             toast = ToastMessage(
@@ -222,7 +279,7 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
                     request: .status(status)
                 )
             ) as HomeIssueResponse
-            await fetch()
+            await reloadAfterWrite()
         } catch {
             toast = ToastMessage(
                 text: (error as? APIError)?.errorDescription ?? "Failed to update issue",
@@ -242,7 +299,7 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
                     request: .status("canceled")
                 )
             ) as HomeIssueResponse
-            await fetch()
+            await reloadAfterWrite()
         } catch {
             toast = ToastMessage(
                 text: (error as? APIError)?.errorDescription ?? "Failed to dismiss issue",
