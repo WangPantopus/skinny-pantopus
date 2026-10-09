@@ -19,6 +19,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -37,6 +38,13 @@ interface ChatApi {
     suspend fun unifiedConversations(
         @Query("limit") limit: Int = 100,
     ): UnifiedConversationsResponse
+
+    /** [unifiedConversations] for the screens' store: sends the stored ETag; a 304 means the copy is current. */
+    @GET("api/chat/unified-conversations")
+    suspend fun unifiedConversationsConditional(
+        @Query("limit") limit: Int,
+        @Header("If-None-Match") etag: String?,
+    ): Response<UnifiedConversationsResponse>
 
     /** `GET /api/chat/stats`. */
     @GET("api/chat/stats")
