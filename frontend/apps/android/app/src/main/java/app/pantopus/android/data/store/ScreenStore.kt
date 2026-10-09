@@ -70,11 +70,30 @@ class ScreenStore
             val state = MutableStateFlow(Stored<Any>())
             var etag: String? = null
             var stale = false
+
+            /** Own edits (`put`, `remove`): a read that started before one never overwrites it. */
+            var edits = 0L
+
+            /** Topic marks: a reply to a read that started before one is kept but stays out of date. */
+            var marks = 0L
             var inFlight: Deferred<Unit>? = null
             var lastUsed = SystemClock.elapsedRealtime()
 
             val removable: Boolean get() = state.subscriptionCount.value == 0 && inFlight?.isActive != true
+
+            fun markStaleLocked() {
+                stale = true
+                marks++
+            }
         }
+
+        /** What a read captured when it started (see [settle]). */
+        private data class Ticket(
+            val generation: Long,
+            val identity: String?,
+            val edits: Long,
+            val marks: Long,
+        )
 
         init {
             context.registerComponentCallbacks(
@@ -128,11 +147,10 @@ class ScreenStore
                     if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
                     val running = slot.inFlight?.takeIf { it.isActive }
                     if (running != null) return@synchronized slot to running
-                    val gen = generation
-                    val identity = identity()
+                    val ticket = Ticket(generation, identity(), slot.edits, slot.marks)
                     val etag = slot.etag.takeIf { current.data != null }
                     slot.state.value = current.copy(refreshing = true)
-                    val job = scope.async { settle(slot, fetchSafely(fetch, etag), gen, identity) }
+                    val job = scope.async { settle(slot, fetchSafely(fetch, etag), ticket) }
                     slot.inFlight = job
                     slot to job
                 }
@@ -150,7 +168,7 @@ class ScreenStore
          * topic ending in `:*` (a list's "supporttrain:*") matches every topic with that prefix.
          */
         fun markStale(topic: String) {
-            synchronized(slots) { slots.values.forEach { if (it.key.matches(topic)) it.stale = true } }
+            synchronized(slots) { slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() } }
         }
 
         /**
@@ -164,6 +182,7 @@ class ScreenStore
             val account = accountId() ?: return
             synchronized(slots) {
                 val slot = slotLocked(key, account)
+                slot.edits++
                 slot.etag = null
                 slot.stale = false
                 slot.state.value = Stored(data, fetchedAt = System.currentTimeMillis())
@@ -172,7 +191,7 @@ class ScreenStore
 
         /** Marks every entry of [kinds] out of date, e.g. the household ones after a socket reconnect. */
         fun markStale(kinds: Set<StoreKind>) {
-            synchronized(slots) { slots.values.forEach { if (it.key.kind in kinds) it.stale = true } }
+            synchronized(slots) { slots.values.forEach { if (it.key.kind in kinds) it.markStaleLocked() } }
         }
 
         /** Drops one entry, e.g. after the item was deleted. */
@@ -180,6 +199,7 @@ class ScreenStore
             val account = accountId() ?: return
             synchronized(slots) {
                 slots.remove("$account|${key.id}")?.let { slot ->
+                    slot.edits++
                     slot.inFlight?.cancel()
                     slot.state.value = Stored()
                 }
@@ -242,16 +262,18 @@ class ScreenStore
         private fun <T : Any> settle(
             slot: Slot,
             result: NetworkResult<Conditional<T>>,
-            gen: Long,
-            identity: String?,
+            ticket: Ticket,
         ) {
             synchronized(slots) {
-                // Late reply: the store was wiped, or another account or session signed in meanwhile. Nothing is
-                // written; an entry still in the store just stops showing a read in progress.
-                if (gen != generation || identity != identity()) {
-                    if (gen == generation) slot.state.value = slot.state.value.copy(refreshing = false)
+                // Late reply (contract §5): the store was wiped, another account or session signed in, or an own
+                // edit replaced the entry meanwhile. Nothing is written; an entry still in the store just stops
+                // showing a read in progress.
+                if (ticket.generation != generation || ticket.identity != identity() || ticket.edits != slot.edits) {
+                    if (ticket.generation == generation) slot.state.value = slot.state.value.copy(refreshing = false)
                     return
                 }
+                // A topic marked the entry while the read was out: the reply is kept, and the next read asks again.
+                val markedMeanwhile = ticket.marks != slot.marks
                 val previous = slot.state.value
                 val now = System.currentTimeMillis()
                 slot.state.value =
@@ -260,11 +282,11 @@ class ScreenStore
                             when (val reply = result.data) {
                                 is Conditional.Fresh -> {
                                     slot.etag = reply.etag
-                                    slot.stale = false
+                                    slot.stale = markedMeanwhile
                                     Stored(reply.data, fetchedAt = now)
                                 }
                                 Conditional.NotModified -> {
-                                    slot.stale = false
+                                    slot.stale = markedMeanwhile
                                     previous.copy(fetchedAt = now, refreshing = false, failure = null)
                                 }
                             }
