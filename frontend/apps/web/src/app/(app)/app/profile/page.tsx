@@ -13,6 +13,7 @@ import { buildUserProfilePath, chosenUsername, usernameHandle } from '@pantopus/
 import ResidencyHomeBlock from '@/components/profile/public/ResidencyHomeBlock';
 import ErrorState from '@/components/ui/ErrorState';
 import { launchFeatures } from '@/lib/featureFlags';
+import { fetchMe } from '@/lib/me';
 
 // Launch cuts #4/#3: the stats row has one column per card still shown.
 const STATS_LG_COLS = ({ 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 5: 'lg:grid-cols-5' } as Record<number, string>)[
@@ -41,7 +42,7 @@ export default function MyProfilePage() {
         return;
       }
 
-      const userData = await api.users.getMyProfile();
+      const userData = await fetchMe();
       setUser(userData);
 
       // Load user stats

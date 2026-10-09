@@ -16,6 +16,7 @@ import { toast } from '@/components/ui/toast-store';
 import type { GigListItem } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
 import GigCardV2 from './GigCardV2';
+import { fetchMe } from '@/lib/me';
 
 // ─── Constants ─────────────────────────────────────────────
 const CATEGORY_FILTERS = ['All', ...GIG_BROWSE_CATEGORIES];
@@ -163,7 +164,7 @@ export default function GigsBrowseV2Page() {
   useEffect(() => {
     const loadViewer = async () => {
       try {
-        const me = await api.users.getMyProfile();
+        const me = await fetchMe();
         setViewerUserId(me?.id ? String(me.id) : null);
       } catch {
         setViewerUserId(null);

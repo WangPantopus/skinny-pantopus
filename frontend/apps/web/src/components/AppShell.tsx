@@ -18,6 +18,9 @@ import UnifiedFAB, { routeHasFab } from '@/components/UnifiedFAB';
 import dynamic from 'next/dynamic';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { setMe, useMe } from '@/lib/me';
+import { primaryHomeQuery } from '@/lib/primaryHome';
+import { conversationsQuery } from '@/lib/conversations';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { identityCopy } from '@/lib/identityLabels';
 
@@ -122,7 +125,6 @@ function sidebarReducer(s: SidebarState, a: SidebarAction): SidebarState {
 
 // ── App-shell reducer ──────────────────────────────────────────
 type AppShellState = {
-  user: User | null;
   discoverQuery: string;
   activeListings: number;
   composerOpen: boolean;
@@ -130,12 +132,10 @@ type AppShellState = {
   feedPosting: boolean;
   mounted: boolean;
 };
-type AppShellAction = { type: 'SET_USER'; value: User | null } | { type: 'SET_DISCOVER_QUERY'; value: string } | { type: 'SET_ACTIVE_LISTINGS'; value: number } | { type: 'SET_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_POSTING'; value: boolean } | { type: 'SET_MOUNTED'; value: boolean };
+type AppShellAction = { type: 'SET_DISCOVER_QUERY'; value: string } | { type: 'SET_ACTIVE_LISTINGS'; value: number } | { type: 'SET_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_POSTING'; value: boolean } | { type: 'SET_MOUNTED'; value: boolean };
 
 function appShellReducer(s: AppShellState, a: AppShellAction): AppShellState {
   switch (a.type) {
-    case 'SET_USER':
-      return { ...s, user: a.value };
     case 'SET_DISCOVER_QUERY':
       return { ...s, discoverQuery: a.value };
     case 'SET_ACTIVE_LISTINGS':
@@ -154,7 +154,6 @@ function appShellReducer(s: AppShellState, a: AppShellAction): AppShellState {
 }
 
 const INITIAL_APP_STATE: AppShellState = {
-  user: null,
   discoverQuery: '',
   activeListings: 0,
   composerOpen: false,
@@ -190,10 +189,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }));
   const { collapsed, mobileOpen, hoverExpanded } = sidebarState;
 
-  // ── App state (useReducer: user, discoverQuery, activeListings,
+  // ── App state (useReducer: discoverQuery, activeListings,
   //    composerOpen, feedComposerOpen, feedPosting, mounted) ──
   const [appState, appDispatch] = useReducer(appShellReducer, INITIAL_APP_STATE);
-  const { user, discoverQuery, composerOpen, feedComposerOpen, feedPosting, mounted } = appState;
+  const { discoverQuery, composerOpen, feedComposerOpen, feedPosting, mounted } = appState;
 
   useEffect(() => {
     appDispatch({ type: 'SET_MOUNTED', value: true });
@@ -227,17 +226,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false });
   }, [pathname]);
 
-  // ── User fetch ────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = getAuthToken();
-        if (!token) return;
-        const u = await api.users.getMyProfile();
-        appDispatch({ type: 'SET_USER', value: u });
-      } catch {}
-    })();
-  }, []);
+  // ── You: the shared profile entry (lib/me.ts) ─────────────
+  const { data: me } = useMe({ enabled: mounted && !!getAuthToken() });
+  const user: User | null = me ?? null;
 
   // ── Tile prefetch for home area ──────────────────────────────
   const { viewerHome } = useViewerHome();
@@ -610,8 +601,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         user={user}
         onOpenChange={setNamePromptOpen}
         onSaved={(saved) => {
-          appDispatch({ type: 'SET_USER', value: user ? { ...user, ...saved } : saved });
-          // The Hub greeting and profile pages read the name from their own queries.
+          setMe(saved);
+          // The Hub greeting and public profile pages read the name from their own queries.
           queryClient.invalidateQueries({ queryKey: queryKeys.hub() });
           queryClient.invalidateQueries({ queryKey: ['profile'] });
         }}
@@ -690,11 +681,7 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
   // intelligence query key needs the home id, not known on hover).
   const prefetchPlace = useCallback(() => {
     router.prefetch('/app/place');
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.placePrimaryHome(),
-      queryFn: () => api.homes.getPrimaryHome(),
-      staleTime: PREFETCH_STALE,
-    });
+    queryClient.prefetchQuery(primaryHomeQuery());
   }, [router, queryClient]);
 
   // Today — the briefing tab; the query key is known ahead of time.
@@ -715,11 +702,7 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
   const prefetchMail = useCallback(() => {
     if (launchFeatures.mailbox) router.prefetch('/app/mailbox');
     router.prefetch('/app/chat');
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.conversations(),
-      queryFn: () => api.chat.getUnifiedConversations({ limit: 200 }),
-      staleTime: PREFETCH_STALE,
-    });
+    queryClient.prefetchQuery(conversationsQuery());
   }, [router, queryClient]);
 
   // Scheduling hub — the hub query key needs the active owner (resolved client-side

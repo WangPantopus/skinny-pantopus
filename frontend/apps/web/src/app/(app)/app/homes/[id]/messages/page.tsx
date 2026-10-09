@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, MessageCircle, Mail } from 'lucide-react';
 import * as api from '@pantopus/api';
+import { fetchMe } from '@/lib/me';
 
 // Why no chat opens: the viewer can't read who the admin is, a read failed, the
 // viewer is the only admin, or the member list shows no admin.
@@ -47,7 +48,7 @@ export default function HomeMessagesPage() {
       const [homeRes, occupantsRes, meRes] = await Promise.allSettled([
         api.homes.getHome(homeId),
         api.homes.getHomeOccupants(homeId),
-        api.users.getMyProfile(),
+        fetchMe(),
       ]);
 
       const home = homeRes.status === 'fulfilled' ? (homeRes.value as { home?: { owner?: { id: string } | null } })?.home : null;

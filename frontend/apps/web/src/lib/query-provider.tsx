@@ -6,6 +6,7 @@ import { purgeExpiredPlacePreviews } from '@/components/place/pendingPlace';
 import { subscribeConnectivity } from '@/lib/connectivity';
 import { clearCachedMapTiles } from '@/utils/tilePrefetch';
 import { AUTH_SESSION_CHANGE_KEY, getAuthToken, onTokenChange } from '@pantopus/api';
+import { setActiveQueryClient } from '@/lib/active-query-client';
 
 // Queries pause while offline. React Query's own detection believes the
 // browser's offline event, which can be wrong while requests still work.
@@ -29,11 +30,18 @@ function clearAccountDeviceData(sessionEnded: boolean) {
   clearCachedMapTiles();
 }
 
+// Instant Screens (contract §6): the web keeps what it loaded in memory only,
+// at most 200 entries, and drops an entry nobody has used for 30 minutes. A
+// screen shows what it has at once; loading shows only when it has nothing.
+const UNUSED_ENTRY_MS = 30 * 60 * 1000;
+const MAX_ENTRIES = 200;
+
 function createQueryClient() {
-  return new QueryClient({
+  const client = new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 30 * 1000,
+        gcTime: UNUSED_ENTRY_MS,
         retry: (failureCount, error) => {
           // Don't retry on 4xx errors. The API client rejects with `statusCode`.
           const failure = error as { statusCode?: number; status?: number } | null;
@@ -48,6 +56,17 @@ function createQueryClient() {
       },
     },
   });
+  // Past 200 entries, the least recently updated ones no screen is showing go
+  // first (never the entry being added, nor one still loading).
+  const cache = client.getQueryCache();
+  cache.subscribe((event) => {
+    if (event.type !== 'added' || cache.getAll().length <= MAX_ENTRIES) return;
+    const unused = cache.getAll()
+      .filter((query) => query !== event.query && query.getObserversCount() === 0 && query.state.fetchStatus === 'idle')
+      .sort((a, b) => a.state.dataUpdatedAt - b.state.dataUpdatedAt);
+    unused.slice(0, cache.getAll().length - MAX_ENTRIES).forEach((query) => cache.remove(query));
+  });
+  return client;
 }
 
 export default function QueryProvider({ children }: { children: React.ReactNode }) {
@@ -60,6 +79,8 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
   }, []);
   const [queryClient, setQueryClient] = useState(createQueryClient);
   const [sessionGeneration, setSessionGeneration] = useState(0);
+  // Set while rendering, so children's first effects already read this session's cache.
+  setActiveQueryClient(queryClient);
 
   useEffect(() => {
     const retire = () => {

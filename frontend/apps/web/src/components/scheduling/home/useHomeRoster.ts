@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import * as api from "@pantopus/api";
 import { toMember, type HomeMember } from "./helpers";
+import { fetchMe } from "@/lib/me";
 
 export interface HomeRoster {
   members: HomeMember[];
@@ -29,7 +30,7 @@ export function useHomeRoster(homeId: string | undefined): HomeRoster {
     (async () => {
       const [occRes, meRes] = await Promise.allSettled([
         api.homes.getHomeOccupants(homeId),
-        api.users.getMyProfile(),
+        fetchMe(),
       ]);
       if (cancelled) return;
       if (occRes.status === "fulfilled") {

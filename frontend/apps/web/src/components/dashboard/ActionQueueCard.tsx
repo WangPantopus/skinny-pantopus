@@ -6,6 +6,7 @@ import * as api from '@pantopus/api';
 import type { User, GigListItem } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 import { openFeedComposer } from '@/lib/feedComposerEvents';
+import { fetchMe } from '@/lib/me';
 
 type Priority = 'high' | 'medium' | 'low';
 
@@ -77,7 +78,7 @@ export default function ActionQueueCard() {
     const failures: Failed = {};
     setLoadingStripeStatus(true);
     Promise.all([
-      api.users.getMyProfile().then(setUser).catch((err) => {
+      fetchMe().then(setUser).catch((err) => {
         console.warn('[ActionQueueCard] Failed to load profile:', err?.message);
         failures.profile = true;
       }),

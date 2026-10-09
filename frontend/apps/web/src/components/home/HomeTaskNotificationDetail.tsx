@@ -6,6 +6,7 @@ import * as api from '@pantopus/api';
 import TaskAttachmentList from './TaskAttachmentList';
 import { recurrenceStatusText, validAutomaticTaskRecurrence, type AutomaticTaskRecurrence } from './tasks/homeTaskModel';
 import { RETURN_REFRESH_MS, transientFailure } from './returnRefresh';
+import { fetchMe } from '@/lib/me';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const statuses: Record<string, string> = { open: 'Open', in_progress: 'In progress', done: 'Done', canceled: 'Canceled' };
@@ -64,7 +65,7 @@ export default function HomeTaskNotificationDetail({ homeId, taskId }: { homeId:
       if (!background) { shown = false; setTask(null); setScope(null); setLoading(true); setError(''); }
       try {
         if (!actorId) {
-          const profile = await api.users.getMyProfile();
+          const profile = await fetchMe();
           if (!active(ticket)) return;
           if (!uuid.test(profile.id)) throw new Error('Invalid current account');
           actorId = profile.id;

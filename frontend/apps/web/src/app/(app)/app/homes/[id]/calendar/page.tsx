@@ -17,6 +17,7 @@ import {
   useHomePermissions,
 } from "@/components/home/useHomePermissions";
 import HomeAgenda from "@/components/scheduling/home/HomeAgenda";
+import { fetchMe } from "@/lib/me";
 
 function CalendarContent() {
   const router = useRouter();
@@ -30,8 +31,7 @@ function CalendarContent() {
   }, [router]);
 
   useEffect(() => {
-    api.users
-      .getMyProfile()
+    fetchMe()
       .then((u) => setCurrentUserId((u as { id?: string })?.id ?? null))
       .catch(() => {});
   }, []);
