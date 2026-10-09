@@ -9,6 +9,7 @@ import { getAuthToken, clearAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import AccountDeleteModal from '@/components/profile/AccountDeleteModal';
 import StepUpPasswordModal from '@/components/settings/StepUpPasswordModal';
+import StorageDataSection from '@/components/settings/StorageDataSection';
 import ErrorState from '@/components/ui/ErrorState';
 import { ACCOUNT_DELETED_NOTICE_KEY, hardNavigate } from '@/lib/session-refresh';
 import { setMe, useMe } from '@/lib/me';
@@ -369,6 +370,9 @@ export default function SettingsPage() {
               </svg>
             </button>
           </div>
+
+          {/* Storage & data: what this browser keeps (contract §7) */}
+          <StorageDataSection />
 
           {/* Legal */}
           <div className="bg-surface rounded-xl border border-app p-6">
