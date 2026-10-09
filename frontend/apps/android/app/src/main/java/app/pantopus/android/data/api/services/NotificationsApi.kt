@@ -4,9 +4,11 @@ import app.pantopus.android.data.api.models.notifications.MarkAllNotificationsRe
 import app.pantopus.android.data.api.models.notifications.NotificationActionEcho
 import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -36,6 +38,22 @@ interface NotificationsApi {
      */
     @GET("api/notifications/unread-count")
     suspend fun unreadCount(): NotificationUnreadCountResponse
+
+    /** [unreadCount] for the screens' store: sends the stored ETag; a 304 means the copy is current. */
+    @GET("api/notifications/unread-count")
+    suspend fun unreadCountConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<NotificationUnreadCountResponse>
+
+    /** [list]'s first page for the screens' store. */
+    @GET("api/notifications")
+    suspend fun listConditional(
+        @Query("limit") limit: Int,
+        @Query("offset") offset: Int,
+        @Query("unread") unreadOnly: Boolean?,
+        @Query("context") context: String?,
+        @Header("If-None-Match") etag: String?,
+    ): Response<NotificationsListResponse>
 
     /**
      * `PATCH /api/notifications/:id/read` — route
