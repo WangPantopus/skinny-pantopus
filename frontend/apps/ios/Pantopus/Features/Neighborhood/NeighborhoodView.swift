@@ -77,6 +77,8 @@ struct NeighborhoodView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
+        // A home added, claimed or verified (`homes`) can change the meter.
+        .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.homes) }, perform: { await viewModel.load() })
     }
 
     // MARK: - Header
