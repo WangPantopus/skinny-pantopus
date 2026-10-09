@@ -1036,61 +1036,6 @@ class PublicProfileViewModel
                 else -> PublicProfileKind.Persona
             }
 
-        private fun buildBadges(profile: PublicProfileDto): List<IdentityPillarBadge> {
-            val verified = profile.verified == true
-            val homeState =
-                if (hasHomeResidency(profile)) {
-                    IdentityPillarVerificationState.Verified
-                } else {
-                    IdentityPillarVerificationState.Unverified
-                }
-            val businessState =
-                if (profile.accountType == "business") {
-                    IdentityPillarVerificationState.Verified
-                } else {
-                    IdentityPillarVerificationState.Unverified
-                }
-            return listOf(
-                IdentityPillarBadge(
-                    pillar = IdentityPillar.Personal,
-                    state = if (verified) IdentityPillarVerificationState.Verified else IdentityPillarVerificationState.Unverified,
-                ),
-                IdentityPillarBadge(
-                    pillar = IdentityPillar.Home,
-                    state = homeState,
-                ),
-                IdentityPillarBadge(
-                    pillar = IdentityPillar.Business,
-                    state = businessState,
-                ),
-            )
-        }
-
-        private fun hasHomeResidency(profile: PublicProfileDto): Boolean {
-            val r = profile.residency ?: return false
-            val verifiedValue = r["verified"]
-            if (verifiedValue is Boolean) return verifiedValue
-            return r.isNotEmpty()
-        }
-
-        private fun relativeTimestamp(iso: String?): String {
-            if (iso.isNullOrEmpty()) return ""
-            val instant =
-                try {
-                    Instant.parse(iso)
-                } catch (_: Throwable) {
-                    return ""
-                }
-            val seconds = Duration.between(instant, Instant.now()).seconds
-            return when {
-                seconds < 60 -> "Just now"
-                seconds < 3_600 -> "${seconds / 60}m ago"
-                seconds < 86_400 -> "${seconds / 3_600}h ago"
-                seconds < 604_800 -> "${seconds / 86_400}d ago"
-                else -> instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
-            }
-        }
-
         private fun friendlyMessage(error: NetworkError): String =
             when (error) {
                 NetworkError.NotFound -> "We couldn't find this profile."
@@ -1126,3 +1071,60 @@ class PublicProfileViewModel
             const val HANDSHAKE_UNAVAILABLE_MESSAGE = "Following isn't available from this profile yet."
         }
     }
+
+// Pure helpers of the profile projection (outside the view model, which detekt keeps small).
+
+private fun buildBadges(profile: PublicProfileDto): List<IdentityPillarBadge> {
+    val verified = profile.verified == true
+    val homeState =
+        if (hasHomeResidency(profile)) {
+            IdentityPillarVerificationState.Verified
+        } else {
+            IdentityPillarVerificationState.Unverified
+        }
+    val businessState =
+        if (profile.accountType == "business") {
+            IdentityPillarVerificationState.Verified
+        } else {
+            IdentityPillarVerificationState.Unverified
+        }
+    return listOf(
+        IdentityPillarBadge(
+            pillar = IdentityPillar.Personal,
+            state = if (verified) IdentityPillarVerificationState.Verified else IdentityPillarVerificationState.Unverified,
+        ),
+        IdentityPillarBadge(
+            pillar = IdentityPillar.Home,
+            state = homeState,
+        ),
+        IdentityPillarBadge(
+            pillar = IdentityPillar.Business,
+            state = businessState,
+        ),
+    )
+}
+
+private fun hasHomeResidency(profile: PublicProfileDto): Boolean {
+    val r = profile.residency ?: return false
+    val verifiedValue = r["verified"]
+    if (verifiedValue is Boolean) return verifiedValue
+    return r.isNotEmpty()
+}
+
+private fun relativeTimestamp(iso: String?): String {
+    if (iso.isNullOrEmpty()) return ""
+    val instant =
+        try {
+            Instant.parse(iso)
+        } catch (_: Throwable) {
+            return ""
+        }
+    val seconds = Duration.between(instant, Instant.now()).seconds
+    return when {
+        seconds < 60 -> "Just now"
+        seconds < 3_600 -> "${seconds / 60}m ago"
+        seconds < 86_400 -> "${seconds / 3_600}h ago"
+        seconds < 604_800 -> "${seconds / 86_400}d ago"
+        else -> instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
+    }
+}
