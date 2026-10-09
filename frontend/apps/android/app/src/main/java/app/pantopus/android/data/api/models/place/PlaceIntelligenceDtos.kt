@@ -1281,6 +1281,8 @@ data class PlaceIntelligence(
     val viewer: PlaceViewer? = null,
     /** `Home.move_in_date` (YYYY-MM-DD) for the movers card; null without household access and from older servers. */
     @Json(name = "move_in_date") val moveInDate: String? = null,
+    /** The home's IANA time zone (Today turns over at its midnight); null without coordinates and from older servers. */
+    @Json(name = "time_zone") val timeZone: String? = null,
 )
 
 // ─── Anonymous T0 preview (`GET /api/public/place`) ──────────

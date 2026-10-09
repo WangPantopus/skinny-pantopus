@@ -528,10 +528,11 @@ sealed interface TodayTabUiState {
         val fetchedAt: Long = 0L,
         val refreshFailed: Boolean = false,
     ) : TodayTabUiState {
-        /** Inside the 10-minute window and still the same day: coming back reads nothing. */
+        /** Inside the 10-minute window and still the same day at the home: coming back reads nothing. */
         fun isFresh(now: Long = System.currentTimeMillis()): Boolean {
             if (now - fetchedAt !in 0 until TODAY_FRESH_MS) return false
-            val zone = ZoneId.systemDefault()
+            // Midnight in the home's time zone (contract §4); the phone's when the reply has none.
+            val zone = intelligence.timeZone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
             return Instant.ofEpochMilli(fetchedAt).atZone(zone).toLocalDate() == Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         }
     }
