@@ -50,6 +50,8 @@ import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
@@ -102,6 +104,8 @@ fun PlaceDashboardScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("place", state is PlaceDashboardUiState.Loaded)
     val unreadCount by viewModel.unreadCount.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     // A Home this account can no longer read (left, removed, deleted): the Place tab moves on.
     LaunchedEffect(state) {
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
@@ -112,11 +116,11 @@ fun PlaceDashboardScreen(
     var showVerify by remember { mutableStateOf(false) }
     val verifyAddress = (state as? PlaceDashboardUiState.Loaded)?.intelligence?.place?.label.orEmpty()
 
-    // Pull to refresh, like iOS's `.refreshable`. The spinner shows only for a pull, not the first load.
+    // Pull to refresh, like iOS's `.refreshable`: it reads now with the indicator over the dashboard, which stays.
     var pulled by remember { mutableStateOf(false) }
-    LaunchedEffect(state) { if (state !is PlaceDashboardUiState.Loading) pulled = false }
+    LaunchedEffect(refreshing) { if (!refreshing) pulled = false }
     PullToRefreshBox(
-        isRefreshing = pulled && state is PlaceDashboardUiState.Loading,
+        isRefreshing = pulled && refreshing,
         onRefresh = {
             pulled = true
             viewModel.refresh()
@@ -152,6 +156,7 @@ fun PlaceDashboardScreen(
                     onComposeMessage = onComposeMessage,
                     onOpenInbox = onOpenInbox,
                     onRetry = viewModel::refresh,
+                    refreshNotice = refreshNotice,
                 )
         }
     }
@@ -205,6 +210,7 @@ internal fun PlaceDashboardContent(
     unreadCount: Int = 0,
     homeId: String = "",
     onRetry: (() -> Unit)? = null,
+    refreshNotice: RefreshNotice? = null,
 ) {
     val isVerified = intel.tier == PlaceTier.T4
     // Guests and service providers aren't residents, so they get no verify prompts.
@@ -224,6 +230,10 @@ internal fun PlaceDashboardContent(
                 unreadCount = unreadCount,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
             )
+        }
+        // Instant Screens contract §3: a read failed on a copy more than a day old.
+        if (refreshNotice != null) {
+            item { RefreshFailedLine(refreshNotice, Modifier.padding(horizontal = 16.dp)) }
         }
         if (isClaimed) {
             item {

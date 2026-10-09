@@ -68,6 +68,18 @@ object StoreKeys {
 
     private const val COORDINATE_SCALE = 1000.0
 
+    /**
+     * A home's Place for the viewer's role (the Place dashboard): every section, kind Place. A claim, verification or
+     * household change marks it through `homes`, `home:` and `place:`.
+     */
+    fun place(homeId: String) =
+        StoreKey<PlaceIntelligence>(
+            "api/homes/$homeId/intelligence",
+            mapOf("ballot" to "1"),
+            kind = StoreKind.PLACE,
+            topics = setOf("place:$homeId", "home:$homeId", StoreTopics.HOMES),
+        )
+
     /** A home's Today: [TODAY_SECTIONS] of its Place intelligence. */
     fun today(homeId: String) =
         StoreKey<PlaceIntelligence>(
