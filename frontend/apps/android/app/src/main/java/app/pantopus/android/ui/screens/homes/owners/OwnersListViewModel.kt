@@ -115,11 +115,18 @@ class OwnersListViewModel
         private val _removalError = MutableStateFlow<String?>(null)
         val removalError: StateFlow<String?> = _removalError.asStateFlow()
 
+        /** The viewer's last known access (a copy's too): enough to show the roster. */
         private val _access = MutableStateFlow<HomeAccessDto?>(null)
-        val access: StateFlow<HomeAccessDto?> = _access.asStateFlow()
+
+        /**
+         * Invite, transfer and remove wait until this visit's access read confirms them; a copy's access only shows
+         * the roster (as on iOS).
+         */
+        private val _confirmedAccess = MutableStateFlow<HomeAccessDto?>(null)
+        val access: StateFlow<HomeAccessDto?> = _confirmedAccess.asStateFlow()
 
         private val canManageOwnership: Boolean
-            get() = _access.value?.can("ownership.manage") == true
+            get() = _confirmedAccess.value?.can("ownership.manage") == true
 
         /** Cached roster — preserves backend ordering and drives
          *  optimistic-remove rollback. */
@@ -272,11 +279,15 @@ class OwnersListViewModel
             when {
                 list != null && viewer != null -> {
                     _access.value = viewer
+                    // Confirmed = the server answered for this access within the Homes window (a fresh copy or this read);
+                    // an older copy kept after a failed re-read (offline) shows the roster but confirms nothing.
+                    _confirmedAccess.value = viewer.takeIf { access.isFresh(StoreKind.HOMES) }
                     owners = list.owners
                     applyState()
                 }
                 list != null -> {
                     _access.value = null
+                    _confirmedAccess.value = null
                     _state.value =
                         ListOfRowsUiState.Error(
                             (access.failure ?: NetworkError.NotFound).displayMessage("Couldn't load owner permissions."),
@@ -284,6 +295,7 @@ class OwnersListViewModel
                 }
                 roster.failure is NetworkError.Forbidden -> {
                     _access.value = null
+                    _confirmedAccess.value = null
                     // Not (or no longer) an owner, e.g. right after transferring
                     // the Home: a retry can't change that, so say so plainly.
                     _state.value =
@@ -295,6 +307,7 @@ class OwnersListViewModel
                 }
                 else -> {
                     _access.value = null
+                    _confirmedAccess.value = null
                     _state.value =
                         ListOfRowsUiState.Error((roster.failure ?: NetworkError.NotFound).displayMessage("Couldn't load the list."))
                 }
