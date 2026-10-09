@@ -32,6 +32,7 @@ import { detailAddress } from '@/components/place/detail/sections';
 import VerifyPromptSheet from '@/components/place/VerifyPromptSheet';
 import NeighborMessageComposeView, { type ComposeRecipient } from './NeighborMessageComposeView';
 import { usePrimaryHome } from '@/lib/primaryHome';
+import { PLACE_FRESH_MS, gatedStaleTime, showsPlaceCopy, useAfterRecheck } from '@/lib/householdCopy';
 
 const REDIRECT_TO = encodeURIComponent('/app/place/neighbor-message');
 
@@ -75,8 +76,10 @@ export default function NeighborMessageCompose() {
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
     queryFn: () => api.place.getPlaceIntelligence(homeId as string),
     enabled: authed && !!homeId,
-    staleTime: 60_000,
+    staleTime: gatedStaleTime(PLACE_FRESH_MS, showsPlaceCopy),
   });
+  // A guest's or service provider's copy is used only once the re-check answers (decision 3).
+  const { data: intelligence, waiting: intelWaiting } = useAfterRecheck(intelQuery, showsPlaceCopy);
 
   const templatesQuery = useQuery({
     queryKey: queryKeys.neighborMessageTemplates(),
@@ -94,9 +97,9 @@ export default function NeighborMessageCompose() {
   const recipientHomeId = searchParams.get('to');
 
   const homeAddress = home ? [home.address, home.city].filter(Boolean).join(' · ') : undefined;
-  const address = intelQuery.data ? detailAddress(intelQuery.data.place) : homeAddress;
-  const verifyAddress = intelQuery.data?.place.label ?? homeAddress ?? '';
-  const tier = intelQuery.data?.tier;
+  const address = intelligence ? detailAddress(intelligence.place) : homeAddress;
+  const verifyAddress = intelligence?.place.label ?? homeAddress ?? '';
+  const tier = intelligence?.tier;
 
   const sendMutation = useMutation({
     mutationFn: () =>
@@ -146,7 +149,7 @@ export default function NeighborMessageCompose() {
     );
   }
 
-  if (homeQuery.isPending || intelQuery.isPending || templatesQuery.isPending) {
+  if (homeQuery.isPending || intelQuery.isPending || intelWaiting || templatesQuery.isPending) {
     return (
       <Shell>
         <DetailHeader title="New message" address={address} backHref="/app/place" />

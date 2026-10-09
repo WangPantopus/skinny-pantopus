@@ -63,15 +63,17 @@ enum PlaceStoreReads {
         if savedPlaceId == nil {
             gate = { intelligence in PlaceStoreReads.showsBeforeRecheck(intelligence) }
         }
+        // Today turns over at midnight in the place's time zone (the last
+        // copy names it); the phone's stands in until one has.
+        let zone = peek(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections)?.value.timeZone
+            .flatMap(TimeZone.init(identifier:)) ?? .current
         return try await ScreenStore.shared.load(
             endpoint(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections),
             as: PlaceIntelligence.self,
             kind: kind,
             topics: topics,
             force: force,
-            // Today turns over at midnight (the device's time zone stands in
-            // for the home's; the pilot homes and phones share one).
-            expiresAt: nextMidnight(),
+            expiresAt: nextMidnight(in: zone),
             showsBeforeRecheck: gate
         )
     }
@@ -83,8 +85,10 @@ enum PlaceStoreReads {
         ["owner", "renter", "member"].contains(intelligence.viewer?.role ?? "")
     }
 
-    static func nextMidnight(after date: Date = Date(), calendar: Calendar = .current) -> Date {
-        calendar.nextDate(after: date, matching: DateComponents(hour: 0, minute: 0, second: 0), matchingPolicy: .nextTime)
+    static func nextMidnight(after date: Date = Date(), in zone: TimeZone = .current) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        return calendar.nextDate(after: date, matching: DateComponents(hour: 0, minute: 0, second: 0), matchingPolicy: .nextTime)
             ?? date.addingTimeInterval(24 * 3600)
     }
 }
