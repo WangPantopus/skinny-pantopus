@@ -36,7 +36,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
@@ -45,6 +44,7 @@ import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.StatusChip
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -66,10 +66,7 @@ fun MaintenanceDetailScreen(
     onEdit: () -> Unit,
     viewModel: MaintenanceDetailViewModel = hiltViewModel(),
 ) {
-    LifecycleStartEffect(viewModel) {
-        viewModel.load()
-        onStopOrDispose { viewModel.suspendContent() }
-    }
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_maintenance_entry", state is MaintenanceDetailUiState.Loaded)
     val isMutating by viewModel.isMutating.collectAsStateWithLifecycle()

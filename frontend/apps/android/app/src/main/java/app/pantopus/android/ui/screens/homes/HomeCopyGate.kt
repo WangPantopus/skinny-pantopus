@@ -1,5 +1,12 @@
 package app.pantopus.android.ui.screens.homes
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.homes.HomeDashboardAccessRepository
@@ -90,3 +97,35 @@ class HomeCopyGateFactory
             keys: List<StoreKey<*>>,
         ): HomeCopyGate = HomeCopyGate(homeId, access, store, keys)
     }
+
+/** Load before the enter transition, then clear expiring content on pause as well as removal from navigation. */
+@Composable
+fun HomeCopyLifecycle(
+    load: () -> Unit,
+    pause: () -> Unit,
+) {
+    val owner = LocalLifecycleOwner.current
+    val currentLoad by rememberUpdatedState(load)
+    val currentPause by rememberUpdatedState(pause)
+    DisposableEffect(owner) {
+        var active = false
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> if (!active) {
+                    active = true
+                    currentLoad()
+                }
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                    active = false
+                    currentPause()
+                }
+                else -> Unit
+            }
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose {
+            owner.lifecycle.removeObserver(observer)
+            currentPause()
+        }
+    }
+}
