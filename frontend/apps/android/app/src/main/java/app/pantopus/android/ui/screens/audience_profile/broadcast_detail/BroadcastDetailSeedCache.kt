@@ -38,6 +38,11 @@ class BroadcastDetailSeedCache
             cached = seed
         }
 
+        /** Sign-out: drop a seed the last account left behind. */
+        fun clear() {
+            cached = null
+        }
+
         /** Read-and-clear the seed if it matches the requested id. */
         fun consume(broadcastId: String): Seed? {
             val current = cached

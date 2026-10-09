@@ -213,6 +213,8 @@ class AuthRepository
         private val notifications: NotificationDispatcher,
         /** The on-disk HTTP cache holds the last account's reads (chats, hub); sign-out empties it, as iOS does. */
         private val httpCache: Cache,
+        /** Images, widget snapshots and the account's other device-local state; sign-out clears them too. */
+        private val accountDeviceData: AccountDeviceData,
     ) {
         /**
          * Outcome of a token refresh. The distinction matters: only
@@ -1270,6 +1272,7 @@ class AuthRepository
                     // The next person on this device must not read the last account's notifications.
                     notifications.clearDelivered()
                     withContext(Dispatchers.IO) { runCatching { httpCache.evictAll() } }
+                    accountDeviceData.clear()
                     deviceIdentity.clearRegistration()
                     observability.identify(userId = null)
                     Analytics.identify(userId = null)

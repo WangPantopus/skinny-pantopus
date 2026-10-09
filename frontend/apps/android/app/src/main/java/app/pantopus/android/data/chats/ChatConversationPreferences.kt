@@ -65,6 +65,14 @@ class ChatConversationPreferences
             return nowMuted
         }
 
+        /**
+         * Sign-out: one account's hidden and muted conversations must never filter or quiet the next
+         * account's chats (like the feed's client-side mutes).
+         */
+        fun clear() {
+            prefs.edit().clear().commit()
+        }
+
         private fun persist(
             key: String,
             values: Set<String>,

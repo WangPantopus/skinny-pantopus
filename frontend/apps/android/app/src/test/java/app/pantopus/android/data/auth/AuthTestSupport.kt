@@ -145,6 +145,7 @@ object AuthTestSupport {
         fcmTokenProvider: FcmTokenProvider = FakeFcmTokenProvider(),
         notifications: NotificationDispatcher = mockk(relaxed = true),
         httpCache: Cache = mockk(relaxed = true),
+        accountDeviceData: AccountDeviceData = mockk(relaxed = true),
     ): AuthRepository =
         AuthRepository(
             api = api,
@@ -164,5 +165,6 @@ object AuthTestSupport {
             fcmTokenProvider = fcmTokenProvider,
             notifications = notifications,
             httpCache = httpCache,
+            accountDeviceData = accountDeviceData,
         )
 }

@@ -69,7 +69,7 @@ class SupportTrainReservationsStore
          */
         fun consumePatch(reservationId: String): SupportTrainReservationDto? = patches.remove(reservationId)
 
-        /** Test affordance — empty the store between unit tests. */
+        /** Empty the store: on sign-out (the last account's reservations) and between unit tests. */
         fun reset() {
             staged = null
             patches.clear()
