@@ -161,13 +161,37 @@ public final class PulsePostDetailViewModel {
     private let postId: String
     private let currentUserId: String?
     private let client: APIClient
+    /// The screen store (Instant Screens): a post and its comments stay
+    /// fresh for a minute; opened from the feed, the feed's card shows first.
+    private let store: ScreenStore
     private let logger = Logger(label: "app.pantopus.ios.PulsePostDetail")
     private let maxInitialReplies = 3
+    /// The post on screen is the feed card's copy: its comments are still
+    /// being read (or that read failed).
+    private var commentsPending = false
+    private var commentsReadFailed = false
 
     init(postId: String, currentUserId: String? = nil, client: APIClient = .shared) {
         self.postId = postId
         self.currentUserId = currentUserId
         self.client = client
+        store = ScreenStore.store(for: client)
+        // The first frame: the store's copy of the post, else the feed card's
+        // copy while the post and its comments load.
+        if let copy = store.peek(endpoint, as: PostDetailResponse.self) {
+            apply(copy.value.post)
+        } else if let card = store.seeded(endpoint, as: FeedPostDTO.self), let post = PostDetailDTO(feedPost: card) {
+            apply(post)
+            commentsPending = true
+        }
+    }
+
+    /// The thread under the post: loaded, or (opened from the feed's copy)
+    /// still loading or failed, with the card's comment count.
+    public var commentsState: CommentsLoadState {
+        guard commentsPending, case let .loaded(content) = state else { return .loaded }
+        let count = content.post.commentCount
+        return commentsReadFailed ? .failed(count: count) : .loading(count: count)
     }
 
     /// True when the signed-in user authored the post on screen — the
@@ -178,15 +202,16 @@ public final class PulsePostDetailViewModel {
         return content.post.userId == currentUserId
     }
 
-    /// First-load entry. Re-run via `refresh()` after a pull-to-refresh.
+    /// Opening the post: what's on screen stays (the store's or the feed's
+    /// copy); the post is read when that copy is over a minute old.
     public func load() async {
-        state = .loading
-        await fetch()
+        if case .loaded = state {} else { state = .loading }
+        await fetch(force: false)
     }
 
-    /// Pull-to-refresh.
+    /// Pull-to-refresh: always asks the server.
     public func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     /// Expand the truncated reply list.
@@ -228,6 +253,7 @@ public final class PulsePostDetailViewModel {
             reconciled.helpful = response.likeCount
             reconciled.userReaction = response.liked ? .helpful : nil
             state = .loaded(content.replacing(reactions: reconciled))
+            postChanged()
             // Lists showing this post (the Pulse feed) refetch, so their card isn't left stale.
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
@@ -272,6 +298,7 @@ public final class PulsePostDetailViewModel {
                 userReacted: response.liked
             )
             state = .loaded(current.replacing(comments: reconciled))
+            postChanged()
         } catch {
             logger.warning("Comment like toggle failed: \(error)")
             toastMessage = "Couldn't update your reaction"
@@ -301,7 +328,7 @@ public final class PulsePostDetailViewModel {
                 as: PostActionAckResponse.self
             )
             if replyTarget?.commentId == commentId { replyTarget = nil }
-            await fetch()
+            await fetch(force: true)
             // Feed and My posts refetch so their comment counts match.
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
@@ -318,6 +345,7 @@ public final class PulsePostDetailViewModel {
                 as: PostActionAckResponse.self
             )
             didDeletePost = true
+            store.remove(endpoint)
             // The feed and My posts still list the post until they refetch.
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
@@ -360,6 +388,7 @@ public final class PulsePostDetailViewModel {
                 as: PostSaveResponse.self
             )
             isSaved = response.saved
+            postChanged()
             // A stale card's next tap would undo this save: lists showing the post refetch.
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
@@ -379,6 +408,7 @@ public final class PulsePostDetailViewModel {
                 as: PostShareResponse.self
             )
             isReposted = response.reposted ?? !original
+            postChanged()
         } catch {
             logger.warning("Repost toggle failed: \(error)")
             toastMessage = "Couldn't update your repost"
@@ -429,7 +459,7 @@ public final class PulsePostDetailViewModel {
                 composerText = ""
                 replyTarget = nil
             }
-            await fetch()
+            await fetch(force: true)
             PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             logger.warning("Comment send failed: \(error)")
@@ -439,22 +469,55 @@ public final class PulsePostDetailViewModel {
 
     // MARK: - Internal helpers
 
-    private func fetch() async {
+    private var endpoint: Endpoint {
+        PostsEndpoints.detail(id: postId)
+    }
+
+    private func apply(_ post: PostDetailDTO) {
+        isSaved = post.userHasSaved
+        isReposted = post.userHasReposted
+        state = .loaded(rebuildContent(from: post))
+    }
+
+    /// An action here changed the post: the next opening reads it again.
+    private func postChanged() {
+        store.markStale(topics: [ScreenTopic.post(postId)])
+    }
+
+    private func fetch(force: Bool) async {
         do {
-            let response = try await client.request(
-                PostsEndpoints.detail(id: postId),
-                as: PostDetailResponse.self
-            )
-            isSaved = response.post.userHasSaved
-            isReposted = response.post.userHasReposted
-            state = .loaded(rebuildContent(from: response.post))
+            try await store.show(
+                endpoint,
+                as: PostDetailResponse.self,
+                kind: .post,
+                topics: [ScreenTopic.post(postId)],
+                force: force
+            ) { snapshot in
+                commentsPending = false
+                commentsReadFailed = false
+                apply(snapshot.value.post)
+            }
+        } catch is CancellationError {
+            return
         } catch let error as APIError {
             logger.warning("Post detail load failed: \(error)")
+            // A failed refresh keeps the post on screen; gone or hidden shows the server's answer.
+            if case .loaded = state, isRetryable(error) {
+                commentsReadFailed = commentsPending
+                if force { toastMessage = "Couldn't refresh this post" }
+                return
+            }
+            commentsPending = false
             state = .error(message: friendlyMessage(for: error), retryable: isRetryable(error))
             // Gone (deleted, or no longer visible to you): a list still showing its card refetches without it.
             if !isRetryable(error) { PulsePostsRefresh.notifyPostsDidChange() }
         } catch {
             logger.warning("Post detail load failed: \(error)")
+            if case .loaded = state {
+                commentsReadFailed = commentsPending
+                if force { toastMessage = "Couldn't refresh this post" }
+                return
+            }
             state = .error(message: "Something went wrong", retryable: true)
         }
     }
@@ -469,10 +532,13 @@ public final class PulsePostDetailViewModel {
 
     private func fetchNearbyProviders() async {
         do {
-            let response = try await client.request(
+            // Kept beside the post (fresh for a minute), so reopening it is free.
+            let response = try await store.load(
                 MatchedBusinessesEndpoints.matchedBusinesses(postId: postId),
-                as: MatchedBusinessesResponse.self
-            )
+                as: MatchedBusinessesResponse.self,
+                kind: .post,
+                topics: [ScreenTopic.post(postId)]
+            ).value
             nearbyProviders = response.businesses.compactMap(Self.providerRow(from:))
         } catch {
             logger.warning("Matched businesses load failed: \(error)")

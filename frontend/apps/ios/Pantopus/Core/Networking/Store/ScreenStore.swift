@@ -39,6 +39,7 @@ final class ScreenStore {
 
     /// The memory limits of contract section 6.
     static let maxEntries = 200
+    static let maxSeeds = 300
     static let unusedLifetime: TimeInterval = 30 * 60
     /// Coming back to the app after this long marks every copy out of date.
     static let backgroundStaleAfter: TimeInterval = 15 * 60
@@ -51,6 +52,10 @@ final class ScreenStore {
 
     @ObservationIgnored private var entries: [Key: ScreenStoreEntry] = [:]
     @ObservationIgnored private var inFlight: [Key: InFlight] = [:]
+    /// Rows another screen already shows (a feed card's post), by the key of
+    /// the detail read they stand in for. Memory only, never fresh or saved.
+    @ObservationIgnored private var seeds: [Key: any Sendable] = [:]
+    @ObservationIgnored private var seedOrder: [Key] = []
     @ObservationIgnored private var counts: [String: Int] = [:]
     @ObservationIgnored var observedAccount: String?
     @ObservationIgnored var backgroundedAt: Date?
@@ -257,6 +262,8 @@ final class ScreenStore {
         inFlight.removeAll()
         entries.removeAll()
         revisions.removeAll()
+        seeds.removeAll()
+        seedOrder.removeAll()
     }
 
     /// The memory warning: keep only what screens used in the last minute
@@ -267,6 +274,8 @@ final class ScreenStore {
             entries[key] = nil
             revisions[key] = nil
         }
+        seeds.removeAll()
+        seedOrder.removeAll()
     }
 
     /// Phase 1 measurement: how often each kind's window was hit, revalidated
@@ -401,5 +410,25 @@ final class ScreenStore {
     private func count(_ event: String, _ kind: ScreenDataKind) {
         counts["\(kind.rawValue).\(event)", default: 0] += 1
         logger.debug("store \(event) \(kind.rawValue)")
+    }
+}
+
+// MARK: - Seeds
+
+extension ScreenStore {
+    /// A list's row that stands in for `endpoint`'s detail until that read
+    /// answers (a post opened from the feed shows the feed's card at once).
+    func seed(_ value: some Sendable, for endpoint: Endpoint) {
+        guard let key = key(for: endpoint) else { return }
+        if seeds.updateValue(value, forKey: key) == nil { seedOrder.append(key) }
+        guard seedOrder.count > Self.maxSeeds else { return }
+        for old in seedOrder.prefix(seedOrder.count - Self.maxSeeds) {
+            seeds[old] = nil
+        }
+        seedOrder.removeFirst(seedOrder.count - Self.maxSeeds)
+    }
+
+    func seeded<Value: Sendable>(_ endpoint: Endpoint, as _: Value.Type = Value.self) -> Value? {
+        key(for: endpoint).flatMap { seeds[$0] as? Value }
     }
 }
