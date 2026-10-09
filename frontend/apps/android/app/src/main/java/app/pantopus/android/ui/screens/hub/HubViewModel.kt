@@ -356,9 +356,10 @@ class HubViewModel
                                 // Launch cut #3 (Marketplace): no Snap & sell.
                                 ActionChipContent(ActionChipContent.Kind.SnapAndSell, "Snap & sell", PantopusIcon.Camera, active = false)
                                     .takeIf { LaunchFeatures.marketplace },
-                                // Launch cut #7 (Household extras): mail scanning is cut, so this only opened the Mailbox list.
+                                // Launch cut #7 (Household extras): mail scanning is cut, so this only opened the Mailbox list;
+                                // with the Mailbox itself off (#10) there is no list to open.
                                 ActionChipContent(ActionChipContent.Kind.ScanMail, "Scan mail", PantopusIcon.ScanLine, active = false)
-                                    .takeIf { LaunchFeatures.householdExtras },
+                                    .takeIf { LaunchFeatures.householdExtras && LaunchFeatures.mailbox },
                                 ActionChipContent(ActionChipContent.Kind.AddHome, "Add home", PantopusIcon.Home, active = false),
                             ),
                         statusItems =
@@ -366,6 +367,8 @@ class HubViewModel
                                 .filterNot { dismissedStatusIds.contains(it.id) }
                                 // Launch cut #7 (Household extras): no bill or package pills.
                                 .filter { it.type !in HOUSEHOLD_EXTRAS_STATUS_TYPES || LaunchFeatures.householdExtras }
+                                // Launch cut #10 (Mailbox): no "new mail" pill, nor any pill into the mailbox.
+                                .filter { DeepLinkRouter.isLaunchAvailable(it.type, it.route) }
                                 .map(::projectStatusItem),
                         neighborDensity = density,
                         setupBanner = setupBanner,
@@ -603,11 +606,12 @@ class HubViewModel
             ).filter { tile -> isLaunchAvailablePillar(tile.pillar) }
         }
 
-        /** Launch cuts #3 (Marketplace) and #4 (Open Gigs): their doors are hidden. */
+        /** Launch cuts #3 (Marketplace), #4 (Open Gigs) and #10 (Mailbox): their doors are hidden. */
         private fun isLaunchAvailablePillar(pillar: PillarTile.Pillar): Boolean =
             when (pillar) {
                 PillarTile.Pillar.Marketplace -> LaunchFeatures.marketplace
                 PillarTile.Pillar.Gigs -> LaunchFeatures.openGigs
+                PillarTile.Pillar.Mail -> LaunchFeatures.mailbox
                 else -> true
             }
 

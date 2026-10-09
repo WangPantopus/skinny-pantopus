@@ -470,11 +470,27 @@ object DeepLinkRouter {
             Destination.DiscoverHub ->
                 setOf(LaunchFeature.BUSINESS_DIRECTORY, LaunchFeature.OPEN_GIGS, LaunchFeature.MARKETPLACE)
             is Destination.BookingDetail, Destination.MyBookings -> setOf(LaunchFeature.PUBLIC_SCHEDULING)
-            is Destination.MailTranslation, Destination.Earn -> setOf(LaunchFeature.MAIL_EXTRAS)
+            // Every mailbox page is the Mailbox (#10); some are also a cut of their own.
+            is Destination.MailTranslation, Destination.Earn -> setOf(LaunchFeature.MAIL_EXTRAS, LaunchFeature.MAILBOX)
             // Package unboxing is package tracking (#7), as on web.
-            is Destination.Unboxing -> setOf(LaunchFeature.HOUSEHOLD_EXTRAS)
+            is Destination.Unboxing -> setOf(LaunchFeature.HOUSEHOLD_EXTRAS, LaunchFeature.MAILBOX)
+            Destination.Mailbox, is Destination.MailItem, Destination.MailDay, Destination.VacationHold, Destination.Stamps,
+            is Destination.MailTask,
+            -> setOf(LaunchFeature.MAILBOX)
+            // A mailbox page the app has no route for (`/app/mailbox/vault`) is still the Mailbox.
+            is Destination.Unknown -> if (isMailboxLink(destination.uri)) setOf(LaunchFeature.MAILBOX) else emptySet()
             else -> emptySet()
         }
+
+    /** True when [raw] opens a mailbox page (`pantopus://mailbox/…`, `https://…/app/mailbox/…`). */
+    private fun isMailboxLink(raw: String): Boolean {
+        val schemeEnd = raw.indexOf("://")
+        val rest = if (schemeEnd >= 0) raw.substring(schemeEnd + 3) else raw
+        val parts = rest.substringBefore('?').substringBefore('#').split('/').filter { it.isNotBlank() }
+        val web = schemeEnd >= 0 && raw.substring(0, schemeEnd).let { it == "http" || it == "https" }
+        val segments = if (web) parts.drop(1) else parts
+        return (if (segments.firstOrNull() == "app") segments.drop(1) else segments).firstOrNull() == "mailbox"
+    }
 
     /** False when [destination] opens a feature hidden for the first launch. */
     fun isLaunchAvailable(destination: Destination): Boolean = launchFeaturesFor(destination).all(LaunchFeatures::isEnabled)
@@ -522,12 +538,18 @@ object DeepLinkRouter {
                 key == "persona" || key.startsWith("persona_") -> setOf(LaunchFeature.BEACON, LaunchFeature.PERSONAS)
                 key.startsWith("booking_") -> setOf(LaunchFeature.PUBLIC_SCHEDULING)
                 else -> LAUNCH_CUT_NOTIFICATION_TYPES[key].orEmpty()
-            }
+            } + mailboxNotificationFeatures(key)
         if (!typeFeatures.all(LaunchFeatures::isEnabled)) return false
         val path = notificationPath(type, link)?.takeIf { it.isNotBlank() } ?: return true
         val normalized = Paths.normalizeIncoming(path)
         return Paths.isOAuthCallback(normalized) || isLaunchAvailable(resolveString(normalized))
     }
+
+    /** Mail notifications (`mail_new`, `mail_summary`, `home_mail_removed` …) come from the Mailbox (#10). */
+    private fun mailboxNotificationFeatures(key: String): Set<LaunchFeature> =
+        if (key == "mail" || MAILBOX_NOTIFICATION_PREFIXES.any(key::startsWith)) setOf(LaunchFeature.MAILBOX) else emptySet()
+
+    private val MAILBOX_NOTIFICATION_PREFIXES = listOf("mail_", "mailbox", "home_mail")
 
     fun consume(): Destination? {
         val current = _pending.value

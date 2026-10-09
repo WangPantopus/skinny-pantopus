@@ -219,7 +219,9 @@ class MeViewModel
                 // Launch cut #7 (Household extras).
                 "me.bills", "me.pets", "me.polls", "me.calendar", "me.packages" -> LaunchFeatures.householdExtras
                 // Launch cut #8 (Mail extras).
-                "me.debug.openCeremonialMail", "me.debug.openCeremonialMailOpen" -> LaunchFeatures.mailExtras
+                "me.debug.openCeremonialMail", "me.debug.openCeremonialMailOpen" -> LaunchFeatures.mailExtras && LaunchFeatures.mailbox
+                // Launch cut #10 (Mailbox).
+                "me.mail", "me.debug.disambiguate" -> LaunchFeatures.mailbox
                 else -> true
             }
 
