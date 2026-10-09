@@ -6,9 +6,10 @@ import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.homes.GetHomeMaintenanceResponse
 import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
@@ -36,6 +37,7 @@ import java.time.Instant
 @OptIn(ExperimentalCoroutinesApi::class)
 class MaintenanceListViewModelTest {
     private val repo: HomesRepository = mockk()
+    private val gates: HomeCopyGateFactory = mockk(relaxed = true)
 
     /** Fixed clock — 2026-05-15T12:00:00Z. */
     private val fixedNow: Instant = Instant.parse("2026-05-15T12:00:00Z")
@@ -72,16 +74,20 @@ class MaintenanceListViewModelTest {
     private fun makeVm(): MaintenanceListViewModel =
         MaintenanceListViewModel(
             repo = repo,
+            gates = gates,
             savedStateHandle = SavedStateHandle(mapOf(MAINTENANCE_HOME_ID_KEY to "home-1")),
             clock = { fixedNow },
         )
+
+    /** What the screens' store hands back for a successful read. */
+    private fun stored(response: GetHomeMaintenanceResponse) = Stored(response, fetchedAt = System.currentTimeMillis())
 
     // ─── Four states ──────────────────────────────────────────
 
     @Test fun empty_response_renders_empty_state() =
         runTest {
-            coEvery { repo.getHomeMaintenance(any(), any()) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(tasks = emptyList()))
+            coEvery { repo.getHomeMaintenanceStored(any(), any()) } returns
+                stored(GetHomeMaintenanceResponse(tasks = emptyList()))
             val vm = makeVm()
             vm.load()
             val state = vm.state.value
@@ -92,8 +98,8 @@ class MaintenanceListViewModelTest {
 
     @Test fun failure_renders_error_state() =
         runTest {
-            coEvery { repo.getHomeMaintenance(any(), any()) } returns
-                NetworkResult.Failure(NetworkError.Server(500, null))
+            coEvery { repo.getHomeMaintenanceStored(any(), any()) } returns
+                Stored(failure = NetworkError.Server(500, null))
             val vm = makeVm()
             vm.load()
             assertTrue(vm.state.value is ListOfRowsUiState.Error)
@@ -101,8 +107,8 @@ class MaintenanceListViewModelTest {
 
     @Test fun loaded_response_maps_rows_to_amountWithChip_trailing() =
         runTest {
-            coEvery { repo.getHomeMaintenance(any(), any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.getHomeMaintenanceStored(any(), any()) } returns
+                stored(
                     GetHomeMaintenanceResponse(
                         tasks =
                             listOf(
@@ -323,8 +329,8 @@ class MaintenanceListViewModelTest {
 
     @Test fun scheduled_tab_excludes_completed_and_cancelled() =
         runTest {
-            coEvery { repo.getHomeMaintenance(any(), any()) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(tasks = mixedTasks()))
+            coEvery { repo.getHomeMaintenanceStored(any(), any()) } returns
+                stored(GetHomeMaintenanceResponse(tasks = mixedTasks()))
             val vm = makeVm()
             vm.load()
             vm.selectTab(MaintenanceTab.Scheduled.id)
@@ -335,8 +341,8 @@ class MaintenanceListViewModelTest {
 
     @Test fun completed_tab_only_completed() =
         runTest {
-            coEvery { repo.getHomeMaintenance(any(), any()) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(tasks = mixedTasks()))
+            coEvery { repo.getHomeMaintenanceStored(any(), any()) } returns
+                stored(GetHomeMaintenanceResponse(tasks = mixedTasks()))
             val vm = makeVm()
             vm.load()
             vm.selectTab(MaintenanceTab.Completed.id)
@@ -347,8 +353,8 @@ class MaintenanceListViewModelTest {
 
     @Test fun all_tab_excludes_cancelled() =
         runTest {
-            coEvery { repo.getHomeMaintenance(any(), any()) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(tasks = mixedTasks()))
+            coEvery { repo.getHomeMaintenanceStored(any(), any()) } returns
+                stored(GetHomeMaintenanceResponse(tasks = mixedTasks()))
             val vm = makeVm()
             vm.load()
             vm.selectTab(MaintenanceTab.All.id)

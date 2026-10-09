@@ -6,10 +6,14 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
-import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerConfig
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerCtaTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
@@ -27,6 +31,8 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -111,14 +117,16 @@ const val MAINTENANCE_HOME_ID_KEY = "homeId"
 class MaintenanceListViewModel
     internal constructor(
         private val repo: HomesRepository,
+        gates: HomeCopyGateFactory,
         savedStateHandle: SavedStateHandle,
         private val clock: () -> Instant = Instant::now,
     ) : ViewModel() {
         @Inject
         constructor(
             repo: HomesRepository,
+            gates: HomeCopyGateFactory,
             savedStateHandle: SavedStateHandle,
-        ) : this(repo, savedStateHandle, Instant::now)
+        ) : this(repo, gates, savedStateHandle, Instant::now)
 
         private val homeId: String =
             checkNotNull(savedStateHandle.get<String>(MAINTENANCE_HOME_ID_KEY)) {
@@ -138,6 +146,18 @@ class MaintenanceListViewModel
         val banner: StateFlow<BannerConfig?> = _banner.asStateFlow()
 
         private var tasks: List<MaintenanceTaskDto>? = null
+
+        /** Pull to refresh is reading while the rows stay (Instant Screens): the pull indicator only. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate = gates.create(homeId, listOf(HomeStoreKeys.maintenance(homeId)))
+        private var readGeneration = 0L
         private var onOpenTask: (String) -> Unit = {}
         private var onAddTask: () -> Unit = {}
         private var onOpenIssues: (() -> Unit)? = null
@@ -152,23 +172,56 @@ class MaintenanceListViewModel
             this.onOpenIssues = onOpenIssues
         }
 
+        /**
+         * Screen entry and every return (Instant Screens): owners and household roles see the stored log at once, and
+         * the store answers a fresh copy without a request or revalidates an older one quietly. An entry saved or
+         * deleted from the form or the detail marked the copy out of date, so the return reads it again.
+         */
         fun load() {
-            refresh()
+            if (tasks == null && gate.showsCopy) repo.storedMaintenance(homeId)?.let { applySuccess(it.tasks) }
+            read(force = false)
         }
 
+        /** Pull to refresh and Retry: read now. */
         fun refresh() {
-            _state.value = ListOfRowsUiState.Loading
+            _refreshing.value = tasks != null
+            read(force = true)
+        }
+
+        override fun onCleared() {
+            gate.leave()
+        }
+
+        private fun read(force: Boolean) {
+            val generation = ++readGeneration
+            if (tasks == null) _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
-                when (val result = repo.getHomeMaintenance(homeId)) {
-                    is NetworkResult.Success -> applySuccess(result.data.tasks)
-                    is NetworkResult.Failure -> {
-                        tasks = null
-                        _banner.value = null
-                        _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
-                    }
+                val fromCopy = gate.showsCopy && !force
+                var stored = readLog(force = !fromCopy)
+                // Household access ended meanwhile: whatever came from a copy is read again now.
+                if (fromCopy && !gate.showsCopy) stored = readLog(force = true)
+                if (generation != readGeneration) return@launch
+                _refreshing.value = false
+                val loaded = stored.data
+                if (loaded != null) {
+                    applySuccess(loaded.tasks)
+                } else {
+                    tasks = null
+                    _banner.value = null
+                    _state.value =
+                        ListOfRowsUiState.Error((stored.failure ?: NetworkError.NotFound).displayMessage("Couldn't load the list."))
                 }
+                _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
             }
         }
+
+        private suspend fun readLog(force: Boolean) =
+            coroutineScope {
+                val recheck = async { gate.recheck(force) }
+                val log = async { repo.getHomeMaintenanceStored(homeId, force) }
+                recheck.await()
+                log.await()
+            }
 
         fun selectTab(id: String) {
             _selectedTab.value = id
