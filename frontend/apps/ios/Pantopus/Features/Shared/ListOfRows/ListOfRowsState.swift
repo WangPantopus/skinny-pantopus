@@ -26,6 +26,14 @@ public enum ListOfRowsState: Sendable {
     case empty(EmptyContent)
     case error(message: String)
 
+    /// Rows or the empty state are on screen: a failed refresh keeps them.
+    public var showsContent: Bool {
+        switch self {
+        case .loaded, .empty: true
+        case .loading, .error: false
+        }
+    }
+
     /// Empty-state configuration. Mirrors the P5 `EmptyState` props.
     public struct EmptyContent: Sendable {
         public let icon: PantopusIcon
@@ -349,6 +357,13 @@ public protocol ListOfRowsDataSource: AnyObject, Observable {
     var loadMoreError: String? { get }
     /// Re-requests the page that failed.
     func retryLoadMore() async
+    /// Instant Screens: a pull to refresh failed while the rows stay on
+    /// screen. The shell shows it as a toast and clears it.
+    var refreshFailureMessage: String? { get set }
+    /// Instant Screens: "Couldn't refresh. Showing 3:42 PM." once the rows on
+    /// screen are older than their kind's max shown age and the last refresh
+    /// failed. The shell shows it above the rows with Retry.
+    var staleNotice: String? { get }
 }
 
 /// T5 additive protocol surface — every existing conformer gets `nil`
@@ -397,6 +412,16 @@ public extension ListOfRowsDataSource {
     }
 
     func retryLoadMore() async {}
+
+    /// Screens not yet reading from the screen store have no refresh notices.
+    var refreshFailureMessage: String? {
+        get { nil }
+        set { _ = newValue }
+    }
+
+    var staleNotice: String? {
+        nil
+    }
 }
 
 /// Top-bar trailing action payload.

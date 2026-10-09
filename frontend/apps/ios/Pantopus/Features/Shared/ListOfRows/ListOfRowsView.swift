@@ -127,6 +127,10 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
             }
         }
         .task { await dataSource.load() }
+        .refreshFailureToast(Binding(
+            get: { dataSource.refreshFailureMessage },
+            set: { dataSource.refreshFailureMessage = $0 }
+        ))
     }
 
     @ViewBuilder private var stateBody: some View {
@@ -134,6 +138,9 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
         case .loading:
             LoadingRows()
         case let .loaded(sections, hasMore):
+            if let notice = dataSource.staleNotice {
+                RefreshNotice(text: notice) { Task { await dataSource.refresh() } }
+            }
             LoadedList(
                 sections: sections,
                 hasMore: hasMore,
