@@ -42,6 +42,11 @@ export function fetchMe(): Promise<Me> {
   return client ? client.fetchQuery(meQuery()) : api.users.getMyProfile();
 }
 
+/** The profile this session already loaded, without asking (undefined when there is none yet). */
+export function peekMe(): Me | undefined {
+  return activeQueryClient()?.getQueryData<Me>(queryKeys.me());
+}
+
 /** Puts a profile the server just returned (after an edit) into the entry. */
 export function setMe(user: Partial<Me> | null | undefined): void {
   if (!user) return;

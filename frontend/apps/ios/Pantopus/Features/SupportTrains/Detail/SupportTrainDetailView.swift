@@ -69,6 +69,7 @@ public struct SupportTrainDetailView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
         .overlay(alignment: .bottom) { toastOverlay }
+        .refreshFailureToast($viewModel.refreshFailureMessage)
         .sheet(item: $viewModel.reserveSelection) { selection in
             reserveSheet(selection)
         }
@@ -225,6 +226,7 @@ public struct SupportTrainDetailView: View {
                 .padding(.bottom, Spacing.s6)
             }
             .background(Theme.Color.appBg)
+            .refreshable { await viewModel.refresh() }
 
             if content.typeDates.slotsTotal > 0, hasDock(content.dock) {
                 dock(content.dock)

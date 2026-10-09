@@ -104,6 +104,24 @@ public struct PostReactionCounts: Sendable, Hashable {
     }
 }
 
+/// The thread under a post opened from a list's copy (Instant Screens): the
+/// card shows at once while the post's comments are read.
+public enum CommentsLoadState: Equatable, Sendable {
+    case loaded
+    /// The comments are being read; `count` is the card's comment count.
+    case loading(count: Int)
+    /// That read failed; the post stays on screen.
+    case failed(count: Int)
+
+    /// The card's count while the comments themselves aren't on screen.
+    var pendingCount: Int? {
+        switch self {
+        case .loaded: nil
+        case let .loading(count), let .failed(count): count
+        }
+    }
+}
+
 /// Pulse post body — text + media + reactions + comments. Pure render
 /// surface; all state lives in the host view-model.
 @MainActor
@@ -119,6 +137,7 @@ public struct BodyReactionsBody: View {
     private let isSending: Bool
     private let onSendTap: @MainActor () -> Void
     private let comments: [PostCommentRow]
+    private let commentsState: CommentsLoadState
     /// The post is under an hour old, so an empty thread reads "just posted".
     private let postedRecently: Bool
     private let hiddenReplyCount: Int
@@ -163,6 +182,7 @@ public struct BodyReactionsBody: View {
         isSending: Bool,
         onSendTap: @escaping @MainActor () -> Void,
         comments: [PostCommentRow],
+        commentsState: CommentsLoadState = .loaded,
         postedRecently: Bool = false,
         hiddenReplyCount: Int = 0,
         onShowMoreReplies: (@MainActor () -> Void)? = nil,
@@ -192,6 +212,7 @@ public struct BodyReactionsBody: View {
         self.isSending = isSending
         self.onSendTap = onSendTap
         self.comments = comments
+        self.commentsState = commentsState
         self.postedRecently = postedRecently
         self.hiddenReplyCount = hiddenReplyCount
         self.onShowMoreReplies = onShowMoreReplies
@@ -237,7 +258,7 @@ public struct BodyReactionsBody: View {
             ReactionsBar(
                 counts: reactions,
                 commentCount: visibleCommentCount,
-                commentsAreFresh: comments.isEmpty,
+                commentsAreFresh: threadIsEmpty,
                 postedRecently: postedRecently,
                 selectedEmoji: selectedReactionEmoji,
                 onEmojiSelected: onEmojiSelected,
@@ -296,7 +317,7 @@ public struct BodyReactionsBody: View {
                     avatarURL: composerAvatarURL,
                     text: $composerText,
                     placeholder: composerPlaceholder,
-                    isFocusedPresentation: comments.isEmpty,
+                    isFocusedPresentation: threadIsEmpty,
                     isSending: isSending,
                     onSend: onSendTap
                 )
@@ -331,6 +352,8 @@ public struct BodyReactionsBody: View {
                     }
                 }
                 .padding(.horizontal, Spacing.s4)
+            } else if !threadIsEmpty {
+                pendingThread
             } else if repliesClosedNote == nil {
                 EmptyThreadState(
                     intent: intent,
@@ -344,12 +367,48 @@ public struct BodyReactionsBody: View {
     }
 
     private var visibleCommentCount: Int {
-        comments.count + hiddenReplyCount
+        commentsState.pendingCount ?? (comments.count + hiddenReplyCount)
+    }
+
+    /// No comments, as far as anyone on screen knows.
+    private var threadIsEmpty: Bool {
+        comments.isEmpty && (commentsState.pendingCount ?? 0) == 0
+    }
+
+    /// Opened from a list's copy: placeholders while the comments load, a
+    /// short line if that failed.
+    @ViewBuilder private var pendingThread: some View {
+        switch commentsState {
+        case let .loading(count) where count > 0:
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                ForEach(0..<min(count, 3), id: \.self) { _ in
+                    HStack(alignment: .top, spacing: Spacing.s3) {
+                        Shimmer(width: 32, height: 32, cornerRadius: 16)
+                        VStack(alignment: .leading, spacing: 7) {
+                            Shimmer(width: 120, height: 11, cornerRadius: Radii.xs)
+                            Shimmer(height: 11, cornerRadius: Radii.xs)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, Spacing.s4)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Loading comments")
+            .accessibilityIdentifier("pulsePostDetail-commentsLoading")
+        case let .failed(count) where count > 0:
+            Text("Couldn't load the comments. Pull down to try again.")
+                .font(.system(size: PantopusTextStyle.small.size))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .padding(.horizontal, Spacing.s4)
+                .accessibilityIdentifier("pulsePostDetail-commentsFailed")
+        default:
+            EmptyView()
+        }
     }
 
     private var composerPlaceholder: String {
         if let replyingToName { return "Reply to \(replyingToName)..." }
-        return comments.isEmpty ? "Be the first to reply..." : "Add a comment"
+        return threadIsEmpty ? "Be the first to reply..." : "Add a comment"
     }
 }
 
