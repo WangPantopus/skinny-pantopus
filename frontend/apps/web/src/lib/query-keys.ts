@@ -75,11 +75,22 @@ export const queryKeys = {
   feedPreferences: () => ['me', 'feed-preferences'] as const,
   profile: (username: string) =>
     ['profile', username] as const,
+  /** Your pending reviews (GET /api/reviews/my-pending), read on other people's profiles. */
+  myPendingReviews: () => ['me', 'pending-reviews'] as const,
+
+  // ── Other people ──────────────────────────────────────────
+  /** What one person shares, as their profile reads it; app/[username]/PublicProfileClient.tsx. */
+  person: (id: string) => ['people', id] as const,
+  personPortfolio: (id: string) => ['people', id, 'portfolio'] as const,
+  personPosts: (id: string) => ['people', id, 'posts'] as const,
+  personReviews: (id: string) => ['people', id, 'reviews'] as const,
 
   // ── Homes ─────────────────────────────────────────────────
   homeDetail: (id: string) => ['homes', 'detail', id] as const,
   /** A Home's dashboard as last shown, with the access it was shown with; components/home/homeDashboardCopy.ts. */
   homeDashboard: (id: string) => ['homes', 'dashboard', id] as const,
+  /** A home's public-record property details (GET /api/homes/:id/property-details). */
+  homePropertyDetails: (id: string) => ['homes', 'property-details', id] as const,
   /** One of that dashboard's summary cards, kept beside its copy. */
   homeSummary: (id: string, name: string) => ['homes', 'dashboard', id, 'summary', name] as const,
 

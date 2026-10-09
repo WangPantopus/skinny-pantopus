@@ -293,6 +293,47 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
+extension PostDetailDTO {
+    /// The feed card's copy of a post, shown while the post and its comments
+    /// load (Instant Screens). Nil for rows without an author (seeded facts).
+    init?(feedPost post: FeedPostDTO) {
+        guard let userId = post.userId else { return nil }
+        id = post.id
+        self.userId = userId
+        title = post.title
+        content = post.content
+        postType = post.postType
+        postFormat = nil
+        purpose = nil
+        mediaURLs = post.mediaURLs
+        mediaTypes = post.mediaTypes
+        mediaThumbnails = post.mediaThumbnails
+        mediaLiveURLs = post.mediaLiveURLs
+        createdAt = post.createdAt
+        updatedAt = nil
+        isEdited = nil
+        likeCount = post.likeCount
+        commentCount = post.commentCount
+        shareCount = post.shareCount
+        viewCount = nil
+        creator = post.creator
+        home = nil
+        userHasLiked = post.userHasLiked
+        userHasSaved = post.userHasSaved
+        userHasReposted = post.userHasReposted
+        comments = []
+        visibility = nil
+        eventDate = post.eventDate
+        eventVenue = post.eventVenue
+        lostFoundType = post.lostFoundType
+        lostFoundContactPref = nil
+        serviceCategory = nil
+        dealBusinessName = nil
+        locationName = post.locationName
+        archiveReason = nil
+    }
+}
+
 // MARK: - Interaction request/response payloads
 
 /// Body for `POST /api/posts/:id/share` — `sharePostSchema`

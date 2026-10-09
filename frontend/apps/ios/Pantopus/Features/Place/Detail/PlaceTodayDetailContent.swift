@@ -255,6 +255,8 @@ struct PlaceTodayDetailContent: View {
 
     private func loadRadonState() async {
         guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
+        // Inside Today's fresh window the same answer carries on (no request).
+        if let current = radonState, current.homeId == homeId, current.resumeIfFresh() { return }
         radonState?.suspend()
         let current = RadonTodayState(homeId: homeId, showing: radonState)
         radonState = current
@@ -264,6 +266,7 @@ struct PlaceTodayDetailContent: View {
     private func resumeRadon(_ active: Bool) {
         radonState?.suspend()
         guard active, showHomeRadon, let homeId = vm.calendarHomeId else { return }
+        if let current = radonState, current.homeId == homeId, current.resumeIfFresh() { return }
         let current = RadonTodayState(homeId: homeId, showing: radonState)
         radonState = current
         if radonAvailable { Task { await current.load() } }
@@ -1088,6 +1091,8 @@ private final class RadonTodayState {
     var noTaskAccess = false
     /// Showing the previous lifecycle's answer while this one re-checks.
     private var carried = false
+    /// When this lifecycle's own check answered (Today's fresh window).
+    private var answeredAt: Date?
 
     init(homeId: String) {
         self.homeId = homeId
@@ -1118,6 +1123,19 @@ private final class RadonTodayState {
         return false
     }
 
+    /// Coming back to Today inside its fresh window (Instant Screens: 10
+    /// minutes) with nothing marked out of date since (a task or household
+    /// change, `today`, coming back after 15 minutes): this lifecycle, with
+    /// its task session, carries on without a request.
+    func resumeIfFresh() -> Bool {
+        guard let answeredAt, loaded, error == nil, access.isCurrent,
+              Date().timeIntervalSince(answeredAt) < ScreenDataKind.today.freshFor,
+              !ScreenStore.shared.wasMarked(topics: [ScreenTopic.today, ScreenTopic.home(homeId)], kind: .today, since: answeredAt)
+        else { return false }
+        context.active = true
+        return true
+    }
+
     func suspend() {
         context.active = false
         access.invalidatePending()
@@ -1138,6 +1156,7 @@ private final class RadonTodayState {
             loaded = true
             carried = false
             error = nil
+            answeredAt = Date()
         } catch {
             guard (try? context.requireCurrent()) != nil, access.lifecycleRevision == revision, access.isCurrent else { return }
             // A failed re-check keeps the carried answer; a refusal still clears it.

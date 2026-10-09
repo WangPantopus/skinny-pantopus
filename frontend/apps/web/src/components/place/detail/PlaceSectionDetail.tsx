@@ -33,6 +33,7 @@ import MoneyDetail from './MoneyDetail';
 import CivicDetail from './CivicDetail';
 import IdentityDetail from './IdentityDetail';
 import { usePrimaryHome } from '@/lib/primaryHome';
+import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
 
 function DetailShell({ section, hidden, children }: { section: string; hidden?: string[]; children: React.ReactNode }) {
   return <PlaceShell active={section} hidden={hidden}>{children}</PlaceShell>;
@@ -102,12 +103,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
   // else the resident's own private setup (as on the overview).
   const switchedHome = useContext(PlaceHomeContext);
   const noSharedHome = homeQuery.isSuccess && !homeQuery.data?.home && !switchedHome;
-  const myHomesQuery = useQuery({
-    queryKey: queryKeys.placeMyHomes(),
-    queryFn: async () => api.homes.getMyHomes(),
-    enabled: authed && valid && noSharedHome,
-    staleTime: 60_000,
-  });
+  const myHomesQuery = useQuery({ ...sharedMyHomesQuery(), enabled: authed && valid && noSharedHome });
   const privateSetupId = (myHomesQuery.data?.homes ?? []).find((h) => h.access_kind === 'private_setup')?.id ?? null;
   const homeId = switchedHome ?? homeQuery.data?.home?.id ?? privateSetupId;
 

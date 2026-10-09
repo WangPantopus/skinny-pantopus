@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
+import { type ComponentType } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { AttomPropertyDetailPayload } from '@pantopus/api';
@@ -112,59 +114,40 @@ function joinText(parts: unknown[], separator: string): string {
     .join(separator);
 }
 
+const PROPERTY_DETAILS_FRESH_MS = 24 * 60 * 60 * 1000;
+
 export default function HomePropertyDetailsPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const homeId = params.id;
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [home, setHome] = useState<HomeRecord | null>(null);
-  const [attomPayload, setAttomPayload] = useState<AttomPropertyDetailPayload | null>(null);
-  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
-
-  const generation = useRef(0);
-  const retire = useCallback(() => {
-    generation.current++; setHome(null); setAttomPayload(null); setUnavailableReason(null); setError(''); setLoading(true);
-  }, []);
-  const load = useCallback(async () => {
-    const revision = ++generation.current;
-    const token = api.getAuthToken(), origin = api.getApiBaseUrl();
-    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
-    const current = () => revision === generation.current && token === api.getAuthToken()
-      && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
-    setHome(null); setAttomPayload(null); setUnavailableReason(null); setLoading(true); setError('');
-    try {
-      if (!token) throw new Error('Sign in to view this Home.');
+  // Public-record facts about the home (contract §4, public place facts: fresh 24 hours), kept in the
+  // session's cache so coming back shows them at once. A 403/404 drops them (lib/query-provider) and
+  // shows the server's answer; signing out or switching accounts replaces the whole cache.
+  const detailQuery = useQuery({
+    queryKey: queryKeys.homePropertyDetails(homeId),
+    queryFn: async () => {
+      if (!api.getAuthToken()) throw new Error('Sign in to view this Home.');
       const res = await api.homes.getHomePropertyDetail(homeId);
-      if (!current()) return;
       if (!res || res.home?.id !== homeId || !['home', 'cache', 'attom', 'unavailable'].includes(res.source)
         || !(res.attom_property_detail === null || (typeof res.attom_property_detail === 'object'
           && !Array.isArray(res.attom_property_detail)))
         || (res.source === 'unavailable' && res.attom_property_detail !== null)) {
         throw new Error('Property details could not be verified. Please retry.');
       }
-      setHome(res.home); setAttomPayload(res.attom_property_detail); setUnavailableReason(res.unavailable_reason ?? null);
-    } catch (err: unknown) {
-      if (!current()) return;
-      setError(err instanceof Error ? err.message : 'Failed to load property details. Please retry.');
-    } finally {
-      if (current()) setLoading(false);
-    }
-  }, [homeId]);
-  // Property facts don't change while the page is open, so coming back keeps them; an account change
-  // clears the page and reloads it, so another account's Home never shows.
-  useEffect(() => {
-    const refresh = () => { retire(); void load(); };
-    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) refresh(); };
-    void load();
-    const unsubscribe = api.onTokenChange(refresh);
-    window.addEventListener('storage', storage);
-    return () => {
-      retire(); unsubscribe();
-      window.removeEventListener('storage', storage);
-    };
-  }, [load, retire]);
+      return res;
+    },
+    enabled: !!homeId,
+    staleTime: PROPERTY_DETAILS_FRESH_MS,
+  });
+  const home: HomeRecord | null = detailQuery.data?.home ?? null;
+  const attomPayload: AttomPropertyDetailPayload | null = detailQuery.data?.attom_property_detail ?? null;
+  const unavailableReason: string | null = detailQuery.data?.unavailable_reason ?? null;
+  const error = !detailQuery.data && detailQuery.isError
+    ? (detailQuery.error instanceof Error ? detailQuery.error.message : 'Failed to load property details. Please retry.')
+    : '';
+  const loading = !detailQuery.data && (!error || detailQuery.isFetching);
+  const load = () => detailQuery.refetch();
 
   const property = getAttomPropertyFromPayload(attomPayload);
   const stats = buildHeroStats(property);
