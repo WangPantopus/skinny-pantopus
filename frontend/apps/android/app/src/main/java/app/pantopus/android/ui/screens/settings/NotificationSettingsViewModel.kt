@@ -213,6 +213,15 @@ class NotificationSettingsViewModel
             _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.YOU) }
         }
 
+        /**
+         * A save failed: the screen goes back to the server's row, read now, unless the person changed something
+         * since (that change is sent next, and its reply is published).
+         */
+        private suspend fun rollBackToServer() {
+            val server = repository.preferencesStored(force = true).data ?: return
+            if (pendingPatch.isEmpty) publish(server)
+        }
+
         /** Apply locally, re-project, and (re)arm the debounce timer. */
         private fun applyLocally(
             updated: NotificationPreferences,
@@ -255,7 +264,7 @@ class NotificationSettingsViewModel
                         }
                         is NetworkResult.Failure -> {
                             _toast.value = ToastMessage("Failed to save", ToastKind.Error)
-                            fetch(force = true)
+                            rollBackToServer()
                         }
                     }
                 }

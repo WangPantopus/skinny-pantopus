@@ -1,7 +1,6 @@
 package app.pantopus.android.ui.screens.place.today
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,7 +31,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -45,6 +43,8 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.screens.place.detail.LocalPlaceDetailRetry
@@ -54,8 +54,6 @@ import app.pantopus.android.ui.screens.place.detail.rememberMinuteClock
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
-import java.time.Instant
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -123,7 +121,7 @@ fun TodayTabScreen(
                     ) {
                         val age = nowMs - current.fetchedAt
                         if (current.refreshFailed && age > TODAY_MAX_SHOWN_AGE_MS) {
-                            RefreshFailedLine(current.fetchedAt, onRetry = viewModel::refresh)
+                            RefreshFailedLine(RefreshNotice(current.fetchedAt, viewModel::refresh), Modifier.padding(bottom = 10.dp))
                         }
                         if (current.savedAnchorMatches) {
                             StatusChip("Saved place · Only you", modifier = Modifier.padding(bottom = 12.dp))
@@ -163,39 +161,6 @@ private fun alertsCheck(
         refreshing -> TodayAlertsCheck.CHECKING
         else -> TodayAlertsCheck.UNAVAILABLE
     }
-
-/** Contract §3: one quiet line when a read failed and the copy on screen is past Today's max shown age. */
-@Composable
-private fun RefreshFailedLine(
-    fetchedAt: Long,
-    onRetry: () -> Unit,
-) {
-    val shownTime = remember(fetchedAt) { REFRESH_TIME_FORMAT.format(Instant.ofEpochMilli(fetchedAt)) }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).testTag("todayRefreshFailed"),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            "Couldn't refresh. Showing $shownTime.",
-            fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            "Retry",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.primary600,
-            modifier =
-                Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(role = Role.Button, onClick = onRetry)
-                    .padding(horizontal = 10.dp, vertical = 12.dp),
-        )
-    }
-}
-
-private val REFRESH_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US).withZone(ZoneId.systemDefault())
 
 @Composable
 private fun SavedPlaceReminders(onAddHome: () -> Unit) {

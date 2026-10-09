@@ -202,7 +202,8 @@ class SupportTrainsViewModel
 
         private fun reload(force: Boolean) {
             if (!loadedOnce) _state.value = ListOfRowsUiState.Loading
-            _refreshing.value = true
+            // Only a pull (or Try again) over rows shows the pull indicator; a return reads quietly or not at all.
+            _refreshing.value = force && loadedOnce
             viewModelScope.launch {
                 val mineDeferred = async { fetchMine(force) }
                 val nearbyDeferred = async { fetchNearby(force) }

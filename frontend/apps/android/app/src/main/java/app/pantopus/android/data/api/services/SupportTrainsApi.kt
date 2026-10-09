@@ -36,6 +36,7 @@ import retrofit2.http.Query
  * The write half (reserve / cancel / reveal / deliver / confirm plus
  * the organizer management actions) lives in [SupportTrainActionsApi].
  */
+@Suppress("TooManyFunctions")
 interface SupportTrainsApi {
     /**
      * `GET /api/support-trains/me/support-trains` — list trains the

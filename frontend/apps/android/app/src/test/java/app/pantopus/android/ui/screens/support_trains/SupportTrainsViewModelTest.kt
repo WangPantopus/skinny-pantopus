@@ -147,7 +147,8 @@ class SupportTrainsViewModelTest {
                                 mineRow("st3", "invited", role = "helper"),
                             ),
                     ),
-                , fetchedAt = System.currentTimeMillis())
+                    fetchedAt = System.currentTimeMillis(),
+                )
             coEvery { repo.nearbyStored(any(), any(), any()) } returns
                 Stored(SupportTrainsNearbyResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
             val vm = SupportTrainsViewModel(repo, noLocation)
@@ -203,7 +204,8 @@ class SupportTrainsViewModelTest {
                     SupportTrainsNearbyResponse(
                         supportTrains = listOf(nearbyRow("n1", "meal_support", 12, 18, "For the Chen family")),
                     ),
-                , fetchedAt = System.currentTimeMillis())
+                    fetchedAt = System.currentTimeMillis(),
+                )
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { 40.0 to -73.0 }
             vm.load()
@@ -237,7 +239,8 @@ class SupportTrainsViewModelTest {
                                 ),
                             ),
                     ),
-                , fetchedAt = System.currentTimeMillis())
+                    fetchedAt = System.currentTimeMillis(),
+                )
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { 40.0 to -73.0 }
             vm.load()

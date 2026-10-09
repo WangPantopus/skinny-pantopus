@@ -89,6 +89,7 @@ data class GroupedListCallbacks(
 
 /** Top-level shell composable. */
 @Composable
+@Suppress("LongParameterList")
 fun GroupedListScreen(
     title: String,
     state: GroupedListUiState,
