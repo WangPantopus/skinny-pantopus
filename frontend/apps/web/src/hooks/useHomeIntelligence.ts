@@ -6,6 +6,7 @@ import * as api from '@pantopus/api';
 import type { HomeHealthScore, SeasonalChecklist, BillTrendData, PropertyValueData, HomeTimelineItem } from '@pantopus/types';
 import { validBillTrendData } from '@/components/home/validBillTrendData';
 import { dropHomeSummaryCopy, keepHomeSummaryCopy, readHomeSummaryCopy, type HomeSummaryName } from '@/components/home/homeDashboardCopy';
+import { onSyncTopic, touchesHome } from '@/lib/syncSignals';
 
 type SummaryKey = 'health' | 'checklist' | 'bills' | 'property' | 'timeline';
 const HEALTH_READ_PERMISSIONS = ['home.view', 'maintenance.view', 'finance.view', 'members.view', 'docs.view', 'sensitive.view'];
@@ -200,11 +201,18 @@ export function useHomeIntelligence(homeId: string | undefined, can: (permission
       return { ...next, items: [...previous.items, ...next.items.filter(item => !previous.items.some(old => old.id === item.id))] }; });
   };
   const clearSeasonTransition = useCallback(() => setSeasonTransition(null), []);
+  // The server says this Home changed (contract §8): the cards on screen read again.
+  const refreshShown = useRef<() => void>(() => {});
   const refreshAll = useCallback(async () => {
     await Promise.all([loadChecklist(), ...(canReadHealth ? [loadHealth()] : []),
       ...(deferred.current.bills && canReadBills ? [loadBills()] : []), ...(deferred.current.property ? [loadProperty()] : []),
       ...(deferred.current.timeline && canReadTimeline ? [loadTimeline()] : [])]);
   }, [canReadHealth, canReadBills, canReadTimeline, loadChecklist, loadHealth, loadBills, loadProperty, loadTimeline]);
+  refreshShown.current = () => { void refreshAll(); };
+  useEffect(() => {
+    if (!homeId) return undefined;
+    return onSyncTopic((topic) => { if (touchesHome(topic, homeId)) refreshShown.current(); });
+  }, [homeId]);
   return {
     healthScore: health.data, healthLoading: health.loading,
     checklist: checklist.data, checklistLoading: checklist.loading, checklistBusy,
