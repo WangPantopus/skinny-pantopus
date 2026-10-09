@@ -12,12 +12,15 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyRe
 object StoreTopics {
     /** The viewer's conversation list: a chat created or left, a message sent or read. */
     const val CHATS = "chats"
+
+    /** The viewer's list of homes: a home added, claimed, verified, left or deleted. */
+    const val HOMES = "homes"
 }
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
 object StoreKeys {
     /** My Homes: one source for every screen that lists the viewer's homes. */
-    val myHomes = StoreKey<MyHomesResponse>("api/homes/my-homes", kind = StoreKind.HOMES, topics = setOf("homes"))
+    val myHomes = StoreKey<MyHomesResponse>("api/homes/my-homes", kind = StoreKind.HOMES, topics = setOf(StoreTopics.HOMES))
 
     /**
      * The sections the Today tab renders (contract §8 "Today on the phones"): weather and its sky, air, alerts, the
@@ -79,6 +82,18 @@ object StoreKeys {
             mapOf("limit" to "100"),
             kind = StoreKind.MESSAGES_LIST,
             topics = setOf(StoreTopics.CHATS),
+        )
+
+    /**
+     * A home's Place for the viewer's role (the Place dashboard): every section, kind Place. A claim, verification or
+     * household change marks it through `homes`, `home:` and `place:`.
+     */
+    fun place(homeId: String) =
+        StoreKey<PlaceIntelligence>(
+            "api/homes/$homeId/intelligence",
+            mapOf("ballot" to "1"),
+            kind = StoreKind.PLACE,
+            topics = setOf("place:$homeId", "home:$homeId", StoreTopics.HOMES),
         )
 
     /** A home's Today: [TODAY_SECTIONS] of its Place intelligence. */

@@ -22,6 +22,8 @@ public final class SavedPostsModel {
     public var toastMessage: String?
 
     private let api: APIClient
+    /// The first page as last read, shown at once on the next visit while it reads again.
+    private let store: ScreenStore
     private let onOpenPost: @MainActor (MyPostDTO) -> Void
     private let now: @Sendable () -> Date
     private var posts: [MyPostDTO] = []
@@ -40,26 +42,35 @@ public final class SavedPostsModel {
         now: @escaping @Sendable () -> Date
     ) {
         self.api = api
+        store = ScreenStore.store(for: api)
         self.onOpenPost = onOpenPost
         self.now = now
     }
 
-    /// Every visit to the tab re-reads it, so posts saved elsewhere since show up.
+    private static let firstPage = PostsEndpoints.savedPosts(limit: pageSize, offset: 0)
+
+    /// Every visit to the tab re-reads it, so posts saved elsewhere since show
+    /// up; the list as last read shows meanwhile.
     func load() async {
         generation += 1
         let current = generation
         loadingMore = false
         loadMoreError = nil
+        if !loadedOnce, let copy = store.peek(Self.firstPage, as: SavedPostsResponse.self) {
+            await apply(copy.value)
+            guard current == generation else { return }
+        }
         if !loadedOnce { state = .loading }
         do {
-            let response: SavedPostsResponse = try await api.request(
-                PostsEndpoints.savedPosts(limit: Self.pageSize, offset: 0)
-            )
+            let response = try await store.load(
+                Self.firstPage,
+                as: SavedPostsResponse.self,
+                kind: .post,
+                topics: [ScreenTopic.posts],
+                force: true
+            ).value
             guard current == generation else { return }
-            posts = response.posts
-            nextOffset = Self.nextOffset(after: response)
-            loadedOnce = true
-            await rebuild()
+            await apply(response)
         } catch {
             guard current == generation else { return }
             // A failed read is not an empty list: keep what's shown, or say so.
@@ -69,6 +80,13 @@ public final class SavedPostsModel {
                 state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't load your saved posts.")
             }
         }
+    }
+
+    private func apply(_ response: SavedPostsResponse) async {
+        posts = response.posts
+        nextOffset = Self.nextOffset(after: response)
+        loadedOnce = true
+        await rebuild()
     }
 
     /// Footer reached: append the next page of saves. A failed page keeps the rows and offers Try again.

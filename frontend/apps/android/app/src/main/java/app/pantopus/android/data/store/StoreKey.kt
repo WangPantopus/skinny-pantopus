@@ -1,6 +1,7 @@
 package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.NetworkResult
 
 /**
  * One store entry's address (Instant Screens contract §6): method, path and sorted query. The store adds the server
@@ -53,3 +54,14 @@ data class Stored<out T : Any>(
         now: Long = System.currentTimeMillis(),
     ): Boolean = data != null && failure != null && now - fetchedAt > kind.maxShownAgeMs
 }
+
+/**
+ * A forced read as a [NetworkResult], for callers written before the store: the reply when the read succeeded (a 304
+ * counts), else its failure. A read dropped by a wipe or an account switch (no data, no failure) fails as transport.
+ */
+fun <T : Any> Stored<T>.asResult(): NetworkResult<T> =
+    when {
+        failure != null -> NetworkResult.Failure(failure)
+        data != null -> NetworkResult.Success(data)
+        else -> NetworkResult.Failure(NetworkError.Transport(IllegalStateException("The read was dropped")))
+    }

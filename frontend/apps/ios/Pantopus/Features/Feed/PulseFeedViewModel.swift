@@ -628,6 +628,7 @@ public final class PulseFeedViewModel {
                 feedEndpoint(query),
                 as: FeedResponse.self,
                 kind: .nearby,
+                topics: [ScreenTopic.posts],
                 force: force
             ).value
             // A newer fetch (e.g. a filter tapped meanwhile) owns the list.

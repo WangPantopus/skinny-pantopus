@@ -11,6 +11,8 @@ import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestsRespons
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeAdminApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreTopics
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,9 +25,11 @@ open class HomeAdminRepository
     @Inject
     constructor(
         private val api: HomeAdminApi,
+        private val store: ScreenStore,
     ) {
         /** `DELETE /api/homes/:id`. */
-        open suspend fun deleteHome(homeId: String): NetworkResult<DeleteHomeResponse> = safeApiCall { api.deleteHome(homeId) }
+        open suspend fun deleteHome(homeId: String): NetworkResult<DeleteHomeResponse> =
+            safeApiCall { api.deleteHome(homeId) }.also { if (it is NetworkResult.Success) store.markStale(StoreTopics.HOMES) }
 
         /** `GET /api/homes/:id/me`. */
         open suspend fun myAccess(homeId: String): NetworkResult<HomeAccessDto> = safeApiCall { api.myAccess(homeId) }
