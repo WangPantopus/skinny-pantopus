@@ -5789,6 +5789,8 @@ router.post(
           eventType: 'lockdown',
         });
         clearAuthCookies(res);
+        // This browser's saved data goes with the session (Instant Screens contract §5).
+        res.set('Clear-Site-Data', '"storage"');
         logger.info('Logout (global) completed', { userId, revoked: result.revoked });
         return res.json({ success: true, revoked: result.revoked });
       } catch (err) {
@@ -5799,6 +5801,8 @@ router.post(
 
     // scope === 'local'
     clearAuthCookies(res);
+    // This browser's saved data goes with the session (Instant Screens contract §5).
+    res.set('Clear-Site-Data', '"storage"');
 
     const accessToken = getLogoutAccessToken(req);
 

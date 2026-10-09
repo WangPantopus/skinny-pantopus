@@ -62,8 +62,10 @@ function mockRes() {
     _json: null,
     _cookies: {},
     _clearedCookies: [],
+    _headers: {},
     status(code) { this._status = code; return this; },
     json(payload) { this._json = payload; return this; },
+    set(name, value) { this._headers[name.toLowerCase()] = value; return this; },
     cookie(name, val, opts) { this._cookies[name] = { val, opts }; return this; },
     clearCookie(name) { this._clearedCookies.push(name); return this; },
   };
@@ -444,6 +446,7 @@ describe('POST /logout', () => {
       'pantopus_csrf',
       'pantopus_session',
     ]));
+    expect(res._headers['clear-site-data']).toBe('"storage"');
   });
 
   test('prefers explicit body access token over stale access cookie', async () => {
