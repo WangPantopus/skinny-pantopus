@@ -30,6 +30,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 const { ensureTodayItems, usersWithUnresolvedMail } = require('../services/mailDayService');
 
 // The local-time window the push may land in. Outside it the user is
@@ -232,6 +233,8 @@ async function releaseMailDay(userId, today) {
 // ── The job ─────────────────────────────────────────────────
 
 async function mailDayNotification() {
+  // Launch cut #10 (Mailbox): mailbox jobs don't run while the mailbox is off.
+  if (skipForLaunchCut('mailbox', 'mailDayNotification')) return;
   const today = todayDate();
   logger.info('[MailDay] Starting mail day notification job', { day_date: today });
 

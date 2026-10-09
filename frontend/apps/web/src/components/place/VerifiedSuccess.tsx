@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
+import { launchFeatures } from '@/lib/featureFlags';
 import { IconTile } from '@/components/archetypes/place';
 
 export interface VerifiedSuccessProps {
@@ -51,7 +52,8 @@ export default function VerifiedSuccess({ onContinue }: VerifiedSuccessProps) {
   const rows: { icon: LucideIcon; label: string; sub: string; href: string }[] = [
     { icon: FileText, label: 'Proof you live here', sub: 'Your badge, a residency letter, and a shareable Residency Pass', href: '/app/place/identity' },
     { icon: MessageCircle, label: 'Your Block Founder number', sub: 'A permanent rank on your block, and the real rents your verified neighbors pay', href: '/app/place/block' },
-    { icon: Mailbox, label: 'Your mailbox', sub: 'Packages, notices, and the offers that come to this address', href: '/app/mailbox' },
+    // Launch cut #10 (Mailbox): the mailbox is hidden.
+    ...(launchFeatures.mailbox ? [{ icon: Mailbox, label: 'Your mailbox', sub: 'Packages, notices, and the offers that come to this address', href: '/app/mailbox' }] : []),
   ];
 
   return (

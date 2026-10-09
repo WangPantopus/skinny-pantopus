@@ -17,7 +17,9 @@ export default function HomeCard({ data, homeId }: HomeCardProps) {
 
   // Launch cut #7 (Household extras): bill management is hidden, so bills due are too.
   const billsDue = launchFeatures.householdExtras ? data.billsDue : [];
-  const hasSomething = billsDue.length > 0 || data.tasksDue.length > 0 || data.newMail > 0;
+  // Launch cut #10 (Mailbox): no mail count and no Mailbox button.
+  const newMail = launchFeatures.mailbox ? data.newMail : 0;
+  const hasSomething = billsDue.length > 0 || data.tasksDue.length > 0 || newMail > 0;
 
   return (
     <div className="bg-app-surface border border-emerald-200 dark:border-emerald-800 rounded-2xl p-5 shadow-sm">
@@ -45,10 +47,10 @@ export default function HomeCard({ data, homeId }: HomeCardProps) {
                 <span className="truncate">{task.title}</span>
               </div>
             ))}
-            {data.newMail > 0 && (
+            {newMail > 0 && (
               <div className="flex items-center gap-2 text-sm text-app-text-secondary">
                 <Mail className="w-4 h-4 flex-shrink-0" />
-                <span>{data.newMail} new mail</span>
+                <span>{newMail} new mail</span>
               </div>
             )}
           </>
@@ -72,15 +74,23 @@ export default function HomeCard({ data, homeId }: HomeCardProps) {
         >
           Open Home
         </button>
-        <button
-          onClick={() => router.push(`/app/mailbox?scope=home&homeId=${homeId}`)}
-          className="py-2.5 px-3 bg-app-surface-sunken text-app-text-strong rounded-lg text-sm font-medium hover:bg-app-hover dark:hover:bg-gray-600 transition"
-        >
-          Mailbox
-        </button>
+        {launchFeatures.mailbox && (
+          <button
+            onClick={() => router.push(`/app/mailbox?scope=home&homeId=${homeId}`)}
+            className="py-2.5 px-3 bg-app-surface-sunken text-app-text-strong rounded-lg text-sm font-medium hover:bg-app-hover dark:hover:bg-gray-600 transition"
+          >
+            Mailbox
+          </button>
+        )}
       </div>
     </div>
   );
+}
+
+// What attaching a home unlocks, without the launch-cut features (#7 bills, #10 mailbox).
+function attachHomeUnlocks(): string {
+  const unlocks = [launchFeatures.mailbox && 'mailbox', launchFeatures.householdExtras && 'bills', 'household tasks'].filter(Boolean);
+  return unlocks.length > 1 ? `Unlock ${unlocks.join(', ')}, and more.` : `Unlock ${unlocks[0]} and more.`;
 }
 
 /** "Later" snoozes the Attach a Home prompt for this account for a week, across loads and tabs. */
@@ -116,7 +126,7 @@ export function AttachHomeCTA({ userId }: { userId: string }) {
         <h3 className="font-semibold text-app-text dark:text-white">Attach a Home</h3>
       </div>
       <p className="text-sm text-app-text-secondary mb-4">
-        {launchFeatures.householdExtras ? 'Unlock mailbox, bills, household tasks, and more.' : 'Unlock mailbox, household tasks, and more.'}
+        {attachHomeUnlocks()}
       </p>
       <div className="flex gap-2">
         <button

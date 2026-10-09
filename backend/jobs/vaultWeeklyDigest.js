@@ -9,8 +9,11 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 
 async function vaultWeeklyDigest() {
+  // Launch cut #10 (Mailbox): mailbox jobs don't run while the mailbox is off.
+  if (skipForLaunchCut('mailbox', 'vaultWeeklyDigest')) return;
   logger.info('[VaultDigest] Starting weekly vault digest job');
 
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();

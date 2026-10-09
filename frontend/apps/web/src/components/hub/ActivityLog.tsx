@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { formatTimeAgo } from '@pantopus/ui-utils';
 import type { ActivityItem } from './types';
-import { launchFeatures } from '@/lib/featureFlags';
+import { isLaunchCutPath, launchFeatures } from '@/lib/featureFlags';
 
 interface ActivityLogProps {
   items: ActivityItem[];
@@ -15,8 +15,10 @@ const pillarColors: Record<string, string> = {
   business: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',
 };
 
-export default function ActivityLog({ items }: ActivityLogProps) {
+export default function ActivityLog({ items: allItems }: ActivityLogProps) {
   const router = useRouter();
+  // Launch cuts: rows that open a hidden page (e.g. mail, #10) are left out.
+  const items = allItems.filter((item) => !(item.route && isLaunchCutPath(item.route)));
 
   if (items.length === 0) {
     return (

@@ -10,6 +10,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 
 // Risk thresholds (match backend route calculateRiskScore)
 const RISK_THRESHOLDS = {
@@ -20,6 +21,8 @@ const RISK_THRESHOLDS = {
 };
 
 async function earnRiskReview() {
+  // Launch cut #10 (Mailbox): mailbox jobs don't run while the mailbox is off.
+  if (skipForLaunchCut('mailbox', 'earnRiskReview')) return;
   logger.info('[EarnRisk] Starting risk review job');
 
   // 1. Auto-lift expired suspensions

@@ -42,8 +42,8 @@ export const webFeatureFlags = {
   schedulingPaid,
 };
 
-// First-launch scope (founder direction, 2026-09-27). These eight features are
-// hidden for the first launch; their code stays. A feature is OFF in every
+// First-launch scope (founder direction, 2026-09-27; Mailbox 2026-10-09). These
+// features are hidden for the first launch; their code stays. A feature is OFF in every
 // environment unless its key is listed in NEXT_PUBLIC_LAUNCH_FEATURES
 // (comma-separated, or "all"), e.g. NEXT_PUBLIC_LAUNCH_FEATURES=marketplace.
 // The same keys drive the backend (LAUNCH_FEATURES) and the native apps.
@@ -57,6 +57,7 @@ export const LAUNCH_FEATURE_KEYS = [
   'household_extras', // 7. Polls, packages, pet section, family calendar, bill management
   'mail_extras', // 8. Letters, e-signing, community mail, event invitations by mail
   'gift_funds', // 9. Support Train gift funds (no app can take a contribution yet)
+  'mailbox', // 10. The digital Mailbox (October 9); the Mail tab becomes Messages
 ] as const;
 
 export type LaunchFeatureKey = (typeof LAUNCH_FEATURE_KEYS)[number];
@@ -82,6 +83,7 @@ export const launchFeatures = {
   householdExtras: enabledLaunchFeatures.has('household_extras'),
   mailExtras: enabledLaunchFeatures.has('mail_extras'),
   giftFunds: enabledLaunchFeatures.has('gift_funds'),
+  mailbox: enabledLaunchFeatures.has('mailbox'),
 };
 
 // Pages that exist only for a hidden feature, matched against the pathname.
@@ -123,12 +125,31 @@ const LAUNCH_CUT_ROUTES: ReadonlyArray<readonly [boolean, RegExp]> = [
   [launchFeatures.openGigs && launchFeatures.householdExtras, /^\/app\/mailbox\/gig(?:\/|$)/],
   // #8 Mail extras, incl. Earn (offers and ad earnings that never reach the withdrawable wallet).
   [launchFeatures.mailExtras, /^\/app\/mailbox\/(?:certified|community|party|translation|earn)(?:\/|$)/],
+  // #10 Mailbox: every mailbox page. The middleware sends the mailbox itself to Messages.
+  // Postcard verification (/app/homes/<id>/verify-postcard) stays.
+  [launchFeatures.mailbox, /^\/app\/mailbox(?:\/|$)/],
 ];
 
 /** True when `path` opens a page of a feature hidden for the first launch. */
 export function isLaunchCutPath(path: string): boolean {
   const pathname = path.split(/[?#]/)[0];
   return LAUNCH_CUT_ROUTES.some(([open, pattern]) => !open && pattern.test(pathname));
+}
+
+/**
+ * Today's briefing without the rows of hidden features: mail signals while
+ * Mailbox (#10) is off, and signals or actions that open a hidden page.
+ */
+export function withoutLaunchCutTodayRows<T extends {
+  signals: ReadonlyArray<{ kind: string; action: { route: string } | null }>;
+  actions: ReadonlyArray<{ route: string }>;
+}>(today: T): T {
+  const hidden = (route?: string | null) => !!route && isLaunchCutPath(route);
+  return {
+    ...today,
+    signals: today.signals.filter((signal) => !(signal.kind === 'mail' && !launchFeatures.mailbox) && !hidden(signal.action?.route)),
+    actions: today.actions.filter((action) => !hidden(action.route)),
+  };
 }
 
 /**

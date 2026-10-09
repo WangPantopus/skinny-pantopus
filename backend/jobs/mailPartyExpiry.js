@@ -7,8 +7,11 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 
 async function mailPartyExpiry() {
+  // Launch cut #10 (Mailbox): mailbox jobs don't run while the mailbox is off.
+  if (skipForLaunchCut('mailbox', 'mailPartyExpiry')) return;
   const expiryThreshold = new Date(Date.now() - 90 * 1000).toISOString();
 
   // Find pending party sessions past the 90s window

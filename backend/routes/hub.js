@@ -280,7 +280,8 @@ router.get('/', verifyToken, async (req, res) => {
       // is_read column; those names made this read fail and show nothing).
       // The same unread rule as the Mailbox's Personal drawer badge (GET /api/mailbox/v2/drawers),
       // which this row opens. Home and Business mail are counted where they are shown.
-      personalMail: Promise.resolve(
+      // Launch cut #10 (Mailbox): no mail rows while the mailbox is off.
+      personalMail: !isLaunchFeatureEnabled('mailbox') ? Promise.resolve({ data: [] }) : Promise.resolve(
         supabaseAdmin
           .from('Mail')
           .select('id, type')
@@ -326,7 +327,7 @@ router.get('/', verifyToken, async (req, res) => {
       // current, verified occupancy), which also hides other members' private
       // and attention-only mail. Mail has no home_id or status column.
       const primaryOccupancy = homeStates[primaryIndex].access.occupancy;
-      if (homeCan('mailbox.view') && primaryOccupancy?.verification_status === 'verified'
+      if (isLaunchFeatureEnabled('mailbox') && homeCan('mailbox.view') && primaryOccupancy?.verification_status === 'verified'
         && !staleAffectsTrust(primaryOccupancy.verified_at)) {
         batch2.homeMail = Promise.resolve(unreadMailQuery(primaryHome.id, userId, now.toISOString()))
           .catch(() => ({ count: 0 }));
@@ -549,7 +550,9 @@ router.get('/', verifyToken, async (req, res) => {
     jumpBackIn.push({ title: 'Messages', route: '/app/chat', icon: 'chatbubbles' });
 
     if (primaryHome) {
-      jumpBackIn.push({ title: 'Mailbox', route: `/app/mailbox?scope=home&homeId=${primaryHome.id}`, icon: 'mail' });
+      if (isLaunchFeatureEnabled('mailbox')) {
+        jumpBackIn.push({ title: 'Mailbox', route: `/app/mailbox?scope=home&homeId=${primaryHome.id}`, icon: 'mail' });
+      }
       jumpBackIn.push({ title: 'My Home', route: `/app/homes/${primaryHome.id}/dashboard`, icon: 'home' });
     }
 
