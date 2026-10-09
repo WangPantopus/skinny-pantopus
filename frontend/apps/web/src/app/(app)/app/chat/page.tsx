@@ -341,11 +341,13 @@ export default function ChatListPage() {
       }));
     }
 
+    // Only unread conversations need a read receipt here; the conversation also
+    // marks itself read once it loads.
     if (conv._type === 'room') {
-      void api.chat.markMessagesAsRead(String(conv.id)).catch(() => {});
+      if (unread > 0) void api.chat.markMessagesAsRead(String(conv.id)).catch(() => {});
       router.push(`/app/chat/${conv.id}`);
     } else {
-      void api.chat.markConversationAsRead(String(conv.other_participant_id)).catch(() => {});
+      if (unread > 0) void api.chat.markConversationAsRead(String(conv.other_participant_id)).catch(() => {});
       router.push(`/app/chat/conversation/${conv.other_participant_id}`);
     }
   };

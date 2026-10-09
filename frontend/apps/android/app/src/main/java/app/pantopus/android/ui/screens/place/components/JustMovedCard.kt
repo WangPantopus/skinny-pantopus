@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -79,7 +80,7 @@ private data class JustMovedStep(
 )
 
 private val STEPS =
-    listOf(
+    listOfNotNull(
         JustMovedStep(
             JustMovedStepId.PICKUP,
             PantopusIcon.Trash2,
@@ -87,13 +88,14 @@ private val STEPS =
             "Reminders the night before, every week",
             PlaceDetailGroup.TODAY,
         ),
+        // Launch cut #10 (Mailbox): returning mail happens in the mailbox (My Mail Day).
         JustMovedStep(
             JustMovedStepId.MAIL,
             PantopusIcon.Mailbox,
             "Send back the previous resident's mail",
             "One tap returns it; yours gets filed",
             null,
-        ),
+        ).takeIf { LaunchFeatures.mailbox },
         JustMovedStep(
             JustMovedStepId.MONEY,
             PantopusIcon.Zap,

@@ -208,8 +208,8 @@ class ScreenStore
             val iterator = slots.values.iterator()
             while (iterator.hasNext()) {
                 val candidate = iterator.next()
-                val idle = now - candidate.lastUsed > IDLE_MS
-                if (candidate !== slot && (idle || slots.size > MAX_ENTRIES) && candidate.removable) iterator.remove()
+                val overLimit = now - candidate.lastUsed > IDLE_MS || slots.size > MAX_ENTRIES
+                if (candidate !== slot && overLimit && candidate.removable) iterator.remove()
             }
             return slot
         }

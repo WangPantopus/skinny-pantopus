@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.root
 
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.theme.PantopusIcon
 
 /**
@@ -11,8 +12,8 @@ import app.pantopus.android.ui.theme.PantopusIcon
  */
 sealed class PantopusRoute(
     val path: String,
-    val label: String,
-    val icon: PantopusIcon,
+    open val label: String,
+    open val icon: PantopusIcon,
 ) {
     /**
      * Your Place — the address's page (Wedge v2 D2). Lands on the Place
@@ -27,8 +28,15 @@ sealed class PantopusRoute(
     /** Nearby — the density door and its window (the cells map, the meter, what opens). */
     data object Nearby : PantopusRoute(path = "root/nearby", label = "Nearby", icon = PantopusIcon.MapPin)
 
-    /** Mail — the digital mailbox, with Messages as its inbox. */
-    data object Mail : PantopusRoute(path = "root/mail", label = "Mail", icon = PantopusIcon.Mailbox)
+    /**
+     * Mail — the digital mailbox, with Messages as its inbox. While Mailbox is off for launch (contract §9,
+     * 2026-10-09) this tab is Messages: the conversation list itself, with a chat bubble. Its path and the
+     * `tab.mail` test tag stay, so links, saved state and UI tests keep working.
+     */
+    data object Mail : PantopusRoute(path = "root/mail", label = "Mail", icon = PantopusIcon.Mailbox) {
+        override val label: String get() = if (LaunchFeatures.mailbox) "Mail" else "Messages"
+        override val icon: PantopusIcon get() = if (LaunchFeatures.mailbox) PantopusIcon.Mailbox else PantopusIcon.MessageCircle
+    }
 
     // ── Reachable, not in the bar (Wedge v2 D2): the pillars live behind
     // Nearby's door, and Messages lives inside Mail. Their routes stay
@@ -63,6 +71,12 @@ sealed class PantopusRoute(
 
         /** Lookup a route by its `path`. Returns null for unknown paths. */
         fun fromPath(path: String?): PantopusRoute? = all.firstOrNull { it.path == path }
+
+        /**
+         * Where "open my conversations" lands: the Messages tab itself while Mailbox is off, so chat pushes and
+         * Hub taps share the tab's list, Back and re-tap; else the Messages root inside Mail.
+         */
+        val messagesTab: PantopusRoute get() = if (LaunchFeatures.mailbox) Messages else Mail
 
         /**
          * The bar tab that owns [route]: bar tabs own themselves, the pillars

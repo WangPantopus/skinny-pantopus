@@ -387,12 +387,13 @@ class NotificationSettingsViewModel
                             subtext = "Device alerts for Beacon updates. Updates stay in the app when off.",
                             control = RowControl.Toggle(prefs.beaconPushEnabled),
                         ).takeIf { LaunchFeatures.beacon },
+                        // Launch cut #10 (Mailbox): no mailbox to digest.
                         GroupedListRow(
                             id = RowId.MAIL_SUMMARY,
                             label = "Mail Summary",
                             subtext = "Daily mailbox digest",
                             control = RowControl.Toggle(prefs.mailSummaryEnabled),
-                        ),
+                        ).takeIf { LaunchFeatures.mailbox },
                     ),
             )
 
