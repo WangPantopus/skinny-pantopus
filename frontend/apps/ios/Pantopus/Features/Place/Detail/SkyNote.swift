@@ -41,6 +41,7 @@ struct SkyNote: Equatable {
         case warmestDay
         case goldenHour
         case air
+        case wind
     }
 
     let kind: Kind

@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotateRad
 import androidx.compose.ui.graphics.drawscope.withTransform
-import app.pantopus.android.data.api.models.place.WeatherConditionCode
 import app.pantopus.android.ui.theme.SkyPalette
 import app.pantopus.android.ui.theme.SkyPalette.mixed
 import kotlin.math.sin
@@ -22,14 +21,15 @@ import kotlin.math.sin
 /**
  * The bottom of the living sky: two hills, the resident's house and two trees as silhouettes in the
  * horizon's own colour. Windows glow after dusk (one stays lit late at night), the chimney smokes
- * below 50°F, snow caps the roof and hills, and the trees lean in the wind.
+ * below 50°F, snow caps the roof and hills, and the trees lean and the smoke bends in the wind.
  * Parity twin of iOS `TodaySkyGround.swift`.
  */
 internal class TodaySkyGround(
     private val scene: SkyScene,
     private val weather: SkyPalette.Weather,
     private val moment: SkyMoment,
-    private val condition: WeatherConditionCode,
+    /** How the trees lean and the chimney smoke bends (`SkyWind.kt`). */
+    private val wind: SkyWind,
     private val cold: Boolean,
     private val still: Boolean,
     /** Bins at the curb, in order: "garbage", "recycling", "yard_waste". */
@@ -184,12 +184,14 @@ internal class TodaySkyGround(
         drawRect(door, Offset(x - 3, y - 11), Size(6f, 11f))
     }
 
-    /** Three puffs rising from the chimney on a loop. */
+    /** Three puffs rising from the chimney on a loop: straight up when it's calm, bent over and kept low in a strong wind. */
     private fun DrawScope.paintSmoke(origin: Offset) {
+        val drift = if (wind.calm) 0.0 else wind.toward * (2 + wind.mph * 0.8)
+        val rise = 34 * (1 - 0.45 * wind.strength)
         repeat(3) { index ->
             val progress = (scene.time * 0.35 + index / 3.0) % 1.0
-            val x = origin.x + 11 + sin(progress * 5 + index) * 3 + progress * 10
-            val y = origin.y - 46 - progress * 34
+            val x = origin.x + 11 + sin(progress * 5 + index) * 3 + progress * drift
+            val y = origin.y - 46 - progress * rise
             drawCircle(
                 SkyPalette.smoke.copy(alpha = (0.35 * (1 - progress)).toFloat()),
                 (3 + progress * 6).toFloat(),
@@ -199,14 +201,15 @@ internal class TodaySkyGround(
     }
 
     /**
-     * A round tree and a pine to the right of the house; both lean in the wind. The round tree
-     * blossoms in spring, turns in autumn and is bare in winter.
+     * A round tree and a pine to the right of the house; both lean with the wind and sway in its
+     * gusts (a still lean with motion off). The round tree blossoms in spring, turns in autumn and
+     * is bare in winter.
      */
     private fun DrawScope.paintTrees(
         tones: Tones,
         origin: Offset,
     ) {
-        val lean = if (condition == WeatherConditionCode.WIND && !still) (sin(scene.time * 2.2) * 0.08).toFloat() else 0f
+        val lean = wind.lean(scene.time, still).toFloat()
         withTransform({
             // Beside the home, however wide it is.
             translate(origin.x + 11 + home.halfWidth, origin.y + 2)
@@ -282,12 +285,14 @@ internal class TodaySkyGround(
         }
     }
 
-    /** Two leaves drifting down from the canopy on a loop. */
+    /** Two leaves drifting down from the canopy on a loop, carried downwind. */
     private fun DrawScope.paintFallingLeaves() {
+        val carry = wind.toward * wind.strength * 16
         repeat(2) { index ->
             val progress = (scene.time * 0.22 + index * 0.5) % 1.0
+            val flutter = sin(progress * 9 + index) * 4
             withTransform({
-                translate((6 - index * 12 + sin(progress * 9 + index) * 4).toFloat(), (-20 + progress * 22).toFloat())
+                translate((6 - index * 12 + flutter + carry * progress).toFloat(), (-20 + progress * 22).toFloat())
                 rotateRad((progress * 6 + index).toFloat(), pivot = Offset.Zero)
             }) {
                 val alpha = (if (night) 0.4f else 0.85f) * (1 - progress.toFloat() * 0.7f)

@@ -111,6 +111,8 @@ export interface PlaceWeatherHour {
   condition_code: WeatherConditionCode;
   /** 0–100. */
   precip_chance: number;
+  /** Sustained wind for the hour; null when the provider gave none. Absent from older servers. */
+  wind_mph?: number | null;
 }
 
 export interface PlaceWeatherDay {
@@ -132,6 +134,10 @@ export interface PlaceWeatherData {
   feels_like_f: number | null;
   high_f: number | null;
   low_f: number | null;
+  /** Sustained wind now; null when unknown. Absent from older servers. */
+  wind_mph?: number | null;
+  /** Where the wind blows FROM, as a 16-point compass label ("SW"); null when unknown. */
+  wind_direction?: string | null;
   /** Hourly strip; may be empty on the dashboard summary. */
   hourly: PlaceWeatherHour[];
   /** 5-day forecast; may be empty on the dashboard summary. */

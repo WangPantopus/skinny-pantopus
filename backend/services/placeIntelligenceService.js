@@ -247,9 +247,9 @@ function finiteNumber(value) {
 }
 
 // The contract's hourly strip wants { time, temp_f, condition_code,
-// precip_chance }; the provider speaks { datetime_utc, temp_f,
-// condition_code, precip_chance_pct }. Rows without a usable timestamp or
-// temperature are dropped rather than rendered as gaps in the strip.
+// precip_chance, wind_mph }; the provider speaks { datetime_utc, temp_f,
+// condition_code, precip_chance_pct, wind_mph }. Rows without a usable
+// timestamp or temperature are dropped rather than rendered as gaps in the strip.
 function mapWeatherHours(hourly) {
   if (!Array.isArray(hourly)) return [];
   const out = [];
@@ -265,9 +265,22 @@ function mapWeatherHours(hourly) {
       // keeps 0. The ENGINE input below deliberately keeps null instead —
       // that is where an absent probability was being read as "dry".
       precip_chance: finiteNumber(h.precip_chance_pct) ?? 0,
+      // null when the provider gave no speed: unknown, never "calm".
+      wind_mph: finiteNumber(h.wind_mph),
     });
   }
   return out;
+}
+
+// Both providers report where the wind comes FROM as a 16-point compass
+// label ("SW"); anything else reads as unknown.
+const COMPASS_POINTS = new Set([
+  'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+  'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW',
+]);
+function compassOrNull(direction) {
+  const d = String(direction || '').trim().toUpperCase();
+  return COMPASS_POINTS.has(d) ? d : null;
 }
 
 // The contract types high_f/low_f as non-null numbers, so a day missing
@@ -389,6 +402,8 @@ function buildTodayEnvelopes({
         feels_like_f: weather.feels_like_f ?? null,
         high_f: weather.high_f,
         low_f: weather.low_f,
+        wind_mph: finiteNumber(weather.wind_mph),
+        wind_direction: compassOrNull(weather.wind_direction),
         hourly: mapWeatherHours(weather.hourly),
         daily: mapWeatherDays(weather.daily),
       },
@@ -548,6 +563,8 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
         feels_like_f: w.current.feels_like_f ?? null,
         high_f: (w.daily && w.daily[0] && w.daily[0].high_f) ?? null,
         low_f: (w.daily && w.daily[0] && w.daily[0].low_f) ?? null,
+        wind_mph: w.current.wind_mph ?? null,
+        wind_direction: w.current.wind_direction ?? null,
         hourly: w.hourly,
         daily: w.daily,
       }

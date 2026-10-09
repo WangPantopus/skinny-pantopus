@@ -46,6 +46,9 @@ struct TodaySkyHero: View {
     /// How far the card has scrolled above the top of the page: the sky's far
     /// layer lags behind (a gentle parallax).
     @State private var hidden: CGFloat = 0
+    /// The card's height at rest, kept while sliding: an hour with fewer chips
+    /// never shrinks the card under the finger.
+    @State private var restHeight: CGFloat = 0
 
     private var animating: Bool {
         !reduceMotion && !lowPower && scenePhase == .active && onScreen && appeared
@@ -90,9 +93,12 @@ struct TodaySkyHero: View {
                 SkyScrubHint(hours: hours.count, scrubbing: scrub != nil)
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: picked == nil ? 0.6 : 0.18), value: key)
-            // At least 188 pt; taller only if the chips have to stack on a narrow phone,
+            // At least 188 pt; taller only if the chips wrap onto a second row,
             // so the reading is never clipped. The ground stays at the bottom either way.
-            .frame(maxWidth: .infinity, minHeight: Self.height)
+            .frame(maxWidth: .infinity, minHeight: scrub == nil ? Self.height : max(Self.height, restHeight))
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                if scrub == nil { restHeight = height }
+            }
             // Behind the crossfade between two hours, so the page never shows through.
             .background(sky.mid.color)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -153,6 +159,8 @@ struct TodaySkyHero: View {
                 rain: shown.rain,
                 home: home,
                 streetLights: streetLights,
+                windMph: shown.weather.windMph,
+                windFrom: shown.weather.windDirection,
                 still: !animating
             )
             Canvas { context, size in
@@ -207,20 +215,25 @@ struct SkyReadingModel {
         let current = data.conditionLabel.isEmpty ? reading : "\(reading), \(data.conditionLabel)"
         spoken = note.map { "\($0.spoken) \(current)" } ?? current
         value = picked.map { SkyScrub.spoken($0, now: now) } ?? ""
-        // High/low and feels-like (or an hour's chance of rain), each in a dark glass
-        // chip: they sit near the bright horizon, where white text alone can't keep 4.5:1.
+        // High/low, feels-like (or an hour's chance of rain or its wind) and the wind
+        // from 15 mph, each in a dark glass chip: they sit near the bright horizon,
+        // where white text alone can't keep 4.5:1.
         var chips: [String] = []
         var said: [String] = []
         if let hi = shown.highF, let lo = shown.lowF {
             chips.append("H \(Int(hi.rounded()))° · L \(Int(lo.rounded()))°")
             said.append("High \(Int(hi.rounded()))°, low \(Int(lo.rounded()))°")
         }
-        if let picked, let chip = SkyScrub.precipChip(picked) {
-            chips.append(chip)
-            said.append(chip)
+        if let picked, let chip = SkyScrub.chip(picked) {
+            chips.append(chip.text)
+            said.append(chip.spoken)
         } else if picked == nil, let feels = shown.feelsLikeF {
             chips.append("Feels like \(Int(feels.rounded()))°")
             said.append("feels like \(Int(feels.rounded()))°")
+        }
+        if picked == nil, let wind = SkyWind.chip(shown.windMph) {
+            chips.append(wind.text)
+            said.append(wind.spoken)
         }
         self.chips = chips
         spokenChips = said.joined(separator: ", ")
@@ -264,12 +277,10 @@ struct TodaySkyReading: View {
             .accessibilityLabel(reading.spoken)
             .modifier(HourAdjuster(hours: hours, scrub: $scrub, value: reading.value))
             if !reading.chips.isEmpty {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 6) { chipViews }
-                    VStack(alignment: .leading, spacing: 4) { chipViews }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(reading.spokenChips)
+                // Onto a second row rather than truncated: the wind chip, a narrow phone.
+                FilterSheetFlowLayout(spacing: 6) { chipViews }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(reading.spokenChips)
             }
         }
         .lineLimit(1)

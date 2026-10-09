@@ -59,6 +59,8 @@ struct SkyShareCardView: View {
                     season: SkySeason.at(card.date),
                     meteorShower: SkyNote.meteors(now: card.date, moment: moment, calendar: .autoupdatingCurrent) != nil,
                     smoke: card.air?.smoke ?? 0,
+                    windMph: card.weather.windMph,
+                    windFrom: card.weather.windDirection,
                     still: true
                 ).paint(context, size: size, time: 0)
             }

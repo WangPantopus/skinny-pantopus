@@ -16,7 +16,6 @@ struct TodaySkyGround {
     let scene: TodaySkyPainter.Scene
     let weather: SkyPalette.Weather
     let moment: SkyMoment
-    let condition: WeatherConditionCode
     let cold: Bool
     let still: Bool
     /// Bins at the curb, in order: "garbage", "recycling", "yard_waste".
@@ -26,6 +25,8 @@ struct TodaySkyGround {
     var home: SkyHome = .house
     /// Lights on the far hill after dusk, from the block's density bucket.
     var streetLights = 0
+    /// How the trees lean and the chimney smoke bends (`SkyWind.swift`).
+    var wind = SkyWind(mph: nil, from: nil, condition: .clear)
 
     struct Tones {
         let backHill: SkyRGB
@@ -172,21 +173,25 @@ struct TodaySkyGround {
         context.fill(Path(CGRect(x: x - 3, y: y - 11, width: 6, height: 11)), with: .color(door))
     }
 
-    /// Three puffs rising from the chimney on a loop.
+    /// Three puffs rising from the chimney on a loop: straight up when it's
+    /// calm, bent over and kept low in a strong wind.
     private func paintSmoke(_ context: GraphicsContext, at origin: CGPoint) {
+        let drift = wind.calm ? 0 : wind.toward * (2 + wind.mph * 0.8)
+        let rise = 34 * (1 - 0.45 * wind.strength)
         for index in 0..<3 {
             let progress = (scene.time * 0.35 + Double(index) / 3).truncatingRemainder(dividingBy: 1)
-            let x = Double(origin.x) + 11 + sin(progress * 5 + Double(index)) * 3 + progress * 10
-            let y = Double(origin.y) - 46 - progress * 34
+            let x = Double(origin.x) + 11 + sin(progress * 5 + Double(index)) * 3 + progress * drift
+            let y = Double(origin.y) - 46 - progress * rise
             let puff = TodaySkyPainter.circle(x, y, 3 + progress * 6)
             context.fill(puff, with: .color(SkyPalette.smoke.color(opacity: 0.35 * (1 - progress))))
         }
     }
 
-    /// A round tree and a pine to the right of the house; both lean in the wind.
+    /// A round tree and a pine to the right of the house; both lean with the
+    /// wind and sway in its gusts (a still lean with motion off).
     /// The round tree blossoms in spring, turns in autumn and is bare in winter.
     private func paintTrees(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
-        let lean = condition == .wind && !still ? sin(scene.time * 2.2) * 0.08 : 0
+        let lean = wind.lean(at: scene.time, still: still)
         var round = context
         // Beside the home, however wide it is.
         round.translateBy(x: origin.x + 11 + home.halfWidth, y: origin.y + 2)
@@ -250,13 +255,15 @@ struct TodaySkyGround {
         }
     }
 
-    /// Two leaves drifting down from the canopy on a loop.
+    /// Two leaves drifting down from the canopy on a loop, carried downwind.
     private func paintFallingLeaves(_ tree: GraphicsContext) {
         let tint = SkyPalette.treeAutumn.color(opacity: night ? 0.4 : 0.85)
+        let carry = wind.toward * wind.strength * 16
         for index in 0..<2 {
             let progress = (scene.time * 0.22 + Double(index) * 0.5).truncatingRemainder(dividingBy: 1)
+            let flutter = sin(progress * 9 + Double(index)) * 4
             var leaf = tree
-            leaf.translateBy(x: 6 - Double(index) * 12 + sin(progress * 9 + Double(index)) * 4, y: -20 + progress * 22)
+            leaf.translateBy(x: 6 - Double(index) * 12 + flutter + carry * progress, y: -20 + progress * 22)
             leaf.rotate(by: .radians(progress * 6 + Double(index)))
             leaf.fill(Path(ellipseIn: CGRect(x: -2, y: -1, width: 4, height: 2)), with: .color(tint.opacity(1 - progress * 0.7)))
         }

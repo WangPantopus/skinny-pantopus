@@ -41,13 +41,27 @@ public struct TodayWidgetSnapshot: Codable, Sendable, Equatable {
         public let label: String
         public let highF: Double?
         public let lowF: Double?
+        /// Sustained wind, mph, and where it blows from ("SW"), so the widget's
+        /// trees lean too; nil in older snapshots.
+        public let windMph: Double?
+        public let windDirection: String?
 
-        public init(tempF: Double, condition: String, label: String, highF: Double?, lowF: Double?) {
+        public init(
+            tempF: Double,
+            condition: String,
+            label: String,
+            highF: Double?,
+            lowF: Double?,
+            windMph: Double? = nil,
+            windDirection: String? = nil
+        ) {
             self.tempF = tempF
             self.condition = condition
             self.label = label
             self.highF = highF
             self.lowF = lowF
+            self.windMph = windMph
+            self.windDirection = windDirection
         }
     }
 

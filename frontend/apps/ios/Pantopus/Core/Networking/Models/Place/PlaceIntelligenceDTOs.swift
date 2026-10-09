@@ -252,12 +252,15 @@ public struct PlaceWeatherHour: Decodable, Sendable, Hashable {
     public let conditionCode: WeatherConditionCode
     /// 0–100.
     public let precipChance: Double
+    /// Sustained wind for the hour, mph; nil when the forecast gave none (older servers send none).
+    public let windMph: Double?
 
     private enum CodingKeys: String, CodingKey {
         case time
         case tempF = "temp_f"
         case conditionCode = "condition_code"
         case precipChance = "precip_chance"
+        case windMph = "wind_mph"
     }
 }
 
@@ -288,6 +291,10 @@ public struct PlaceWeatherData: Decodable, Sendable, Hashable {
     public let feelsLikeF: Double?
     public let highF: Double?
     public let lowF: Double?
+    /// Sustained wind now, mph; nil when unknown (older servers send none).
+    public let windMph: Double?
+    /// Where the wind blows from, a 16-point compass label ("SW"); nil when unknown.
+    public let windDirection: String?
     /// Hourly strip; may be empty on the dashboard summary.
     public let hourly: [PlaceWeatherHour]
     /// 5-day forecast; may be empty on the dashboard summary.
@@ -301,6 +308,8 @@ public struct PlaceWeatherData: Decodable, Sendable, Hashable {
         case feelsLikeF = "feels_like_f"
         case highF = "high_f"
         case lowF = "low_f"
+        case windMph = "wind_mph"
+        case windDirection = "wind_direction"
     }
 }
 

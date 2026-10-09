@@ -205,6 +205,8 @@ data class PlaceWeatherHour(
     @Json(name = "condition_code") val conditionCode: WeatherConditionCode,
     /** 0–100. */
     @Json(name = "precip_chance") val precipChance: Double,
+    /** Sustained wind for the hour, mph; null when the forecast gave none (older servers send none). */
+    @Json(name = "wind_mph") val windMph: Double? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -228,6 +230,10 @@ data class PlaceWeatherData(
     @Json(name = "feels_like_f") val feelsLikeF: Double? = null,
     @Json(name = "high_f") val highF: Double? = null,
     @Json(name = "low_f") val lowF: Double? = null,
+    /** Sustained wind now, mph; null when unknown (older servers send none). */
+    @Json(name = "wind_mph") val windMph: Double? = null,
+    /** Where the wind blows from, a 16-point compass label ("SW"); null when unknown. */
+    @Json(name = "wind_direction") val windDirection: String? = null,
     /** Hourly strip; may be empty on the dashboard summary. */
     val hourly: List<PlaceWeatherHour> = emptyList(),
     /** 5-day forecast; may be empty on the dashboard summary. */

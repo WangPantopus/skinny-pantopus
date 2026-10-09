@@ -19,8 +19,8 @@ import kotlin.math.roundToInt
  * One true, timely line for the Now card ("🌕 FULL MOON TONIGHT" in place of
  * "NOW"), and the season for the tree in the scene. A note is shown only when
  * it is true for this address right now: the household's own pickup day, a
- * freezing forecast, a meteor shower's peak night, the moon's phase, a
- * solstice or equinox, the week's warmest day, golden hour.
+ * freezing forecast, strong wind, a meteor shower's peak night, the moon's
+ * phase, a solstice or equinox, the week's warmest day, golden hour.
  * Parity twin of iOS `TodaySkyNotes.swift`.
  */
 
@@ -47,6 +47,7 @@ data class SkyNote(
         WARMEST_DAY,
         GOLDEN_HOUR,
         AIR,
+        WIND,
     }
 
     companion object {
@@ -65,6 +66,7 @@ data class SkyNote(
                 ?: bins(now, moment, pickups)
                 ?: air(air)
                 ?: frost(weather, moment)
+                ?: strongWind(weather)
                 ?: (if (clear) meteors(now, moment) else null)
                 ?: moon(moment, clear)
                 ?: solsticeOrEquinox(now)
@@ -225,6 +227,22 @@ data class SkyNote(
                 .ofSecondOfDay((minutes * 60).toLong().coerceIn(0L, 86_399L))
                 .format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
     }
+}
+
+/**
+ * Sustained wind of 30 mph or more (about where wind advisories start), now or in the next six hours:
+ * rare, and a reason to secure loose things.
+ */
+private fun strongWind(weather: PlaceWeatherData): SkyNote? {
+    weather.windMph?.takeIf { it >= 30 }?.let {
+        return SkyNote(SkyNote.Kind.WIND, "💨 STRONG WIND NOW", "Strong wind now, ${it.roundToInt()} miles per hour.")
+    }
+    val peak = weather.hourly.take(6).mapNotNull { it.windMph }.maxOrNull()?.takeIf { it >= 30 } ?: return null
+    return SkyNote(
+        SkyNote.Kind.WIND,
+        "💨 STRONG WIND AHEAD",
+        "Strong wind ahead, up to ${peak.roundToInt()} miles per hour in the next six hours.",
+    )
 }
 
 /**

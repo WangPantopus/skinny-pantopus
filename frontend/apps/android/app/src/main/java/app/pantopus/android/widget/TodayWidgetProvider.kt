@@ -152,6 +152,8 @@ class TodayWidgetProvider : AppWidgetProvider() {
                     SkyDetails(
                         meteorShower = SkyNote.meteors(now, moment) != null,
                         smoke = snapshot?.air?.let { SkyAir(it.aqi, it.label, it.smoky == true).smoke } ?: 0.0,
+                        windMph = snapshot?.weather?.windMph,
+                        windFrom = snapshot?.weather?.windDirection,
                     ),
             )
         val bitmap = ImageBitmap(width, height)
