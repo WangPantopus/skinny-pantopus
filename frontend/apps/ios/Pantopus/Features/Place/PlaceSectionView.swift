@@ -81,6 +81,7 @@ struct PlaceSectionView: View {
         let state = cardState
         let isLive = state == .loaded || state == .stale
         let reading = isLive ? PlacePresentation.reading(for: env) : PlaceSectionReading()
+        let wording = PlacePresentation.errorWording(for: env.id)
         return PlaceSectionCard(
             icon: cfg.icon,
             title: cfg.title,
@@ -94,7 +95,9 @@ struct PlaceSectionView: View {
             actionLabel: nil,
             inline: cfg.inline,
             onTap: onOpen,
-            onRetry: onRetry
+            onRetry: onRetry,
+            errorTitle: wording.title,
+            retryTitle: wording.retry
         )
     }
 }
