@@ -22,6 +22,11 @@ struct MaintenanceListView: View {
             .accessibilityIdentifier("maintenanceList")
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .onAppear { Analytics.track(.screenHomeMaintenanceViewed) }
+            // Someone changed this Home (`sync:changed`) or the socket came back: re-check the open log,
+            // the rows staying on screen meanwhile (Instant Screens).
+            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.home(viewModel.homeId), kind: .homes) }, perform: {
+                await viewModel.load()
+            })
     }
 }
 

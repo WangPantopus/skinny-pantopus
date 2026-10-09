@@ -51,4 +51,17 @@ public final class WidgetSnapshotStore: WidgetSnapshotStoring {
         defaults.set(data, forKey: TodayWidgetSnapshotContract.snapshotKey)
         WidgetCenter.shared.reloadTimelines(ofKind: TodayWidgetSnapshotContract.widgetKind)
     }
+
+    /// Sign-out: the home-screen widgets must not keep showing the last
+    /// account's place, dates and nearby tasks. Without a snapshot they ask
+    /// to open the app.
+    public func clear() {
+        guard !isSuppressed,
+              let defaults = UserDefaults(suiteName: GigWidgetSnapshotContract.appGroupId)
+        else { return }
+        defaults.removeObject(forKey: GigWidgetSnapshotContract.snapshotKey)
+        defaults.removeObject(forKey: TodayWidgetSnapshotContract.snapshotKey)
+        WidgetCenter.shared.reloadTimelines(ofKind: GigWidgetSnapshotContract.widgetKind)
+        WidgetCenter.shared.reloadTimelines(ofKind: TodayWidgetSnapshotContract.widgetKind)
+    }
 }

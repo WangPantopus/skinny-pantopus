@@ -42,6 +42,9 @@ final class LinkPreviewStore {
     private var inFlight: Set<String> = []
     /// FIFO insertion order backing the ~50-entry cache cap.
     private var insertionOrder: [String] = []
+    /// Bumped by `clear()` so a fetch started for the previous account
+    /// doesn't land in the next one's cache.
+    private var generation = 0
     private static let maxEntries = 50
     private static let maxBytes = 120 * 1024
 
@@ -70,7 +73,8 @@ final class LinkPreviewStore {
         guard entries[key] == nil, !inFlight.contains(key) else { return }
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
         inFlight.insert(key)
-        defer { inFlight.remove(key) }
+        let startedIn = generation
+        defer { if generation == startedIn { inFlight.remove(key) } }
 
         var entry = Entry.unavailable
         do {
@@ -97,7 +101,16 @@ final class LinkPreviewStore {
         } catch {
             // Negative-cached below — never retried this session.
         }
+        guard generation == startedIn else { return }
         store(entry, for: key)
+    }
+
+    /// Sign-out: previews of the links in the last account's chats go with it.
+    func clear() {
+        generation += 1
+        entries.removeAll()
+        inFlight.removeAll()
+        insertionOrder.removeAll()
     }
 
     private func store(_ entry: Entry, for key: String) {
