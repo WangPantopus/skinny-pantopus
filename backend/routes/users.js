@@ -4593,11 +4593,13 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
       title: `${followerName} started following you`,
       body: null,
       icon: '👤',
-      link: `/${followerUser?.username || followerId}`,
+      // By id: a username may be one the server made up (part of an email address), and it can change.
+      link: `/${followerId}`,
       metadata: { follower_id: followerId },
     });
 
-    res.status(200).json({ message: `You are now following ${user.username}`, following: true });
+    // No username in the answer: it may be one the server made up (part of an email address).
+    res.status(200).json({ message: 'Followed successfully', following: true });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Follow error', { error: err.message });

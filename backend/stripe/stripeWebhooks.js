@@ -1255,19 +1255,18 @@ async function handleDisputeCreated(dispute) {
       })
       .eq('id', payment.id);
 
-    // Notify the payer so a human is aware
+    // Notify the payer so a human is aware. An invoice payment has no gig: like the other dispute
+    // notices, this one names and opens the invoice (it opened /gigs/null).
     createNotification({
       userId: payment.payer_id,
       type: 'dispute_evidence_failed',
       title: 'Action may be needed on your dispute',
-      body: `A dispute was filed on your payment for "${gigTitle}". Our team has been alerted, but you may want to check your email for any communication from your bank.`,
+      body: `A dispute was filed on your payment for ${invoiceId ? 'an invoice' : `"${gigTitle}"`}. Our team has been alerted, but you may want to check your email for any communication from your bank.`,
       icon: '⚠️',
-      link: `/gigs/${payment.gig_id}`,
-      metadata: {
-        payment_id: payment.id,
-        dispute_id: dispute.id,
-        gig_id: payment.gig_id,
-      },
+      link: invoiceId ? `/app/invoice/${invoiceId}` : `/gigs/${payment.gig_id}`,
+      metadata: invoiceId
+        ? { payment_id: payment.id, dispute_id: dispute.id, invoice_id: invoiceId }
+        : { payment_id: payment.id, dispute_id: dispute.id, gig_id: payment.gig_id },
     });
   });
 }
