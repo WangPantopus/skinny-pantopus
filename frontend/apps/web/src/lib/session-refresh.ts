@@ -26,6 +26,14 @@ export const ACCOUNT_DELETED_NOTICE_KEY = 'pantopus:account-deleted';
 export const ACCOUNT_DELETED_NOTICE_MAX_AGE_MS = 120_000;
 
 /**
+ * sessionStorage key that tells /login why the session ended while the page
+ * was open: `revoked:<ms>` (signed out from another device, Sign out
+ * everywhere, this device removed) or `password:<ms>` (a password change or
+ * reset). Same staleness rule as the account-deleted notice.
+ */
+export const SESSION_ENDED_NOTICE_KEY = 'pantopus:session-ended';
+
+/**
  * Two hand-offs for the same target within this window mean the refresh
  * "succeeded" but the access cookie still did not appear (misconfigured
  * proxy, cookie domain mismatch, third-party cookie policy…). The page then
