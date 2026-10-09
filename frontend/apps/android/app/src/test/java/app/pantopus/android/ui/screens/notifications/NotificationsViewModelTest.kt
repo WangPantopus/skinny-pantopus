@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.notifications.NotificationsListRespo
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.notifications.NotificationsRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
@@ -17,6 +18,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
 import app.pantopus.android.ui.theme.PantopusIcon
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -41,6 +43,14 @@ class NotificationsViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The first page goes through the screens' store (Instant Screens); here it reads the stubbed list.
+        every { repo.firstPageCopy(any(), any(), any()) } returns null
+        coEvery { repo.firstPageStored(any(), any(), any(), any()) } coAnswers {
+            when (val page = repo.list(firstArg(), 0, secondArg(), thirdArg())) {
+                is NetworkResult.Success -> Stored(page.data, fetchedAt = System.currentTimeMillis())
+                is NetworkResult.Failure -> Stored(failure = page.error)
+            }
+        }
     }
 
     @After

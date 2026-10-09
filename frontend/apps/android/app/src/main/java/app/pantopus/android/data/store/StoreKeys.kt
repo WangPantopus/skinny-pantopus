@@ -2,6 +2,8 @@ package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
+import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
+import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
@@ -9,6 +11,9 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyRe
 
 /** Change topics (contract §8) that more than one key or repository names. */
 object StoreTopics {
+    /** The viewer's notifications: one created, read or deleted. */
+    const val NOTIFICATIONS = "notifications"
+
     /** The viewer's list of homes: a home added, claimed, verified, left or deleted. */
     const val HOMES = "homes"
 }
@@ -79,6 +84,26 @@ object StoreKeys {
             kind = StoreKind.PLACE,
             topics = setOf("place:$homeId", "home:$homeId", StoreTopics.HOMES),
         )
+
+    /** The bell's unread count (kind Notifications: fresh 30 seconds, never saved on the phone). */
+    val notificationsUnreadCount =
+        StoreKey<NotificationUnreadCountResponse>(
+            "api/notifications/unread-count",
+            kind = StoreKind.NOTIFICATIONS,
+            topics = setOf(StoreTopics.NOTIFICATIONS),
+        )
+
+    /** The first page of one notifications list (a zone's context, all or unread); later pages are never stored. */
+    fun notificationsFirstPage(
+        limit: Int,
+        unreadOnly: Boolean?,
+        context: String?,
+    ) = StoreKey<NotificationsListResponse>(
+        "api/notifications",
+        mapOf("limit" to "$limit", "offset" to "0", "unread" to unreadOnly?.toString(), "context" to context),
+        kind = StoreKind.NOTIFICATIONS,
+        topics = setOf(StoreTopics.NOTIFICATIONS),
+    )
 
     /** A home's Today: [TODAY_SECTIONS] of its Place intelligence. */
     fun today(homeId: String) =

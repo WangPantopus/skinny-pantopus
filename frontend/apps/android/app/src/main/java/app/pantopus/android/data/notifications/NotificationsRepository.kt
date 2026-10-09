@@ -7,8 +7,14 @@ import app.pantopus.android.data.api.models.notifications.NotificationActionEcho
 import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.NotificationsApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreTopics
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.data.store.asResult
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,6 +29,7 @@ class NotificationsRepository
     constructor(
         private val api: NotificationsApi,
         private val legacyApi: ApiService,
+        private val store: ScreenStore,
     ) {
         /**
          * `GET /api/notifications` — route `backend/routes/notifications.js:85`.
@@ -38,9 +45,39 @@ class NotificationsRepository
                 api.list(limit = limit, offset = offset, unreadOnly = unreadOnly, context = context)
             }
 
-        suspend fun unreadCount(): NetworkResult<NotificationUnreadCountResponse> = safeApiCall { api.unreadCount() }
+        /**
+         * The bell's unread count through the screens' store (fresh 30 seconds): the Place header, the Hub and the
+         * list share it. Reading, marking all read or deleting a notification marks it out of date.
+         */
+        suspend fun unreadCount(): NetworkResult<NotificationUnreadCountResponse> {
+            val stored =
+                store.read(StoreKeys.notificationsUnreadCount) { etag -> conditionalApiCall { api.unreadCountConditional(etag) } }
+            return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
+        }
 
-        suspend fun markRead(id: String): NetworkResult<NotificationActionEcho> = safeApiCall { api.markRead(id) }
+        /** One zone's first page through the screens' store (fresh 30 seconds; [force] reads now). Later pages use [list]. */
+        suspend fun firstPageStored(
+            limit: Int,
+            unreadOnly: Boolean?,
+            context: String?,
+            force: Boolean,
+        ): Stored<NotificationsListResponse> =
+            store.read(StoreKeys.notificationsFirstPage(limit, unreadOnly, context), force) { etag ->
+                conditionalApiCall { api.listConditional(limit, 0, unreadOnly, context, etag) }
+            }
+
+        /** That first page as it is stored now, without a request. */
+        fun firstPageCopy(
+            limit: Int,
+            unreadOnly: Boolean?,
+            context: String?,
+        ): NotificationsListResponse? = store.peek(StoreKeys.notificationsFirstPage(limit, unreadOnly, context)).data
+
+        /** An own edit to the notifications (read, all read, deleted): the lists and the bell read again. */
+        private fun <T> NetworkResult<T>.notificationsChanged(): NetworkResult<T> =
+            also { if (it is NetworkResult.Success) store.markStale(StoreTopics.NOTIFICATIONS) }
+
+        suspend fun markRead(id: String): NetworkResult<NotificationActionEcho> = safeApiCall { api.markRead(id) }.notificationsChanged()
 
         /**
          * `POST /api/notifications/read-all` — route
@@ -54,10 +91,10 @@ class NotificationsRepository
                 } else {
                     api.markAllReadInContexts(MarkAllNotificationsReadBody(contexts = contexts))
                 }
-            }
+            }.notificationsChanged()
 
         /** `DELETE /api/notifications/:id` — route `backend/routes/notifications.js:452`. */
-        suspend fun delete(id: String): NetworkResult<NotificationActionEcho> = safeApiCall { api.delete(id) }
+        suspend fun delete(id: String): NetworkResult<NotificationActionEcho> = safeApiCall { api.delete(id) }.notificationsChanged()
 
         /**
          * Register the device's FCM token with the backend. Mirrors
