@@ -49,6 +49,8 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
     private var profileVisibility: String?
     private var blockCount: Int = 0
     private var isAdmin: Bool = false
+    /// What Pantopus keeps on this iPhone (Storage & data); nil until measured.
+    private var storageBytes: Int?
 
     init(
         api: APIClient = .shared,
@@ -100,6 +102,7 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
             profileVisibility = nil
         }
         stripeConnected = await connectTask.value.map { $0.account.chargesEnabled && $0.account.payoutsEnabled }
+        storageBytes = await StorageDataViewModel.measure().total
         rebuild()
     }
 
@@ -123,6 +126,7 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
             securityGroup(),
             privacyGroup(),
             notificationsGroup(),
+            thisIPhoneGroup(),
             paymentsGroup(),
             supportGroup()
         ]
@@ -206,6 +210,20 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
         )
     }
 
+    /// Storage & data (Instant Screens contract section 7), after Notifications.
+    private func thisIPhoneGroup() -> GroupedListGroup {
+        let size: RowControl = storageBytes.map {
+            .chipStatus(label: StorageDataViewModel.format($0), tone: .neutral, includesChevron: true)
+        } ?? .chevron
+        return GroupedListGroup(
+            id: "thisIPhone",
+            overline: "This iPhone",
+            rows: [
+                GroupedListRow(id: "storageData", label: "Storage & data", subtext: "Photos and saved pages", control: size)
+            ]
+        )
+    }
+
     private func paymentsGroup() -> GroupedListGroup {
         let stripeChip: RowControl =
             stripeConnected == true
@@ -273,6 +291,7 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
         case "blocks": onNavigate(.blocks)
         case "visibility": onNavigate(.privacy)
         case "notificationPreferences": onNavigate(.notifications)
+        case "storageData": onNavigate(.storageData)
         case "export": onNavigate(.dataExport)
         case "paymentsPayouts": onNavigate(.paymentsPayouts)
         case "help": onNavigate(.help)
@@ -321,6 +340,8 @@ public enum SettingsRoute: Sendable, Hashable {
     case notifications
     case privacy
     case dataExport
+    /// This iPhone → Storage & data (Instant Screens contract section 7).
+    case storageData
     case paymentsPayouts
     case help
     case legal
