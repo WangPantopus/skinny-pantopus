@@ -235,7 +235,7 @@ internal fun PlaceDashboardContent(
             PlaceMessagesActionRow(
                 icon = PantopusIcon.Home,
                 title = "Home tools",
-                subtitle = "Documents, household tasks and members.",
+                subtitle = "Tasks and tools for your household.",
                 onTap = onOpenHomeTools,
                 modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp).testTag("place.homeTools"),
             )

@@ -7,11 +7,9 @@ import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
-import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.place.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,7 +28,6 @@ class PlaceDashboardViewModel
     @Inject
     constructor(
         private val repo: PlaceRepository,
-        private val homesRepository: HomesRepository,
         private val notificationsRepo: NotificationsRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PlaceDashboardUiState>(PlaceDashboardUiState.Loading)
@@ -82,16 +79,13 @@ class PlaceDashboardViewModel
         }
 
         private suspend fun fetch(id: String) {
-            // The home row rides alongside the intelligence for the one field
-            // the dashboard needs from it (move_in_date → the movers card);
-            // a failure there never blocks the page.
-            val intelligence = viewModelScope.async { repo.intelligence(id) }
-            val detail = viewModelScope.async { homesRepository.detail(id) }
-            val intelligenceResult = intelligence.await()
-            val moveInDate = (detail.await() as? NetworkResult.Success)?.data?.home?.moveInDate
+            // The move-in date (the movers card) rides on the intelligence; it
+            // used to need the whole Home detail, a 403 for a private setup.
+            val intelligenceResult = repo.intelligence(id)
             _state.value =
                 when (intelligenceResult) {
-                    is NetworkResult.Success -> PlaceDashboardUiState.Loaded(intelligenceResult.data, moveInDate)
+                    is NetworkResult.Success ->
+                        PlaceDashboardUiState.Loaded(intelligenceResult.data, intelligenceResult.data.moveInDate)
                     is NetworkResult.Failure ->
                         PlaceDashboardUiState.Error(
                             intelligenceResult.error.displayMessage("Couldn't load your dashboard."),

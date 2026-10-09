@@ -209,6 +209,7 @@ function serializePlaceIntelligence(options = {}) {
     sections = [],
     verifyAvailable = false,
     viewer = null,
+    moveInDate,
   } = options;
 
   assertOneOf(tier, ['T0', 'T1', 'T2', 'T3', 'T4'], 'tier');
@@ -255,6 +256,9 @@ function serializePlaceIntelligence(options = {}) {
     // household member, guest) and the stage what is locked (setup, claimed,
     // verified). Absent on responses that aren't about a Home.
     ...(viewer ? { viewer: { role: viewer.role, stage: viewer.stage, ownership: viewer.ownership } } : {}),
+    // The Home's move-in date (the movers card), so the apps don't read the
+    // whole Home detail for one field. Absent on responses that aren't about a Home.
+    ...(moveInDate !== undefined ? { move_in_date: moveInDate } : {}),
     region_supported: regionSupported,
     generated_at: generatedAt || new Date().toISOString(),
     groups,

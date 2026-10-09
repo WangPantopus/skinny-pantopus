@@ -1237,6 +1237,9 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
     viewer,
     // A private setup verifies by mail too; guests and service providers can't.
     verifyAvailable: (tier === 'T3' || viewer.stage === 'setup') && viewer.role !== 'nonresident',
+    // Same gate as the Home detail it replaces for the movers card (home.view):
+    // a private setup or another account's Home gets null.
+    moveInDate: access && access.hasAccess ? home.move_in_date || null : null,
     regionSupported: true,
     sections,
   });
