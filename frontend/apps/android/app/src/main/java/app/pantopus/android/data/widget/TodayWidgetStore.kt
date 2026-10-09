@@ -51,6 +51,8 @@ data class TodayWidgetSnapshot(
         val aqi: Int,
         val label: String,
         val source: String?,
+        /** Fine particles lead it (in the Northwest, wildfire smoke); null in older snapshots. */
+        val smoky: Boolean? = null,
     )
 
     data class DateItem(
@@ -129,7 +131,11 @@ class TodayWidgetStoreImpl
                 ).put(
                     "air",
                     snapshot.air?.let {
-                        JSONObject().put("aqi", it.aqi).put("label", it.label).put("source", it.source ?: JSONObject.NULL)
+                        JSONObject()
+                            .put("aqi", it.aqi)
+                            .put("label", it.label)
+                            .put("source", it.source ?: JSONObject.NULL)
+                            .put("smoky", it.smoky ?: JSONObject.NULL)
                     } ?: JSONObject.NULL,
                 ).put(
                     "dates",
@@ -161,7 +167,12 @@ class TodayWidgetStoreImpl
                     },
                 air =
                     json.optJSONObject("air")?.let {
-                        TodayWidgetSnapshot.Air(it.getInt("aqi"), it.getString("label"), it.optStringOrNull("source"))
+                        TodayWidgetSnapshot.Air(
+                            it.getInt("aqi"),
+                            it.getString("label"),
+                            it.optStringOrNull("source"),
+                            if (it.isNull("smoky")) null else it.optBoolean("smoky"),
+                        )
                     },
                 dates =
                     (0 until dates.length()).map { index ->

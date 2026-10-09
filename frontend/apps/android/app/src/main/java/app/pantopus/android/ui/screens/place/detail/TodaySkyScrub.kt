@@ -42,10 +42,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -74,6 +76,20 @@ object SkyScrub {
                 instant.atZone(after.zone).takeIf { it.isAfter(after) }?.let { SkyScrubHour(it, hour) }
             }.sortedBy { it.time }
             .take(24)
+
+    /** How hard it rains then, 0..1: the nearest forecast hour's chance of rain. */
+    fun rain(
+        hourly: List<PlaceWeatherHour>,
+        at: ZonedDateTime,
+    ): Double {
+        val nearest =
+            hourly
+                .mapNotNull { hour ->
+                    runCatching { Instant.parse(hour.time) }.getOrNull()?.let { abs(Duration.between(it, at.toInstant()).seconds) to hour }
+                }.minByOrNull { it.first }
+                ?.second
+        return (nearest?.precipChance ?: 50.0) / 100
+    }
 
     /** The reading for that hour: its temperature and sky, and that day's high and low. */
     fun weather(

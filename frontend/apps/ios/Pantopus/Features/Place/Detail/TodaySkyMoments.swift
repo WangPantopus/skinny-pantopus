@@ -3,8 +3,9 @@
 //  Pantopus
 //
 //  The sky's rarer pictures, each drawn only when it's true: shooting stars
-//  on a meteor shower's peak night, and frost creeping in from the card's
-//  corners when it's freezing. Parity twin of Android's `TodaySkyMoments.kt`.
+//  on a meteor shower's peak night, frost creeping in from the card's
+//  corners when it's freezing, and a veil of wildfire smoke. Parity twin of
+//  Android's `TodaySkyMoments.kt`.
 //
 
 import SwiftUI
@@ -38,6 +39,16 @@ extension TodaySkyPainter {
             style: StrokeStyle(lineWidth: 1.6, lineCap: .round)
         )
         context.fill(Self.circle(Double(head.x), Double(head.y), 1.6), with: .color(SkyPalette.white.color(opacity: fade)))
+    }
+
+    /// Wildfire smoke: a veil over the whole sky, thickest toward the horizon.
+    func paintSmoke(_ context: GraphicsContext, _ scene: Scene) {
+        let haze = moment.phase == .night ? SkyPalette.smokeHazeNight : SkyPalette.smokeHaze
+        let gradient = Gradient(colors: [haze.color(opacity: smoke * 0.45), haze.color(opacity: smoke * 0.85)])
+        context.fill(
+            Path(CGRect(origin: .zero, size: scene.size)),
+            with: .linearGradient(gradient, startPoint: .zero, endPoint: CGPoint(x: 0, y: scene.horizon + 10))
+        )
     }
 
     /// Frost from three corners (never the top left, where the reading sits):

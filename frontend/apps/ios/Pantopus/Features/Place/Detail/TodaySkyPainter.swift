@@ -21,6 +21,10 @@ struct TodaySkyPainter {
     var season: SkySeason = .summer
     /// A meteor shower's peak night: shooting stars whatever the note says.
     var meteorShower = false
+    /// Wildfire smoke, 0 (none) to 0.85: an amber veil and a dim red sun.
+    var smoke = 0.0
+    /// How hard it rains, 0 (a light shower) to 1 (a downpour).
+    var rain = 0.5
     let still: Bool
 
     private var weather: SkyPalette.Weather {
@@ -43,6 +47,7 @@ struct TodaySkyPainter {
         paintSnow(context, scene)
         if condition == .wind { paintWind(context, scene) }
         if weather == .storm, !still { paintLightning(context, scene) }
+        if smoke > 0 { paintSmoke(context, scene) }
         TodaySkyGround(
             scene: scene,
             weather: weather,
@@ -136,12 +141,18 @@ struct TodaySkyPainter {
         let y = scene.horizon - 18 - sin(.pi * fraction) * (scene.horizon - 58)
         // In the golden hour the sun warms and a wide halo of gold spreads around it.
         let golden = goldenWarmth
-        let core = moment.phase == .dawn || moment.phase == .dusk
+        let warm = moment.phase == .dawn || moment.phase == .dusk
             ? SkyPalette.sunLow
             : SkyPalette.sunHigh.mixed(with: SkyPalette.sunLow, by: golden * 2)
+        // Through smoke the sun is a dim red disc without rays.
+        let core = warm.mixed(with: SkyPalette.smokeSun, by: smoke * 1.2)
         let veiled = weather != .clear && weather != .partly
-        glow(context, scene, Glow(center: CGPoint(x: x, y: y), radius: 78, color: core, opacity: veiled ? 0.22 : 0.45))
+        glow(context, scene, Glow(center: CGPoint(x: x, y: y), radius: smoke > 0 ? 56 : 78, color: core, opacity: veiled ? 0.22 : 0.45))
         guard !veiled else { return }
+        if smoke > 0 {
+            context.fill(Self.circle(x, y, 16), with: .color(core.color(opacity: 0.9)))
+            return
+        }
         if golden > 0 {
             glow(context, scene, Glow(center: CGPoint(x: x, y: y), radius: 130, color: SkyPalette.sunLow, opacity: golden * 0.7))
         }
@@ -228,7 +239,8 @@ struct TodaySkyPainter {
     private func paintRain(_ context: GraphicsContext, _ scene: Scene) {
         guard weather == .wet || weather == .storm else { return }
         var random = SkyRandom(seed: 11)
-        let count = weather == .storm ? 90 : condition == .sleet ? 40 : 70
+        // Fewer streaks for a passing shower, more for a downpour.
+        let count = Int(Double(weather == .storm ? 90 : condition == .sleet ? 40 : 70) * (0.6 + 0.8 * rain))
         var path = Path()
         for _ in 0..<count {
             let start = random.next() * (scene.width + 40)

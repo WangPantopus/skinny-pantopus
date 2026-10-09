@@ -46,6 +46,7 @@ data class SkyNote(
         EQUINOX,
         WARMEST_DAY,
         GOLDEN_HOUR,
+        AIR,
     }
 
     companion object {
@@ -55,10 +56,14 @@ data class SkyNote(
             moment: SkyMoment,
             weather: PlaceWeatherData,
             pickups: List<PlaceCalendarEvent>,
+            air: SkyAir? = null,
         ): SkyNote? {
             val sky = skyWeather(weather.conditionCode)
             val clear = sky == SkyPalette.Weather.CLEAR || sky == SkyPalette.Weather.PARTLY
-            return bins(now, moment, pickups)
+            // Unhealthy air (151+) comes first; air for sensitive groups after the bins.
+            return air?.takeIf { it.aqi >= 151 }?.let { air(it) }
+                ?: bins(now, moment, pickups)
+                ?: air(air)
                 ?: frost(weather, moment)
                 ?: (if (clear) meteors(now, moment) else null)
                 ?: moon(moment, clear)
@@ -108,6 +113,16 @@ data class SkyNote(
                     .minOfOrNull { it.tempF }
                     ?.takeIf { moment.minutes >= 15 * 60 && it <= 32 } ?: return null
             return SkyNote(Kind.FROST, "❄️ FROST TONIGHT", "Frost likely tonight, down to ${low.roundToInt()}°.")
+        }
+
+        /** Air at 101 or worse: "🌫️ SMOKY AIR · AQI 168" when smoke leads it. */
+        fun air(air: SkyAir?): SkyNote? {
+            if (air == null || air.aqi < 101) return null
+            return SkyNote(
+                Kind.AIR,
+                "${if (air.smoky) "🌫️ SMOKY AIR" else "😷 POOR AIR"} · AQI ${air.aqi}",
+                "${air.label}, air quality index ${air.aqi}.",
+            )
         }
 
         /** The major showers' peak nights, by the date the night starts (the night of D into D + 1). */
@@ -210,6 +225,21 @@ data class SkyNote(
                 .ofSecondOfDay((minutes * 60).toLong().coerceIn(0L, 86_399L))
                 .format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
     }
+}
+
+/**
+ * The air reading the sky and its note need: the index, its label, and whether fine particles
+ * (in the Northwest, wildfire smoke) lead it.
+ */
+data class SkyAir(
+    val aqi: Int,
+    /** "Unhealthy for sensitive groups". */
+    val label: String,
+    val smoky: Boolean,
+) {
+    /** How thick the smoke looks: none below 101, up to 0.85 from 301. */
+    val smoke: Double
+        get() = if (!smoky || aqi < 101) 0.0 else minOf(0.85, 0.35 + (aqi - 101) / 400.0)
 }
 
 /** Northern-hemisphere seasons as a tree shows them: blossom, leaf, colour, bare. */

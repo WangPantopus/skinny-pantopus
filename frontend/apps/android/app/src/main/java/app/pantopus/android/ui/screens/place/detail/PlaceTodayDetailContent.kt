@@ -923,7 +923,12 @@ private fun TodayWeatherSection(
         PlaceDetailSectionLabel("Weather")
         val data = env.weather
         if (data != null && env.isLive()) {
-            TodaySkyHero(data, intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset, pickups, onBins)
+            // The air reading for the sky: smoke veils it, and bad air leads the card.
+            val air =
+                intel.section(PlaceSectionId.AIR_QUALITY)?.takeIf { it.isLive() }?.airQuality?.let {
+                    SkyAir(it.index, it.categoryLabel, smoky = it.dominantPollutant == "pm25")
+                }
+            TodaySkyHero(data, intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset, pickups, air, onBins)
             PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf))
         } else {
             PlaceDetailFallbackCard(env)

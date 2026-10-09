@@ -141,6 +141,13 @@ struct PlaceTodayDetailContent: View {
         }
     }
 
+    /// The air reading for the sky: smoke veils it, and bad air leads the card.
+    private var skyAir: SkyAir? {
+        guard let section = vm.section(.airQuality, in: intel), section.status == .ready || section.status == .stale,
+              let air = section.airQuality else { return nil }
+        return SkyAir(aqi: air.index, label: air.categoryLabel, smoky: air.dominantPollutant == "pm25")
+    }
+
     /// The address calendar's upcoming dates, live or from the fallback load.
     private var calendarEvents: [PlaceCalendarEvent] {
         if let calendar = vm.section(.addressCalendar, in: intel), let data = calendar.addressCalendar,
@@ -158,7 +165,8 @@ struct PlaceTodayDetailContent: View {
                 TodaySkyHero(
                     data: data,
                     sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
-                    pickups: calendarEvents
+                    pickups: calendarEvents,
+                    air: skyAir
                 ) { withAnimation { proxy.scrollTo("todayAddressCalendar", anchor: .top) } }
                 PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
             } else {
