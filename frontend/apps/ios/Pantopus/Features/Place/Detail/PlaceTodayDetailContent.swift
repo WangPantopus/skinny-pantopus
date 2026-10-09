@@ -256,7 +256,7 @@ struct PlaceTodayDetailContent: View {
     private func loadRadonState() async {
         guard showHomeRadon, let homeId = vm.calendarHomeId else { return }
         radonState?.suspend()
-        let current = RadonTodayState(homeId: homeId)
+        let current = RadonTodayState(homeId: homeId, showing: radonState)
         radonState = current
         if radonAvailable { await current.load() }
     }
@@ -264,7 +264,7 @@ struct PlaceTodayDetailContent: View {
     private func resumeRadon(_ active: Bool) {
         radonState?.suspend()
         guard active, showHomeRadon, let homeId = vm.calendarHomeId else { return }
-        let current = RadonTodayState(homeId: homeId)
+        let current = RadonTodayState(homeId: homeId, showing: radonState)
         radonState = current
         if radonAvailable { Task { await current.load() } }
     }
@@ -1086,6 +1086,8 @@ private final class RadonTodayState {
     var retained: CreateHomeTaskRequest?
     /// The viewer can't read the household's tasks (e.g. a guest): the card isn't theirs to answer.
     var noTaskAccess = false
+    /// Showing the previous lifecycle's answer while this one re-checks.
+    private var carried = false
 
     init(homeId: String) {
         self.homeId = homeId
@@ -1096,8 +1098,24 @@ private final class RadonTodayState {
         firstUseDismissed = UserDefaults.standard.bool(forKey: "firstUse.dismissed.\(homeId)")
     }
 
+    /// A new lifecycle for the same home keeps showing what `previous` showed
+    /// until its own check answers (coming back to Today never blanks the card).
+    convenience init(homeId: String, showing previous: RadonTodayState?) {
+        self.init(homeId: homeId)
+        guard let previous, previous.homeId == homeId, previous.loaded else { return }
+        task = previous.task
+        canCreate = previous.canCreate
+        loaded = true
+        carried = true
+    }
+
     var hidden: Bool {
         noTaskAccess || (task == nil && (dismissedUntil.map { $0 > Date() } ?? false))
+    }
+
+    private static func isForbidden(_ error: any Error) -> Bool {
+        if case .forbidden = error as? APIError { return true }
+        return false
     }
 
     func suspend() {
@@ -1118,9 +1136,12 @@ private final class RadonTodayState {
             task = RadonToday.selected(response.tasks)
             canCreate = response.collectionCapabilities?.canCreate == true
             loaded = true
+            carried = false
             error = nil
         } catch {
             guard (try? context.requireCurrent()) != nil, access.lifecycleRevision == revision, access.isCurrent else { return }
+            // A failed re-check keeps the carried answer; a refusal still clears it.
+            if carried, !Self.isForbidden(error) { return }
             loaded = false
             canCreate = false
             if case .forbidden = error as? APIError {

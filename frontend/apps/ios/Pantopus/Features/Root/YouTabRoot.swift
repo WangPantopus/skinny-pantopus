@@ -474,15 +474,26 @@ public struct YouTabRoot: View {
     private let initialRoute: YouRoute?
     @State private var didOpenInitialRoute = false
 
-    public init(expandMonthlyReceipt: Bool = false, initialRoute: YouRoute? = nil, onClose: (@MainActor () -> Void)? = nil) {
+    /// The host's model for the You screen, kept across openings so the
+    /// cover shows its last content at once (nil: a fresh one).
+    private let meViewModel: MeViewModel?
+
+    public init(
+        expandMonthlyReceipt: Bool = false,
+        initialRoute: YouRoute? = nil,
+        meViewModel: MeViewModel? = nil,
+        onClose: (@MainActor () -> Void)? = nil
+    ) {
         self.expandMonthlyReceipt = expandMonthlyReceipt
         self.initialRoute = initialRoute
+        self.meViewModel = meViewModel
         self.onClose = onClose
     }
 
     public var body: some View {
         NavigationStack(path: navigationPathBinding) {
             MeView(
+                viewModel: meViewModel,
                 expandMonthlyReceipt: expandMonthlyReceipt,
                 onAction: { tile in handleAction(tile) },
                 onSection: { row in handleSection(row) },
