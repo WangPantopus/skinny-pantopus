@@ -25,6 +25,11 @@ function mailObjectIcon(type: string): string {
   }
 }
 
+/** Read anywhere: opening it here stamps opened_at; the Mail page and the apps set viewed. */
+export function isMailRead(item: Pick<MailItemV2, 'opened_at' | 'viewed'>): boolean {
+  return !!item.opened_at || item.viewed === true;
+}
+
 /** Detect if item is a certified mail (duck-typed from MailItemV2) */
 function isCertified(item: MailItemV2): boolean {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,7 +56,7 @@ export default function MailItemCard({
   isRead,
   onClick,
 }: MailItemCardProps) {
-  const read = isRead ?? !!item.opened_at;
+  const read = isRead ?? isMailRead(item);
   const urgencyClass = item.urgency === 'overdue' ? 'bg-red-50 dark:bg-red-950/20' : '';
   const isBundle = item.mail_object_type === 'bundle';
   const isBooklet = item.mail_object_type === 'booklet';

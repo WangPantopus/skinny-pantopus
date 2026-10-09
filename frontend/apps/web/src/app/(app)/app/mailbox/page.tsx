@@ -163,9 +163,9 @@ function MailboxPageContent() {
           ) : filteredMail.length === 0 ? (
             <div className="py-16 text-center bg-app-surface rounded-xl border border-app-border">
               <div className="mb-3 flex justify-center"><Mailbox className="w-12 h-12 text-app-text-muted" /></div>
-              <h3 className="text-lg font-semibold text-app-text mb-1">Mailbox is empty</h3>
+              <h2 className="text-lg font-semibold text-app-text mb-1">Mailbox is empty</h2>
               <p className="text-sm text-app-text-secondary">
-                {viewFilter === 'inbox' ? "No mail yet. When you receive letters, bills, or packages they'll appear here."
+                {viewFilter === 'inbox' ? "No mail yet. Letters and bills you receive will appear here."
                   : viewFilter === 'starred' ? 'No starred mail.' : 'No archived mail.'}
               </p>
             </div>

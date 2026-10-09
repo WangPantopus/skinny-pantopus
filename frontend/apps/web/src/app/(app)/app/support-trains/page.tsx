@@ -126,6 +126,7 @@ export default function SupportTrainsPage() {
         <ErrorState message={error} onRetry={fetchTrains} />
       ) : trains.length === 0 ? (
         <EmptyState
+          headingLevel={2}
           icon={Heart}
           title={roleFilter === 'helper' ? 'Not helping on any trains yet' : roleFilter === 'organizer' ? 'No trains organized yet' : 'No Support Trains yet'}
           description={roleFilter === 'organizer'
