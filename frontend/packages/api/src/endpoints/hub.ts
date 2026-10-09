@@ -219,6 +219,10 @@ export async function getHubToday(options: {
       if (isHubTodayPayload(payload)) {
         return payload;
       }
+      // A reply that says it failed ({ today: null, error }) is a failure, not "no briefing":
+      // callers keep the briefing they show (Instant Screens contract §6).
+      const failed = (payload as { error?: unknown } | null)?.error;
+      if (failed) lastError = Object.assign(new Error('Today’s briefing could not be loaded.'), { code: String(failed) });
     } catch (error) {
       lastError = error;
     }
