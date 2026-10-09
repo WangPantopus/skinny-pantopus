@@ -34,7 +34,7 @@ final class MaintenanceDetailViewModel {
     private(set) var isMutating: Bool = false
     private(set) var actionError: String?
 
-    private let homeId: String
+    let homeId: String
     private let taskId: String
     private let api: APIClient
     private let store: ScreenStore
@@ -179,6 +179,11 @@ public struct MaintenanceDetailView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .onAppear { Analytics.track(.screenMaintenanceDetailViewed) }
         .task { await viewModel.load() }
+        // Someone changed this Home (`sync:changed`) or the socket came back: re-check the open entry,
+        // which stays on screen meanwhile (Instant Screens).
+        .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.home(viewModel.homeId), kind: .homes) }, perform: {
+            await viewModel.load()
+        })
         .confirmationDialog(
             "Delete this maintenance entry?",
             isPresented: $showDeleteConfirm,

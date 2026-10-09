@@ -1,6 +1,5 @@
 package app.pantopus.android.di
 
-import android.content.Context
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.ApiService
 import app.pantopus.android.data.api.models.homes.UploadEvidenceRequestJsonAdapter
@@ -128,22 +127,17 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.sentry.android.okhttp.SentryOkHttpInterceptor
-import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
-import java.io.File
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
 
-private const val HTTP_CACHE_DIR = "pantopus-http"
-private const val HTTP_CACHE_SIZE_BYTES = 10L * 1024 * 1024
 private const val CONNECT_TIMEOUT_SECONDS = 15L
 private const val READ_WRITE_TIMEOUT_SECONDS = 30L
 
@@ -193,17 +187,6 @@ object NetworkModule {
             .addLast(KotlinJsonAdapterFactory())
             .build()
 
-    /**
-     * 10 MB on-disk HTTP cache. OkHttp honours `Cache-Control`, `ETag`, and
-     * `If-None-Match` automatically — backend endpoints that emit those
-     * headers get conditional revalidation for free.
-     */
-    @Provides
-    @Singleton
-    fun provideOkHttpCache(
-        @ApplicationContext context: Context,
-    ): Cache = Cache(File(context.cacheDir, HTTP_CACHE_DIR), HTTP_CACHE_SIZE_BYTES)
-
     @Provides
     @Singleton
     fun provideRetryInterceptor(): RetryInterceptor = RetryInterceptor()
@@ -217,20 +200,21 @@ object NetworkModule {
         tokenAuthenticator: TokenAuthenticator,
         retryInterceptor: RetryInterceptor,
         dpopReplayGuard: DPoPReplayGuard,
-        cache: Cache,
     ): OkHttpClient {
         val logging = SafeHttpLoggingInterceptor(enabled = BuildConfig.DEBUG)
+        // No HTTP cache: replies carry door codes, medical cards, the wallet and the profile, and OkHttp's disk
+        // cache kept them while signed in. Coil keeps images in its own cache (PantopusApplication).
         return OkHttpClient
             .Builder()
-            .cache(cache)
             // Outermost: UTC timestamps reach Moshi as "Z", which Android 8–13 can parse.
             .addInterceptor(UtcTimestampInterceptor())
-            // X-Client-Platform + X-Device-Id on every request (both clients).
+            // X-Client-Platform + X-Device-Id on every API request (both clients).
+            // This client also loads Coil images; other hosts get neither header nor the bearer.
             .addInterceptor(deviceIdentityInterceptor)
             .addNetworkInterceptor(authInterceptor.dispatchGuardInterceptor())
             // Per network attempt: OkHttp's own re-send of a DPoP call gets a fresh proof.
             .addNetworkInterceptor(dpopReplayGuard)
-            // Bearer + pre-flight refresh when the access token is about to expire.
+            // Bearer (API origin only) + pre-flight refresh when the access token is about to expire.
             .addInterceptor(authInterceptor)
             // 403 STEP_UP_REQUIRED -> step-up UI -> retry once with X-Step-Up.
             .addInterceptor(stepUpInterceptor)
@@ -295,10 +279,7 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named(PUBLIC_SCHEDULING)
-    fun providePublicSchedulingOkHttpClient(
-        retryInterceptor: RetryInterceptor,
-        cache: Cache,
-    ): OkHttpClient {
+    fun providePublicSchedulingOkHttpClient(retryInterceptor: RetryInterceptor): OkHttpClient {
         val logging = SafeHttpLoggingInterceptor(enabled = BuildConfig.DEBUG)
         val platformHeader =
             Interceptor { chain ->
@@ -308,7 +289,6 @@ object NetworkModule {
             }
         return OkHttpClient
             .Builder()
-            .cache(cache)
             .addInterceptor(platformHeader)
             .addInterceptor(retryInterceptor)
             .addInterceptor(logging)

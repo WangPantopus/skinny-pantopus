@@ -21,6 +21,8 @@ struct MyClaimsListView: View {
         ListOfRowsView(dataSource: viewModel)
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .onAppear { Analytics.track(.screenMyClaimsViewed) }
+            // A claim was submitted, approved or rejected (`homes`): the open list re-reads.
+            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.homes, kind: .homes) }, perform: { await viewModel.load() })
     }
 }
 

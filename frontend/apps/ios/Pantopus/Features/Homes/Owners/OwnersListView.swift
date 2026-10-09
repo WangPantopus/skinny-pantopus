@@ -51,6 +51,11 @@ public struct OwnersListView: View {
             .safeAreaInset(edge: .bottom) { transferBar }
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .accessibilityIdentifier("ownersList")
+            // Someone changed this Home (`sync:changed`) or the socket came back: re-check the open roster,
+            // the rows staying on screen meanwhile (Instant Screens).
+            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.home(homeId), kind: .homes) }, perform: {
+                await viewModel.load()
+            })
             .onAppear {
                 Analytics.track(.screenOwnersListViewed)
                 if refreshOnReturn {

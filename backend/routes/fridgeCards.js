@@ -68,6 +68,8 @@ router.post('/:id/fridge-cards', verifyToken, fridgeCardIssueLimiter, async (req
 router.get('/:id/fridge-cards', verifyToken, async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
+  // Medical details and live card codes: never kept in a device's HTTP cache.
+  res.set('Cache-Control', 'private, no-store');
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {

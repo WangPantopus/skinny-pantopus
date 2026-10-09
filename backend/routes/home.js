@@ -4105,6 +4105,8 @@ router.delete('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => 
  * GET /api/homes/:id/access
  */
 router.get('/:id/access', verifyToken, async (req, res) => {
+  // Door, gate and Wi-Fi codes: never kept in a device's HTTP cache.
+  res.set('Cache-Control', 'private, no-store');
   try {
     res.json({ secrets: await homeAccessSecretService.list(req.params.id, req.user.id) });
   } catch (err) {

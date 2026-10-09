@@ -54,10 +54,6 @@ enum PlaceStoreReads {
         if !force, sections != nil, savedPlaceId == nil, let full = peek(homeId: homeId), full.isFresh {
             return full
         }
-        var topics: Set<String> = [ScreenTopic.today]
-        if savedPlaceId == nil, !homeId.isEmpty {
-            topics.formUnion([ScreenTopic.home(homeId), ScreenTopic.place(homeId)])
-        }
         // A saved place is the account's own address: no household check.
         var gate: (@Sendable (PlaceIntelligence) -> Bool)?
         if savedPlaceId == nil {
@@ -71,12 +67,21 @@ enum PlaceStoreReads {
             endpoint(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections),
             as: PlaceIntelligence.self,
             kind: kind,
-            topics: topics,
+            topics: topics(homeId: homeId, savedPlaceId: savedPlaceId),
             force: force,
             expiresAt: nextMidnight(in: zone),
             showsBeforeRecheck: gate
         )
         return snapshot.checkingAlerts()
+    }
+
+    /// The change topics a home's (or saved place's) copy goes out of date by.
+    static func topics(homeId: String, savedPlaceId: String?) -> Set<String> {
+        var topics: Set<String> = [ScreenTopic.today]
+        if savedPlaceId == nil, !homeId.isEmpty {
+            topics.formUnion([ScreenTopic.home(homeId), ScreenTopic.place(homeId)])
+        }
+        return topics
     }
 
     /// Owners and household roles see the last copy while access is
