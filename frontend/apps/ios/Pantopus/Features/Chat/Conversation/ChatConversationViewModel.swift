@@ -1596,6 +1596,19 @@ public final class ChatConversationViewModel {
     }
 
     private func apply(response: ChatMessagesResponse, kind: FetchKind) {
+        if case .merge = kind, !messages.isEmpty, Self.leavesGap(response, after: messages) {
+            // More arrived while away than one page holds: what's held and the
+            // newest page don't meet, so the thread starts from the newest page
+            // (older ones load on scroll) instead of showing a silent gap.
+            messages = response.messages.sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
+            retireConfirmedClientIds(in: response)
+            updateActiveRooms(response: response)
+            hasMore = true
+            oldestCursor = response.nextCursor ?? Self.paginationCursor(for: messages.first)
+            rebuild()
+            joinActiveRoomsIfPossible()
+            return
+        }
         if case .merge = kind, !messages.isEmpty {
             // Newest-page refetch while older pages may be loaded —
             // replace held copies (edits/reactions land) and append rows
@@ -2424,6 +2437,14 @@ extension ChatConversationViewModel {
         hasMore = memory.hasMore
         rebuild()
         return true
+    }
+
+    /// The newest page shares no message with what's held while older messages
+    /// remain beyond it: messages in between may be missing.
+    static func leavesGap(_ response: ChatMessagesResponse, after held: [ChatMessageDTO]) -> Bool {
+        guard response.hasMore == true, !response.messages.isEmpty else { return false }
+        let heldIds = Set(held.map(\.id))
+        return !response.messages.contains { heldIds.contains($0.id) }
     }
 
     /// Keeps the newest messages for the next opening (leaving the screen).
