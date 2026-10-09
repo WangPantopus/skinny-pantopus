@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef, createElement } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getErrorMessage, usernameHandle } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { toast, toastStore } from '@/components/ui/toast-store';
+import { mailboxKeys } from '@/lib/mailbox-queries';
 import type { MailItem, Summary, MailScope, MailType, AvailableHome } from './mailbox-types';
 import { DELIVERABLE_TYPE_META } from './mailbox-constants';
 
@@ -14,6 +16,7 @@ const UNDO_TOAST_MS = 8000;
 
 export default function useMailboxData() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const scopeFromUrlParam = searchParams.get('scope');
   const homeIdFromUrlParam = searchParams.get('homeId') || '';
@@ -150,6 +153,13 @@ export default function useMailboxData() {
     setScopeHomeId(availableHomes[0].id);
   }, [mailScope, scopeHomeId, availableHomes]);
 
+  // The drawer badges and the Mail Day banner count unread mail still in Incoming,
+  // so reading, archiving, deleting or restoring a letter here changes them.
+  const refreshMailCounts = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: mailboxKeys.drawers() });
+    queryClient.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
+  }, [queryClient]);
+
   const closeReadSession = useCallback(async (reason: string) => {
     if (!readSessionId || !readSessionStartedAt) return;
     const activeTimeMs = Math.max(0, Date.now() - readSessionStartedAt);
@@ -204,6 +214,7 @@ export default function useMailboxData() {
         await api.mailbox.markMailAsRead(item.id);
         setMail(prev => prev.map(m => m.id === item.id ? { ...m, viewed: true } : m));
         setSelectedMail(prev => prev && prev.id === item.id ? { ...prev, viewed: true } : prev);
+        refreshMailCounts();
       } catch {}
     }
   };
@@ -227,6 +238,7 @@ export default function useMailboxData() {
       await api.mailbox.archiveMail(item.id);
       setMail(prev => prev.filter(m => m.id !== item.id));
       setSelectedMail(null);
+      refreshMailCounts();
     } catch (err) {
       toast.error(`Couldn't archive this mail. ${getErrorMessage(err, 'Please try again.')}`);
     }
@@ -245,6 +257,7 @@ export default function useMailboxData() {
       await api.mailbox.deleteMail(item.id);
       setMail(prev => prev.filter(m => m.id !== item.id));
       setSelectedMail(null);
+      refreshMailCounts();
       const toastId = toast.success(createElement('span', null, 'Mail deleted. ', createElement('button', {
         type: 'button',
         className: 'underline font-semibold',
@@ -259,6 +272,7 @@ export default function useMailboxData() {
     try {
       await api.mailbox.restoreMail(item.id);
       await loadMail();
+      refreshMailCounts();
       toast.success('Mail restored');
     } catch (err) {
       toast.error(`Couldn't restore this mail. ${getErrorMessage(err, 'Please try again.')}`);

@@ -192,6 +192,7 @@ export function useMarkItemOpened(
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
       qc.invalidateQueries({ queryKey: mailboxKeys.counter() });
+      qc.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
       // Invalidate all drawer item lists
       qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
     },
@@ -207,6 +208,7 @@ export function useFileItemToVault(
     mutationFn: ({ itemId, folderId }) => api.fileItemToVault(itemId, folderId),
     onSuccess: (_data, { itemId }) => {
       qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
+      qc.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
       qc.invalidateQueries({ queryKey: mailboxKeys.itemDetail(itemId) });
       qc.invalidateQueries({ queryKey: mailboxKeys.vaultFolders() });
       qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
@@ -257,6 +259,7 @@ export function useFileAllBundleItems(
     onSuccess: (_data, { bundleId }) => {
       qc.invalidateQueries({ queryKey: mailboxKeys.bundleItems(bundleId) });
       qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
+      qc.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
       qc.invalidateQueries({ queryKey: mailboxKeys.vaultFolders() });
       qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
     },
@@ -965,6 +968,7 @@ export function useRestoreMail(
       qc.invalidateQueries({ queryKey: mailboxKeys.deleted() });
       qc.invalidateQueries({ queryKey: mailboxKeys.itemDetail(itemId) });
       qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
+      qc.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
       qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
       qc.invalidateQueries({ queryKey: mailboxKeys.counter() });
     },
