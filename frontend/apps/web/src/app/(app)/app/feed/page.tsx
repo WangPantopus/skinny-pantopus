@@ -55,9 +55,12 @@ export default function FeedPage() {
   const handleReport = useCallback((postId: string) => setReportPostId(postId), []);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
 
+  // Each message stays its full 3 seconds: an earlier message's timer doesn't cut a newer one short.
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 3000);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 3000);
   }, []);
 
   const area = useAreaPicker(showToast);
@@ -565,6 +568,7 @@ export default function FeedPage() {
                               onSolved={feed.handleSolved}
                               currentUserId={feed.user?.id}
                               isLiking={feed.likingIds.has(post.id)}
+                              isSaving={feed.savingIds.has(post.id)}
                               surface={feed.surface}
                               showToast={showToast}
                             />
