@@ -83,7 +83,8 @@ export default function ActionQueueCard() {
       }),
       // The viewer's own open tasks. The public list (`getGigs`) leaves the
       // viewer's tasks out, so deadline / no-offer items could never appear.
-      api.gigs.getMyGigs({ limit: 100, status: ['open'] }).then((r) => setGigs((r?.gigs || []) as GigListItem[])).catch((err) => {
+      // Launch cut #4 (Open Gigs): nobody posts open tasks, so they are not loaded.
+      Promise.resolve(launchFeatures.openGigs ? api.gigs.getMyGigs({ limit: 100, status: ['open'] }) : { gigs: [] }).then((r) => setGigs((r?.gigs || []) as GigListItem[])).catch((err) => {
         console.warn('[ActionQueueCard] Failed to load gigs:', err?.message);
         failures.gigs = true;
         setGigs([]);
