@@ -361,7 +361,7 @@ final class ScreenStore {
     }
 }
 
-// MARK: - Out of date and removal
+// MARK: - Out of date, writing and removal
 
 extension ScreenStore {
     /// Marks every entry carrying one of `topics` out of date (contract
@@ -395,6 +395,17 @@ extension ScreenStore {
 
     func remove(_ endpoint: Endpoint) {
         if let key = key(for: endpoint) { remove(key) }
+    }
+
+    /// Keeps a reply a screen read itself (the Home dashboard's access check
+    /// reads 403 answers too, so it can't go through `load`).
+    func put(_ endpoint: Endpoint, data: Data, kind: ScreenDataKind, topics: Set<String>, showsBeforeRecheck: Bool) {
+        guard kind != .sensitive, let key = key(for: endpoint) else { return }
+        let entry = ScreenStoreEntry(data: data, etag: nil, kind: kind, at: now())
+        entry.confirm(at: now(), kind: kind, topics: topics, expiresAt: nil, showsBeforeRecheck: showsBeforeRecheck)
+        entries[key] = entry
+        enforceLimits()
+        bump(key)
     }
 
     /// Sign-out, a revoked session, an account switch or deletion, Clear
