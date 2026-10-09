@@ -31,15 +31,27 @@ enum HomesStoreReads {
         ScreenStore.shared.peek(HomesEndpoints.myHomes(), as: MyHomesResponse.self)
     }
 
-    /// `GET /api/saved-places`: the account's own saved addresses.
-    static func savedPlaces(force: Bool = false) async throws -> ScreenSnapshot<SavedPlacesListResponse> {
-        try await ScreenStore.shared.load(
+    /// `GET /api/saved-places`: the account's own saved addresses, one copy
+    /// for every screen that lists them.
+    static func savedPlaces(store: ScreenStore = .shared, force: Bool = false) async throws -> ScreenSnapshot<SavedPlacesListResponse> {
+        try await store.load(
             SavedPlacesEndpoints.list(),
             as: SavedPlacesListResponse.self,
             kind: .you,
-            topics: [ScreenTopic.homes],
+            topics: [ScreenTopic.homes, ScreenTopic.savedPlaces],
             force: force
         )
+    }
+
+    static func peekSavedPlaces(store: ScreenStore = .shared) -> ScreenSnapshot<SavedPlacesListResponse>? {
+        store.peek(SavedPlacesEndpoints.list(), as: SavedPlacesListResponse.self)
+    }
+
+    /// A save or removal went through: the kept list is read again next time,
+    /// and (with `notify`) an open Saved places screen refreshes.
+    static func savedPlacesChanged(store: ScreenStore = .shared, notify: Bool = true) {
+        store.markStale(topics: [ScreenTopic.savedPlaces])
+        if notify { NotificationCenter.default.post(name: .savedPlacesDidChange, object: nil) }
     }
 }
 

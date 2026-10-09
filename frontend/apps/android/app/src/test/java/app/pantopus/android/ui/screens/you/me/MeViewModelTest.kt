@@ -19,6 +19,7 @@ import app.pantopus.android.data.profile.ProfileInsightsRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -48,8 +49,17 @@ class MeViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         // The launch cut hides several tiles and rows; these tests pin the full set.
         LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
-        coEvery { businessesRepo.myBusinesses() } returns NetworkResult.Success(MyBusinessesResponse(emptyList()))
+        // The You tab reads through the screens' store (Instant Screens); no copies before the first read here.
+        coEvery { businessesRepo.myBusinessesStored(any()) } returns
+            Stored(MyBusinessesResponse(emptyList()), fetchedAt = System.currentTimeMillis())
         coEvery { homeDashboardRepo.dashboard(any()) } returns NetworkResult.Failure(NetworkError.Server(500, null))
+        coEvery { homeDashboardRepo.dashboardStored(any(), any()) } returns Stored(failure = NetworkError.Server(500, null))
+        every { profileRepo.ownProfileCopy() } returns null
+        every { profileRepo.ownProfileIsCurrent() } returns false
+        every { homesRepo.myHomesCopy() } returns null
+        every { businessesRepo.myBusinessesCopy() } returns null
+        coEvery { insightsRepo.inviteProgressStored(any()) } returns Stored()
+        coEvery { insightsRepo.inviteCodeStored(any()) } returns Stored()
     }
 
     @After fun tearDown() {
@@ -124,7 +134,8 @@ class MeViewModelTest {
 
     @Test fun load_produces_all_three_identities_when_home_exists() =
         runTest {
-            coEvery { profileRepo.ownProfile() } returns NetworkResult.Success(ProfileResponse(profile(), null))
+            coEvery { profileRepo.ownProfileStored(any()) } returns
+                Stored(ProfileResponse(profile(), null), fetchedAt = System.currentTimeMillis())
             coEvery { homesRepo.myHomesStored(any()) } returns
                 Stored(MyHomesResponse(listOf(home()), null), fetchedAt = System.currentTimeMillis())
             coEvery { profileRepo.stats("u1") } returns NetworkResult.Success(stats())
@@ -182,7 +193,8 @@ class MeViewModelTest {
 
     @Test fun load_produces_unbound_home_when_no_home() =
         runTest {
-            coEvery { profileRepo.ownProfile() } returns NetworkResult.Success(ProfileResponse(profile(), null))
+            coEvery { profileRepo.ownProfileStored(any()) } returns
+                Stored(ProfileResponse(profile(), null), fetchedAt = System.currentTimeMillis())
             coEvery { homesRepo.myHomesStored(any()) } returns
                 Stored(MyHomesResponse(emptyList(), null), fetchedAt = System.currentTimeMillis())
             coEvery { profileRepo.stats("u1") } returns NetworkResult.Success(stats())
@@ -195,7 +207,8 @@ class MeViewModelTest {
 
     @Test fun select_identity_flips_active_without_refetch() =
         runTest {
-            coEvery { profileRepo.ownProfile() } returns NetworkResult.Success(ProfileResponse(profile(), null))
+            coEvery { profileRepo.ownProfileStored(any()) } returns
+                Stored(ProfileResponse(profile(), null), fetchedAt = System.currentTimeMillis())
             coEvery { homesRepo.myHomesStored(any()) } returns
                 Stored(MyHomesResponse(listOf(home()), null), fetchedAt = System.currentTimeMillis())
             coEvery { profileRepo.stats("u1") } returns NetworkResult.Success(stats())
@@ -210,7 +223,7 @@ class MeViewModelTest {
 
     @Test fun profile_failure_transitions_error() =
         runTest {
-            coEvery { profileRepo.ownProfile() } returns NetworkResult.Failure(NetworkError.Server(500, null))
+            coEvery { profileRepo.ownProfileStored(any()) } returns Stored(failure = NetworkError.Server(500, null))
             coEvery { homesRepo.myHomesStored(any()) } returns
                 Stored(MyHomesResponse(emptyList(), null), fetchedAt = System.currentTimeMillis())
             val vm = MeViewModel(profileRepo, homesRepo, homeDashboardRepo, insightsRepo, businessesRepo)
