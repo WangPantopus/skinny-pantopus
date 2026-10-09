@@ -21,6 +21,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Provider
@@ -57,12 +58,19 @@ class ScreenStore
         @ApplicationContext context: Context,
         private val tokens: TokenStorage,
         private val auth: Provider<AuthRepository>,
+        private val saved: SavedCopies,
     ) {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         // Least recently used first (access order); guarded by itself.
         private val slots = LinkedHashMap<String, Slot>(MAX_ENTRIES, LOAD_FACTOR, true)
+
+        @Volatile
         private var generation = 0L
+
+        // Guards the saved copy: a write checks the generation and the entry's edits under it, and a wipe or a delete
+        // runs under it, so a write queued before them can't put a copy back afterwards.
+        private val diskLock = Any()
 
         private class Slot(
             val key: StoreKey<*>,
@@ -71,11 +79,16 @@ class ScreenStore
             var etag: String? = null
             var stale = false
 
-            /** Own edits (`put`, `remove`): a read that started before one never overwrites it. */
+            /** Own edits (`put`, `remove`) and ended access: a read that started before one never overwrites it. */
+            @Volatile
             var edits = 0L
 
             /** Topic marks: a reply to a read that started before one is kept but stays out of date. */
             var marks = 0L
+
+            /** The entry may be written to the phone (its kind allows it, and the last reader said the viewer may). */
+            @Volatile
+            var persist = false
             var inFlight: Deferred<Unit>? = null
             var lastUsed = SystemClock.elapsedRealtime()
 
@@ -137,12 +150,20 @@ class ScreenStore
         suspend fun <T : Any> read(
             key: StoreKey<T>,
             force: Boolean = false,
+            persist: Boolean = key.kind.tier == StoreTier.EVERYDAY,
             fetch: suspend (etag: String?) -> NetworkResult<Conditional<T>>,
         ): Stored<T> {
             val account = accountId() ?: return readSignedOut(fetch)
             val (slot, job) =
                 synchronized(slots) {
                     val slot = slotLocked(key, account)
+                    // Founder decision 3: a household entry stays on the phone only while its reader vouches for the
+                    // viewer. A reader that no longer does (the viewer became a guest, or the access now expires)
+                    // takes the saved copy away.
+                    val vouched = persist && key.savable
+                    val unsave = slot.persist && !vouched
+                    slot.persist = vouched
+                    if (unsave) deleteSaved(key.id, account)
                     val current = slot.state.value
                     if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
                     val running = slot.inFlight?.takeIf { it.isActive }
@@ -186,6 +207,10 @@ class ScreenStore
                 slot.etag = null
                 slot.stale = false
                 slot.state.value = Stored(data, fetchedAt = System.currentTimeMillis())
+                if (slot.persist || (key.kind.tier == StoreTier.EVERYDAY && key.savable)) {
+                    slot.persist = true
+                    writeSaved(data, slot, slot.state.value.fetchedAt, etag = null)
+                }
             }
         }
 
@@ -204,6 +229,7 @@ class ScreenStore
                     slot.state.value = Stored()
                 }
             }
+            deleteSaved(key.id, account)
         }
 
         /**
@@ -220,6 +246,8 @@ class ScreenStore
                 }
                 slots.clear()
             }
+            // The saved pages too, before anyone else can sign in on this phone.
+            synchronized(diskLock) { saved.deleteAll() }
         }
 
         /** Contract §6: when the phone warns about memory, keep only what screens are showing. */
@@ -232,7 +260,7 @@ class ScreenStore
             account: String,
         ): Slot {
             val now = SystemClock.elapsedRealtime()
-            val slot = slots.getOrPut("$account|${key.id}") { Slot(key) }
+            val slot = slots.getOrPut("$account|${key.id}") { Slot(key).also { loadSavedLocked(it, account) } }
             slot.lastUsed = now
             val iterator = slots.values.iterator()
             while (iterator.hasNext()) {
@@ -241,6 +269,51 @@ class ScreenStore
                 if (candidate !== slot && overLimit && candidate.removable) iterator.remove()
             }
             return slot
+        }
+
+        /** Deletes an entry's saved copy off the caller's thread (access ended, the entry was removed). */
+        private fun deleteSaved(
+            keyId: String,
+            account: String? = accountId(),
+        ) {
+            if (account == null) return
+            scope.launch { synchronized(diskLock) { saved.delete(account, keyId) } }
+        }
+
+        /** A new entry starts from its saved copy on the phone, when there is a usable one (contract §6 "Read"). */
+        private fun loadSavedLocked(
+            slot: Slot,
+            account: String,
+        ) {
+            val type = slot.key.type ?: return
+            if (!slot.key.savable) return
+            val copy = saved.load<Any>(account, slot.key.id, type) ?: return
+            slot.etag = copy.etag
+            slot.persist = true
+            slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
+        }
+
+        /** Writes a confirmed reply to the phone off the caller's thread, when the entry may be saved. */
+        private fun writeSaved(
+            data: Any?,
+            slot: Slot,
+            fetchedAt: Long,
+            etag: String? = slot.etag,
+        ) {
+            val account = accountId() ?: return
+            if (data == null || !slot.persist) return
+            val type = slot.key.type ?: return
+            val edits = slot.edits
+            val gen = generation
+            scope.launch {
+                synchronized(diskLock) {
+                    // A wipe, a newer own edit, ended access or a reader that stopped vouching for the viewer since
+                    // this reply was settled: it is not written.
+                    if (gen == generation && edits == slot.edits && slot.persist) {
+                        saved.save(account, slot.key.id, type, data, fetchedAt, etag)
+                    }
+                }
+            }
         }
 
         private suspend fun <T : Any> fetchSafely(
@@ -283,17 +356,22 @@ class ScreenStore
                                 is Conditional.Fresh -> {
                                     slot.etag = reply.etag
                                     slot.stale = markedMeanwhile
-                                    Stored(reply.data, fetchedAt = now)
+                                    Stored(reply.data, fetchedAt = now).also { writeSaved(it.data, slot, now) }
                                 }
                                 Conditional.NotModified -> {
                                     slot.stale = markedMeanwhile
-                                    previous.copy(fetchedAt = now, refreshing = false, failure = null)
+                                    previous.copy(fetchedAt = now, refreshing = false, failure = null).also {
+                                        writeSaved(it.data, slot, now)
+                                    }
                                 }
                             }
                         is NetworkResult.Failure ->
                             if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) {
-                                // Access ended: the entry goes at once and the screen shows the server's answer.
+                                // Access ended: the entry goes at once, from the phone too, and the screen shows
+                                // the server's answer.
                                 slot.etag = null
+                                slot.edits++
+                                deleteSaved(slot.key.id)
                                 Stored(failure = result.error)
                             } else {
                                 previous.copy(refreshing = false, failure = result.error)

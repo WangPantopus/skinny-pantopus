@@ -179,9 +179,21 @@ class TodayTabViewModel
                         shown.calendarHomeId?.let(repo::todayIsCurrent) == true -> Unit
                         else -> refresh(force = false)
                     }
-                TodayTabUiState.Loading -> if (loadJob?.isActive != true) refresh(force = false)
+                TodayTabUiState.Loading -> {
+                    showStoredToday()
+                    if (loadJob?.isActive != true) refresh(force = false)
+                }
                 TodayTabUiState.NoPlace, is TodayTabUiState.Error -> refresh(force = false)
             }
+        }
+
+        /** A first entry (a cold start too) shows the stored Today of the primary home at once; the read revalidates it. */
+        private fun showStoredToday() {
+            val id = homesRepository.myHomesCopy()?.let(::primaryHomeId) ?: return
+            val copy = repo.todayCopy(id)
+            val data = copy.data ?: return
+            homeId = id
+            _state.value = TodayTabUiState.Loaded(data, calendarHomeId = id, fetchedAt = copy.fetchedAt)
         }
 
         /**

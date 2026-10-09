@@ -142,12 +142,16 @@ class PlaceRepository
                 conditionalApiCall { placeApi.intelligenceConditional(homeId, StoreKeys.todaySectionsQuery, etag) }
             }
 
-        /** A home's Place (the dashboard, every section) through the screens' store: fresh for 10 minutes. */
+        /**
+         * A home's Place (the dashboard, every section) through the screens' store: fresh for 10 minutes. [persist]: the
+         * viewer is an owner or household role (founder decision 3), so the copy may be saved on the phone.
+         */
         suspend fun placeStored(
             homeId: String,
             force: Boolean = false,
+            persist: Boolean = false,
         ): Stored<PlaceIntelligence> =
-            store.read(StoreKeys.place(homeId), force) { etag ->
+            store.read(StoreKeys.place(homeId), force, persist) { etag ->
                 conditionalApiCall { placeApi.intelligenceConditional(homeId, sections = null, etag = etag) }
             }
 
@@ -162,6 +166,9 @@ class PlaceRepository
 
         /** True while the home's stored Today is fresh and no topic marked it out of date (coming back reads nothing). */
         fun todayIsCurrent(homeId: String): Boolean = store.isCurrent(StoreKeys.today(homeId))
+
+        /** The home's stored Today as it is now (memory or the phone's saved copy), without a request. */
+        fun todayCopy(homeId: String): Stored<PlaceIntelligence> = store.peek(StoreKeys.today(homeId))
 
         /** The anonymous, address-only T0 preview (no account required). */
         suspend fun publicPreview(address: String): NetworkResult<PlacePreview> = safeApiCall { placeApi.publicPreview(address) }

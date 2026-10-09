@@ -80,7 +80,8 @@ fun SettingsIndexScreen(
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },
             title = { Text("Sign out of Pantopus?") },
-            text = { Text("You'll need to sign in again to access your hub.") },
+            // Instant Screens contract §7: the sign-out confirmation says the phone's saved copy goes too.
+            text = { Text("You'll need to sign in again to access your hub. Signing out removes what Pantopus saved on this phone.") },
             modifier = Modifier.testTag("settingsSignOutDialog"),
             confirmButton = {
                 TextButton(onClick = {
