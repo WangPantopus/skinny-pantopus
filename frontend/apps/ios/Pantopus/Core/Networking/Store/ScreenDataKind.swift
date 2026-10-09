@@ -115,6 +115,10 @@ enum ScreenTopic {
     static let homes = "homes"
     static let today = "today"
     static let chats = "chats"
+    /// Client-only: your connection lists (accepted, requests in and out,
+    /// blocked). Marked by your own connect, accept, ignore, remove, block
+    /// and unblock here.
+    static let connections = "connections"
     static let notifications = "notifications"
     static let profileMe = "profile:me"
     static let mail = "mail"

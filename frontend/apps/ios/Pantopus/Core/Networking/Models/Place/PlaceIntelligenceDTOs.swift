@@ -1378,7 +1378,7 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
     public let group: PlaceGroup
     public let band: PlaceBand
     public let access: PlaceSectionAccess
-    public let status: PlaceSectionStatus
+    public internal(set) var status: PlaceSectionStatus
     /// ISO 8601 timestamp of the underlying data.
     public let asOf: String?
     /// Provider label, e.g. "FEMA National Flood Hazard Layer".
@@ -1386,7 +1386,7 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
     public let coverage: PlaceCoverage
     /// Why there is no data — a coverage gap or a lock reason.
     public let unavailableReason: String?
-    public let data: PlaceSectionData?
+    public internal(set) var data: PlaceSectionData?
 
     private enum CodingKeys: String, CodingKey {
         case id, group, band, access, status, source, coverage, data
@@ -1593,7 +1593,7 @@ public struct PlaceGroupBlock: Decodable, Sendable, Hashable {
     public let group: PlaceGroup
     /// Server-rendered group label, e.g. "Risk & readiness".
     public let label: String
-    public let sections: [PlaceSectionEnvelope]
+    public internal(set) var sections: [PlaceSectionEnvelope]
 }
 
 /// `GET /api/homes/:id/intelligence` — grouped section envelopes for an
@@ -1608,7 +1608,7 @@ public struct PlaceIntelligence: Decodable, Sendable, Hashable {
     public let regionSupported: Bool
     /// ISO 8601.
     public let generatedAt: String
-    public let groups: [PlaceGroupBlock]
+    public internal(set) var groups: [PlaceGroupBlock]
     /// Who is looking; sections that don't apply to the role are left out.
     /// Nil from older servers.
     public var viewer: PlaceViewer?
@@ -1872,5 +1872,32 @@ public struct PlacePreview: Decodable, Sendable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case status, tier, region, message, place, aha, sections, free, locked, disclaimer
         case moneyLead = "money_lead"
+    }
+}
+
+// MARK: - Weather alerts that can't be trusted as "none"
+
+extension PlaceIntelligence {
+    /// The copy with an alerts check that found nothing, but is out of date
+    /// (the server says stale) or `tooOld` for this phone to show, turned into
+    /// an error: it says it couldn't load and offers Try again, and Today's
+    /// Pulse says alerts are unavailable. A check is never shown as "no
+    /// alerts" (contract section 4); one that found active alerts keeps them.
+    func markingUncheckedAlerts(tooOld: Bool) -> PlaceIntelligence {
+        var copy = self
+        copy.groups = groups.map { block in
+            var block = block
+            block.sections = block.sections.map { section in
+                guard section.id == .alerts, section.alerts?.active.isEmpty ?? true,
+                      section.status == .stale || (tooOld && (section.status == .ready || section.status == .partial))
+                else { return section }
+                var unchecked = section
+                unchecked.status = .error
+                unchecked.data = nil
+                return unchecked
+            }
+            return block
+        }
+        return copy
     }
 }

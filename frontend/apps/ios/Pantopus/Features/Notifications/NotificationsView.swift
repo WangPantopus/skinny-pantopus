@@ -34,6 +34,9 @@ public struct NotificationsView: View {
             }
         }
         .accessibilityIdentifier("notifications")
+        .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.notifications, kind: .notifications) }, perform: {
+            await viewModel.load()
+        })
         .refreshFailureToast($viewModel.actionFailure)
         .confirmationDialog(
             "Delete notification?",

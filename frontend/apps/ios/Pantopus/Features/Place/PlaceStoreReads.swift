@@ -35,10 +35,10 @@ enum PlaceStoreReads {
     ) -> ScreenSnapshot<PlaceIntelligence>? {
         let store = ScreenStore.shared
         if let own = store.peek(endpoint(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections), as: PlaceIntelligence.self) {
-            return own
+            return own.checkingAlerts()
         }
         guard sections != nil, savedPlaceId == nil else { return nil }
-        return store.peek(endpoint(homeId: homeId, savedPlaceId: nil), as: PlaceIntelligence.self)
+        return store.peek(endpoint(homeId: homeId, savedPlaceId: nil), as: PlaceIntelligence.self)?.checkingAlerts()
     }
 
     /// The shared copy if fresh, else one (shared) request. `force` for pull
@@ -67,7 +67,7 @@ enum PlaceStoreReads {
         // copy names it); the phone's stands in until one has.
         let zone = peek(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections)?.value.timeZone
             .flatMap(TimeZone.init(identifier:)) ?? .current
-        return try await ScreenStore.shared.load(
+        let snapshot = try await ScreenStore.shared.load(
             endpoint(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections),
             as: PlaceIntelligence.self,
             kind: kind,
@@ -76,6 +76,7 @@ enum PlaceStoreReads {
             expiresAt: nextMidnight(in: zone),
             showsBeforeRecheck: gate
         )
+        return snapshot.checkingAlerts()
     }
 
     /// Owners and household roles see the last copy while access is
@@ -90,5 +91,21 @@ enum PlaceStoreReads {
         calendar.timeZone = zone
         return calendar.nextDate(after: date, matching: DateComponents(hour: 0, minute: 0, second: 0), matchingPolicy: .nextTime)
             ?? date.addingTimeInterval(24 * 3600)
+    }
+}
+
+extension ScreenSnapshot where Value == PlaceIntelligence {
+    /// Weather alerts show for 30 minutes after the server checked them
+    /// (Today alerts' max shown age); an older copy's empty check is not an
+    /// all-clear.
+    func checkingAlerts(now: Date = Date()) -> ScreenSnapshot<PlaceIntelligence> {
+        let tooOld = now.timeIntervalSince(fetchedAt) > ScreenDataKind.todayAlerts.maxShownAge
+        return ScreenSnapshot(
+            value: value.markingUncheckedAlerts(tooOld: tooOld),
+            fetchedAt: fetchedAt,
+            isFresh: isFresh,
+            refreshFailed: refreshFailed,
+            kind: kind
+        )
     }
 }

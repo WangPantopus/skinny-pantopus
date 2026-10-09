@@ -1,6 +1,7 @@
 package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
@@ -16,6 +17,9 @@ import app.pantopus.android.data.api.models.users.ProfileResponse
 object StoreTopics {
     /** The viewer's own profile and settings (a name, username or photo saved, here or on another device). */
     const val PROFILE_ME = "profile:me"
+
+    /** The viewer's conversation list: a chat created or left, a message sent or read. */
+    const val CHATS = "chats"
 
     /** The viewer's list of homes: a home added, claimed, verified, left or deleted. */
     const val HOMES = "homes"
@@ -75,6 +79,18 @@ object StoreKeys {
     fun roundCoordinate(value: Double): Double = kotlin.math.round(value * COORDINATE_SCALE) / COORDINATE_SCALE
 
     private const val COORDINATE_SCALE = 1000.0
+
+    /**
+     * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
+     * seconds, shared by the Messages tab and its badge. Message history never enters the store (founder decision 7).
+     */
+    val conversations =
+        StoreKey<UnifiedConversationsResponse>(
+            "api/chat/unified-conversations",
+            mapOf("limit" to "100"),
+            kind = StoreKind.MESSAGES_LIST,
+            topics = setOf(StoreTopics.CHATS),
+        )
 
     /**
      * A home's Place for the viewer's role (the Place dashboard): every section, kind Place. A claim, verification or
