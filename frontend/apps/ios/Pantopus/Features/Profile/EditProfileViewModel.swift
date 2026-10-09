@@ -85,7 +85,7 @@ public enum EditProfileAvatarState: Sendable, Equatable {
 @Observable
 @MainActor
 final class EditProfileViewModel {
-    private(set) var state: EditProfileState = .loading
+    var state: EditProfileState = .loading
     /// Email is read-only; captured so the view can render it.
     private(set) var email: String = ""
     /// True while the verified flag on the fetched profile is set.
@@ -121,12 +121,16 @@ final class EditProfileViewModel {
     var bioDraftState: EditProfileBioDraftState = .idle
 
     let api: APIClient
+    /// The profile the You screen already read (You: fresh 10 minutes),
+    /// so the form fills in the first frame.
+    let store: ScreenStore
     private let uploader: MultipartUploader
     /// Checks a typed username (see `UsernameAvailability.swift`).
     let usernameCheck: UsernameAvailabilityChecker
 
     init(api: APIClient = .shared, uploader: MultipartUploader = .shared) {
         self.api = api
+        store = ScreenStore.store(for: api)
         self.uploader = uploader
         usernameCheck = UsernameAvailabilityChecker(api: api)
         for field in EditProfileField.allCases {
@@ -175,24 +179,6 @@ final class EditProfileViewModel {
     /// Clear a failed upload so the block returns to its resting pose.
     func dismissAvatarError() {
         if case .failed = avatarState { avatarState = .idle }
-    }
-
-    /// Initial load; no-op when already loaded.
-    func load() async {
-        if case .loaded = state { return }
-        state = .loading
-        do {
-            let response: ProfileResponse = try await api.request(UsersEndpoints.profile())
-            hydrate(from: response.user)
-            // Seeded here rather than in `hydrate(from:)`: the PATCH echo
-            // carries no `skills` key (`backend/routes/users.js:2194`), so
-            // hydrating skills there would blank the list after every save.
-            skills = response.user.skills ?? []
-            savedSkills = skills
-            state = .loaded
-        } catch {
-            state = .error((error as? APIError)?.errorDescription ?? "Couldn't load profile.")
-        }
     }
 
     /// Retry after an error.
@@ -341,7 +327,7 @@ final class EditProfileViewModel {
 
     // MARK: - Private
 
-    private func hydrate(from profile: UserProfile) {
+    func hydrate(from profile: UserProfile) {
         email = profile.email
         emailVerified = profile.verified
         // A just-uploaded avatar wins over the PATCH echo: `PATCH

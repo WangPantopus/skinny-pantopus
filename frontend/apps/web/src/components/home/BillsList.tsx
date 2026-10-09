@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Home, Landmark, Zap, Flame, Droplets, Pipette, Trash2, Satellite, Tv, Building2, ShieldCheck, Package, CreditCard, Banknote, Mail, Check } from 'lucide-react';
 import { BILL_STATUS, statusClasses } from '@/components/statusColors';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const BILL_ICON: Record<string, ReactNode> = {
   rent: <Home className="w-4 h-4" />,
@@ -90,10 +91,10 @@ export default function BillsList({
         <div className="divide-y divide-app-border-subtle">
           {sorted.slice(0, 8).map((bill) => {
             const overdue = isOverdue(bill);
-            const sourceMailId =
-              bill?.details?.sourceMailId ||
-              bill?.details?.source_mail_id ||
-              null;
+            // Launch cut #10 (Mailbox): no link to the hidden mail item.
+            const sourceMailId = launchFeatures.mailbox
+              ? bill?.details?.sourceMailId || bill?.details?.source_mail_id || null
+              : null;
             return (
               <div
                 id={`home-bill-${bill.id}`}

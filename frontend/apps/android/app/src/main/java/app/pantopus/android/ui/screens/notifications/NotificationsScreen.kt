@@ -13,11 +13,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.theme.PantopusColors
 
 /** Test tag on the notifications root container. */
@@ -46,6 +48,8 @@ fun NotificationsScreen(
     val showsZoneStrip by viewModel.showsZoneStrip.collectAsStateWithLifecycle()
     val pendingDelete by viewModel.pendingDelete.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    ReportContentShown("notifications", state is ListOfRowsUiState.Loaded || state is ListOfRowsUiState.Empty)
     val toastController = remember { ToastController() }
     LaunchedEffect(toast) {
         toast?.let {
@@ -66,6 +70,7 @@ fun NotificationsScreen(
             title = "Notifications",
             state = state,
             onRefresh = { viewModel.refresh() },
+            refreshing = refreshing,
             onEndReached = { viewModel.loadMoreIfNeeded() },
             tabs = tabs,
             selectedTab = selectedTab,

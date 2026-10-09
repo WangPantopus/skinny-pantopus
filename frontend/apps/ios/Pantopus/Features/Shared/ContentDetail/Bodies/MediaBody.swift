@@ -161,7 +161,7 @@ public struct MediaBody: View {
     @ViewBuilder
     private func thumbnail(_ item: MediaItem) -> some View {
         if let url = item.imageURL {
-            AsyncImage(url: url) { phase in
+            CachedAsyncImage(url: url) { phase in
                 switch phase {
                 case let .success(image):
                     image.resizable().aspectRatio(contentMode: .fill)

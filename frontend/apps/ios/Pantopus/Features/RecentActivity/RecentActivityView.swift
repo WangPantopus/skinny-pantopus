@@ -19,6 +19,10 @@ public struct RecentActivityView: View {
     public var body: some View {
         ListOfRowsView(dataSource: viewModel)
             .accessibilityIdentifier("recentActivity")
+            // New activity (a notification, a message, a household change): the open log re-reads.
+            .refreshesOnStoreChange(affects: { note in
+                HubStoreReads.topics.contains { note.names(topic: $0) } || note.names(kind: HubStoreReads.kind)
+            }, perform: { await viewModel.load() })
     }
 }
 

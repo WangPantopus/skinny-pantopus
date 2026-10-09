@@ -3,7 +3,9 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.users.InviteCodeDto
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.MonthlyReceiptDto
+import retrofit2.Response
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Query
 
 /**
@@ -32,6 +34,12 @@ interface ProfileInsightsApi {
     @GET("api/users/me/invite-progress")
     suspend fun inviteProgress(): InviteProgressDto
 
+    /** [inviteProgress] for the screens' store. */
+    @GET("api/users/me/invite-progress")
+    suspend fun inviteProgressConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<InviteProgressDto>
+
     /**
      * `GET /api/users/me/invite-code` — the user's stable invite code plus its
      * shareable URL. Creates one on first call.
@@ -39,4 +47,10 @@ interface ProfileInsightsApi {
      */
     @GET("api/users/me/invite-code")
     suspend fun inviteCode(): InviteCodeDto
+
+    /** [inviteCode] for the screens' store. */
+    @GET("api/users/me/invite-code")
+    suspend fun inviteCodeConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<InviteCodeDto>
 }

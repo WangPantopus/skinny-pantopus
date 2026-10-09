@@ -58,6 +58,8 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
     private let appLock: AppLockManager
     private let auth: AuthManager
     private let api: APIClient
+    /// Search privacy as last read (You: fresh 10 minutes): the screen opens on it.
+    private let store: ScreenStore
 
     // MARK: - Search privacy (persisted)
 
@@ -70,6 +72,9 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
     /// A PATCH is in flight — the radios/toggle ignore taps meanwhile,
     /// matching RN's `privacySaving` guard.
     private var searchPrivacySaving = false
+    /// Counts the changes made here, so a read that was out while one was
+    /// made drops its older reply.
+    private var searchPrivacyEdits = 0
 
     // MARK: - Account deletion
 
@@ -120,6 +125,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         self.appLock = appLock
         self.auth = auth
         self.api = api
+        store = ScreenStore.store(for: api)
         self.onOpen = onOpen
         sensitiveActionGate = { reason in
             await appLock.verifySensitiveAction(reason: reason)
@@ -144,22 +150,57 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
     public func load() async {
         appLock.configure(userID: signedInUserID)
         appLock.refreshCapability()
+        // The settings as last read show at once; the read below confirms them.
+        if case .loading = state, let copy = store.peek(PrivacyEndpoints.settings, as: PrivacySettingsResponse.self) {
+            apply(copy.value)
+            state = .loaded(groups())
+        }
         await fetchSearchPrivacy()
+        state = .loaded(groups())
+    }
+
+    /// `profile:me` while the screen is open (a change on another device, or
+    /// this phone's own change coming back): re-read the search privacy. Not
+    /// while a change saves or the account is being deleted, and a failed
+    /// re-read keeps the values on screen.
+    public func refreshFromSignal() async {
+        guard !searchPrivacySaving, !isDeleteSheetPresented, !isDeletingAccount else { return }
+        await fetchSearchPrivacy(keepsShown: !searchPrivacyLoadFailed)
         state = .loaded(groups())
     }
 
     /// `GET /api/privacy/settings` — `backend/routes/privacy.js:50`.
     /// A failure never blanks the screen: RN keeps every other card and
-    /// swaps the search-privacy helper for the "couldn't load" line.
-    private func fetchSearchPrivacy() async {
+    /// swaps the search-privacy helper for the "couldn't load" line
+    /// (`keepsShown`: the values on screen stay instead). A reply that a
+    /// change made here meanwhile is newer than is dropped.
+    private func fetchSearchPrivacy(keepsShown: Bool = false) async {
+        let edits = searchPrivacyEdits
         do {
-            let response: PrivacySettingsResponse = try await api.request(PrivacyEndpoints.settings)
-            searchVisibility = response.settings.searchVisibility ?? "everyone"
-            findableByName = response.settings.findableByName ?? false
-            searchPrivacyLoadFailed = false
+            let response = try await store.load(
+                PrivacyEndpoints.settings,
+                as: PrivacySettingsResponse.self,
+                kind: .you,
+                topics: [ScreenTopic.profileMe]
+            ).value
+            guard edits == searchPrivacyEdits else { return }
+            apply(response)
         } catch {
+            guard edits == searchPrivacyEdits, !keepsShown else { return }
             searchPrivacyLoadFailed = true
         }
+    }
+
+    private func apply(_ response: PrivacySettingsResponse) {
+        searchVisibility = response.settings.searchVisibility ?? "everyone"
+        findableByName = response.settings.findableByName ?? false
+        searchPrivacyLoadFailed = false
+    }
+
+    /// A change went through: the kept settings go, so the screen never
+    /// opens on the old toggle.
+    private func settingsChanged() {
+        store.remove(PrivacyEndpoints.settings)
     }
 
     public func tapRow(_ rowId: String) async {
@@ -222,12 +263,14 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         let previous = searchVisibility
         searchVisibility = next
         searchPrivacySaving = true
+        searchPrivacyEdits += 1
         state = .loaded(groups())
         do {
             let response: PrivacySettingsResponse = try await api.request(
                 PrivacyEndpoints.updateSettings(PrivacySettingsUpdate(searchVisibility: next))
             )
             searchVisibility = response.settings.searchVisibility ?? next
+            settingsChanged()
             toast = ToastMessage(text: "Search privacy updated.", kind: .success)
         } catch {
             searchVisibility = previous
@@ -250,12 +293,14 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         let previous = findableByName
         findableByName = next
         searchPrivacySaving = true
+        searchPrivacyEdits += 1
         state = .loaded(groups())
         do {
             let response: PrivacySettingsResponse = try await api.request(
                 PrivacyEndpoints.updateSettings(PrivacySettingsUpdate(findableByName: next))
             )
             findableByName = response.settings.findableByName ?? next
+            settingsChanged()
             toast = ToastMessage(text: "Name search privacy updated.", kind: .success)
         } catch {
             findableByName = previous

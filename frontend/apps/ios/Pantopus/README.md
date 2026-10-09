@@ -68,10 +68,11 @@ nothing.
 - **Retry.** Idempotent GETs are retried up to 2 additional times on 5xx
   / transient `URLError`s with 300ms and ~900ms jittered delays. POST/
   PATCH are never retried.
-- **Cache.** The client owns a dedicated `URLSession` with a 10MB memory
-  / 50MB disk `URLCache`; ETag and `If-None-Match` handling is automatic.
-  Pass `cachePolicy: .reloadIgnoringLocalCacheData` on the `Endpoint` to
-  opt out (e.g. `GET /api/hub` which is no-store server-side).
+- **Cache.** The client owns a dedicated ephemeral `URLSession`: its
+  `URLCache` lives in memory only, so API replies never reach disk; ETag
+  and `If-None-Match` handling is automatic. Pass
+  `cachePolicy: .reloadIgnoringLocalCacheData` on the `Endpoint` to opt
+  out (e.g. `GET /api/hub` which is no-store server-side).
 
 ## Building
 

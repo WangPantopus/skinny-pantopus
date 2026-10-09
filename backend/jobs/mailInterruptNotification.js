@@ -9,8 +9,11 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 
 async function mailInterruptNotification() {
+  // Launch cut #10 (Mailbox): mailbox jobs don't run while the mailbox is off.
+  if (skipForLaunchCut('mailbox', 'mailInterruptNotification')) return;
   const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
   // 1. Package status changes (out_for_delivery)

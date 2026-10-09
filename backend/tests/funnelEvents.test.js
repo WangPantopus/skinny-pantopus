@@ -127,9 +127,9 @@ describe('authenticated pilot funnel events', () => {
 describe('pilot Hub truthfulness', () => {
   beforeEach(() => resetTables());
 
-  it('hides Earn today with production launch flags while retaining unread personal mail', async () => {
+  it('hides Earn today without mail_extras while retaining unread personal mail', async () => {
     const previous = process.env.LAUNCH_FEATURES;
-    process.env.LAUNCH_FEATURES = '';
+    process.env.LAUNCH_FEATURES = 'mailbox';
     try {
       const actor = 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa';
       seedTable('User', [{ id: actor, username: 'pilot-test' }]);
@@ -147,6 +147,13 @@ describe('pilot Hub truthfulness', () => {
         expect.objectContaining({ id: 'inbox_personal', count: 3, subtitle: 'Open inbox' }),
       ]));
       expect(res.body.statusItems.some(item => item.id === 'inbox_offers' || item.subtitle === 'Earn today')).toBe(false);
+
+      // Production launch flags: the mailbox is off, so the Hub shows no mail at all.
+      process.env.LAUNCH_FEATURES = '';
+      const launch = await request(makeApp()).get('/api/hub').set('x-test-user-id', actor);
+      expect(launch.status).toBe(200);
+      expect(launch.body.statusItems.some(item => item.type === 'mail_new' || item.id === 'inbox_offers')).toBe(false);
+      expect(launch.body.jumpBackIn.some(item => item.title === 'Mailbox')).toBe(false);
     } finally {
       if (previous === undefined) delete process.env.LAUNCH_FEATURES;
       else process.env.LAUNCH_FEATURES = previous;

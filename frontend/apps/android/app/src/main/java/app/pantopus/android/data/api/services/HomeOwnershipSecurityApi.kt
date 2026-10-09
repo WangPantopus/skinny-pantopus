@@ -3,8 +3,10 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.homes.HomeOwnershipSecurityResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeOwnershipSecurityRequest
 import app.pantopus.android.data.api.models.homes.UpdateHomeOwnershipSecurityResponse
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.Path
 
@@ -22,6 +24,13 @@ interface HomeOwnershipSecurityApi {
     suspend fun getSecurity(
         @Path("id") homeId: String,
     ): HomeOwnershipSecurityResponse
+
+    /** [getSecurity] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/security")
+    suspend fun getSecurityConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeOwnershipSecurityResponse>
 
     /**
      * `PATCH /api/homes/:id/security` — route

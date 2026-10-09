@@ -72,23 +72,6 @@ export default function MailDetail({
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit'
               })}
             </p>
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-              {mail.object_id && (
-                <span className="inline-block px-2 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-700">
-                  Object-backed
-                </span>
-              )}
-              {typeof mail.view_count === 'number' && (
-                <span className="inline-block px-2 py-0.5 text-[10px] font-semibold rounded bg-app-surface-sunken text-app-text-strong">
-                  Views: {mail.view_count}
-                </span>
-              )}
-              {typeof mail.total_read_time_ms === 'number' && (
-                <span className="inline-block px-2 py-0.5 text-[10px] font-semibold rounded bg-app-surface-sunken text-app-text-strong">
-                  Read time: {(mail.total_read_time_ms / 1000).toFixed(1)}s
-                </span>
-              )}
-            </div>
           </div>
         </div>
 

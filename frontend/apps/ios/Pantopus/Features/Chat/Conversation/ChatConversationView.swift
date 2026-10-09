@@ -75,6 +75,9 @@ public struct ChatConversationView: View {
     /// message. Gates stay-pinned-on-new-rows scrolling. Only flips on
     /// actual boundary crossings, so it stays a cheap @State.
     @State private var isAtBottom = false
+    /// The thread opened at its latest message once; coming back (a pushed
+    /// profile, a tab switch) keeps the reading position (Instant Screens).
+    @State private var hasLandedAtLatest = false
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Presentation mode — drives the AI chrome (avatar, welcome card,
@@ -1086,13 +1089,14 @@ extension ChatConversationView {
     private func landAtLatestMessage(_ proxy: ScrollViewProxy) async {
         // Opened from Chat Search → the pendingScrollTargetId path
         // positions on the matched message instead.
-        guard !viewModel.hasPendingSearchTarget else { return }
+        guard !viewModel.hasPendingSearchTarget, !hasLandedAtLatest else { return }
         proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
         for delayMs: UInt64 in [80, 250, 600] {
             try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
             guard !Task.isCancelled else { return }
             proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
         }
+        hasLandedAtLatest = true
     }
 
     /// Keep the viewport pinned to the newest message: always follow the
@@ -2381,7 +2385,7 @@ private struct ChatLinkPreviewCard: View {
         Button { openURL(metadata.url) } label: {
             VStack(alignment: .leading, spacing: Spacing.s0) {
                 if let imageURL = metadata.imageURL {
-                    AsyncImage(url: imageURL) { phase in
+                    CachedAsyncImage(url: imageURL) { phase in
                         switch phase {
                         case let .success(image):
                             image.resizable().scaledToFill()
@@ -2785,7 +2789,7 @@ private struct ChatBubbleRow: View {
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 6)], spacing: 6) {
                 ForEach(imageURLs, id: \.absoluteString) { url in
-                    AsyncImage(url: url) { phase in
+                    CachedAsyncImage(url: url) { phase in
                         switch phase {
                         case let .success(image): image.resizable().scaledToFill()
                         case .failure: PhotoBubblePlaceholder()
@@ -2875,7 +2879,7 @@ private struct ChatBubbleRow: View {
     @ViewBuilder
     private func imageBody(_ url: URL?) -> some View {
         if let url {
-            AsyncImage(url: url) { phase in
+            CachedAsyncImage(url: url) { phase in
                 switch phase {
                 case let .success(image): image.resizable().scaledToFill()
                 case .failure: PhotoBubblePlaceholder()

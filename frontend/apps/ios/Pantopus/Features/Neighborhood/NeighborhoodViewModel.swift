@@ -26,31 +26,59 @@ final class NeighborhoodViewModel {
     private(set) var cells: NeighborhoodCellsDTO?
 
     private let client: APIClient
+    /// The screen store (Instant Screens): the meter and the window show from
+    /// its copies at once and are re-read only once out of date (Nearby: 2 minutes).
+    private let store: ScreenStore
 
     init(client: APIClient = .shared) {
         self.client = client
+        store = ScreenStore.store(for: client)
+        if let meter = store.peek(NeighborhoodEndpoints.meter(), as: NeighborhoodMeterDTO.self)?.value {
+            state = .loaded(meter)
+            cells = Self.ready(store.peek(NeighborhoodEndpoints.cells(), as: NeighborhoodCellsDTO.self)?.value)
+        }
     }
 
     func load() async {
-        if case .loaded = state { return }
-        state = .loading
-        await fetch()
+        await fetch(force: false)
     }
 
     func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
-    private func fetch() async {
+    private func fetch(force: Bool) async {
         do {
-            let meter: NeighborhoodMeterDTO = try await client.request(NeighborhoodEndpoints.meter())
-            state = .loaded(meter)
+            let meter = try await store.load(
+                NeighborhoodEndpoints.meter(),
+                as: NeighborhoodMeterDTO.self,
+                kind: .nearby,
+                topics: [ScreenTopic.homes],
+                force: force
+            ).value
+            if state != .loaded(meter) { state = .loaded(meter) }
             if meter.state != .noPlace {
-                let window: NeighborhoodCellsDTO? = try? await client.request(NeighborhoodEndpoints.cells())
-                cells = window?.isReady == true ? window : nil
+                // A failed window read keeps the one on screen.
+                if let window = try? await store.load(
+                    NeighborhoodEndpoints.cells(),
+                    as: NeighborhoodCellsDTO.self,
+                    kind: .nearby,
+                    topics: [ScreenTopic.homes],
+                    force: force
+                ).value {
+                    cells = Self.ready(window)
+                }
             }
+        } catch is CancellationError {
+            return
         } catch {
+            // A failed refresh keeps the meter on screen.
+            if case .loaded = state, !ScreenStore.isRefusal(error) { return }
             state = .error(message: "We couldn't load your neighborhood meter.")
         }
+    }
+
+    private static func ready(_ window: NeighborhoodCellsDTO?) -> NeighborhoodCellsDTO? {
+        window?.isReady == true ? window : nil
     }
 }

@@ -16,7 +16,6 @@
 
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
 import {
   Check,
   ArrowRight,
@@ -25,9 +24,9 @@ import {
   Mailbox,
   FileText,
 } from 'lucide-react';
-import * as api from '@pantopus/api';
-import { queryKeys } from '@/lib/query-keys';
+import { launchFeatures } from '@/lib/featureFlags';
 import { IconTile } from '@/components/archetypes/place';
+import { usePrimaryHome } from '@/lib/primaryHome';
 
 export interface VerifiedSuccessProps {
   /** "Go to your place" — clears the flag and shows the verified dashboard. */
@@ -36,11 +35,7 @@ export interface VerifiedSuccessProps {
 
 export default function VerifiedSuccess({ onContinue }: VerifiedSuccessProps) {
   // Reuse the dashboard's primary-home query (cached) for the address line.
-  const homeQuery = useQuery({
-    queryKey: queryKeys.placePrimaryHome(),
-    queryFn: () => api.homes.getPrimaryHome(),
-    staleTime: 60_000,
-  });
+  const homeQuery = usePrimaryHome();
 
   const home = homeQuery.data?.home ?? null;
   const homeId = home?.id ?? null;
@@ -51,7 +46,8 @@ export default function VerifiedSuccess({ onContinue }: VerifiedSuccessProps) {
   const rows: { icon: LucideIcon; label: string; sub: string; href: string }[] = [
     { icon: FileText, label: 'Proof you live here', sub: 'Your badge, a residency letter, and a shareable Residency Pass', href: '/app/place/identity' },
     { icon: MessageCircle, label: 'Your Block Founder number', sub: 'A permanent rank on your block, and the real rents your verified neighbors pay', href: '/app/place/block' },
-    { icon: Mailbox, label: 'Your mailbox', sub: 'Packages, notices, and the offers that come to this address', href: '/app/mailbox' },
+    // Launch cut #10 (Mailbox): the mailbox is hidden.
+    ...(launchFeatures.mailbox ? [{ icon: Mailbox, label: 'Your mailbox', sub: 'Packages, notices, and the offers that come to this address', href: '/app/mailbox' }] : []),
   ];
 
   return (

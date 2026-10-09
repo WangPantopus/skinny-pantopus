@@ -12,6 +12,14 @@ import SwiftUI
 
 // swiftlint:disable file_length
 
+/// A tap shown at once while the server hasn't confirmed it yet (Instant
+/// Screens: low-risk taps show as pending, then confirmed or rolled back).
+public enum PulsePendingAction: Sendable, Hashable {
+    case reaction
+    case save
+    case repost
+}
+
 /// Which overflow actions a single Pulse card offers this viewer, and
 /// which of them are already applied. Mirrors RN's per-card gating in
 /// `src/components/feed/PostCard.tsx:97-101, 382-397, 445-470`.
@@ -39,6 +47,8 @@ public struct PulsePostActions: Sendable, Hashable {
     public let postType: String?
     /// Human label for the topic being muted ("Deals", "Alerts", …).
     public let topicLabel: String?
+    /// Taps on this card still waiting for the server.
+    public let pending: Set<PulsePendingAction>
 
     public init(
         isSeeded: Bool = false,
@@ -53,7 +63,8 @@ public struct PulsePostActions: Sendable, Hashable {
         muteEntityId: String? = nil,
         muteEntityName: String = "this author",
         postType: String? = nil,
-        topicLabel: String? = nil
+        topicLabel: String? = nil,
+        pending: Set<PulsePendingAction> = []
     ) {
         self.isSeeded = isSeeded
         self.isSaved = isSaved
@@ -68,6 +79,7 @@ public struct PulsePostActions: Sendable, Hashable {
         self.muteEntityName = muteEntityName
         self.postType = postType
         self.topicLabel = topicLabel
+        self.pending = pending
     }
 
     /// Report is offered to everyone except the author (RN
@@ -395,7 +407,9 @@ public struct PulsePostCard: View {
                     .hitArea(horizontal: 8, vertical: 10)
                 }
                 .buttonStyle(.plain)
+                .opacity(content.actions.pending.contains(.save) ? 0.5 : 1)
                 .accessibilityLabel(content.actions.isSaved ? "Remove bookmark" : "Save post")
+                .accessibilityValue(content.actions.pending.contains(.save) ? "Saving" : "")
                 .accessibilityIdentifier("pulsePostSave_\(content.id)")
             }
             if let onToggleRepost {
@@ -420,7 +434,9 @@ public struct PulsePostCard: View {
                     .hitArea(horizontal: 8, vertical: 10)
                 }
                 .buttonStyle(.plain)
+                .opacity(content.actions.pending.contains(.repost) ? 0.5 : 1)
                 .accessibilityLabel(content.actions.isReposted ? "Undo repost" : "Repost")
+                .accessibilityValue(content.actions.pending.contains(.repost) ? "Saving" : "")
                 .accessibilityIdentifier("pulsePostRepost_\(content.id)")
             }
             HStack(spacing: Spacing.s1) {
@@ -467,6 +483,7 @@ public struct PulsePostCard: View {
         if reaction.isInteractive {
             Button(action: onPrimaryReaction) { reactionLabel(reaction, active: active).hitArea(horizontal: 6, vertical: 12) }
                 .buttonStyle(.plain)
+                .opacity(content.actions.pending.contains(.reaction) ? 0.5 : 1)
                 .accessibilityLabel("\(reaction.label.isEmpty ? "Heart reaction" : reaction.label), \(reaction.count)")
                 .accessibilityIdentifier("pulseReaction_\(content.id)_\(reaction.id.rawValue)")
         } else {

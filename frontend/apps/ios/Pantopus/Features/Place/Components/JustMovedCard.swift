@@ -73,9 +73,28 @@ struct JustMovedCard: View {
     let onOpenDetail: (PlaceDetailGroup) -> Void
     let onOpenMailDay: () -> Void
 
-    @State private var dismissed = false
-    @State private var done: Set<JustMovedStepId> = []
-    @State private var loaded = false
+    @State private var dismissed: Bool
+    @State private var done: Set<JustMovedStepId>
+
+    init(
+        homeId: String,
+        moveInDate: String?,
+        needsPickupDay: Bool? = nil,
+        onOpenDetail: @escaping (PlaceDetailGroup) -> Void,
+        onOpenMailDay: @escaping () -> Void
+    ) {
+        self.homeId = homeId
+        self.moveInDate = moveInDate
+        self.needsPickupDay = needsPickupDay
+        self.onOpenDetail = onOpenDetail
+        self.onOpenMailDay = onOpenMailDay
+        // Read this home's ticks and dismissal up front. They were read in an
+        // `onAppear` on the Group below, which never fires while the Group is
+        // empty, so the card never showed.
+        let store = JustMovedStore(homeId: homeId)
+        _dismissed = State(initialValue: store.isDismissed)
+        _done = State(initialValue: store.done)
+    }
 
     private struct Step {
         let id: JustMovedStepId
@@ -85,7 +104,13 @@ struct JustMovedCard: View {
         let target: PlaceDetailGroup?
     }
 
-    private static let steps: [Step] = [
+    /// Launch cut #10 (Mailbox): returning the previous resident's mail opens
+    /// My mail day, so that step waits for the mailbox.
+    private static var steps: [Step] {
+        allSteps.filter { $0.id != .mail || LaunchFeatures.mailbox }
+    }
+
+    private static let allSteps: [Step] = [
         Step(id: .pickup, icon: .trash2, label: "Set your pickup day", payoff: "Reminders the night before, every week", target: .today),
         Step(
             id: .mail,
@@ -131,19 +156,13 @@ struct JustMovedCard: View {
 
     var body: some View {
         Group {
-            if loaded, !dismissed, isRecentMove(moveInDate) {
+            if !dismissed, isRecentMove(moveInDate) {
                 if doneCount == Self.steps.count {
                     retired
                 } else {
                     card
                 }
             }
-        }
-        .onAppear {
-            guard !loaded else { return }
-            dismissed = store.isDismissed
-            done = store.done
-            loaded = true
         }
     }
 

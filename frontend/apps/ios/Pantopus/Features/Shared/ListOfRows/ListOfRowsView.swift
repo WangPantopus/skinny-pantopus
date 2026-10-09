@@ -30,6 +30,11 @@ import SwiftUI
 public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: View {
     @Bindable private var dataSource: DataSource
     private let customHeader: Header
+    /// Rows or the empty state have shown on this screen. After that a data
+    /// source's `load()` (the first-appear call) usually returns at once, so
+    /// Try again on a later failure refreshes instead, as pull-to-refresh
+    /// would: the error banner replaces the list and its pull-to-refresh.
+    @State private var hasShownContent = false
 
     /// Full init — provide a custom header view that renders between the
     /// chrome strip (search / chip / tab) and the state body.
@@ -122,6 +127,10 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
             }
         }
         .task { await dataSource.load() }
+        .refreshFailureToast(Binding(
+            get: { dataSource.refreshFailureMessage },
+            set: { dataSource.refreshFailureMessage = $0 }
+        ))
     }
 
     @ViewBuilder private var stateBody: some View {
@@ -129,6 +138,9 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
         case .loading:
             LoadingRows()
         case let .loaded(sections, hasMore):
+            if let notice = dataSource.staleNotice {
+                RefreshNotice(text: notice) { Task { await dataSource.refresh() } }
+            }
             LoadedList(
                 sections: sections,
                 hasMore: hasMore,
@@ -141,6 +153,7 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                 onRefresh: { await dataSource.refresh() },
                 reservesFABSpace: dataSource.fab != nil
             )
+            .onAppear { hasShownContent = true }
         case let .empty(content):
             EmptyState(
                 icon: content.icon,
@@ -153,8 +166,13 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                 tint: content.tint ?? Theme.Color.personalBg,
                 accent: content.accent ?? Theme.Color.primary600
             )
+            .onAppear { hasShownContent = true }
         case let .error(message):
-            ListOfRowsErrorBanner(message: message) { Task { await dataSource.load() } }
+            ListOfRowsErrorBanner(message: message) {
+                Task {
+                    if hasShownContent { await dataSource.refresh() } else { await dataSource.load() }
+                }
+            }
         }
     }
 }
@@ -750,7 +768,7 @@ private struct ListingContextHeader: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().aspectRatio(contentMode: .fill)
@@ -1305,7 +1323,7 @@ private struct LeadingView: View {
                     )
                 }
                 if let url = imageURL {
-                    AsyncImage(url: url) { image in
+                    CachedAsyncImage(url: url) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Text(initials)
@@ -1349,7 +1367,7 @@ private struct LeadingView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().aspectRatio(contentMode: .fill)

@@ -9,7 +9,7 @@ import PantopusBadge from '@/components/PantopusBadge';
 import AuthForm from '@/components/auth/AuthForm';
 import { toast } from '@/components/ui/toast-store';
 import { takeSignInHandoff } from '@/lib/email-verified-handoff';
-import { ACCOUNT_DELETED_NOTICE_KEY, ACCOUNT_DELETED_NOTICE_MAX_AGE_MS } from '@/lib/session-refresh';
+import { ACCOUNT_DELETED_NOTICE_KEY, ACCOUNT_DELETED_NOTICE_MAX_AGE_MS, SESSION_ENDED_NOTICE_KEY } from '@/lib/session-refresh';
 import {
   authPageHref,
   extractApiError,
@@ -50,6 +50,20 @@ function LoginContent() {
     } else if (kind === 'unconfirmed') {
       setInfo("We couldn't confirm your account was deleted. If you can still sign in, try again from Settings.");
     }
+  }, []);
+
+  // The server ended this browser's session while a page was open (SocketContext).
+  useEffect(() => {
+    let notice = '';
+    try {
+      notice = sessionStorage.getItem(SESSION_ENDED_NOTICE_KEY) || '';
+      sessionStorage.removeItem(SESSION_ENDED_NOTICE_KEY);
+    } catch { /* storage disabled */ }
+    const [kind, writtenAt] = notice.split(':');
+    if (!(Date.now() - Number(writtenAt) < ACCOUNT_DELETED_NOTICE_MAX_AGE_MS)) return;
+    setInfo(kind === 'password'
+      ? 'Your password was changed, so this browser was signed out. Sign in with your new password.'
+      : 'You were signed out of this browser. Sign in again to continue.');
   }, []);
 
   // Arriving from the confirmation link or from a password reset: sign-in starts from that address.

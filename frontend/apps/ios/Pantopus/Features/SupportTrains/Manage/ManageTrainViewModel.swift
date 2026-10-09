@@ -328,6 +328,7 @@ public final class ManageTrainViewModel {
 
     func markDeleted() {
         didDeleteTrain = true
+        markTrainChanged()
         NotificationCenter.default.post(name: .supportTrainDeleted, object: supportTrainId)
     }
 
@@ -412,6 +413,7 @@ public final class ManageTrainViewModel {
             }
             updateRequestId = UUID().uuidString
             if draftMessage == body { draftMessage = "" }
+            markTrainChanged()
             toast = "Update sent · \(helperCount) helpers"
         } catch {
             actionError = (error as? APIError)?.errorDescription ?? "Couldn't send that update."
@@ -486,6 +488,7 @@ public final class ManageTrainViewModel {
                 as: SupportTrainStatusResponse.self
             )
             guard saved.id == trainId, saved.status == "completed" else { throw APIError.invalidResponse }
+            markTrainChanged()
             state = .loaded(next)
             sheetMode = .closed
             toast = note.isEmpty ? "Train closed" : "Train closed · thanks sent to \(content.helpersValue) helpers"

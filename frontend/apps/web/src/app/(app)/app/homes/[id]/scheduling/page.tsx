@@ -11,6 +11,7 @@ import * as api from "@pantopus/api";
 import { getAuthToken } from "@pantopus/api";
 import { HomePermissionsProvider, useHomePermissions } from "@/components/home/useHomePermissions";
 import PermissionGate from "@/components/scheduling/home/PermissionGate";
+import { fetchMe } from "@/lib/me";
 
 const ACCESS_KEY = (homeId: string) => `pantopus.home-sched-access.${homeId}`;
 
@@ -27,8 +28,7 @@ function SchedulerContent() {
   }, [router]);
 
   useEffect(() => {
-    api.users
-      .getMyProfile()
+    fetchMe()
       .then((u) => setCurrentUserId((u as { id?: string })?.id ?? null))
       .catch(() => {});
   }, []);

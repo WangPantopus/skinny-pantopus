@@ -135,9 +135,7 @@ public final class FeedContextBarViewModel {
             applyCurrent(payload.viewingLocation)
             // Saved places live on their own route; a failure there just
             // drops that section rather than blanking the sheet.
-            let saved: SavedPlacesListResponse? = try? await api.request(
-                SavedPlacesEndpoints.list()
-            )
+            let saved = try? await HomesStoreReads.savedPlaces(store: ScreenStore.store(for: api)).value
             let options = Self.options(payload: payload, savedPlaces: saved?.savedPlaces ?? [])
             sheetState = options.isEmpty ? .empty : .loaded(options)
         } catch {
@@ -164,6 +162,8 @@ public final class FeedContextBarViewModel {
             let response: SetViewingLocationResponse = try await api.request(
                 ViewingLocationEndpoints.set(request)
             )
+            // The stored area is now another one; feeds re-read it.
+            ScreenStore.shared.remove(ViewingLocationEndpoints.current())
             applyCurrent(response.viewingLocation)
             if response.viewingLocation == nil { locationLabel = option.label }
             isSheetPresented = false
@@ -211,6 +211,7 @@ public final class FeedContextBarViewModel {
                 ViewingLocationEndpoints.setRadius(miles: miles)
             )
             radiusMiles = response.radiusMiles ?? miles
+            ScreenStore.shared.remove(ViewingLocationEndpoints.current())
             onChange()
             return true
         } catch {

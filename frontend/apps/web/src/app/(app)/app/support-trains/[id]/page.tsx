@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { buildSupportTrainShareUrl, chosenUsername } from '@pantopus/utils';
@@ -11,6 +12,7 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
 import { contributionSummary, trainStatusLabel } from '@/components/support-trains/contributionLabels';
+import { refreshSupportTrains, supportTrainQuery } from '@/components/support-trains/supportTrainQueries';
 import {
   Calendar,
   Clock,
@@ -32,6 +34,9 @@ import {
 // ============================================================
 
 type TabKey = 'needs' | 'details' | 'updates';
+
+// The tab each train was left on, so coming back opens it again (memory only).
+const rememberedTabs = new Map<string, TabKey>();
 
 type OrganizerUser = {
   id?: string | null;
@@ -195,17 +200,35 @@ export default function SupportTrainDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const [data, setData] = useState<any>(null);
-  const [reservations, setReservations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reservationError, setReservationError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>('needs');
+  // The session cookie is readable only in the browser: until mount, the page
+  // renders what the cache already has (nothing on a fresh load), like the server.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const signedIn = mounted && !!getAuthToken();
+  useEffect(() => {
+    if (mounted && !getAuthToken()) router.push('/login');
+  }, [mounted, router]);
+
+  // The train (and, for organizers, its signups) is one cached entry, so coming
+  // back shows it at once and refreshes it quietly; a change to it asks again.
+  const queryClient = useQueryClient();
+  const trainQuery = useQuery({ ...supportTrainQuery(id), enabled: signedIn });
+  const data = trainQuery.data?.train ?? null;
+  const reservations = trainQuery.data?.reservations ?? [];
+  const reservationError = trainQuery.data?.reservationError ?? null;
+  const error = !data && trainQuery.isError
+    ? ((trainQuery.error as { message?: string } | null)?.message || 'Failed to load')
+    : null;
+  const loading = !data && (!error || trainQuery.isFetching);
+  const fetchData = () => refreshSupportTrains(queryClient);
+
+  const [activeTab, setActiveTabState] = useState<TabKey>(() => rememberedTabs.get(id) ?? 'needs');
+  const setActiveTab = (tab: TabKey) => { rememberedTabs.set(id, tab); setActiveTabState(tab); };
   // An update notification links here with ?tab=updates, so the update is what opens.
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get('tab');
-    if (tab === 'updates' || tab === 'details') setActiveTab(tab);
-  }, []);
+    if (tab === 'updates' || tab === 'details') { rememberedTabs.set(id, tab); setActiveTabState(tab); }
+  }, [id]);
   // Reservation id of the helper action in flight (Mark delivered / Leave slot).
   const [helperAction, setHelperAction] = useState<string | null>(null);
   const [reserveSlot, setReserveSlot] = useState<any>(null);
@@ -217,40 +240,6 @@ export default function SupportTrainDetailPage() {
   const [reserving, setReserving] = useState(false);
   const [reserveError, setReserveError] = useState<string | null>(null);
   const needsSectionRef = useRef<HTMLDivElement | null>(null);
-
-  const fetchData = useCallback(async () => {
-    const token = getAuthToken();
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    try {
-      const result = await api.supportTrains.getSupportTrain(id);
-      setData(result);
-      setError(null);
-      setReservationError(null);
-      if (result?.viewer_level === 'organizer') {
-        try {
-          const resData = await api.supportTrains.listReservations(id);
-          setReservations(resData.reservations || []);
-        } catch (err: any) {
-          setReservations([]);
-          setReservationError(err?.message || 'Failed to load signups');
-        }
-      } else {
-        setReservations([]);
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load');
-      setReservations([]);
-      setReservationError(null);
-    }
-  }, [id, router]);
-
-  useEffect(() => {
-    setLoading(true);
-    fetchData().finally(() => setLoading(false));
-  }, [fetchData]);
 
   if (loading) {
     return (

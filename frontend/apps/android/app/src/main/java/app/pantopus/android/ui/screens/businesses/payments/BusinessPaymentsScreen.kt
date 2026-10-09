@@ -211,7 +211,7 @@ private fun PayoutCard(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "Set up Stripe once to withdraw what your business earns.",
+                text = "Where this business's invoice payments go.",
                 color = PantopusColors.appTextSecondary,
                 fontSize = 13.sp,
             )
@@ -365,8 +365,8 @@ private fun Footnote() {
         )
         Text(
             text =
-                "This is your own payout account, the same one your Wallet withdraws to. " +
-                    "What the business earns reaches your wallet first.",
+                "The business's own payout account: Stripe asks for its details (its EIN, or your SSN as a " +
+                    "sole proprietor). Only the primary owner can set it up.",
             color = PantopusColors.appTextSecondary,
             fontSize = 12.sp,
         )

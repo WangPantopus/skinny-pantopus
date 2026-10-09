@@ -235,7 +235,8 @@ class StripeService {
           card_payments: { requested: true },
           transfers: { requested: true }
         },
-        business_type: userData.business_type || 'individual',
+        // null leaves the choice to Stripe's onboarding (a business can be a company or a sole proprietor).
+        ...(userData.business_type === null ? {} : { business_type: userData.business_type || 'individual' }),
         metadata: {
           user_id: userId,
           platform: 'pantopus'

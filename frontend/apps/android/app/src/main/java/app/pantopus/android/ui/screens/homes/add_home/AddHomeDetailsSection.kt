@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsFields
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
@@ -132,7 +133,12 @@ internal fun AddHomeDetailsSection(
                         color = PantopusColors.appText,
                     )
                     Text(
-                        "We'll start you on the first week: pickup day, the previous resident's mail, your districts.",
+                        // Launch cut #10 (Mailbox): the previous resident's mail is handled in the mailbox.
+                        if (LaunchFeatures.mailbox) {
+                            "We'll start you on the first week: pickup day, the previous resident's mail, your districts."
+                        } else {
+                            "We'll start you on the first week: pickup day, your districts, and who's on the block."
+                        },
                         style = PantopusTextStyle.small,
                         color = PantopusColors.appTextSecondary,
                     )

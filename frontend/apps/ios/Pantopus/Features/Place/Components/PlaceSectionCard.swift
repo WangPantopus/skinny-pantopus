@@ -45,6 +45,9 @@ struct PlaceSectionCard: View {
     var onTap: (() -> Void)?
     var onAction: (() -> Void)?
     var onRetry: (() -> Void)?
+    /// The error state's line and its retry button (alerts say they're unavailable).
+    var errorTitle = "Couldn't load this"
+    var retryTitle = "Try again"
 
     private var tileTone: PlaceIconTile.Tone {
         state == .unavailable || state == .empty ? .muted : .home
@@ -174,11 +177,11 @@ struct PlaceSectionCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 7) {
                     Icon(.cloudOff, size: 16, strokeWidth: 2, color: Theme.Color.appTextSecondary)
-                    Text("Couldn't load this")
+                    Text(errorTitle)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Theme.Color.appTextStrong)
                 }
-                PlaceTextButton(title: "Try again", arrow: false) { onRetry?() }
+                PlaceTextButton(title: retryTitle, arrow: false) { onRetry?() }
             }
 
         case .loaded, .stale:

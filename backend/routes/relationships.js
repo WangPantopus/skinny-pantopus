@@ -225,7 +225,8 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
             type: 'connection_accepted',
             title: `${requesterName} accepted your connection request`,
             icon: '🤝',
-            link: `/${(await supabaseAdmin.from('User').select('username').eq('id', requesterId).single()).data?.username}`,
+            // By id: a username may be one the server made up (part of an email address), and it can change.
+            link: `/${requesterId}`,
             metadata: { relationship_id: existing.id, user_id: requesterId },
           });
 
@@ -367,7 +368,8 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
       type: 'connection_accepted',
       title: `${accepterName} accepted your connection request`,
       icon: '🤝',
-      link: `/${(await supabaseAdmin.from('User').select('username').eq('id', userId).single()).data?.username}`,
+      // By id: a username may be one the server made up (part of an email address), and it can change.
+      link: `/${userId}`,
       metadata: { relationship_id: relationshipId, user_id: userId },
     });
 

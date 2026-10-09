@@ -10,6 +10,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import { extractApiError } from '@/lib/auth-utils';
 import { launchFeatures } from '@/lib/featureFlags';
 import { queryKeys } from '@/lib/query-keys';
+import { useMe } from '@/lib/me';
 
 /** SavedPlace is a private bookmark, never a Home or an access credential. */
 export default function SavedPlaceContext({ previewId, savedPlaceId }: { previewId?: string; savedPlaceId?: string }) {
@@ -17,24 +18,27 @@ export default function SavedPlaceContext({ previewId, savedPlaceId }: { preview
   const queryClient = useQueryClient();
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState('');
-  const viewer = useQuery({ queryKey: ['place-entry', 'viewer'], queryFn: () => api.users.getMyProfile(), staleTime: 0, retry: false, refetchOnWindowFocus: true });
+  // The account comes from the shared profile entry; sign-out and account
+  // switches replace the whole cache, so it is never another account's.
+  const viewer = useMe();
   const userId = viewer.data?.id;
   useEffect(() => api.onTokenChange(() => {
     void queryClient.resetQueries({ queryKey: ['place-entry'] });
   }), [queryClient]);
   const saved = useQuery({
     queryKey: ['place-entry', userId, 'saved'], queryFn: () => api.savedPlaces.getSavedPlaces(),
-    enabled: !!userId && !viewer.isFetching, staleTime: 0, retry: false,
+    enabled: !!userId, staleTime: 0, retry: false,
   });
   const places = (saved.data?.savedPlaces ?? []).filter((p) => p.user_id === userId);
   const active = savedPlaceId && savedPlaceId !== 'all' ? places.find((p) => p.id === savedPlaceId) : places[0];
   const preview = useQuery({
     queryKey: ['place-entry', userId, 'preview', active?.id],
     queryFn: () => api.savedPlaces.getPreview(active!.id),
-    enabled: !!active && !previewId && !viewer.isFetching, staleTime: 60_000, retry: false,
+    enabled: !!active && !previewId, staleTime: 60_000, retry: false,
   });
 
-  if (viewer.isPending || viewer.isFetching) return <p role="status">Loading your places…</p>;
+  // Loading shows only while there is nothing to show; refreshes update in place.
+  if (viewer.isPending) return <p role="status">Loading your places…</p>;
   if (viewer.isError || !userId) return <ErrorState message="We could not load your account." onRetry={() => viewer.refetch()} />;
   if (previewId) return <PendingPlaceSaver key={`${previewId}:${userId}`} previewId={previewId} userId={userId} onSaved={(place) => {
     queryClient.setQueryData<{ savedPlaces: api.savedPlaces.SavedPlace[] }>(['place-entry', userId, 'saved'], (current) => ({
@@ -44,7 +48,7 @@ export default function SavedPlaceContext({ previewId, savedPlaceId }: { preview
     void queryClient.invalidateQueries({ queryKey: queryKeys.hub() });
     router.replace(`/app/place?savedPlace=${encodeURIComponent(place.id)}`);
   }} />;
-  if (saved.isPending || (saved.isFetching && !active)) return <p role="status">Loading your saved places…</p>;
+  if (saved.isPending) return <p role="status">Loading your saved places…</p>;
   if (saved.isError) return <ErrorState message="We could not load your saved places." onRetry={() => saved.refetch()} />;
   if (!active) return (
     <section className="rounded-2xl border border-app-border bg-app-surface p-5">

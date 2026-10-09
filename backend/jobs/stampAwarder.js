@@ -6,7 +6,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
-const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
+const { isLaunchFeatureEnabled, skipForLaunchCut } = require('../utils/featureFlags');
 
 // Each stamp is earned when one count (metric) reaches its target; the gallery shows the same progress.
 const ALL_MILESTONES = [
@@ -92,6 +92,8 @@ async function awardForUser(userId) {
  *   the scheduled run passes nothing and covers everyone.
  */
 async function stampAwarder(options = {}) {
+  // Launch cut #10 (Mailbox): mailbox jobs don't run while the mailbox is off.
+  if (skipForLaunchCut('mailbox', 'stampAwarder')) return;
   logger.info('[StampAwarder] Starting stamp award check');
   const only = Array.isArray(options?.userIds) ? options.userIds : null;
 

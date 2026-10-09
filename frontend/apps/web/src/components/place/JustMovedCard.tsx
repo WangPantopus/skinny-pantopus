@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import { Truck, Trash2, Mailbox, Zap, Landmark, Users, ChevronRight, Check } from 'lucide-react';
+import { launchFeatures } from '@/lib/featureFlags';
 
 export const JUST_MOVED_WINDOW_DAYS = 60;
 const DISMISS_KEY = 'pantopus_just_moved_dismissed';
@@ -39,7 +40,8 @@ export type JustMovedStepId = 'pickup' | 'mail' | 'money' | 'civic' | 'block';
 
 export const JUST_MOVED_STEPS: { id: JustMovedStepId; icon: LucideIcon; label: string; payoff: string; href: string }[] = [
   { id: 'pickup', icon: Trash2, label: 'Set your pickup day', payoff: 'Reminders the night before, every week', href: '/app/place/today' },
-  { id: 'mail', icon: Mailbox, label: "Send back the previous resident's mail", payoff: 'One tap returns it; yours gets filed', href: '/app/mailbox/settings/mail-day' },
+  // Launch cut #10 (Mailbox): no mail step while the mailbox is hidden.
+  ...(launchFeatures.mailbox ? [{ id: 'mail' as const, icon: Mailbox, label: "Send back the previous resident's mail", payoff: 'One tap returns it; yours gets filed', href: '/app/mailbox/settings/mail-day' }] : []),
   { id: 'money', icon: Zap, label: 'Utilities, rebates, and rates', payoff: 'What this address qualifies for, and when taxes are due', href: '/app/place/money' },
   { id: 'civic', icon: Landmark, label: 'Who represents you, and the schools', payoff: 'Your districts, the next election, the council calendar', href: '/app/place/civic' },
   { id: 'block', icon: Users, label: 'Meet the block', payoff: 'Who is verified nearby, and the Founding Neighbor slots', href: '/app/nearby' },

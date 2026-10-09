@@ -38,6 +38,9 @@ public final class SavedPlacesViewModel {
     // MARK: - Dependencies
 
     private let api: APIClient
+    /// The saved places as last read (You: fresh 10 minutes), shared with the
+    /// save sheet, Pulse's area picker and the Place switcher.
+    private let store: ScreenStore
     private let onBack: @MainActor () -> Void
     private let onExplore: @MainActor () -> Void
     private let onSavePlace: @MainActor () -> Void
@@ -75,29 +78,33 @@ public final class SavedPlacesViewModel {
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.api = api
+        store = ScreenStore.store(for: api)
         self.onBack = onBack
         self.onExplore = onExplore
         self.onSavePlace = onSavePlace
         self.onOpenMap = onOpenMap
         self.now = now
+        if let copy = HomesStoreReads.peekSavedPlaces(store: store) {
+            items = copy.value.savedPlaces
+            loadedAtLeastOnce = true
+            rebuild()
+        }
     }
 
     // MARK: - Loading
 
     public func load() async {
         if !loadedAtLeastOnce { state = .loading }
-        await fetch()
+        await fetch(force: false)
     }
 
     public func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
-    private func fetch() async {
+    private func fetch(force: Bool) async {
         do {
-            let response: SavedPlacesListResponse = try await api.request(
-                SavedPlacesEndpoints.list()
-            )
+            let response = try await HomesStoreReads.savedPlaces(store: store, force: force).value
             items = response.savedPlaces
             loadedAtLeastOnce = true
             rebuild()
@@ -183,6 +190,7 @@ public final class SavedPlacesViewModel {
         undo = SavedPlaceUndo(dto: removed, index: index)
         do {
             try await api.request(SavedPlacesEndpoints.remove(id: target.id))
+            HomesStoreReads.savedPlacesChanged(store: store, notify: false)
         } catch {
             items = previous
             rebuild()
@@ -211,6 +219,7 @@ public final class SavedPlacesViewModel {
                 items[i] = response.savedPlace
                 rebuild()
             }
+            HomesStoreReads.savedPlacesChanged(store: store, notify: false)
         } catch {
             if let i = items.firstIndex(where: { $0.id == dto.id }) {
                 items.remove(at: i)

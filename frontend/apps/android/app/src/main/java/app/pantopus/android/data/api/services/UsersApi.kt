@@ -12,8 +12,10 @@ import app.pantopus.android.data.api.models.users.UpdateSkillsResponse
 import app.pantopus.android.data.api.models.users.UserSearchResponse
 import app.pantopus.android.data.api.models.users.UserStatsDto
 import app.pantopus.android.data.api.models.users.UsernameAvailabilityDto
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -21,10 +23,17 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 /** User profile routes from `backend/routes/users.js`. */
+@Suppress("TooManyFunctions") // declarative Retrofit endpoint list — one function per route
 interface UsersApi {
     /** `GET /api/users/profile` — route `backend/routes/users.js:1962`. */
     @GET("api/users/profile")
     suspend fun profile(): ProfileResponse
+
+    /** [profile] for the screens' store: sends the stored ETag; a 304 means the copy is current. */
+    @GET("api/users/profile")
+    suspend fun profileConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<ProfileResponse>
 
     /** `PATCH /api/users/profile` — route `backend/routes/users.js:2052`. */
     @PATCH("api/users/profile")

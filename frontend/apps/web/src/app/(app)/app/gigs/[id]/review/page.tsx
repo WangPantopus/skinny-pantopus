@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import ReviewForm from '@/components/ReviewForm';
 import type { GigDetail, User, Review } from '@pantopus/types';
 import { chosenUsername } from '@pantopus/utils';
+import { fetchMe } from '@/lib/me';
 
 export default function GigReviewPage() {
   const params = useParams();
@@ -27,7 +28,7 @@ export default function GigReviewPage() {
         setError(null);
 
         const [profile, gigRes, gigReviews] = await Promise.all([
-          api.users.getMyProfile(),
+          fetchMe(),
           api.gigs.getGig(gigId),
           api.reviews.getGigReviews(gigId),
         ]);

@@ -328,8 +328,9 @@ async function getBusinessMemberIdsByRole(businessUserId, roles = ['owner']) {
 }
 
 /**
- * The owner a business's money goes to: its earliest active owner seat. A business account has no sign-in, so it has
- * no wallet anyone can open; its owner's wallet and payout account receive what it earns (invoice payments).
+ * The owner a business's money goes to while it has no payout account of its own (getBusinessPayoutAccount): its
+ * earliest active owner seat. A business account has no sign-in, so it has no wallet anyone can open; until then its
+ * owner's wallet and payout account receive what it earns (invoice payments).
  *
  * @param {string} businessUserId - The business user ID
  * @returns {Promise<string|null>} - The owner's user ID, or null when the business has no active owner
@@ -346,6 +347,25 @@ async function getBusinessPrimaryOwnerId(businessUserId) {
     .maybeSingle();
   if (error) throw error;
   return data?.user_id || null;
+}
+
+/**
+ * The business's own Stripe payout account, or null when it has none. A business is a User row, so its account is the
+ * StripeAccount row with its user_id; its primary owner sets it up from the business's Payments screen. Once Stripe
+ * has enabled its payouts, invoice payments go to it; until then they go to the primary owner.
+ *
+ * @param {string} businessUserId - The business user ID
+ * @returns {Promise<{stripe_account_id: string, payouts_enabled: boolean, charges_enabled: boolean,
+ *   details_submitted: boolean}|null>}
+ */
+async function getBusinessPayoutAccount(businessUserId) {
+  const { data, error } = await supabaseAdmin
+    .from('StripeAccount')
+    .select('stripe_account_id, payouts_enabled, charges_enabled, details_submitted')
+    .eq('user_id', businessUserId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
 }
 
 // ============================================================
@@ -477,6 +497,7 @@ async function writeAuditLog(businessUserId, actorUserId, action, targetType, ta
 module.exports = {
   getBusinessMemberIdsByRole,
   getBusinessPrimaryOwnerId,
+  getBusinessPayoutAccount,
   hasPermission,
   getUserAccess,
   checkBusinessPermission,

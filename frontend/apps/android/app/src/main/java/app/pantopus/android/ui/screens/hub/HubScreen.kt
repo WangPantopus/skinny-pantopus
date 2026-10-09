@@ -31,6 +31,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.identity.ProfileChanges
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.hub.sections.HubActionStrip
 import app.pantopus.android.ui.screens.hub.sections.HubDiscoveryRail
@@ -61,6 +62,7 @@ fun HubScreen(
     viewModel: HubViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("hub", state is HubUiState.Populated || state is HubUiState.FirstRun)
     val discoveryFilter by viewModel.discoveryFilter.collectAsStateWithLifecycle()
     val discoveryLoading by viewModel.discoveryLoading.collectAsStateWithLifecycle()
     val discoveryFailed by viewModel.discoveryFailed.collectAsStateWithLifecycle()

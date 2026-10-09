@@ -80,6 +80,7 @@ struct PlaceDashboardView: View {
             await viewModel.refreshUnread()
         }
         .refreshable { await viewModel.refresh() }
+        .refreshesOnStoreChange { if isActive { await viewModel.load() } }
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .sheet(isPresented: $showSwitcher) {
             PlaceSwitcherSheet(
@@ -146,7 +147,7 @@ struct PlaceDashboardView: View {
                 PlaceMessagesActionRow(
                     icon: .house,
                     title: "Home tools",
-                    subtitle: "Documents, household tasks and members."
+                    subtitle: "Tasks and tools for your household."
                 ) {
                     viewModel.reloadOnReturn()
                     viewModel.onOpenHubHome()
@@ -163,6 +164,8 @@ struct PlaceDashboardView: View {
                     onOpenDetail: viewModel.onOpenDetail,
                     onOpenMailDay: viewModel.onOpenMailDay
                 )
+                // Its ticks and dismissal are per Home: another Home starts fresh.
+                .id(viewModel.homeId)
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
 

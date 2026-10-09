@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import * as api from '@pantopus/api';
 import { PendingRelationshipStore } from '../relationships/PendingRelationshipStore';
 import { PendingResidencyReviewStore } from './PendingResidencyReviewStore';
+import { fetchMe } from '@/lib/me';
 
 /**
  * Whether this account has an unfinished residency or ownership (relationship) decision for this Home saved in this
@@ -14,7 +15,7 @@ export function useSavedReviewDecisions(homeId: string): { residency: boolean; r
     const found = async (load: () => Promise<unknown>) => { try { return (await load()) !== null; } catch { return true; } };
     void (async () => {
       let actor: string;
-      try { actor = (await api.users.getMyProfile()).id; } catch {
+      try { actor = (await fetchMe()).id; } catch {
         if (live) setSaved({ residency: true, relationship: true });
         return;
       }

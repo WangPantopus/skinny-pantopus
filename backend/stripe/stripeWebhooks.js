@@ -1088,6 +1088,19 @@ async function handleChargeRefunded(charge) {
  * charge.dispute.created
  * CRITICAL: Freeze the payment. Stop pending transfers. Notify parties.
  */
+/**
+ * Who hears about a payment's payee side, and where their notice opens. A payment made to a business itself (its own
+ * payout account) is followed by the business's primary owner on its Payments tab: a business account has no sign-in,
+ * so nobody reads its notices.
+ */
+async function payeeNoticeTarget(payment) {
+  const businessId = payment.metadata?.type === 'invoice_payment' ? payment.metadata.business_user_id : null;
+  if (!businessId || payment.payee_id !== businessId) return { userId: payment.payee_id, walletLink: undefined };
+  const { getBusinessPrimaryOwnerId } = require('../utils/businessPermissions');
+  const ownerId = await getBusinessPrimaryOwnerId(businessId).catch(() => null);
+  return { userId: ownerId || payment.payee_id, walletLink: `/app/businesses/${businessId}/dashboard?tab=payments` };
+}
+
 async function handleDisputeCreated(dispute) {
   const paymentIntentId = dispute.payment_intent;
   const chargeId = dispute.charge;
@@ -1204,12 +1217,14 @@ async function handleDisputeCreated(dispute) {
   });
 
   // Notify provider (payee)
+  const payeeTarget = await payeeNoticeTarget(payment);
   notifyDisputeCreated({
-    userId: payment.payee_id,
+    userId: payeeTarget.userId,
     gigId: payment.gig_id,
     gigTitle,
     role: 'provider',
     invoiceId,
+    walletLink: payeeTarget.walletLink,
   });
 
   // Auto-submit evidence if we have completion proof
@@ -1240,19 +1255,18 @@ async function handleDisputeCreated(dispute) {
       })
       .eq('id', payment.id);
 
-    // Notify the payer so a human is aware
+    // Notify the payer so a human is aware. An invoice payment has no gig: like the other dispute
+    // notices, this one names and opens the invoice (it opened /gigs/null).
     createNotification({
       userId: payment.payer_id,
       type: 'dispute_evidence_failed',
       title: 'Action may be needed on your dispute',
-      body: `A dispute was filed on your payment for "${gigTitle}". Our team has been alerted, but you may want to check your email for any communication from your bank.`,
+      body: `A dispute was filed on your payment for ${invoiceId ? 'an invoice' : `"${gigTitle}"`}. Our team has been alerted, but you may want to check your email for any communication from your bank.`,
       icon: '⚠️',
-      link: `/gigs/${payment.gig_id}`,
-      metadata: {
-        payment_id: payment.id,
-        dispute_id: dispute.id,
-        gig_id: payment.gig_id,
-      },
+      link: invoiceId ? `/app/invoice/${invoiceId}` : `/gigs/${payment.gig_id}`,
+      metadata: invoiceId
+        ? { payment_id: payment.id, dispute_id: dispute.id, invoice_id: invoiceId }
+        : { payment_id: payment.id, dispute_id: dispute.id, gig_id: payment.gig_id },
     });
   });
 }
@@ -1364,7 +1378,8 @@ async function handleDisputeClosed(dispute) {
     // Notify both parties — dispute won
     const wonInvoiceId = payment.metadata?.type === 'invoice_payment' ? payment.metadata.invoice_id : null;
     notifyDisputeResolved({ userId: payment.payer_id, gigId: payment.gig_id, gigTitle, won: false, invoiceId: wonInvoiceId });
-    notifyDisputeResolved({ userId: payment.payee_id, gigId: payment.gig_id, gigTitle, won: true, invoiceId: wonInvoiceId, isProvider: true });
+    const wonPayeeTarget = await payeeNoticeTarget(payment);
+    notifyDisputeResolved({ userId: wonPayeeTarget.userId, gigId: payment.gig_id, gigTitle, won: true, invoiceId: wonInvoiceId, isProvider: true, walletLink: wonPayeeTarget.walletLink });
 
   } else if (status === 'lost') {
     logger.error('Dispute LOST — funds are gone', {
@@ -1438,7 +1453,8 @@ async function handleDisputeClosed(dispute) {
     // Notify both parties — dispute lost
     const lostInvoiceId = payment.metadata?.type === 'invoice_payment' ? payment.metadata.invoice_id : null;
     notifyDisputeResolved({ userId: payment.payer_id, gigId: payment.gig_id, gigTitle, won: true, invoiceId: lostInvoiceId });
-    notifyDisputeResolved({ userId: payment.payee_id, gigId: payment.gig_id, gigTitle, won: false, invoiceId: lostInvoiceId, isProvider: true, owedCents, collectedCents });
+    const lostPayeeTarget = await payeeNoticeTarget(payment);
+    notifyDisputeResolved({ userId: lostPayeeTarget.userId, gigId: payment.gig_id, gigTitle, won: false, invoiceId: lostInvoiceId, isProvider: true, owedCents, collectedCents, walletLink: lostPayeeTarget.walletLink });
 
   } else {
     // warning_closed or other status

@@ -181,15 +181,16 @@ class ChatConversationViewModel
 
         // A15.3 capability chips for the AI welcome card (tap-to-send). Launch cut #4 (Open gigs):
         // the assistant doesn't price tasks, so "Price a task" gives way to the nearby question (as on web).
+        // Launch cut #10 (Mailbox): no mailbox to summarize.
         val aiPrompts: List<ChatPromptChip> =
-            listOf(
+            listOfNotNull(
                 if (LaunchFeatures.openGigs) {
                     ChatPromptChip("price", "Price a task", PantopusIcon.Hammer)
                 } else {
                     ChatPromptChip("nearby", "What's happening nearby?", PantopusIcon.MapPin)
                 },
                 ChatPromptChip("draft", "Draft a Pulse post", PantopusIcon.Pencil),
-                ChatPromptChip("mail", "Summarize mail", PantopusIcon.Mailbox),
+                ChatPromptChip("mail", "Summarize mail", PantopusIcon.Mailbox).takeIf { LaunchFeatures.mailbox },
                 ChatPromptChip("neighbor", "Find a neighbor", PantopusIcon.Search),
             )
 
@@ -420,9 +421,13 @@ class ChatConversationViewModel
             }
         }
 
+        /**
+         * Pull, Retry and the socket-down poll. A thread already on screen is read again in place (no Loading
+         * flash, no lost scroll); only an error or an empty first load starts over.
+         */
         fun refresh() {
             loadTopicsIfNeeded()
-            fetch(initial = true)
+            fetch(initial = true, quiet = _state.value is ChatConversationUiState.Loaded)
         }
 
         fun selectTopic(topicId: String?) {
@@ -1392,24 +1397,31 @@ class ChatConversationViewModel
 
         // MARK: - Fetch
 
+        /**
+         * [quiet]: refetch the newest page under the messages on screen instead of clearing them first. The page
+         * replaces what it covers; older pages the reader loaded and rows newer than the page (a send that landed
+         * meanwhile) stay. A failed quiet read keeps the thread as it is.
+         */
         private fun fetch(
             initial: Boolean,
             before: String? = null,
+            quiet: Boolean = false,
         ) {
             viewModelScope.launch {
-                if (initial) {
+                if (initial && !quiet) {
                     _state.value = ChatConversationUiState.Loading
                     messages = mutableListOf()
                     // Pending / failed optimistic rows survive refetches —
-                    // socket events trigger `fetch(initial = true)`, and
-                    // eating an in-flight or failed send here would lose the
-                    // message and its retry CTA. Confirmed rows are retired
-                    // below by `client_message_id` match.
+                    // socket fallbacks refetch the thread, and eating an
+                    // in-flight or failed send here would lose the message
+                    // and its retry CTA. Confirmed rows are retired below by
+                    // `client_message_id` match.
                     oldestCursor = null
                     hasMore = false
                 }
                 if (mode is ChatThreadMode.Ai) {
-                    _state.value = ChatConversationUiState.Empty
+                    // The assistant's transcript lives in this view model; a quiet read leaves it alone.
+                    if (!quiet) _state.value = ChatConversationUiState.Empty
                     return@launch
                 }
                 val requestedTopicId = _selectedTopicId.value
@@ -1424,38 +1436,65 @@ class ChatConversationViewModel
                 if (requestedTopicId != _selectedTopicId.value) return@launch
                 when (response) {
                     is NetworkResult.Success -> {
-                        // Drop ids we already hold — a send completing while
-                        // this fetch was in flight may have upserted its
-                        // message ahead of us.
-                        val existingIds = messages.mapTo(mutableSetOf()) { it.id }
-                        // Backend returns messages oldest-first (ascending) —
-                        // see backend/routes/chats.js, which fetches the newest
-                        // N rows then reverses them. Append + sort by created_at
-                        // so the held list stays oldest-first regardless of which
-                        // page these rows came from.
-                        val incoming = response.data.messages.filterNot { existingIds.contains(it.id) }
-                        messages.addAll(incoming)
-                        messages.sortBy { it.createdAt }
+                        val keptOlder = placePage(response.data.messages, quiet)
                         retireConfirmedSends(response.data.messages)
                         updateActiveRooms(response.data)
-                        hasMore = response.data.hasMore ?: false
-                        oldestCursor =
-                            response.data.nextCursor
-                                ?: paginationCursor(messages.firstOrNull())
+                        // Older pages kept under a quiet read keep their own cursor.
+                        if (!keptOlder) {
+                            hasMore = response.data.hasMore ?: false
+                            oldestCursor =
+                                response.data.nextCursor
+                                    ?: paginationCursor(messages.firstOrNull())
+                        }
                         rebuild()
                         joinActiveRoomsIfPossible()
                         scheduleMarkRead()
                         if (initial) prefetchDirectRoomIfNeeded()
                     }
                     is NetworkResult.Failure -> {
-                        if (initial) {
+                        if (initial && !quiet) {
                             _state.value = ChatConversationUiState.Error(response.error.message)
                         } else {
-                            Timber.w("chat pagination failed: ${response.error.message}")
+                            Timber.w("chat refresh or pagination failed: ${response.error.message}")
                         }
                     }
                 }
             }
+        }
+
+        /** Puts a fetched [page] into [messages]; true when a quiet read kept older pages (they keep their cursor). */
+        private fun placePage(
+            page: List<ChatMessageDto>,
+            quiet: Boolean,
+        ): Boolean {
+            if (quiet) return mergeNewestPage(page)
+            // Drop ids we already hold — a send completing while
+            // this fetch was in flight may have upserted its
+            // message ahead of us.
+            val existingIds = messages.mapTo(mutableSetOf()) { it.id }
+            // Backend returns messages oldest-first (ascending) —
+            // see backend/routes/chats.js, which fetches the newest
+            // N rows then reverses them. Append + sort by created_at
+            // so the held list stays oldest-first regardless of which
+            // page these rows came from.
+            messages.addAll(page.filterNot { existingIds.contains(it.id) })
+            messages.sortBy { it.createdAt }
+            return false
+        }
+
+        /**
+         * Quiet refetch: the newest [page] replaces the rows it covers, so edits and deletions inside it show;
+         * rows older than the page (pages the reader loaded) and newer than it (a send that landed while the page
+         * was in flight) stay. Returns true when older rows were kept.
+         */
+        private fun mergeNewestPage(page: List<ChatMessageDto>): Boolean {
+            val pageIds = page.mapTo(HashSet()) { it.id }
+            val oldest = page.minOfOrNull { it.createdAt }
+            val newest = page.maxOfOrNull { it.createdAt }
+            val older = messages.filter { it.id !in pageIds && oldest != null && it.createdAt < oldest }
+            val newer = messages.filter { it.id !in pageIds && newest != null && it.createdAt > newest }
+            messages = (older + page + newer).sortedBy { it.createdAt }.toMutableList()
+            return older.isNotEmpty()
         }
 
         /**
@@ -1846,7 +1885,7 @@ class ChatConversationViewModel
             reactionRefetchJob =
                 viewModelScope.launch {
                     delay(REACTION_REFETCH_DEBOUNCE_MS)
-                    fetch(initial = true)
+                    fetch(initial = true, quiet = true)
                 }
         }
 
@@ -1884,7 +1923,7 @@ class ChatConversationViewModel
                 if (decoded != null) {
                     if (matchesTopicFilter(decoded)) insertIncoming(decoded) else rebuild()
                 } else {
-                    fetch(initial = true)
+                    fetch(initial = true, quiet = true)
                 }
                 return
             }
@@ -1898,7 +1937,7 @@ class ChatConversationViewModel
                 // so the incremental merge must too.
                 if (matchesTopicFilter(decoded)) insertIncoming(decoded)
             } else {
-                fetch(initial = true)
+                fetch(initial = true, quiet = true)
             }
         }
 
@@ -1943,7 +1982,7 @@ class ChatConversationViewModel
             if (decoded != null) {
                 applyUpdatedMessage(decoded)
             } else {
-                fetch(initial = true)
+                fetch(initial = true, quiet = true)
             }
         }
 

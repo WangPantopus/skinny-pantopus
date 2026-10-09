@@ -1,12 +1,10 @@
 package app.pantopus.android.ui.screens.root
 
-import app.pantopus.android.data.api.models.chats.ChatStats
-import app.pantopus.android.data.api.models.chats.ChatStatsResponse
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatRepository
 import app.pantopus.android.data.realtime.SocketManager
+import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -42,13 +40,13 @@ class ChatBadgeViewModelTest {
         Dispatchers.resetMain()
     }
 
-    @Test fun init_seeds_unread_messages_from_stats() =
+    @Test fun init_seeds_unread_messages_from_the_list() =
         runTest {
-            coEvery { repo.stats() } returns
-                NetworkResult.Success(ChatStatsResponse(ChatStats(totalUnread = 7)))
-            coEvery { repo.unifiedConversations(any()) } returns
-                NetworkResult.Success(
-                    app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse(emptyList()),
+            // The badge reads the Messages list through the store (Instant Screens): its own unread total.
+            coEvery { repo.conversationsStored(any()) } returns
+                Stored(
+                    app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse(emptyList(), totalUnread = 7),
+                    fetchedAt = System.currentTimeMillis(),
                 )
             val vm = ChatBadgeViewModel(repo, socket, preferences, badgeCoordinator)
             assertEquals(7, vm.unreadMessages.value)

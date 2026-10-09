@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { ChatRoomWithDetails, ChatMessage } from '@pantopus/types';
 import { getInitials } from '@pantopus/ui-utils';
@@ -18,6 +18,8 @@ import ImageLightbox from './ImageLightbox';
 import MessageReactionBar from './MessageReactionBar';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { launchFeatures } from '@/lib/featureFlags';
+import { fetchMe } from '@/lib/me';
+import { queryKeys } from '@/lib/query-keys';
 
 // Launch cut #4 (Open Gigs): bidding is hidden, so the pre-bid chat limit does not point to it.
 const PRE_BID_LIMIT_MESSAGE = launchFeatures.openGigs
@@ -37,7 +39,6 @@ export default function ChatRoomView({
 
   // ── Room-specific state ───────────────────────────────
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [roomInfo, setRoomInfo] = useState<ChatRoomWithDetails | null>(null);
   const [representedUserIds, setRepresentedUserIds] = useState<string[]>([]);
   const [preBidStatus, setPreBidStatus] = useState<Record<string, any> | null>(null);
   const [historicalMessages, setHistoricalMessages] = useState<ChatMessage[]>([]);
@@ -55,23 +56,25 @@ export default function ChatRoomView({
   useEffect(() => {
     (async () => {
       try {
-        const userData = await api.users.getMyProfile() as { id?: string };
+        const userData = await fetchMe() as { id?: string };
         setCurrentUserId(userData?.id || null);
       } catch {}
     })();
   }, []);
 
-  // ── Load room info ────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        const resp = await (api.chat as Record<string, any> & { getChatRoom?: (id: string, opts?: Record<string, any>) => Promise<{ room?: ChatRoomWithDetails }> }).getChatRoom?.(roomId, {
-          ...(asBusinessUserId ? { asBusinessUserId } : {}),
-        });
-        setRoomInfo(resp?.room || null);
-      } catch {}
-    })();
-  }, [roomId, asBusinessUserId]);
+  // ── Room info: kept with the conversation (the header shows at once on return) ──
+  const roomQuery = useQuery({
+    queryKey: queryKeys.chatRoom(roomId, asBusinessUserId),
+    queryFn: async () => {
+      const resp = await (api.chat as Record<string, any> & { getChatRoom?: (id: string, opts?: Record<string, any>) => Promise<{ room?: ChatRoomWithDetails }> }).getChatRoom?.(roomId, {
+        ...(asBusinessUserId ? { asBusinessUserId } : {}),
+      });
+      return resp?.room || null;
+    },
+    staleTime: 30_000,
+    retry: false,
+  });
+  const roomInfo: ChatRoomWithDetails | null = roomQuery.data ?? null;
 
   // ── Business identity resolution ──────────────────────
   const isRepresented = useCallback(

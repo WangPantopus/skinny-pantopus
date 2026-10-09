@@ -29,6 +29,7 @@ public struct PublicProfileView: View {
     @State private var viewModel: PublicProfileViewModel
     @State private var showReportSheet = false
     @State private var showBlockConfirm = false
+    @State private var showUnblockConfirm = false
     @State private var shareURL: URL?
     /// The "Pick a username for your link" sheet, asked before the first share.
     @State private var usernameShare: UsernameShareSheetModel?
@@ -104,8 +105,15 @@ public struct PublicProfileView: View {
             }
             // Nobody blocks or reports themselves.
             if !viewModel.isOwnProfileLoaded {
-                Button("Block this user", role: .destructive) {
-                    showBlockConfirm = true
+                // Someone you blocked can be unblocked here, as in Settings → Blocked users.
+                if viewModel.isBlockedByViewer {
+                    Button("Unblock this user") {
+                        showUnblockConfirm = true
+                    }
+                } else {
+                    Button("Block this user", role: .destructive) {
+                        showBlockConfirm = true
+                    }
                 }
                 Button("Report") { showReportSheet = true }
             }
@@ -120,6 +128,14 @@ public struct PublicProfileView: View {
             }
         } message: {
             Text("You won't be able to message each other or see each other's posts.")
+        }
+        .alert(unblockTitle, isPresented: $showUnblockConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Unblock") {
+                Task { await viewModel.unblock() }
+            }
+        } message: {
+            Text("You'll be able to see each other's posts and message each other again. They aren't notified.")
         }
         .sheet(isPresented: $showReportSheet) {
             reportSheet
@@ -214,6 +230,10 @@ public struct PublicProfileView: View {
 
     private var blockTitle: String {
         blockName.map { "Block \($0)?" } ?? "Block this user?"
+    }
+
+    private var unblockTitle: String {
+        blockName.map { "Unblock \($0)?" } ?? "Unblock this user?"
     }
 
     /// Names the neighbor being disconnected, per the destructive-confirm

@@ -32,6 +32,7 @@ fun ConnectionsScreen(
     onOpenChat: (ConnectionsChatTarget) -> Unit,
     onFindPeople: () -> Unit,
     onOpenProfile: (String) -> Unit = {},
+    onOpenBlockedUsers: () -> Unit = {},
     viewModel: ConnectionsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -46,6 +47,7 @@ fun ConnectionsScreen(
         viewModel.onMessage = onOpenChat
         viewModel.onFindPeople = onFindPeople
         viewModel.onOpenProfile = onOpenProfile
+        viewModel.onOpenBlockedUsers = onOpenBlockedUsers
         viewModel.load()
     }
 

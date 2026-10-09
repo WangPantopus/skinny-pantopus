@@ -3,18 +3,16 @@
 package app.pantopus.android.ui.screens.inbox.chat
 
 import app.pantopus.android.data.api.models.chats.ChatOtherIdentity
-import app.pantopus.android.data.api.models.chats.ChatStats
-import app.pantopus.android.data.api.models.chats.ChatStatsResponse
 import app.pantopus.android.data.api.models.chats.ChatTopic
 import app.pantopus.android.data.api.models.chats.UnifiedConversationDto
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatRepository
 import app.pantopus.android.data.chats.ChatUnreadBadgeMath
 import app.pantopus.android.data.realtime.SocketManager
+import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -42,6 +40,7 @@ class ChatListViewModelTest {
     private var mutedKeys = mutableSetOf<String>()
 
     @Before fun setUp() {
+        every { repo.conversationsCopy() } returns null
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { socket.eventsOf(any()) } returns emptyFlow()
         hiddenKeys = mutableSetOf()
@@ -124,22 +123,17 @@ class ChatListViewModelTest {
             lastMessagePreview = "I'll grab the chairs",
         )
 
-    private fun stats(): ChatStatsResponse =
-        ChatStatsResponse(
-            ChatStats(totalChats = 3, totalMessages = 17, totalUnread = 3, directChats = 2, gigChats = 1),
-        )
-
     @Test fun load_produces_loaded_with_ai_row_pinned() =
         runTest {
-            coEvery { repo.unifiedConversations(any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.conversationsStored(any()) } returns
+                Stored(
                     UnifiedConversationsResponse(
                         conversations = listOf(direct(), business(), group()),
                         total = 3,
                         totalUnread = 3,
                     ),
+                    fetchedAt = System.currentTimeMillis(),
                 )
-            coEvery { repo.stats() } returns NetworkResult.Success(stats())
             val vm = ChatListViewModel(repo, socket, preferences, badgeCoordinator)
             vm.load()
             val loaded = vm.state.value as ChatListUiState.Loaded
@@ -158,9 +152,8 @@ class ChatListViewModelTest {
 
     @Test fun load_empty_transitions_empty() =
         runTest {
-            coEvery { repo.unifiedConversations(any()) } returns
-                NetworkResult.Success(UnifiedConversationsResponse(emptyList(), 0, 0))
-            coEvery { repo.stats() } returns NetworkResult.Success(stats())
+            coEvery { repo.conversationsStored(any()) } returns
+                Stored(UnifiedConversationsResponse(emptyList(), 0, 0), fetchedAt = System.currentTimeMillis())
             val vm = ChatListViewModel(repo, socket, preferences, badgeCoordinator)
             vm.load()
             assertTrue(vm.state.value is ChatListUiState.Empty)
@@ -168,9 +161,8 @@ class ChatListViewModelTest {
 
     @Test fun load_failure_transitions_error() =
         runTest {
-            coEvery { repo.unifiedConversations(any()) } returns
-                NetworkResult.Failure(NetworkError.Server(500, null))
-            coEvery { repo.stats() } returns NetworkResult.Success(stats())
+            coEvery { repo.conversationsStored(any()) } returns
+                Stored(failure = NetworkError.Server(500, null))
             val vm = ChatListViewModel(repo, socket, preferences, badgeCoordinator)
             vm.load()
             assertTrue(vm.state.value is ChatListUiState.Error)
@@ -178,11 +170,11 @@ class ChatListViewModelTest {
 
     @Test fun select_filter_filters_without_refetch() =
         runTest {
-            coEvery { repo.unifiedConversations(any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.conversationsStored(any()) } returns
+                Stored(
                     UnifiedConversationsResponse(listOf(direct(), business(), group()), 3, 3),
+                    fetchedAt = System.currentTimeMillis(),
                 )
-            coEvery { repo.stats() } returns NetworkResult.Success(stats())
             val vm = ChatListViewModel(repo, socket, preferences, badgeCoordinator)
             vm.load()
             vm.selectFilter(ChatFilter.Gigs)
@@ -194,11 +186,11 @@ class ChatListViewModelTest {
 
     @Test fun hide_conversation_removes_row_from_list() =
         runTest {
-            coEvery { repo.unifiedConversations(any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.conversationsStored(any()) } returns
+                Stored(
                     UnifiedConversationsResponse(listOf(direct(), business(), group()), 3, 3),
+                    fetchedAt = System.currentTimeMillis(),
                 )
-            coEvery { repo.stats() } returns NetworkResult.Success(stats())
             val vm = ChatListViewModel(repo, socket, preferences, badgeCoordinator)
             vm.load()
             vm.hideConversation("person:u1")
@@ -208,11 +200,11 @@ class ChatListViewModelTest {
 
     @Test fun mute_conversation_excludes_unread_from_filter_badge() =
         runTest {
-            coEvery { repo.unifiedConversations(any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.conversationsStored(any()) } returns
+                Stored(
                     UnifiedConversationsResponse(listOf(direct(), business(), group()), 3, 3),
+                    fetchedAt = System.currentTimeMillis(),
                 )
-            coEvery { repo.stats() } returns NetworkResult.Success(stats())
             val vm = ChatListViewModel(repo, socket, preferences, badgeCoordinator)
             vm.load()
             vm.toggleMute("person:u1")
@@ -224,17 +216,18 @@ class ChatListViewModelTest {
 
     @Test fun hidden_conversation_auto_unhides_when_unread_arrives() =
         runTest {
-            coEvery { repo.unifiedConversations(any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.conversationsStored(any()) } returns
+                Stored(
                     UnifiedConversationsResponse(listOf(group(), direct(), business()), 3, 3),
+                    fetchedAt = System.currentTimeMillis(),
                 )
-            coEvery { repo.stats() } returns NetworkResult.Success(stats())
             val vm = ChatListViewModel(repo, socket, preferences, badgeCoordinator)
             vm.load()
             vm.hideConversation("person:u1")
-            coEvery { repo.unifiedConversations(any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.conversationsStored(any()) } returns
+                Stored(
                     UnifiedConversationsResponse(listOf(direct(unread = 4), business(), group()), 3, 7),
+                    fetchedAt = System.currentTimeMillis(),
                 )
             vm.refresh()
             val loaded = vm.state.value as ChatListUiState.Loaded

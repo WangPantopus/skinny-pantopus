@@ -69,9 +69,11 @@ import app.pantopus.android.data.api.models.homes.UploadEvidenceResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -87,6 +89,12 @@ interface HomesApi {
     @GET("api/homes/my-homes")
     suspend fun myHomes(): MyHomesResponse
 
+    /** [myHomes] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/my-homes")
+    suspend fun myHomesConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<MyHomesResponse>
+
     /** `GET /api/homes/primary` — the actor's primary Home card (`homeListService.read` with `primary`). */
     @GET("api/homes/primary")
     suspend fun primaryHome(): PrimaryHomeResponse
@@ -96,6 +104,13 @@ interface HomesApi {
     suspend fun detail(
         @Path("id") id: String,
     ): HomeDetailResponse
+
+    /** [detail] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}")
+    suspend fun detailConditional(
+        @Path("id") id: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeDetailResponse>
 
     /** `GET /api/homes/:id/public-profile` — route `backend/routes/home.js:2439`. */
     @GET("api/homes/{id}/public-profile")
@@ -108,6 +123,13 @@ interface HomesApi {
     suspend fun propertyDetails(
         @Path("id") id: String,
     ): PropertyDetailsResponse
+
+    /** [propertyDetails] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/property-details")
+    suspend fun propertyDetailsConditional(
+        @Path("id") id: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<PropertyDetailsResponse>
 
     /** `POST /api/homes` — route `backend/routes/home.js:677`. */
     @POST("api/homes")
@@ -158,6 +180,13 @@ interface HomesApi {
     suspend fun listOwners(
         @Path("id") homeId: String,
     ): OwnersResponse
+
+    /** [listOwners] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/owners")
+    suspend fun listOwnersConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<OwnersResponse>
 
     /**
      * `DELETE /api/homes/:id/owners/:ownerId` — route

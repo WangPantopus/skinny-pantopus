@@ -63,8 +63,8 @@ The CI job documented below runs this on every PR and posts a diff
 comment when stability classes change.
 
 ### 5. Existing P3 wins
-- OkHttp `Cache(File(cacheDir, "http"), 10 * 1024 * 1024)` is wired
-  in `NetworkModule.kt` and respects ETag / Cache-Control.
+- The API OkHttp client has no HTTP cache (replies carry private data
+  and must not reach disk); Coil keeps images in its own disk cache.
 - Retry interceptor with exponential backoff covers transient 5xx /
   IOException on idempotent requests only.
 - All Retrofit DTOs use Moshi codegen (`@JsonClass(generateAdapter =

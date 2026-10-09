@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
-import type { Post, PostComment, MatchedBusiness } from '@pantopus/api';
+import type { Post, MatchedBusiness } from '@pantopus/api';
 import type { User } from '@pantopus/types';
 import {
   MessageCircle, Star, CalendarDays, Search as SearchIcon, Megaphone, AlertTriangle,
@@ -25,6 +25,8 @@ import ErrorState from '@/components/ui/ErrorState';
 import { lostFoundContactLabel } from '@/components/feed/composer/LostFoundFields';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
 import { launchFeatures } from '@/lib/featureFlags';
+import { fetchMe } from '@/lib/me';
+import { usePostDetail } from '@/hooks/usePostDetail';
 
 // ─── Icon lookup (data from shared config, React icons stay local) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -50,14 +52,8 @@ export default function PostDetailPage() {
   const router = useRouter();
   const postId = params.id as string;
 
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
-  const [post, setPost] = useState<Post | null>(null);
-  const [comments, setComments] = useState<PostComment[]>([]);
-  const [loading, setLoading] = useState(true);
-  // A failed load that isn't "this post is gone" (network, 5xx): retryable.
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [commentsFailed, setCommentsFailed] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
   const [commentPosting, setCommentPosting] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -85,62 +81,34 @@ export default function PostDetailPage() {
       try {
         const token = getAuthToken();
         if (!token) return;
-        const u = await api.users.getMyProfile();
+        const u = await fetchMe();
         setUser(u);
       } catch {}
     })();
   }, []);
 
-  // ─── Load post + comments ──────────────────────────────────
+  // ─── Post + comments (cached; shown at once from a feed list or a visit) ──
   // Loaded independently: a failed comments call must not hide a post that
   // loaded, and only a missing or hidden post (404/403) reads "not found".
-  useEffect(() => {
-    if (!postId) return;
-    (async () => {
-      setLoading(true);
-      setLoadError(null);
-      setCommentsFailed(false);
-      const [postResult, commentsResult] = await Promise.allSettled([
-        api.posts.getPost(postId),
-        api.posts.getComments(postId),
-      ]);
-      if (postResult.status === 'fulfilled') {
-        const loaded = postResult.value.post;
-        setPost(loaded);
-        if (commentsResult.status === 'fulfilled') {
-          setComments(commentsResult.value.comments || loaded.comments || []);
-        } else {
-          setComments(loaded.comments || []);
-          setCommentsFailed(true);
-        }
-      } else {
-        console.error('Failed to load post', postResult.reason);
-        setPost(null);
-        const status = (postResult.reason as { statusCode?: number } | null)?.statusCode;
-        if (status !== 404 && status !== 403) {
-          setLoadError(getErrorMessage(postResult.reason, "We couldn't load this post. Please try again."));
-        }
-      }
-      setLoading(false);
-    })();
-  }, [postId, reloadKey]);
+  const { post, comments, postQuery, commentsQuery, setPost, setComments, loading, unavailable, commentsFailed } = usePostDetail(postId);
+  // A failed load that isn't "this post is gone" (network, 5xx): retryable.
+  const loadError = !post && postQuery.isError && !unavailable
+    ? getErrorMessage(postQuery.error, "We couldn't load this post. Please try again.")
+    : null;
 
+  const refetchComments = commentsQuery.refetch;
   const retryComments = useCallback(async () => {
-    try {
-      const res = await api.posts.getComments(postId);
-      setComments(res.comments || []);
-      setCommentsFailed(false);
-    } catch (err) {
-      console.error('Failed to load comments', err);
-    }
-  }, [postId]);
+    const result = await refetchComments();
+    if (result.error) console.error('Failed to load comments', result.error);
+  }, [refetchComments]);
 
   // ─── Load matched businesses ───────────────────────────────
+  const postType = post?.post_type;
   useEffect(() => {
-    if (!post) return;
+    if (!postType) return;
     // Only load for ask_local/recommendation types
     const matchTypes = ['ask_local', 'recommendation', 'service_offer', 'lost_found'];
-    if (!matchTypes.includes(post.post_type)) return;
+    if (!matchTypes.includes(postType)) return;
 
     setLoadingBusinesses(true);
     api.posts
@@ -148,10 +116,9 @@ export default function PostDetailPage() {
       .then((res) => setMatchedBusinesses(res.businesses || []))
       .catch(() => {})
       .finally(() => setLoadingBusinesses(false));
-  }, [post, postId]);
+  }, [postType, postId]);
 
   // ─── Actions ───────────────────────────────────────────────
-  const queryClient = useQueryClient();
 
   // A comment added or deleted here shows in the feed card's count when you go back.
   const commentCount = post?.comment_count;
@@ -418,7 +385,7 @@ export default function PostDetailPage() {
   if (!post && loadError) {
     return (
       <div className="min-h-screen bg-app flex flex-col items-center justify-center">
-        <ErrorState message={loadError} onRetry={() => setReloadKey((k) => k + 1)} />
+        <ErrorState message={loadError} onRetry={() => { void postQuery.refetch(); }} />
         <button
           onClick={() => router.push('/app/feed')}
           className="px-4 py-2 text-sm font-medium text-app-muted hover:text-app transition"
@@ -897,7 +864,8 @@ export default function PostDetailPage() {
               isPosting={commentPosting}
               canCompose={!isRemovedByModerator}
               composeDisabledMessage="Replies are off for this post."
-              emptyText={commentsFailed || isRemovedByModerator ? null : undefined}
+              // While the comments load, say nothing rather than "no comments".
+              emptyText={commentsFailed || isRemovedByModerator || commentsQuery.isPending ? null : undefined}
             />
           </div>
         </div>

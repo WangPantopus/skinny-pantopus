@@ -10,6 +10,13 @@
 //  existing Invite Owner form. Kebab opens an action sheet with
 //  Remove (DELETE /:ownerId).
 //
+//  Instant Screens: the roster and the viewer's access go through the
+//  screen store (Homes, 2 minutes, topic `home:{id}`), so coming back shows
+//  the roster in the first frame and asks again only once it is out of date.
+//  Only an owner's or household member's open-ended access, as the Home
+//  dashboard last confirmed it, sees the copy before the re-check
+//  (`HomeCopyGate`). A removal reads the roster again.
+//
 
 import Foundation
 import Observation
@@ -66,6 +73,8 @@ final class OwnersListViewModel: ListOfRowsDataSource {
     }
 
     private(set) var state: ListOfRowsState = .loading
+    var refreshFailureMessage: String?
+    private(set) var staleNotice: String?
 
     /// Event the view should react to. Set by row handlers; cleared by
     /// the view after dispatching.
@@ -76,18 +85,23 @@ final class OwnersListViewModel: ListOfRowsDataSource {
     let homeId: String
     private let currentUserId: String?
     private let api: APIClient
+    private let store: ScreenStore
     /// Cached roster — preserves backend ordering (primary first) and
     /// drives optimistic-remove rollback.
     private var owners: [OwnerDTO] = []
     private var access: HomeAccessDTO?
 
     var canManageOwnership: Bool {
-        access?.can("ownership.manage") == true
+        accessConfirmed && access?.can("ownership.manage") == true
     }
 
     var canTransferOwnership: Bool {
-        access?.can("ownership.transfer") == true
+        accessConfirmed && access?.can("ownership.transfer") == true
     }
+
+    /// Owner actions wait until this visit's access read confirms them; a copy's access only shows the
+    /// roster (as the dashboard holds its edits until its re-check).
+    private var accessConfirmed = false
 
     /// True only when the host supplied an `onOpenClaimReview` handler.
     private let showsClaimReview: Bool
@@ -101,19 +115,24 @@ final class OwnersListViewModel: ListOfRowsDataSource {
         self.homeId = homeId
         self.currentUserId = currentUserId
         self.api = api
+        store = ScreenStore.store(for: api)
         self.showsClaimReview = showsClaimReview
+        // The store's copy shows in the first frame (Instant Screens), for household access only.
+        if HomeCopyGate.showsCopy(homeId: homeId, store: store),
+           let copy = store.peek(listEndpoint, as: OwnersResponse.self) {
+            access = store.peek(accessEndpoint, as: HomeAccessDTO.self)?.value
+            show(copy)
+        }
     }
 
     // MARK: - ListOfRowsDataSource
 
     func load() async {
-        if case .loaded = state { return }
-        state = .loading
-        await fetch()
+        await fetch(force: false)
     }
 
     func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     func loadMoreIfNeeded() async {
@@ -157,6 +176,9 @@ final class OwnersListViewModel: ListOfRowsDataSource {
             let _: RemoveOwnerResponse = try await api.request(
                 HomesEndpoints.removeOwner(homeId: homeId, ownerId: ownerId)
             )
+            // The kept roster must not bring the owner back: this Home's entries are out of date.
+            store.markStale(topics: [ScreenTopic.home(homeId)])
+            await fetch(force: true)
         } catch {
             owners = previous
             applyState()
@@ -167,33 +189,94 @@ final class OwnersListViewModel: ListOfRowsDataSource {
 
     // MARK: - Private
 
-    private func fetch() async {
-        access = nil
+    private var listEndpoint: Endpoint {
+        HomesEndpoints.listOwners(homeId: homeId)
+    }
+
+    private var accessEndpoint: Endpoint {
+        HomeAdminEndpoints.myAccess(homeId: homeId)
+    }
+
+    private func show(_ snapshot: ScreenSnapshot<OwnersResponse>) {
+        staleNotice = snapshot.refreshNotice
+        owners = snapshot.value.owners
+        applyState()
+    }
+
+    private func fetch(force: Bool) async {
+        let household = HomeCopyGate.showsCopy(homeId: homeId, store: store)
+        // Without household access in hand, every visit waits for the server.
+        let read = force || !household
+        let topics: Set<String> = [ScreenTopic.home(homeId)]
+        let listGate: @Sendable (OwnersResponse) -> Bool = { _ in household }
+        let accessGate: @Sendable (HomeAccessDTO) -> Bool = { _ in household }
         do {
-            let response: OwnersResponse = try await api.request(
-                HomesEndpoints.listOwners(homeId: homeId)
-            )
-            access = try await api.request(HomeAdminEndpoints.myAccess(homeId: homeId), as: HomeAccessDTO.self)
-            owners = response.owners
-            applyState()
+            try await store.show(
+                listEndpoint,
+                as: OwnersResponse.self,
+                kind: .homes,
+                topics: topics,
+                force: read,
+                showsBeforeRecheck: listGate
+            ) { show($0) }
+        } catch is CancellationError {
+            return
         } catch {
-            if case .forbidden = error as? APIError {
-                // Not (or no longer) an owner, e.g. right after transferring
-                // the Home: a retry can't change that, so say so plainly.
-                state = .empty(
-                    ListOfRowsState.EmptyContent(
-                        icon: .shield,
-                        headline: "You're not an owner of this Home",
-                        subcopy: "Only the Home's owners can see its owners and transfers."
-                    )
-                )
+            listFailed(error, force: force)
+            return
+        }
+        do {
+            access = try await store.load(
+                accessEndpoint,
+                as: HomeAccessDTO.self,
+                kind: .homes,
+                topics: topics,
+                force: read,
+                showsBeforeRecheck: accessGate
+            ).value
+            accessConfirmed = true
+        } catch is CancellationError {
+            return
+        } catch {
+            // Unknown permissions: no owner actions until a read confirms them; a refusal clears the roster.
+            access = nil
+            accessConfirmed = false
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load owners. Try again."
+            if ScreenStore.isRefusal(error) {
+                owners = []
+                state = .error(message: message)
                 return
             }
-            state = .error(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't load owners. Try again."
-            )
+            if force { refreshFailureMessage = message }
         }
+        applyState()
+    }
+
+    private func listFailed(_ error: any Error, force: Bool) {
+        if case .forbidden = error as? APIError {
+            owners = []
+            access = nil
+            // Not (or no longer) an owner, e.g. right after transferring
+            // the Home: a retry can't change that, so say so plainly.
+            state = .empty(
+                ListOfRowsState.EmptyContent(
+                    icon: .shield,
+                    headline: "You're not an owner of this Home",
+                    subcopy: "Only the Home's owners can see its owners and transfers."
+                )
+            )
+            return
+        }
+        let message = (error as? APIError)?.errorDescription ?? "Couldn't load owners. Try again."
+        guard state.showsContent, !ScreenStore.isRefusal(error) else {
+            owners = []
+            access = nil
+            state = .error(message: message)
+            return
+        }
+        // The roster stays; a pull to refresh says it failed.
+        if force { refreshFailureMessage = message }
+        staleNotice = store.peek(listEndpoint, as: OwnersResponse.self)?.refreshNotice
     }
 
     private func applyState() {

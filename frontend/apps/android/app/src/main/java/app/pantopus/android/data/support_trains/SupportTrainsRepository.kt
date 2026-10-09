@@ -20,9 +20,14 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResp
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.support_trains.UpdateSupportTrainSlotBody
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
+import app.pantopus.android.data.api.net.mapFresh
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.SupportTrainActionsApi
 import app.pantopus.android.data.api.services.SupportTrainsApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.Stored
 import com.squareup.moshi.JsonDataException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,7 +47,36 @@ class SupportTrainsRepository
     constructor(
         private val api: SupportTrainsApi,
         private val actionsApi: SupportTrainActionsApi,
+        private val store: ScreenStore,
     ) {
+        /** My trains and Invitations through the screens' store (fresh for a minute). [force] reads now. */
+        suspend fun mineStored(force: Boolean = false): Stored<SupportTrainsListResponse> =
+            store.read(StoreKeys.mySupportTrains, force) { etag ->
+                conditionalApiCall { api.mineConditional(limit = 20, offset = 0, etag = etag) }
+            }
+
+        /** Nearby trains through the screens' store, searched from the point rounded to about 110 m. */
+        suspend fun nearbyStored(
+            latitude: Double,
+            longitude: Double,
+            force: Boolean = false,
+        ): Stored<SupportTrainsNearbyResponse> {
+            val lat = StoreKeys.roundCoordinate(latitude)
+            val lng = StoreKeys.roundCoordinate(longitude)
+            return store.read(StoreKeys.nearbySupportTrains(lat, lng), force) { etag ->
+                conditionalApiCall { api.nearbyConditional(lat, lng, limit = 40, etag = etag) }.mapFresh(::withRowIds)
+            }
+        }
+
+        /** The Nearby RPC names each row's id `support_train_id`. */
+        private fun withRowIds(response: SupportTrainsNearbyResponse): SupportTrainsNearbyResponse =
+            response.copy(
+                supportTrains =
+                    response.supportTrains.mapNotNull { row ->
+                        row.id.ifEmpty { row.supportTrainId.orEmpty() }.takeIf { it.isNotEmpty() }?.let { row.copy(id = it) }
+                    },
+            )
+
         /**
          * `GET /api/support-trains/me/support-trains` — list trains
          * I participate in (organizer or helper). Route

@@ -2,8 +2,8 @@
 //  APIClient.swift
 //  Pantopus
 //
-//  Async/await HTTP client with typed errors, ETag-aware response caching,
-//  and exponential-backoff retry for idempotent GETs. Every feature
+//  Async/await HTTP client with typed errors, ETag-aware in-memory response
+//  caching, and exponential-backoff retry for idempotent GETs. Every feature
 //  accesses the backend through this — no direct `URLSession.shared` in
 //  feature code.
 //
@@ -13,9 +13,9 @@
 import Foundation
 import Logging
 
-/// Pantopus's HTTP client. Owns a dedicated `URLSession` with on-disk
-/// caching; emits typed `APIError` values; retries transient failures on
-/// idempotent methods.
+/// Pantopus's HTTP client. Owns a dedicated ephemeral `URLSession` whose
+/// cache never touches disk; emits typed `APIError` values; retries
+/// transient failures on idempotent methods.
 @Observable
 final class APIClient: @unchecked Sendable {
     /// Singleton for the live app. Unit tests construct their own
@@ -85,8 +85,8 @@ final class APIClient: @unchecked Sendable {
 
     /// - Parameters:
     ///   - environment: API target + base URL.
-    ///   - session: Inject a custom session for tests. Defaults to a
-    ///     URLCache-backed session sized 10MB / 50MB (memory / disk).
+    ///   - session: Inject a custom session for tests. Defaults to an
+    ///     ephemeral session whose response cache lives in memory only.
     ///   - retryPolicy: Retry configuration.
     init(
         environment: AppEnvironment = .current,
@@ -99,16 +99,14 @@ final class APIClient: @unchecked Sendable {
         if let session {
             self.session = session
         } else {
-            let config = URLSessionConfiguration.default
-            // ETag-aware cache — URLSession honours Cache-Control, ETag, and
-            // If-None-Match automatically when the policy allows it. Feature
-            // code can override per-request via `Endpoint.cachePolicy`.
-            let cache = URLCache(
-                memoryCapacity: 10 * 1024 * 1024,
-                diskCapacity: 50 * 1024 * 1024,
-                diskPath: "pantopus-http"
-            )
-            config.urlCache = cache
+            // Ephemeral: the cache, cookies and credentials stay in memory.
+            // Replies carry door codes, medical cards, the wallet and the
+            // profile, and a disk cache kept them while signed in (CFNetwork
+            // stores a 200 GET that has no `Cache-Control`). In memory,
+            // URLSession still honours Cache-Control, ETag and If-None-Match
+            // when the policy allows it. Feature code can override
+            // per-request via `Endpoint.cachePolicy`.
+            let config = URLSessionConfiguration.ephemeral
             config.requestCachePolicy = .useProtocolCachePolicy
             config.timeoutIntervalForRequest = 20
             config.timeoutIntervalForResource = 60
@@ -264,6 +262,25 @@ final class APIClient: @unchecked Sendable {
         session.configuration.urlCache?.removeAllCachedResponses()
     }
 
+    /// Earlier builds kept replies in an on-disk `URLCache` ("pantopus-http",
+    /// which CFNetwork places under Library/Caches/<bundle id>/) until
+    /// sign-out. Delete what an update left behind; the ephemeral session
+    /// never writes there. Called at launch, before the app lock.
+    static func removeLegacyDiskCache() {
+        DispatchQueue.global(qos: .utility).async {
+            guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+                return
+            }
+            var folders = [caches]
+            if let bundleID = Bundle.main.bundleIdentifier {
+                folders.append(caches.appendingPathComponent(bundleID, isDirectory: true))
+            }
+            for folder in folders {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent("pantopus-http", isDirectory: true))
+            }
+        }
+    }
+
     // MARK: - Retry loop
 
     // swiftlint:disable:next cyclomatic_complexity
@@ -389,8 +406,8 @@ final class APIClient: @unchecked Sendable {
         }
         // An endpoint that opts out of the protocol cache must not leave a
         // copy behind either: `URLRequest.CachePolicy` only governs *reads*,
-        // so CFNetwork still heuristically writes a 200 GET with no
-        // `Cache-Control` into the on-disk `pantopus-http` cache. Sensitive
+        // so CFNetwork still heuristically stores a 200 GET with no
+        // `Cache-Control` in the session's in-memory cache. Sensitive
         // reads (e.g. the business private record — legal name, tax id) rely
         // on this purge, so the bytes never outlive the request.
         if endpoint.cachePolicy != .useProtocolCachePolicy {

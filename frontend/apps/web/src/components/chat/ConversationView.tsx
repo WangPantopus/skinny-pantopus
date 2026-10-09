@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState, useCallback, useId, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getInitials } from '@pantopus/ui-utils';
 import type { ConversationTopic } from '@pantopus/types';
@@ -21,6 +21,8 @@ import { confirmStore } from '../ui/confirm-store';
 import { toast } from '../ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
 import { usernameHandle } from '@pantopus/utils';
+import { fetchMe } from '@/lib/me';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================
 // UNIFIED CONVERSATION VIEW (Person-Based)
@@ -40,7 +42,6 @@ export default function ConversationView({
 
   // ── Conversation-specific state ───────────────────────
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [topics, setTopics] = useState<ConversationTopic[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(initialTopicId || null);
   const [showDrawer, setShowDrawer] = useState(false);
   const drawerTitleId = useId();
@@ -103,7 +104,7 @@ export default function ConversationView({
       setCurrentUserId(null);
       const current = captureSafetyScope();
       if (api.getAuthToken()) {
-        void api.users.getMyProfile().then(user => {
+        void fetchMe().then(user => {
           if (current()) setCurrentUserId(user?.id || null);
         }).catch(() => {});
       }
@@ -165,17 +166,20 @@ export default function ConversationView({
 
   const otherUser = chat.directChatPeer;
 
-  // ── Fetch topics ──────────────────────────────────────
-  const fetchTopics = useCallback(async () => {
-    if (!otherUserId) return;
-    try {
-      const result = await api.chat.getConversationTopics(otherUserId) as { topics?: ConversationTopic[] };
-      // Launch cut #3 (Marketplace): listing topics are not shown.
-      setTopics((result?.topics || []).filter((t) => launchFeatures.marketplace || t.topic_type !== 'listing'));
-    } catch {}
-  }, [otherUserId]);
-
-  useEffect(() => { fetchTopics(); }, [fetchTopics]);
+  // ── Topics: kept with the conversation (shown at once when you come back) ──
+  const topicsQuery = useQuery({
+    queryKey: queryKeys.chatTopics(otherUserId),
+    queryFn: async () => ((await api.chat.getConversationTopics(otherUserId)) as { topics?: ConversationTopic[] })?.topics || [],
+    enabled: !!otherUserId,
+    staleTime: 30_000,
+  });
+  // Launch cut #3 (Marketplace): listing topics are not shown.
+  const topics = useMemo(
+    () => (topicsQuery.data ?? []).filter((t) => launchFeatures.marketplace || t.topic_type !== 'listing'),
+    [topicsQuery.data],
+  );
+  const refetchTopics = topicsQuery.refetch;
+  const fetchTopics = useCallback(() => { void refetchTopics(); }, [refetchTopics]);
 
   // ── Fetch listing owner for Share Address button ──────
   const activeListingTopic = useMemo(

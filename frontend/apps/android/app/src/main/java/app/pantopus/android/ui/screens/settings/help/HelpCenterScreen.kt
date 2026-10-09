@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
@@ -147,16 +148,17 @@ private val Sections =
                 ),
         ),
         Section(
-            heading = "Mail & messages",
+            // Launch cut #10 (Mailbox): without a mailbox there is no mail to tell apart from chats.
+            heading = if (LaunchFeatures.mailbox) "Mail & messages" else "Messages",
             items =
-                listOf(
+                listOfNotNull(
                     Item(
                         question = "What's the difference between mail and a chat?",
                         answer =
                             "Mail is asynchronous and ceremonial — it lands in your mailbox, can carry " +
                                 "attachments and trust signals, and you reply when you're ready. " +
                                 "Chats are real-time and live in the inbox tab.",
-                    ),
+                    ).takeIf { LaunchFeatures.mailbox },
                     Item(
                         question = "Why didn't my message send?",
                         answer =

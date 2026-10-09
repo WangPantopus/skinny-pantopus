@@ -428,7 +428,7 @@ struct PublicProfilePostsFeed: View {
     /// (local). Defaults to a no-op so previews / tests can opt out.
     var onEmptyCTA: @MainActor () -> Void = {}
     /// A21.2 — the profile owner's display name, so the Local empty state
-    /// can name the neighbour ("… — Priya just moved in."). `nil` falls
+    /// can name the neighbour ("No posts yet from Priya. …"). `nil` falls
     /// back to the un-personalised copy.
     var localName: String?
     /// `true` when the posts couldn't load: the card says so and offers
@@ -560,9 +560,10 @@ struct PublicProfilePostsFeed: View {
         return kind == .persona ? "No broadcasts yet" : "Quiet for now"
     }
 
-    /// A21.2 names the neighbour when we know them ("No posts yet — Priya
-    /// just moved in. …"); without a name we fall back to the neutral
-    /// sentence rather than printing an empty gap.
+    /// A21.2 names the neighbour when we know them ("No posts yet from
+    /// Priya. …"); without a name we fall back to the neutral sentence
+    /// rather than printing an empty gap. Nothing says when they moved in:
+    /// the profile doesn't know.
     private var emptyBody: String {
         if loadFailed {
             return "Check your connection and try again."
@@ -577,7 +578,7 @@ struct PublicProfilePostsFeed: View {
         guard let first = Self.firstName(localName) else {
             return "No posts yet — say hi or send a message to break the ice."
         }
-        return "No posts yet — \(first) just moved in. Say hi or send a message to break the ice."
+        return "No posts yet from \(first). Say hi or send a message to break the ice."
     }
 
     /// First word of a display name, or `nil` when there isn't one.

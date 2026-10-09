@@ -102,6 +102,8 @@ import app.pantopus.android.ui.components.CompactButton
 import app.pantopus.android.ui.components.CompactButtonSize
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.components.VerifiedBadge
@@ -164,10 +166,17 @@ fun ListOfRowsScreen(
      * Null renders nothing — preserving every existing call site.
      */
     monoFooter: String? = null,
+    /**
+     * Instant Screens: a read is running while [state] keeps showing what the screen had. The pull indicator
+     * shows over the rows; the rows never drop to the loading skeleton.
+     */
+    refreshing: Boolean = false,
+    /** Instant Screens contract §3: the quiet "Couldn't refresh. Showing 3:42 PM." line above the rows. */
+    refreshNotice: RefreshNotice? = null,
 ) {
     val pullState =
         rememberPullRefreshState(
-            refreshing = state is ListOfRowsUiState.Loading,
+            refreshing = refreshing || state is ListOfRowsUiState.Loading,
             onRefresh = onRefresh,
         )
 
@@ -242,6 +251,9 @@ fun ListOfRowsScreen(
             }
             if (customHeader != null) {
                 customHeader()
+            }
+            if (refreshNotice != null && state !is ListOfRowsUiState.Loading) {
+                RefreshFailedLine(refreshNotice, modifier = Modifier.padding(horizontal = Spacing.s4))
             }
             Box(modifier = Modifier.fillMaxSize().pullRefresh(pullState)) {
                 when (state) {

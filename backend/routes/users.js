@@ -2681,6 +2681,8 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
  * Get current user's profile
  */
 router.get('/profile', verifyToken, async (req, res) => {
+  // Email, phone, date of birth and address are never kept in a device's HTTP cache.
+  res.set('Cache-Control', 'private, no-store');
   try {
     const userId = req.user.id;
 
@@ -4593,11 +4595,13 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
       title: `${followerName} started following you`,
       body: null,
       icon: '👤',
-      link: `/${followerUser?.username || followerId}`,
+      // By id: a username may be one the server made up (part of an email address), and it can change.
+      link: `/${followerId}`,
       metadata: { follower_id: followerId },
     });
 
-    res.status(200).json({ message: `You are now following ${user.username}`, following: true });
+    // No username in the answer: it may be one the server made up (part of an email address).
+    res.status(200).json({ message: 'Followed successfully', following: true });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Follow error', { error: err.message });
@@ -5787,6 +5791,8 @@ router.post(
           eventType: 'lockdown',
         });
         clearAuthCookies(res);
+        // This browser's saved data goes with the session (Instant Screens contract §5).
+        res.set('Clear-Site-Data', '"storage"');
         logger.info('Logout (global) completed', { userId, revoked: result.revoked });
         return res.json({ success: true, revoked: result.revoked });
       } catch (err) {
@@ -5797,6 +5803,8 @@ router.post(
 
     // scope === 'local'
     clearAuthCookies(res);
+    // This browser's saved data goes with the session (Instant Screens contract §5).
+    res.set('Clear-Site-Data', '"storage"');
 
     const accessToken = getLogoutAccessToken(req);
 

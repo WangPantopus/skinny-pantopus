@@ -15,7 +15,9 @@ import type { FeedSurface, Post, PostType } from '@pantopus/api';
 import type { AudienceProfile, User } from '@pantopus/types';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { queryKeys } from '@/lib/query-keys';
+import { useFirstPageRefresh } from '@/lib/firstPageRefresh';
 import type { SportsMode, TopicKey } from '@/constants/feedTopics';
+import { fetchMe } from '@/lib/me';
 
 export type FilterType = PostType | 'all';
 
@@ -44,10 +46,14 @@ interface UseFeedDataOptions {
   userLng: number | null;
   gpsTimestamp: string | null;
   radiusMiles: number | null;
+  /** False while the viewing area is still being read: the Place feed waits for it instead of
+   * first asking without coordinates. */
+  areaReady?: boolean;
   showToast: (msg: string) => void;
 }
 
 type FeedPage = Awaited<ReturnType<typeof api.posts.getFeedV2>>;
+const FEED_FRESH_MS = 30_000;
 // Sports lane returns a richer cursor tuple: (rankBucket, createdAt, id).
 type FeedCursor = { createdAt: string; id: string; rankBucket?: number } | null;
 
@@ -76,6 +82,9 @@ function buildFeedKey(
  * in My pulse then shows on its feed card when you come back; a stale card's next click would undo it.
  */
 export function patchPostInFeedCaches(queryClient: QueryClient, postId: string, patch: Partial<Post>) {
+  // The post's own kept copy (usePostDetail) takes the change too.
+  queryClient.setQueryData<{ post: Post | null; complete: boolean }>(queryKeys.postDetail(postId), (old) =>
+    old?.post ? { ...old, post: { ...old.post, ...patch } } : old);
   queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ['feed'] }, (old) => {
     if (!old) return old;
     return {
@@ -110,6 +119,7 @@ export function useFeedData({
   userLng,
   gpsTimestamp,
   radiusMiles,
+  areaReady = true,
   showToast,
 }: UseFeedDataOptions) {
   const queryClient = useQueryClient();
@@ -130,8 +140,11 @@ export function useFeedData({
   }, [initialSurface]);
 
   // Place eligibility
-  const [placeEligible, setPlaceEligible] = useState(true);
-  const [eligibilityReason, setEligibilityReason] = useState<string | null>(null);
+  // The last answer for this area shows at once (the composer doesn't flicker); the check runs again.
+  const [keptEligibility] = useState(() => queryClient.getQueryData<{ eligible: boolean; reason: string | null }>(
+    ['posts', 'place-eligibility', viewingLat, viewingLng]));
+  const [placeEligible, setPlaceEligible] = useState(keptEligibility?.eligible ?? true);
+  const [eligibilityReason, setEligibilityReason] = useState<string | null>(keptEligibility?.reason ?? null);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -153,7 +166,7 @@ export function useFeedData({
       try {
         const token = getAuthToken();
         if (!token) return;
-        const u = await api.users.getMyProfile();
+        const u = await fetchMe();
         setUser(u);
       } catch {}
     })();
@@ -177,6 +190,7 @@ export function useFeedData({
         if (!latest) return;
         setPlaceEligible(r.eligible);
         setEligibilityReason(r.reason || null);
+        queryClient.setQueryData(['posts', 'place-eligibility', viewingLat, viewingLng], { eligible: r.eligible, reason: r.reason || null });
       })
       .catch(() => {
         if (latest) setPlaceEligible(true);
@@ -184,9 +198,11 @@ export function useFeedData({
     return () => {
       latest = false;
     };
-  }, [surface, viewingLat, viewingLng, gpsTimestamp, userLat, userLng]);
+  }, [surface, viewingLat, viewingLng, gpsTimestamp, userLat, userLng, queryClient]);
 
   // ── Feed data ──────────────────────────────────────────────
+  // Back after the fresh window, the feed refreshes its first page, not every page it had.
+  useFirstPageRefresh(currentKey, FEED_FRESH_MS);
   const feedQuery = useInfiniteQuery<FeedPage, Error, InfiniteData<FeedPage>, typeof currentKey, FeedCursor>({
     queryKey: currentKey,
     initialPageParam: null,
@@ -230,7 +246,8 @@ export function useFeedData({
     },
     getNextPageParam: (lastPage) =>
       lastPage.pagination.hasMore ? (lastPage.pagination.nextCursor ?? null) : undefined,
-    staleTime: 30_000,
+    staleTime: FEED_FRESH_MS,
+    enabled: surface !== 'place' || areaReady,
   });
 
   // Flatten pages into a single deduped array for consumers

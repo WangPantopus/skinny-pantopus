@@ -21,8 +21,10 @@ import app.pantopus.android.data.api.models.businesses.StartBusinessInquiryRespo
 import app.pantopus.android.data.api.models.businesses.UpdateBusinessLocationRequest
 import app.pantopus.android.data.api.models.businesses.UpdateBusinessRequest
 import app.pantopus.android.data.api.models.businesses.UsernameAvailabilityDto
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -52,6 +54,12 @@ interface BusinessesApi :
      */
     @GET("api/businesses/my-businesses")
     suspend fun myBusinesses(): MyBusinessesResponse
+
+    /** [myBusinesses] for the screens' store: sends the stored ETag; a 304 means the copy is current. */
+    @GET("api/businesses/my-businesses")
+    suspend fun myBusinessesConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<MyBusinessesResponse>
 
     /**
      * `GET /api/businesses/:businessId` — authenticated detail fetch.
