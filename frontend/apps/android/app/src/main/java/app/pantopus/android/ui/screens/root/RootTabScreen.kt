@@ -43,6 +43,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
@@ -2530,6 +2531,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     selected = currentRoute,
                     badges = badges,
                     onSelect = { target ->
+                        ScreenTiming.tabTapped(target.path.substringAfterLast('/'))
                         if (target == currentRoute) {
                             if (target == PantopusRoute.Place && navController.currentDestination?.route == PantopusRoute.Place.path) {
                                 placeReselects.tryEmit(Unit)
