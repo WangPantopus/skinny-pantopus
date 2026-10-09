@@ -93,6 +93,7 @@ fun PublicProfileScreen(
     val showOverflow by viewModel.showOverflow.collectAsStateWithLifecycle()
     val connectState by viewModel.connectState.collectAsStateWithLifecycle()
     val connection by viewModel.connection.collectAsStateWithLifecycle()
+    val isBlockedByViewer by viewModel.isBlockedByViewer.collectAsStateWithLifecycle()
     val showDisconnectConfirm by viewModel.showDisconnectConfirm.collectAsStateWithLifecycle()
     val showHandshake by viewModel.showFollowHandshake.collectAsStateWithLifecycle()
     val handshakeTier by viewModel.handshakePreselectedTierRank.collectAsStateWithLifecycle()
@@ -105,6 +106,7 @@ fun PublicProfileScreen(
     val reportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showReportSheet by remember { mutableStateOf(false) }
     var showBlockConfirm by remember { mutableStateOf(false) }
+    var showUnblockConfirm by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     LaunchedEffect(showHandshake) {
@@ -223,6 +225,7 @@ fun PublicProfileScreen(
                     // The header's "Share profile" opens this sheet, so it shares first.
                     shareUrl = profileShareUrl(state),
                     isOwnProfile = loaded?.isOwner == true,
+                    isBlockedByViewer = isBlockedByViewer,
                     onShare = { url ->
                         viewModel.setShowOverflow(false)
                         // Your own link still on a made-up username: offer to pick one first, once.
@@ -236,6 +239,10 @@ fun PublicProfileScreen(
                     onBlock = {
                         viewModel.setShowOverflow(false)
                         showBlockConfirm = true
+                    },
+                    onUnblock = {
+                        viewModel.setShowOverflow(false)
+                        showUnblockConfirm = true
                     },
                     onReport = {
                         viewModel.setShowOverflow(false)
@@ -298,6 +305,33 @@ fun PublicProfileScreen(
                     TextButton(
                         onClick = { showBlockConfirm = false },
                         modifier = Modifier.testTag("publicProfileBlockCancel"),
+                    ) {
+                        Text("Cancel")
+                    }
+                },
+            )
+        }
+        if (showUnblockConfirm) {
+            val name = (state as? PublicProfileUiState.Loaded)?.content?.header?.displayName?.trim().orEmpty()
+            AlertDialog(
+                onDismissRequest = { showUnblockConfirm = false },
+                title = { Text(if (name.isEmpty()) "Unblock this user?" else "Unblock $name?") },
+                text = { Text("You'll be able to see each other's posts and message each other again. They aren't notified.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showUnblockConfirm = false
+                            viewModel.unblock()
+                        },
+                        modifier = Modifier.testTag("publicProfileUnblockConfirm"),
+                    ) {
+                        Text("Unblock")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showUnblockConfirm = false },
+                        modifier = Modifier.testTag("publicProfileUnblockCancel"),
                     ) {
                         Text("Cancel")
                     }
@@ -639,7 +673,7 @@ internal fun LocalProfileLoadedFrame(
 /**
  * The Local header's two actions, Connect and Message (`beacon-primitives.jsx:268-272`).
  * Message doesn't show for someone the viewer blocked: the block says you can't message
- * each other, and Settings → Blocked users unblocks. Mirrors iOS `identityActions`.
+ * each other, and the overflow's Unblock or Settings → Blocked users lifts it. Mirrors iOS `identityActions`.
  */
 @Composable
 private fun NeighborHeaderActions(
@@ -745,8 +779,10 @@ private fun profileShareUrl(state: PublicProfileUiState): String? {
 private fun OverflowSheetContent(
     shareUrl: String?,
     isOwnProfile: Boolean,
+    isBlockedByViewer: Boolean,
     onShare: (String) -> Unit,
     onBlock: () -> Unit,
+    onUnblock: () -> Unit,
     onReport: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -757,7 +793,12 @@ private fun OverflowSheetContent(
         shareUrl?.let { url -> OverflowSheetRow(label = "Share profile", onClick = { onShare(url) }) }
         // Nobody blocks or reports themselves.
         if (!isOwnProfile) {
-            OverflowSheetRow(label = "Block this user", destructive = true, onClick = onBlock)
+            // Someone you blocked can be unblocked here, as in Settings → Blocked users.
+            if (isBlockedByViewer) {
+                OverflowSheetRow(label = "Unblock this user", onClick = onUnblock)
+            } else {
+                OverflowSheetRow(label = "Block this user", destructive = true, onClick = onBlock)
+            }
             OverflowSheetRow(label = "Report", onClick = onReport)
         }
         OverflowSheetRow(label = "Cancel", onClick = onCancel)

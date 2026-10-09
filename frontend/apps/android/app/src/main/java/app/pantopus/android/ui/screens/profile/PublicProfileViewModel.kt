@@ -297,6 +297,10 @@ class PublicProfileViewModel
             MutableStateFlow<PublicProfileActionState>(PublicProfileActionState.Idle)
         val blockState: StateFlow<PublicProfileActionState> = _blockState.asStateFlow()
 
+        /** True while this account's own block (`UserBlock`) of the person is in place: the overflow offers Unblock. */
+        private val _isBlockedByViewer = MutableStateFlow(false)
+        val isBlockedByViewer: StateFlow<Boolean> = _isBlockedByViewer.asStateFlow()
+
         private val _showOverflow = MutableStateFlow(false)
         val showOverflow: StateFlow<Boolean> = _showOverflow.asStateFlow()
 
@@ -618,7 +622,33 @@ class PublicProfileViewModel
                         // success, which drops the Connect / Follow row
                         // (`src/app/user/[id].tsx:322`).
                         _connection.value = ProfileConnection.Blocked
+                        _isBlockedByViewer.value = true
                         _toastMessage.value = "User blocked"
+                    }
+                    is NetworkResult.Failure -> {
+                        val message = friendlyMessage(result.error)
+                        _blockState.value = PublicProfileActionState.Failed(message)
+                        _toastMessage.value = message
+                    }
+                }
+            }
+        }
+
+        /**
+         * Lift this account's own block (`DELETE /api/users/:userId/block`), as Settings → Blocked users
+         * does, then load the profile again so posts, Follow and Connect come back.
+         */
+        fun unblock() {
+            if (_blockState.value is PublicProfileActionState.InFlight) return
+            _blockState.value = PublicProfileActionState.InFlight
+            viewModelScope.launch {
+                when (val result = blocks.unblock(userId)) {
+                    is NetworkResult.Success -> {
+                        _blockState.value = PublicProfileActionState.Idle
+                        _isBlockedByViewer.value = false
+                        _connection.value = ProfileConnection.None
+                        _toastMessage.value = "User unblocked"
+                        fetch()
                     }
                     is NetworkResult.Failure -> {
                         val message = friendlyMessage(result.error)
@@ -669,7 +699,8 @@ class PublicProfileViewModel
                 // turn an unavailable authorization check into an affordance.
                 when (val blockedResult = blocks.blocked()) {
                     is NetworkResult.Success -> {
-                        if (blockedResult.data.blocked.any { it.userId == profileId }) {
+                        _isBlockedByViewer.value = blockedResult.data.blocked.any { it.userId == profileId }
+                        if (_isBlockedByViewer.value) {
                             _canFollow.value = false
                             _isFollowing.value = false
                             _connection.value = ProfileConnection.Blocked

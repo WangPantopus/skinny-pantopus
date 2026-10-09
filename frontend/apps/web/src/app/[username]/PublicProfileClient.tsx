@@ -121,6 +121,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   // Relationship state
   const [followState, setFollowState] = useState(false);
   const [connectionState, setConnectionState] = useState<RelationshipState>('none');
+  // The viewer's own block (UserBlock) of this person: the menu offers Unblock instead of Block.
+  const [blockedByMe, setBlockedByMe] = useState(false);
   // Connect shows only once the relationship is read, as in the apps: a failed read never offers it.
   const [connectionKnown, setConnectionKnown] = useState(false);
   // True when the viewer's personal block list could not be read: Follow
@@ -233,7 +235,9 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     setConnectionKnown(false);
     try {
       const { blocked } = await api.blocks.getBlockedUsers();
-      if ((blocked || []).some((entry) => entry.user_id === profile.id)) {
+      const blockedHere = (blocked || []).some((entry) => entry.user_id === profile.id);
+      setBlockedByMe(blockedHere);
+      if (blockedHere) {
         setConnectionState('blocked');
         setFollowState(false);
         return;
@@ -467,7 +471,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
    * `backend/services/blockService.js` reads to refuse direct messages.
    * It is deliberately NOT the trust-graph block
    * (`POST /api/relationships/block-user`), which does not gate messaging.
-   * The block is liftable from Settings -> Blocked Users.
+   * The block is liftable from this profile's menu (Unblock) or Settings -> Blocked Users.
    */
   const handleBlock = async () => {
     if (!currentUser) { router.push('/login'); return; }
@@ -495,11 +499,46 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       // on the same success, which hides the Connect / Follow row.
       setConnectionState('blocked');
       setFollowState(false);
+      setBlockedByMe(true);
       toast.success(`${fullName} blocked`);
     } catch (err: unknown) {
       if (!current()) return;
       console.error('Block error:', err);
       toast.error('Couldn\'t block this user');
+    } finally {
+      if (current()) { pendingBlock.current = false; setActionLoading(false); }
+    }
+  };
+
+  /** Lifts the viewer's own block, as Settings → Blocked users does, then reads the relationship and posts again. */
+  const handleUnblock = async () => {
+    if (!currentUser) { router.push('/login'); return; }
+    if (pendingBlock.current) return;
+    pendingBlock.current = true;
+    const current = captureAction();
+    const targetId = profile!.id;
+    const yes = await confirmStore.open({
+      title: 'Unblock user',
+      description:
+        `Unblock ${fullName}? You'll be able to see each other's posts and message each other again. ` +
+        `They aren't notified.`,
+      confirmLabel: 'Unblock',
+    });
+    if (!current()) return;
+    if (!yes) { pendingBlock.current = false; return; }
+
+    setActionLoading(true);
+    try {
+      await api.blocks.unblockUser(targetId);
+      if (!current()) return;
+      setBlockedByMe(false);
+      toast.success(`${fullName} unblocked`);
+      await loadRelationshipStatus();
+      loadUserPosts();
+    } catch (err: unknown) {
+      if (!current()) return;
+      console.error('Unblock error:', err);
+      toast.error('Couldn\'t unblock this user');
     } finally {
       if (current()) { pendingBlock.current = false; setActionLoading(false); }
     }
@@ -636,7 +675,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     : (connectionState === 'connected' ? 'follower' : 'public');
 
   const showOwnerOnly = effectiveViewer === 'owner';
-  // Someone you blocked can't be messaged (the block says so); Settings unblocks.
+  // Someone you blocked can't be messaged (the block says so); the menu or Settings unblocks.
   const canMessage = connectionState !== 'blocked';
 
   const trustBadges = [
@@ -717,6 +756,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         onRequestHire={handleRequestHire}
         onShare={handleShare}
         onBlock={handleBlock}
+        onUnblock={blockedByMe ? handleUnblock : undefined}
         onReport={handleReport}
       />
 

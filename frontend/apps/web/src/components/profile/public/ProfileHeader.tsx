@@ -50,6 +50,8 @@ interface ProfileHeaderProps {
    * nothing on click.
    */
   onBlock: () => void;
+  /** Set when the viewer has blocked this person: the menu offers Unblock (`DELETE /api/users/:userId/block`). */
+  onUnblock?: () => void;
   onReport: () => void;
 }
 
@@ -96,6 +98,7 @@ export default function ProfileHeader({
   onRequestHire,
   onShare,
   onBlock,
+  onUnblock,
   onReport,
 }: ProfileHeaderProps) {
   const router = useRouter();
@@ -234,11 +237,11 @@ export default function ProfileHeader({
                     <div className="absolute right-0 mt-2 w-40 bg-surface border border-app rounded-lg shadow-sm p-1 z-20">
                       <button onClick={onReport} className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded">Report profile</button>
                       <button
-                        onClick={onBlock}
+                        onClick={onUnblock ?? onBlock}
                         disabled={actionLoading}
                         className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded disabled:opacity-60"
                       >
-                        Block user
+                        {onUnblock ? 'Unblock user' : 'Block user'}
                       </button>
                     </div>
                   </details>
