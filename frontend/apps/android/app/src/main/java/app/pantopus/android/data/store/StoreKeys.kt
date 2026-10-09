@@ -1,14 +1,22 @@
 package app.pantopus.android.data.store
 
+import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
+import app.pantopus.android.data.api.models.users.InviteCodeDto
+import app.pantopus.android.data.api.models.users.InviteProgressDto
+import app.pantopus.android.data.api.models.users.ProfileResponse
 
 /** Change topics (contract §8) that more than one key or repository names. */
 object StoreTopics {
+    /** The viewer's own profile and settings (a name, username or photo saved, here or on another device). */
+    const val PROFILE_ME = "profile:me"
+
     /** The viewer's list of homes: a home added, claimed, verified, left or deleted. */
     const val HOMES = "homes"
 }
@@ -78,6 +86,29 @@ object StoreKeys {
             mapOf("ballot" to "1"),
             kind = StoreKind.PLACE,
             topics = setOf("place:$homeId", "home:$homeId", StoreTopics.HOMES),
+        )
+
+    /** The viewer's own profile (contract §4 "You": fresh 10 minutes). */
+    val ownProfile = StoreKey<ProfileResponse>("api/users/profile", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** The businesses the viewer belongs to (the You tab's Business card). */
+    val myBusinesses =
+        StoreKey<MyBusinessesResponse>("api/businesses/my-businesses", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** The viewer's invite progress and invite code (the You tab's invite card). */
+    val inviteProgress =
+        StoreKey<InviteProgressDto>("api/users/me/invite-progress", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+    val inviteCode = StoreKey<InviteCodeDto>("api/users/me/invite-code", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /**
+     * A home's dashboard (household data: counts, members, recent activity), kind Homes. Shown from a copy only to
+     * owners and household roles (founder decision 3); callers check `MyHome.showsCopyBeforeRecheck` first.
+     */
+    fun homeDashboard(homeId: String) =
+        StoreKey<HomeDashboardResponse>(
+            "api/homes/$homeId/dashboard",
+            kind = StoreKind.HOMES,
+            topics = setOf("home:$homeId", StoreTopics.HOMES),
         )
 
     /** A home's Today: [TODAY_SECTIONS] of its Place intelligence. */
