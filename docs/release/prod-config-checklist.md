@@ -625,10 +625,14 @@ chose in P2 (with P2A, the new project's `<ref>.supabase.co`, not the April
 Vercel Production environment variables: `NEXT_PUBLIC_API_URL=https://api.pantopus.com`,
 `NEXT_PUBLIC_APP_URL=https://pantopus.com`, `NEXT_PUBLIC_APP_ENV=production`,
 `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (matching D4), `NEXT_PUBLIC_MAPBOX_TOKEN`,
-`EDGE_PROXY_SECRET` (the value in `hosted-secrets/production.env`, as in S7),
-and, once the new store listings exist, `NEXT_PUBLIC_IOS_APP_STORE_URL`,
-`NEXT_PUBLIC_IOS_APP_STORE_APP_ID` and `NEXT_PUBLIC_ANDROID_PLAY_STORE_URL`
-(today's defaults point at the April apps). Production branch `master`.
+`EDGE_PROXY_SECRET` (the value in `hosted-secrets/production.env`, as in S7).
+Leave `NEXT_PUBLIC_IOS_APP_STORE_URL`, `NEXT_PUBLIC_IOS_APP_STORE_APP_ID` and
+`NEXT_PUBLIC_ANDROID_PLAY_STORE_URL` unset until the new store listings exist;
+remove any old values pointing to the April apps from the Vercel project. The
+web app no longer falls back to April store links. Regenerate the two landing
+page QR images for the new listings before setting
+`NEXT_PUBLIC_STORE_QR_CODES_READY=true` to reveal that download block.
+Production branch `master`.
 Before this step L4 adds `"master": true` under `git.deploymentEnabled` in
 `frontend/apps/web/vercel.json` (S7); without it `master` never deploys. Keep
 the Vercel account on Pro from here, or production and staging deployments

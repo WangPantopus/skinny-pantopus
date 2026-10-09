@@ -71,49 +71,53 @@ export default function FinalCTASection() {
           </a>
         </div>
 
-        {/* App store badges & QR codes — preserved from prior design */}
-        <div className="mh-reveal mh-reveal-d3 mt-16 flex flex-col items-center gap-6">
-          <div className="flex items-center gap-3">
-            <a
-              href={IOS_APP_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Download on the App Store"
-            >
-              <Image src="/landing/badge-appstore.svg" alt="Download on the App Store" width={132} height={44} />
-            </a>
-            <a
-              href={ANDROID_PLAY_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Get it on Google Play"
-            >
-              <Image src="/landing/badge-playstore.svg" alt="Get it on Google Play" width={140} height={44} />
-            </a>
-          </div>
+        {/* Show badges and QR codes only after the new listings and QR assets are ready. */}
+        {IOS_APP_STORE_URL &&
+          ANDROID_PLAY_STORE_URL &&
+          process.env.NEXT_PUBLIC_STORE_QR_CODES_READY === 'true' && (
+            <div className="mh-reveal mh-reveal-d3 mt-16 flex flex-col items-center gap-6">
+                <div className="flex items-center gap-3">
+                  <a
+                    href={IOS_APP_STORE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Download on the App Store"
+                  >
+                    <Image src="/landing/badge-appstore.svg" alt="Download on the App Store" width={132} height={44} />
+                  </a>
+                  <a
+                    href={ANDROID_PLAY_STORE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Get it on Google Play"
+                  >
+                    <Image src="/landing/badge-playstore.svg" alt="Get it on Google Play" width={140} height={44} />
+                  </a>
+                </div>
 
-          <div className="flex justify-center gap-10">
-            <div className="flex flex-col items-center gap-2">
-              <div
-                className="w-40 h-40 bg-white rounded-xl p-2"
-                style={{ border: '1px solid var(--rule)' }}
-              >
-                <Image src="/landing/qr-ios.png" alt="QR code for iOS App Store" width={160} height={160} className="w-full h-full" />
-              </div>
-              <span style={{ fontSize: '11px', color: 'var(--ink-3)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>iOS</span>
+                <div className="flex justify-center gap-10">
+                  <div className="flex flex-col items-center gap-2">
+                    <div
+                      className="w-40 h-40 bg-white rounded-xl p-2"
+                      style={{ border: '1px solid var(--rule)' }}
+                    >
+                      <Image src="/landing/qr-ios.png" alt="QR code for iOS App Store" width={160} height={160} className="w-full h-full" />
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--ink-3)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>iOS</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-2">
+                    <div
+                      className="w-40 h-40 bg-white rounded-xl p-2"
+                      style={{ border: '1px solid var(--rule)' }}
+                    >
+                      <Image src="/landing/qr-android.png" alt="QR code for Google Play Store" width={160} height={160} className="w-full h-full" />
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--ink-3)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Android</span>
+                  </div>
+                </div>
+                <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: 0 }}>Scan to download</p>
             </div>
-            <div className="flex flex-col items-center gap-2">
-              <div
-                className="w-40 h-40 bg-white rounded-xl p-2"
-                style={{ border: '1px solid var(--rule)' }}
-              >
-                <Image src="/landing/qr-android.png" alt="QR code for Google Play Store" width={160} height={160} className="w-full h-full" />
-              </div>
-              <span style={{ fontSize: '11px', color: 'var(--ink-3)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Android</span>
-            </div>
-          </div>
-          <p style={{ fontSize: '12px', color: 'var(--ink-3)', margin: 0 }}>Scan to download</p>
-        </div>
+          )}
       </div>
     </section>
   );
