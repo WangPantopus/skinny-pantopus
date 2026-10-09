@@ -164,7 +164,7 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
     /// Last-fetched payload so tab swaps don't refetch.
     private var tasks: [MaintenanceTaskDTO]?
 
-    private let homeId: String
+    let homeId: String
     private let store: ScreenStore
     private let onOpenTask: @Sendable (String) -> Void
     private let onAddTask: @Sendable () -> Void

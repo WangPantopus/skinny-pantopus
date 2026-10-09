@@ -28,7 +28,7 @@ final class PropertyDetailsViewModel {
     /// "Couldn't refresh. Showing 3:42 PM." once a failed refresh leaves an old copy on screen.
     private(set) var staleNotice: String?
 
-    private let homeId: String
+    let homeId: String
     private let store: ScreenStore
     /// Preview/test seam. When non-nil, `load()` projects this loader's
     /// output instead of calling the backend.
