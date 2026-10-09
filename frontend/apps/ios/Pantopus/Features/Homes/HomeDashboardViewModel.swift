@@ -227,7 +227,14 @@ final class HomeDashboardViewModel {
     /// The screen shows the last copy while the access is re-checked; writes
     /// here wait for that re-check.
     private(set) var showingCopy = false
-    /// The re-check couldn't reach the server while the copy is on screen.
+    /// The re-check couldn't reach the server: the copy stays, its sensitive
+    /// parts say they couldn't load.
+    private(set) var copyCheckFailed = false
+    /// "Couldn't refresh. Showing 3:42 PM." once a copy that couldn't be
+    /// re-checked is older than a day (contract section 3).
+    private(set) var staleNotice: String?
+    private var copyFetchedAt: Date?
+    /// A tap that has to wait for the access re-check says so.
     var refreshFailureMessage: String?
     private var generation = 0
     private var visible = false
@@ -250,6 +257,12 @@ final class HomeDashboardViewModel {
 
     var canEditChecklist: Bool {
         visible && isCurrent && accessUnexpired && accessFingerprint != nil && access?.can("home.edit") == true
+    }
+
+    /// Whether the checklist shows as editable: an owner's stays so while the
+    /// access is re-checked (the tap itself waits for the re-check).
+    var checklistEditable: Bool {
+        shows("home.edit")
     }
 
     func can(_ permission: String) -> Bool {
@@ -319,6 +332,9 @@ final class HomeDashboardViewModel {
 
     private func clearPrivateData() {
         showingCopy = false
+        copyCheckFailed = false
+        staleNotice = nil
+        copyFetchedAt = nil
         expiryTask?.cancel()
         expiryTask = nil
         accessExpiresAt = nil
@@ -409,6 +425,11 @@ final class HomeDashboardViewModel {
         if !showingCopy {
             clearPrivateData()
             showCopy()
+        } else if copyCheckFailed {
+            // Trying again: the sensitive parts are being checked again.
+            copyCheckFailed = false
+            billTrends = .loading
+            rebuild()
         }
         guard isCurrent else {
             dropCopy()
@@ -421,9 +442,10 @@ final class HomeDashboardViewModel {
         } catch {
             guard visible, revision == generation else { return }
             // No answer (offline, timed out, server busy): an owner's or household
-            // member's copy stays, its writes still waiting. Anything else clears.
+            // member's copy stays, quietly; its sensitive parts say they couldn't
+            // load and its writes still wait. Anything else clears.
             if showingCopy, Self.isUnreachable(error) {
-                refreshFailureMessage = "Couldn't reach Pantopus. Showing this Home as you last saw it."
+                showCopyCheckFailed()
                 return
             }
             dropCopy()
@@ -473,6 +495,8 @@ final class HomeDashboardViewModel {
             )
         }
         showingCopy = false
+        copyCheckFailed = false
+        staleNotice = nil
         accessFingerprint = final.fingerprint
         access = currentAccess
         detailData = detail
@@ -571,10 +595,12 @@ final class HomeDashboardViewModel {
         guard let copyAccess = store.peek(HomeDashboardAccess.endpoint(homeId: homeId), as: HomeAccessDTO.self)?.value,
               copyAccess.can("home.view"), Self.isHousehold(copyAccess, expiresAt: nil),
               let detail = store.peek(HomesEndpoints.detail(homeId: homeId), as: HomeDetailResponse.self)?.value.home,
-              let dashboard = store.peek(HomeDashboardEndpoints.dashboard(homeId: homeId), as: HomeDashboardResponse.self)?.value,
-              detail.base.id == homeId, dashboard.home?.id == homeId,
-              Set(dashboard.myAccess?.permissions ?? []) == Set(copyAccess.permissions)
+              let copy = store.peek(HomeDashboardEndpoints.dashboard(homeId: homeId), as: HomeDashboardResponse.self),
+              detail.base.id == homeId, copy.value.home?.id == homeId,
+              Set(copy.value.myAccess?.permissions ?? []) == Set(copyAccess.permissions)
         else { return false }
+        let dashboard = copy.value
+        copyFetchedAt = copy.fetchedAt
         access = copyAccess
         detailData = detail
         dashboardData = dashboard
@@ -583,6 +609,27 @@ final class HomeDashboardViewModel {
         checklist = copyCard(HomeDashboardEndpoints.seasonalChecklist(homeId: homeId))
         propertyValue = copyCard(HomeDashboardEndpoints.propertyValue(homeId: homeId))
         rebuild()
+        return true
+    }
+
+    /// The re-check couldn't reach the server (decision 3, offline): the copy
+    /// stays; bill trends and emergency info say they couldn't load, and past
+    /// a day the quiet "Couldn't refresh" line shows.
+    private func showCopyCheckFailed() {
+        copyCheckFailed = true
+        billTrends = .failed(message: "Couldn't load this card. Check your connection and try again.")
+        if let copyFetchedAt, Date().timeIntervalSince(copyFetchedAt) > ScreenDataKind.homes.maxShownAge {
+            let shown = copyFetchedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute())
+            staleNotice = "Couldn't refresh. Showing \(shown)."
+        }
+        rebuild()
+    }
+
+    /// A card's Retry or a checklist action while the copy is on screen: the
+    /// access is re-checked first (the cards then read with it).
+    private func recheckFirst() async -> Bool {
+        guard showingCopy, accessFingerprint == nil else { return false }
+        await refresh()
         return true
     }
 
@@ -754,6 +801,7 @@ final class HomeDashboardViewModel {
     /// items when the home has none, so "Generate checklist" is a re-read.
     /// The score counts the checklist, so it reloads once the items exist.
     func generateChecklist() async {
+        if await recheckFirst() { return }
         checklist = .loading
         await loadChecklist()
         await loadHealthScore()
@@ -762,16 +810,19 @@ final class HomeDashboardViewModel {
     /// Re-reads only the health score (used after a checklist mutation and
     /// on card-level Retry).
     func refreshHealthScore() async {
+        if await recheckFirst() { return }
         healthScore = .loading
         await loadHealthScore()
     }
 
     func retryPropertyValue() async {
+        if await recheckFirst() { return }
         propertyValue = .loading
         await loadPropertyValue()
     }
 
     func retryBillTrends() async {
+        if await recheckFirst() { return }
         billTrends = .loading
         await loadBillTrends()
     }
@@ -811,6 +862,12 @@ final class HomeDashboardViewModel {
     }
 
     private func updateChecklistItem(_ itemId: String, status: String) async {
+        if showingCopy, checklistEditable, accessFingerprint == nil {
+            refreshFailureMessage = copyCheckFailed
+                ? "Can't reach Pantopus right now. Try again when you're back online."
+                : "Checking your access to this Home. Try again in a moment."
+            return
+        }
         guard canEditChecklist, !pendingChecklistItemIds.contains(itemId) else { return }
         let revision = generation
         pendingChecklistItemIds.insert(itemId)
@@ -898,7 +955,7 @@ final class HomeDashboardViewModel {
         // Document and bill counts and emergency info never show from a copy.
         let counts = showingCopy ? dashboardData?.counts.withoutSensitiveCounts : dashboardData?.counts
         var overview = HomeDashboardProjection.overview(dashboard: dashboardData, health: showingCopy ? nil : healthScore.value)
-        if showingCopy { overview = overview.checkingEmergency }
+        if showingCopy { overview = overview.checkingEmergency(failed: copyCheckFailed) }
         return HomeDashboardContent(
             address: address,
             verified: verified,
@@ -999,12 +1056,17 @@ private extension HomeDashboardCountsDTO {
 }
 
 private extension HomeDashboardOverviewContent {
-    /// Emergency info is sensitive: shown as being checked until the re-check.
-    var checkingEmergency: HomeDashboardOverviewContent {
+    /// Emergency info is sensitive: shown as being checked until the re-check,
+    /// or as unavailable when the re-check couldn't reach the server.
+    func checkingEmergency(failed: Bool) -> HomeDashboardOverviewContent {
         HomeDashboardOverviewContent(
             upcoming: upcoming,
             activity: activity,
-            emergency: HomeDashboardEmergencyInfo(title: "Emergency info", body: "Checking emergency info…", isConfigured: false)
+            emergency: HomeDashboardEmergencyInfo(
+                title: "Emergency info",
+                body: failed ? "Couldn't check emergency info. Check your connection." : "Checking emergency info…",
+                isConfigured: false
+            )
         )
     }
 }

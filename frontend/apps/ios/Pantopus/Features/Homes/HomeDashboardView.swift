@@ -287,6 +287,9 @@ struct HomeDashboardView: View {
             },
             body: {
                 VStack(spacing: Spacing.s4) {
+                    if let notice = viewModel.staleNotice {
+                        RefreshNotice(text: notice) { Task { await viewModel.refresh() } }
+                    }
                     if let security = content.securityBanner {
                         HomeSecurityStatusBanner(content: security) {
                             handleSecurityBannerCTA(security.action)
@@ -362,7 +365,7 @@ struct HomeDashboardView: View {
         SeasonalChecklistCard(
             state: viewModel.checklist,
             pendingItemIds: viewModel.pendingChecklistItemIds,
-            canEdit: viewModel.canEditChecklist,
+            canEdit: viewModel.checklistEditable,
             changeFailed: viewModel.checklistChangeFailed,
             onComplete: { itemId in Task { await viewModel.completeChecklistItem(itemId) } },
             onSkip: { itemId in Task { await viewModel.skipChecklistItem(itemId) } },
