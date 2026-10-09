@@ -86,11 +86,16 @@ class TodayTabViewModel
         var homeId: String? = null
             private set
         override val calendarHomeId: String? get() = homeId
+
+        /**
+         * The radon card's guard: Today still shows this home to this session, with the app and phone unlocked. It
+         * binds to the home, not to one read of it: Today keeps its content while it reads again (pull to refresh,
+         * coming back after its window), and a card built before that read stays usable for the same home.
+         */
         val radonContext: suspend () -> Unit
             get() {
                 val id = homeId
-                val version = loadVersion
-                return { check(id != null && pickupCurrent(id, version)) }
+                return { check(id != null && pickupCurrent(id, loadVersion)) }
             }
         private var loadJob: Job? = null
         private var loadVersion = 0L
