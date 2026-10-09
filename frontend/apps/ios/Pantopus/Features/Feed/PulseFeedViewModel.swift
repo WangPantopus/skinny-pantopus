@@ -200,6 +200,21 @@ public final class PulseFeedViewModel {
     /// Identity of the query that produced the visible rows and cursor.
     private var lastQuery: FeedQuery?
     private var loadedItems: [FeedPostDTO] = []
+    /// A quiet refresh that found new posts while the reader is further down
+    /// holds its page here, behind the "N new posts" pill (Instant Screens).
+    private var pendingFirstPage: PendingFirstPage?
+    /// New posts waiting behind the pill; 0 hides it.
+    public private(set) var newPostsCount = 0
+    /// Set by the list: its first card is on screen.
+    public var isReadingAtTop = true
+
+    private struct PendingFirstPage {
+        let response: FeedResponse
+        let area: FeedArea
+        let query: FeedQuery
+        let viewingLocation: ViewingLocationDTO?
+    }
+
     private var isLoading = false
     /// Bumped per fetch; only the latest fetch's response is applied, so a
     /// filter tapped while a load is in flight still takes effect.
@@ -632,6 +647,19 @@ public final class PulseFeedViewModel {
             ).value
             // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
             guard generation == fetchGeneration else { return }
+            // New posts never move what someone is reading: below the top they
+            // wait behind the pill; at the top (or on a pull) they slide in.
+            if !force, !isReadingAtTop, case .loaded = state, query == lastQuery {
+                let known = Set(loadedItems.map(\.id))
+                let fresh = response.posts.filter { !known.contains($0.id) }.count
+                if fresh > 0 {
+                    pendingFirstPage = PendingFirstPage(response: response, area: area, query: query, viewingLocation: viewingLocation)
+                    newPostsCount = fresh
+                    return
+                }
+            }
+            pendingFirstPage = nil
+            newPostsCount = 0
             applyFirstPage(response, area: area, query: query, viewingLocation: viewingLocation)
         } catch is CancellationError {
             return
@@ -703,6 +731,14 @@ public final class PulseFeedViewModel {
         // Nothing was searched, so "no posts within 100 mi" would mislead.
         if needsArea { radiusSuggestion = nil }
         rebuildLoadedState()
+    }
+
+    /// The pill: the held page goes on screen (the list scrolls to its top).
+    public func showNewPosts() {
+        guard let pending = pendingFirstPage else { return }
+        pendingFirstPage = nil
+        newPostsCount = 0
+        applyFirstPage(pending.response, area: pending.area, query: pending.query, viewingLocation: pending.viewingLocation)
     }
 
     /// Reopening Pulse: the stored first page for the stored area and the
