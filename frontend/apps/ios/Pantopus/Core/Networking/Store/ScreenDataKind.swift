@@ -125,6 +125,10 @@ enum ScreenTopic {
     /// Client-only: the trains lists (My trains, Nearby). Marked by your own
     /// train changes here; the server signals single trains (`supporttrain:`).
     static let supportTrains = "supporttrains"
+    /// Client-only: your saved places (one list for Saved places, the save
+    /// sheet, Pulse's area picker and the Place switcher). Marked by your own
+    /// saves and removals here (`HomesStoreReads.savedPlacesChanged`).
+    static let savedPlaces = "savedplaces"
     /// Client-only: lists of posts (the Pulse feed's first page, My posts,
     /// Saved). Marked by your own post changes here (`PulsePostsRefresh`).
     static let posts = "posts"
