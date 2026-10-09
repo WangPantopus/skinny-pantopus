@@ -394,6 +394,13 @@ enum PlacePresentation {
 
     // ── envelope status → card state ───────────────────────────
 
+    /// What a section in error says, and its retry button. A failed or
+    /// out-of-date alerts check reads "Alerts unavailable · Retry", never
+    /// "no alerts" (Instant Screens contract section 4).
+    static func errorWording(for id: PlaceSectionID) -> (title: String, retry: String) {
+        id == .alerts ? ("Alerts unavailable", "Retry") : ("Couldn't load this", "Try again")
+    }
+
     static func cardState(_ env: PlaceSectionEnvelope) -> PlaceSectionCardState {
         switch env.status {
         case .ready, .partial: .loaded

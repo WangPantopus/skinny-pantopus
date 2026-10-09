@@ -7,7 +7,7 @@
 //    - row mapping (proof tone resolution; role subtitle; You badge)
 //    - optimistic remove + rollback on failure
 //    - FAB shape (secondary-create, home-tinted, user-plus glyph)
-//    - load idempotency
+//    - a second load without household access asks again (decision 3)
 //
 
 import XCTest
@@ -85,7 +85,8 @@ final class OwnersListViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [.status(200, body: Self.threeOwnersJSON)]
         SequencedURLProtocol.routeResponses["/api/homes/home_1/me"] = [.status(503, body: "{}")]
         await vm.refresh()
-        guard case .error = vm.state else { return XCTFail("Access-read failure must remain retryable") }
+        // A failed access read keeps the roster (Instant Screens §3) without owner actions; a pull retries.
+        guard case .loaded = vm.state else { return XCTFail("Access-read failure must keep the roster, without actions") }
         XCTAssertNil(vm.fab)
         XCTAssertFalse(vm.canTransferOwnership)
 
@@ -107,17 +108,18 @@ final class OwnersListViewModelTests: XCTestCase {
         XCTAssertTrue(vm.canTransferOwnership)
     }
 
-    func testLoadIsIdempotentAfterLoaded() async {
+    func testLoadWithoutHouseholdAccessAsksAgain() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.threeOwnersJSON),
-            // Second response would only fire if `load()` refetched. The VM
-            // must short-circuit so this stays in the queue.
+            // Without the dashboard's household access in hand (decision 3),
+            // every visit waits for the server, so the second load reads this.
             .status(200, body: Self.emptyJSON)
         ]
         let vm = makeVM()
         await vm.load()
         await vm.load()
-        XCTAssertEqual(SequencedURLProtocol.sequence.count, 1)
+        XCTAssertTrue(SequencedURLProtocol.sequence.isEmpty)
+        guard case .empty = vm.state else { return XCTFail("Expected the second reply, got \(vm.state)") }
     }
 
     // MARK: - Row mapping

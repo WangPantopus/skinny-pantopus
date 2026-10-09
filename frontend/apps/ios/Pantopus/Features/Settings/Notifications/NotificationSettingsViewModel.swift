@@ -61,7 +61,9 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     /// arrive until they are back on in Settings.
     public private(set) var systemNotificationsDenied = false
 
-    private let api: APIClient
+    let api: APIClient
+    /// Your preferences as last read or saved (You: fresh 10 minutes); see `+Copy`.
+    let store: ScreenStore
     private let saveDebounce: Duration
     private let systemAuthorization: @Sendable () async -> UNAuthorizationStatus
     /// Wire-name keys accumulated since the last flush. Merged rather
@@ -79,8 +81,11 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         }
     ) {
         self.api = api
+        store = ScreenStore.store(for: api)
         self.saveDebounce = saveDebounce
         self.systemAuthorization = systemAuthorization
+        preferences = storedPreferences()
+        if preferences != nil { state = .loaded(groups()) }
     }
 
     // MARK: - GroupedListDataSource
@@ -109,11 +114,11 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     public func load() async {
         if preferences == nil { state = .loading }
         await refreshSystemPermission()
-        await fetch()
+        await fetch(force: false)
     }
 
     public func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     public func tapRow(_: String) async {}
@@ -183,11 +188,9 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
 
     // MARK: - Networking
 
-    private func fetch() async {
+    private func fetch(force: Bool) async {
         do {
-            let response: NotificationPreferencesResponseDTO = try await api.request(
-                NotificationPreferencesEndpoints.fetch()
-            )
+            let response = try await readPreferences(force: force)
             preferences = response.preferences
             state = .loaded(groups())
         } catch {
@@ -239,9 +242,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
             let revision = saveRevision
             pendingPatch = [:]
             do {
-                let response: NotificationPreferencesResponseDTO = try await api.request(
-                    NotificationPreferencesEndpoints.update(patch)
-                )
+                let response = try await savePreferences(patch)
                 guard revision == saveRevision else { continue }
                 preferences = response.preferences
                 state = .loaded(groups())
@@ -249,7 +250,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
             } catch {
                 guard revision == saveRevision else { continue }
                 toast = ToastMessage(text: "Failed to save", kind: .error)
-                await fetch()
+                await fetch(force: true)
             }
         }
     }

@@ -139,12 +139,16 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
     /// As the server allows: maintenance editors report issues; maintenance
     /// managers and home editors update them.
     private var canReport: Bool {
-        access?.can("maintenance.edit") == true || access?.can("maintenance.manage") == true
+        accessConfirmed && (access?.can("maintenance.edit") == true || access?.can("maintenance.manage") == true)
     }
 
     private var canUpdate: Bool {
-        access?.can("home.edit") == true || access?.can("maintenance.manage") == true
+        accessConfirmed && (access?.can("home.edit") == true || access?.can("maintenance.manage") == true)
     }
+
+    /// Report and status actions wait until this visit's access read confirms them; a copy's access only
+    /// shows the list (as the dashboard holds its edits until its re-check).
+    private var accessConfirmed = false
 
     private let homeId: String
     private let api: APIClient
@@ -205,6 +209,7 @@ final class HomeIssuesListViewModel: ListOfRowsDataSource {
                 force: force || !household,
                 showsBeforeRecheck: accessGate
             ).value
+            accessConfirmed = access != nil
             rebuildState()
         } catch is CancellationError {
             return

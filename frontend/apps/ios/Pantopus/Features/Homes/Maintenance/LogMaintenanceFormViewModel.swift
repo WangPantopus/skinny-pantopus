@@ -369,6 +369,8 @@ final class LogMaintenanceFormViewModel {
 
             pendingCreate = nil
             let taskId = response.task.id
+            // The log and the Home's other kept copies are out of date (Instant Screens).
+            ScreenStore.store(for: api).markStale(topics: [ScreenTopic.home(homeId)])
             persistExtras(for: taskId)
 
             // Best-effort calendar reminder. A failure here doesn't
