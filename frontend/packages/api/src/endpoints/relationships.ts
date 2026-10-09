@@ -11,7 +11,8 @@ export type RelationshipStatus = 'pending' | 'accepted' | 'blocked';
 
 export interface RelationshipUser {
   id: string;
-  username: string;
+  /** Null when the person hasn't chosen one (made-up usernames aren't sent). */
+  username: string | null;
   name?: string;
   first_name?: string;
   last_name?: string;
