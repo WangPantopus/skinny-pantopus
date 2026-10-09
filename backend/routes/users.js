@@ -7,6 +7,7 @@ const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { signUp, signIn } = require('../config/auth');
 const rateLimit = require('express-rate-limit');
+const { clientIpKey } = require('../utils/clientIpKey');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
@@ -700,17 +701,78 @@ function whenRemoteLogout(mw) {
 
 // ============ RATE LIMITERS ============
 
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10,
-  message: { error: 'Too many login attempts. Please wait a few minutes and try again.' },
-});
+const DAY_MS = 24 * 60 * 60 * 1000;
+const requestEmail = (req) => String(req.body?.email || '').trim().toLowerCase();
 
-const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20,
-  message: { error: 'Too many registration attempts. Please try again later.' },
-});
+// Sign-in counts only failed attempts (a wrong email or password), in three layers, the way
+// identity services do (OWASP's authentication guidance, NIST SP 800-63B §5.2.2, Auth0's
+// brute-force protection). Successful sign-ins never count, so people signing in on one
+// shared network (a meetup's Wi-Fi, a café, a carrier's NAT) don't use up each other's tries:
+// - one person on one network (email + IP): 10 failures in 15 minutes, cleared by signing in.
+//   This is the limit someone who mistypes their password meets.
+// - one account from anywhere (email): 20 failures in 15 minutes, so guesses spread across
+//   many addresses stop too (OWASP ASVS 2.2.1 allows at most 100 an hour).
+// - one network across accounts (IP, IPv6 by its /64): 50 failures in 15 minutes and 300 a
+//   day, so one address can't work through many accounts.
+// A password reset starts both email counts again on every network, so the owner can always
+// get back in. An email counts whether or not an account has it, so the limits don't reveal
+// which addresses have accounts. Counters are per process (MemoryStore).
+const SIGN_IN_WINDOW_MS = 15 * 60 * 1000;
+
+// Each account's last password reset. It is part of the account's keys, so a reset leaves the
+// earlier counts behind; it is kept for two windows, until counts made after it have expired too.
+const SIGN_IN_RESET_KEPT_MS = 2 * SIGN_IN_WINDOW_MS;
+const signInResets = new Map();
+function signInResetMark(email) {
+  const at = signInResets.get(email);
+  return at && Date.now() - at < SIGN_IN_RESET_KEPT_MS ? at : 0;
+}
+function startSignInCountsAgain(rawEmail) {
+  const email = String(rawEmail || '').trim().toLowerCase();
+  if (!email) return;
+  const now = Date.now();
+  for (const [key, at] of signInResets) if (now - at >= SIGN_IN_RESET_KEPT_MS) signInResets.delete(key);
+  signInResets.set(email, now);
+}
+const signInAccountKey = (req) => `${requestEmail(req)}|${signInResetMark(requestEmail(req))}`;
+const signInPairKey = (req) => `${signInAccountKey(req)}|${clientIpKey(req)}`;
+
+function signInFailureLimiter({ windowMs, max, keyGenerator, error }) {
+  return rateLimit({
+    windowMs,
+    max,
+    keyGenerator,
+    // Only an attempt the handler marks as a rejected email or password stays counted.
+    skipSuccessfulRequests: true,
+    requestWasSuccessful: (_req, res) => res.locals.signInFailed !== true,
+    message: { error },
+  });
+}
+
+const ACCOUNT_SIGN_IN_LIMIT = 'Too many sign-in attempts. Please wait a few minutes and try again, or reset your password.';
+const NETWORK_SIGN_IN_LIMIT = 'Too many failed sign-ins from this network. Please try again later.';
+const signInNetworkLimiters = [
+  signInFailureLimiter({ windowMs: DAY_MS, max: 300, keyGenerator: clientIpKey, error: NETWORK_SIGN_IN_LIMIT }),
+  signInFailureLimiter({ windowMs: SIGN_IN_WINDOW_MS, max: 50, keyGenerator: clientIpKey, error: NETWORK_SIGN_IN_LIMIT }),
+];
+const signInAccountLimiter = signInFailureLimiter({ windowMs: SIGN_IN_WINDOW_MS, max: 20, keyGenerator: signInAccountKey, error: ACCOUNT_SIGN_IN_LIMIT });
+const signInPairLimiter = signInFailureLimiter({ windowMs: SIGN_IN_WINDOW_MS, max: 10, keyGenerator: signInPairKey, error: ACCOUNT_SIGN_IN_LIMIT });
+
+/** The password was right: this person's failures on this network stop counting. */
+function forgetSignInFailures(req) {
+  Promise.resolve()
+    .then(() => signInPairLimiter.resetKey(signInPairKey(req)))
+    .catch((err) => logger.warn('auth.sign_in_limit_reset_failed', { error: err.message }));
+}
+
+// Sign-ups, per network (IP, IPv6 by its /64). Every attempt counts, since a flood of fake
+// accounts is made of successful sign-ups. 50 an hour lets a pilot meetup sign up together on
+// one Wi-Fi; 200 a day caps account farming from one address.
+const REGISTER_LIMIT = { error: 'Too many registration attempts. Please try again later.' };
+const registerLimiters = [
+  rateLimit({ windowMs: DAY_MS, max: 200, keyGenerator: clientIpKey, message: REGISTER_LIMIT }),
+  rateLimit({ windowMs: 60 * 60 * 1000, max: 50, keyGenerator: clientIpKey, message: REGISTER_LIMIT }),
+];
 
 // Username fields check as the person types (the apps wait for a pause first).
 const usernameAvailabilityLimiter = rateLimit({
@@ -719,17 +781,17 @@ const usernameAvailabilityLimiter = rateLimit({
   message: { error: 'Too many username checks. Please wait a moment and try again.' },
 });
 
-const forgotPasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  message: { error: 'Too many password reset requests. Please try again later.' },
-});
-
-const resendVerificationLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  message: { error: 'Too many verification email requests. Please try again later.' },
-});
+// Password-reset and verification emails: 10 requests every 15 minutes per network (IP, IPv6
+// by its /64), and 5 an hour per email address, counted whether or not an account has it (the
+// reply is the same either way), so no one can flood another person's inbox from many networks.
+function authEmailLimiters(error) {
+  return {
+    network: rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyGenerator: clientIpKey, message: { error } }),
+    email: rateLimit({ windowMs: 60 * 60 * 1000, max: 5, keyGenerator: requestEmail, message: { error } }),
+  };
+}
+const forgotPasswordLimiters = authEmailLimiters('Too many password reset requests. Please try again later.');
+const resendVerificationLimiters = authEmailLimiters('Too many verification email requests. Please try again later.');
 
 const oauthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -1549,7 +1611,7 @@ const registrationReply = (body, account) => ({
  */
 router.post(
   '/register',
-  registerLimiter,
+  registerLimiters,
   validate(registerSchema),
   async (req, res) => {
     const {
@@ -1906,7 +1968,7 @@ router.post(
  * POST /api/users/login
  * Login user
  */
-router.post('/login', loginLimiter, validate(loginSchema), authRouteDpop(), async (req, res) => {
+router.post('/login', signInNetworkLimiters, validate(loginSchema), signInAccountLimiter, signInPairLimiter, authRouteDpop(), async (req, res) => {
   const { email, password } = req.body;
 
   logger.info('Login attempt', { email });
@@ -1919,6 +1981,20 @@ router.post('/login', loginLimiter, validate(loginSchema), authRouteDpop(), asyn
     });
 
     if (authError) {
+      // Supabase Auth's own per-IP limit (every sign-in reaches it from this server's address)
+      // or an outage is not the person's mistake: don't call it a wrong password or count it.
+      const authStatus = Number(authError.status) || 0;
+      if (authStatus === 429 || authStatus === 0 || authStatus >= 500) {
+        logger.error('Login failed - Supabase Auth refused or unreachable', {
+          email,
+          status: authStatus,
+          code: authError.code,
+          error: authError.message,
+        });
+        return res.status(503).json({
+          error: 'Sign-in is busy right now. Please try again in a minute.',
+        });
+      }
       // GoTrue refuses unconfirmed accounts before we can inspect
       // email_confirmed_at below; surface the same verification response.
       if (/email not confirmed/i.test(authError.message || '')) {
@@ -1932,6 +2008,7 @@ router.post('/login', loginLimiter, validate(loginSchema), authRouteDpop(), asyn
         email,
         error: authError.message,
       });
+      res.locals.signInFailed = true;
       return res.status(401).json({
         error: 'Invalid email or password',
       });
@@ -2023,6 +2100,7 @@ router.post('/login', loginLimiter, validate(loginSchema), authRouteDpop(), asyn
       email,
       username: userData.username,
     });
+    forgetSignInFailures(req);
 
     // Persistent login: register the session (and bind it to the presenting
     // device key when `device` + a verified DPoP proof are present). Web
@@ -3818,7 +3896,7 @@ router.get('/:username', optionalAuth, async (req, res) => {
  * Resend an email-verification link via our own SMTP. Uses a magiclink token
  * (doesn't require password) which, when clicked, also confirms the email.
  */
-router.post('/resend-verification', resendVerificationLimiter, validate(resendVerificationSchema), async (req, res) => {
+router.post('/resend-verification', resendVerificationLimiters.network, validate(resendVerificationSchema), resendVerificationLimiters.email, async (req, res) => {
   const email = req.body?.email;
 
   try {
@@ -4008,7 +4086,7 @@ async function authLinkSentRecently(email) {
  * our own SMTP transport (branded template, better deliverability than
  * Supabase's shared mail sender).
  */
-router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSchema), async (req, res) => {
+router.post('/forgot-password', forgotPasswordLimiters.network, validate(forgotPasswordSchema), forgotPasswordLimiters.email, async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -4076,6 +4154,7 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
   try {
     const { token, newPassword } = req.body;
     const isJwtAccessToken = token.split('.').length === 3;
+    let resetEmail = '';
 
     if (isJwtAccessToken) {
       const authClient = createAuthClient();
@@ -4119,6 +4198,7 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
         accessToken: token,
         req,
       }));
+      resetEmail = userData.user.email;
     } else {
       // Supabase verifyOtp for recovery + token_hash accepts only { type, token_hash }.
       // Including email causes: "Only the token_hash and type should be provided".
@@ -4172,8 +4252,11 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
         source: 'reset_password',
         userId: verifyData?.user?.id,
       });
+      resetEmail = verifyData?.user?.email;
     }
 
+    // The owner proved they hold the email: earlier failed sign-ins stop counting everywhere.
+    startSignInCountsAgain(resetEmail);
     return res.json({ message: 'Password reset successful. You can now sign in.' });
   } catch (err) {
     logger.error('Reset password error', { error: err.message });
