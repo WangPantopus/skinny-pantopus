@@ -397,7 +397,7 @@ fun PublicProfilePostsFeed(
     onEmptyCta: () -> Unit = {},
     /**
      * A21.2 — the profile owner's display name, so the Local empty state
-     * can name the neighbour ("… — Priya just moved in."). `null` falls
+     * can name the neighbour ("No posts yet from Priya. …"). `null` falls
      * back to the un-personalised copy.
      */
     localName: String? = null,
@@ -480,9 +480,10 @@ private fun postsCardCopy(
             ctaIcon = PantopusIcon.Plus,
         )
     }
-    // A21.2 names the neighbour when we know them ("No posts yet — Priya
-    // just moved in. …"); without a name we fall back to the neutral
-    // sentence rather than printing an empty gap.
+    // A21.2 names the neighbour when we know them ("No posts yet from
+    // Priya. …"); without a name we fall back to the neutral sentence
+    // rather than printing an empty gap. Nothing says when they moved in:
+    // the profile doesn't know.
     val firstName = localName?.split(" ")?.firstOrNull()?.takeIf { it.isNotEmpty() }
     if (hiddenByBlock) {
         return PostsCardCopy(
@@ -497,7 +498,7 @@ private fun postsCardCopy(
     }
     val body =
         if (firstName != null) {
-            "No posts yet — $firstName just moved in. Say hi or send a message to break the ice."
+            "No posts yet from $firstName. Say hi or send a message to break the ice."
         } else {
             "No posts yet — say hi or send a message to break the ice."
         }
