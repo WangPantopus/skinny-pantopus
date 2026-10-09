@@ -44,6 +44,11 @@ import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -697,6 +702,7 @@ private fun EmailField(
                 modifier =
                     Modifier
                         .weight(1f)
+                        .onHardwareEnter(onNext)
                         .authAutofill(listOf(AuthAutofillKind.EmailAddress, AuthAutofillKind.Username), onChange)
                         .testTag(LoginScreenTags.EMAIL_FIELD)
                         .semantics { contentDescription = "Email address" },
@@ -728,6 +734,19 @@ private fun submitSignIn(
     focusManager.clearFocus()
     signIn()
 }
+
+/**
+ * A hardware keyboard's Enter runs [action] when the key comes back up, and both halves of the press stop
+ * here. A field acts on Enter's key-down; once that moved focus (signing in clears it), the key-up landed on
+ * the next focused control, so signing in also opened "Not you?"'s "Remove this account" dialog. The soft
+ * keyboard's Next / Go still arrive as [KeyboardActions].
+ */
+private fun Modifier.onHardwareEnter(action: () -> Unit): Modifier =
+    onPreviewKeyEvent { event ->
+        if (event.key != Key.Enter && event.key != Key.NumPadEnter) return@onPreviewKeyEvent false
+        if (event.type == KeyEventType.KeyUp) action()
+        true
+    }
 
 @Suppress("LongParameterList")
 @Composable
@@ -795,6 +814,7 @@ private fun PasswordFieldWithForgot(
                     Modifier
                         .weight(1f)
                         .focusRequester(focusRequester)
+                        .onHardwareEnter(onGo)
                         .authAutofill(listOf(AuthAutofillKind.Password), onChange)
                         .testTag(LoginScreenTags.PASSWORD_FIELD)
                         .semantics { contentDescription = "Password" },
