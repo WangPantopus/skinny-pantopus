@@ -200,6 +200,23 @@ public final class PulseFeedViewModel {
     /// Identity of the query that produced the visible rows and cursor.
     private var lastQuery: FeedQuery?
     private var loadedItems: [FeedPostDTO] = []
+    /// Taps shown at once that the server hasn't confirmed yet, per post.
+    private var pendingActions: [String: Set<PulsePendingAction>] = [:]
+    /// A quiet refresh that found new posts while the reader is further down
+    /// holds its page here, behind the "N new posts" pill (Instant Screens).
+    private var pendingFirstPage: PendingFirstPage?
+    /// New posts waiting behind the pill; 0 hides it.
+    public private(set) var newPostsCount = 0
+    /// Set by the list: its first card is on screen.
+    public var isReadingAtTop = true
+
+    private struct PendingFirstPage {
+        let response: FeedResponse
+        let area: FeedArea
+        let query: FeedQuery
+        let viewingLocation: ViewingLocationDTO?
+    }
+
     private var isLoading = false
     /// Bumped per fetch; only the latest fetch's response is applied, so a
     /// filter tapped while a load is in flight still takes effect.
@@ -252,7 +269,13 @@ public final class PulseFeedViewModel {
     /// First-time load. Refetches when still empty so a location fix can
     /// populate the feed after permissions are granted.
     public func load() async {
-        if case .loaded = state { return }
+        if case .loaded = state {
+            // Coming back: a quiet re-read once the first page is out of date
+            // (Nearby: 2 minutes, or marked); new posts wait behind the pill.
+            if let query = lastQuery, store.peek(feedEndpoint(query), as: FeedResponse.self)?.isFresh == true { return }
+            await fetch()
+            return
+        }
         showStoredFirstPage()
         await fetch()
     }
@@ -368,7 +391,12 @@ public final class PulseFeedViewModel {
         let toggled = !current
         overrides[postId, default: PulsePostOverride()].hasReacted = toggled
         overrides[postId, default: PulsePostOverride()].likeCount = max(0, currentCount + (toggled ? 1 : -1))
+        pendingActions[postId, default: []].insert(.reaction)
         rebuildLoadedState()
+        defer {
+            pendingActions[postId]?.remove(.reaction)
+            rebuildLoadedState()
+        }
 
         do {
             let response = try await api.request(
@@ -380,8 +408,8 @@ public final class PulseFeedViewModel {
         } catch {
             overrides[postId, default: PulsePostOverride()].hasReacted = current
             overrides[postId, default: PulsePostOverride()].likeCount = currentCount
+            toastMessage = "Couldn't update your reaction."
         }
-        rebuildLoadedState()
     }
 
     // MARK: - Overflow actions
@@ -397,6 +425,7 @@ public final class PulseFeedViewModel {
         guard let item = loadedItems.first(where: { $0.id == postId }) else { return }
         let original = effectiveIsSaved(item)
         overrides[postId, default: PulsePostOverride()].isSaved = !original
+        pendingActions[postId, default: []].insert(.save)
         rebuildLoadedState()
         do {
             let response = try await api.request(
@@ -409,6 +438,7 @@ public final class PulseFeedViewModel {
             overrides[postId, default: PulsePostOverride()].isSaved = original
             toastMessage = "Couldn't update your bookmark."
         }
+        pendingActions[postId]?.remove(.save)
         rebuildLoadedState()
     }
 
@@ -420,7 +450,12 @@ public final class PulseFeedViewModel {
         let originalCount = effectiveShareCount(item)
         overrides[postId, default: PulsePostOverride()].isReposted = !original
         overrides[postId, default: PulsePostOverride()].shareCount = max(0, originalCount + (original ? -1 : 1))
+        pendingActions[postId, default: []].insert(.repost)
         rebuildLoadedState()
+        defer {
+            pendingActions[postId]?.remove(.repost)
+            rebuildLoadedState()
+        }
         do {
             let response = try await api.request(
                 PostsEndpoints.share(id: postId, shareType: "repost", reposted: !original),
@@ -628,10 +663,31 @@ public final class PulseFeedViewModel {
                 feedEndpoint(query),
                 as: FeedResponse.self,
                 kind: .nearby,
+                topics: [ScreenTopic.posts],
                 force: force
             ).value
             // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
             guard generation == fetchGeneration else { return }
+            // New posts never move what someone is reading: below the top they
+            // wait behind the pill; at the top (or on a pull) they slide in.
+            if !force, !isReadingAtTop, case .loaded = state, query == lastQuery {
+                let known = Set(loadedItems.map(\.id))
+                let fresh = response.posts.filter { !known.contains($0.id) }.count
+                if fresh > 0 {
+                    pendingFirstPage = PendingFirstPage(response: response, area: area, query: query, viewingLocation: viewingLocation)
+                    newPostsCount = fresh
+                    return
+                }
+                // Nothing new: the rows on screen take the server's counts and
+                // edits in place, and the older pages below stay.
+                let refreshed = Dictionary(response.posts.map { ($0.id, $0) }) { first, _ in first }
+                loadedItems = loadedItems.map { refreshed[$0.id] ?? $0 }
+                seedPostDetails(response.posts)
+                rebuildLoadedState()
+                return
+            }
+            pendingFirstPage = nil
+            newPostsCount = 0
             applyFirstPage(response, area: area, query: query, viewingLocation: viewingLocation)
         } catch is CancellationError {
             return
@@ -703,6 +759,14 @@ public final class PulseFeedViewModel {
         // Nothing was searched, so "no posts within 100 mi" would mislead.
         if needsArea { radiusSuggestion = nil }
         rebuildLoadedState()
+    }
+
+    /// The pill: the held page goes on screen (the list scrolls to its top).
+    public func showNewPosts() {
+        guard let pending = pendingFirstPage else { return }
+        pendingFirstPage = nil
+        newPostsCount = 0
+        applyFirstPage(pending.response, area: pending.area, query: pending.query, viewingLocation: pending.viewingLocation)
     }
 
     /// Reopening Pulse: the stored first page for the stored area and the
@@ -950,7 +1014,8 @@ public final class PulseFeedViewModel {
                 muteEntityId: post.businessAuthorId ?? post.userId,
                 muteEntityName: post.creator?.displayName ?? "this author",
                 postType: post.postType,
-                topicLabel: intent.cardChipLabel
+                topicLabel: intent.cardChipLabel,
+                pending: pendingActions[post.id] ?? []
             ),
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
             isVisitor: post.isVisitorPost,

@@ -142,6 +142,24 @@ class PlaceRepository
                 conditionalApiCall { placeApi.intelligenceConditional(homeId, StoreKeys.todaySectionsQuery, etag) }
             }
 
+        /** A home's Place (the dashboard, every section) through the screens' store: fresh for 10 minutes. */
+        suspend fun placeStored(
+            homeId: String,
+            force: Boolean = false,
+        ): Stored<PlaceIntelligence> =
+            store.read(StoreKeys.place(homeId), force) { etag ->
+                conditionalApiCall { placeApi.intelligenceConditional(homeId, sections = null, etag = etag) }
+            }
+
+        /** The stored Place as it is now, without a request. */
+        fun placeCopy(homeId: String): PlaceIntelligence? = store.peek(StoreKeys.place(homeId)).data
+
+        /** True while the stored Place is fresh and no topic marked it out of date. */
+        fun placeIsCurrent(homeId: String): Boolean = store.isCurrent(StoreKeys.place(homeId))
+
+        /** Drops the stored Place (a viewer whose copy may not be kept, leaving the screen). */
+        fun forgetPlace(homeId: String) = store.remove(StoreKeys.place(homeId))
+
         /** True while the home's stored Today is fresh and no topic marked it out of date (coming back reads nothing). */
         fun todayIsCurrent(homeId: String): Boolean = store.isCurrent(StoreKeys.today(homeId))
 

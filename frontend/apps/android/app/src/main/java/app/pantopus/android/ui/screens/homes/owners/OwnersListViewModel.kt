@@ -15,7 +15,7 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeOwnersRepository
-import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
@@ -90,7 +90,7 @@ class OwnersListViewModel
         val homeId: String = savedStateHandle[OWNERS_LIST_HOME_ID_KEY] ?: ""
 
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
-        private val gate = gates.create(homeId, listOf(StoreKeys.homeOwners(homeId), StoreKeys.homeMe(homeId)))
+        private val gate = gates.create(homeId, listOf(HomeStoreKeys.owners(homeId), HomeStoreKeys.me(homeId)))
         private var readGeneration = 0L
 
         /** Pull to refresh is reading while the rows stay (Instant Screens): the pull indicator only. */

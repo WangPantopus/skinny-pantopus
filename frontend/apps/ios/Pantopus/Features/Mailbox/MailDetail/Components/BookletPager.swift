@@ -265,7 +265,7 @@ private struct BookletPageImage: View {
 
     var body: some View {
         BookletPaperPageChrome(hasNextPage: hasNextPage) {
-            AsyncImage(url: url) { phase in
+            CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
                 switch phase {
                 case let .success(image):
                     image
@@ -313,7 +313,7 @@ private struct ThumbnailCell: View {
                 foldSize: Spacing.s4,
                 cornerRadius: Radii.sm
             ) {
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
                     switch phase {
                     case let .success(image):
                         image

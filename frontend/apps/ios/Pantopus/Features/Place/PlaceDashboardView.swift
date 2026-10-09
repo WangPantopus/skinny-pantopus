@@ -80,6 +80,7 @@ struct PlaceDashboardView: View {
             await viewModel.refreshUnread()
         }
         .refreshable { await viewModel.refresh() }
+        .refreshesOnStoreChange { if isActive { await viewModel.load() } }
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .sheet(isPresented: $showSwitcher) {
             PlaceSwitcherSheet(

@@ -6,8 +6,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomePrivacyApi
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
-import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,12 +28,12 @@ class HomePrivacyRepository
             homeId: String,
             force: Boolean = false,
         ): Stored<HomePrivacyResponse> =
-            store.read(StoreKeys.homePrivacy(homeId), force) { etag ->
+            store.read(HomeStoreKeys.privacy(homeId), force) { etag ->
                 conditionalApiCall { api.getPrivacyConditional(homeId, etag) }
             }
 
         /** The stored privacy toggles, without a request. */
-        fun storedPrivacy(homeId: String): HomePrivacyResponse? = store.peek(StoreKeys.homePrivacy(homeId)).data
+        fun storedPrivacy(homeId: String): HomePrivacyResponse? = store.peek(HomeStoreKeys.privacy(homeId)).data
 
         /** `PATCH /api/homes/:id/privacy`. The reply is the whole saved row, so it becomes the stored copy. */
         suspend fun updatePrivacy(
@@ -41,6 +41,6 @@ class HomePrivacyRepository
             body: UpdateHomePrivacyRequest,
         ): NetworkResult<HomePrivacyResponse> =
             safeApiCall { api.updatePrivacy(homeId, body) }.also { result ->
-                if (result is NetworkResult.Success) store.put(StoreKeys.homePrivacy(homeId), result.data)
+                if (result is NetworkResult.Success) store.put(HomeStoreKeys.privacy(homeId), result.data)
             }
     }

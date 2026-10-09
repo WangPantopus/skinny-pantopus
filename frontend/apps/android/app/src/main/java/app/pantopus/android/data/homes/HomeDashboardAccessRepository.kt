@@ -6,8 +6,8 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.services.HomeDashboardApi
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
-import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.Stored
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.Moshi
@@ -46,12 +46,12 @@ class HomeDashboardAccessRepository
             homeId: String,
             force: Boolean = false,
         ): Stored<HomeDashboardAuthorityDto> =
-            store.read(StoreKeys.homeAccess(homeId), force) { etag ->
+            store.read(HomeStoreKeys.access(homeId), force) { etag ->
                 conditionalApiCall { api.dashboardAuthorityConditional(homeId, etag) }.confirmed(homeId)
             }
 
         /** The stored access copy, without a request; null when there is none. */
-        fun storedAuthority(homeId: String): HomeDashboardAuthorityDto? = store.peek(StoreKeys.homeAccess(homeId)).data
+        fun storedAuthority(homeId: String): HomeDashboardAuthorityDto? = store.peek(HomeStoreKeys.access(homeId)).data
 
         private fun NetworkResult<Conditional<HomeDashboardAuthorityDto>>.confirmed(
             homeId: String,

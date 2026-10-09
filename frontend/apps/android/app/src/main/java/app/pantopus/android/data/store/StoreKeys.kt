@@ -1,27 +1,26 @@
 package app.pantopus.android.data.store
 
-import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
-import app.pantopus.android.data.api.models.homes.HomeAccessDto
-import app.pantopus.android.data.api.models.homes.HomeAuditLogResponse
-import app.pantopus.android.data.api.models.homes.HomeDetailResponse
-import app.pantopus.android.data.api.models.homes.HomeOwnershipSecurityResponse
-import app.pantopus.android.data.api.models.homes.HomePrivacyResponse
-import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestsResponse
+import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
-import app.pantopus.android.data.api.models.homes.OccupantsResponse
-import app.pantopus.android.data.api.models.homes.OwnersResponse
-import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 
+/** Change topics (contract §8) that more than one key or repository names. */
+object StoreTopics {
+    /** The viewer's conversation list: a chat created or left, a message sent or read. */
+    const val CHATS = "chats"
+
+    /** The viewer's list of homes: a home added, claimed, verified, left or deleted. */
+    const val HOMES = "homes"
+}
+
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
-@Suppress("TooManyFunctions") // One function per stored endpoint.
 object StoreKeys {
     /** My Homes: one source for every screen that lists the viewer's homes. */
-    val myHomes = StoreKey<MyHomesResponse>("api/homes/my-homes", kind = StoreKind.HOMES, topics = setOf("homes"))
+    val myHomes = StoreKey<MyHomesResponse>("api/homes/my-homes", kind = StoreKind.HOMES, topics = setOf(StoreTopics.HOMES))
 
     /**
      * The sections the Today tab renders (contract §8 "Today on the phones"): weather and its sky, air, alerts, the
@@ -73,6 +72,30 @@ object StoreKeys {
 
     private const val COORDINATE_SCALE = 1000.0
 
+    /**
+     * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
+     * seconds, shared by the Messages tab and its badge. Message history never enters the store (founder decision 7).
+     */
+    val conversations =
+        StoreKey<UnifiedConversationsResponse>(
+            "api/chat/unified-conversations",
+            mapOf("limit" to "100"),
+            kind = StoreKind.MESSAGES_LIST,
+            topics = setOf(StoreTopics.CHATS),
+        )
+
+    /**
+     * A home's Place for the viewer's role (the Place dashboard): every section, kind Place. A claim, verification or
+     * household change marks it through `homes`, `home:` and `place:`.
+     */
+    fun place(homeId: String) =
+        StoreKey<PlaceIntelligence>(
+            "api/homes/$homeId/intelligence",
+            mapOf("ballot" to "1"),
+            kind = StoreKind.PLACE,
+            topics = setOf("place:$homeId", "home:$homeId", StoreTopics.HOMES),
+        )
+
     /** A home's Today: [TODAY_SECTIONS] of its Place intelligence. */
     fun today(homeId: String) =
         StoreKey<PlaceIntelligence>(
@@ -81,64 +104,4 @@ object StoreKeys {
             kind = StoreKind.TODAY,
             topics = setOf("today", "home:$homeId", "place:$homeId"),
         )
-
-    /**
-     * The viewer's access to a Home (role, permissions, expiry). Founder decision 3: decides who may see a Home
-     * screen's stored copy (owners and household roles without an expiry).
-     */
-    fun homeAccess(homeId: String) =
-        StoreKey<HomeDashboardAuthorityDto>(
-            "api/homes/$homeId/dashboard-access",
-            kind = StoreKind.HOMES,
-            topics = setOf("home:$homeId", "homes"),
-        )
-
-    /** A Home as the viewer sees it. */
-    fun homeDetail(homeId: String) =
-        StoreKey<HomeDetailResponse>("api/homes/$homeId", kind = StoreKind.HOMES, topics = setOf("home:$homeId", "homes", "place:$homeId"))
-
-    /** The viewer's effective permissions in a Home. */
-    fun homeMe(homeId: String) = StoreKey<HomeAccessDto>("api/homes/$homeId/me", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
-
-    /** A Home's occupants and pending invitations. */
-    fun homeOccupants(homeId: String) =
-        StoreKey<OccupantsResponse>("api/homes/$homeId/occupants", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
-
-    /** A Home's privacy toggles. */
-    fun homePrivacy(homeId: String) =
-        StoreKey<HomePrivacyResponse>("api/homes/$homeId/privacy", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
-
-    /** A Home's ownership security policy. */
-    fun homeSecurity(homeId: String) =
-        StoreKey<HomeOwnershipSecurityResponse>("api/homes/$homeId/security", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
-
-    /** A Home's property facts. */
-    fun homePropertyDetails(homeId: String) =
-        StoreKey<PropertyDetailsResponse>(
-            "api/homes/$homeId/property-details",
-            kind = StoreKind.HOMES,
-            topics = setOf("home:$homeId", "place:$homeId"),
-        )
-
-    /** A Home's pending household access requests (managers). */
-    fun homeAccessRequests(homeId: String) =
-        StoreKey<HouseholdAccessRequestsResponse>(
-            "api/homes/$homeId/household-access-requests",
-            mapOf("status" to "pending"),
-            kind = StoreKind.HOMES,
-            topics = setOf("home:$homeId"),
-        )
-
-    /** The first page of a Home's audit log (managers). */
-    fun homeAuditLog(homeId: String) =
-        StoreKey<HomeAuditLogResponse>(
-            "api/homes/$homeId/audit-log",
-            mapOf("limit" to "50", "offset" to "0"),
-            kind = StoreKind.HOMES,
-            topics = setOf("home:$homeId"),
-        )
-
-    /** A Home's owners. */
-    fun homeOwners(homeId: String) =
-        StoreKey<OwnersResponse>("api/homes/$homeId/owners", kind = StoreKind.HOMES, topics = setOf("home:$homeId", "homes"))
 }

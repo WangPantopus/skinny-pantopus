@@ -11,7 +11,7 @@ import app.pantopus.android.data.api.models.homes.UpdateHomePrivacyRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomePrivacyRepository
-import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
@@ -83,7 +83,7 @@ class HomeSecurityViewModel
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
-        private val gate = gates.create(homeId, listOf(StoreKeys.homePrivacy(homeId)))
+        private val gate = gates.create(homeId, listOf(HomeStoreKeys.privacy(homeId)))
         private var readGeneration = 0L
 
         /**

@@ -118,7 +118,8 @@ class MeViewModel
             loadJob =
                 viewModelScope.launch {
                     val profileDeferred = async { profileRepo.ownProfile() }
-                    val homesDeferred = async { homesRepo.myHomes() }
+                    // The shared My Homes copy when it is fresh (Instant Screens); a read otherwise.
+                    val homesDeferred = async { homesRepo.myHomesStored() }
                     val businessesDeferred = async { businessesRepo.myBusinesses() }
                     val profileResult = profileDeferred.await()
                     val homesResult = homesDeferred.await()
@@ -138,10 +139,9 @@ class MeViewModel
                                 _state.value = MeUiState.Error(message)
                                 return@launch
                             }
-                    val homes: List<MyHome> =
-                        (homesResult as? NetworkResult.Success)?.data?.sharedHomes.orEmpty()
+                    val homes: List<MyHome> = homesResult.data?.sharedHomes.orEmpty()
                     // A failed homes read must not read as "No shared Home".
-                    val homesFailed = homesResult is NetworkResult.Failure
+                    val homesFailed = homesResult.data == null
                     // The Home card's counts come from the primary Home's dashboard.
                     val dashboard = primaryHomeDashboard(homes)
 

@@ -208,6 +208,11 @@ struct HomeDashboardView: View {
             viewModel.suspend(keepingCopy: true)
         }
         .refreshFailureToast($viewModel.refreshFailureMessage)
+        // Someone changed this Home (a task, a member, access): re-check now,
+        // the copy staying on screen for owners and household roles.
+        .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.home(homeId), kind: .homes) }, perform: {
+            await viewModel.refresh()
+        })
         .onChange(of: scenePhase) { _, phase in
             guard isVisible else { return }
             if phase == .active {

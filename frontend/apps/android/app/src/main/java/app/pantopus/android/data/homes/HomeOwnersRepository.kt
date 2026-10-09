@@ -8,8 +8,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomesApi
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
-import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,10 +38,10 @@ open class HomeOwnersRepository
             homeId: String,
             force: Boolean = false,
         ): Stored<OwnersResponse> =
-            store.read(StoreKeys.homeOwners(homeId), force) { etag -> conditionalApiCall { api.listOwnersConditional(homeId, etag) } }
+            store.read(HomeStoreKeys.owners(homeId), force) { etag -> conditionalApiCall { api.listOwnersConditional(homeId, etag) } }
 
         /** The stored owners, without a request. */
-        open fun storedList(homeId: String): OwnersResponse? = store.peek(StoreKeys.homeOwners(homeId)).data
+        open fun storedList(homeId: String): OwnersResponse? = store.peek(HomeStoreKeys.owners(homeId)).data
 
         /** `DELETE /api/homes/:id/owners/:ownerId`. */
         open suspend fun remove(
@@ -61,6 +62,6 @@ open class HomeOwnersRepository
         ) {
             if (result !is NetworkResult.Success) return
             store.markStale("home:$homeId")
-            store.markStale("homes")
+            store.markStale(StoreTopics.HOMES)
         }
     }

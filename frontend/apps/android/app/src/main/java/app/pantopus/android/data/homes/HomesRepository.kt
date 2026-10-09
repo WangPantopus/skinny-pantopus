@@ -64,9 +64,12 @@ import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.FilesApi
 import app.pantopus.android.data.api.services.HomeTasksApi
 import app.pantopus.android.data.api.services.HomesApi
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.data.store.asResult
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -91,8 +94,12 @@ open class HomesRepository
         private val filesApi: FilesApi,
         private val store: ScreenStore,
     ) {
-        /** `GET /api/homes/my-homes`. */
-        open suspend fun myHomes(): NetworkResult<MyHomesResponse> = safeApiCall { api.myHomes() }
+        /**
+         * `GET /api/homes/my-homes`, read now through the screens' store (Instant Screens: My Homes from one source).
+         * Every caller shares one copy and concurrent callers one request; the reply (or a 304) refreshes every screen
+         * that shows the list. Screens that show the list at once read [myHomesStored] instead.
+         */
+        open suspend fun myHomes(): NetworkResult<MyHomesResponse> = myHomesStored(force = true).asResult()
 
         /**
          * My Homes through the screens' store (Instant Screens): a fresh copy returns without a request; otherwise
@@ -100,6 +107,16 @@ open class HomesRepository
          */
         open suspend fun myHomesStored(force: Boolean = false): Stored<MyHomesResponse> =
             store.read(StoreKeys.myHomes, force) { etag -> conditionalApiCall { api.myHomesConditional(etag) } }
+
+        /** The stored My Homes as it is now, without a request (null before the first read or after a wipe). */
+        open fun myHomesCopy(): MyHomesResponse? = store.peek(StoreKeys.myHomes).data
+
+        /**
+         * An own edit that changes the viewer's list of homes (contract §6 and §8, topic `homes`): every screen
+         * showing My Homes reads it again on its next visit.
+         */
+        protected fun <T> NetworkResult<T>.homesChanged(): NetworkResult<T> =
+            also { if (it is NetworkResult.Success) store.markStale(StoreTopics.HOMES) }
 
         /** `GET /api/homes/:id`. */
         open suspend fun detail(id: String) = safeApiCall { api.detail(id) }
@@ -109,10 +126,10 @@ open class HomesRepository
             id: String,
             force: Boolean = false,
         ): Stored<HomeDetailResponse> =
-            store.read(StoreKeys.homeDetail(id), force) { etag -> conditionalApiCall { api.detailConditional(id, etag) } }
+            store.read(HomeStoreKeys.detail(id), force) { etag -> conditionalApiCall { api.detailConditional(id, etag) } }
 
         /** The stored Home, without a request. */
-        open fun storedDetail(id: String): HomeDetailResponse? = store.peek(StoreKeys.homeDetail(id)).data
+        open fun storedDetail(id: String): HomeDetailResponse? = store.peek(HomeStoreKeys.detail(id)).data
 
         /** `GET /api/homes/:id/public-profile`. */
         open suspend fun publicProfile(id: String) = safeApiCall { api.publicProfile(id) }
@@ -125,10 +142,10 @@ open class HomesRepository
             id: String,
             force: Boolean = false,
         ): Stored<PropertyDetailsResponse> =
-            store.read(StoreKeys.homePropertyDetails(id), force) { etag -> conditionalApiCall { api.propertyDetailsConditional(id, etag) } }
+            store.read(HomeStoreKeys.propertyDetails(id), force) { etag -> conditionalApiCall { api.propertyDetailsConditional(id, etag) } }
 
         /** The stored property facts, without a request. */
-        open fun storedPropertyDetails(id: String): PropertyDetailsResponse? = store.peek(StoreKeys.homePropertyDetails(id)).data
+        open fun storedPropertyDetails(id: String): PropertyDetailsResponse? = store.peek(HomeStoreKeys.propertyDetails(id)).data
 
         /** `POST /api/homes/property-suggestions`. */
         open suspend fun propertySuggestions(request: PropertySuggestionsRequest) = safeApiCall { api.propertySuggestions(request) }
@@ -139,7 +156,7 @@ open class HomesRepository
         open suspend fun checkAddress(request: CheckAddressRequest) = safeApiCall { api.checkAddress(request) }
 
         /** `POST /api/homes`. */
-        open suspend fun create(request: CreateHomeRequest) = safeApiCall { api.create(request) }
+        open suspend fun create(request: CreateHomeRequest) = safeApiCall { api.create(request) }.homesChanged()
 
         /** `POST /api/homes/:id/owners/invite`. */
         open suspend fun inviteOwner(
@@ -152,7 +169,7 @@ open class HomesRepository
             homeId: String,
             request: SubmitClaimRequest,
             expectedSession: String? = null,
-        ): NetworkResult<SubmitClaimResponse> = safeApiCall { api.submitClaim(homeId, request, expectedSession) }
+        ): NetworkResult<SubmitClaimResponse> = safeApiCall { api.submitClaim(homeId, request, expectedSession) }.homesChanged()
 
         /** `POST /api/homes/:id/ownership-claims/:claimId/evidence`. */
         open suspend fun uploadEvidence(
@@ -165,13 +182,13 @@ open class HomesRepository
         open suspend fun myOwnershipClaims(): NetworkResult<MyOwnershipClaimsResponse> = safeApiCall { api.myOwnershipClaims() }
 
         /** `POST /api/homes/:id/move-out`. */
-        open suspend fun moveOut(homeId: String): NetworkResult<MoveOutResponse> = safeApiCall { api.moveOut(homeId) }
+        open suspend fun moveOut(homeId: String): NetworkResult<MoveOutResponse> = safeApiCall { api.moveOut(homeId) }.homesChanged()
 
         /** `DELETE /api/homes/:id/ownership-claims/:claimId`. */
         open suspend fun deleteOwnershipClaim(
             homeId: String,
             claimId: String,
-        ): NetworkResult<DeleteOwnershipClaimResponse> = safeApiCall { api.deleteOwnershipClaim(homeId, claimId) }
+        ): NetworkResult<DeleteOwnershipClaimResponse> = safeApiCall { api.deleteOwnershipClaim(homeId, claimId) }.homesChanged()
 
         /** `GET /api/homes/:id/bills`. */
         open suspend fun getHomeBills(

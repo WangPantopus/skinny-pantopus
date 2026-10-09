@@ -54,24 +54,24 @@ public struct PropertyDetailsView: View {
         case .loading:
             LoadingBody(onBack: onBack)
         case let .clean(content):
-            LoadedBody(
-                content: content,
-                isMismatch: false,
-                onBack: onBack,
-                onRequestCorrection: onRequestCorrection
-            )
+            loaded(content, isMismatch: false)
         case let .mismatch(content):
-            LoadedBody(
-                content: content,
-                isMismatch: true,
-                onBack: onBack,
-                onRequestCorrection: onRequestCorrection
-            )
+            loaded(content, isMismatch: true)
         case let .error(message):
             ErrorBody(message: message, onBack: onBack) {
                 Task { await viewModel.refresh() }
             }
         }
+    }
+
+    private func loaded(_ content: PropertyDetailsContent, isMismatch: Bool) -> some View {
+        LoadedBody(
+            content: content,
+            isMismatch: isMismatch,
+            staleNotice: viewModel.staleNotice,
+            onBack: onBack,
+            onRequestCorrection: onRequestCorrection
+        ) { Task { await viewModel.refresh() } }
     }
 }
 
@@ -80,8 +80,10 @@ public struct PropertyDetailsView: View {
 private struct LoadedBody: View {
     let content: PropertyDetailsContent
     let isMismatch: Bool
+    let staleNotice: String?
     let onBack: () -> Void
     let onRequestCorrection: () -> Void
+    let onRetry: () -> Void
 
     var body: some View {
         ContentDetailShell(
@@ -93,6 +95,7 @@ private struct LoadedBody: View {
             },
             body: {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
+                    if let staleNotice { RefreshNotice(text: staleNotice, onRetry: onRetry) }
                     if isMismatch, let banner = content.banner {
                         MismatchBanner(data: banner)
                     }

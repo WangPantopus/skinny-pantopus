@@ -268,7 +268,7 @@ public struct RebookRailView: View {
 
     @ViewBuilder private func avatar(_ worker: RebookableWorkerDTO?) -> some View {
         if let raw = worker?.avatarUrl, let url = URL(string: raw) {
-            AsyncImage(url: url) { image in
+            CachedAsyncImage(url: url) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 initialsAvatar(worker)

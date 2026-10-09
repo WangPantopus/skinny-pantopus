@@ -24,7 +24,7 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
-import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
@@ -181,10 +181,10 @@ class MembersListViewModel
             gates.create(
                 homeId,
                 listOf(
-                    StoreKeys.homeMe(homeId),
-                    StoreKeys.homeOccupants(homeId),
-                    StoreKeys.homeAccessRequests(homeId),
-                    StoreKeys.homeAuditLog(homeId),
+                    HomeStoreKeys.me(homeId),
+                    HomeStoreKeys.occupants(homeId),
+                    HomeStoreKeys.accessRequests(homeId),
+                    HomeStoreKeys.auditLog(homeId),
                 ),
             )
 

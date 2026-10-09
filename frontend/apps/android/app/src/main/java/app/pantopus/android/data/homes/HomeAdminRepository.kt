@@ -12,8 +12,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeAdminApi
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
-import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -41,12 +42,12 @@ open class HomeAdminRepository
             homeId: String,
             force: Boolean = false,
         ): Stored<HomeAccessDto> =
-            store.read(StoreKeys.homeMe(homeId), force) { etag ->
+            store.read(HomeStoreKeys.me(homeId), force) { etag ->
                 conditionalApiCall { api.myAccessConditional(homeId, etag) }
             }
 
         /** The stored `/me` reply, without a request. */
-        open fun storedMyAccess(homeId: String): HomeAccessDto? = store.peek(StoreKeys.homeMe(homeId)).data
+        open fun storedMyAccess(homeId: String): HomeAccessDto? = store.peek(HomeStoreKeys.me(homeId)).data
 
         /** `GET /api/homes/:id/me`, verification slice. */
         open suspend fun myVerificationAccess(homeId: String): NetworkResult<HomeVerificationAccessDto> =
@@ -64,10 +65,10 @@ open class HomeAdminRepository
             homeId: String,
             force: Boolean = false,
         ): Stored<HomeAuditLogResponse> =
-            store.read(StoreKeys.homeAuditLog(homeId), force) { etag -> conditionalApiCall { api.auditLogConditional(homeId, etag) } }
+            store.read(HomeStoreKeys.auditLog(homeId), force) { etag -> conditionalApiCall { api.auditLogConditional(homeId, etag) } }
 
         /** The stored audit log, without a request. */
-        open fun storedAuditLog(homeId: String): HomeAuditLogResponse? = store.peek(StoreKeys.homeAuditLog(homeId)).data
+        open fun storedAuditLog(homeId: String): HomeAuditLogResponse? = store.peek(HomeStoreKeys.auditLog(homeId)).data
 
         /** `POST /api/homes/:id/members/:userId/role`. */
         open suspend fun changeMemberRole(
@@ -90,13 +91,13 @@ open class HomeAdminRepository
             homeId: String,
             force: Boolean = false,
         ): Stored<HouseholdAccessRequestsResponse> =
-            store.read(StoreKeys.homeAccessRequests(homeId), force) { etag ->
+            store.read(HomeStoreKeys.accessRequests(homeId), force) { etag ->
                 conditionalApiCall { api.householdAccessRequestsConditional(homeId, etag) }
             }
 
         /** The stored pending access requests, without a request. */
         open fun storedHouseholdAccessRequests(homeId: String): HouseholdAccessRequestsResponse? =
-            store.peek(StoreKeys.homeAccessRequests(homeId)).data
+            store.peek(HomeStoreKeys.accessRequests(homeId)).data
 
         /** `POST …/household-access-requests/:requestId/approve`. */
         open suspend fun approveHouseholdAccessRequest(
@@ -119,6 +120,6 @@ open class HomeAdminRepository
         ) {
             if (result !is NetworkResult.Success) return
             store.markStale("home:$homeId")
-            store.markStale("homes")
+            store.markStale(StoreTopics.HOMES)
         }
     }

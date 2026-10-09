@@ -520,7 +520,7 @@ public struct YouTabRoot: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("You'll need to sign in again to access your hub.")
+                Text("You'll need to sign in again to access your hub. Signing out removes what Pantopus saved on this phone.")
             }
             .sheet(isPresented: $showsEditProfile) {
                 EditProfileView()
