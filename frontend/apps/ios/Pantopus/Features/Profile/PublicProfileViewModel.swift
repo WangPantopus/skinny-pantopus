@@ -411,9 +411,10 @@ public final class PublicProfileViewModel {
     }
 
     /// A follow, connection or block changed this profile's counts and edges:
-    /// the next opening reads it again.
+    /// the next opening reads it again, and so do your connection lists.
     private func profileChanged() {
         store.remove(profileEndpoint)
+        store.markStale(topics: [ScreenTopic.connections])
     }
 
     // MARK: - Connect control (relationship-aware)
