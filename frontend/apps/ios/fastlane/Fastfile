@@ -22,6 +22,21 @@ def appstore_api_key
   )
 end
 
+# Every target in the App Store archive and its bundle id. The widget
+# extension ships inside the app, so it needs its own App Store profile.
+APP_STORE_TARGETS = {
+  "Pantopus" => "app.pantopus.ios",
+  "PantopusWidgets" => "app.pantopus.ios.widgets"
+}.freeze
+
+def app_store_profile_name(identifier)
+  "match AppStore #{identifier}"
+end
+
+def app_store_export_options
+  { provisioningProfiles: APP_STORE_TARGETS.values.to_h { |id| [id, app_store_profile_name(id)] } }
+end
+
 platform :ios do
   before_all do
     # Materialize Config/Secrets.xcconfig from .env so the per-configuration
@@ -48,13 +63,14 @@ platform :ios do
   lane :build_release do
     setup_ci if is_ci
     api_key = appstore_api_key
-    match(type: "appstore", readonly: is_ci, api_key: api_key)
+    app_store_signing(api_key: api_key)
 
     build_app(
       project: "Pantopus.xcodeproj",
       scheme: "Pantopus",
       configuration: "Release",
       export_method: "app-store",
+      export_options: app_store_export_options,
       clean: true
     )
     UI.success("✓ Signed Release archive built (no upload). Verify it points at api.pantopus.com with the Stripe key decision D4 calls for (pk_test_ during the pilot, pk_live_ after).")
@@ -64,7 +80,7 @@ platform :ios do
   lane :beta do
     setup_ci if is_ci
     api_key = appstore_api_key
-    match(type: "appstore", readonly: is_ci, api_key: api_key)
+    app_store_signing(api_key: api_key)
 
     increment_build_number(
       build_number: latest_testflight_build_number(initial_build_number: 0, api_key: api_key) + 1
@@ -75,6 +91,7 @@ platform :ios do
       scheme: "Pantopus",
       configuration: "Release",
       export_method: "app-store",
+      export_options: app_store_export_options,
       clean: true
     )
 
@@ -91,13 +108,14 @@ platform :ios do
   lane :release do
     setup_ci if is_ci
     api_key = appstore_api_key
-    match(type: "appstore", readonly: is_ci, api_key: api_key)
+    app_store_signing(api_key: api_key)
 
     build_app(
       project: "Pantopus.xcodeproj",
       scheme: "Pantopus",
       configuration: "Release",
       export_method: "app-store",
+      export_options: app_store_export_options,
       clean: true
     )
 
@@ -126,6 +144,30 @@ platform :ios do
       override_status_bar: true,
       stop_after_first_error: false
     )
+  end
+
+  # App Store signing for every target. match fetches both profiles (run it
+  # once locally without readonly to create them), then each target switches
+  # from the project's automatic signing, which can't provision on a CI runner
+  # without an Apple account, to its match profile.
+  private_lane :app_store_signing do |options|
+    match(
+      type: "appstore",
+      app_identifier: APP_STORE_TARGETS.values,
+      readonly: is_ci,
+      api_key: options[:api_key]
+    )
+    APP_STORE_TARGETS.each do |target, identifier|
+      update_code_signing_settings(
+        path: "Pantopus.xcodeproj",
+        use_automatic_signing: false,
+        targets: [target],
+        build_configurations: ["Release"],
+        team_id: ENV["APPLE_TEAM_ID"],
+        code_sign_identity: "Apple Distribution",
+        profile_name: app_store_profile_name(identifier)
+      )
+    end
   end
 
   # Upload the freshly-built dSYMs to Sentry so release crashes symbolicate
