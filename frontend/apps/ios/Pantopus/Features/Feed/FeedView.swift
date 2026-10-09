@@ -580,10 +580,12 @@ public struct FeedView: View {
 
     /// "3 new posts": a refresh found new posts while the reader was further
     /// down; tapping shows them and goes back to the top.
-    private func newPostsPill(scrollToTop: @escaping () -> Void) -> some View {
+    private func newPostsPill(scrollToTop: @escaping @MainActor () -> Void) -> some View {
         Button {
             viewModel.showNewPosts()
-            scrollToTop()
+            // After the new page is in the list: a scroll in the same update is
+            // undone by the list keeping the reader's rows in place.
+            Task { @MainActor in scrollToTop() }
         } label: {
             HStack(spacing: Spacing.s1) {
                 Icon(.arrowUp, size: 14, color: Theme.Color.appTextInverse)
