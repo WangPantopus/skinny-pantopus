@@ -71,6 +71,8 @@ export const queryKeys = {
   notificationPreferences: () => ['me', 'notification-preferences'] as const,
   /** Your privacy settings (GET /api/privacy/settings); lib/me.ts. */
   privacySettings: () => ['me', 'privacy'] as const,
+  /** Your feed preferences (GET /api/posts/feed-preferences); hooks/useFeedPreferences.ts. */
+  feedPreferences: () => ['me', 'feed-preferences'] as const,
   profile: (username: string) =>
     ['profile', username] as const,
 

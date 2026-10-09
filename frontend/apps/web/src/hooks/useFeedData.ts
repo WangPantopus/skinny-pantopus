@@ -140,8 +140,11 @@ export function useFeedData({
   }, [initialSurface]);
 
   // Place eligibility
-  const [placeEligible, setPlaceEligible] = useState(true);
-  const [eligibilityReason, setEligibilityReason] = useState<string | null>(null);
+  // The last answer for this area shows at once (the composer doesn't flicker); the check runs again.
+  const [keptEligibility] = useState(() => queryClient.getQueryData<{ eligible: boolean; reason: string | null }>(
+    ['posts', 'place-eligibility', viewingLat, viewingLng]));
+  const [placeEligible, setPlaceEligible] = useState(keptEligibility?.eligible ?? true);
+  const [eligibilityReason, setEligibilityReason] = useState<string | null>(keptEligibility?.reason ?? null);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -187,6 +190,7 @@ export function useFeedData({
         if (!latest) return;
         setPlaceEligible(r.eligible);
         setEligibilityReason(r.reason || null);
+        queryClient.setQueryData(['posts', 'place-eligibility', viewingLat, viewingLng], { eligible: r.eligible, reason: r.reason || null });
       })
       .catch(() => {
         if (latest) setPlaceEligible(true);
@@ -194,7 +198,7 @@ export function useFeedData({
     return () => {
       latest = false;
     };
-  }, [surface, viewingLat, viewingLng, gpsTimestamp, userLat, userLng]);
+  }, [surface, viewingLat, viewingLng, gpsTimestamp, userLat, userLng, queryClient]);
 
   // ── Feed data ──────────────────────────────────────────────
   // Back after the fresh window, the feed refreshes its first page, not every page it had.
