@@ -11,6 +11,8 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeResidencyProgressRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
@@ -149,6 +151,7 @@ class MyHomesListViewModel
         private val adminRepo: HomeAdminRepository,
         sessions: HomeClaimSessionScopeFactory,
         private val residencyRepo: HomeResidencyProgressRepository,
+        private val store: ScreenStore,
     ) : ViewModel() {
         private val session = sessions.create(viewModelScope)
         private var generation = 0L
@@ -230,11 +233,16 @@ class MyHomesListViewModel
             homesError = null
             historyError = null
             loadingHistory = false
-            if (!entries.all { it.showsCopyBeforeRecheck }) entries = emptyList()
-            if (entries.isEmpty()) {
-                _state.value = ListOfRowsUiState.Loading
-                _banner.value = null
+            if (!entries.all { it.showsCopyBeforeRecheck }) {
+                store.remove(StoreKeys.myHomes)
+                entries = emptyList()
             }
+            _state.value = if (entries.isEmpty()) {
+                ListOfRowsUiState.Loading
+            } else {
+                ListOfRowsUiState.Loaded(listOf(RowSection(id = "my-homes", rows = entries.map { rowFor(it, generation) })))
+            }
+            _banner.value = null
             _pendingEvent.value = null
             _actionError.value = null
             _refreshing.value = false
@@ -262,13 +270,18 @@ class MyHomesListViewModel
                 viewModelScope.launch {
                     try {
                         session.requireCurrent()
-                        val stored = repo.myHomesStored(force)
+                        val mayReuse = repo.myHomesCopy()?.homes?.all { it.showsCopyBeforeRecheck } == true
+                        val stored = repo.myHomesStored(force || !mayReuse)
                         session.requireCurrent()
                         if (!current(revision)) return@launch
                         _refreshing.value = false
                         _refreshNotice.value =
                             RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
-                        val homes = stored.data?.homes
+                        val homes = stored.data?.homes?.takeUnless { rows ->
+                            val rejectedCopy = stored.failure != null && rows.any { !it.showsCopyBeforeRecheck }
+                            if (rejectedCopy) store.remove(StoreKeys.myHomes)
+                            rejectedCopy
+                        }
                         when {
                             homes == null -> {
                                 entries = emptyList()

@@ -137,7 +137,7 @@ class MyHomesListViewModelTest {
                         message = null,
                     ),
                 )
-            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true))
             vm.load()
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             val rows = loaded.sections.first().rows
@@ -172,7 +172,7 @@ class MyHomesListViewModelTest {
                     isPrimary = false,
                 )
             coEvery { repo.myHomes() } returns NetworkResult.Success(MyHomesResponse(listOf(member), null))
-            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true))
             vm.load()
             val row = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.single()
             assertEquals("Member · X, CA", row.subtitle)
@@ -184,7 +184,7 @@ class MyHomesListViewModelTest {
     fun empty_response_surfaces_empty_state_and_clears_banner() =
         runTest {
             coEvery { repo.myHomes() } returns NetworkResult.Success(MyHomesResponse(homes = emptyList(), message = null))
-            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true))
             vm.load()
             val empty = vm.state.value as ListOfRowsUiState.Empty
             assertEquals("No saved Homes yet", empty.headline)
@@ -197,7 +197,7 @@ class MyHomesListViewModelTest {
         runTest {
             coEvery { repo.myHomes() } returns NetworkResult.Failure(NetworkError.NotFound)
             coEvery { residencyRepo.requests(null) } returns NetworkResult.Failure(NetworkError.NotFound)
-            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true))
             vm.load()
             assertTrue(vm.state.value is ListOfRowsUiState.Error)
         }
@@ -224,7 +224,7 @@ class MyHomesListViewModelTest {
             coEvery { repo.myHomes() } returns NetworkResult.Failure(NetworkError.NotFound)
             coEvery { residencyRepo.requests(null) } returns NetworkResult.Success(PersonalHomeResidencyPage(listOf(claim), null))
             val opened = mutableListOf<String>()
-            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true))
             vm.configureNavigation({}, {}, onVerifyResidency = { opened.add(it) })
             vm.load()
             val rows = (vm.state.value as ListOfRowsUiState.Loaded).sections.flatMap { it.rows }
@@ -246,7 +246,7 @@ class MyHomesListViewModelTest {
             coEvery { repo.myHomes() } returns NetworkResult.Success(MyHomesResponse(emptyList(), null))
             coEvery { residencyRepo.requests(null) } returns NetworkResult.Success(PersonalHomeResidencyPage(listOf(first), first.id))
             coEvery { residencyRepo.requests(first.id) } returns NetworkResult.Failure(NetworkError.NotFound)
-            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true))
             vm.load()
             vm.loadMoreRequests()
             val failed = (vm.state.value as ListOfRowsUiState.Loaded).sections.flatMap { it.rows }
@@ -266,7 +266,7 @@ class MyHomesListViewModelTest {
         runTest {
             coEvery { repo.myHomes() } returns
                 NetworkResult.Success(MyHomesResponse(homes = listOf(makeHome("00000000-0000-4000-8000-000000000001")), message = null))
-            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true))
             vm.load()
             val row = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.first()
             assertEquals(RowTrailing.Chevron, row.trailing)
@@ -280,7 +280,7 @@ class MyHomesListViewModelTest {
                 NetworkResult.Success(
                     MyHomesResponse(homes = listOf(makeHome("00000000-0000-4000-8000-000000000001", canDeleteHome = true)), message = null),
                 )
-            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true))
             vm.load()
             val row = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.first()
             assertEquals(RowTrailing.Kebab, row.trailing)
@@ -298,7 +298,7 @@ class MyHomesListViewModelTest {
                 )
             coEvery { adminRepo.deleteHome("00000000-0000-4000-8000-000000000001") } returns
                 NetworkResult.Success(DeleteHomeResponse(message = "Home deleted successfully"))
-            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true))
             vm.load()
             vm.deleteHome("00000000-0000-4000-8000-000000000001")
             coVerify { adminRepo.deleteHome("00000000-0000-4000-8000-000000000001") }
@@ -314,7 +314,7 @@ class MyHomesListViewModelTest {
                 )
             coEvery { adminRepo.deleteHome("00000000-0000-4000-8000-000000000001") } returns
                 NetworkResult.Failure(NetworkError.Server(403, "Only the primary owner can delete this home."))
-            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo)
+            val vm = MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true))
             vm.load()
             vm.deleteHome("00000000-0000-4000-8000-000000000001")
             assertNotNull(vm.actionError.value)
@@ -328,7 +328,7 @@ class MyHomesListViewModelTest {
             coEvery { repo.myHomes() } returns NetworkResult.Success(MyHomesResponse(homes = emptyList(), message = null))
             var added = false
             val vm =
-                MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo).apply {
+                MyHomesListViewModel(repo, adminRepo, sessions, residencyRepo, mockk(relaxed = true)).apply {
                     configureNavigation(onOpenHome = {}, onAddHome = { added = true })
                 }
             vm.load()
