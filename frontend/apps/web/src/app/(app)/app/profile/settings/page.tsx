@@ -70,23 +70,28 @@ export default function SettingsPage() {
   }, [loadSettings]);
 
   // Each switch and the visibility menu saves when it changes; a bottom "Save Settings" button
-  // lost every change made without it. Only the latest save of a setting may undo the screen.
+  // lost every change made without it. Saves run one after another, so an older "on" can't land
+  // after a newer "off" (as on Notification Preferences), and only the newest save of a setting
+  // may undo the screen.
   const saveSeq = useRef<Record<string, number>>({});
-  const saveSetting = async (
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const saveSetting = (
     field: 'email_notifications' | 'push_notifications' | 'profile_visibility' | 'show_email' | 'show_phone',
     value: boolean | string,
     revert: () => void,
   ) => {
     const seq = (saveSeq.current[field] ?? 0) + 1;
     saveSeq.current[field] = seq;
-    try {
-      await api.users.updateProfile({ [field]: value } as Record<string, unknown>);
-      if (saveSeq.current[field] === seq) toast.success('Saved');
-    } catch (err: unknown) {
-      if (saveSeq.current[field] !== seq) return;
-      revert();
-      toast.error(err instanceof Error ? err.message : "Couldn't save that setting");
-    }
+    saveQueue.current = saveQueue.current.then(async () => {
+      try {
+        await api.users.updateProfile({ [field]: value } as Record<string, unknown>);
+        if (saveSeq.current[field] === seq) toast.success('Saved');
+      } catch (err: unknown) {
+        if (saveSeq.current[field] !== seq) return;
+        revert();
+        toast.error(err instanceof Error ? err.message : "Couldn't save that setting");
+      }
+    });
   };
 
   const handleLogout = async () => {
@@ -207,7 +212,7 @@ export default function SettingsPage() {
                 onChange={(value) => {
                   const previous = emailNotifications;
                   setEmailNotifications(value);
-                  void saveSetting('email_notifications', value, () => setEmailNotifications(previous));
+                  saveSetting('email_notifications', value, () => setEmailNotifications(previous));
                 }}
               />
               <ToggleSetting
@@ -217,7 +222,7 @@ export default function SettingsPage() {
                 onChange={(value) => {
                   const previous = pushNotifications;
                   setPushNotifications(value);
-                  void saveSetting('push_notifications', value, () => setPushNotifications(previous));
+                  saveSetting('push_notifications', value, () => setPushNotifications(previous));
                 }}
               />
               <button
@@ -253,7 +258,7 @@ export default function SettingsPage() {
                     const previous = profileVisibility;
                     const value = e.target.value;
                     setProfileVisibility(value);
-                    void saveSetting('profile_visibility', value, () => setProfileVisibility(previous));
+                    saveSetting('profile_visibility', value, () => setProfileVisibility(previous));
                   }}
                   className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
@@ -269,7 +274,7 @@ export default function SettingsPage() {
                 onChange={(value) => {
                   const previous = showEmail;
                   setShowEmail(value);
-                  void saveSetting('show_email', value, () => setShowEmail(previous));
+                  saveSetting('show_email', value, () => setShowEmail(previous));
                 }}
               />
               <ToggleSetting
@@ -279,7 +284,7 @@ export default function SettingsPage() {
                 onChange={(value) => {
                   const previous = showPhone;
                   setShowPhone(value);
-                  void saveSetting('show_phone', value, () => setShowPhone(previous));
+                  saveSetting('show_phone', value, () => setShowPhone(previous));
                 }}
               />
               <button
