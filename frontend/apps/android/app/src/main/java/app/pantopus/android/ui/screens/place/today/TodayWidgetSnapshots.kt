@@ -27,7 +27,15 @@ fun PlaceIntelligence.todayWidgetSnapshot(
         placeLabel = if (street.isEmpty()) place.city else TodayWidgetSnapshot.streetOnly(street),
         weather =
             weather?.let {
-                TodayWidgetSnapshot.Weather(it.currentTempF, it.conditionCode.name.lowercase(), it.conditionLabel, it.highF, it.lowF)
+                TodayWidgetSnapshot.Weather(
+                    it.currentTempF,
+                    it.conditionCode.name.lowercase(),
+                    it.conditionLabel,
+                    it.highF,
+                    it.lowF,
+                    it.windMph,
+                    it.windDirection,
+                )
             },
         sun = sun?.let { TodayWidgetSnapshot.Sun(it.sunrise, it.sunset) },
         air =

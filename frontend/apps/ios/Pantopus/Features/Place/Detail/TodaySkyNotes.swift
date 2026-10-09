@@ -3,7 +3,8 @@
 //  Pantopus
 //
 //  Picking the Now card's note: the shared notes in `SkyNote.swift`, plus
-//  the ones that read the app's weather data (freezing, the warmest day).
+//  the ones that read the app's weather data (freezing, strong wind, the
+//  warmest day).
 //  Parity twin of Android's `SkyNote.kt`.
 //
 
@@ -30,6 +31,7 @@ extension SkyNote {
             { bins(now: now, moment: moment, pickups: pickups, calendar: calendar) },
             { Self.air(air) },
             { frost(weather: weather, moment: moment) },
+            { wind(weather: weather) },
             { clear ? meteors(now: now, moment: moment, calendar: calendar) : nil },
             { moon(moment: moment, clear: clear) },
             { solsticeOrEquinox(now: now, calendar: calendar) },
@@ -51,6 +53,24 @@ extension SkyNote {
         // From mid-afternoon on: the next 14 hours dip to freezing.
         guard moment.minutes >= 15 * 60, let low = weather.hourly.prefix(14).map(\.tempF).min(), low <= 32 else { return nil }
         return SkyNote(kind: .frost, kicker: "❄️ FROST TONIGHT", spoken: "Frost likely tonight, down to \(Int(low.rounded()))°.")
+    }
+
+    // MARK: - Strong wind
+
+    /// Sustained wind of 30 mph or more (about where wind advisories start),
+    /// now or in the next six hours: rare, and a reason to secure loose things.
+    static func wind(weather: PlaceWeatherData) -> SkyNote? {
+        if let now = weather.windMph, now >= 30 {
+            let mph = Int(now.rounded())
+            return SkyNote(kind: .wind, kicker: "💨 STRONG WIND NOW", spoken: "Strong wind now, \(mph) miles per hour.")
+        }
+        let ahead: [Double] = weather.hourly.prefix(6).compactMap(\.windMph)
+        guard let peak = ahead.max(), peak >= 30 else { return nil }
+        return SkyNote(
+            kind: .wind,
+            kicker: "💨 STRONG WIND AHEAD",
+            spoken: "Strong wind ahead, up to \(Int(peak.rounded())) miles per hour in the next six hours."
+        )
     }
 
     // MARK: - Warmest day

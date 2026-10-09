@@ -34,7 +34,7 @@ import kotlin.math.sqrt
  * Parity twin of iOS `TodaySkyPainter.swift` and `TodaySkyGround.swift`; the numbers match.
  */
 
-/** The scene's finer details: the meteor shower, smoke and rain, and the home and its street. */
+/** The scene's finer details: the meteor shower, smoke, rain and wind, and the home and its street. */
 data class SkyDetails(
     /** A meteor shower's peak night: shooting stars whatever the note says. */
     val meteorShower: Boolean = false,
@@ -46,6 +46,10 @@ data class SkyDetails(
     val home: SkyHome = SkyHome.HOUSE,
     /** Lights on the far hill after dusk, from the block's density bucket. */
     val streetLights: Int = 0,
+    /** Sustained wind, mph (that hour's while sliding); null when the forecast didn't say (`TodaySkyWind.kt`). */
+    val windMph: Double? = null,
+    /** Where the wind blows from ("SW"); null when unknown. */
+    val windFrom: String? = null,
 )
 
 class TodaySkyPainter(
@@ -62,6 +66,7 @@ class TodaySkyPainter(
     private val smoke = details.smoke
     private val weather = skyWeather(condition)
     private val night = moment.phase == SkyPalette.Phase.NIGHT
+    private val wind = SkyWind.of(details.windMph, details.windFrom, condition)
 
     /** The day's first and last golden hour warm the horizon until dawn's or dusk's own sky takes over (up to 0.5). */
     private val goldenWarmth =
@@ -97,10 +102,10 @@ class TodaySkyPainter(
             }
             paintRain(scene)
             paintSnow(scene)
-            if (condition == WeatherConditionCode.WIND) paintWind(scene)
+            if (wind.streaks > 0) paintWind(scene, wind, night, still, season)
             if (weather == SkyPalette.Weather.STORM && !still) paintLightning(scene)
             if (smoke > 0) paintSmoke(scene, smoke, night)
-            TodaySkyGround(scene, weather, moment, condition, temperature < 50, still, note?.bins.orEmpty(), season, details).paint(this)
+            TodaySkyGround(scene, weather, moment, wind, temperature < 50, still, note?.bins.orEmpty(), season, details).paint(this)
             // Fog hugs the ground, in front of the house and below the reading.
             paintFog(scene)
             paintScrim(scene)
@@ -221,7 +226,7 @@ class TodaySkyPainter(
                 SkyPalette.Phase.DAY -> SkyPalette.white
             }
 
-        fun sway(offset: Double) = if (still) 0f else (sin(scene.time * 0.18 + offset) * 12).toFloat()
+        fun sway(offset: Double) = if (still) 0f else (sin(scene.time * wind.swayPace + offset) * wind.sway).toFloat()
         cloud(scene.width * 0.5f + sway(0.0), 70f, 96f, tint, if (night) 0.9f else 0.88f)
         cloud(scene.width * 0.74f + sway(2.0), 92f, 120f, tint, if (night) 0.95f else 0.97f)
     }
@@ -233,9 +238,10 @@ class TodaySkyPainter(
             if (storm) scene.sky.top.mixed(SkyPalette.black, 0.1f) else scene.sky.top.mixed(SkyPalette.white, if (night) 0.08f else 0.16f)
         val lower =
             if (storm) scene.sky.mid.mixed(SkyPalette.black, 0.05f) else scene.sky.mid.mixed(SkyPalette.white, if (night) 0.06f else 0.2f)
+        val pace = wind.cloudPace * wind.toward
         DECK.forEach { layer ->
             val span = scene.width + layer.width
-            val x = scene.drift((layer.start * span).toDouble(), layer.speed, span.toDouble(), still) - layer.width
+            val x = scene.drift((layer.start * span).toDouble(), layer.speed * pace, span.toDouble(), still) - layer.width
             cloud(x, layer.y, layer.width, if (layer.upper) deck else lower, if (layer.upper) 0.95f else 0.9f)
         }
     }
@@ -250,18 +256,22 @@ class TodaySkyPainter(
                 condition == WeatherConditionCode.SLEET -> 40
                 else -> 70
             }
-        val count = (base * (0.6 + 0.8 * details.rain)).toInt()
+        // Sideways for each dp fallen; the drops start further upwind to cover the card.
+        val slant = wind.slant * wind.toward
+        val spread = scene.height * abs(slant)
+        val from = if (slant > 0) -spread - 10 else -10.0
+        val count = (base * (0.6 + 0.8 * details.rain) * (scene.width + spread) / scene.width).toInt()
         val path = Path()
         repeat(count) {
-            val start = random.next() * (scene.width + 40)
+            val start = from + random.next() * (scene.width + spread + 20)
             val speed = 380 + random.next() * 160
             val length = 9 + random.next() * 7
             val offset = random.next() * scene.height
             val fall = (offset + if (still) 0.0 else scene.time * speed) % (scene.height + length)
             val y = fall - length
-            val x = start - (y + length) * 0.22
+            val x = start + (y + length) * slant
             path.moveTo(x.toFloat(), y.toFloat())
-            path.lineTo((x - length * 0.22).toFloat(), (y + length).toFloat())
+            path.lineTo((x + length * slant).toFloat(), (y + length).toFloat())
         }
         val color = if (night) SkyPalette.rainNight.copy(alpha = 0.45f) else SkyPalette.rainDay.copy(alpha = 0.55f)
         drawPath(path, color, style = Stroke(width = 1.2f, cap = StrokeCap.Round))
@@ -271,8 +281,13 @@ class TodaySkyPainter(
         if (weather != SkyPalette.Weather.SNOW && condition != WeatherConditionCode.SLEET) return
         val random = SkyRandom(23)
         val moving = if (still) 0.0 else scene.time
-        repeat(if (condition == WeatherConditionCode.SLEET) 26 else 55) {
-            val start = random.next() * scene.width
+        // Flakes blow sideways as they fall, so they start further upwind.
+        val slant = wind.slant * wind.toward
+        val spread = scene.height * abs(slant)
+        val from = if (slant > 0) -spread else 0.0
+        val count = ((if (condition == WeatherConditionCode.SLEET) 26 else 55) * (scene.width + spread) / scene.width).toInt()
+        repeat(count) {
+            val start = from + random.next() * (scene.width + spread)
             val speed = 18 + random.next() * 24
             val radius = 1 + random.next() * 1.7
             val offset = random.next() * scene.height
@@ -281,7 +296,7 @@ class TodaySkyPainter(
             val phase = random.next() * 6.28
             val opacity = 0.65 + random.next() * 0.3
             val y = (offset + moving * speed) % (scene.height + 8) - 4
-            val x = start + sin(moving * frequency + phase) * amplitude
+            val x = start + (y + 4) * slant + sin(moving * frequency + phase) * amplitude
             drawCircle(SkyPalette.white.copy(alpha = opacity.toFloat()), radius.toFloat(), Offset(x.toFloat(), y.toFloat()))
         }
     }
@@ -305,34 +320,6 @@ class TodaySkyPainter(
                 drawCircle(glow, radius = 13f, center = Offset.Zero)
             }
         }
-    }
-
-    private fun DrawScope.paintWind(scene: SkyScene) {
-        val random = SkyRandom(31)
-        val moving = if (still) 0.0 else scene.time
-        repeat(4) {
-            val span = scene.width + 60.0
-            val speed = 55 + random.next() * 35
-            val base = 40 + random.next() * 90
-            val phase = random.next() * 6.28
-            val x = scene.drift(random.next() * span, speed, span, still) - 30
-            val y = (base + sin(moving * 2 + phase) * 8).toFloat()
-            translate(x, y) {
-                rotateRad((moving * 3 + phase).toFloat(), pivot = Offset.Zero) {
-                    val color = if (night) SkyPalette.leafNight.copy(alpha = 0.7f) else SkyPalette.leafDay.copy(alpha = 0.85f)
-                    drawOval(color, topLeft = Offset(-4f, -2f), size = Size(8f, 4f))
-                }
-            }
-        }
-        val streaks = Path()
-        repeat(4) { index ->
-            val span = scene.width + 160.0
-            val x = scene.drift(index * 0.27 * span, 70.0 + index * 12, span, still) - 120
-            val y = 40f + index * 26
-            streaks.moveTo(x, y)
-            streaks.cubicTo(x + 40, y - 6, x + 70, y + 6, x + 110, y)
-        }
-        drawPath(streaks, SkyPalette.white.copy(alpha = if (night) 0.28f else 0.5f), style = Stroke(width = 1.6f, cap = StrokeCap.Round))
     }
 
     /**

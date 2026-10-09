@@ -39,6 +39,9 @@ data class TodayWidgetSnapshot(
         val label: String,
         val highF: Double?,
         val lowF: Double?,
+        /** Sustained wind, mph, and where it blows from ("SW"), so the widget's trees lean too; null in older snapshots. */
+        val windMph: Double? = null,
+        val windDirection: String? = null,
     )
 
     /** Local wall-clock times, as the place-intelligence contract sends them. */
@@ -122,6 +125,8 @@ class TodayWidgetStoreImpl
                             .put("label", it.label)
                             .put("high_f", it.highF ?: JSONObject.NULL)
                             .put("low_f", it.lowF ?: JSONObject.NULL)
+                            .put("wind_mph", it.windMph ?: JSONObject.NULL)
+                            .put("wind_direction", it.windDirection ?: JSONObject.NULL)
                     } ?: JSONObject.NULL,
                 ).put(
                     "sun",
@@ -159,6 +164,8 @@ class TodayWidgetStoreImpl
                             label = it.getString("label"),
                             highF = it.optDoubleOrNull("high_f"),
                             lowF = it.optDoubleOrNull("low_f"),
+                            windMph = it.optDoubleOrNull("wind_mph"),
+                            windDirection = it.optStringOrNull("wind_direction"),
                         )
                     },
                 sun =

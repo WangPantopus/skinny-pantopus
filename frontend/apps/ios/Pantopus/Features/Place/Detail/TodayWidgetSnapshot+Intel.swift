@@ -34,7 +34,9 @@ extension TodayWidgetSnapshot {
                     condition: $0.conditionCode.rawValue,
                     label: $0.conditionLabel,
                     highF: $0.highF,
-                    lowF: $0.lowF
+                    lowF: $0.lowF,
+                    windMph: $0.windMph,
+                    windDirection: $0.windDirection
                 )
             },
             sun: sun.map { Sun(sunrise: $0.sunrise, sunset: $0.sunset) },

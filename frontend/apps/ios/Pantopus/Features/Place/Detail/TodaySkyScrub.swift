@@ -35,7 +35,8 @@ enum SkyScrub {
         return (gaps.min { $0.gap < $1.gap }?.chance ?? 50) / 100
     }
 
-    /// The reading for that hour: its temperature and sky, and that day's high and low.
+    /// The reading for that hour: its temperature, sky and wind (blowing from
+    /// where it blows now), and that day's high and low.
     static func weather(_ data: PlaceWeatherData, at picked: SkyScrubHour, calendar: Calendar = .autoupdatingCurrent) -> PlaceWeatherData {
         let day = data.daily.first { $0.date.hasPrefix(SkyNote.dayKey(picked.date, calendar: calendar)) }
         return PlaceWeatherData(
@@ -45,6 +46,8 @@ enum SkyScrub {
             feelsLikeF: nil,
             highF: day?.highF ?? data.highF,
             lowF: day?.lowF ?? data.lowF,
+            windMph: picked.hour.windMph,
+            windDirection: data.windDirection,
             hourly: [],
             daily: data.daily
         )
@@ -72,13 +75,20 @@ enum SkyScrub {
         return "\(kind) \(Int(picked.hour.precipChance.rounded()))%"
     }
 
+    /// The hour's chip beside the high and low: its chance of rain, otherwise
+    /// its wind from 15 mph. One chip, so the row keeps its height while sliding.
+    static func chip(_ picked: SkyScrubHour) -> (text: String, spoken: String)? {
+        if let precip = precipChip(picked) { return (precip, precip) }
+        return SkyWind.chip(picked.hour.windMph)
+    }
+
     /// "3 PM", or "TOMORROW 6 AM" past midnight: takes the place of "NOW".
     static func kicker(_ picked: SkyScrubHour, now: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
         let time = picked.date.formatted(.dateTime.hour())
         return (calendar.isDate(picked.date, inSameDayAs: now) ? time : "Tomorrow \(time)").uppercased()
     }
 
-    /// "3 PM: 68°, Partly cloudy, 40% chance of rain."
+    /// "3 PM: 68°, Partly cloudy, 40% chance of rain, wind 22 miles per hour."
     static func spoken(_ picked: SkyScrubHour, now: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
         let time = picked.date.formatted(.dateTime.hour())
         var parts = ["\(calendar.isDate(picked.date, inSameDayAs: now) ? time : "Tomorrow \(time)"): \(Int(picked.hour.tempF.rounded()))°"]
@@ -88,6 +98,7 @@ enum SkyScrub {
             let kind = picked.hour.conditionCode == .snow || picked.hour.conditionCode == .sleet ? "snow" : "rain"
             parts.append("\(Int(picked.hour.precipChance.rounded()))% chance of \(kind)")
         }
+        if let wind = SkyWind.chip(picked.hour.windMph) { parts.append(wind.spoken) }
         return parts.joined(separator: ", ") + "."
     }
 }

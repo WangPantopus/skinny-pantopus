@@ -81,7 +81,13 @@ class SkyShareCard(
                 note = null,
                 season = SkySeason.at(now.toLocalDate()),
                 still = true,
-                details = SkyDetails(meteorShower = SkyNote.meteors(now, moment) != null, smoke = air?.smoke ?: 0.0),
+                details =
+                    SkyDetails(
+                        meteorShower = SkyNote.meteors(now, moment) != null,
+                        smoke = air?.smoke ?: 0.0,
+                        windMph = weather.windMph,
+                        windFrom = weather.windDirection,
+                    ),
             )
         val canvas = Canvas(bitmap)
         CanvasDrawScope().draw(Density(scale), LayoutDirection.Ltr, canvas, Size(WIDTH * scale, HEIGHT * scale)) {
