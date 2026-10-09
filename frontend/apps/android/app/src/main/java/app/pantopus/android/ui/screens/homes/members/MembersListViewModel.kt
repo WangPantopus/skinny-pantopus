@@ -214,6 +214,7 @@ class MembersListViewModel
         private var rosterConfirmed = false
         private var loadedOnce = false
         private var readGeneration = 0L
+        private var active = true
         private var loadInFlight = false
         private var readError: String? = null
 
@@ -265,6 +266,7 @@ class MembersListViewModel
          * and the store answers a fresh copy without a request or revalidates an older one quietly.
          */
         fun load() {
+            active = true
             if (loadInFlight) return
             if (!loadedOnce && gate.showsCopy) showStoredCopy()
             reload(force = false)
@@ -274,6 +276,16 @@ class MembersListViewModel
         fun refresh() {
             _refreshing.value = loadedOnce
             reload(force = true)
+        }
+
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            loadInFlight = false
+            pendingInvites = emptyList()
+            invitationsKnown = false
+            if (!gate.showsCopy) retireSnapshot() else applyState()
+            gate.leave()
         }
 
         override fun onCleared() {
@@ -465,17 +477,14 @@ class MembersListViewModel
             generation: Long = ++readGeneration,
             force: Boolean = true,
         ) = coroutineScope {
-            if (generation != readGeneration) return@coroutineScope
+            if (!active || generation != readGeneration) return@coroutineScope
             loadInFlight = true
             val session = sender.session(this)
             try {
                 session.requireCurrent()
-                val fromCopy = gate.showsCopy && !force
-                var reads = readAll(fromCopy)
-                // Household access ended meanwhile: whatever came from a copy is read again now.
-                if (fromCopy && !gate.showsCopy) reads = readAll(fromCopy = false)
+                val reads = readAll(force, generation)
                 session.requireCurrent()
-                if (generation != readGeneration) return@coroutineScope
+                if (!active || generation != readGeneration) return@coroutineScope
                 _refreshing.value = false
                 publish(reads)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -491,24 +500,28 @@ class MembersListViewModel
             }
         }
 
-        private suspend fun readAll(fromCopy: Boolean): MembersReads =
-            coroutineScope {
-                val force = !fromCopy
-                val recheck = async { gate.recheck(force) }
-                val meRead = async { adminRepo.myAccessStored(homeId, force) }
-                val rosterRead = async { repo.listOccupantsStored(homeId, force) }
+        private suspend fun readAll(force: Boolean, generation: Long): MembersReads {
+            val refusal = gate.checkForRead(force) { if (generation == readGeneration) retireSnapshot() }
+            if (refusal != null) return MembersReads(null, Stored(failure = refusal), emptyList<PendingInviteDto>() to null, emptyList(), emptyList())
+            if (generation != readGeneration) return MembersReads(null, Stored(), emptyList<PendingInviteDto>() to null, emptyList(), emptyList())
+            return coroutineScope {
+                val readNow = force || !gate.showsCopy
+                val meRead = async { adminRepo.myAccessStored(homeId, readNow) }
+                val rosterRead = async { repo.listOccupantsStored(homeId, readNow) }
                 val me = meRead.await().data
                 val roster = rosterRead.await()
                 val canManage = me?.canManageMembers == true
                 val invitations = async { fetchSenderInvitations(canManage) }
                 val requests =
                     async {
-                        if (canManage) adminRepo.householdAccessRequestsStored(homeId, force).data?.requests.orEmpty() else emptyList()
+                        if (canManage) adminRepo.householdAccessRequestsStored(homeId, readNow).data?.requests.orEmpty() else emptyList()
                     }
-                val audit = async { if (canManage) adminRepo.auditLogStored(homeId, force).data?.entries.orEmpty() else emptyList() }
-                recheck.await()
-                MembersReads(me, roster, invitations.await(), requests.await(), audit.await())
+                val audit = async { if (canManage) adminRepo.auditLogStored(homeId, readNow).data?.entries.orEmpty() else emptyList() }
+                val rows = if (!gate.showsCopy && roster.failure != null) Stored<OccupantsResponse>(failure = roster.failure) else roster
+                MembersReads(me, rows, invitations.await(), requests.await(), audit.await())
             }
+
+        }
 
         private fun publish(reads: MembersReads) {
             val roster = reads.roster.data
