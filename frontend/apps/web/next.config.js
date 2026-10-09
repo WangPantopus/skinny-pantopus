@@ -16,6 +16,14 @@ const createNextConfig = (phase) => ({
     (phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next'),
   output: 'standalone',
   reactStrictMode: true,
+  experimental: {
+    // Instant Screens (contract §3): a page visited in this tab reopens from the router's
+    // memory instead of asking the server for its route again, so going back is instant and
+    // works offline. Signed-in pages are thin client wrappers (their data loads in the
+    // browser, kept by TanStack Query for the same 30 minutes), so a kept route carries no
+    // account data. Defaults: dynamic 0 s, static 300 s.
+    staleTimes: { dynamic: 1800, static: 1800 },
+  },
   typescript: {
     ignoreBuildErrors: false,
   },
