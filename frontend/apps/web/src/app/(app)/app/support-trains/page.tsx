@@ -1,15 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { Heart, Plus, Calendar, Users } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
 import { trainStatusLabel } from '@/components/support-trains/contributionLabels';
+import { SUPPORT_TRAIN_FRESH_MS } from '@/components/support-trains/supportTrainQueries';
+import { queryKeys } from '@/lib/query-keys';
 
 type RoleFilter = 'all' | 'organizer' | 'helper';
+
+// The role tab you were on, so coming back shows the same list (memory only).
+let rememberedRole: RoleFilter = 'all';
 
 const ROLE_TABS: Array<{ key: RoleFilter; label: string }> = [
   { key: 'all', label: 'All' },
@@ -45,43 +51,33 @@ function formatDate(value: string | null): string {
 
 export default function SupportTrainsPage() {
   const router = useRouter();
-  const [trains, setTrains] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
-  const requestSequence = useRef(0);
-
-  const fetchTrains = useCallback(async () => {
-    const request = ++requestSequence.current;
-    setLoading(true);
-    const token = getAuthToken();
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    try {
-      const params: any = { limit: 50, offset: 0 };
-      if (roleFilter !== 'all') params.role = roleFilter;
-
-      const result = await api.supportTrains.listMySupportTrains(params);
-      if (request !== requestSequence.current) return;
-      setTrains(result.support_trains || []);
-      setTotal(result.total || 0);
-      setError(null);
-    } catch (err: any) {
-      if (request !== requestSequence.current) return;
-      setError(err?.message || 'Failed to load Support Trains');
-    } finally {
-      if (request === requestSequence.current) setLoading(false);
-    }
-  }, [roleFilter, router]);
-
+  // The session cookie is readable only in the browser: until mount, the page
+  // renders what the cache already has (nothing on a fresh load), like the server.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const signedIn = mounted && !!getAuthToken();
   useEffect(() => {
-    void fetchTrains();
-    return () => { requestSequence.current += 1; };
-  }, [fetchTrains]);
+    if (mounted && !getAuthToken()) router.push('/login');
+  }, [mounted, router]);
+
+  const [roleFilter, setRoleFilterState] = useState<RoleFilter>(() => rememberedRole);
+  const setRoleFilter = (role: RoleFilter) => { rememberedRole = role; setRoleFilterState(role); };
+  // Each role tab is its own entry (contract §4, Support Trains: fresh 1 minute), so
+  // coming back, or back to a tab, shows the list at once and refreshes it quietly.
+  const trainsQuery = useQuery({
+    queryKey: queryKeys.supportTrainsMine(roleFilter),
+    queryFn: () => api.supportTrains.listMySupportTrains({
+      limit: 50, offset: 0, ...(roleFilter !== 'all' ? { role: roleFilter } : {}),
+    }),
+    enabled: signedIn,
+    staleTime: SUPPORT_TRAIN_FRESH_MS,
+  });
+  const trains: any[] = trainsQuery.data?.support_trains || [];
+  const error = !trainsQuery.data && trainsQuery.isError
+    ? ((trainsQuery.error as { message?: string } | null)?.message || 'Failed to load Support Trains')
+    : null;
+  const loading = !trainsQuery.data && (!error || trainsQuery.isFetching);
+  const fetchTrains = () => { void trainsQuery.refetch(); };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
