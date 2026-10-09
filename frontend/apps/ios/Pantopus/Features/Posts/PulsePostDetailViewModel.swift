@@ -532,10 +532,13 @@ public final class PulsePostDetailViewModel {
 
     private func fetchNearbyProviders() async {
         do {
-            let response = try await client.request(
+            // Kept beside the post (fresh for a minute), so reopening it is free.
+            let response = try await store.load(
                 MatchedBusinessesEndpoints.matchedBusinesses(postId: postId),
-                as: MatchedBusinessesResponse.self
-            )
+                as: MatchedBusinessesResponse.self,
+                kind: .post,
+                topics: [ScreenTopic.post(postId)]
+            ).value
             nearbyProviders = response.businesses.compactMap(Self.providerRow(from:))
         } catch {
             logger.warning("Matched businesses load failed: \(error)")
