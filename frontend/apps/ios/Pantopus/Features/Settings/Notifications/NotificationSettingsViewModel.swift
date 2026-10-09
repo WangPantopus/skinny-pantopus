@@ -26,7 +26,8 @@
 //  (`hub.js:699-709`), so never format them for display locale.
 //
 
-// swiftlint:disable type_body_length
+// Live refresh while open (Instant Screens) pushed this past 500 lines.
+// swiftlint:disable type_body_length file_length
 
 import Foundation
 import Observation
@@ -121,6 +122,14 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         await fetch(force: true)
     }
 
+    /// `profile:me` while the screen is open (a change on another device, or
+    /// this phone's own save coming back): re-read what went stale. Not while
+    /// a change here waits to save or is saving: its reply is the newer copy.
+    public func refreshFromSignal() async {
+        guard saveTask == nil, !saveInFlight, pendingPatch.isEmpty else { return }
+        await fetch(force: false)
+    }
+
     public func tapRow(_: String) async {}
     public func setSlider(_: String, index _: Int) async {}
 
@@ -189,11 +198,16 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     // MARK: - Networking
 
     private func fetch(force: Bool) async {
+        // A change made here while the read is out is newer than its reply
+        // (the change's own save answers it), so that reply is dropped.
+        let edits = saveRevision
         do {
             let response = try await readPreferences(force: force)
+            guard edits == saveRevision else { return }
             preferences = response.preferences
             state = .loaded(groups())
         } catch {
+            guard edits == saveRevision else { return }
             guard preferences != nil else {
                 state = .error(
                     message: (error as? APIError)?.errorDescription

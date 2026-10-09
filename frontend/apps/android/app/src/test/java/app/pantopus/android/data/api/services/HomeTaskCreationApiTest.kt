@@ -4,8 +4,10 @@ import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.data.homes.HomeTasksRepository
+import app.pantopus.android.data.store.ScreenStore
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -36,6 +38,7 @@ class HomeTaskCreationApiTest {
             HomeTasksRepository(
                 Retrofit.Builder().baseUrl(server.url("/"))
                     .addConverterFactory(MoshiConverterFactory.create(moshi)).build().create(HomeTasksApi::class.java),
+                mockk<ScreenStore>(relaxed = true),
             )
     }
 

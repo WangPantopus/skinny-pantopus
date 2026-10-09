@@ -115,6 +115,15 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         await reload(force: true)
     }
 
+    /// A change signal named the home list while it's on screen: re-read what
+    /// went stale. Not while suspended (in the background, or the removal
+    /// check is open: closing it re-reads) or while a failed delete's alert
+    /// is up (a re-read would close it unread).
+    func refreshIfShown() async {
+        guard visible, actionError == nil else { return }
+        await load()
+    }
+
     private func reload(force: Bool) async {
         guard isCurrent else { retireSession()
             return

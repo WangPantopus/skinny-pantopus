@@ -114,9 +114,14 @@ extension AuthManager {
             return
         }
         // Each call may wait 20 s and retry twice, so an outage once meant ~100 s on the splash.
-        // The splash follows `state`, so the app opens on the cached identity while this finishes.
+        // The splash follows `state`, so the app opens on the cached identity while this finishes:
+        // after `launchRestoreCap`, or at once with no network (the screens open on the copy they
+        // saved on the phone, Instant Screens M3).
         let opener = Task { [weak self] in
-            try? await Task.sleep(for: Self.launchRestoreCap)
+            let deadline = ContinuousClock.now + Self.launchRestoreCap
+            while ContinuousClock.now < deadline, NetworkMonitor.shared.isOnline, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
             guard let self, !Task.isCancelled, state == .unknown, let cached = loadCachedUser() else { return }
             logger.info("Session restore still running — opening on the cached identity")
             setState(.signedIn(cached))
@@ -548,6 +553,17 @@ extension AuthManager {
         FeedModerationStore.shared.clear()
         // Cached reads belong to the account that made them.
         apiClient.purgeCache()
+        // So do the images AsyncImage kept in the shared URL cache (chat and
+        // mail photos, avatars), the widgets' snapshots of Today and nearby
+        // tasks, and what this account's chat badge, link previews, AI thread,
+        // Support Train edits and chat hide/mute choices left in memory.
+        URLCache.shared.removeAllCachedResponses()
+        WidgetSnapshotStore.shared.clear()
+        ChatBadgeStore.shared.reset()
+        LinkPreviewStore.shared.clear()
+        AIConversationStore.shared.clear()
+        SupportTrainReservationsStore.shared.reset()
+        ChatConversationPreferences.shared.clear()
         guard hadSession else { return false }
         // The next person on this device must not read the last account's
         // notifications on the lock screen or in Notification Center.

@@ -210,6 +210,14 @@ public final class ChatConversationPreferences {
         return nowMuted
     }
 
+    /// Sign-out: one account's hidden and muted conversations must never
+    /// filter or quiet the next account's chats (like the feed's mutes).
+    public func clear() {
+        for key in [Self.hiddenStorageKey, Self.mutedStorageKey, Self.hiddenUnreadBaselineKey] {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
     private func persist(_ values: Set<String>, key: String) {
         let encoded = (try? JSONEncoder().encode(Array(values).sorted())) ?? Data("[]".utf8)
         defaults.set(String(data: encoded, encoding: .utf8), forKey: key)

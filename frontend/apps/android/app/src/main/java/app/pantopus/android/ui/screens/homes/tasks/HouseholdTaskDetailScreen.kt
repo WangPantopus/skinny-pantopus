@@ -34,6 +34,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -53,6 +54,7 @@ fun HouseholdTaskDetailScreen(
     gigViewModel: HomeTaskGigViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_task", state.task != null)
     val mediaState by mediaViewModel.controller.state.collectAsStateWithLifecycle()
     val recurrenceState by recurrenceViewModel.controller.state.collectAsStateWithLifecycle()
     val gigState by gigViewModel.controller.state.collectAsStateWithLifecycle()
