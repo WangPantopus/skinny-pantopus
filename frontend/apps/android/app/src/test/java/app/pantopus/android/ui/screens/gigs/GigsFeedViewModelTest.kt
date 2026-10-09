@@ -97,6 +97,10 @@ class GigsFeedViewModelTest {
         }
 
         override fun read(): WidgetSnapshotData? = null
+
+        override fun clear() {
+            written = null
+        }
     }
 
     private val repo: GigsRepository = mockk()

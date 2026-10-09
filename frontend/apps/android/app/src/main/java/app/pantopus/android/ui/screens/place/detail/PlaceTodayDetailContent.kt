@@ -478,8 +478,9 @@ private fun UpcomingEvents(
     }
 }
 
-// Home UI preferences are separate from credential and management-token stores.
-private val android.content.Context.homeTodayPreferences by preferencesDataStore(name = "home_today")
+// Home UI preferences are separate from credential and management-token stores. Sign-out clears
+// them (AccountDeviceData), so one DataStore instance serves both.
+internal val android.content.Context.homeTodayPreferences by preferencesDataStore(name = "home_today")
 
 internal object RadonToday {
     fun selected(tasks: List<HomeTaskDto>): HomeTaskDto? {

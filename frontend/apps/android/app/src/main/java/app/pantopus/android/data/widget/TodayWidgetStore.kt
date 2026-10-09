@@ -87,6 +87,9 @@ interface TodayWidgetStore {
     fun write(snapshot: TodayWidgetSnapshot)
 
     fun read(): TodayWidgetSnapshot?
+
+    /** Sign-out: forget the snapshot; placed widgets ask to open the app. */
+    fun clear()
 }
 
 /** SharedPreferences JSON; after each write the placed widgets re-render at once. */
@@ -103,6 +106,11 @@ class TodayWidgetStoreImpl
                 prefs.edit().putString(KEY_SNAPSHOT, encode(snapshot).toString()).apply()
                 requestWidgetUpdate()
             }.onFailure { Timber.w(it, "Failed to write the Today widget snapshot") }
+        }
+
+        override fun clear() {
+            prefs.edit().remove(KEY_SNAPSHOT).commit()
+            requestWidgetUpdate()
         }
 
         override fun read(): TodayWidgetSnapshot? {
