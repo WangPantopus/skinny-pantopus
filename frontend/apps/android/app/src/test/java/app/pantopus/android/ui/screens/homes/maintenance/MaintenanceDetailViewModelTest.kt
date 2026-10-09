@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,7 @@ class MaintenanceDetailViewModelTest {
         MaintenanceDetailViewModel(
             repo = repo,
             draftStore = store,
+            gates = mockk(relaxed = true),
             savedStateHandle =
                 SavedStateHandle(
                     mapOf(
@@ -53,6 +55,9 @@ class MaintenanceDetailViewModelTest {
                     ),
                 ),
         )
+
+    /** What the screens' store hands back for a successful read. */
+    private fun stored(response: GetHomeMaintenanceResponse) = Stored(response, fetchedAt = System.currentTimeMillis())
 
     private fun task(
         id: String,
@@ -79,8 +84,8 @@ class MaintenanceDetailViewModelTest {
     @Test
     fun `load returns Loaded for an existing task`() =
         runTest {
-            coEvery { repo.getHomeMaintenance("home-1", null) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(tasks = listOf(task("task-1"))))
+            coEvery { repo.getHomeMaintenanceStored("home-1", any()) } returns
+                stored(GetHomeMaintenanceResponse(tasks = listOf(task("task-1"))))
             val vm = makeVm("task-1")
             vm.load()
             val state = vm.state.value
@@ -91,8 +96,8 @@ class MaintenanceDetailViewModelTest {
     @Test
     fun `load merges draft store photos and receipt`() =
         runTest {
-            coEvery { repo.getHomeMaintenance("home-1", null) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(tasks = listOf(task("task-2"))))
+            coEvery { repo.getHomeMaintenanceStored("home-1", any()) } returns
+                stored(GetHomeMaintenanceResponse(tasks = listOf(task("task-2"))))
             store.upsert(
                 "task-2",
                 MaintenanceDraft(
@@ -121,8 +126,8 @@ class MaintenanceDetailViewModelTest {
     @Test
     fun `load returns Error when task is missing`() =
         runTest {
-            coEvery { repo.getHomeMaintenance("home-1", null) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(tasks = emptyList()))
+            coEvery { repo.getHomeMaintenanceStored("home-1", any()) } returns
+                stored(GetHomeMaintenanceResponse(tasks = emptyList()))
             val vm = makeVm("missing")
             vm.load()
             val state = vm.state.value
@@ -133,8 +138,8 @@ class MaintenanceDetailViewModelTest {
     @Test
     fun `load returns Error when server fails`() =
         runTest {
-            coEvery { repo.getHomeMaintenance("home-1", null) } returns
-                NetworkResult.Failure(NetworkError.Server(500, "boom"))
+            coEvery { repo.getHomeMaintenanceStored("home-1", any()) } returns
+                Stored(failure = NetworkError.Server(500, "boom"))
             val vm = makeVm("task-3")
             vm.load()
             assertTrue(vm.state.value is MaintenanceDetailUiState.Error)
@@ -145,8 +150,8 @@ class MaintenanceDetailViewModelTest {
     @Test
     fun `delete clears draft store and emits Deleted event`() =
         runTest {
-            coEvery { repo.getHomeMaintenance("home-1", null) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(tasks = listOf(task("task-3"))))
+            coEvery { repo.getHomeMaintenanceStored("home-1", any()) } returns
+                stored(GetHomeMaintenanceResponse(tasks = listOf(task("task-3"))))
             coEvery { repo.deleteHomeMaintenance("home-1", "task-3") } returns
                 NetworkResult.Success(Unit)
             store.upsert(
@@ -166,8 +171,8 @@ class MaintenanceDetailViewModelTest {
     @Test
     fun `delete surfaces server error and does not emit event`() =
         runTest {
-            coEvery { repo.getHomeMaintenance("home-1", null) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(tasks = listOf(task("task-4"))))
+            coEvery { repo.getHomeMaintenanceStored("home-1", any()) } returns
+                stored(GetHomeMaintenanceResponse(tasks = listOf(task("task-4"))))
             coEvery { repo.deleteHomeMaintenance("home-1", "task-4") } returns
                 NetworkResult.Failure(NetworkError.Forbidden)
             val vm = makeVm("task-4")
@@ -181,8 +186,8 @@ class MaintenanceDetailViewModelTest {
     fun `notes load from server with an empty draft store`() =
         runTest {
             val saved = task("task-1").copy(notes = "Saved server note", category = "hvac", performerContact = "555-0142")
-            coEvery { repo.getHomeMaintenance("home-1", null) } returns
-                NetworkResult.Success(GetHomeMaintenanceResponse(listOf(saved)))
+            coEvery { repo.getHomeMaintenanceStored("home-1", any()) } returns
+                stored(GetHomeMaintenanceResponse(listOf(saved)))
             val vm = makeVm()
             vm.load()
             val state = vm.state.value as MaintenanceDetailUiState.Loaded
