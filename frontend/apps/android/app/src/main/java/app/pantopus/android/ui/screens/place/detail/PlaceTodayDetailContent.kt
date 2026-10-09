@@ -155,6 +155,7 @@ enum class TodayAlertsCheck {
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
+@Suppress("LongParameterList")
 fun PlaceTodayDetailContent(
     intel: PlaceIntelligence,
     viewModel: AddressCalendarActions? = null,
@@ -672,6 +673,7 @@ private class RadonTodayState(
     private fun keepSnapshot(readAt: Long = memory?.byHome?.get(homeId)?.readAt ?: 0L) {
         memory?.byHome?.set(homeId, RadonSnapshot(task, canCreate, loaded, firstUseDismissed, dismissedUntil, readAt))
     }
+
     val hidden get() = noTaskAccess || (task == null && dismissedUntil > Instant.now().toEpochMilli())
 
     private suspend fun requireCurrent() {

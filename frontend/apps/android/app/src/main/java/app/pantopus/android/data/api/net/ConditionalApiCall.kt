@@ -28,7 +28,11 @@ suspend inline fun <T> conditionalApiCall(crossinline block: suspend () -> Respo
         val response = block()
         when {
             response.code() == HTTP_NOT_MODIFIED -> Conditional.NotModified
-            response.isSuccessful -> Conditional.Fresh(response.body() ?: throw JsonDataException("Empty reply"), response.headers()["ETag"])
+            response.isSuccessful ->
+                Conditional.Fresh(
+                    response.body() ?: throw JsonDataException("Empty reply"),
+                    response.headers()["ETag"],
+                )
             else -> throw HttpException(response)
         }
     }
