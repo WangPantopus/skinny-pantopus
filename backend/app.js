@@ -610,6 +610,7 @@ const gracefulShutdown = async (signal) => {
   await stopPgBoss().catch((err) => {
     logger.error('[pg-boss] Error during shutdown:', { error: err.message });
   });
+  await require('./services/syncChangedService').stop();
 
   server.close(() => {
     logger.info('HTTP server closed');
