@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -38,6 +39,9 @@ fun MaintenanceListScreen(
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
+    // Ahead of the load effect, so the first rows already have the large-text layout.
+    val largeText = LocalDensity.current.fontScale >= LARGE_TEXT_FONT_SCALE
+    LaunchedEffect(largeText) { viewModel.setLargeText(largeText) }
     LaunchedEffect(Unit) {
         viewModel.configureNavigation(
             onOpenTask = onOpenTask,
@@ -66,3 +70,6 @@ fun MaintenanceListScreen(
         )
     }
 }
+
+/** The list shell's large-text step (`LARGE_FONT_SCALE` in ListOfRowsScreen). */
+private const val LARGE_TEXT_FONT_SCALE = 1.3f

@@ -162,6 +162,9 @@ class MaintenanceListViewModel
         private var onAddTask: () -> Unit = {}
         private var onOpenIssues: (() -> Unit)? = null
 
+        /** The system font scale is large; see [setLargeText]. */
+        private var largeText = false
+
         fun configureNavigation(
             onOpenTask: (String) -> Unit = {},
             onAddTask: () -> Unit = {},
@@ -225,6 +228,16 @@ class MaintenanceListViewModel
 
         fun selectTab(id: String) {
             _selectedTab.value = id
+            tasks?.let(::renderForCurrentTab)
+        }
+
+        /**
+         * The screen says whether the system font scale is large (the list shell's 1.3 step, where it already puts
+         * inline chips under the title). Large rows carry the status chip under the performer, see [rowFor].
+         */
+        fun setLargeText(large: Boolean) {
+            if (large == largeText) return
+            largeText = large
             tasks?.let(::renderForCurrentTab)
         }
 
@@ -336,6 +349,9 @@ class MaintenanceListViewModel
         ): RowModel {
             val projection = project(task, now)
             val category = projection.category
+            // Large text: the trailing column keeps only the cost. With the status chip there too it took most of the
+            // row at 2x ("Replace furnace fi…", "Self-manage / d"), so the chip follows the due date under the performer.
+            val statusChip = RowChip(projection.chipText, projection.chipIcon, RowChip.Tint.Status(projection.chipVariant))
             return RowModel(
                 id = task.id,
                 title = projection.title,
@@ -348,14 +364,20 @@ class MaintenanceListViewModel
                         foreground = category.foreground,
                     ),
                 trailing =
-                    RowTrailing.AmountWithChip(
-                        amount = projection.amount,
-                        chipText = projection.chipText,
-                        chipVariant = projection.chipVariant,
-                        chipIcon = projection.chipIcon,
-                    ),
+                    if (largeText) {
+                        RowTrailing.PriceStack(amount = projection.amount)
+                    } else {
+                        RowTrailing.AmountWithChip(
+                            amount = projection.amount,
+                            chipText = projection.chipText,
+                            chipVariant = projection.chipVariant,
+                            chipIcon = projection.chipIcon,
+                        )
+                    },
                 onTap = { onOpenTask(task.id) },
-                inlineChip = projection.inlineChip,
+                inlineChip = projection.inlineChip.takeUnless { largeText },
+                chips = if (largeText) listOfNotNull(projection.inlineChip, statusChip) else null,
+                wrapChips = largeText,
                 highlight = projection.highlight,
             )
         }
