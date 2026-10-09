@@ -266,9 +266,11 @@ class HubViewModel
         /**
          * Re-read only the unread counts when the hub reappears (for example
          * after the user read their notifications), so the bell's dot and the
-         * megaphone don't go stale. A failed read leaves them as they are.
+         * megaphone don't go stale. A failed read leaves them as they are. Only
+         * a hub on screen is freshened: its own load reads the counts itself.
          */
         fun refreshUnread() {
+            if (_state.value !is HubUiState.Populated && _state.value !is HubUiState.FirstRun) return
             viewModelScope.launch {
                 val unread = (notificationsRepo.unreadCount() as? NetworkResult.Success)?.data ?: return@launch
                 when (val current = _state.value) {

@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -113,9 +114,22 @@ private const val RADON_MORNING_HOUR = 9
 private const val RADON_REMINDER_DAYS = 14L
 private const val RADON_DISMISS_DAYS = 30L
 
+/** How current the alert check on screen is (contract §4, Today alerts). */
+enum class TodayAlertsCheck {
+    /** Checked within the last 30 minutes: show the alerts, or the all-clear. */
+    CURRENT,
+
+    /** Older, and being read again now. */
+    CHECKING,
+
+    /** Older, and the last read failed: never shown as "no alerts". */
+    UNAVAILABLE,
+}
+
 /**
  * [onOpenBallot] takes the Ballot P0 card's "Open your ballot" to the
- * Place card; without it the button is left out.
+ * Place card; without it the button is left out. [alertsCheck] replaces the
+ * alerts with an honest line once the check on screen is out of date.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -126,6 +140,7 @@ fun PlaceTodayDetailContent(
     pilotEvents: PilotEvents? = null,
     radonContext: (suspend () -> Unit)? = null,
     onOpenBallot: (() -> Unit)? = null,
+    alertsCheck: TodayAlertsCheck = TodayAlertsCheck.CURRENT,
 ) {
     val homeState =
         if (radonFactory != null && pilotEvents != null && radonContext != null) {
@@ -181,7 +196,7 @@ fun PlaceTodayDetailContent(
         }
         if (homeState.sheet != null) RadonTaskSheet(homeState)
     }
-    TodayAirAlertsSunSections(intel)
+    TodayAirAlertsSunSections(intel, alertsCheck)
 }
 
 /**
@@ -279,6 +294,42 @@ private fun AlertsCard(active: List<PlaceWeatherAlert>) {
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             active.forEach { AlertRow(it) }
+        }
+    }
+}
+
+/** An alert check past its max shown age: being read again, or "Alerts unavailable · Retry". */
+@Composable
+private fun AlertsOutOfDateCard(checking: Boolean) {
+    val onRetry = LocalPlaceDetailRetry.current
+    PlaceDetailCard(modifier = Modifier.testTag("todayAlertsOutOfDate")) {
+        Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    if (checking) "Checking for alerts…" else "Alerts unavailable",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appText,
+                )
+                Text(
+                    if (checking) "The last check is more than 30 minutes old." else "Couldn't check for alerts just now.",
+                    fontSize = 13.sp,
+                    color = PantopusColors.appTextMuted,
+                )
+            }
+            if (!checking && onRetry != null) {
+                Text(
+                    "Retry",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.primary600,
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(role = Role.Button, onClick = onRetry)
+                            .padding(horizontal = 10.dp, vertical = 12.dp),
+                )
+            }
         }
     }
 }
@@ -989,7 +1040,10 @@ private fun HomeFirstUseCard(
 }
 
 @Composable
-private fun TodayAirAlertsSunSections(intel: PlaceIntelligence) {
+private fun TodayAirAlertsSunSections(
+    intel: PlaceIntelligence,
+    alertsCheck: TodayAlertsCheck,
+) {
     intel.section(PlaceSectionId.AIR_QUALITY)?.let { env ->
         PlaceDetailSectionLabel("Air quality")
         val data = env.airQuality
@@ -1004,7 +1058,9 @@ private fun TodayAirAlertsSunSections(intel: PlaceIntelligence) {
         PlaceDetailSectionLabel("Alerts")
         // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
         val data = env.alerts
-        if (data != null && env.isLive()) {
+        if (alertsCheck != TodayAlertsCheck.CURRENT) {
+            AlertsOutOfDateCard(checking = alertsCheck == TodayAlertsCheck.CHECKING)
+        } else if (data != null && env.isLive()) {
             AlertsCard(data.active)
             PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, "live")
         } else {
