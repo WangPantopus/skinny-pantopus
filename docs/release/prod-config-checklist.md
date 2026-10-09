@@ -489,9 +489,12 @@ upgrade remain to be done.
 
 **Plan decision, October 9:** stay on Free for now. Defer the two 100 MB
 buckets and April login import until the founder chooses to upgrade. The
-private 25 MB `home-documents` bucket can be prepared on Free. Do not point
-production traffic at the new project while existing logins remain only in
-the April project.
+private 25 MB `home-documents` bucket can be prepared on Free. The founder
+later directed a public backend and web cutover before importing April
+logins, accepting that those accounts cannot sign in to the new project yet.
+Do not report login preservation as complete until the Auth transfer is
+rehearsed, run and verified. The two deferred buckets also leave their upload
+flows unavailable.
 
 **Storage status, October 9:** the founder created `home-documents`. A
 read-only Storage API check confirmed it is private with a 26,214,400-byte
