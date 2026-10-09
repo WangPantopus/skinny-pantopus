@@ -20,7 +20,7 @@ struct ResourceHomeMemberAvatar: View {
         ZStack {
             Circle().fill(tone.background)
             if let url = member.avatarURL {
-                AsyncImage(url: url) { image in
+                CachedAsyncImage(url: url) { image in
                     image.resizable().aspectRatio(contentMode: .fill)
                 } placeholder: {
                     initials

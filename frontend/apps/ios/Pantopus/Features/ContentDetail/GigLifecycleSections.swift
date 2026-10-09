@@ -327,7 +327,7 @@ private struct BidderAvatar: View {
         ZStack(alignment: .bottomTrailing) {
             Group {
                 if let imageUrl {
-                    AsyncImage(url: imageUrl) { phase in
+                    CachedAsyncImage(url: imageUrl) { phase in
                         if case let .success(image) = phase {
                             image.resizable().scaledToFill()
                         } else {

@@ -447,7 +447,11 @@ extension ScreenStore {
         seeds.removeAll()
         seedOrder.removeAll()
         marks.removeAll()
-        disk?.removeAll()
+        // The app's own store (not a test's) also owns the images on the phone.
+        if let disk {
+            disk.removeAll()
+            PantopusImagePipeline.shared.removeAll()
+        }
     }
 
     /// The memory warning: keep only what screens used in the last minute
