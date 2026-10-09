@@ -11,8 +11,10 @@
 //  instant). On appear it POSTs the link's hashed token to the existing
 //  verify-email endpoint and walks three phases:
 //
-//    verifying → success   (token accepted)
-//    verifying → expired   (token rejected / missing / network error)
+//    verifying → success      (token accepted)
+//    verifying → expired      (token rejected / missing)
+//    verifying → unavailable  (offline, rate-limited or Pantopus busy: the
+//                              link wasn't checked and still works → Try again)
 //
 //  The expired phase offers a Resend (re-uses the resend-verification
 //  endpoint, honouring the same 30s cooldown as A18.1) plus a "use a
@@ -24,12 +26,13 @@ import Foundation
 @Observable
 @MainActor
 final class VerifyEmailLandingViewModel {
-    /// The three post-tap outcomes the design frames. `verifying` is the
-    /// transient loading moment; `success` / `expired` are terminal.
+    /// The post-tap outcomes. `verifying` is the transient loading moment;
+    /// `success` / `expired` are terminal; `unavailable` offers the same link again.
     enum Phase: Equatable {
         case verifying
         case success
         case expired
+        case unavailable
     }
 
     /// Transient confirmation surfaced after a Resend tap. `isError`
@@ -43,6 +46,8 @@ final class VerifyEmailLandingViewModel {
     let token: String?
 
     private(set) var phase: Phase = .verifying
+    /// Why the link couldn't be checked (`unavailable`), in the person's terms.
+    private(set) var unavailableMessage: String = ""
     private(set) var isResending: Bool = false
     private(set) var toast: ResendToast?
     /// Earliest wall-clock time the user may resend at. Drives the local
@@ -92,11 +97,38 @@ final class VerifyEmailLandingViewModel {
             phase = .success
             Observability.shared.track("auth.verify.landing_success")
         } catch let error as AuthError {
-            phase = .expired
+            if let message = Self.unavailableMessage(for: error) {
+                unavailableMessage = message
+                phase = .unavailable
+            } else {
+                phase = .expired
+            }
             Observability.shared.capture(error)
         } catch {
             phase = .expired
             Observability.shared.capture(error)
+        }
+    }
+
+    /// "Try again" from the unavailable frame: checks the same link once more.
+    func retry(using auth: AuthManager) async {
+        guard phase == .unavailable else { return }
+        hasVerified = false
+        await verifyOnAppearIfNeeded(using: auth)
+    }
+
+    /// Copy for a failure that left the link unused (offline, rate-limited,
+    /// busy); `nil` when the link itself was refused.
+    static func unavailableMessage(for error: AuthError) -> String? {
+        switch error {
+        case .networkError:
+            "Can't reach Pantopus. Check your connection, then try again. Your link still works."
+        case .rateLimited:
+            "Too many tries for now. Wait a minute, then try again. Your link still works."
+        case let .temporarilyUnavailable(message):
+            message
+        default:
+            nil
         }
     }
 
@@ -138,6 +170,9 @@ final class VerifyEmailLandingViewModel {
     static func preview(_ phase: Phase, email: String? = "jordan@hey.com") -> VerifyEmailLandingViewModel {
         let model = VerifyEmailLandingViewModel(email: email, token: "preview-token")
         model.phase = phase
+        if phase == .unavailable {
+            model.unavailableMessage = unavailableMessage(for: .networkError) ?? ""
+        }
         model.hasVerified = true
         return model
     }

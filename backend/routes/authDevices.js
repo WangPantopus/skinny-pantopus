@@ -391,6 +391,10 @@ router.post('/step-up', verifyToken, stepUpLimiter, attachSession, validate(step
       }
       const authClient = authSessionService.createAuthClient();
       const { data, error } = await authClient.auth.signInWithPassword({ email, password: req.body.password });
+      if (authSessionService.isAuthServiceBusy(error)) {
+        logger.error('auth.stepup.password_busy', { userId, status: error.status });
+        return res.status(503).json({ error: 'Checking your password is busy right now. Please try again in a minute.', code: 'AUTH_BUSY', purpose });
+      }
       if (error || !data?.user || !data?.session) {
         logger.warn('auth.stepup.password_failed', { userId });
         return res.status(401).json({ error: 'Invalid password', code: 'UNAUTHORIZED', purpose });

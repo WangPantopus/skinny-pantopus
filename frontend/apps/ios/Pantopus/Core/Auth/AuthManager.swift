@@ -50,6 +50,8 @@ public enum OAuthProvider: String, Sendable, Hashable, CaseIterable {
 ///   registerLimiter, forgotPasswordLimiter, etc).
 /// - `serverError(String)` — 5xx or otherwise unrecoverable server reply;
 ///   carries the backend's `error` field for diagnostics.
+/// - `temporarilyUnavailable(String)` — a 5xx from a check that can simply be
+///   repeated (the email link wasn't used); carries the backend's `error`.
 /// - `unknown` — any other failure (decoding, invalid response, 4xx that
 ///   doesn't fit the above).
 public enum AuthError: Error, LocalizedError, Hashable, Sendable {
@@ -59,6 +61,7 @@ public enum AuthError: Error, LocalizedError, Hashable, Sendable {
     case networkError
     case rateLimited
     case serverError(String)
+    case temporarilyUnavailable(String)
     case unknown
 
     public var errorDescription: String? {
@@ -69,6 +72,7 @@ public enum AuthError: Error, LocalizedError, Hashable, Sendable {
         case .networkError: "Can't reach Pantopus. Check your connection."
         case .rateLimited: "Too many attempts. Please wait a few minutes and try again."
         case let .serverError(message): message
+        case let .temporarilyUnavailable(message): message
         case .unknown: "Something went wrong. Please try again."
         }
     }

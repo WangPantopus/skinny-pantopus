@@ -38,6 +38,28 @@ function createAuthClient() {
   );
 }
 
+// auth-js errors raised inside this process (a missing PKCE verifier, an answer without a
+// session): they carry status 500 but say nothing about the Auth server being busy.
+const LOCAL_AUTH_ERROR_NAMES = new Set([
+  'AuthPKCEGrantCodeExchangeError',
+  'AuthInvalidTokenResponseError',
+  'AuthImplicitGrantRedirectError',
+]);
+
+/**
+ * True when Supabase Auth refused or failed for its own reasons rather than because of what the
+ * person sent: its per-address rate limit (429; on hosted every call reaches it from this
+ * server's address, so the limit is shared by everyone using the app), a 5xx, or no usable answer
+ * (network, a non-JSON page). Callers answer 503 "busy" and leave the person's link, code or
+ * session as it was.
+ */
+function isAuthServiceBusy(error) {
+  if (!error || LOCAL_AUTH_ERROR_NAMES.has(error.name)) return false;
+  if (error.name === 'AuthRetryableFetchError' || error.name === 'AuthUnknownError') return true;
+  const status = Number(error.status) || 0;
+  return status === 429 || status >= 500;
+}
+
 // ---------------------------------------------------------------------------
 // Hashing / decoding
 // ---------------------------------------------------------------------------
@@ -442,9 +464,17 @@ async function lookupAuthUser(userId) {
   }
 }
 
+/** An Error whose `authBusy` says Supabase Auth was busy or unreachable (see isAuthServiceBusy). */
+function mintError(message, cause) {
+  const err = new Error(message);
+  err.authBusy = isAuthServiceBusy(cause);
+  return err;
+}
+
 /**
  * Mint a Supabase session for a user without a credential (server-verified
- * resume grant). Returns `{ session, user }` (Supabase shapes) or throws.
+ * resume grant). Returns `{ session, user }` (Supabase shapes) or throws; a
+ * thrown error has `authBusy: true` when Supabase Auth was busy or unreachable.
  * The caller decides the AuthSession context (always 'restored' for grants).
  */
 async function mintSessionForUser({ userId, email }) {
@@ -465,7 +495,7 @@ async function mintSessionForUser({ userId, email }) {
     email: targetEmail,
   });
   if (linkError || !linkData?.properties?.hashed_token) {
-    throw new Error(`generateLink failed: ${linkError?.message || 'no hashed_token'}`);
+    throw mintError(`generateLink failed: ${linkError?.message || 'no hashed_token'}`, linkError);
   }
   if (linkData.user?.id && userId && linkData.user.id !== userId) {
     throw new Error('generateLink returned a different user');
@@ -477,7 +507,7 @@ async function mintSessionForUser({ userId, email }) {
     token_hash: linkData.properties.hashed_token,
   });
   if (error || !data?.session?.access_token || !data?.session?.refresh_token) {
-    throw new Error(`verifyOtp failed: ${error?.message || 'no session'}`);
+    throw mintError(`verifyOtp failed: ${error?.message || 'no session'}`, error);
   }
   if (userId && data.user?.id && data.user.id !== userId) {
     await signOutSupabase(data.session.access_token, 'local', { source: 'mint_user_mismatch' });
@@ -660,6 +690,7 @@ async function listSecurityEvents(userId, limit = 20) {
 module.exports = {
   authEvents,
   createAuthClient,
+  isAuthServiceBusy,
   hashToken,
   decodeJwtPayload,
   sessionClaimsFromAccessToken,

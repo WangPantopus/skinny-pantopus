@@ -54,6 +54,11 @@ class AuthErrorViewModel
                             headline = "Something went wrong",
                             body = "We hit a snag on our end. Give it another try.",
                         )
+                    is AuthError.TemporarilyUnavailable ->
+                        AuthErrorCopy(
+                            headline = "Pantopus is busy",
+                            body = "Give it a minute and try again.",
+                        )
                     is AuthError.Unknown ->
                         AuthErrorCopy(
                             headline = "Something went wrong",
@@ -71,6 +76,7 @@ class AuthErrorViewModel
                 is AuthError.NetworkError,
                 is AuthError.RateLimited,
                 is AuthError.ServerError,
+                is AuthError.TemporarilyUnavailable,
                 is AuthError.Unknown,
                 -> true
             }

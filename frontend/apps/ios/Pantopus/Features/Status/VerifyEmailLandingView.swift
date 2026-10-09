@@ -7,10 +7,11 @@
 //  in their verification email. Sibling to A18.1 "Verify Email Sent" — this
 //  is the POST-tap result, not the pre-tap "we sent you a link" surface.
 //
-//  Three frames, one per outcome of the token check:
-//    · verifying — mail halo + "Checking your link…" pill, no CTA
-//    · success   — green check halo + "Verified · just now" + Continue
-//    · expired   — amber halo + "Link expired" + Resend / Use a different email
+//  One frame per outcome of the token check:
+//    · verifying   — mail halo + "Checking your link…" pill, no CTA
+//    · success     — green check halo + "Verified · just now" + Continue
+//    · expired     — amber halo + "Link expired" + Resend / Use a different email
+//    · unavailable — info halo + "Link still works" + Try again (offline / busy)
 //
 //  Reuses the shared A18 primitives (`HaloCircle`, `StatusPillView`) and the
 //  design tokens so it's a true sibling of `StatusWaitingView`. The view is
@@ -85,6 +86,7 @@ struct VerifyEmailLandingView: View {
         case .verifying: verifyingBody
         case .success: successBody
         case .expired: expiredBody
+        case .unavailable: unavailableBody
         }
     }
 
@@ -156,6 +158,25 @@ struct VerifyEmailLandingView: View {
         }
     }
 
+    private var unavailableBody: some View {
+        scaffold(
+            stateID: "verifyEmail.unavailableView",
+            chrome: PhaseChrome(
+                halo: HaloCircle(tone: .info, icon: .clock),
+                headline: "We couldn't check your link",
+                body: Text(viewModel.unavailableMessage),
+                pill: StatusWaitingPill(text: "Link still works", icon: .link, tone: .neutral)
+            )
+        ) {
+            LandingPrimaryButton(
+                label: "Try again",
+                icon: .refreshCw,
+                identifier: "verifyEmail.retryBtn",
+                action: retry
+            )
+        }
+    }
+
     // MARK: - Shared scaffold
 
     /// Halo + copy + pill bundle for one phase. Bundled into a value so the
@@ -202,6 +223,10 @@ struct VerifyEmailLandingView: View {
 
     private func resend() {
         Task { await viewModel.resend(using: auth) }
+    }
+
+    private func retry() {
+        Task { await viewModel.retry(using: auth) }
     }
 
     /// Body copy with the email fragment rendered bold (mirrors
@@ -346,5 +371,10 @@ private struct ResendToastView: View {
 
 #Preview("Expired") {
     VerifyEmailLandingView(viewModel: .preview(.expired))
+        .environment(AuthManager.previewSignedOut)
+}
+
+#Preview("Unavailable") {
+    VerifyEmailLandingView(viewModel: .preview(.unavailable))
         .environment(AuthManager.previewSignedOut)
 }

@@ -22,6 +22,10 @@ function VerifyEmailPageContent() {
   const [message, setMessage] = useState('Verifying your email...');
   const [resending, setResending] = useState(false);
   const [emailHint, setEmailHint] = useState('');
+  // Offline, timed out or Pantopus busy: the link wasn't checked and still works, so offer the
+  // same link again rather than a new one.
+  const [canRetry, setCanRetry] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   // Cleanup redirect timeout on unmount
   useEffect(() => {
@@ -52,6 +56,7 @@ function VerifyEmailPageContent() {
       if (!tokenHash && !token) {
         if (!cancelled) {
           setState('error');
+          setCanRetry(false);
           setMessage('Verification link is missing required token parameters.');
         }
         return;
@@ -61,10 +66,11 @@ function VerifyEmailPageContent() {
         timeoutId = setTimeout(() => {
           if (cancelled) return;
           setState('error');
+          setCanRetry(true);
           setMessage('Verification request timed out. Please try again or contact support.');
         }, 15000);
 
-        const key = JSON.stringify([tokenHash, token, email, type]);
+        const key = JSON.stringify([tokenHash, token, email, type, attempt]);
         if (requestRef.current?.key !== key) {
           requestRef.current = { key, promise: api.auth.verifyEmail({
             tokenHash: tokenHash || undefined, token: token || undefined,
@@ -82,7 +88,9 @@ function VerifyEmailPageContent() {
       } catch (err: unknown) {
         if (timeoutId) clearTimeout(timeoutId);
         if (!cancelled) {
+          const statusCode = (err as { statusCode?: number } | null)?.statusCode;
           setState('error');
+          setCanRetry(statusCode === undefined || statusCode === 429 || statusCode >= 500);
           setMessage(extractApiError(err, 'Verification failed. The link may be invalid or expired.'));
         }
       }
@@ -93,7 +101,13 @@ function VerifyEmailPageContent() {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [searchParams, router, loginHref]);
+  }, [searchParams, router, loginHref, attempt]);
+
+  const retry = () => {
+    setState('verifying');
+    setMessage('Verifying your email...');
+    setAttempt((n) => n + 1);
+  };
 
   const resend = async () => {
     if (!emailHint) {
@@ -144,7 +158,16 @@ function VerifyEmailPageContent() {
               Go to Sign in
             </Link>
 
-            {state === 'error' ? (
+            {state === 'error' && canRetry ? (
+              <button
+                type="button"
+                onClick={retry}
+                className="w-full py-2 text-sm font-medium text-primary-700 dark:text-primary-300 hover:opacity-90"
+              >
+                Try again
+              </button>
+            ) : null}
+            {state === 'error' && !canRetry ? (
               <button
                 type="button"
                 onClick={resend}
