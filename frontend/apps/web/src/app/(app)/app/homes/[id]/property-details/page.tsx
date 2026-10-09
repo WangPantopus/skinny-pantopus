@@ -1,8 +1,9 @@
 'use client';
 
-import { type ComponentType } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, type ComponentType } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { showsHouseholdHomeCopy, useAfterRecheck } from '@/lib/householdCopy';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { AttomPropertyDetailPayload } from '@pantopus/api';
@@ -124,6 +125,11 @@ export default function HomePropertyDetailsPage() {
   // Public-record facts about the home (contract §4, public place facts: fresh 24 hours), kept in the
   // session's cache so coming back shows them at once. A 403/404 drops them (lib/query-provider) and
   // shows the server's answer; signing out or switching accounts replaces the whole cache.
+  // Decision 3: only an owner's or household member's home (no end date) on your kept homes list shows
+  // the copy first; a guest's, service provider's or ending access asks again on every visit and
+  // shows only that answer.
+  const queryClient = useQueryClient();
+  const [household] = useState(() => showsHouseholdHomeCopy(queryClient, homeId));
   const detailQuery = useQuery({
     queryKey: queryKeys.homePropertyDetails(homeId),
     queryFn: async () => {
@@ -138,15 +144,16 @@ export default function HomePropertyDetailsPage() {
       return res;
     },
     enabled: !!homeId,
-    staleTime: PROPERTY_DETAILS_FRESH_MS,
+    staleTime: household ? PROPERTY_DETAILS_FRESH_MS : 0,
   });
-  const home: HomeRecord | null = detailQuery.data?.home ?? null;
-  const attomPayload: AttomPropertyDetailPayload | null = detailQuery.data?.attom_property_detail ?? null;
-  const unavailableReason: string | null = detailQuery.data?.unavailable_reason ?? null;
-  const error = !detailQuery.data && detailQuery.isError
+  const { data: details } = useAfterRecheck(detailQuery, () => household);
+  const home: HomeRecord | null = details?.home ?? null;
+  const attomPayload: AttomPropertyDetailPayload | null = details?.attom_property_detail ?? null;
+  const unavailableReason: string | null = details?.unavailable_reason ?? null;
+  const error = !details && detailQuery.isError
     ? (detailQuery.error instanceof Error ? detailQuery.error.message : 'Failed to load property details. Please retry.')
     : '';
-  const loading = !detailQuery.data && (!error || detailQuery.isFetching);
+  const loading = !details && (!error || detailQuery.isFetching);
   const load = () => detailQuery.refetch();
 
   const property = getAttomPropertyFromPayload(attomPayload);

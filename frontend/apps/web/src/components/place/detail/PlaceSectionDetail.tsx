@@ -34,6 +34,7 @@ import CivicDetail from './CivicDetail';
 import IdentityDetail from './IdentityDetail';
 import { usePrimaryHome } from '@/lib/primaryHome';
 import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
+import { PLACE_FRESH_MS, gatedStaleTime, showsPlaceCopy, useAfterRecheck } from '@/lib/householdCopy';
 
 function DetailShell({ section, hidden, children }: { section: string; hidden?: string[]; children: React.ReactNode }) {
   return <PlaceShell active={section} hidden={hidden}>{children}</PlaceShell>;
@@ -120,8 +121,10 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
     queryFn: async () => api.place.getPlaceIntelligence(homeId as string),
     enabled: authed && valid && !!homeId,
-    staleTime: 60_000,
+    staleTime: gatedStaleTime(PLACE_FRESH_MS, showsPlaceCopy),
   });
+  // A guest's or service provider's copy shows only once the re-check answers (decision 3).
+  const { data: shownIntelligence, waiting: intelWaiting } = useAfterRecheck(intelQuery, showsPlaceCopy);
 
   // Resident name is only needed by the Identity detail.
   const userQuery = useMe({ enabled: authed && valid && section === 'identity' });
@@ -146,7 +149,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
 
   // Coming back shows what this tab already loaded in the first frame; the skeleton is only for
   // nothing at all (a fresh page load starts with an empty cache, like the server).
-  const kept = intelQuery.data !== undefined;
+  const kept = shownIntelligence !== undefined;
   if (!kept && (!mounted || !authed)) {
     return (
       <DetailShell section={section}>
@@ -218,7 +221,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     );
   }
 
-  if (!kept && (homeQuery.isPending || intelQuery.isPending)) {
+  if (!kept && (homeQuery.isPending || intelQuery.isPending || intelWaiting)) {
     return (
       <DetailShell section={section}>
         <DetailHeader title={meta.title} />
@@ -227,7 +230,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     );
   }
 
-  if (!intelQuery.data) {
+  if (!shownIntelligence) {
     // A 403 means this account can't see the place: say so, without a retry.
     const denied = (intelQuery.error as { statusCode?: number } | null)?.statusCode === 403;
     return (
@@ -244,7 +247,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     );
   }
 
-  const intelligence = intelQuery.data;
+  const intelligence = shownIntelligence;
   const residentName = userQuery.data?.name || userQuery.data?.firstName || '';
   const hidden = placeSlugsNotForViewer(intelligence);
 
