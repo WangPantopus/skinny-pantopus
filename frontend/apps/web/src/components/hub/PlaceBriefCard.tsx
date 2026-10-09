@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
+import { queryKeys } from '@/lib/query-keys';
 import {
   AlertTriangle,
   CloudRain,
@@ -118,30 +120,24 @@ function StatusIcon({ status }: { status: string }) {
 
 export function PlaceBriefCard({ homeId, homeName }: PlaceBriefCardProps) {
   const router = useRouter();
-  const [pulse, setPulse] = useState<NeighborhoodPulse['pulse'] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The same entry as Today's Pulse (/app/place/pulse): coming back to the Hub shows it at once
+  // and refreshes it after a minute, behind the card.
+  const pulseQuery = useQuery({
+    queryKey: queryKeys.placePulse(homeId),
+    queryFn: async () => api.ai.getNeighborhoodPulse(homeId),
+    enabled: !!homeId,
+    staleTime: 60_000,
+  });
+  const pulse: NeighborhoodPulse['pulse'] | null = pulseQuery.data?.pulse ?? null;
+  const loading = !pulseQuery.data && (pulseQuery.isPending || pulseQuery.isFetching);
+  const error = !pulseQuery.data && pulseQuery.isError
+    ? (pulseQuery.error instanceof Error ? pulseQuery.error.message : 'Failed to load')
+    : null;
+  const load = () => { void pulseQuery.refetch(); };
   const [expanded, setExpanded] = useState(false);
-  const [visible, setVisible] = useState(false);
+  // A card that was already loaded doesn't fade in again.
+  const [visible, setVisible] = useState(!!pulseQuery.data);
   const cardRef = useRef<HTMLDivElement>(null);
-
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.ai.getNeighborhoodPulse(homeId);
-      setPulse(result.pulse);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (homeId) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [homeId]);
 
   // Fade-in on first load
   useEffect(() => {
