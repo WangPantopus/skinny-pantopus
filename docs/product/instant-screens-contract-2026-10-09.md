@@ -6,6 +6,12 @@ The shared rules the four Instant Screens sessions build against: IS-iOS, IS-And
 - Build plan (sessions, order, dates): https://claude.ai/artifact/8eYEXcE9zuXymtQ6wpRhGr
 - Process: `AGENTS.md` and `/Users/yingpengwang/skinny-pantopus/launch-streams/RULES.md`, with the changes in section 12 below.
 
+## 0. Priority
+
+This work is the founder's top priority. There are no target dates. Each session works through its list as fast as quality allows and keeps going until the list is done. Work outside this contract waits, except a P0: a crash, data loss, a privacy or security leak, or a money error.
+
+If another session takes over any line of this work, it inherits the same priority. Never sit idle waiting on another session: work on the next independent step meanwhile.
+
 ## 1. Founder decisions (October 9, 2026)
 
 1. **Build the Instant Screens design on all three platforms and the server**, as four sessions working in parallel, one per codebase.
@@ -22,12 +28,18 @@ The shared rules the four Instant Screens sessions build against: IS-iOS, IS-And
 |---|---|---|
 | IS-iOS | `frontend/apps/ios/` | one simulator, "Pantopus ISI" |
 | IS-Android | `frontend/apps/android/` | one emulator, `pantopus_ISA` on emulator-5580 |
-| IS-Server | `backend/`, `supabase/`, and `docs/launch-scope-flags-2026-10-01.md` for the new key | none until the day 13 rebalance, then `pantopus_ISS` on emulator-5582 |
-| IS-Web | `frontend/apps/web/`, `frontend/packages/` | browser only until the day 13 rebalance, then simulator "Pantopus ISW" |
+| IS-Server | `backend/`, `supabase/`, and `docs/launch-scope-flags-2026-10-01.md` for the new key | none until its own list is done, then `pantopus_ISS` on emulator-5582 for the Android Home screens |
+| IS-Web | `frontend/apps/web/`, `frontend/packages/` | browser only until its own list is done, then simulator "Pantopus ISW" for the iOS Home screens |
 | Coordinator | this file, the design and plan pages | none |
 
+- **L4, top priority for whichever L4 session runs next:**
+  - add the four sessions to RULES.md and the kit README
+  - record the founder's decisions (section 1) in NEXT_STEPS
+  - merge PR 1998
+  - retake the iOS and Android store screenshots as soon as the Messages tab is merged
+  - run the final measurement sweep once all four sessions report DONE
 - **No session edits another session's folder.** If you need something in another folder, write it in `REQUESTS.md` (section 12) and message the owning session.
-- **Day 13 rebalance (October 22).** Once IS-Server and IS-Web finish their own lists, IS-Server converts only `frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/` and IS-Web converts only `frontend/apps/ios/Pantopus/Features/Homes/`. They follow the owning phone session's conversion recipe exactly. The owning phone session reviews every helper PR before it merges. Helpers never touch the store, the list shells, the network client, sign-out code or the tab roots.
+- **Home screens handover.** As soon as IS-Server or IS-Web finishes its own list, IS-Server converts only `frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/` and IS-Web converts only `frontend/apps/ios/Pantopus/Features/Homes/`. They follow the owning phone session's conversion recipe exactly. Each phone session writes that recipe, one page with an example PR, as soon as its store and list shells are merged and two screens are converted. The owning phone session reviews every helper PR before it merges. Helpers never touch the store, the list shells, the network client, sign-out code or the tab roots.
 - **Kit ports.**
 
   | Session | Backend | Web | Browse at |
@@ -219,15 +231,15 @@ The new launch key is `mailbox`. It is off unless listed, the same mechanism as 
 - **Privacy check.** After visiting sensitive screens, and again after signing out, list the app's cache folders. Nothing from the account should remain, and no sensitive reply is ever on disk.
 - **Tests.** No new unit tests. Existing tests that break because the intended behavior changed are updated in the same PR. Snapshot images are re-recorded when a screen's look changes. Run the platform's lint before pushing: SwiftLint and SwiftFormat; ktlint and detekt; web ESLint, typecheck and Jest; backend Jest near the change.
 
-## 11. Milestones
+## 11. Order and milestones
 
-| Date | Milestone |
-|---|---|
-| Oct 12 | D1: Messages tab live on all three platforms with Mailbox hidden; Today keeps its content on both phones; Android conversations stop flashing |
-| Oct 18 | M1: tabs and main screens never blank on iOS and Android, with before and after numbers |
-| Oct 21 | M2: server and web lists complete |
-| Oct 22 | M3: phones open on their saved copy, even in airplane mode; Storage & data on phones |
-| Oct 29 | M4: everything converted; final sweep (L4) |
+There are no dates. Each milestone is reached as soon as its work is done, in this order:
+
+1. **D1.** The Messages tab is live on all three platforms with Mailbox hidden. Today keeps its content on both phones, and Android conversations stop flashing.
+2. **M1.** Tabs and main screens never blank on iOS or Android, with before and after numbers.
+3. **M2.** The server and web lists are complete. IS-Server ships `sync:changed` early in its list and messages the other three when it merges. Until then they work on their other steps.
+4. **M3.** The phones open on their saved copy, even in airplane mode, and Storage & data is on the phones.
+5. **M4.** Everything is converted. L4 runs the final measurement sweep once all four sessions report DONE.
 
 ## 12. Process changes for these four sessions
 
