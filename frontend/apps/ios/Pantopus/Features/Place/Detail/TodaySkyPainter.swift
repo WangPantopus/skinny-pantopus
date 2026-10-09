@@ -25,6 +25,8 @@ struct TodaySkyPainter {
     var smoke = 0.0
     /// How hard it rains, 0 (a light shower) to 1 (a downpour).
     var rain = 0.5
+    var home: SkyHome = .house
+    var streetLights = 0
     let still: Bool
 
     private var weather: SkyPalette.Weather {
@@ -35,14 +37,18 @@ struct TodaySkyPainter {
         moment.phase == .night
     }
 
-    func paint(_ context: GraphicsContext, size: CGSize, time: Double) {
-        let scene = Scene(size: size, time: still ? 2 : time, sky: SkyPalette.sky(moment.phase, weather))
+    /// `rise` (0...1) lifts the sun or moon into its place as the card loads;
+    /// `drift` lowers the stars, sun or moon and clouds as the card scrolls away.
+    func paint(_ context: GraphicsContext, size: CGSize, time: Double, rise: Double = 1, drift: Double = 0) {
+        let scene = Scene(size: size, time: still ? 2 : time, sky: SkyPalette.sky(moment.phase, weather), rise: rise)
         let clear = weather == .clear || weather == .partly
         paintSky(context, scene)
-        if night, clear { paintStars(context, scene) }
-        if night, clear, meteorShower { paintMeteors(context, scene) }
-        if night { paintMoon(context, scene) } else { paintSun(context, scene) }
-        paintClouds(context, scene)
+        var far = context
+        far.translateBy(x: 0, y: drift)
+        if night, clear { paintStars(far, scene) }
+        if night, clear, meteorShower { paintMeteors(far, scene) }
+        if night { paintMoon(far, scene) } else { paintSun(far, scene) }
+        paintClouds(far, scene)
         paintRain(context, scene)
         paintSnow(context, scene)
         if condition == .wind { paintWind(context, scene) }
@@ -56,7 +62,9 @@ struct TodaySkyPainter {
             cold: temperature < 50,
             still: still,
             bins: note?.bins ?? [],
-            season: season
+            season: season,
+            home: home,
+            streetLights: streetLights
         ).paint(context)
         // Fog hugs the ground, in front of the house and below the reading.
         paintFog(context, scene)
@@ -79,6 +87,8 @@ struct TodaySkyPainter {
         let size: CGSize
         let time: Double
         let sky: SkyPalette.Sky
+        /// 0 below its place, 1 in it.
+        var rise = 1.0
 
         var width: Double {
             size.width
@@ -97,15 +107,6 @@ struct TodaySkyPainter {
             let raw = (base + (still ? 0 : time * speed)).truncatingRemainder(dividingBy: span)
             return raw < 0 ? raw + span : raw
         }
-    }
-
-    /// The day's first and last golden hour warm the horizon until dawn's or
-    /// dusk's own sky takes over: 0 outside them, up to 0.5 at the handover.
-    private var goldenWarmth: Double {
-        guard moment.phase == .day else { return 0 }
-        let evening = (moment.minutes - (moment.sunset - 60)) / 20
-        let morning = (moment.sunrise + 60 - moment.minutes) / 20
-        return min(max(max(evening, morning), 0), 1) * 0.5
     }
 
     private func paintSky(_ context: GraphicsContext, _ scene: Scene) {
@@ -138,7 +139,7 @@ struct TodaySkyPainter {
         // The sun rides the right half of the sky: low at dawn and dusk, high at noon.
         let fraction = moment.dayFraction
         let x = scene.width * (0.56 + 0.32 * fraction)
-        let y = scene.horizon - 18 - sin(.pi * fraction) * (scene.horizon - 58)
+        let y = scene.horizon - 18 - sin(.pi * fraction) * (scene.horizon - 58) + (1 - scene.rise) * 44
         // In the golden hour the sun warms and a wide halo of gold spreads around it.
         let golden = goldenWarmth
         let warm = moment.phase == .dawn || moment.phase == .dusk
@@ -174,7 +175,7 @@ struct TodaySkyPainter {
     private func paintMoon(_ context: GraphicsContext, _ scene: Scene) {
         guard weather != .wet, weather != .snow, weather != .storm else { return }
         let x = scene.width * 0.8
-        let y = 50.0
+        let y = 50.0 + (1 - scene.rise) * 44
         let veiled = weather == .overcast || weather == .fog
         // A full moon lights up more of the sky.
         let full = abs(moment.moonPhase - 0.5) < 0.034
@@ -329,25 +330,6 @@ struct TodaySkyPainter {
     /// A soft double flash about every seven seconds: well under the three
     /// flashes a second that photosensitivity guidance allows, and never
     /// drawn with Reduce Motion (the painter is `still` then).
-    private func paintLightning(_ context: GraphicsContext, _ scene: Scene) {
-        let period = 7.0
-        let cycle = (scene.time / period).rounded(.down)
-        let local = scene.time - cycle * period
-        var random = SkyRandom(seed: UInt32(truncatingIfNeeded: 100 + Int(cycle)))
-        let strike = 1 + random.next() * 4
-        let since = local - strike
-        let opacity: Double = if since >= 0, since < 0.09 { 0.28 } else if since >= 0.17, since < 0.25 { 0.18 } else { 0 }
-        guard opacity > 0 else { return }
-        context.fill(Path(CGRect(origin: .zero, size: scene.size)), with: .color(SkyPalette.lightning.color(opacity: opacity)))
-        let x = scene.width * (0.35 + random.next() * 0.5)
-        var bolt = Path()
-        bolt.move(to: CGPoint(x: x, y: 40))
-        bolt.addLine(to: CGPoint(x: x - 8, y: 70))
-        bolt.addLine(to: CGPoint(x: x + 4, y: 72))
-        bolt.addLine(to: CGPoint(x: x - 6, y: scene.horizon - 20))
-        context.stroke(bolt, with: .color(SkyPalette.bolt.color(opacity: 0.9)), lineWidth: 2)
-    }
-
     /// Darkens the left of the sky so the white reading keeps its contrast:
     /// with it every scene gives the temperature and condition (large text)
     /// at least 3:1 and "NOW" 4.5:1; the chips carry their own backing.
@@ -377,8 +359,9 @@ extension TodaySkyPainter {
 
     private func glow(_ context: GraphicsContext, _ scene: Scene, _ glow: Glow) {
         let gradient = Gradient(colors: [glow.color.color(opacity: glow.opacity), glow.color.color(opacity: 0)])
+        // Taller than the card, so a drifted glow never shows its edge.
         context.fill(
-            Path(CGRect(origin: .zero, size: scene.size)),
+            Path(CGRect(x: 0, y: -80, width: scene.width, height: scene.height + 160)),
             with: .radialGradient(gradient, center: glow.center, startRadius: 0, endRadius: glow.radius)
         )
     }

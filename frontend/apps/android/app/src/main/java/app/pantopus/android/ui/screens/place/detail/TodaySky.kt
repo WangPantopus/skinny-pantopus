@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -95,6 +97,9 @@ fun TodaySkyHero(
     pickups: List<PlaceCalendarEvent> = emptyList(),
     /** The air reading: smoke veils the sky, and bad air leads the card. */
     air: SkyAir? = null,
+    /** The resident's kind of home, and the far hill's lights after dusk. */
+    home: SkyHome = SkyHome.HOUSE,
+    streetLights: Int = 0,
     /** Tapping the bins shows the pickup schedule. */
     onBins: (() -> Unit)? = null,
 ) {
@@ -107,10 +112,15 @@ fun TodaySkyHero(
     val now = rememberMinuteClock()
     val hours = remember(data.hourly, now) { SkyScrub.hours(data.hourly, now) }
     val scrub = rememberSkyScrub(reduced)
+    // When the card appeared or got new data: the sun or moon rises into place.
+    val shownAt = remember(data) { System.currentTimeMillis() }
     val picked = scrub.index?.let { hours.getOrNull(it) }
     val current = SkyView.at(now, null, data, sun, pickups, air)
     val shown = if (picked == null) current else SkyView.at(now, picked, data, sun, pickups, air)
     val sky = SkyPalette.sky(shown.moment.phase, skyWeather(shown.weather.conditionCode))
+    // How far the card has scrolled above the top of the page (dp): the sky's far layer lags behind.
+    val hidden = remember { mutableFloatStateOf(0f) }
+    val pxPerDp = LocalDensity.current.density
     val shape = RoundedCornerShape(20.dp)
     Box(
         modifier =
@@ -127,6 +137,8 @@ fun TodaySkyHero(
                 .onGloballyPositioned {
                     val bounds = it.boundsInWindow()
                     onScreen = bounds.bottom > 0f && bounds.top < screenHeight
+                    // The scroll container clips the bounds, so the difference is what's scrolled away.
+                    hidden.floatValue = ((bounds.top - it.positionInWindow().y) / pxPerDp).coerceAtLeast(0f)
                 }.skyScrubGesture(hours.size, scrub)
                 .testTag("todaySkyHero"),
     ) {
@@ -146,19 +158,24 @@ fun TodaySkyHero(
                 ),
             label = "skyScene",
         ) { view ->
-            val painter = view.painter(!animating)
+            val painter = view.painter(!animating, home, streetLights)
             Canvas(modifier = Modifier.fillMaxSize().clearAndSetSemantics { }) {
                 val t = time.doubleValue
                 val perDp = density
+                // Eased over 0.9 s; in place at once without motion or while sliding.
+                val progress = if (animating && view.time == now) ((System.currentTimeMillis() - shownAt) / 900f).coerceIn(0f, 1f) else 1f
+                val rise = 1 - (1 - progress) * (1 - progress) * (1 - progress)
                 withTransform({ scale(perDp, perDp, pivot = Offset.Zero) }) {
-                    painter.paint(this, size.width / perDp, size.height / perDp, t)
+                    // A third of the way behind, never more than 60 dp, and not with animations off.
+                    val drift = if (reduced) 0f else (hidden.floatValue * 0.3f).coerceAtMost(60f)
+                    painter.paint(this, size.width / perDp, size.height / perDp, t, rise, drift)
                 }
             }
         }
         SkyReading(SkyReadingModel.of(data, current.note, picked, now), hours.size, scrub)
         // The bins only stand at the curb now, not in an hour slid to.
         val bins = current.note?.takeIf { picked == null && it.bins.isNotEmpty() }
-        if (bins != null && onBins != null) BinsTarget(bins, onBins)
+        if (bins != null && onBins != null) BinsTarget(bins, home, onBins)
         scrub.index?.takeIf { picked != null }?.let { SkyScrubTrack(it, hours.size) }
         SkyScrubHint(hours.size, scrubbing = scrub.index != null)
     }
@@ -174,18 +191,26 @@ private data class SkyView(
     /** 0..1, from the forecast hour's chance of rain. */
     val rain: Double,
 ) {
-    fun painter(still: Boolean) =
-        TodaySkyPainter(
-            condition = weather.conditionCode,
-            moment = moment,
-            temperature = weather.currentTempF,
-            note = note,
-            season = SkySeason.at(time.toLocalDate()),
-            meteorShower = SkyNote.meteors(time, moment) != null,
-            still = still,
-            smoke = air?.smoke ?: 0.0,
-            rain = rain,
-        )
+    fun painter(
+        still: Boolean,
+        home: SkyHome,
+        streetLights: Int,
+    ) = TodaySkyPainter(
+        condition = weather.conditionCode,
+        moment = moment,
+        temperature = weather.currentTempF,
+        note = note,
+        season = SkySeason.at(time.toLocalDate()),
+        still = still,
+        details =
+            SkyDetails(
+                meteorShower = SkyNote.meteors(time, moment) != null,
+                smoke = air?.smoke ?: 0.0,
+                rain = rain,
+                home = home,
+                streetLights = streetLights,
+            ),
+    )
 
     companion object {
         fun at(
@@ -209,10 +234,11 @@ private data class SkyView(
 @Composable
 private fun BoxScope.BinsTarget(
     note: SkyNote,
+    home: SkyHome,
     onBins: () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.matchParentSize()) {
-        val center = TodaySkyGround.binsCenter(maxWidth.value, maxHeight.value, note.bins.size)
+        val center = TodaySkyGround.binsCenter(maxWidth.value, maxHeight.value, note.bins.size, home)
         Box(
             modifier =
                 Modifier

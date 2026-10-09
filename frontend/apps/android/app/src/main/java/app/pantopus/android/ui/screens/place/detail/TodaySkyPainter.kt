@@ -33,6 +33,21 @@ import kotlin.math.sqrt
  * inputs always give the same picture, and [still] gives the motionless one.
  * Parity twin of iOS `TodaySkyPainter.swift` and `TodaySkyGround.swift`; the numbers match.
  */
+
+/** The scene's finer details: the meteor shower, smoke and rain, and the home and its street. */
+data class SkyDetails(
+    /** A meteor shower's peak night: shooting stars whatever the note says. */
+    val meteorShower: Boolean = false,
+    /** Wildfire smoke, 0 (none) to 0.85: an amber veil and a dim red sun. */
+    val smoke: Double = 0.0,
+    /** How hard it rains, 0 (a light shower) to 1 (a downpour). */
+    val rain: Double = 0.5,
+    /** The resident's kind of home (`TodaySkyHomes.kt`). */
+    val home: SkyHome = SkyHome.HOUSE,
+    /** Lights on the far hill after dusk, from the block's density bucket. */
+    val streetLights: Int = 0,
+)
+
 class TodaySkyPainter(
     private val condition: WeatherConditionCode,
     private val moment: SkyMoment,
@@ -41,14 +56,10 @@ class TodaySkyPainter(
     /** Today's note, when it has a picture: bins at the curb. */
     private val note: SkyNote?,
     private val season: SkySeason,
-    /** A meteor shower's peak night: shooting stars whatever the note says. */
-    private val meteorShower: Boolean,
     private val still: Boolean,
-    /** Wildfire smoke, 0 (none) to 0.85: an amber veil and a dim red sun. */
-    private val smoke: Double = 0.0,
-    /** How hard it rains, 0 (a light shower) to 1 (a downpour). */
-    private val rain: Double = 0.5,
+    private val details: SkyDetails = SkyDetails(),
 ) {
+    private val smoke = details.smoke
     private val weather = skyWeather(condition)
     private val night = moment.phase == SkyPalette.Phase.NIGHT
 
@@ -62,26 +73,34 @@ class TodaySkyPainter(
             0f
         }
 
+    /**
+     * [rise] (0..1) lifts the sun or moon into its place as the card loads; [drift] lowers the stars,
+     * sun or moon and clouds as the card scrolls away.
+     */
     fun paint(
         scope: DrawScope,
         width: Float,
         height: Float,
         time: Double,
+        rise: Float = 1f,
+        drift: Float = 0f,
     ) {
-        val scene = SkyScene(width, height, if (still) 2.0 else time, SkyPalette.sky(moment.phase, weather))
+        val scene = SkyScene(width, height, if (still) 2.0 else time, SkyPalette.sky(moment.phase, weather), rise)
         val clear = weather == SkyPalette.Weather.CLEAR || weather == SkyPalette.Weather.PARTLY
         with(scope) {
             paintSky(scene)
-            if (night && clear) paintStars(scene)
-            if (night && clear && meteorShower) paintMeteors(scene, still)
-            if (night) paintMoon(scene) else paintSun(scene)
-            paintClouds(scene)
+            translate(0f, drift) {
+                if (night && clear) paintStars(scene)
+                if (night && clear && details.meteorShower) paintMeteors(scene, still)
+                if (night) paintMoon(scene) else paintSun(scene)
+                paintClouds(scene)
+            }
             paintRain(scene)
             paintSnow(scene)
             if (condition == WeatherConditionCode.WIND) paintWind(scene)
             if (weather == SkyPalette.Weather.STORM && !still) paintLightning(scene)
             if (smoke > 0) paintSmoke(scene, smoke, night)
-            TodaySkyGround(scene, weather, moment, condition, temperature < 50, still, note?.bins.orEmpty(), season).paint(this)
+            TodaySkyGround(scene, weather, moment, condition, temperature < 50, still, note?.bins.orEmpty(), season, details).paint(this)
             // Fog hugs the ground, in front of the house and below the reading.
             paintFog(scene)
             paintScrim(scene)
@@ -120,7 +139,7 @@ class TodaySkyPainter(
         // The sun rides the right half of the sky: low at dawn and dusk, high at noon.
         val fraction = moment.dayFraction
         val x = (scene.width * (0.56 + 0.32 * fraction)).toFloat()
-        val y = (scene.horizon - 18 - sin(PI * fraction) * (scene.horizon - 58)).toFloat()
+        val y = (scene.horizon - 18 - sin(PI * fraction) * (scene.horizon - 58)).toFloat() + (1 - scene.rise) * 44
         val warm = moment.phase == SkyPalette.Phase.DAWN || moment.phase == SkyPalette.Phase.DUSK
         // In the golden hour the sun warms and a wide halo of gold spreads around it.
         val lit = if (warm) SkyPalette.sunLow else SkyPalette.sunHigh.mixed(SkyPalette.sunLow, goldenWarmth * 2)
@@ -155,7 +174,7 @@ class TodaySkyPainter(
 
     private fun DrawScope.paintMoon(scene: SkyScene) {
         if (weather == SkyPalette.Weather.WET || weather == SkyPalette.Weather.SNOW || weather == SkyPalette.Weather.STORM) return
-        val center = Offset(scene.width * 0.8f, 50f)
+        val center = Offset(scene.width * 0.8f, 50f + (1 - scene.rise) * 44)
         val veiled = weather == SkyPalette.Weather.OVERCAST || weather == SkyPalette.Weather.FOG
         // A full moon lights up more of the sky.
         val full = abs(moment.moonPhase - 0.5) < 0.034
@@ -231,7 +250,7 @@ class TodaySkyPainter(
                 condition == WeatherConditionCode.SLEET -> 40
                 else -> 70
             }
-        val count = (base * (0.6 + 0.8 * rain)).toInt()
+        val count = (base * (0.6 + 0.8 * details.rain)).toInt()
         val path = Path()
         repeat(count) {
             val start = random.next() * (scene.width + 40)
@@ -369,9 +388,11 @@ class TodaySkyPainter(
         color: Color,
         opacity: Float,
     ) {
+        // Taller than the card, so a drifted glow never shows its edge.
         drawRect(
             brush = Brush.radialGradient(listOf(color.copy(alpha = opacity), color.copy(alpha = 0f)), center = center, radius = radius),
-            size = Size(scene.width, scene.height),
+            topLeft = Offset(0f, -80f),
+            size = Size(scene.width, scene.height + 160),
         )
     }
 
@@ -465,6 +486,8 @@ internal class SkyScene(
     val height: Float,
     val time: Double,
     val sky: SkyPalette.Sky,
+    /** 0 below its place, 1 in it. */
+    val rise: Float = 1f,
 ) {
     val horizon = height - 34f
 

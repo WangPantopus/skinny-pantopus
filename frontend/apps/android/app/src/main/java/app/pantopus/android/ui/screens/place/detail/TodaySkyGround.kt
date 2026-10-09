@@ -35,8 +35,12 @@ internal class TodaySkyGround(
     /** Bins at the curb, in order: "garbage", "recycling", "yard_waste". */
     private val bins: List<String> = emptyList(),
     private val season: SkySeason = SkySeason.SUMMER,
+    /** The home's kind and the far hill's lights. */
+    details: SkyDetails = SkyDetails(),
 ) {
     private val night = moment.phase == SkyPalette.Phase.NIGHT
+    private val home = details.home
+    private val streetLights = details.streetLights
 
     private class Tones(
         val backHill: Color,
@@ -77,6 +81,7 @@ internal class TodaySkyGround(
                 close()
             }
         drawPath(back, tones.backHill)
+        if (streetLights > 0 && (moment.phase == SkyPalette.Phase.DUSK || night)) paintStreetLights(scene, streetLights)
         val front =
             Path().apply {
                 moveTo(0f, y + 14)
@@ -88,9 +93,14 @@ internal class TodaySkyGround(
             }
         drawPath(front, tones.frontHill)
         val house = Offset(w * 0.7f, y + 7)
-        paintHouse(tones, house)
+        when (home) {
+            SkyHome.HOUSE -> paintHouse(tones, house)
+            SkyHome.TOWNHOUSE -> paintTownhouses(HomeLight(scene, moment), tones.house, house)
+            SkyHome.APARTMENT -> paintApartment(HomeLight(scene, moment), tones.house, house)
+            SkyHome.MOBILE -> paintMobileHome(HomeLight(scene, moment), tones.house, house)
+        }
         if (bins.isNotEmpty()) paintBins(tones, house)
-        if (cold && !still) paintSmoke(house)
+        if (cold && !still && home.chimney) paintSmoke(house)
         paintTrees(tones, house)
     }
 
@@ -99,7 +109,7 @@ internal class TodaySkyGround(
         tones: Tones,
         origin: Offset,
     ) {
-        val right = origin.x - 27
+        val right = origin.x - home.halfWidth - 2
         // At the curb: a little in front of the house.
         val base = origin.y + 8
         if (moment.phase == SkyPalette.Phase.DUSK || night) {
@@ -198,7 +208,8 @@ internal class TodaySkyGround(
     ) {
         val lean = if (condition == WeatherConditionCode.WIND && !still) (sin(scene.time * 2.2) * 0.08).toFloat() else 0f
         withTransform({
-            translate(origin.x + 36, origin.y + 2)
+            // Beside the home, however wide it is.
+            translate(origin.x + 11 + home.halfWidth, origin.y + 2)
             rotateRad(lean, pivot = Offset.Zero)
         }) {
             drawRect(tones.house, Offset(-1.5f, -12f), Size(3f, 12f))
@@ -211,7 +222,7 @@ internal class TodaySkyGround(
             }
         }
         withTransform({
-            translate(origin.x + 60, origin.y + 3)
+            translate(origin.x + 35 + home.halfWidth, origin.y + 3)
             rotateRad(lean * 0.7f, pivot = Offset.Zero)
         }) {
             drawRect(tones.house, Offset(-1.5f, -7f), Size(3f, 8f))
@@ -291,9 +302,10 @@ internal class TodaySkyGround(
             width: Float,
             height: Float,
             count: Int,
+            home: SkyHome = SkyHome.HOUSE,
         ): Offset =
             // Horizon (34 above the bottom), down 7 to the house's ground line and 8 more to the curb,
             // then up 5 to the bins' middle.
-            Offset(width * 0.7f - 27 - (count * 9f - 2) / 2, height - 34 + 7 + 8 - 5)
+            Offset(width * 0.7f - home.halfWidth - 2 - (count * 9f - 2) / 2, height - 34 + 7 + 8 - 5)
     }
 }

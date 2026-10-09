@@ -160,13 +160,27 @@ struct PlaceTodayDetailContent: View {
     @ViewBuilder
     private func weatherAndGoodDay(proxy: ScrollViewProxy) -> some View {
         if let weather = vm.section(.weather, in: intel) {
-            PlaceDetailSectionLabel(text: "Weather")
+            HStack(alignment: .bottom, spacing: 8) {
+                PlaceDetailSectionLabel(text: "Weather")
+                if let data = weather.weather, weather.status == .ready || weather.status == .stale, !intel.place.city.isEmpty {
+                    SkyShareLink(card: SkyShareCard(
+                        weather: data,
+                        sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
+                        air: skyAir,
+                        city: intel.place.city,
+                        date: .now
+                    ))
+                    .padding(.trailing, 4)
+                }
+            }
             if let data = weather.weather, weather.status == .ready || weather.status == .stale {
                 TodaySkyHero(
                     data: data,
                     sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
                     pickups: calendarEvents,
-                    air: skyAir
+                    air: skyAir,
+                    home: SkyHome(vm.section(.yourHome, in: intel)?.yourHome?.homeType),
+                    streetLights: SkyStreet.lights(vm.section(.blockDensity, in: intel)?.blockDensity?.bucket.rawValue)
                 ) { withAnimation { proxy.scrollTo("todayAddressCalendar", anchor: .top) } }
                 PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
             } else {

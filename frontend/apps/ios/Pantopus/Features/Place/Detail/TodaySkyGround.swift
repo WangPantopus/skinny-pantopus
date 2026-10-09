@@ -22,14 +22,18 @@ struct TodaySkyGround {
     /// Bins at the curb, in order: "garbage", "recycling", "yard_waste".
     var bins: [String] = []
     var season: SkySeason = .summer
+    /// The resident's kind of home (`TodaySkyHomes.swift`).
+    var home: SkyHome = .house
+    /// Lights on the far hill after dusk, from the block's density bucket.
+    var streetLights = 0
 
-    private struct Tones {
+    struct Tones {
         let backHill: SkyRGB
         let frontHill: SkyRGB
         let house: SkyRGB
     }
 
-    private var night: Bool {
+    var night: Bool {
         moment.phase == .night
     }
 
@@ -50,16 +54,17 @@ struct TodaySkyGround {
     func paint(_ context: GraphicsContext) {
         let tones = tones
         paintHills(context, tones)
+        if streetLights > 0, moment.phase == .dusk || night { paintStreetLights(context) }
         let house = CGPoint(x: scene.width * 0.7, y: scene.horizon + 7)
-        paintHouse(context, tones, at: house)
+        paintHome(context, tones, at: house)
         if !bins.isEmpty { paintBins(context, tones, at: house) }
-        if cold, !still { paintSmoke(context, at: house) }
+        if cold, !still, home.chimney { paintSmoke(context, at: house) }
         paintTrees(context, tones, at: house)
     }
 
     /// Where the bins stand in a card of `size`, for the button over them.
-    static func binsCenter(in size: CGSize, count: Int) -> CGPoint {
-        let right = Double(size.width) * 0.7 - 27
+    static func binsCenter(in size: CGSize, count: Int, home: SkyHome = .house) -> CGPoint {
+        let right = Double(size.width) * 0.7 - home.halfWidth - 2
         // Horizon (34 above the bottom), down 7 to the house's ground line and 8 more to the curb,
         // then up 5 to the bins' middle.
         return CGPoint(x: right - (Double(count) * 9 - 2) / 2, y: Double(size.height) - 34 + 7 + 8 - 5)
@@ -69,7 +74,7 @@ struct TodaySkyGround {
     /// the porch after dark.
     private func paintBins(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
         let lit = moment.phase == .dusk || night
-        let right = Double(origin.x) - 27
+        let right = Double(origin.x) - home.halfWidth - 2
         let base = Double(origin.y) + 8
         if lit {
             let width = Double(bins.count) * 9 + 12
@@ -127,7 +132,7 @@ struct TodaySkyGround {
     }
 
     /// A 40 × 26 point house with its door at `at` (the ground line).
-    private func paintHouse(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
+    func paintHouse(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
         let x = origin.x
         let y = origin.y
         // Filled one part at a time: overlapping subpaths in one path could
@@ -183,7 +188,8 @@ struct TodaySkyGround {
     private func paintTrees(_ context: GraphicsContext, _ tones: Tones, at origin: CGPoint) {
         let lean = condition == .wind && !still ? sin(scene.time * 2.2) * 0.08 : 0
         var round = context
-        round.translateBy(x: origin.x + 36, y: origin.y + 2)
+        // Beside the home, however wide it is.
+        round.translateBy(x: origin.x + 11 + home.halfWidth, y: origin.y + 2)
         round.rotate(by: .radians(lean))
         round.fill(Path(CGRect(x: -1.5, y: -12, width: 3, height: 12)), with: .color(tones.house.color))
         if season == .winter {
@@ -195,7 +201,7 @@ struct TodaySkyGround {
         }
 
         var pine = context
-        pine.translateBy(x: origin.x + 60, y: origin.y + 3)
+        pine.translateBy(x: origin.x + 35 + home.halfWidth, y: origin.y + 3)
         pine.rotate(by: .radians(lean * 0.7))
         var needles = Path()
         needles.move(to: CGPoint(x: -9, y: -6))
