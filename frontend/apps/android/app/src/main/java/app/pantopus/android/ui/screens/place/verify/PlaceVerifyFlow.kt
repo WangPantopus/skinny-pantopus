@@ -90,11 +90,27 @@ enum class PlaceVerifyMethod(val slug: String, val icon: PantopusIcon, val label
 
 private data class VerifyBenefit(val icon: PantopusIcon, val label: String, val sub: String)
 
+/**
+ * The unlocks verifying really gives (Wedge v2 D4), the same three as iOS and the web: proof
+ * you live here, your rank on the block, and what only verified neighbors see.
+ */
 private val VERIFY_BENEFITS =
     listOf(
-        VerifyBenefit(PantopusIcon.MessageCircle, "Message your verified neighbors", "Direct messages with the people on your block"),
-        VerifyBenefit(PantopusIcon.BadgeCheck, "Your verified badge", "The address-proven check on your profile"),
-        VerifyBenefit(PantopusIcon.Mailbox, "Your digital mailbox", "Packages, civic notices, and permits in one place"),
+        VerifyBenefit(
+            PantopusIcon.BadgeCheck,
+            "Proof you live here",
+            "Your verified badge, a residency letter, and a shareable Residency Pass",
+        ),
+        VerifyBenefit(
+            PantopusIcon.Mailbox,
+            "Your mailbox and your rank",
+            "The digital mailbox opens, and you take a permanent Block Founder number",
+        ),
+        VerifyBenefit(
+            PantopusIcon.MessageCircle,
+            "What only verified neighbors see",
+            "Real rents on your block, neighbor messages, the Fridge Card, rate watch",
+        ),
     )
 
 // ─── B1 — the verify sheet ───────────────────────────────────
