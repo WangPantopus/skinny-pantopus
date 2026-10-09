@@ -541,10 +541,14 @@ router.post('/reminder-push', verifyInternalApiKey, async (req, res) => {
   if (['bill_due', 'calendar'].includes(reminderType) && skipForLaunchCut('household_extras', `reminder-push:${reminderType}`)) {
     return res.json({ status: 'skipped', reason: 'feature_hidden' });
   }
+  // Launch cut #10 (Mailbox): the mail notification Lambda's pushes are off while the mailbox is.
+  const mailTypes = new Set(['mail_summary', 'mail_urgent']);
+  if (mailTypes.has(reminderType) && skipForLaunchCut('mailbox', `reminder-push:${reminderType}`)) {
+    return res.json({ status: 'skipped', reason: 'feature_hidden' });
+  }
 
   try {
     // Check preference + quiet hours in a single query
-    const mailTypes = new Set(['mail_summary', 'mail_urgent']);
     const prefField = mailTypes.has(reminderType) ? 'mail_summary_enabled' : 'home_reminders_enabled';
 
     const { data: prefs } = await supabaseAdmin
