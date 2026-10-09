@@ -114,9 +114,14 @@ extension AuthManager {
             return
         }
         // Each call may wait 20 s and retry twice, so an outage once meant ~100 s on the splash.
-        // The splash follows `state`, so the app opens on the cached identity while this finishes.
+        // The splash follows `state`, so the app opens on the cached identity while this finishes:
+        // after `launchRestoreCap`, or at once with no network (the screens open on the copy they
+        // saved on the phone, Instant Screens M3).
         let opener = Task { [weak self] in
-            try? await Task.sleep(for: Self.launchRestoreCap)
+            let deadline = ContinuousClock.now + Self.launchRestoreCap
+            while ContinuousClock.now < deadline, NetworkMonitor.shared.isOnline, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
             guard let self, !Task.isCancelled, state == .unknown, let cached = loadCachedUser() else { return }
             logger.info("Session restore still running — opening on the cached identity")
             setState(.signedIn(cached))
