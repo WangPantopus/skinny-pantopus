@@ -11,8 +11,9 @@ import type { ReactElement } from 'react';
 import type { PlaceIntelligence, PlaceSection, PlaceSectionId } from '@pantopus/types';
 
 // IdentityDetail now carries the mailbox-check query in its main view,
-// so its renders need a QueryClient (queries resolve to loading states
-// here — the card's own behavior is covered in mailboxCheckCard.test).
+// and Today's briefing card reads your notification preferences, so their
+// renders need a QueryClient (queries resolve to loading states here — the
+// card's own behavior is covered in mailboxCheckCard.test).
 function renderWithQueryClient(ui: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
@@ -90,7 +91,7 @@ const FULL = intel([
 
 describe('Place group-detail — renders from the contract', () => {
   it('Today shows weather, air quality, and the all-clear alerts state', () => {
-    render(<TodayDetail intelligence={FULL} />);
+    renderWithQueryClient(<TodayDetail intelligence={FULL} />);
     expect(screen.getByText('Clear')).toBeInTheDocument();
     expect(screen.getByText(/US Air Quality Index/)).toBeInTheDocument();
     expect(screen.getByText('No active alerts')).toBeInTheDocument();
@@ -180,7 +181,7 @@ describe('Place group-detail — degrades section-by-section', () => {
       sec('alerts', { data: { active: [] } }),
       sec('sunrise_sunset', { status: 'unavailable', data: null }),
     ]);
-    render(<TodayDetail intelligence={degraded} />);
+    renderWithQueryClient(<TodayDetail intelligence={degraded} />);
     // Weather degrades to the unavailable card while air quality still reads.
     expect(screen.getAllByText('Not available for your area yet.').length).toBeGreaterThan(0);
     expect(screen.getByText(/US Air Quality Index/)).toBeInTheDocument();
