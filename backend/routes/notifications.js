@@ -83,7 +83,15 @@ function applyNotificationFilters(query, {
  *   context_id — business_user_id to filter business notifications
  *   firewall — alias for `context` kept for P0.6 internal callers.
  *     New code should pass `context` instead.
+ *   after — only what's new (Instant Screens contract §8): a notification id
+ *     the client already has, or an ISO time; returns the notifications
+ *     newer than it, newest first (offset is ignored; hasMore means more new
+ *     ones than `limit`, so reload the list). An id that isn't one of the
+ *     caller's notifications answers 400 NOTIFICATION_CURSOR_UNKNOWN.
  */
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:?\d{2})$/;
+const NOTIFICATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 router.get('/', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -105,6 +113,31 @@ router.get('/', verifyToken, async (req, res) => {
     }
     const contexts = contextRaw && contextRaw !== 'all' ? [contextRaw] : null;
 
+    let after = null;
+    const afterRaw = typeof req.query.after === 'string' ? req.query.after.trim() : '';
+    if (afterRaw) {
+      if (NOTIFICATION_ID.test(afterRaw)) {
+        const { data: anchor, error: anchorError } = await supabaseAdmin
+          .from('Notification')
+          .select('id, created_at')
+          .eq('id', afterRaw)
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (anchorError) {
+          logger.error('Error reading notification cursor', { error: anchorError.message, userId });
+          return res.status(500).json({ error: 'Failed to fetch notifications' });
+        }
+        if (!anchor) {
+          return res.status(400).json({ error: 'Unknown notification; reload the list.', code: 'NOTIFICATION_CURSOR_UNKNOWN' });
+        }
+        after = anchor;
+      } else if (ISO_TIME.test(afterRaw) && Number.isFinite(Date.parse(afterRaw))) {
+        after = { created_at: afterRaw };
+      } else {
+        return res.status(400).json({ error: 'invalid after' });
+      }
+    }
+
     // Get notifications
     let query = supabaseAdmin
       .from('Notification')
@@ -113,7 +146,13 @@ router.get('/', verifyToken, async (req, res) => {
       .order('created_at', { ascending: false })
       // Notifications written together share created_at; without a tiebreak "load more" can repeat one and skip others.
       .order('id', { ascending: false })
-      .range(offset, offset + limit - 1);
+      .range(after ? 0 : offset, (after ? 0 : offset) + limit - 1);
+    if (after?.id) {
+      // Newer in the list's order: a later time, or the same time with a later id.
+      query = query.or(`created_at.gt."${after.created_at}",and(created_at.eq."${after.created_at}",id.gt.${after.id})`);
+    } else if (after) {
+      query = query.gt('created_at', after.created_at);
+    }
 
     if (unreadOnly) {
       query = query.eq('is_read', false);

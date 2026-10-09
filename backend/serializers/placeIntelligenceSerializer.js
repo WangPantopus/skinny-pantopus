@@ -210,6 +210,7 @@ function serializePlaceIntelligence(options = {}) {
     verifyAvailable = false,
     viewer = null,
     moveInDate,
+    timeZone,
   } = options;
 
   assertOneOf(tier, ['T0', 'T1', 'T2', 'T3', 'T4'], 'tier');
@@ -259,6 +260,9 @@ function serializePlaceIntelligence(options = {}) {
     // The Home's move-in date (the movers card), so the apps don't read the
     // whole Home detail for one field. Absent on responses that aren't about a Home.
     ...(moveInDate !== undefined ? { move_in_date: moveInDate } : {}),
+    // The place's IANA time zone (from its coordinates), so the apps roll Today over at the place's
+    // midnight rather than the phone's (Instant Screens contract §4). Absent when the place has no coordinates.
+    ...(timeZone ? { time_zone: timeZone } : {}),
     region_supported: regionSupported,
     generated_at: generatedAt || new Date().toISOString(),
     groups,
