@@ -3597,6 +3597,15 @@ public struct HubTabRoot: View {
             path.append(.placeArrival)
             return
         }
+        // The home list the phone kept (owners and household roles only) lands
+        // at once, also offline; the server's list then confirms it.
+        if let copy = HomesStoreReads.peekMyHomes(), let homeId = Self.primaryHomeId(in: copy.value) {
+            didAutoLandPlace = true
+            path.append(.placeDashboard(homeId: homeId))
+            isResolvingPlace = false
+            await confirmPlaceLanding(homeId)
+            return
+        }
         do {
             let homeId = try await Self.primaryHomeId()
             // A tab change, link, or newer retry must win over this response.
@@ -3617,6 +3626,22 @@ public struct HubTabRoot: View {
             guard !Task.isCancelled, canResolvePlaceLanding else { return placeLandingDropped() }
             placeResolutionError = (error as? APIError)?.errorDescription
                 ?? "Check your connection and try again."
+        }
+    }
+
+    /// A landing made from the kept home list: when the server's list names
+    /// another home (or none) while that dashboard is still the only screen
+    /// open, the landing follows the server. A failed read keeps the landing.
+    private func confirmPlaceLanding(_ homeId: String) async {
+        guard let response = try? await HomesStoreReads.myHomes().value else { return }
+        let current = Self.primaryHomeId(in: response)
+        guard current != homeId, path.last == .placeDashboard(homeId: homeId) else { return }
+        path.removeLast()
+        if let current {
+            path.append(.placeDashboard(homeId: current))
+        } else {
+            didAutoLandPlace = false
+            placeLandingNeedsHome = true
         }
     }
 
@@ -3668,11 +3693,14 @@ public struct HubTabRoot: View {
 
     private static func primaryHomeId() async throws -> String? {
         // One home list for every screen (the screen store): shown at once while fresh.
-        let response = try await HomesStoreReads.myHomes().value
+        try await primaryHomeId(in: HomesStoreReads.myHomes().value)
+    }
+
+    private static func primaryHomeId(in response: MyHomesResponse) -> String? {
         // A resident's own private setup is their Place until a household shares
         // it (as on the web): public readings, with the Home's records waiting on
         // verification.
-        return response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
+        response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
             ?? response.sharedHomes.first?.id
             ?? response.homes.first { $0.hasValidListContext && $0.accessKind == "private_setup" }?.id
     }
