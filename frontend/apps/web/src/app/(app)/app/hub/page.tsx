@@ -24,15 +24,19 @@ import {
 import ProfileCompletionCard from '@/components/hub/ProfileCompletionCard';
 import type { HubPayload } from '@/components/hub';
 import type { HubToday } from '@pantopus/types';
+import { activeQueryClient } from '@/lib/active-query-client';
+import { myHomesQuery } from '@/lib/myHomes';
 
 const HUB_STALE_TIME = 120_000; // 2 minutes
 
 // Fetches the hub payload + (in parallel) the user's homes, merging them
-// so the UI shows homes even when hub returns none.
+// so the UI shows homes even when hub returns none. The homes come from the
+// list Place and the switcher share (lib/myHomes.ts): one read for all three.
 async function fetchHubData(): Promise<HubPayload> {
+  const client = activeQueryClient();
   const [hubPayload, myHomesRes] = await Promise.all([
     api.hub.getHub(),
-    api.homes.getMyHomes().catch(() => null),
+    (client ? client.fetchQuery(myHomesQuery()) : api.homes.getMyHomes()).catch(() => null),
   ]);
 
   let homes: api.HubHome[] = hubPayload.homes ?? [];

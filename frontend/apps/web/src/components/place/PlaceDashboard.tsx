@@ -26,6 +26,7 @@ import PlaceDashboardSkeleton from './PlaceDashboardSkeleton';
 import PlaceShell from './PlaceShell';
 import SetupBanner from '@/components/hub/SetupBanner';
 import { usePrimaryHome } from '@/lib/primaryHome';
+import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
 
 const REDIRECT_TO = encodeURIComponent('/app/place');
 
@@ -82,12 +83,7 @@ export default function PlaceDashboard() {
   // 1b) The resident's full list of places — powers the multi-home
   // switcher. Supplementary: it never gates the dashboard, so if it
   // fails the dashboard still renders (without the switch affordance).
-  const myHomesQuery = useQuery({
-    queryKey: queryKeys.placeMyHomes(),
-    queryFn: async () => api.homes.getMyHomes(),
-    enabled: authed,
-    staleTime: 60_000,
-  });
+  const myHomesQuery = useQuery({ ...sharedMyHomesQuery(), enabled: authed });
 
   // The resident's own private setup is their place too until they share a
   // household: the server answers it with public readings only (tier T1).

@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
+import { myHomesQuery } from '@/lib/myHomes';
+import { queryKeys } from '@/lib/query-keys';
 import { IdentityIcons } from '@/lib/icons';
 import { Check, ChevronDown, Shield } from 'lucide-react';
 import type { MySeat } from '@pantopus/types';
@@ -63,7 +66,15 @@ export default function ProfileToggle({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [homes, setHomes] = useState<HomeOption[]>([]);
+  // Your homes: the entry Place reads too (lib/myHomes.ts), so the switcher shows them at once and
+  // follows changes (a rename, the `homes` signal) without its own reads.
+  const queryClient = useQueryClient();
+  const homesQuery = useQuery(myHomesQuery());
+  const homes = useMemo(
+    () => toHomeOptions(((homesQuery.data as Record<string, unknown> | undefined)?.homes as Record<string, unknown>[] | undefined) ?? []),
+    [homesQuery.data],
+  );
+  const homesLoading = !homesQuery.data && homesQuery.isPending;
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [professional, setProfessional] = useState<ProfessionalOption | null>(null);
   const [hasSeats, setHasSeats] = useState(false);
@@ -75,8 +86,7 @@ export default function ProfileToggle({
   useEffect(() => {
     (async () => {
       try {
-        const [homesRes, bizRes, proRes, seatsRes] = await Promise.allSettled([
-          api.homes.getMyHomes(),
+        const [bizRes, proRes, seatsRes] = await Promise.allSettled([
           api.businesses.getMyBusinesses(),
           // Professional mode is a launch cut (#2 + #4): no profile to read while it's off.
           launchFeatures.personas && launchFeatures.openGigs ? api.professional.getMyProfile() : Promise.resolve(null),
@@ -93,11 +103,6 @@ export default function ProfileToggle({
               seatList.map((s) => [s.business_user_id, s])
             );
           }
-        }
-
-        if (homesRes.status === 'fulfilled') {
-          const list = (homesRes.value as Record<string, unknown>)?.homes as Record<string, unknown>[] ?? [];
-          setHomes(toHomeOptions(list));
         }
 
         if (bizRes.status === 'fulfilled') {
@@ -139,22 +144,12 @@ export default function ProfileToggle({
     })();
   }, []);
 
-  // A rename saved elsewhere in the app re-reads the Homes; a failed read keeps the last list.
+  // A rename saved elsewhere in the app reads the Homes again; a failed read keeps the last list.
   useEffect(() => {
-    let generation = 0;
-    const reread = async () => {
-      const current = ++generation;
-      try {
-        const res = await api.homes.getMyHomes();
-        if (current !== generation) return;
-        setHomes(toHomeOptions((res as Record<string, unknown>)?.homes as Record<string, unknown>[] ?? []));
-      } catch {
-        // The next full load corrects it.
-      }
-    };
+    const reread = () => { void queryClient.invalidateQueries({ queryKey: queryKeys.placeMyHomes() }); };
     window.addEventListener(HOMES_CHANGED_EVENT, reread);
-    return () => { generation++; window.removeEventListener(HOMES_CHANGED_EVENT, reread); };
-  }, []);
+    return () => window.removeEventListener(HOMES_CHANGED_EVENT, reread);
+  }, [queryClient]);
 
   // Dropdown dimensions (w-64 = 16rem = 256px)
   const DROPDOWN_WIDTH = 256;
@@ -313,7 +308,7 @@ export default function ProfileToggle({
             )}
 
             {/* Home items */}
-            {loading ? (
+            {homesLoading ? (
               <div className="px-3 py-3 text-xs text-app-muted">Loading…</div>
             ) : (
               homes.map((h) => (
