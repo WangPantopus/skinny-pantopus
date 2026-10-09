@@ -156,6 +156,8 @@ public struct RootTabView: View {
         .tint(Theme.Color.primaryTint)
         .environment(model)
         .task {
+            // Live updates (sync:changed, notification:new, reconnects) for every screen.
+            ScreenStoreLive.start()
             await chatBadgeStore.start()
             model.messagesBadge = chatBadgeStore.unreadMessages
         }
