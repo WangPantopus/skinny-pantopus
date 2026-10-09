@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeResidencyProgressRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerCtaTint
@@ -57,6 +58,14 @@ class MyHomesListViewModelTest {
         every { session.invalidated } returns MutableStateFlow(false)
         coEvery { session.requireCurrent() } just Runs
         coEvery { residencyRepo.requests(null) } returns NetworkResult.Success(PersonalHomeResidencyPage(emptyList(), null))
+        // The screens' store hands back what the endpoint answered (Instant Screens); nothing is stored yet.
+        every { repo.myHomesCopy() } returns null
+        coEvery { repo.myHomesStored(any()) } coAnswers {
+            when (val result = repo.myHomes()) {
+                is NetworkResult.Success -> Stored(result.data, fetchedAt = System.currentTimeMillis())
+                is NetworkResult.Failure -> Stored(failure = result.error)
+            }
+        }
     }
 
     @After
