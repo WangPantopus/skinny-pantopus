@@ -199,9 +199,18 @@ app.use(cors(corsOptions));
 app.use(helmet());
 
 // The answer to a write is never reusable, and sign-in, refresh, reset-password, OAuth and resume answers carry
-// tokens: without this, iOS's disk cache keeps them. A route that sets its own Cache-Control keeps it.
+// tokens: without this, iOS's disk cache keeps them. A read sent with an account's credentials (the apps' Bearer,
+// the web's access cookie) answers with that account's data, such as door codes, fridge cards, the wallet or the
+// profile; without a Cache-Control, HTTP caches on the phone and in the browser keep a copy on disk.
+// A route that sets its own Cache-Control keeps it, and Express's ETag is unchanged.
+// cookieParser runs later, so the access cookie is read from the raw header.
+const ACCESS_COOKIE = /(?:^|;\s*)pantopus_access=/;
 app.use('/api', (req, res, next) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') res.setHeader('Cache-Control', 'no-store');
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    if (req.headers.authorization || ACCESS_COOKIE.test(req.headers.cookie || '')) res.setHeader('Cache-Control', 'private, no-store');
+  } else if (req.method !== 'OPTIONS') {
+    res.setHeader('Cache-Control', 'no-store');
+  }
   next();
 });
 

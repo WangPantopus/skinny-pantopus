@@ -2681,6 +2681,8 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
  * Get current user's profile
  */
 router.get('/profile', verifyToken, async (req, res) => {
+  // Email, phone, date of birth and address are never kept in a device's HTTP cache.
+  res.set('Cache-Control', 'private, no-store');
   try {
     const userId = req.user.id;
 

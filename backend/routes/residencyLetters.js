@@ -78,6 +78,8 @@ router.post('/:id/residency-letters', verifyToken, residencyLetterIssueLimiter, 
 router.get('/:id/residency-letters', verifyToken, async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
+  // Name, address and each letter's verification code: never kept in a device's HTTP cache.
+  res.set('Cache-Control', 'private, no-store');
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
@@ -95,6 +97,7 @@ router.get('/:id/residency-letters', verifyToken, async (req, res) => {
 router.get('/:id/residency-letters/:letterId/pdf', verifyToken, async (req, res) => {
   const { id, letterId } = req.params;
   const userId = req.user.id;
+  res.set('Cache-Control', 'private, no-store');
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {

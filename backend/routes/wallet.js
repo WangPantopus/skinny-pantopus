@@ -29,6 +29,9 @@ const walletReadLimiter = rateLimit({
   message: { error: 'Too many wallet history requests. Please try again shortly.' },
 });
 
+// Balances and transaction history are never kept in a device's HTTP cache.
+router.use((_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); });
+
 // ============ VALIDATION SCHEMAS ============
 
 const withdrawSchema = Joi.object({
