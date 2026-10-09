@@ -200,6 +200,8 @@ public final class PulseFeedViewModel {
     /// Identity of the query that produced the visible rows and cursor.
     private var lastQuery: FeedQuery?
     private var loadedItems: [FeedPostDTO] = []
+    /// Taps shown at once that the server hasn't confirmed yet, per post.
+    private var pendingActions: [String: Set<PulsePendingAction>] = [:]
     /// A quiet refresh that found new posts while the reader is further down
     /// holds its page here, behind the "N new posts" pill (Instant Screens).
     private var pendingFirstPage: PendingFirstPage?
@@ -383,7 +385,12 @@ public final class PulseFeedViewModel {
         let toggled = !current
         overrides[postId, default: PulsePostOverride()].hasReacted = toggled
         overrides[postId, default: PulsePostOverride()].likeCount = max(0, currentCount + (toggled ? 1 : -1))
+        pendingActions[postId, default: []].insert(.reaction)
         rebuildLoadedState()
+        defer {
+            pendingActions[postId]?.remove(.reaction)
+            rebuildLoadedState()
+        }
 
         do {
             let response = try await api.request(
@@ -395,8 +402,8 @@ public final class PulseFeedViewModel {
         } catch {
             overrides[postId, default: PulsePostOverride()].hasReacted = current
             overrides[postId, default: PulsePostOverride()].likeCount = currentCount
+            toastMessage = "Couldn't update your reaction."
         }
-        rebuildLoadedState()
     }
 
     // MARK: - Overflow actions
@@ -412,6 +419,7 @@ public final class PulseFeedViewModel {
         guard let item = loadedItems.first(where: { $0.id == postId }) else { return }
         let original = effectiveIsSaved(item)
         overrides[postId, default: PulsePostOverride()].isSaved = !original
+        pendingActions[postId, default: []].insert(.save)
         rebuildLoadedState()
         do {
             let response = try await api.request(
@@ -424,6 +432,7 @@ public final class PulseFeedViewModel {
             overrides[postId, default: PulsePostOverride()].isSaved = original
             toastMessage = "Couldn't update your bookmark."
         }
+        pendingActions[postId]?.remove(.save)
         rebuildLoadedState()
     }
 
@@ -435,7 +444,12 @@ public final class PulseFeedViewModel {
         let originalCount = effectiveShareCount(item)
         overrides[postId, default: PulsePostOverride()].isReposted = !original
         overrides[postId, default: PulsePostOverride()].shareCount = max(0, originalCount + (original ? -1 : 1))
+        pendingActions[postId, default: []].insert(.repost)
         rebuildLoadedState()
+        defer {
+            pendingActions[postId]?.remove(.repost)
+            rebuildLoadedState()
+        }
         do {
             let response = try await api.request(
                 PostsEndpoints.share(id: postId, shareType: "repost", reposted: !original),
@@ -986,7 +1000,8 @@ public final class PulseFeedViewModel {
                 muteEntityId: post.businessAuthorId ?? post.userId,
                 muteEntityName: post.creator?.displayName ?? "this author",
                 postType: post.postType,
-                topicLabel: intent.cardChipLabel
+                topicLabel: intent.cardChipLabel,
+                pending: pendingActions[post.id] ?? []
             ),
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
             isVisitor: post.isVisitorPost,
