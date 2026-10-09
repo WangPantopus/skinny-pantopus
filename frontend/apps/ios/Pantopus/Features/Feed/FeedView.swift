@@ -567,7 +567,7 @@ public struct FeedView: View {
             .refreshable { await viewModel.refresh() }
             .overlay(alignment: .top) {
                 if viewModel.newPostsCount > 0 {
-                    newPostsPill { withAnimation { proxy.scrollTo(Self.listTopID, anchor: .top) } }
+                    newPostsPill { withAnimation { proxy.scrollTo(firstPostID ?? Self.listTopID, anchor: .top) } }
                 }
             }
         }
@@ -575,6 +575,14 @@ public struct FeedView: View {
     }
 
     private static let listTopID = "pulseFeedTop"
+
+    /// The first post on screen now: the pill scrolls to it (a lazy list
+    /// can always find a post's row; the 1 pt marker is gone once far away).
+    private var firstPostID: String? {
+        guard case let .loaded(rows) = viewModel.state else { return nil }
+        return rows.first?.id
+    }
+
     /// Scrolled less than this from the top still reads as "at the top".
     private static let topSlack: CGFloat = 40
 
