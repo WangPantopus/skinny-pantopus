@@ -199,6 +199,7 @@ class TodayTabViewModel
                 _state.value = TodayTabUiState.Loading
             }
             _refreshing.value = true
+            if (force) radonMemory.readAgain()
             loadJob =
                 viewModelScope.launch {
                     try {

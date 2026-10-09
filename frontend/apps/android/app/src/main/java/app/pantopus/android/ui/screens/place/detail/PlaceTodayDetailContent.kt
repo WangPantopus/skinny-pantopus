@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -121,6 +122,14 @@ private const val RADON_DISMISS_DAYS = 30L
  */
 class RadonTodayMemory {
     internal val byHome = mutableMapOf<String, RadonSnapshot>()
+
+    /** Reads Today forced (pull to refresh, Retry): each one reads the household's tasks again as well. */
+    var forcedReads by mutableIntStateOf(0)
+        private set
+
+    fun readAgain() {
+        forcedReads++
+    }
 }
 
 internal data class RadonSnapshot(
@@ -877,7 +886,10 @@ private fun rememberHomeTodayState(
             epoch++
         }
     }
-    LaunchedEffect(state) { state.load() }
+    // A pull (or Retry) reads the tasks now; otherwise the card's 2-minute window decides.
+    val forcedReads = memory?.forcedReads ?: 0
+    val forcedAtStart = remember(state) { forcedReads }
+    LaunchedEffect(state, forcedReads) { state.load(force = forcedReads != forcedAtStart) }
     return state
 }
 
