@@ -16,6 +16,8 @@ export const queryKeys = {
   // ── Feed ───────────────────────────────────────────────────
   feed: (surface: string, filter: string) =>
     ['feed', surface, filter] as const,
+  /** Your saved viewing area (GET /api/location/resolve); hooks/useAreaPicker.ts. */
+  viewingArea: () => ['location', 'viewing'] as const,
 
   // ── Gigs ───────────────────────────────────────────────────
   gigs: (filters: Record<string, any>) =>

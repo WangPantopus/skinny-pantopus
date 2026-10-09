@@ -23,6 +23,13 @@ final class PlaceDetailViewModel {
     /// The error is the server refusing this account the place (403): a
     /// retry can't change it, so the views drop their Try again.
     private(set) var accessDenied = false
+    /// When the shown copy was fetched.
+    private(set) var loadedAt: Date?
+    /// Set when a pull to refresh fails while the content stays on screen.
+    var refreshFailureMessage: String?
+    /// Today's fresh window (Instant Screens contract §4): coming back
+    /// within it sends no request.
+    static let todayFreshFor: TimeInterval = 10 * 60
     let homeId: String
     let savedPlaceId: String?
     var calendarHomeId: String? {
@@ -76,16 +83,30 @@ final class PlaceDetailViewModel {
 
     func load() async {
         if case .loaded = state { return }
-        await fetch()
+        await fetch(quietly: false)
     }
 
+    /// Coming back: the shown copy stays and is fetched again quietly once
+    /// it is older than `freshFor`.
+    func refreshIfStale(freshFor: TimeInterval) async {
+        guard case .loaded = state, let loadedAt else {
+            await load()
+            return
+        }
+        guard Date().timeIntervalSince(loadedAt) >= freshFor else { return }
+        await fetch(quietly: true)
+    }
+
+    /// Pull to refresh and Try again: always fetches now.
     func refresh() async {
-        await fetch()
+        await fetch(quietly: false)
     }
 
-    private func fetch() async {
-        fallbackRequested = false
-        fallbackCalendar = nil
+    /// A failed fetch keeps loaded content on screen (a pull to refresh says
+    /// so in a toast). A refusal (403 or 404) replaces it with the server's
+    /// answer, and with nothing loaded the error shows.
+    private func fetch(quietly: Bool) async {
+        let hadFallback = fallbackCalendar != nil
         do {
             let intelligence: PlaceIntelligence = try await api.request(
                 savedPlaceId.map { SavedPlacesEndpoints.today(id: $0) }
@@ -93,15 +114,35 @@ final class PlaceDetailViewModel {
             )
             try Task.checkCancellation()
             accessDenied = false
+            refreshFailureMessage = nil
+            loadedAt = Date()
             state = .loaded(intelligence)
+            // A refresh asks for the fallback calendar again; the shown one
+            // stays until the new one arrives.
+            if !quietly {
+                fallbackRequested = false
+                if hadFallback { await loadFallbackCalendar() }
+            }
         } catch is CancellationError {
             return
-        } catch let error as APIError {
-            if case .forbidden = error { accessDenied = true } else { accessDenied = false }
-            state = .error(message: error.errorDescription ?? "Couldn't load this section.")
         } catch {
-            accessDenied = false
-            state = .error(message: "Couldn't load this section.")
+            let apiError = error as? APIError
+            if case .loaded = state, !Self.isRefusal(apiError) {
+                if !quietly { refreshFailureMessage = "Couldn't refresh. Pull down to try again." }
+                return
+            }
+            if case .forbidden = apiError { accessDenied = true } else { accessDenied = false }
+            fallbackRequested = false
+            fallbackCalendar = nil
+            loadedAt = nil
+            state = .error(message: apiError?.errorDescription ?? "Couldn't load this section.")
+        }
+    }
+
+    private static func isRefusal(_ error: APIError?) -> Bool {
+        switch error {
+        case .forbidden, .notFound: true
+        default: false
         }
     }
 
@@ -115,7 +156,8 @@ final class PlaceDetailViewModel {
             try sessionScope.requireCurrent()
             fallbackCalendar = response.calendar
         } catch {
-            fallbackCalendar = nil
+            // A failed refresh keeps the shown calendar; another account never sees it.
+            if !sessionScope.isCurrent { fallbackCalendar = nil }
         }
     }
 
