@@ -225,13 +225,12 @@ object NetworkModule {
             .cache(cache)
             // Outermost: UTC timestamps reach Moshi as "Z", which Android 8–13 can parse.
             .addInterceptor(UtcTimestampInterceptor())
-            // X-Client-Platform + X-Device-Id on every API request (both clients).
-            // This client also loads Coil images; other hosts get neither header nor the bearer.
+            // X-Client-Platform + X-Device-Id on every request (both clients).
             .addInterceptor(deviceIdentityInterceptor)
             .addNetworkInterceptor(authInterceptor.dispatchGuardInterceptor())
             // Per network attempt: OkHttp's own re-send of a DPoP call gets a fresh proof.
             .addNetworkInterceptor(dpopReplayGuard)
-            // Bearer (API origin only) + pre-flight refresh when the access token is about to expire.
+            // Bearer + pre-flight refresh when the access token is about to expire.
             .addInterceptor(authInterceptor)
             // 403 STEP_UP_REQUIRED -> step-up UI -> retry once with X-Step-Up.
             .addInterceptor(stepUpInterceptor)

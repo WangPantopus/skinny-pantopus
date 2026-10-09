@@ -80,21 +80,12 @@ class PantopusApplication :
      * Sized per the P13 budget (`docs/perf_budgets.md`). One process-wide
      * loader keeps avatar / discovery / mailbox imagery from re-decoding
      * during fast scrolls.
-     *
-     * Images use the main client's interceptors, which send the bearer only
-     * to the API origin (chat photos at `/api/chat/files/:id` need it; other
-     * hosts get no credentials), but not its 10 MB HTTP cache: Coil's disk
-     * cache above already keeps the image bytes, and the HTTP cache stays for
-     * API responses.
      */
     override fun newImageLoader(): ImageLoader {
         val okHttp =
             EntryPointAccessors
                 .fromApplication(this, CoilNetworkEntryPoint::class.java)
                 .okHttpClient()
-                .newBuilder()
-                .cache(null)
-                .build()
         return ImageLoader
             .Builder(this)
             .okHttpClient(okHttp)
