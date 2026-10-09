@@ -101,6 +101,15 @@ class ScreenStore
         /** The entry as it is now, without a request. */
         fun <T : Any> peek(key: StoreKey<T>): Stored<T> = state(key).value
 
+        /** True while the entry's copy is fresh and no topic marked it out of date: a read would send nothing. */
+        fun isCurrent(key: StoreKey<*>): Boolean {
+            val account = accountId() ?: return false
+            return synchronized(slots) {
+                val slot = slots["$account|${key.id}"] ?: return@synchronized false
+                !slot.stale && slot.state.value.isFresh(key.kind)
+            }
+        }
+
         /**
          * Returns the copy when it is fresh; otherwise reads it (sharing a read already in flight) and returns what the
          * store holds afterwards. [force] reads even a fresh copy (pull to refresh, Retry, after an own edit). [fetch]
@@ -237,8 +246,12 @@ class ScreenStore
             identity: String?,
         ) {
             synchronized(slots) {
-                // Late reply: the store was wiped, or another account or session signed in meanwhile.
-                if (gen != generation || identity != identity()) return
+                // Late reply: the store was wiped, or another account or session signed in meanwhile. Nothing is
+                // written; an entry still in the store just stops showing a read in progress.
+                if (gen != generation || identity != identity()) {
+                    if (gen == generation) slot.state.value = slot.state.value.copy(refreshing = false)
+                    return
+                }
                 val previous = slot.state.value
                 val now = System.currentTimeMillis()
                 slot.state.value =

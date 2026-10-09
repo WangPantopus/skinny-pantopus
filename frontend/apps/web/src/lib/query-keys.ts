@@ -16,6 +16,8 @@ export const queryKeys = {
   // ── Feed ───────────────────────────────────────────────────
   feed: (surface: string, filter: string) =>
     ['feed', surface, filter] as const,
+  /** Your saved viewing area (GET /api/location/resolve); hooks/useAreaPicker.ts. */
+  viewingArea: () => ['location', 'viewing'] as const,
 
   // ── Gigs ───────────────────────────────────────────────────
   gigs: (filters: Record<string, any>) =>
@@ -60,15 +62,24 @@ export const queryKeys = {
 
   // ── Posts ──────────────────────────────────────────────────
   postDetail: (id: string) => ['posts', 'detail', id] as const,
+  postComments: (id: string) => ['posts', 'comments', id] as const,
 
   // ── Profiles ──────────────────────────────────────────────
   /** Your own profile (GET /api/users/profile); read it through lib/me.ts. */
   me: () => ['me'] as const,
+  /** Your notification preferences (GET /api/hub/preferences); lib/me.ts. */
+  notificationPreferences: () => ['me', 'notification-preferences'] as const,
+  /** Your privacy settings (GET /api/privacy/settings); lib/me.ts. */
+  privacySettings: () => ['me', 'privacy'] as const,
   profile: (username: string) =>
     ['profile', username] as const,
 
   // ── Homes ─────────────────────────────────────────────────
   homeDetail: (id: string) => ['homes', 'detail', id] as const,
+  /** A Home's dashboard as last shown, with the access it was shown with; components/home/homeDashboardCopy.ts. */
+  homeDashboard: (id: string) => ['homes', 'dashboard', id] as const,
+  /** One of that dashboard's summary cards, kept beside its copy. */
+  homeSummary: (id: string, name: string) => ['homes', 'dashboard', id, 'summary', name] as const,
 
   // ── Place (address-led home intelligence) ─────────────────
   placePrimaryHome: () => ['place', 'primary-home'] as const,
@@ -108,6 +119,16 @@ export const queryKeys = {
   // ── Businesses ────────────────────────────────────────────
   businessDetail: (id: string) =>
     ['businesses', 'detail', id] as const,
+
+  // ── Support Trains ────────────────────────────────────────
+  /** Every Support Train entry; a change to any train marks them out of date. */
+  supportTrains: () => ['supportTrains'] as const,
+  /** Your trains on the list page: every role tab. */
+  supportTrainLists: () => ['supportTrains', 'mine'] as const,
+  /** Your trains on the list page, per role tab ('all', 'organizer', 'helper'). */
+  supportTrainsMine: (role: string) => ['supportTrains', 'mine', role] as const,
+  /** One train, with its signups when you organize it. */
+  supportTrain: (id: string) => ['supportTrains', 'train', id] as const,
 
   // ── Audience zone (unified-IA §3.1, §3.6) ─────────────────
   audienceMe: () => ['audience', 'me'] as const,

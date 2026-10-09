@@ -45,6 +45,9 @@ interface UseFeedDataOptions {
   userLng: number | null;
   gpsTimestamp: string | null;
   radiusMiles: number | null;
+  /** False while the viewing area is still being read: the Place feed waits for it instead of
+   * first asking without coordinates. */
+  areaReady?: boolean;
   showToast: (msg: string) => void;
 }
 
@@ -77,6 +80,9 @@ function buildFeedKey(
  * in My pulse then shows on its feed card when you come back; a stale card's next click would undo it.
  */
 export function patchPostInFeedCaches(queryClient: QueryClient, postId: string, patch: Partial<Post>) {
+  // The post's own kept copy (usePostDetail) takes the change too.
+  queryClient.setQueryData<{ post: Post | null; complete: boolean }>(queryKeys.postDetail(postId), (old) =>
+    old?.post ? { ...old, post: { ...old.post, ...patch } } : old);
   queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ['feed'] }, (old) => {
     if (!old) return old;
     return {
@@ -111,6 +117,7 @@ export function useFeedData({
   userLng,
   gpsTimestamp,
   radiusMiles,
+  areaReady = true,
   showToast,
 }: UseFeedDataOptions) {
   const queryClient = useQueryClient();
@@ -232,6 +239,7 @@ export function useFeedData({
     getNextPageParam: (lastPage) =>
       lastPage.pagination.hasMore ? (lastPage.pagination.nextCursor ?? null) : undefined,
     staleTime: 30_000,
+    enabled: surface !== 'place' || areaReady,
   });
 
   // Flatten pages into a single deduped array for consumers

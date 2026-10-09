@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
@@ -74,6 +75,7 @@ fun TodayTabScreen(
     viewModel: TodayTabViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("today", state is TodayTabUiState.Loaded || state == TodayTabUiState.NoPlace)
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val showMorningCard by viewModel.showMorningCard.collectAsStateWithLifecycle()
     val preferenceBusy by viewModel.preferenceBusy.collectAsStateWithLifecycle()

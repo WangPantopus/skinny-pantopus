@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -91,6 +92,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.net.HttpURLConnection.HTTP_FORBIDDEN
 import java.time.Instant
 import java.time.LocalDate
@@ -121,6 +123,14 @@ private const val RADON_DISMISS_DAYS = 30L
  */
 class RadonTodayMemory {
     internal val byHome = mutableMapOf<String, RadonSnapshot>()
+
+    /** Reads Today forced (pull to refresh, Retry): each one reads the household's tasks again as well. */
+    var forcedReads by mutableIntStateOf(0)
+        private set
+
+    fun readAgain() {
+        forcedReads++
+    }
 }
 
 internal data class RadonSnapshot(
@@ -816,34 +826,50 @@ private class RadonTodayState(
         }
     }
 
-    suspend fun hideFirstUse() {
-        requireCurrent()
-        preferences.edit { it[booleanPreferencesKey("firstUse.dismissed.$homeId")] = true }
-        requireCurrent()
-        firstUseDismissed = true
-        keepSnapshot()
-    }
+    suspend fun hideFirstUse() =
+        whileCurrent {
+            preferences.edit { it[booleanPreferencesKey("firstUse.dismissed.$homeId")] = true }
+            requireCurrent()
+            firstUseDismissed = true
+            keepSnapshot()
+        }
 
-    suspend fun clearRadonDismissal() {
-        requireCurrent()
-        preferences.edit { it.remove(longPreferencesKey("radonCard.dismissedUntil.$homeId")) }
-        requireCurrent()
-        dismissedUntil = 0L
-        keepSnapshot()
-    }
+    suspend fun clearRadonDismissal() =
+        whileCurrent {
+            preferences.edit { it.remove(longPreferencesKey("radonCard.dismissedUntil.$homeId")) }
+            requireCurrent()
+            dismissedUntil = 0L
+            keepSnapshot()
+        }
 
-    suspend fun dismiss() {
-        requireCurrent()
-        val until = Instant.now().atZone(ZoneId.systemDefault()).plusDays(RADON_DISMISS_DAYS).toInstant().toEpochMilli()
-        preferences.edit { it[longPreferencesKey("radonCard.dismissedUntil.$homeId")] = until }
-        requireCurrent()
-        dismissedUntil = until
-        keepSnapshot()
-        events.send(
-            PilotEvents.Event.SuggestionDecision,
-            mapOf("suggestion" to "radon_test", "decision" to "not_now"),
-            coordinator.access.actorId,
-        )
+    suspend fun dismiss() =
+        whileCurrent {
+            val until = Instant.now().atZone(ZoneId.systemDefault()).plusDays(RADON_DISMISS_DAYS).toInstant().toEpochMilli()
+            preferences.edit { it[longPreferencesKey("radonCard.dismissedUntil.$homeId")] = until }
+            requireCurrent()
+            dismissedUntil = until
+            keepSnapshot()
+            events.send(
+                PilotEvents.Event.SuggestionDecision,
+                mapOf("suggestion" to "radon_test", "decision" to "not_now"),
+                coordinator.access.actorId,
+            )
+        }
+
+    /**
+     * Runs a card action that has no error line of its own. When the card no longer belongs to what's on screen (the
+     * home changed, the session ended, the app or phone locked), the guard refuses and the tap does nothing, instead
+     * of the refusal escaping into the card's scope and closing the app.
+     */
+    private suspend fun whileCurrent(action: suspend () -> Unit) {
+        try {
+            requireCurrent()
+            action()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (refused: IllegalStateException) {
+            Timber.w(refused, "radon card action skipped: the card is no longer current")
+        }
     }
 }
 
@@ -877,7 +903,10 @@ private fun rememberHomeTodayState(
             epoch++
         }
     }
-    LaunchedEffect(state) { state.load() }
+    // A pull (or Retry) reads the tasks now; otherwise the card's 2-minute window decides.
+    val forcedReads = memory?.forcedReads ?: 0
+    val forcedAtStart = remember(state) { forcedReads }
+    LaunchedEffect(state, forcedReads) { state.load(force = forcedReads != forcedAtStart) }
     return state
 }
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { launchFeatures } from '@/lib/featureFlags';
 import { getAuthToken } from '@pantopus/api';
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { GenerateSlotsPreset } from '@pantopus/types';
 import ScheduleSection from '@/components/support-trains/ScheduleSection';
+import { refreshSupportTrains } from '@/components/support-trains/supportTrainQueries';
 import WhereSection, {
   toSupportTrainDeliveryLocation,
   type HomeInfo,
@@ -94,6 +96,7 @@ function isNotADraft(err: unknown): boolean {
 
 export default function NewSupportTrainPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('story');
 
   // ── Step 1 state ─────────────────────────────────────────────
@@ -365,9 +368,11 @@ export default function NewSupportTrainPage() {
       setPublishError(err?.message || 'Failed to publish. Please try again.');
     } finally {
       setPublishing(false);
+      // A train was made, published or removed: the lists show it on the next visit.
+      void refreshSupportTrains(queryClient);
     }
   }, [
-    computedMissingEssentials, resolvedLocation, draftData, draftStory, householdSize,
+    queryClient, computedMissingEssentials, resolvedLocation, draftData, draftStory, householdSize,
     restrictions, preferences, scheduleSlotStart, scheduleSlotEnd, contactless, specialInstructions,
     summaryChips, title, sharingMode, enableMeals, enableTakeout, enableGroceries, enableGiftFunds,
     schedulePreset, scheduleRangeStart, scheduleRangeEnd, scheduleWeekdays, router,

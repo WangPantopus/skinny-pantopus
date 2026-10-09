@@ -2,8 +2,8 @@
 //  LaunchFeatures.swift
 //  Pantopus
 //
-//  First-launch scope (founder direction, 2026-09-27). Eight features are
-//  hidden for the first launch; their code stays so any of them can come
+//  First-launch scope (founder direction, 2026-09-27; Mailbox added
+//  2026-10-09). These features are hidden for the first launch; their code stays so any of them can come
 //  back. A feature is OFF unless its key is listed in the Info.plist value
 //  `PantopusLaunchFeatures` (build setting `PANTOPUS_LAUNCH_FEATURES`,
 //  comma-separated, or "all"). Debug builds also read the
@@ -43,6 +43,11 @@ public enum LaunchFeature: String, CaseIterable, Sendable {
     case mailExtras = "mail_extras"
     /// 9. Support Train gift funds: no app can take a contribution yet.
     case giftFunds = "gift_funds"
+    /// 10. Mailbox (founder decision, 2026-10-09): received mail, the
+    /// Incoming / Counter / Vault drawers, letters, My mail day, vacation
+    /// hold and mail search. While it is off the Mail tab is "Messages".
+    /// Address verification by postcard stays.
+    case mailbox
 }
 
 /// Read-only switches for the features cut from the first launch.
@@ -96,6 +101,10 @@ public enum LaunchFeatures {
 
     public static var giftFunds: Bool {
         isEnabled(.giftFunds)
+    }
+
+    public static var mailbox: Bool {
+        isEnabled(.mailbox)
     }
 
     /// Parses a comma-separated key list ("all" enables every feature).

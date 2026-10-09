@@ -2,6 +2,8 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { UserNotificationPreferences } from '@pantopus/types';
 import * as api from '@pantopus/api';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { setActiveQueryClient } from '@/lib/active-query-client';
 import NotificationPreferencesPage from '../src/app/(app)/app/settings/notifications/page';
 
 const mockRouter = { replace: jest.fn(), back: jest.fn() };
@@ -15,7 +17,16 @@ const save = jest.mocked(api.updateHubPreferences);
 let stored: UserNotificationPreferences;
 const beacon = () => screen.getByRole('switch', { name: 'Beacon Push Notifications' });
 const tick = async () => { await act(async () => { jest.advanceTimersByTime(600); }); };
-const load = async () => { await act(async () => { render(<NotificationPreferencesPage />); }); };
+// As in the app (lib/query-provider.tsx), the page reads and writes the session's query client,
+// which hands results to the page on a timer these tests drive.
+const load = async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  setActiveQueryClient(client);
+  await act(async () => {
+    render(<QueryClientProvider client={client}><NotificationPreferencesPage /></QueryClientProvider>);
+  });
+  await act(async () => { jest.advanceTimersByTime(0); });
+};
 
 beforeEach(() => {
   jest.useFakeTimers(); jest.clearAllMocks();

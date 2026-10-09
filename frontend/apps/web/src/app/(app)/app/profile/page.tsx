@@ -1,19 +1,36 @@
 // @ts-nocheck
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import Image from 'next/image';
 import { UserRound } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
-import type { User, UserProfile, Listing, GigListItem } from '@pantopus/types';
+import type { User, UserProfile, Listing } from '@pantopus/types';
 import { buildUserProfilePath, chosenUsername, usernameHandle } from '@pantopus/utils';
 import ResidencyHomeBlock from '@/components/profile/public/ResidencyHomeBlock';
 import ErrorState from '@/components/ui/ErrorState';
 import { launchFeatures } from '@/lib/featureFlags';
-import { fetchMe } from '@/lib/me';
+import { useMe } from '@/lib/me';
+
+// Your own activity counts (Instant Screens contract §4, "You").
+const STATS_FRESH_MS = 2 * 60 * 1000;
+
+/** Earnings in dollars from the payment summary (cents). */
+function earningsDollars(res: Record<string, unknown>): number {
+  const earnings = res?.earnings as Record<string, unknown> | undefined;
+  const cents = Number(earnings?.total_earned ?? earnings?.totalEarned ?? 0) || 0;
+  return Math.round((cents / 100) * 100) / 100;
+}
+
+/** A stat still loading shows "…"; one whose read failed shows "—". */
+function statValue(value: number | null | undefined): number | string {
+  if (value === undefined) return '…';
+  return value === null ? '—' : value;
+}
 
 // Launch cuts #4/#3: the stats row has one column per card still shown.
 const STATS_LG_COLS = ({ 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 5: 'lg:grid-cols-5' } as Record<number, string>)[
@@ -22,129 +39,88 @@ const STATS_LG_COLS = ({ 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4', 5: 'lg:grid-c
 
 export default function MyProfilePage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  // A stat whose read failed is null (unknown), shown as "—" rather than 0.
-  const [stats, setStats] = useState<Record<string, number | null> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activities, setActivities] = useState<{ id?: string; icon?: string; text?: string; time_ago?: string }[]>([]);
-  const [myListings, setMyListings] = useState<Listing[]>([]);
-  const [, setListingsCount] = useState(0);
-  /** Why the profile could not load (null when it did, or while loading). */
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const loadUserData = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const token = getAuthToken();
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
-      const userData = await fetchMe();
-      setUser(userData);
-
-      // Load user stats
-      try {
-        console.log('📊 Loading stats...');
-
-        // Gigs posted = gigs I created. Completed = gigs I completed as worker (canonical: User.gigs_completed from profile).
-        let gigsCount = (userData as Record<string, unknown>).gigs_posted ?? 0;
-        const completedCount = (userData as Record<string, unknown>).gigs_completed ?? 0;
-        try {
-          const myGigs = await api.gigs.getMyGigs({ limit: 100 });
-          gigsCount = myGigs.total ?? (myGigs.gigs?.length ?? gigsCount);
-        } catch (gigErr) {
-          console.warn('⚠️ Could not load my gigs:', gigErr);
-        }
-        
-        // Try to load my bids
-        let activeBidsCount: number | null = 0;
-        try {
-          // Launch cut #4 (Open Gigs): bids are hidden, so they are not loaded.
-          const myBids = launchFeatures.openGigs ? await api.gigs.getMyBids({ limit: 100 }) : { bids: [] };
-          console.log('✅ My bids loaded:', myBids);
-          const bidsArray = myBids.bids || [];
-          activeBidsCount = bidsArray.filter((b: { status?: string }) => b.status === 'pending').length;
-        } catch (bidErr) {
-          console.warn('⚠️ Could not load my bids:', bidErr);
-          activeBidsCount = null;
-        }
-
-        // Load earnings from payment summary
-        let earningsDollars: number | null = 0;
-        try {
-          const earningsRes = await api.payments.getEarnings() as Record<string, unknown>;
-          const earningsObj = earningsRes?.earnings as Record<string, unknown> | undefined;
-          const earningsCents = Number(
-            earningsObj?.total_earned ??
-            earningsObj?.totalEarned ??
-            0
-          ) || 0;
-          earningsDollars = Math.round((earningsCents / 100) * 100) / 100;
-        } catch (earnErr) {
-          console.warn('⚠️ Could not load earnings:', earnErr);
-          earningsDollars = null;
-        }
-
-        // Load my listings
-        let activeListingsCount: number | null = 0;
-        try {
-          // Launch cut #3 (Marketplace): listings are hidden, so they are not loaded.
-          const listingsRes = (launchFeatures.marketplace ? await api.listings.getMyListings({ limit: 5 }) : {}) as Record<string, unknown>;
-          const listingsArr = (listingsRes?.listings || []) as Listing[];
-          const pagination = listingsRes?.pagination as Record<string, unknown> | undefined;
-          activeListingsCount = (pagination?.total as number) ?? listingsArr.length;
-          setMyListings(listingsArr);
-          setListingsCount(activeListingsCount);
-        } catch (listErr) {
-          console.warn('⚠️ Could not load listings:', listErr);
-          activeListingsCount = null;
-        }
-
-        setStats({
-          gigsPosted: gigsCount,
-          activeBids: activeBidsCount,
-          gigsCompleted: completedCount,
-          earnings: earningsDollars,
-          listings: activeListingsCount,
-        });
-      } catch (err) {
-        console.error('❌ Failed to load stats:', err);
-        // The profile's own counts are known; the rest are not.
-        setStats({
-          gigsPosted: userData.gigs_posted || 0,
-          activeBids: null,
-          gigsCompleted: userData.gigs_completed || 0,
-          earnings: null,
-          listings: null,
-        });
-      }
-      // Load recent activity
-      try {
-        const activityData = await api.get('/api/users/me/activity?limit=10');
-        setActivities(((activityData as Record<string, unknown>).activities || []) as { id?: string; icon?: string; text?: string; time_ago?: string }[]);
-      } catch {
-        // Activity feed is non-critical
-      }
-    } catch (err) {
-      console.error('Failed to load user:', err);
-      // Only an expired session belongs on /login (which sends signed-in users
-      // back to Place); a network or server failure gets a retry here.
-      if ((err as { statusCode?: number } | null)?.statusCode === 401) {
-        router.push('/login');
-      } else {
-        setLoadError(err instanceof Error && err.message ? err.message : "We couldn't load your profile.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
+  // The session cookie is readable only in the browser: until mount, the page
+  // renders what the cache already has (nothing on a fresh load), like the server.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const signedIn = mounted && !!getAuthToken();
   useEffect(() => {
-    loadUserData();
-  }, [loadUserData]);
+    if (mounted && !getAuthToken()) router.push('/login');
+  }, [mounted, router]);
+
+  // Your profile is the shared entry (lib/me.ts); the numbers and activity load
+  // alongside it instead of one after another, and show at once on the next visit.
+  const meQuery = useMe({ enabled: signedIn });
+  const user = (meQuery.data ?? null) as (User & Record<string, any>) | null;
+  const gigsQuery = useQuery({
+    queryKey: ['profile', 'stats', 'gigs'],
+    queryFn: () => api.gigs.getMyGigs({ limit: 100 }),
+    enabled: signedIn,
+    staleTime: STATS_FRESH_MS,
+  });
+  // Launch cut #4 (Open Gigs): bids are hidden, so they are not loaded.
+  const bidsQuery = useQuery({
+    queryKey: ['profile', 'stats', 'bids'],
+    queryFn: () => api.gigs.getMyBids({ limit: 100 }),
+    enabled: signedIn && launchFeatures.openGigs,
+    staleTime: STATS_FRESH_MS,
+  });
+  // Money is never shown from a kept copy (contract §5, sensitive): asked on
+  // every visit and dropped as soon as the page closes.
+  const earningsQuery = useQuery({
+    queryKey: ['profile', 'stats', 'earnings'],
+    queryFn: () => api.payments.getEarnings() as Promise<Record<string, unknown>>,
+    enabled: signedIn,
+    staleTime: 0,
+    gcTime: 0,
+  });
+  // Launch cut #3 (Marketplace): listings are hidden, so they are not loaded.
+  const listingsQuery = useQuery({
+    queryKey: ['profile', 'stats', 'listings'],
+    queryFn: () => api.listings.getMyListings({ limit: 5 }) as Promise<Record<string, unknown>>,
+    enabled: signedIn && launchFeatures.marketplace,
+    staleTime: STATS_FRESH_MS,
+  });
+  const activityQuery = useQuery({
+    queryKey: ['users', 'me', 'activity'],
+    queryFn: () => api.get('/api/users/me/activity?limit=10') as Promise<Record<string, unknown>>,
+    enabled: signedIn,
+    staleTime: STATS_FRESH_MS,
+  });
+
+  const loading = !user && (!mounted || (signedIn && meQuery.isPending));
+  /** Why the profile could not load (null when it did, or while loading). */
+  const loadError = !user && meQuery.isError
+    ? (meQuery.error instanceof Error && meQuery.error.message ? meQuery.error.message : "We couldn't load your profile.")
+    : null;
+  const loadUserData = () => { void meQuery.refetch(); };
+
+  // A number whose read failed is null (unknown), shown as "—" rather than 0;
+  // one still loading is undefined, shown as "…".
+  const myListings = ((listingsQuery.data?.listings || []) as Listing[]);
+  const stats: Record<string, number | null | undefined> | null = user ? {
+    gigsPosted: gigsQuery.data
+      ? (gigsQuery.data.total ?? gigsQuery.data.gigs?.length ?? user.gigs_posted ?? 0)
+      : (user.gigs_posted ?? 0),
+    activeBids: !launchFeatures.openGigs ? 0
+      : bidsQuery.isError ? null
+      : bidsQuery.data ? (bidsQuery.data.bids || []).filter((b: { status?: string }) => b.status === 'pending').length
+      : undefined,
+    gigsCompleted: user.gigs_completed ?? 0,
+    earnings: earningsQuery.isError ? null
+      : earningsQuery.data ? earningsDollars(earningsQuery.data)
+      : undefined,
+    listings: !launchFeatures.marketplace ? 0
+      : listingsQuery.isError ? null
+      : listingsQuery.data ? ((listingsQuery.data.pagination as Record<string, unknown> | undefined)?.total as number ?? myListings.length)
+      : undefined,
+  } : null;
+  const activities = ((activityQuery.data?.activities || []) as { id?: string; icon?: string; text?: string; time_ago?: string }[]);
+  const retryStats = () => {
+    if (bidsQuery.isError) void bidsQuery.refetch();
+    if (earningsQuery.isError) void earningsQuery.refetch();
+    if (listingsQuery.isError) void listingsQuery.refetch();
+  };
 
   if (loading) {
     return (
@@ -320,7 +296,7 @@ export default function MyProfilePage() {
               {launchFeatures.openGigs && <StatsCard
                 icon="💼"
                 label="Active Bids"
-                value={stats?.activeBids ?? '—'}
+                value={statValue(stats?.activeBids)}
                 color="purple"
                 onClick={() => router.push('/app/my-bids')}
               />}
@@ -334,22 +310,22 @@ export default function MyProfilePage() {
               {launchFeatures.marketplace && <StatsCard
                 icon="🏷️"
                 label="Listings"
-                value={stats?.listings ?? '—'}
+                value={statValue(stats?.listings)}
                 color="blue"
                 onClick={() => router.push('/app/my-listings')}
               />}
               <StatsCard
                 icon="💰"
                 label="Earnings"
-                value={stats?.earnings == null ? '—' : `$${Number(stats.earnings).toFixed(2)}`}
+                value={stats?.earnings == null ? statValue(stats?.earnings) : `$${Number(stats.earnings).toFixed(2)}`}
                 color="yellow"
                 onClick={() => router.push('/app/wallet')}
               />
             </div>
-            {stats && ((launchFeatures.openGigs && stats.activeBids == null) || stats.earnings == null || (launchFeatures.marketplace && stats.listings == null)) && (
+            {stats && ((launchFeatures.openGigs && stats.activeBids === null) || stats.earnings === null || (launchFeatures.marketplace && stats.listings === null)) && (
               <p role="alert" className="text-sm text-app-muted">
                 Some of these numbers couldn&apos;t load.{' '}
-                <button type="button" onClick={loadUserData} className="font-medium text-primary-600 hover:underline">
+                <button type="button" onClick={retryStats} className="font-medium text-primary-600 hover:underline">
                   Try again
                 </button>
               </p>

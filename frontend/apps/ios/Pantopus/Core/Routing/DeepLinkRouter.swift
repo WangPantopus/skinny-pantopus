@@ -970,6 +970,21 @@ extension DeepLinkRouter.Destination {
             true
         }
     }
+
+    /// A link into the mailbox: received mail, My mail day, vacation hold,
+    /// stamps, mail tasks and the mail extras. While Mailbox is off for
+    /// launch (`LaunchFeatures.mailbox`) these links and mail pushes land on
+    /// the Place stack's "not in the app yet" placeholder instead of being
+    /// dropped, and notification lists skip them.
+    var opensMailbox: Bool {
+        switch self {
+        case .vacationHold, .mailDay, .stamps, .mailTask, .mailTranslation, .unboxing, .packageGig, .earn,
+             .mailbox, .mailItem:
+            true
+        default:
+            false
+        }
+    }
 }
 
 extension DeepLinkRouter {
@@ -990,6 +1005,9 @@ extension DeepLinkRouter {
             LaunchFeatures.beacon && LaunchFeatures.personas
         } else if key.hasPrefix("booking_") {
             LaunchFeatures.publicScheduling
+        } else if key.hasPrefix("mail_") || key.hasPrefix("home_mail") {
+            // Mailbox: new mail, Mail Day, the mail summary and letters.
+            LaunchFeatures.mailbox
         } else {
             true
         }
@@ -997,6 +1015,8 @@ extension DeepLinkRouter {
         guard let path = Self.notificationPath(type: type, link: link), !path.isEmpty,
               let url = URL(string: Self.normalizeIncoming(path)),
               !AuthManager.isOAuthCallback(url) else { return true }
-        return resolve(url: url).isAvailableAtLaunch
+        let destination = resolve(url: url)
+        if destination.opensMailbox, !LaunchFeatures.mailbox { return false }
+        return destination.isAvailableAtLaunch
     }
 }

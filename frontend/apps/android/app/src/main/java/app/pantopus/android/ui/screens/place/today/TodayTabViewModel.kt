@@ -41,9 +41,6 @@ import kotlin.math.abs
 
 private const val SAVED_ANCHOR_TOLERANCE = 0.000001
 
-/** Contract §4, Today: inside this window coming back to the tab sends no request. */
-internal const val TODAY_FRESH_MS = 10 * 60 * 1000L
-
 /** Contract §4, Today: a copy older than this gets the quiet "Couldn't refresh" line when a refresh fails. */
 internal const val TODAY_MAX_SHOWN_AGE_MS = 2 * 60 * 60 * 1000L
 
@@ -91,11 +88,16 @@ class TodayTabViewModel
         var homeId: String? = null
             private set
         override val calendarHomeId: String? get() = homeId
+
+        /**
+         * The radon card's guard: Today still shows this home to this session, with the app and phone unlocked. It
+         * binds to the home, not to one read of it: Today keeps its content while it reads again (pull to refresh,
+         * coming back after its window), and a card built before that read stays usable for the same home.
+         */
         val radonContext: suspend () -> Unit
             get() {
                 val id = homeId
-                val version = loadVersion
-                return { check(id != null && pickupCurrent(id, version)) }
+                return { check(id != null && pickupCurrent(id, loadVersion)) }
             }
         private var loadJob: Job? = null
         private var loadVersion = 0L
@@ -162,12 +164,21 @@ class TodayTabViewModel
 
         /**
          * Tab entry, including coming back after rotation or a dark-mode switch (contract §3): what's on screen
-         * stays. A home's Today is read again only once it is out of date (10 minutes, or a new day); without a
-         * home it is checked again quietly, so an address saved since the last visit takes over.
+         * stays. A home's Today is read again only once the store says it is out of date (10 minutes, or a topic
+         * marked it) or the day turned over at the home; without a home it is checked again quietly, so an address
+         * saved since the last visit takes over.
          */
         fun load() {
             when (val shown = _state.value) {
-                is TodayTabUiState.Loaded -> if (shown.savedPlace != null || !shown.isFresh()) refresh(force = false)
+                is TodayTabUiState.Loaded ->
+                    when {
+                        // A saved place's Today isn't kept in the store: every visit checks it quietly.
+                        shown.savedPlace != null -> refresh(force = false)
+                        // Midnight in the home's time zone (contract §4) ends the copy even inside its window.
+                        !shown.isSameDay() -> refresh(force = true)
+                        shown.calendarHomeId?.let(repo::todayIsCurrent) == true -> Unit
+                        else -> refresh(force = false)
+                    }
                 TodayTabUiState.Loading -> if (loadJob?.isActive != true) refresh(force = false)
                 TodayTabUiState.NoPlace, is TodayTabUiState.Error -> refresh(force = false)
             }
@@ -193,6 +204,7 @@ class TodayTabViewModel
                 _state.value = TodayTabUiState.Loading
             }
             _refreshing.value = true
+            if (force) radonMemory.readAgain()
             loadJob =
                 viewModelScope.launch {
                     try {
@@ -528,9 +540,8 @@ sealed interface TodayTabUiState {
         val fetchedAt: Long = 0L,
         val refreshFailed: Boolean = false,
     ) : TodayTabUiState {
-        /** Inside the 10-minute window and still the same day at the home: coming back reads nothing. */
-        fun isFresh(now: Long = System.currentTimeMillis()): Boolean {
-            if (now - fetchedAt !in 0 until TODAY_FRESH_MS) return false
+        /** Still the day this copy was read on, at the home: Today turns over at the home's midnight. */
+        fun isSameDay(now: Long = System.currentTimeMillis()): Boolean {
             // Midnight in the home's time zone (contract §4); the phone's when the reply has none.
             val zone = intelligence.timeZone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
             return Instant.ofEpochMilli(fetchedAt).atZone(zone).toLocalDate() == Instant.ofEpochMilli(now).atZone(zone).toLocalDate()

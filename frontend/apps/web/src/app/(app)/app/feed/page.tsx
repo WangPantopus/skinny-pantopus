@@ -72,6 +72,7 @@ export default function FeedPage() {
     userLng: area.userLng,
     gpsTimestamp: area.gpsTimestamp,
     radiusMiles: area.radiusMiles,
+    areaReady: area.areaStatus !== 'resolving',
     showToast,
   });
 
