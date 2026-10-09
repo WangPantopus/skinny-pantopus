@@ -4,11 +4,30 @@ import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { purgeExpiredPlacePreviews } from '@/components/place/pendingPlace';
 import { subscribeConnectivity } from '@/lib/connectivity';
-import { AUTH_SESSION_CHANGE_KEY, onTokenChange } from '@pantopus/api';
+import { clearCachedMapTiles } from '@/utils/tilePrefetch';
+import { AUTH_SESSION_CHANGE_KEY, getAuthToken, onTokenChange } from '@pantopus/api';
 
 // Queries pause while offline. React Query's own detection believes the
 // browser's offline event, which can be wrong while requests still work.
 onlineManager.setEventListener((setOnline) => subscribeConnectivity(setOnline));
+
+// What this browser keeps for the signed-in account: the private Place inputs
+// (your rent, mortgage balance and rate), refund recovery and the map tiles
+// around where you live. None of it may outlive the account's session.
+const ACCOUNT_STORAGE_PREFIXES = ['place:rent:', 'place:equity:', 'pantopus:refund:v1:'];
+// A booking's manage token can belong to a signed-out invitee too, so only an
+// ending session clears it.
+const BOOKING_TOKEN_PREFIX = 'pantopus.calendarly.manageToken.';
+
+function clearAccountDeviceData(sessionEnded: boolean) {
+  const prefixes = sessionEnded ? [...ACCOUNT_STORAGE_PREFIXES, BOOKING_TOKEN_PREFIX] : ACCOUNT_STORAGE_PREFIXES;
+  try {
+    Object.keys(window.localStorage)
+      .filter((key) => prefixes.some((prefix) => key.startsWith(prefix)))
+      .forEach((key) => window.localStorage.removeItem(key));
+  } catch { /* storage disabled: nothing was kept */ }
+  clearCachedMapTiles();
+}
 
 function createQueryClient() {
   return new QueryClient({
@@ -33,6 +52,12 @@ function createQueryClient() {
 
 export default function QueryProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { purgeExpiredPlacePreviews(); }, []);
+  useEffect(() => {
+    // A visit without a session keeps nothing from an account whose session
+    // lapsed while the browser was closed; every sign-out clears the rest.
+    if (getAuthToken() === null) clearAccountDeviceData(false);
+    return onTokenChange((token) => { if (token === null) clearAccountDeviceData(true); });
+  }, []);
   const [queryClient, setQueryClient] = useState(createQueryClient);
   const [sessionGeneration, setSessionGeneration] = useState(0);
 

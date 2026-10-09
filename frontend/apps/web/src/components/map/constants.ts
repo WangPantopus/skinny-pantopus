@@ -30,6 +30,9 @@ export function getTileUrl(): string {
 /** Static tile URL — evaluated once at module load. */
 export const TILE_URL = `${MAPBOX_TILE_URL_BASE}?access_token=${MAP_PUBLIC_TOKEN}`;
 
+/** Cache Storage bucket for map tiles (offline fallback). Sign-out deletes it. */
+export const TILE_CACHE_NAME = 'pantopus-map-tiles-v1';
+
 /** Attribution string — Mapbox ToS requires this when using Mapbox tiles. */
 export const TILE_ATTRIBUTION =
   '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> ' +
