@@ -176,7 +176,7 @@ function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft, guestPass
 
   const { reload: reloadPermissions } = useHomePermissions();
   const reloadAccess = useCallback(() => { void Promise.all([refresh(), reloadPermissions()]); }, [refresh, reloadPermissions]);
-  const intelligence = useHomeIntelligence(homeId, can, reloadAccess);
+  const intelligence = useHomeIntelligence(homeId, can, reloadAccess, data.keepsCopy);
   const { reloadSummary } = intelligence;
   const [selectedBillType, setSelectedBillType] = useState<string | null>(null);
 
