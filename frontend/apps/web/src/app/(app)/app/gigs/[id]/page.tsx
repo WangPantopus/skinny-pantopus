@@ -33,6 +33,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { GigWithDetails, UserProfile } from '@pantopus/types';
 import { chosenUsername } from '@pantopus/utils';
+import { fetchMe } from '@/lib/me';
 
 // ─── Lazy Leaflet mini map (SSR-disabled) ───────────────────────────
 // Same pattern as gigs-v2/[id]/page.tsx — dynamically imports react-leaflet only on the client.
@@ -191,7 +192,7 @@ export default function GigDetailsPage() {
 
   const loadCurrentUser = async () => {
     try {
-      const userData = await api.users.getMyProfile();
+      const userData = await fetchMe();
       setUser(userData as UserProfile);
     } catch (err) {
       console.error('Failed to load user:', err);

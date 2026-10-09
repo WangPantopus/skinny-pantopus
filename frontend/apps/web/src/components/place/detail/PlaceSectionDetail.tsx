@@ -18,6 +18,7 @@ import { getAuthToken } from '@pantopus/api';
 import { MapPinned } from 'lucide-react';
 import type { PlaceGroup, PlaceViewer } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
+import { useMe } from '@/lib/me';
 import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
@@ -31,6 +32,7 @@ import BlockDetail from './BlockDetail';
 import MoneyDetail from './MoneyDetail';
 import CivicDetail from './CivicDetail';
 import IdentityDetail from './IdentityDetail';
+import { usePrimaryHome } from '@/lib/primaryHome';
 
 function DetailShell({ section, hidden, children }: { section: string; hidden?: string[]; children: React.ReactNode }) {
   return <PlaceShell active={section} hidden={hidden}>{children}</PlaceShell>;
@@ -94,12 +96,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
   const authed = mounted && !!getAuthToken();
   const valid = !!meta;
 
-  const homeQuery = useQuery({
-    queryKey: queryKeys.placePrimaryHome(),
-    queryFn: async () => api.homes.getPrimaryHome(),
-    enabled: authed && valid,
-    staleTime: 60_000,
-  });
+  const homeQuery = usePrimaryHome({ enabled: authed && valid });
 
   // The switcher's place (?home=) when there is one, else the primary home,
   // else the resident's own private setup (as on the overview).
@@ -131,12 +128,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
   });
 
   // Resident name is only needed by the Identity detail.
-  const userQuery = useQuery({
-    queryKey: ['users', 'me', 'profile'],
-    queryFn: async () => api.users.getMyProfile(),
-    enabled: authed && valid && section === 'identity',
-    staleTime: 5 * 60_000,
-  });
+  const userQuery = useMe({ enabled: authed && valid && section === 'identity' });
 
   // ── Unknown section ───────────────────────────────────────
   if (!valid) {

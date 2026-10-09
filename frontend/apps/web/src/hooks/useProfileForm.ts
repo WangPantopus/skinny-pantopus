@@ -7,6 +7,7 @@ import { getAuthToken } from '@pantopus/api';
 import type { ProfileFormData, User } from '@pantopus/types';
 import { extractApiError, extractFieldErrors } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
+import { fetchMe, setMe } from '@/lib/me';
 
 /** Server messages for rejected fields, keyed like the form. */
 export type FieldErrors = Partial<Record<keyof ProfileFormData, string>>;
@@ -149,7 +150,7 @@ export function useProfileForm(): UseProfileFormReturn {
         return;
       }
 
-      const userData = await api.users.getMyProfile();
+      const userData = await fetchMe();
       setUser(userData);
 
       const sl = userData.socialLinks || userData.social_links || {};
@@ -251,10 +252,12 @@ export function useProfileForm(): UseProfileFormReturn {
         return;
       }
 
-      await api.users.updateProfile(updates as Record<string, unknown>);
+      const { user: saved } = await api.users.updateProfile(updates as Record<string, unknown>);
+      setMe(saved);
       profileSaved = true;
       initialSnapshot.current = { ...form };
-      await api.users.updateSkills(skills);
+      const savedSkills = await api.users.updateSkills(skills);
+      setMe({ skills: savedSkills?.skills ?? skills });
       toast.success('Profile updated successfully');
       router.push('/app/profile');
     } catch (err: unknown) {

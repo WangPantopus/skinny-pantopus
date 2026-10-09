@@ -20,6 +20,7 @@ export {
   setTokenCache,
   onTokenChange,
   AUTH_SESSION_CHANGE_KEY,
+  authSessionMarker,
   configureApiClient,
   apiRequest,
   get,

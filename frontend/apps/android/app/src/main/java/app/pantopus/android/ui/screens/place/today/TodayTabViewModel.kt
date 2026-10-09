@@ -32,11 +32,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection.HTTP_CONFLICT
+import java.time.Instant
 import java.time.ZoneId
 import javax.inject.Inject
 import kotlin.math.abs
 
 private const val SAVED_ANCHOR_TOLERANCE = 0.000001
+
+/** Contract §4, Today: inside this window coming back to the tab sends no request. */
+internal const val TODAY_FRESH_MS = 10 * 60 * 1000L
+
+/** Contract §4, Today: a copy older than this gets the quiet "Couldn't refresh" line when a refresh fails. */
+internal const val TODAY_MAX_SHOWN_AGE_MS = 2 * 60 * 60 * 1000L
+
+/** Contract §4, Today alerts: an alert check older than this is never shown as "no alerts". */
+internal const val TODAY_ALERTS_MAX_SHOWN_AGE_MS = 30 * 60 * 1000L
 
 /**
  * The Today tab (Wedge v2 D2): the primary home's Today group — weather,
@@ -67,6 +77,10 @@ class TodayTabViewModel
 
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
         val state: StateFlow<TodayTabUiState> = _state.asStateFlow()
+
+        /** A read is running while content stays on screen; the pull indicator shows it only for a pull. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
         /** The home this tab shows, once resolved. */
         var homeId: String? = null
@@ -141,50 +155,72 @@ class TodayTabViewModel
         private val _calendarError = MutableStateFlow<String?>(null)
         override val calendarError: StateFlow<String?> = _calendarError.asStateFlow()
 
-        /** Re-resolve on tab entry, including an address saved since the last visit. */
+        /**
+         * Tab entry, including coming back after rotation or a dark-mode switch (contract §3): what's on screen
+         * stays. A home's Today is read again only once it is out of date (10 minutes, or a new day); without a
+         * home it is checked again quietly, so an address saved since the last visit takes over.
+         */
         fun load() {
-            refresh()
+            when (val shown = _state.value) {
+                is TodayTabUiState.Loaded -> if (shown.savedPlace != null || !shown.isFresh()) refresh()
+                TodayTabUiState.Loading -> if (loadJob?.isActive != true) refresh()
+                TodayTabUiState.NoPlace, is TodayTabUiState.Error -> refresh()
+            }
         }
 
+        /**
+         * Reads Today now (pull to refresh, Retry, after a pickup edit). Content on screen stays while it is
+         * read again; only a first visit or an error waits on the network. A failed read keeps the content and
+         * marks it, so the screen can say how old it is.
+         */
         fun refresh() {
             loadJob?.cancel()
             val version = ++loadVersion
-            promptAttempted = false
-            promptConfirmed = false
-            _showMorningCard.value = false
+            val shown = _state.value
             _preferenceBusy.value = false
             _preferenceError.value = null
-            homeId = null
-            _state.value = TodayTabUiState.Loading
+            if (shown !is TodayTabUiState.Loaded && shown != TodayTabUiState.NoPlace) {
+                promptAttempted = false
+                promptConfirmed = false
+                _showMorningCard.value = false
+                homeId = null
+                _state.value = TodayTabUiState.Loading
+            }
+            _refreshing.value = true
             loadJob =
                 viewModelScope.launch {
-                    if (!current(version)) return@launch
-                    val id =
-                        when (val homes = resolvePrimaryHome()) {
-                            is NetworkResult.Success -> homes.data
-                            is NetworkResult.Failure -> {
-                                // A failed lookup isn't "no place": offer a retry instead of
-                                // sending a resident off to claim an address they already have.
-                                _state.value = TodayTabUiState.Error(homes.error.displayMessage("Couldn't load your place."))
-                                return@launch
+                    try {
+                        if (!current(version)) return@launch
+                        val id =
+                            when (val homes = resolvePrimaryHome()) {
+                                is NetworkResult.Success -> homes.data
+                                is NetworkResult.Failure -> {
+                                    // A failed lookup isn't "no place": offer a retry instead of
+                                    // sending a resident off to claim an address they already have.
+                                    _state.value = _state.value.afterFailedRead(homes.error.displayMessage("Couldn't load your place."))
+                                    return@launch
+                                }
                             }
-                        }
-                    val result =
-                        if (id != null) {
-                            homeId = id
-                            repo.intelligence(id)
-                        } else {
+                        if (id == null) {
                             loadSavedPlace(version)
                             return@launch
                         }
-                    if (!current(version)) return@launch
-                    _state.value =
+                        homeId = id
+                        val result = repo.intelligence(id)
+                        if (!current(version)) return@launch
                         when (result) {
-                            is NetworkResult.Success -> TodayTabUiState.Loaded(result.data, calendarHomeId = id)
-                            is NetworkResult.Failure -> TodayTabUiState.Error(result.error.displayMessage("Couldn't load today."))
+                            is NetworkResult.Success -> {
+                                val now = System.currentTimeMillis()
+                                _state.value = TodayTabUiState.Loaded(result.data, calendarHomeId = id, fetchedAt = now)
+                                if (::todayWidget.isInitialized) todayWidget.write(result.data.todayWidgetSnapshot())
+                            }
+                            is NetworkResult.Failure -> {
+                                val sameHome = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.calendarHomeId == id }
+                                _state.value = sameHome.afterFailedRead(result.error.displayMessage("Couldn't load today."))
+                            }
                         }
-                    if (result is NetworkResult.Success && ::todayWidget.isInitialized) {
-                        todayWidget.write(result.data.todayWidgetSnapshot())
+                    } finally {
+                        if (version == loadVersion) _refreshing.value = false
                     }
                 }
         }
@@ -216,13 +252,16 @@ class TodayTabViewModel
         }
 
         private suspend fun loadSavedPlace(version: Long) {
+            homeId = null
             val saved = savedPlacesRepository.list()
             if (!current(version)) return
             val place =
                 when (saved) {
                     is NetworkResult.Success -> saved.data.savedPlaces.firstOrNull()
                     is NetworkResult.Failure -> {
-                        _state.value = TodayTabUiState.Error(saved.error.displayMessage("Couldn't load your place."))
+                        val shown = _state.value
+                        val noHome = shown.takeIf { it == TodayTabUiState.NoPlace || (it as? TodayTabUiState.Loaded)?.savedPlace != null }
+                        _state.value = noHome.afterFailedRead(saved.error.displayMessage("Couldn't load your place."))
                         return
                     }
                 }
@@ -233,7 +272,10 @@ class TodayTabViewModel
             val result = savedPlacesRepository.today(place.id)
             if (!current(version)) return
             when (result) {
-                is NetworkResult.Failure -> _state.value = TodayTabUiState.Error(result.error.displayMessage("Couldn't load today."))
+                is NetworkResult.Failure -> {
+                    val samePlace = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.savedPlace?.id == place.id }
+                    _state.value = samePlace.afterFailedRead(result.error.displayMessage("Couldn't load today."))
+                }
                 is NetworkResult.Success -> loadSavedToday(version, place, result.data)
             }
         }
@@ -245,7 +287,8 @@ class TodayTabViewModel
         ) {
             val matches = checkSavedAnchor(place)
             if (!current(version)) return
-            _state.value = TodayTabUiState.Loaded(intelligence, savedPlace = place, savedAnchorMatches = matches)
+            val now = System.currentTimeMillis()
+            _state.value = TodayTabUiState.Loaded(intelligence, savedPlace = place, savedAnchorMatches = matches, fetchedAt = now)
             if (::todayWidget.isInitialized) todayWidget.write(intelligence.todayWidgetSnapshot())
             if (!matches) return
             val preferences = preferencesRepository.preferences()
@@ -444,18 +487,39 @@ class TodayTabViewModel
         }
     }
 
+/** After a failed read: content already shown for the same place stays, marked; otherwise the error shows. */
+private fun TodayTabUiState?.afterFailedRead(message: String): TodayTabUiState =
+    when (this) {
+        is TodayTabUiState.Loaded -> copy(refreshFailed = true)
+        TodayTabUiState.NoPlace -> this
+        else -> TodayTabUiState.Error(message)
+    }
+
 sealed interface TodayTabUiState {
     data object Loading : TodayTabUiState
 
     /** No primary home yet — the tab is a claim prompt. */
     data object NoPlace : TodayTabUiState
 
+    /**
+     * @property fetchedAt when this copy arrived (wall clock), for Today's freshness windows.
+     * @property refreshFailed the last read failed while this copy stayed on screen.
+     */
     data class Loaded(
         val intelligence: PlaceIntelligence,
         val calendarHomeId: String? = null,
         val savedPlace: SavedPlaceDto? = null,
         val savedAnchorMatches: Boolean = false,
-    ) : TodayTabUiState
+        val fetchedAt: Long = 0L,
+        val refreshFailed: Boolean = false,
+    ) : TodayTabUiState {
+        /** Inside the 10-minute window and still the same day: coming back reads nothing. */
+        fun isFresh(now: Long = System.currentTimeMillis()): Boolean {
+            if (now - fetchedAt !in 0 until TODAY_FRESH_MS) return false
+            val zone = ZoneId.systemDefault()
+            return Instant.ofEpochMilli(fetchedAt).atZone(zone).toLocalDate() == Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        }
+    }
 
     data class Error(val message: String) : TodayTabUiState
 }

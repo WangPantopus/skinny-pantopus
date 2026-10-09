@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import * as api from '@pantopus/api';
 import type { ScheduleType, Home } from '@pantopus/types';
 import AddressAutocomplete from '../AddressAutocomplete';
+import { fetchPrimaryHome } from '@/lib/primaryHome';
 
 type LocationTab = 'home' | 'current' | 'other' | 'remote';
 type PriceOption = 'ai' | 'custom';
@@ -168,7 +169,7 @@ export default function QuickModifiers({
       try {
         const [myRes, primaryRes] = await Promise.all([
           api.homes.getMyHomes().catch(() => ({ homes: [] as Home[] })),
-          api.homes.getPrimaryHome().catch(() => ({ home: null as Home | null })),
+          fetchPrimaryHome().catch(() => ({ home: null as Home | null })),
         ]);
         const list = (myRes as { homes?: Home[] })?.homes ?? [];
         const primary = (primaryRes as { home?: Home | null })?.home ?? null;

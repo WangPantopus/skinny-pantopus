@@ -14,6 +14,7 @@ import type { User } from '@pantopus/types';
 import ModalShell from '@/components/ui/ModalShell';
 import UsernameField, { profileLinkLabel, type UsernameStatus } from '@/components/profile/UsernameField';
 import { extractApiError } from '@/lib/auth-utils';
+import { setMe } from '@/lib/me';
 
 const ASKED_KEY = 'pantopus.usernamePrompt.asked';
 
@@ -55,6 +56,7 @@ export default function UsernamePrompt({
     setServerError('');
     try {
       const { user } = await api.users.updateProfile({ username: value });
+      setMe(user);
       onSaved(user);
     } catch (err) {
       setServerError(extractApiError(err, "Your username wasn't saved. Try again."));

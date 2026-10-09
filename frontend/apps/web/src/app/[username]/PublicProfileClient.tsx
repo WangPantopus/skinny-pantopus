@@ -26,6 +26,7 @@ import {
 import type { PortfolioEntry } from '@/components/profile/public/tabs/PortfolioTab';
 import { launchFeatures } from '@/lib/featureFlags';
 import UsernamePrompt, { markAskedForUsername, shouldAskForUsername } from '@/components/profile/UsernamePrompt';
+import { fetchMe } from '@/lib/me';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
@@ -150,7 +151,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     try {
       const token = getAuthToken();
       if (token) {
-        const userData = await api.users.getMyProfile();
+        const userData = await fetchMe();
         if (!current()) return null;
         setCurrentUser(userData);
         return userData;

@@ -35,6 +35,7 @@ import InstantAcceptButtonComp from '@/components/gig-detail-v2/InstantAcceptBut
 import ETATrackerComp from '@/components/gig-detail-v2/ETATracker';
 import ActiveTaskPanel from '@/components/gig-detail-v2/ActiveTaskPanel';
 import { launchFeatures } from '@/lib/featureFlags';
+import { fetchMe } from '@/lib/me';
 
 // ─── Lazy Leaflet ────────────────────────────────────────────────────
 
@@ -465,7 +466,7 @@ function GigDetailV2Content() {
     const current = beginRead('user');
     if (!current()) return;
     try {
-      const res = await api.users.getMyProfile();
+      const res = await fetchMe();
       if (current()) setCurrentUser(res);
     } catch { /* not critical */ }
   }, [beginRead]);

@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import * as api from '@pantopus/api';
 import type { User } from '@pantopus/types';
 import { getAuthToken } from '@pantopus/api';
 import BusinessPublicProfile from '@/components/business/BusinessPublicProfile';
+import { fetchMe } from '@/lib/me';
 
 export default function BusinessPublicSlugPage() {
   const params = useParams();
@@ -18,7 +18,7 @@ export default function BusinessPublicSlugPage() {
       const token = getAuthToken();
       if (!token) return;
       try {
-        const me = await api.users.getMyProfile();
+        const me = await fetchMe();
         setCurrentUser(me);
       } catch {
         setCurrentUser(null);

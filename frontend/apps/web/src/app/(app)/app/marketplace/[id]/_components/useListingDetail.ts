@@ -11,6 +11,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import { REFRESH_COOLDOWN_DAYS, STATUS_OPTIONS } from './listing-detail.types';
 import type { ListingDetail, ListingQuestion, ListingStatus, User } from '@pantopus/types';
 import type { ListingOffer } from '@pantopus/api';
+import { fetchMe } from '@/lib/me';
 
 export function useListingDetail() {
   const router = useRouter();
@@ -63,7 +64,7 @@ export function useListingDetail() {
   // ── Fetch data ─────────────────────────────────────────────
   const fetchUser = useCallback(async () => {
     try {
-      const currentUser = await api.users.getMyProfile();
+      const currentUser = await fetchMe();
       if (!currentUser?.id) throw new Error("Account unavailable");
       setUser(currentUser);
       setViewerError(null);

@@ -6,6 +6,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { homeAccessExpiry, homeAccessFingerprint, readCurrentHomeAccess, watchHomeAccessExpiry } from '@/components/home/homeAccessFingerprint';
 import { RETURN_REFRESH_MS, transientFailure } from '@/components/home/returnRefresh';
+import { fetchMe } from '@/lib/me';
 
 // ── Types ──
 
@@ -251,7 +252,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
       // Load current user
       let userId: string | null = null;
       try {
-        const userData = await api.users.getMyProfile() as Record<string, any>;
+        const userData = await fetchMe() as Record<string, any>;
         const u = userData?.user ?? userData;
         userId = u?.id || null;
         if (!current()) return;

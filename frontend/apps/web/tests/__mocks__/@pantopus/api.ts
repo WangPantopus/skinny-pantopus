@@ -236,6 +236,7 @@ export const authDevices = {
 };
 
 export const AUTH_SESSION_CHANGE_KEY = 'pantopus_auth_session_change';
+export const authSessionMarker = jest.fn(() => 'test-session');
 export const getApiBaseUrl = jest.fn(() => 'https://synthetic.invalid');
 export const onTokenChange = jest.fn((_listener: () => void) => () => {});
 

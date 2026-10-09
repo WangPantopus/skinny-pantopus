@@ -13,6 +13,7 @@ import StepUpPasswordModal from '@/components/settings/StepUpPasswordModal';
 import ErrorState from '@/components/ui/ErrorState';
 import { ACCOUNT_DELETED_NOTICE_KEY, hardNavigate } from '@/lib/session-refresh';
 import type { User } from '@pantopus/types';
+import { fetchMe, setMe } from '@/lib/me';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -45,7 +46,7 @@ export default function SettingsPage() {
         return;
       }
 
-      const userData = await api.users.getMyProfile();
+      const userData = await fetchMe();
       setUser(userData);
 
       // Load saved preferences (from userData or localStorage)
@@ -84,7 +85,8 @@ export default function SettingsPage() {
     saveSeq.current[field] = seq;
     saveQueue.current = saveQueue.current.then(async () => {
       try {
-        await api.users.updateProfile({ [field]: value } as Record<string, unknown>);
+        const { user: saved } = await api.users.updateProfile({ [field]: value } as Record<string, unknown>);
+        setMe(saved);
         if (saveSeq.current[field] === seq) toast.success('Saved');
       } catch (err: unknown) {
         if (saveSeq.current[field] !== seq) return;

@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { formatTimestamp } from '@pantopus/ui-utils';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import type { ListingDetail, ListingMessage } from '@pantopus/types';
+import { fetchMe } from '@/lib/me';
 
 const STATUS_BADGE: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
@@ -34,7 +35,7 @@ export default function ListingMessagesPage() {
     try {
       const [listingResult, userResult] = await Promise.all([
         api.listings.getListing(listingId),
-        api.users.getMyProfile(),
+        fetchMe(),
       ]);
 
       const listingData = ((listingResult as Record<string, any>)?.listing ?? listingResult) as ListingDetail;

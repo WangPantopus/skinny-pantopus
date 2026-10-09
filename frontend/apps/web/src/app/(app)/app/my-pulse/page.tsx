@@ -13,6 +13,7 @@ import { toast } from '@/components/ui/toast-store';
 import ErrorState from '@/components/ui/ErrorState';
 import { Bookmark, Newspaper } from 'lucide-react';
 import { ListArchetype } from '@/components/archetypes';
+import { fetchMe } from '@/lib/me';
 
 const PAGE_SIZE = 50;
 
@@ -54,7 +55,7 @@ export default function MyPulsePage() {
       const token = getAuthToken();
       if (!token) { router.push('/login'); return; }
       try {
-        const u = await api.users.getMyProfile();
+        const u = await fetchMe();
         setUserId(u.id);
         setMe(u);
       } catch {

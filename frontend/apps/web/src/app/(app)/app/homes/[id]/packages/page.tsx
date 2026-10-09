@@ -8,6 +8,7 @@ import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { readCurrentHomeAccess } from '@/components/home/homeAccessFingerprint';
+import { fetchMe } from '@/lib/me';
 
 type PkgTab = 'expected' | 'delivered' | 'archived';
 
@@ -50,7 +51,7 @@ function PackagesContent() {
       const [res, access, me] = await Promise.all([
         api.homeProfile.getHomePackages(homeId),
         readCurrentHomeAccess(homeId).catch(() => null),
-        api.users.getMyProfile().catch(() => null) as Promise<Record<string, any> | null>,
+        fetchMe().catch(() => null) as Promise<Record<string, any> | null>,
       ]);
       setLoadError(null);
       setPackages((res as any)?.packages || []);

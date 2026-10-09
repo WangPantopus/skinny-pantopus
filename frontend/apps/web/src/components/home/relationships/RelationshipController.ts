@@ -2,6 +2,7 @@ import * as api from '@pantopus/api';
 import type { RelationshipAction, RelationshipReview } from '@pantopus/api';
 import { PendingRelationshipStore, type RelationshipSnapshot } from './PendingRelationshipStore';
 import { UUID, validReview, validReceipt, canDecide, type PendingRelationship } from './relationshipModel';
+import { fetchMe } from '@/lib/me';
 
 /** Opening account/session, current ordinary authority and one original per Home. */
 export class RelationshipController {
@@ -30,7 +31,7 @@ export class RelationshipController {
   async open() {
     this.current();
     if (!UUID.test(this.homeId) || (this.requestedClaim && !UUID.test(this.requestedClaim))) throw new Error('This claim link is invalid.');
-    const profile = await api.users.getMyProfile(); this.current();
+    const profile = await fetchMe(); this.current();
     if (!UUID.test(profile.id)) throw new Error('Your account could not be verified.');
     this.actorId = profile.id;
     this.store = new PendingRelationshipStore(this.origin, this.actorId, this.homeId);
