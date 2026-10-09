@@ -94,6 +94,12 @@ const requestSchema = Joi.object({
 
 const USER_SELECT = 'id, username, name, first_name, last_name, profile_picture_url, city, state';
 
+// A made-up username (user_…, or the kind made from an email address) isn't the person's handle, and the
+// email kind shows part of their email address, so the lists send null instead (clients link by id then).
+function withChosenUsername(user) {
+  return user ? { ...user, username: chosenUsernameOrNull(user.username) } : user;
+}
+
 /**
  * Get user display name for notifications.
  */
@@ -744,9 +750,13 @@ router.get('/', verifyToken, async (req, res) => {
     // Enrich with role info (who is the "other" user relative to current user)
     const enriched = (relationships || []).map(rel => {
       const isRequester = rel.requester?.id === userId;
+      const requester = withChosenUsername(rel.requester);
+      const addressee = withChosenUsername(rel.addressee);
       return {
         ...rel,
-        other_user: isRequester ? rel.addressee : rel.requester,
+        requester,
+        addressee,
+        other_user: isRequester ? addressee : requester,
         direction: isRequester ? 'sent' : 'received',
       };
     });
@@ -780,7 +790,7 @@ router.get('/requests/pending', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch pending requests' });
     }
 
-    res.json({ requests: requests || [] });
+    res.json({ requests: (requests || []).map(r => ({ ...r, requester: withChosenUsername(r.requester) })) });
   } catch (err) {
     logger.error('Pending requests error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch pending requests' });
@@ -809,7 +819,7 @@ router.get('/requests/sent', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch sent requests' });
     }
 
-    res.json({ requests: requests || [] });
+    res.json({ requests: (requests || []).map(r => ({ ...r, addressee: withChosenUsername(r.addressee) })) });
   } catch (err) {
     logger.error('Sent requests error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch sent requests' });
@@ -840,8 +850,10 @@ router.get('/blocked', verifyToken, async (req, res) => {
     }
 
     const enriched = (blocked || []).map(rel => {
-      const blockedUser = rel.requester?.id === userId ? rel.addressee : rel.requester;
-      return { ...rel, blocked_user: blockedUser };
+      const requester = withChosenUsername(rel.requester);
+      const addressee = withChosenUsername(rel.addressee);
+      const blockedUser = rel.requester?.id === userId ? addressee : requester;
+      return { ...rel, requester, addressee, blocked_user: blockedUser };
     });
 
     res.json({ blocked: enriched });

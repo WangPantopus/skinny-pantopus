@@ -2352,7 +2352,7 @@ router.get('/mute', verifyToken, async (req, res) => {
           entity_type: m.muted_entity_type,
           entity_id: m.muted_entity_id,
           name: account.name || fullName || chosenUsernameOrNull(account.username) || 'Pantopus member',
-          username: account.username || null,
+          username: chosenUsernameOrNull(account.username),
           avatar_url: account.profile_picture_url || null,
           muted_at: m.created_at,
         };
