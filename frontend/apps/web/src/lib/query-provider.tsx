@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
+import { QueryCache, QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { purgeExpiredPlacePreviews } from '@/components/place/pendingPlace';
 import { subscribeConnectivity } from '@/lib/connectivity';
 import { clearCachedMapTiles } from '@/utils/tilePrefetch';
@@ -36,16 +36,30 @@ function clearAccountDeviceData(sessionEnded: boolean) {
 const UNUSED_ENTRY_MS = 30 * 60 * 1000;
 const MAX_ENTRIES = 200;
 
+function failureStatus(error: unknown): number | undefined {
+  const failure = error as { statusCode?: number; status?: number } | null;
+  return failure?.statusCode ?? failure?.status;
+}
+
 function createQueryClient() {
   const client = new QueryClient({
+    queryCache: new QueryCache({
+      // Access ended (contract §3): a 403 or 404 on a refresh drops what was
+      // kept, so the screen shows the server's answer instead of the old copy.
+      onError: (error, query) => {
+        const status = failureStatus(error);
+        if ((status === 403 || status === 404) && query.state.data !== undefined) {
+          query.setState({ data: undefined, dataUpdatedAt: 0 });
+        }
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: 30 * 1000,
         gcTime: UNUSED_ENTRY_MS,
         retry: (failureCount, error) => {
           // Don't retry on 4xx errors. The API client rejects with `statusCode`.
-          const failure = error as { statusCode?: number; status?: number } | null;
-          const status = failure?.statusCode ?? failure?.status;
+          const status = failureStatus(error);
           if (status && status >= 400 && status < 500) return false;
           return failureCount < 2;
         },
