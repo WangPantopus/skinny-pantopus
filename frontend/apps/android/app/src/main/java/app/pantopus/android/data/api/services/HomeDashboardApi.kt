@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemD
 import app.pantopus.android.data.api.models.homedashboard.UpdateSeasonalChecklistItemRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.PATCH
 import retrofit2.http.Path
@@ -28,6 +29,16 @@ interface HomeDashboardApi {
     @GET("api/homes/{id}/dashboard-access")
     suspend fun dashboardAuthority(
         @Path("id") homeId: String,
+    ): retrofit2.Response<HomeDashboardAuthorityDto>
+
+    /**
+     * [dashboardAuthority] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. No
+     * `Cache-Control: no-cache` here: Express answers 200 to any conditional request that carries it.
+     */
+    @GET("api/homes/{id}/dashboard-access")
+    suspend fun dashboardAuthorityConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
     ): retrofit2.Response<HomeDashboardAuthorityDto>
 
     /**

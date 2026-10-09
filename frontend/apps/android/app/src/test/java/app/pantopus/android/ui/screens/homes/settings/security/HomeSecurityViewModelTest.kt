@@ -8,6 +8,8 @@ import app.pantopus.android.data.api.models.homes.HomePrivacyResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomePrivacyRepository
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
 import io.mockk.coEvery
@@ -39,12 +41,13 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeSecurityViewModelTest {
     private val repository: HomePrivacyRepository = mockk()
+    private val gates: HomeCopyGateFactory = mockk(relaxed = true)
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         // Default: GET returns the balanced fixture; PATCH succeeds.
-        coEvery { repository.getPrivacy(any()) } returns NetworkResult.Success(privacyResponse())
+        coEvery { repository.getPrivacyStored(any(), any()) } returns stored(privacyResponse())
         coEvery { repository.updatePrivacy(any(), any()) } returns NetworkResult.Success(privacyResponse())
     }
 
@@ -56,8 +59,12 @@ class HomeSecurityViewModelTest {
     private fun makeVm() =
         HomeSecurityViewModel(
             repository = repository,
+            gates = gates,
             savedStateHandle = SavedStateHandle(mapOf(HOME_SECURITY_HOME_ID_KEY to "home-1")),
         )
+
+    /** What the screens' store hands back for a successful read. */
+    private fun stored(response: HomePrivacyResponse) = Stored(response, fetchedAt = System.currentTimeMillis())
 
     private fun privacyResponse(mapOptOut: Boolean = false) =
         HomePrivacyResponse(
@@ -143,7 +150,7 @@ class HomeSecurityViewModelTest {
     @Test
     fun load_applies_server_toggles() =
         runTest {
-            coEvery { repository.getPrivacy("home-1") } returns NetworkResult.Success(privacyResponse(mapOptOut = true))
+            coEvery { repository.getPrivacyStored("home-1", any()) } returns stored(privacyResponse(mapOptOut = true))
             val vm = makeVm()
             vm.load()
             assertEquals(true, vm.toggles[HomeSecurityToggles.MAP_OPT_OUT])

@@ -1,6 +1,13 @@
 package app.pantopus.android.data.store
 
+import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
+import app.pantopus.android.data.api.models.homes.HomeDetailResponse
+import app.pantopus.android.data.api.models.homes.HomeOwnershipSecurityResponse
+import app.pantopus.android.data.api.models.homes.HomePrivacyResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.homes.OccupantsResponse
+import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
@@ -69,5 +76,43 @@ object StoreKeys {
             mapOf("ballot" to "1", "sections" to todaySectionsQuery),
             kind = StoreKind.TODAY,
             topics = setOf("today", "home:$homeId", "place:$homeId"),
+        )
+
+    /**
+     * The viewer's access to a Home (role, permissions, expiry). Founder decision 3: decides who may see a Home
+     * screen's stored copy (owners and household roles without an expiry).
+     */
+    fun homeAccess(homeId: String) =
+        StoreKey<HomeDashboardAuthorityDto>(
+            "api/homes/$homeId/dashboard-access",
+            kind = StoreKind.HOMES,
+            topics = setOf("home:$homeId", "homes"),
+        )
+
+    /** A Home as the viewer sees it. */
+    fun homeDetail(homeId: String) =
+        StoreKey<HomeDetailResponse>("api/homes/$homeId", kind = StoreKind.HOMES, topics = setOf("home:$homeId", "homes", "place:$homeId"))
+
+    /** The viewer's effective permissions in a Home. */
+    fun homeMe(homeId: String) = StoreKey<HomeAccessDto>("api/homes/$homeId/me", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
+
+    /** A Home's occupants and pending invitations. */
+    fun homeOccupants(homeId: String) =
+        StoreKey<OccupantsResponse>("api/homes/$homeId/occupants", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
+
+    /** A Home's privacy toggles. */
+    fun homePrivacy(homeId: String) =
+        StoreKey<HomePrivacyResponse>("api/homes/$homeId/privacy", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
+
+    /** A Home's ownership security policy. */
+    fun homeSecurity(homeId: String) =
+        StoreKey<HomeOwnershipSecurityResponse>("api/homes/$homeId/security", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
+
+    /** A Home's property facts. */
+    fun homePropertyDetails(homeId: String) =
+        StoreKey<PropertyDetailsResponse>(
+            "api/homes/$homeId/property-details",
+            kind = StoreKind.HOMES,
+            topics = setOf("home:$homeId", "place:$homeId"),
         )
 }

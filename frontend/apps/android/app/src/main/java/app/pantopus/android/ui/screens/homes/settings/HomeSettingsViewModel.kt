@@ -7,19 +7,28 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeDetail
+import app.pantopus.android.data.api.models.homes.HomeDetailResponse
 import app.pantopus.android.data.api.models.homes.OccupantsResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeRequest
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomeSettingsRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListRow
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -100,6 +109,7 @@ class HomeSettingsViewModel
         private val homeMembersRepository: HomeMembersRepository,
         private val homeAdminRepository: HomeAdminRepository,
         private val homeSettingsRepository: HomeSettingsRepository,
+        gates: HomeCopyGateFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         val title: String = "Home settings"
@@ -111,6 +121,15 @@ class HomeSettingsViewModel
 
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
+
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate =
+            gates.create(homeId, listOf(StoreKeys.homeDetail(homeId), StoreKeys.homeOccupants(homeId), StoreKeys.homeMe(homeId)))
+        private var readGeneration = 0L
 
         private val _identity =
             MutableStateFlow(HomeSettingsSampleData.identity(HomeSettingsSampleData.Frame.Populated))
@@ -137,12 +156,21 @@ class HomeSettingsViewModel
         private var viewerAccess: HomeAccessDto? = null
         private var loadedOnce = false
 
+        /**
+         * Screen entry and every return (Instant Screens): owners and household roles see the stored copy at once,
+         * and the store answers a fresh copy without a request or revalidates an older one quietly.
+         */
         fun load() {
-            if (loadedOnce) return
-            reload()
+            if (!loadedOnce && gate.showsCopy) showStoredCopy()
+            read(force = false)
         }
 
-        fun refresh() = reload()
+        /** Pull to refresh, Retry and own edits: read now. */
+        fun refresh() = read(force = true)
+
+        override fun onCleared() {
+            gate.leave()
+        }
 
         fun consumeNavigation() {
             _navigation.value = null
@@ -225,7 +253,7 @@ class HomeSettingsViewModel
                 when (val result = homeSettingsRepository.updateHome(homeId, UpdateHomeRequest(name = trimmed))) {
                     is NetworkResult.Success -> {
                         _rename.update { it.copy(isSaving = false, isRenaming = false, error = null) }
-                        reload()
+                        refresh()
                     }
                     is NetworkResult.Failure -> {
                         _rename.update {
@@ -239,27 +267,53 @@ class HomeSettingsViewModel
             }
         }
 
-        private fun reload() {
-            _state.value = GroupedListUiState.Loading
+        private fun showStoredCopy() {
+            val detail = homesRepository.storedDetail(homeId)?.home ?: return
+            apply(detail, homeMembersRepository.storedOccupants(homeId), homeAdminRepository.storedMyAccess(homeId))
+            loadedOnce = true
+            _state.value = GroupedListUiState.Loaded(groups())
+        }
+
+        private fun read(force: Boolean) {
+            val generation = ++readGeneration
+            if (!loadedOnce) _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
-                when (val result = homesRepository.detail(homeId)) {
-                    is NetworkResult.Success -> {
-                        // Member counts + viewer access are best-effort — a
-                        // failure on either still lets the identity card +
-                        // navigation render.
-                        val occupants =
-                            (homeMembersRepository.listOccupants(homeId) as? NetworkResult.Success)?.data
-                        val access =
-                            (homeAdminRepository.myAccess(homeId) as? NetworkResult.Success)?.data
-                        apply(result.data.home, occupants, access)
-                        loadedOnce = true
-                        _state.value = GroupedListUiState.Loaded(groups())
-                    }
-                    is NetworkResult.Failure -> {
-                        _state.value = GroupedListUiState.Error(result.error.displayMessage("Couldn't load settings."))
-                    }
-                }
+                val fromCopy = gate.showsCopy && !force
+                var reads = readAll(force = !fromCopy)
+                // Household access ended meanwhile: whatever came from a copy is read again now.
+                if (fromCopy && !gate.showsCopy) reads = readAll(force = true)
+                if (generation == readGeneration) publish(reads)
             }
+        }
+
+        /** The Home, its occupants and the viewer's access, read side by side with the access re-check. */
+        private suspend fun readAll(force: Boolean): SettingsReads =
+            coroutineScope {
+                val recheck = async { gate.recheck(force) }
+                val detail = async { homesRepository.detailStored(homeId, force) }
+                val occupants = async { homeMembersRepository.listOccupantsStored(homeId, force) }
+                val access = async { homeAdminRepository.myAccessStored(homeId, force) }
+                recheck.await()
+                SettingsReads(detail.await(), occupants.await(), access.await())
+            }
+
+        private fun publish(reads: SettingsReads) {
+            val home = reads.detail.data?.home
+            if (home != null) {
+                // Member counts + viewer access are best-effort — a
+                // failure on either still lets the identity card +
+                // navigation render.
+                apply(home, reads.occupants.data, reads.access.data)
+                loadedOnce = true
+                _state.value = GroupedListUiState.Loaded(groups())
+            } else {
+                // Nothing to show, or the server ended this viewer's access (the store dropped the copy).
+                loadedOnce = false
+                val error = reads.detail.failure ?: NetworkError.NotFound
+                _state.value = GroupedListUiState.Error(error.displayMessage("Couldn't load settings."))
+            }
+            _refreshNotice.value =
+                RefreshNotice(reads.detail.fetchedAt, ::refresh).takeIf { reads.detail.showsRefreshFailure(StoreKind.HOMES) }
         }
 
         private fun apply(
@@ -479,6 +533,13 @@ class HomeSettingsViewModel
             return GroupedListGroup(id = "windDown", overline = "Wind down", rows = listOf(row))
         }
     }
+
+/** One read of the Settings index: the Home is required; occupants and access are best-effort. */
+private data class SettingsReads(
+    val detail: Stored<HomeDetailResponse>,
+    val occupants: Stored<OccupantsResponse>,
+    val access: Stored<HomeAccessDto>,
+)
 
 /**
  * Row subtexts resolved for the active frame. Live data fills only the

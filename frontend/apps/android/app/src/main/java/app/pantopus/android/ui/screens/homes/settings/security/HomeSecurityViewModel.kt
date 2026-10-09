@@ -6,15 +6,23 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.HomePrivacyDto
+import app.pantopus.android.data.api.models.homes.HomePrivacyResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomePrivacyRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomePrivacyRepository
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListRow
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,6 +53,7 @@ class HomeSecurityViewModel
     @Inject
     constructor(
         private val repository: HomePrivacyRepository,
+        gates: HomeCopyGateFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         enum class Variant { Balanced, Strict }
@@ -69,23 +78,65 @@ class HomeSecurityViewModel
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
 
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate = gates.create(homeId, listOf(StoreKeys.homePrivacy(homeId)))
+        private var readGeneration = 0L
+
+        /**
+         * Screen entry and every return (Instant Screens): owners and household roles see the stored toggles at once,
+         * and the store answers a fresh copy without a request or revalidates an older one quietly.
+         */
         fun load() {
             saveError = null
-            _state.value = GroupedListUiState.Loading
+            if (_state.value !is GroupedListUiState.Loaded && gate.showsCopy) repository.storedPrivacy(homeId)?.let(::show)
+            read(force = false)
+        }
+
+        /** Retry: read now. */
+        fun refresh() = read(force = true)
+
+        override fun onCleared() {
+            gate.leave()
+        }
+
+        private fun read(force: Boolean) {
+            val generation = ++readGeneration
+            if (_state.value !is GroupedListUiState.Loaded) _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
-                when (val result = repository.getPrivacy(homeId)) {
-                    is NetworkResult.Success -> {
-                        applyServer(result.data.privacy)
-                        _state.value = GroupedListUiState.Loaded(groups())
-                    }
-                    is NetworkResult.Failure -> {
-                        _state.value =
-                            GroupedListUiState.Error(
-                                result.error.displayMessage("Couldn't load this home's privacy settings. Try again."),
-                            )
+                val fromCopy = gate.showsCopy && !force
+                var stored = readPrivacy(force = !fromCopy)
+                // Household access ended meanwhile: whatever came from a copy is read again now.
+                if (fromCopy && !gate.showsCopy) stored = readPrivacy(force = true)
+                if (generation != readGeneration) return@launch
+                val data = stored.data
+                when {
+                    // A toggle still saving wins over a copy read meanwhile; the save keeps or rolls back its own row.
+                    data != null && isSaving -> Unit
+                    data != null -> show(data)
+                    else -> {
+                        val fallback = "Couldn't load this home's privacy settings. Try again."
+                        _state.value = GroupedListUiState.Error(stored.failure?.displayMessage(fallback) ?: fallback)
                     }
                 }
+                _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
             }
+        }
+
+        private suspend fun readPrivacy(force: Boolean): Stored<HomePrivacyResponse> =
+            coroutineScope {
+                val recheck = async { gate.recheck(force) }
+                val privacy = async { repository.getPrivacyStored(homeId, force) }
+                recheck.await()
+                privacy.await()
+            }
+
+        private fun show(response: HomePrivacyResponse) {
+            applyServer(response.privacy)
+            _state.value = GroupedListUiState.Loaded(groups())
         }
 
         /** Test / preview seam: swap the underlying toggle seed. */
@@ -107,15 +158,22 @@ class HomeSecurityViewModel
             isSaving = true
             _state.value = GroupedListUiState.Loaded(groups())
             viewModelScope.launch {
+                var failed = false
                 try {
                     val result = repository.updatePrivacy(homeId, requestFor(rowId, isOn))
                     if (result is NetworkResult.Failure) {
                         // Roll back the single key.
+                        failed = true
                         _toggles[rowId] = previous
                         saveError = "Your change wasn't saved. ${result.error.displayMessage("Please try again.")}"
                     }
                 } finally {
                     isSaving = false
+                    _state.value = GroupedListUiState.Loaded(groups())
+                }
+                // Reads that landed while saving were set aside: after a failed save, show the server's row, read now.
+                if (failed) {
+                    repository.getPrivacyStored(homeId, force = true).data?.let { applyServer(it.privacy) }
                     _state.value = GroupedListUiState.Loaded(groups())
                 }
             }

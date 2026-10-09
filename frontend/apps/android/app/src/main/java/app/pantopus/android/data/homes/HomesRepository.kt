@@ -32,6 +32,7 @@ import app.pantopus.android.data.api.models.homes.HomeAccessSecretResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretsResponse
 import app.pantopus.android.data.api.models.homes.HomeAddressValidationRequest
 import app.pantopus.android.data.api.models.homes.HomeBillResponse
+import app.pantopus.android.data.api.models.homes.HomeDetailResponse
 import app.pantopus.android.data.api.models.homes.HomeEventDetailResponse
 import app.pantopus.android.data.api.models.homes.HomeEventResponse
 import app.pantopus.android.data.api.models.homes.HomeEventRsvpRequest
@@ -44,6 +45,7 @@ import app.pantopus.android.data.api.models.homes.InviteOwnerRequest
 import app.pantopus.android.data.api.models.homes.MoveOutResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.MyOwnershipClaimsResponse
+import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsRequest
 import app.pantopus.android.data.api.models.homes.SubmitClaimRequest
 import app.pantopus.android.data.api.models.homes.SubmitClaimResponse
@@ -102,11 +104,31 @@ open class HomesRepository
         /** `GET /api/homes/:id`. */
         open suspend fun detail(id: String) = safeApiCall { api.detail(id) }
 
+        /** [detail] through the screens' store: a fresh copy answers without a request. */
+        open suspend fun detailStored(
+            id: String,
+            force: Boolean = false,
+        ): Stored<HomeDetailResponse> =
+            store.read(StoreKeys.homeDetail(id), force) { etag -> conditionalApiCall { api.detailConditional(id, etag) } }
+
+        /** The stored Home, without a request. */
+        open fun storedDetail(id: String): HomeDetailResponse? = store.peek(StoreKeys.homeDetail(id)).data
+
         /** `GET /api/homes/:id/public-profile`. */
         open suspend fun publicProfile(id: String) = safeApiCall { api.publicProfile(id) }
 
         /** `GET /api/homes/:id/property-details`. */
         open suspend fun propertyDetails(id: String) = safeApiCall { api.propertyDetails(id) }
+
+        /** [propertyDetails] through the screens' store: a fresh copy answers without a request. */
+        open suspend fun propertyDetailsStored(
+            id: String,
+            force: Boolean = false,
+        ): Stored<PropertyDetailsResponse> =
+            store.read(StoreKeys.homePropertyDetails(id), force) { etag -> conditionalApiCall { api.propertyDetailsConditional(id, etag) } }
+
+        /** The stored property facts, without a request. */
+        open fun storedPropertyDetails(id: String): PropertyDetailsResponse? = store.peek(StoreKeys.homePropertyDetails(id)).data
 
         /** `POST /api/homes/property-suggestions`. */
         open suspend fun propertySuggestions(request: PropertySuggestionsRequest) = safeApiCall { api.propertySuggestions(request) }

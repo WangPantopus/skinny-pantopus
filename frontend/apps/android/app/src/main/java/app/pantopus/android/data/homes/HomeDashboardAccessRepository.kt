@@ -1,7 +1,14 @@
 package app.pantopus.android.data.homes
 
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
+import app.pantopus.android.data.api.net.Conditional
+import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.services.HomeDashboardApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.Stored
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.Moshi
 import retrofit2.HttpException
@@ -12,6 +19,7 @@ class HomeDashboardAccessRepository
     constructor(
         private val api: HomeDashboardApi,
         moshi: Moshi,
+        private val store: ScreenStore,
     ) {
         private val adapter = moshi.adapter(HomeDashboardAuthorityDto::class.java)
 
@@ -27,5 +35,32 @@ class HomeDashboardAccessRepository
                     else -> throw HttpException(response)
                 }
             return authority ?: throw JsonDataException("Current Home authority could not be confirmed.")
+        }
+
+        /**
+         * The viewer's access through the screens' store (Instant Screens): a fresh copy answers without a request,
+         * otherwise one conditional request. Decides who may see a stored copy of a Home screen (founder decision 3).
+         * A 403 or 404 drops the copy; [read] keeps the typed 403 for the dashboard's limited view.
+         */
+        suspend fun readStored(
+            homeId: String,
+            force: Boolean = false,
+        ): Stored<HomeDashboardAuthorityDto> =
+            store.read(StoreKeys.homeAccess(homeId), force) { etag ->
+                conditionalApiCall { api.dashboardAuthorityConditional(homeId, etag) }.confirmed(homeId)
+            }
+
+        /** The stored access copy, without a request; null when there is none. */
+        fun storedAuthority(homeId: String): HomeDashboardAuthorityDto? = store.peek(StoreKeys.homeAccess(homeId)).data
+
+        private fun NetworkResult<Conditional<HomeDashboardAuthorityDto>>.confirmed(
+            homeId: String,
+        ): NetworkResult<Conditional<HomeDashboardAuthorityDto>> {
+            val reply = ((this as? NetworkResult.Success)?.data as? Conditional.Fresh)?.data ?: return this
+            return if (reply.homeId == homeId && reply.hasAccess && reply.isOwner != null) {
+                this
+            } else {
+                NetworkResult.Failure(NetworkError.Decoding(JsonDataException("Current Home authority could not be confirmed.")))
+            }
         }
     }
