@@ -17,6 +17,13 @@
 //   • Summary banner above the list — count of overdue + YTD spend.
 //   • 60pt `canonicalCreate` FAB tinted `.home` (home-pillar identity).
 //
+//  Instant Screens: the log goes through the screen store (Homes, 2 minutes,
+//  topic `home:{id}`; the detail screen reads the same entry), so coming back
+//  shows it in the first frame and asks again only once it is out of date.
+//  Logging, editing or deleting an entry marks the Home out of date. Only an
+//  owner's or household member's open-ended access, as the Home dashboard
+//  last confirmed it, sees the copy before the re-check (`HomeCopyGate`).
+//
 
 import Foundation
 import Observation
@@ -151,12 +158,14 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
     }
 
     private(set) var state: ListOfRowsState = .loading
+    var refreshFailureMessage: String?
+    private(set) var staleNotice: String?
 
     /// Last-fetched payload so tab swaps don't refetch.
     private var tasks: [MaintenanceTaskDTO]?
 
     private let homeId: String
-    private let api: APIClient
+    private let store: ScreenStore
     private let onOpenTask: @Sendable (String) -> Void
     private let onAddTask: @Sendable () -> Void
     /// Route to the per-home issue tracker. Nil hides the top-bar action.
@@ -172,42 +181,66 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.homeId = homeId
-        self.api = api
+        store = ScreenStore.store(for: api)
         self.onOpenTask = onOpenTask
         self.onAddTask = onAddTask
         self.onOpenIssues = onOpenIssues
         self.now = now
+        // The store's copy shows in the first frame (Instant Screens), for household access only.
+        if HomeCopyGate.showsCopy(homeId: homeId, store: store),
+           let copy = store.peek(HomesEndpoints.maintenance(homeId: homeId), as: GetHomeMaintenanceResponse.self) {
+            show(copy)
+        }
     }
 
     func load() async {
-        if case .loading = state {} else { state = .loading }
-        await fetch()
+        await fetch(force: false)
     }
 
     func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     func loadMoreIfNeeded() async {}
 
     func reloadAfterMutation() async {
-        await fetch()
+        store.markStale(topics: [ScreenTopic.home(homeId)])
+        await fetch(force: true)
     }
 
-    private func fetch() async {
+    private func fetch(force: Bool) async {
+        let household = HomeCopyGate.showsCopy(homeId: homeId, store: store)
+        let gate: @Sendable (GetHomeMaintenanceResponse) -> Bool = { _ in household }
+        let endpoint = HomesEndpoints.maintenance(homeId: homeId)
         do {
-            let response: GetHomeMaintenanceResponse = try await api.request(
-                HomesEndpoints.maintenance(homeId: homeId)
-            )
-            tasks = response.tasks
-            rebuildState()
+            // Without household access in hand, every visit waits for the server.
+            try await store.show(
+                endpoint,
+                as: GetHomeMaintenanceResponse.self,
+                kind: .homes,
+                topics: [ScreenTopic.home(homeId)],
+                force: force || !household,
+                showsBeforeRecheck: gate
+            ) { show($0) }
+        } catch is CancellationError {
+            return
         } catch {
-            tasks = nil
-            state = .error(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't load your maintenance log."
-            )
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load your maintenance log."
+            guard state.showsContent, !ScreenStore.isRefusal(error) else {
+                tasks = nil
+                state = .error(message: message)
+                return
+            }
+            // The log stays; a pull to refresh says it failed.
+            if force { refreshFailureMessage = message }
+            staleNotice = store.peek(endpoint, as: GetHomeMaintenanceResponse.self)?.refreshNotice
         }
+    }
+
+    private func show(_ snapshot: ScreenSnapshot<GetHomeMaintenanceResponse>) {
+        staleNotice = snapshot.refreshNotice
+        tasks = snapshot.value.tasks
+        rebuildState()
     }
 
     private func rebuildState() {

@@ -37,6 +37,7 @@ final class MaintenanceDetailViewModel {
     private let homeId: String
     private let taskId: String
     private let api: APIClient
+    private let store: ScreenStore
     private let draftStore: MaintenanceDraftStore
     private let onChanged: @Sendable () -> Void
     private let onDeleted: @Sendable () -> Void
@@ -52,9 +53,16 @@ final class MaintenanceDetailViewModel {
         self.homeId = homeId
         self.taskId = taskId
         self.api = api
+        store = ScreenStore.store(for: api)
         self.draftStore = draftStore
         self.onChanged = onChanged
         self.onDeleted = onDeleted
+        // The entry from the log's kept copy (Instant Screens), for household access only.
+        if HomeCopyGate.showsCopy(homeId: homeId, store: store),
+           let task = store.peek(HomesEndpoints.maintenance(homeId: homeId), as: GetHomeMaintenanceResponse.self)?
+           .value.tasks.first(where: { $0.id == taskId }) {
+            state = .loaded(task)
+        }
     }
 
     var draft: MaintenanceDraft? {
@@ -62,12 +70,11 @@ final class MaintenanceDetailViewModel {
     }
 
     func load() async {
-        state = .loading
-        await fetch()
+        await fetch(force: false)
     }
 
     func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     func delete() async {
@@ -80,6 +87,7 @@ final class MaintenanceDetailViewModel {
                 HomesEndpoints.deleteMaintenance(homeId: homeId, taskId: taskId)
             )
             draftStore.remove(id: taskId)
+            store.markStale(topics: [ScreenTopic.home(homeId)])
             Analytics.track(.ctaMaintenanceDelete(result: .success))
             onChanged()
             onDeleted()
@@ -90,17 +98,29 @@ final class MaintenanceDetailViewModel {
         }
     }
 
-    private func fetch() async {
+    /// The log through the screen store (the list's entry): at once when fresh, read again when out of date.
+    private func fetch(force: Bool) async {
+        let household = HomeCopyGate.showsCopy(homeId: homeId, store: store)
+        let gate: @Sendable (GetHomeMaintenanceResponse) -> Bool = { _ in household }
         do {
-            let response: GetHomeMaintenanceResponse = try await api.request(
-                HomesEndpoints.maintenance(homeId: homeId)
-            )
+            let response = try await store.load(
+                HomesEndpoints.maintenance(homeId: homeId),
+                as: GetHomeMaintenanceResponse.self,
+                kind: .homes,
+                topics: [ScreenTopic.home(homeId)],
+                force: force || !household,
+                showsBeforeRecheck: gate
+            ).value
             guard let task = response.tasks.first(where: { $0.id == taskId }) else {
                 state = .error(message: "This maintenance entry is no longer available.")
                 return
             }
             state = .loaded(task)
+        } catch is CancellationError {
+            return
         } catch {
+            // A failed refresh keeps the entry on screen; a refusal shows the error.
+            if case .loaded = state, !ScreenStore.isRefusal(error) { return }
             state = .error(
                 message: (error as? APIError)?.errorDescription
                     ?? "Couldn't load this maintenance entry."
