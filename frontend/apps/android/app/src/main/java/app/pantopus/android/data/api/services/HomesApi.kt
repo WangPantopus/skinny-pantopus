@@ -105,6 +105,13 @@ interface HomesApi {
         @Path("id") id: String,
     ): HomeDetailResponse
 
+    /** [detail] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}")
+    suspend fun detailConditional(
+        @Path("id") id: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeDetailResponse>
+
     /** `GET /api/homes/:id/public-profile` — route `backend/routes/home.js:2439`. */
     @GET("api/homes/{id}/public-profile")
     suspend fun publicProfile(
@@ -116,6 +123,13 @@ interface HomesApi {
     suspend fun propertyDetails(
         @Path("id") id: String,
     ): PropertyDetailsResponse
+
+    /** [propertyDetails] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/property-details")
+    suspend fun propertyDetailsConditional(
+        @Path("id") id: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<PropertyDetailsResponse>
 
     /** `POST /api/homes` — route `backend/routes/home.js:677`. */
     @POST("api/homes")

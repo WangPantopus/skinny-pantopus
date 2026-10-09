@@ -33,6 +33,16 @@ interface HomeDashboardApi {
     ): retrofit2.Response<HomeDashboardAuthorityDto>
 
     /**
+     * [dashboardAuthority] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. No
+     * `Cache-Control: no-cache` here: Express answers 200 to any conditional request that carries it.
+     */
+    @GET("api/homes/{id}/dashboard-access")
+    suspend fun dashboardAuthorityConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): retrofit2.Response<HomeDashboardAuthorityDto>
+
+    /**
      * `GET /api/homes/:id/dashboard` — route `backend/routes/home.js:6224`.
      *
      * Single-request aggregate: `{ home, myAccess, today, counts, members,
