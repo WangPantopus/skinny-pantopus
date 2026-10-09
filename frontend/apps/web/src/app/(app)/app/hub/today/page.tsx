@@ -104,6 +104,11 @@ function repeatsCondition(summary: string, label?: string | null): boolean {
   return !!label && plain(summary) === plain(label);
 }
 
+// Instant Screens contract §4: how old a shown briefing may be after a failed refresh before the
+// page says so ("Couldn't refresh"), and how old its alerts may be before they show as unavailable.
+const TODAY_MAX_SHOWN_MS = 2 * 60 * 60 * 1000;
+const ALERTS_MAX_SHOWN_MS = 30 * 60 * 1000;
+
 // ── Page ─────────────────────────────────────────────────────────
 
 export default function HubTodayPage() {
@@ -136,8 +141,22 @@ export default function HubTodayPage() {
   const ballot = useBallotToday(hasToken);
 
   const today = query.data ? withoutLaunchCutTodayRows(query.data) : null;
-  const loading = !mounted || (query.isPending && hasToken);
-  const error = query.error instanceof Error ? query.error.message : '';
+  // The first frame shows what this tab already loaded; the skeleton only while nothing has been
+  // (a fresh page load starts with an empty cache, like the server).
+  const loading = query.data === undefined && (!mounted || (query.isPending && hasToken));
+  // Only a briefing that never loaded shows the error. A failed refresh keeps the briefing
+  // (contract §3) and says so once it is older than Today's max shown age (§4: 2 hours; alerts 30 minutes).
+  const error = query.data === undefined && query.error instanceof Error ? query.error.message : '';
+  const refreshFailed = query.isError && query.data !== undefined;
+  const shownAge = Date.now() - query.dataUpdatedAt;
+  const showStaleLine = refreshFailed && shownAge > TODAY_MAX_SHOWN_MS;
+  const alertsUnavailable = refreshFailed && shownAge > ALERTS_MAX_SHOWN_MS;
+  // Quiet refreshes show nothing; the icon turns only after a tap on Refresh.
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    setRefreshing(true);
+    try { await query.refetch(); } finally { setRefreshing(false); }
+  };
 
   return (
     <div className="min-h-screen bg-app pb-16">
@@ -157,12 +176,12 @@ export default function HubTodayPage() {
             <h1 className="text-xl font-bold text-app-text">Today</h1>
           </div>
           <button
-            onClick={() => query.refetch()}
-            disabled={query.isFetching}
+            onClick={() => { void refresh(); }}
+            disabled={refreshing}
             className="flex items-center gap-1.5 text-sm text-app-text-secondary hover:text-app-text transition disabled:opacity-50"
             aria-label="Refresh"
           >
-            <RefreshCw className={`w-4 h-4 ${query.isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
         </div>
@@ -183,6 +202,16 @@ export default function HubTodayPage() {
           </div>
         )}
 
+        {/* A refresh failed and the briefing shown is older than its max shown age */}
+        {!loading && showStaleLine && (
+          <div className="mb-3 flex items-center justify-between gap-3 px-1 text-xs text-app-text-secondary" role="status">
+            <span>Couldn’t refresh. Showing {new Date(query.dataUpdatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</span>
+            <button onClick={() => { void refresh(); }} disabled={refreshing} className="font-semibold text-primary-600 dark:text-primary-400 hover:underline disabled:opacity-50">
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Error */}
         {!loading && error && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/20 p-4 flex items-center justify-between">
@@ -191,7 +220,7 @@ export default function HubTodayPage() {
               <span>{error || 'Could not load today’s briefing'}</span>
             </div>
             <button
-              onClick={() => query.refetch()}
+              onClick={() => { void refresh(); }}
               className="text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline"
             >
               Retry
@@ -307,8 +336,16 @@ export default function HubTodayPage() {
             {/* Ballot P0 (ballot_p0): ballot week and "Moved this year?" */}
             <BallotTodaySection data={ballot} />
 
-            {/* Alerts */}
-            {today.alerts.length > 0 && (
+            {/* Alerts: an out-of-date alert check is never shown as "no alerts" (contract §4) */}
+            {alertsUnavailable && (
+              <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-app bg-surface dark:bg-surface-dark" role="status">
+                <span className="text-sm text-app-text-secondary">Alerts unavailable</span>
+                <button onClick={() => { void refresh(); }} disabled={refreshing} className="text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline disabled:opacity-50">
+                  Retry
+                </button>
+              </div>
+            )}
+            {!alertsUnavailable && today.alerts.length > 0 && (
               <div className="space-y-2">
                 {today.alerts.map((alert) => (
                   <div
