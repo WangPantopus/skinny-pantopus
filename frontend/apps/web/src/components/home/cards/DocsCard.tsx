@@ -9,6 +9,7 @@ import VisibilityChip from '../VisibilityChip';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { failureMessage } from '../share/shareFailure';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // "expires in 23h" / "expires in 2d 4h" for a share link's end time.
 function linkExpiry(end: string | null | undefined) {
@@ -172,7 +173,8 @@ export default function DocsCard({
             </h3>
             <div className="bg-app-surface rounded-xl border border-app-border shadow-sm divide-y divide-app-border-subtle">
               {docs.map((doc) => {
-                const sourceMailId = doc?.details?.sourceMailId || doc?.details?.source_mail_id || null;
+                // Launch cut #10 (Mailbox): no link to the hidden mail item.
+                const sourceMailId = launchFeatures.mailbox ? doc?.details?.sourceMailId || doc?.details?.source_mail_id || null : null;
                 return (
                   <div
                     key={doc.id}
