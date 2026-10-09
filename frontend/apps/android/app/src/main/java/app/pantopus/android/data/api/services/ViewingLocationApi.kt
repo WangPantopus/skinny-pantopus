@@ -5,8 +5,10 @@ import app.pantopus.android.data.api.models.location.SetViewingLocationResponse
 import app.pantopus.android.data.api.models.location.SetViewingRadiusRequest
 import app.pantopus.android.data.api.models.location.SetViewingRadiusResponse
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PUT
 
 /**
@@ -22,6 +24,12 @@ interface ViewingLocationApi {
      */
     @GET("api/location")
     suspend fun current(): ViewingLocationPayload
+
+    /** `GET /api/location` through the screens' store (Instant Screens): a 304 keeps the copy. */
+    @GET("api/location")
+    suspend fun currentConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<ViewingLocationPayload>
 
     /**
      * `PUT /api/location` — upsert the viewing location. The handler also

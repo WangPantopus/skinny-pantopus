@@ -24,9 +24,11 @@ import app.pantopus.android.data.api.models.posts.PostShareResponse
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateResponse
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -57,6 +59,21 @@ interface PostsApi {
         @Query("sportsMode") sportsMode: String? = null,
         @Query("eventKey") eventKey: String? = null,
     ): FeedResponse
+
+    /** `GET /api/posts/feed`'s first page through the screens' store (Instant Screens): a 304 keeps the copy. */
+    @GET("api/posts/feed")
+    suspend fun feedConditional(
+        @Query("surface") surface: String,
+        @Query("latitude") latitude: Double?,
+        @Query("longitude") longitude: Double?,
+        @Query("radiusMiles") radiusMiles: Double?,
+        @Query("postType") postType: String?,
+        @Query("limit") limit: Int,
+        @Query("topic") topic: String?,
+        @Query("sportsMode") sportsMode: String?,
+        @Query("eventKey") eventKey: String?,
+        @Header("If-None-Match") etag: String?,
+    ): Response<FeedResponse>
 
     /**
      * `POST /api/posts` — create a new post. Body keys are validated

@@ -2,9 +2,11 @@ package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
+import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
+import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
@@ -16,6 +18,7 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyRe
 import app.pantopus.android.data.api.models.users.InviteCodeDto
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.ProfileResponse
+import app.pantopus.android.data.posts.FeedQuery
 
 /** Change topics (contract §8) that more than one key or repository names. */
 object StoreTopics {
@@ -27,6 +30,9 @@ object StoreTopics {
 
     /** The viewer's conversation list: a chat created or left, a message sent or read. */
     const val CHATS = "chats"
+
+    /** Client-only: the viewer posted, edited or deleted a post, so the feeds' first pages go out of date. */
+    const val POSTS = "posts"
 
     /** The viewer's list of homes: a home added, claimed, verified, left or deleted. */
     const val HOMES = "homes"
@@ -86,6 +92,28 @@ object StoreKeys {
     fun roundCoordinate(value: Double): Double = kotlin.math.round(value * COORDINATE_SCALE) / COORDINATE_SCALE
 
     private const val COORDINATE_SCALE = 1000.0
+
+    /** The area the viewer chose in the Nearby context bar (`GET /api/location`; kind You: fresh 10 minutes). */
+    val viewingLocation = StoreKey<ViewingLocationPayload>("api/location", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** The first page of one feed query (contract §4 "Nearby": fresh 2 minutes); later pages are never stored. */
+    fun feedFirstPage(query: FeedQuery) =
+        StoreKey<FeedResponse>(
+            "api/posts/feed",
+            mapOf(
+                "surface" to query.surface,
+                "latitude" to query.latitude?.toString(),
+                "longitude" to query.longitude?.toString(),
+                "radiusMiles" to query.radiusMiles?.toString(),
+                "postType" to query.postType,
+                "topic" to query.topic,
+                "sportsMode" to query.sportsMode,
+                "eventKey" to query.eventKey,
+                "limit" to FeedQuery.PAGE_SIZE.toString(),
+            ),
+            kind = StoreKind.NEARBY,
+            topics = setOf(StoreTopics.POSTS),
+        )
 
     /**
      * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
