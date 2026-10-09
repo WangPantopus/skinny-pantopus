@@ -118,27 +118,31 @@ public final class MeViewModel {
     private func fetch() async {
         // Every read starts at once; only the stats (by profile id) and the
         // primary Home's dashboard wait for the profile and the Homes list.
-        async let profileTask: ProfileResponse? = optional { try await self.api.request(UsersEndpoints.profile()) }
-        async let homesTask: MyHomesResponse? = optional { try await self.api.request(HomesEndpoints.myHomes()) }
-        async let businessesTask: MyBusinessesResponse? = optional {
+        let profileTask: Task<ProfileResponse?, Never> = start { try await self.api.request(UsersEndpoints.profile()) }
+        let homesTask: Task<MyHomesResponse?, Never> = start { try await self.api.request(HomesEndpoints.myHomes()) }
+        let businessesTask: Task<MyBusinessesResponse?, Never> = start {
             try await self.api.request(BusinessesEndpoints.myBusinesses())
         }
-        async let insights: Void = fetchInsights()
+        let insights = Task { await self.fetchInsights() }
         // Personal profile is the only hard requirement. Home and stats
         // failures degrade their own surface instead of failing the whole
         // screen. A failed refresh keeps what's on screen.
-        guard let profile = await profileTask else {
+        guard let profile = await profileTask.value else {
             if case .loaded = state {} else { state = .error(message: "Couldn't load your profile.") }
             return
         }
 
-        let homes = await homesTask
+        let homes = await homesTask.value
         let userId = profile.user.id
-        async let statsTask: UserStatsDTO? = optional { try await self.api.request(UsersEndpoints.stats(userId: userId)) }
+        let statsTask: Task<UserStatsDTO?, Never> = start { try await self.api.request(UsersEndpoints.stats(userId: userId)) }
         // The Home card's counts come from the primary Home's dashboard.
         let primaryHomeId = Self.primaryHome(in: homes?.sharedHomes ?? [])?.home.id
-        async let dashboardTask = dashboard(homeId: primaryHomeId)
-        let (stats, dashboard, businesses) = await (statsTask, dashboardTask, businessesTask)
+        let dashboardTask: Task<HomeDashboardResponse?, Never>? = primaryHomeId.map { homeId in
+            start { try await self.api.request(HomeDashboardEndpoints.dashboard(homeId: homeId)) }
+        }
+        let stats = await statsTask.value
+        let dashboard = await dashboardTask?.value
+        let businesses = await businessesTask.value
 
         let personal = Self.buildPersonal(profile: profile.user, stats: stats)
         // `homes == nil` is a failed read; it must not read as "No shared Home".
@@ -157,12 +161,7 @@ public final class MeViewModel {
             business: Self.launchScoped(business)
         )
         loadedAt = now()
-        await insights
-    }
-
-    private func dashboard(homeId: String?) async -> HomeDashboardResponse? {
-        guard let homeId else { return nil }
-        return await optional { try await self.api.request(HomeDashboardEndpoints.dashboard(homeId: homeId)) }
+        await insights.value
     }
 
     /// Monthly Receipt + invite progress + invite code, read at once. All
@@ -171,21 +170,30 @@ public final class MeViewModel {
     /// failed refresh keeps a card already shown.
     private func fetchInsights() async {
         let period = Self.receiptPeriod(now: now())
-        async let receipt: MonthlyReceiptDTO? = optional {
+        let receipt: Task<MonthlyReceiptDTO?, Never> = start {
             try await self.api.request(
                 ProfileInsightsEndpoints.monthlyReceipt(year: period.year, month: period.month)
             )
         }
-        async let progress: InviteProgressDTO? = optional {
+        let progress: Task<InviteProgressDTO?, Never> = start {
             try await self.api.request(ProfileInsightsEndpoints.inviteProgress())
         }
-        async let code: InviteCodeDTO? = optional {
+        let code: Task<InviteCodeDTO?, Never> = start {
             try await self.api.request(ProfileInsightsEndpoints.inviteCode())
         }
-        let (newReceipt, newProgress, newCode) = await (receipt, progress, code)
+        let newReceipt = await receipt.value
+        let newProgress = await progress.value
+        let newCode = await code.value
         monthlyReceipt = newReceipt ?? monthlyReceipt
         inviteProgress = newProgress ?? inviteProgress
         inviteCode = newCode?.inviteCode ?? inviteCode
+    }
+
+    /// Starts one read now. Reads run side by side as tasks awaited through
+    /// `.value`, not `async let`: the `async let` fan-out crashed the iOS 18
+    /// test host ("freed pointer was not the last allocation").
+    private func start<T: Sendable>(_ operation: @escaping @Sendable () async throws -> T) -> Task<T?, Never> {
+        Task { await self.optional(operation) }
     }
 
     private func optional<T: Sendable>(_ operation: @Sendable () async throws -> T) async -> T? {
