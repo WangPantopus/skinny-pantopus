@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -109,7 +110,7 @@ class SkyShareCard(
         ) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = white
             textSize = size * scale
-            typeface = Typeface.create(Typeface.SANS_SERIF, weight, false)
+            typeface = sansSerif(weight)
             setShadowLayer(4 * scale, 0f, scale, shadow)
         }
         val left = 26 * scale
@@ -125,6 +126,18 @@ class SkyShareCard(
         canvas.drawText("$city · $date", left, (HEIGHT - 44) * scale, paint(17f, 600))
         canvas.drawText("Pantopus", left, (HEIGHT - 24) * scale, paint(13f, 700).apply { alpha = 217 })
     }
+
+    /** Sans serif at [weight]; before Android 9 the nearest of light, medium and bold. */
+    private fun sansSerif(weight: Int): Typeface =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            Typeface.create(Typeface.SANS_SERIF, weight, false)
+        } else {
+            when {
+                weight < 400 -> Typeface.create("sans-serif-light", Typeface.NORMAL)
+                weight < 700 -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                else -> Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            }
+        }
 
     /** Writes the picture to the app's cache and opens the share sheet. */
     suspend fun share(context: Context) {
