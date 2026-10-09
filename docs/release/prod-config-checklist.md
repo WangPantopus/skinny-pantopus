@@ -285,6 +285,12 @@ Vercel → the Pantopus project:
 - Domains: assign `staging.pantopus.com` to the `dev` branch, then change its
   Cloudflare record to Vercel's CNAME (DNS only). The September staging site on
   the server can then be retired.
+- Automatic deployments: `frontend/apps/web/vercel.json` lets only `dev`
+  deploy. The Hobby plan allows 100 deployments in any 24 hours, and a preview
+  of every pull-request push and every merge to `master` (over 100 merges on
+  October 8 alone) used them up, so the `dev` push that releases staging could
+  not deploy. CI builds the production web app for every web change instead
+  (the "Production build" step).
 
 **Check:** `https://staging.pantopus.com` loads, sign-in works, and the browser's
 network panel shows API calls going to `/api/...` on the same origin (Next.js
@@ -557,6 +563,10 @@ Vercel Production environment variables: `NEXT_PUBLIC_API_URL=https://api.pantop
 and, once the new store listings exist, `NEXT_PUBLIC_IOS_APP_STORE_URL`,
 `NEXT_PUBLIC_IOS_APP_STORE_APP_ID` and `NEXT_PUBLIC_ANDROID_PLAY_STORE_URL`
 (today's defaults point at the April apps). Production branch `master`.
+Before this step L4 adds `"master": true` under `git.deploymentEnabled` in
+`frontend/apps/web/vercel.json` (S7); without it `master` never deploys. Keep
+the Vercel account on Pro from here, or production and staging deployments
+share the 100-a-day Hobby limit.
 
 **Check:** `https://pantopus.com` shows the new home page; sign-in works;
 `https://pantopus.com/.well-known/apple-app-site-association` returns JSON;
