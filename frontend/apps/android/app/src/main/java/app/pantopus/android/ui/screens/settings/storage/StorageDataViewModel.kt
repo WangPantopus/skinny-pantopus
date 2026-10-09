@@ -45,9 +45,14 @@ class StorageDataViewModel
             viewModelScope.launch { _sizes.value = usage.measure() }
         }
 
+        /** The one limit for photos and saved pages; a lower one applies to the photos already kept, too. */
         fun setLimit(megabytes: Int) {
             limit.megabytes = megabytes
             _limitMegabytes.value = limit.megabytes
+            viewModelScope.launch {
+                usage.fitImages(limit.bytes)
+                _sizes.value = usage.measure()
+            }
         }
 
         /** Photos and saved pages go; the toast says how much that freed. A second tap while clearing does nothing. */

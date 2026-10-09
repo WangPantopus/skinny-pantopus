@@ -6,9 +6,10 @@ import app.pantopus.android.core.routing.PendingDeepLinkStore
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.PostHogAnalytics
 import app.pantopus.android.data.observability.Observability
+import app.pantopus.android.data.storage.ImageDiskCache
+import app.pantopus.android.data.storage.StorageLimit
 import coil.ImageLoader
 import coil.ImageLoaderFactory
-import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.stripe.android.PaymentConfiguration
 import dagger.hilt.EntryPoint
@@ -78,11 +79,15 @@ class PantopusApplication :
     /**
      * Coil image-loader factory. Caches:
      *   - 15 % of available app memory (~30–60 MB on a Pixel 6)
-     *   - 2 % of available disk under `cacheDir/image_cache` (~100 MB)
+     *   - on disk under `cacheDir/image_cache`, inside the one storage limit
+     *     (Instant Screens §6, Storage & data's "Keep up to", 100 MB by default):
+     *     what the saved pages leave of it, least recently used first, and
+     *     nothing kept past 30 days unused ([ImageDiskCache])
      *
-     * Sized per the P13 budget (`docs/perf_budgets.md`). One process-wide
-     * loader keeps avatar / discovery / mailbox imagery from re-decoding
-     * during fast scrolls.
+     * One process-wide loader keeps avatar / discovery imagery from
+     * re-decoding during fast scrolls. Saved images are shown without asking
+     * the server again (`respectCacheHeaders(false)`): chat photos came back
+     * blank from their second view when a revalidation was answered 304.
      *
      * Images use the main client's interceptors, which send the bearer only
      * to the API origin (chat photos at `/api/chat/files/:id` need it; other
@@ -105,13 +110,9 @@ class PantopusApplication :
                     .Builder(this)
                     .maxSizePercent(IMAGE_CACHE_MEMORY_PERCENT)
                     .build()
-            }.diskCache {
-                DiskCache
-                    .Builder()
-                    .directory(File(cacheDir, "image_cache"))
-                    .maxSizePercent(IMAGE_CACHE_DISK_PERCENT)
-                    .build()
-            }.crossfade(true)
+            }.diskCache { ImageDiskCache.build(this, StorageLimit(this).bytes) }
+            .respectCacheHeaders(false)
+            .crossfade(true)
             .build()
     }
 
@@ -123,7 +124,6 @@ class PantopusApplication :
 
     private companion object {
         const val IMAGE_CACHE_MEMORY_PERCENT = 0.15
-        const val IMAGE_CACHE_DISK_PERCENT = 0.02
         const val LEGACY_HTTP_CACHE_DIR = "pantopus-http"
     }
 }

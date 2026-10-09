@@ -65,6 +65,19 @@ class StorageUsage
             }
         }
 
+        /**
+         * A lower limit takes effect at once: photos over what it leaves them are cleared now (Coil sizes its cache from
+         * the limit at the next launch, least recently used first from then on).
+         */
+        @OptIn(ExperimentalCoilApi::class)
+        suspend fun fitImages(limitBytes: Long) {
+            withContext(Dispatchers.IO) {
+                if (imageBytes() <= ImageDiskCache.photoBudget(limitBytes)) return@withContext
+                runCatching { context.imageLoader.diskCache?.clear() }
+                    .onFailure { Timber.w(it, "A lower storage limit could not clear the image cache") }
+            }
+        }
+
         @OptIn(ExperimentalCoilApi::class)
         private fun imageBytes(): Long = runCatching { context.imageLoader.diskCache?.size ?: 0L }.getOrDefault(0L)
 
