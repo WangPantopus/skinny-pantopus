@@ -13,6 +13,8 @@ import app.pantopus.android.data.api.models.token_accept.LeaseInvitePreviewRespo
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.TokenAcceptApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreTopics
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,12 +25,13 @@ class TokenAcceptRepository
     @Inject
     constructor(
         private val api: TokenAcceptApi,
+        private val store: ScreenStore,
     ) {
         suspend fun leaseInvite(token: String): NetworkResult<LeaseInvitePreviewResponse> =
             safeApiCall { api.leaseInvite(BusinessSeatDeclineBody(token)) }
 
         suspend fun acceptLeaseInvite(token: String): NetworkResult<LeaseInviteAcceptanceResponse> =
-            safeApiCall { api.acceptLeaseInvite(BusinessSeatDeclineBody(token)) }
+            safeApiCall { api.acceptLeaseInvite(BusinessSeatDeclineBody(token)) }.homesChanged()
 
         suspend fun homeInvite(token: String): NetworkResult<HomeInviteResponse> = safeApiCall { api.homeInvite(token) }
 
@@ -37,7 +40,11 @@ class TokenAcceptRepository
 
         suspend fun guestPass(token: String): NetworkResult<GuestPassResponse> = safeApiCall { api.guestPass(token) }
 
-        suspend fun acceptHomeInvite(token: String): NetworkResult<HomeAcceptResponse> = safeApiCall { api.acceptHomeInvite(token) }
+        suspend fun acceptHomeInvite(token: String): NetworkResult<HomeAcceptResponse> = safeApiCall { api.acceptHomeInvite(token) }.homesChanged()
+
+        /** Joining a home changes the viewer's list of homes (contract §8 topic `homes`). */
+        private fun <T> NetworkResult<T>.homesChanged(): NetworkResult<T> =
+            also { if (it is NetworkResult.Success) store.markStale(StoreTopics.HOMES) }
 
         suspend fun declineHomeInvite(invitationId: String): NetworkResult<GenericAcknowledgement> =
             safeApiCall { api.declineHomeInvite(invitationId) }

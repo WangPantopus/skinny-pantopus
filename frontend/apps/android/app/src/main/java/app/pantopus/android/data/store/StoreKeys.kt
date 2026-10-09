@@ -7,10 +7,16 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 
+/** Change topics (contract §8) that more than one key or repository names. */
+object StoreTopics {
+    /** The viewer's list of homes: a home added, claimed, verified, left or deleted. */
+    const val HOMES = "homes"
+}
+
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
 object StoreKeys {
     /** My Homes: one source for every screen that lists the viewer's homes. */
-    val myHomes = StoreKey<MyHomesResponse>("api/homes/my-homes", kind = StoreKind.HOMES, topics = setOf("homes"))
+    val myHomes = StoreKey<MyHomesResponse>("api/homes/my-homes", kind = StoreKind.HOMES, topics = setOf(StoreTopics.HOMES))
 
     /**
      * The sections the Today tab renders (contract §8 "Today on the phones"): weather and its sky, air, alerts, the
