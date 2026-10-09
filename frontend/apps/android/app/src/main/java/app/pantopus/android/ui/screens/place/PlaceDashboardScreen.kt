@@ -80,7 +80,7 @@ const val PLACE_DASHBOARD_HOME_ID_KEY = "homeId"
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 fun PlaceDashboardScreen(
     homeId: String,
     onOpenSection: (homeId: String, slug: String) -> Unit,
