@@ -29,9 +29,12 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeDashboardRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.Stored
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -55,6 +58,7 @@ class HomeDashboardViewModelTest {
     private val intelligenceRepo: HomeDashboardRepository = mockk()
     private val accessFactory: HomeDashboardAccessFactory = mockk()
     private val authority: HomeDashboardAccess = mockk()
+    private val gates: HomeCopyGateFactory = mockk(relaxed = true)
     private val store = ViewModelStore()
     private val permissions =
         listOf(
@@ -86,7 +90,28 @@ class HomeDashboardViewModelTest {
         coEvery { intelligenceRepo.seasonalChecklist(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
         coEvery { intelligenceRepo.propertyValue(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
         coEvery { intelligenceRepo.billTrends(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
+        // The screens' store hands back what the endpoints answered (Instant Screens).
+        every { intelligenceRepo.rememberChecklist(any(), any()) } just Runs
+        coEvery { authority.readStored(any()) } coAnswers { Stored(authority.read(), fetchedAt = System.currentTimeMillis()) }
+        coEvery { authority.readTasksStored(any()) } coAnswers { Stored(authority.readTasks(), fetchedAt = System.currentTimeMillis()) }
+        coEvery { repo.detailStored(any(), any()) } coAnswers { repo.detail(firstArg()).stored() }
+        coEvery { intelligenceRepo.dashboardStored(any(), any()) } coAnswers { intelligenceRepo.dashboard(firstArg()).stored() }
+        coEvery { intelligenceRepo.healthScoreStored(any(), any()) } coAnswers { intelligenceRepo.healthScore(firstArg(), true).stored() }
+        coEvery { intelligenceRepo.seasonalChecklistStored(any(), any()) } coAnswers {
+            intelligenceRepo.seasonalChecklist(firstArg()).stored()
+        }
+        coEvery { intelligenceRepo.propertyValueStored(any(), any()) } coAnswers { intelligenceRepo.propertyValue(firstArg()).stored() }
+        coEvery { intelligenceRepo.billTrendsStored(any(), any(), any()) } coAnswers {
+            intelligenceRepo.billTrends(firstArg(), secondArg()).stored()
+        }
     }
+
+    /** What the screens' store hands back for a read with this outcome. */
+    private fun <T : Any> NetworkResult<T>.stored(): Stored<T> =
+        when (this) {
+            is NetworkResult.Success -> Stored(data, fetchedAt = System.currentTimeMillis())
+            is NetworkResult.Failure -> Stored(failure = error)
+        }
 
     @After fun tearDown() {
         store.clear()
@@ -99,6 +124,7 @@ class HomeDashboardViewModelTest {
             repo = repo,
             intelligenceRepo = intelligenceRepo,
             accessFactory = accessFactory,
+            gates = gates,
             savedStateHandle = SavedStateHandle(mapOf(HOME_DASHBOARD_HOME_ID_KEY to homeId)),
         ).also { store.put(homeId, it) }
 

@@ -1,6 +1,10 @@
 package app.pantopus.android.data.store
 
+import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
+import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
+import app.pantopus.android.data.api.models.homedashboard.HomePropertyValueDto
+import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistDto
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeAuditLogResponse
@@ -93,4 +97,32 @@ object HomeStoreKeys {
         homeId: String,
         taskId: String,
     ) = StoreKey<HomeTaskResponse>("api/homes/$homeId/tasks/$taskId", kind = StoreKind.HOMES, topics = setOf("home:$homeId", "today"))
+
+    /** A Home's health score, recomputed by the server (`force=true`, as the dashboard always asks). */
+    fun healthScore(homeId: String) =
+        StoreKey<HomeHealthScoreDto>(
+            "api/homes/$homeId/health-score",
+            mapOf("force" to "true"),
+            kind = StoreKind.HOMES,
+            topics = setOf("home:$homeId"),
+        )
+
+    /** A Home's current seasonal checklist. */
+    fun seasonalChecklist(homeId: String) =
+        StoreKey<SeasonalChecklistDto>("api/homes/$homeId/seasonal-checklist", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
+
+    /** A Home's estimated value. */
+    fun propertyValue(homeId: String) =
+        StoreKey<HomePropertyValueDto>("api/homes/$homeId/property-value", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
+
+    /** A Home's bill comparison in one currency (finance roles). */
+    fun billTrends(
+        homeId: String,
+        currency: String,
+    ) = StoreKey<HomeBillTrendsDto>(
+        "api/homes/$homeId/bill-trends",
+        mapOf("format" to "2", "currency" to currency),
+        kind = StoreKind.HOMES,
+        topics = setOf("home:$homeId"),
+    )
 }

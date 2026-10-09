@@ -22,6 +22,11 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeDashboardRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.homes.settings.ownership_security.HomeOwnershipSecurityViewModel
 import app.pantopus.android.ui.screens.shared.content_detail.GridTabsTab
 import app.pantopus.android.ui.screens.shared.content_detail.HomeHeroStat
@@ -222,6 +227,7 @@ class HomeDashboardViewModel
         private val repo: HomesRepository,
         private val intelligenceRepo: HomeDashboardRepository,
         accessFactory: HomeDashboardAccessFactory,
+        gates: HomeCopyGateFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private val homeId: String =
@@ -287,6 +293,25 @@ class HomeDashboardViewModel
          */
         private var accessData: HomeAccessDto? = null
         private val authority = accessFactory.create(homeId, viewModelScope)
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate =
+            gates.create(
+                homeId,
+                listOf(
+                    HomeStoreKeys.detail(homeId),
+                    StoreKeys.homeDashboard(homeId),
+                    HomeStoreKeys.tasks(homeId),
+                    HomeStoreKeys.healthScore(homeId),
+                    HomeStoreKeys.seasonalChecklist(homeId),
+                    HomeStoreKeys.propertyValue(homeId),
+                    HomeStoreKeys.billTrends(homeId, "USD"),
+                ),
+            )
+
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
         private var authoritySnapshot: HomeDashboardAuthorityDto? = null
         private var generation = 0L
         private var visible = false
@@ -329,11 +354,19 @@ class HomeDashboardViewModel
                 else -> true
             }
 
+        /**
+         * Pause and leave. Founder decision 3: owners and household roles keep what's on screen (shown again on return
+         * while it is re-checked); guests, service providers and any access with an expiry are cleared now.
+         */
         fun suspendContent() {
             generation += 1
             visible = false
             refreshJob?.cancel()
-            clearPrivateData()
+            if (!gate.showsCopy) clearPrivateData()
+        }
+
+        override fun onCleared() {
+            gate.leave()
         }
 
         private fun clearPrivateData() {
@@ -393,6 +426,7 @@ class HomeDashboardViewModel
                 authority.invalidated.collect { invalidated ->
                     if (invalidated) {
                         suspendContent()
+                        clearPrivateData()
                         _state.value = HomeDashboardUiState.Error("Your session changed. Reopen this Home to continue.")
                     }
                 }
@@ -421,19 +455,27 @@ class HomeDashboardViewModel
                 HomeDashboardUiState.Loading, is HomeDashboardUiState.Error, is HomeDashboardUiState.Limited -> null
             }
 
-        /** Recheck on every foreground or return to this Home. */
+        /**
+         * Recheck on every foreground or return to this Home (Instant Screens): owners and household roles see the
+         * stored dashboard at once and the store answers fresh copies without a request; anyone else re-checks first.
+         */
         fun load() {
             if (visible) return
             visible = true
-            refresh()
+            if (detailData == null && gate.showsCopy) showStoredCopy()
+            refresh(force = false)
         }
 
-        fun refresh() {
+        /** Pull to refresh and Retry: read now. */
+        fun refresh() = refresh(force = true)
+
+        private fun refresh(force: Boolean) {
             if (!visible) return
             refreshJob?.cancel()
             generation += 1
             val revision = generation
-            clearPrivateData()
+            // Blank-and-re-check unless an owner or household role is looking at a copy (decision 3).
+            if (detailData == null || !gate.showsCopy) clearPrivateData()
             HomeDashboardSampleData.stateFor(homeId)?.let { sample ->
                 _state.value = sample
                 return
@@ -442,13 +484,75 @@ class HomeDashboardViewModel
                 _state.value = HomeDashboardUiState.Error("Your session changed. Reopen this Home to continue.")
                 return
             }
-            refreshJob = viewModelScope.launch { fetchAll(revision) }
+            refreshJob = viewModelScope.launch { fetchAll(revision, force) }
         }
 
-        private suspend fun fetchAll(revision: Long) {
+        /** The stored dashboard, shown before the re-check when every core piece checks out. */
+        private fun showStoredCopy() {
+            val opening = authority.storedAuthority() ?: return
+            val access = opening.sharedAccess() ?: return
+            val detail = repo.storedDetail(homeId)?.home ?: return
+            val stored = intelligenceRepo.storedDashboard(homeId)
+            val dashboard = stored.dashboard
+            if (dashboard == null || !copiesAgree(detail, dashboard, access)) return
+            authoritySnapshot = opening
+            accessData = access
+            detailData = detail
+            dashboardData = dashboard
+            canCreateTask = authority.storedTasks()?.collectionCapabilities?.canCreate == true
+            _healthScore.value =
+                storedCardCopy(HEALTH_PERMISSIONS, stored.healthScore) { HomeIntelligenceValidation.health(it, homeId) }
+            _checklist.value = storedCardCopy(listOf("home.view"), stored.checklist) { HomeIntelligenceValidation.checklist(it, homeId) }
+            _propertyValue.value = storedCardCopy(listOf("home.view"), stored.propertyValue, HomeIntelligenceValidation::property)
+            val bills = intelligenceRepo.storedBillTrends(homeId, _billCurrency.value)
+            _billTrends.value = storedCardCopy(listOf("finance.view"), bills) { HomeBillPresentation.isCurrent(it, _billCurrency.value) }
+            rebuild()
+        }
+
+        /** The copies agree with each other as a fresh batch must ([fetchAll]), or nothing shows before the re-check. */
+        private fun copiesAgree(
+            detail: HomeDetail,
+            dashboard: HomeDashboardResponse,
+            access: HomeAccessDto,
+        ): Boolean =
+            detail.id == homeId &&
+                dashboard.home?.id == homeId &&
+                dashboard.myAccess?.permissions.orEmpty().toSet() == access.permissions.toSet() &&
+                dashboard.myAccess?.isOwner == access.isOwner
+
+        private fun <T> storedCardCopy(
+            permissions: List<String>,
+            copy: T?,
+            valid: (T) -> Boolean,
+        ): HomeIntelligenceCardState<T> =
+            when {
+                !permissions.all { accessData?.can(it) == true } -> HomeIntelligenceCardState.Forbidden
+                copy != null && valid(copy) -> HomeIntelligenceCardState.Loaded(copy)
+                else -> HomeIntelligenceCardState.Loading
+            }
+
+        /** The viewer's access for this batch: from the store (owners and household roles), else read now. */
+        private suspend fun openingAuthority(fromCopy: Boolean): Stored<HomeDashboardAuthorityDto> {
+            val stored = authority.readStored(force = !fromCopy)
+            if (stored.data != null) return stored
+            // No access: the direct read keeps the server's typed refusal (verification kind) for the limited view.
+            if (stored.failure is NetworkError.Forbidden || stored.failure == NetworkError.NotFound) {
+                return Stored(authority.read(), fetchedAt = System.currentTimeMillis())
+            }
+            throw stored.failure ?: NetworkError.NotFound
+        }
+
+        private suspend fun fetchAll(
+            revision: Long,
+            force: Boolean,
+        ) {
             try {
                 requireCurrent(revision)
-                val opening = authority.read()
+                val fromCopy = gate.showsCopy && !force && detailData != null
+                val batchStart = System.currentTimeMillis()
+                val openingRead = openingAuthority(fromCopy)
+                val opening = checkNotNull(openingRead.data)
+                gate.observe(opening)
                 requireCurrent(revision)
                 val access = opening.sharedAccess()
                 if (access == null) {
@@ -462,33 +566,42 @@ class HomeDashboardViewModel
                 }
                 watchExpiry(opening.expiryMillis(), revision)
                 requireCurrent(revision)
-                val (detail, dashboard) =
+                val readNow = !fromCopy
+                val (detailRead, dashboardRead) =
                     coroutineScope {
-                        val detailRead = async { repo.detail(homeId).homeValue().home }
-                        val dashboardRead = async { intelligenceRepo.dashboard(homeId).homeValue() }
-                        detailRead.await() to dashboardRead.await()
+                        val detailStored = async { repo.detailStored(homeId, readNow) }
+                        val dashboardStored = async { intelligenceRepo.dashboardStored(homeId, readNow) }
+                        detailStored.await() to dashboardStored.await()
                     }
                 requireCurrent(revision)
+                val detail = detailRead.value().home
+                val dashboard = dashboardRead.value()
                 check(
                     detail.id == homeId && dashboard.home?.id == homeId &&
                         dashboard.myAccess?.permissions.orEmpty().toSet() == access.permissions.toSet() &&
                         dashboard.myAccess?.isOwner == access.isOwner,
                 ) { "Unexpected Home information" }
-                val collection = if (access.can("tasks.view")) readOptionalTasks() else null
+                val collection = if (access.can("tasks.view")) readOptionalTasksStored(readNow) else null
                 requireCurrent(revision)
-                check(authority.read() == opening) { "Home authority changed" }
+                // Anything read anew in this batch is composed only under the same authority: confirm it once more.
+                val reads = listOfNotNull(openingRead, detailRead, dashboardRead, collection)
+                if (reads.any { it.fetchedAt >= batchStart }) {
+                    check(authority.readStored(force = true).data == opening) { "Home authority changed" }
+                }
                 requireCurrent(revision)
                 authoritySnapshot = opening
                 accessData = access
                 detailData = detail
                 dashboardData = dashboard
-                canCreateTask = collection?.collectionCapabilities?.canCreate == true
+                canCreateTask = collection?.data?.collectionCapabilities?.canCreate == true
                 rebuild()
+                _refreshNotice.value =
+                    RefreshNotice(detailRead.fetchedAt, ::refresh).takeIf { detailRead.showsRefreshFailure(StoreKind.HOMES) }
                 coroutineScope {
-                    launch { loadHealthScore() }
-                    launch { loadChecklist() }
-                    launch { loadPropertyValue() }
-                    launch { loadBillTrends() }
+                    launch { loadHealthScore(readNow) }
+                    launch { loadChecklist(readNow) }
+                    launch { loadPropertyValue(readNow) }
+                    launch { loadBillTrends(readNow) }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -509,6 +622,19 @@ class HomeDashboardViewModel
                 null
             }
 
+        /** The task collection through the store; null when it can't be read (the tasks entry point stays hidden). */
+        private suspend fun readOptionalTasksStored(force: Boolean) =
+            try {
+                authority.readTasksStored(force).takeIf { it.data != null }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                null
+            }
+
+        /** A stored read's data, kept even when its refresh failed; no data rethrows the failure. */
+        private fun <T : Any> Stored<T>.value(): T = data ?: throw (failure ?: NetworkError.NotFound)
+
         private fun <T> NetworkResult<T>.homeValue(): T =
             when (this) {
                 is NetworkResult.Success -> data
@@ -522,22 +648,32 @@ class HomeDashboardViewModel
             if (snapshot.sharedAccess() == null || snapshot != authoritySnapshot) throw NetworkError.Forbidden
         }
 
-        private suspend fun <T> authorizedCard(
+        // ── Home Intelligence reads ─────────────────────────────────
+
+        /**
+         * Through the store (Instant Screens): a fresh copy answers without a request, [force] reads now (card retry,
+         * own edits, pull). The server checks each card's permissions; its 403 retires this Home's access.
+         */
+        private suspend fun <T : Any> storedCard(
             permissions: List<String>,
-            work: suspend () -> NetworkResult<T>,
+            read: suspend () -> Stored<T>,
+            valid: (T) -> Boolean,
         ): HomeIntelligenceCardState<T>? {
             val revision = generation
             if (!current(revision) || authoritySnapshot == null) return null
             if (!permissions.all { accessData?.can(it) == true }) return HomeIntelligenceCardState.Forbidden
             return try {
-                authorize(revision)
-                val result = work().toCardState()
-                authorize(revision)
-                if (result is HomeIntelligenceCardState.Forbidden) {
-                    retireAccess(revision)
-                    null
-                } else {
-                    result
+                val stored = read()
+                if (!current(revision)) return null
+                val data = stored.data
+                when {
+                    data != null && valid(data) -> HomeIntelligenceCardState.Loaded(data)
+                    data != null -> HomeIntelligenceCardState.Failed("Current Home information is unavailable. Reload this card.")
+                    stored.failure is NetworkError.Forbidden -> {
+                        retireAccess(revision)
+                        null
+                    }
+                    else -> NetworkResult.Failure(stored.failure ?: NetworkError.NotFound).toCardState()
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -547,43 +683,40 @@ class HomeDashboardViewModel
             }
         }
 
-        // ── Home Intelligence reads ─────────────────────────────────
-
         /**
          * Mirrors RN's `useHomeIntelligence`, which always forces a server
          * recompute so a stale zero-score can't mask a populated home.
          */
-        private suspend fun loadHealthScore() {
-            _healthScore.value = authorizedCard(
-                listOf("home.view", "maintenance.view", "finance.view", "members.view", "docs.view", "sensitive.view"),
-            ) { intelligenceRepo.healthScore(homeId, force = true).validated { HomeIntelligenceValidation.health(it, homeId) } } ?: return
+        private suspend fun loadHealthScore(force: Boolean = true) {
+            _healthScore.value =
+                storedCard(HEALTH_PERMISSIONS, { intelligenceRepo.healthScoreStored(homeId, force) }) {
+                    HomeIntelligenceValidation.health(it, homeId)
+                } ?: return
             // The Overview's emergency row reads the health breakdown.
             rebuild()
         }
 
-        private suspend fun loadChecklist() {
-            _checklist.value = authorizedCard(listOf("home.view")) {
-                intelligenceRepo.seasonalChecklist(homeId).validated { HomeIntelligenceValidation.checklist(it, homeId) }
-            } ?: return
+        private suspend fun loadChecklist(force: Boolean = true) {
+            _checklist.value =
+                storedCard(listOf("home.view"), { intelligenceRepo.seasonalChecklistStored(homeId, force) }) {
+                    HomeIntelligenceValidation.checklist(it, homeId)
+                } ?: return
         }
 
-        private suspend fun loadPropertyValue() {
-            _propertyValue.value = authorizedCard(listOf("home.view")) {
-                intelligenceRepo.propertyValue(homeId).validated(HomeIntelligenceValidation::property)
-            } ?: return
+        private suspend fun loadPropertyValue(force: Boolean = true) {
+            _propertyValue.value =
+                storedCard(
+                    listOf("home.view"),
+                    { intelligenceRepo.propertyValueStored(homeId, force) },
+                    HomeIntelligenceValidation::property,
+                ) ?: return
         }
 
-        private fun <T> NetworkResult<T>.validated(valid: (T) -> Boolean): NetworkResult<T> =
-            if (this is NetworkResult.Success && !valid(data)) {
-                NetworkResult.Failure(NetworkError.Decoding(IllegalArgumentException("Invalid current Home information")))
-            } else {
-                this
-            }
-
-        private suspend fun loadBillTrends() {
+        private suspend fun loadBillTrends(force: Boolean = true) {
             val readId = ++billReadId
             val currency = _billCurrency.value
-            val result = authorizedCard(listOf("finance.view")) { intelligenceRepo.billTrends(homeId, currency) } ?: return
+            val result =
+                storedCard(listOf("finance.view"), { intelligenceRepo.billTrendsStored(homeId, currency, force) }) { true } ?: return
             if (readId != billReadId || currency != _billCurrency.value) return
             result.valueOrNull()?.let { data ->
                 if (HomeBillPresentation.isCurrent(data, currency)) {
@@ -682,7 +815,7 @@ class HomeDashboardViewModel
             if (currency == _billCurrency.value || currency !in _billCurrencies.value) return
             _billCurrency.value = currency
             _billTrends.value = HomeIntelligenceCardState.Loading
-            viewModelScope.launch { loadBillTrends() }
+            viewModelScope.launch { loadBillTrends(force = false) }
         }
 
         private suspend fun updateChecklistItem(
@@ -734,19 +867,20 @@ class HomeDashboardViewModel
                     )
                 }
             val completed = items.count { it.isResolved }
-            _checklist.value =
-                HomeIntelligenceCardState.Loaded(
-                    current.copy(
-                        items = items,
-                        progress =
-                            SeasonalChecklistProgressDto(
-                                total = items.size,
-                                completed = completed,
-                                percentage = HomeDashboardProjection.percentage(completed, items.size),
-                            ),
-                        carryover = carryover,
-                    ),
+            val spliced =
+                current.copy(
+                    items = items,
+                    progress =
+                        SeasonalChecklistProgressDto(
+                            total = items.size,
+                            completed = completed,
+                            percentage = HomeDashboardProjection.percentage(completed, items.size),
+                        ),
+                    carryover = carryover,
                 )
+            _checklist.value = HomeIntelligenceCardState.Loaded(spliced)
+            // Own edit (contract §3): a return shows the confirmed change, not the copy from before it.
+            intelligenceRepo.rememberChecklist(homeId, spliced)
         }
 
         // ── Projection ──────────────────────────────────────────────
@@ -800,6 +934,10 @@ class HomeDashboardViewModel
         }
 
         companion object {
+            /** What the health score card needs (as the server's own check). */
+            private val HEALTH_PERMISSIONS =
+                listOf("home.view", "maintenance.view", "finance.view", "members.view", "docs.view", "sensitive.view")
+
             /**
              * Pure projection of `Home.security_state` onto the dashboard
              * banner. Copy is lifted verbatim from RN's

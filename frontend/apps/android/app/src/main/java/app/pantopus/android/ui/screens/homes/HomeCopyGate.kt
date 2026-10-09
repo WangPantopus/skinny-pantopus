@@ -33,6 +33,11 @@ class HomeCopyGate(
     suspend fun recheck(force: Boolean): Stored<HomeDashboardAuthorityDto> =
         access.readStored(homeId, force || !showsCopy).also { showsCopy = householdAccess(it.data) }
 
+    /** A screen that reads the viewer's access itself (the dashboard) reports what it read. */
+    fun observe(authority: HomeDashboardAuthorityDto?) {
+        showsCopy = householdAccess(authority)
+    }
+
     /** The screen left: the entries of a viewer without household access go with it. */
     fun leave() {
         if (!showsCopy) keys.forEach(store::remove)

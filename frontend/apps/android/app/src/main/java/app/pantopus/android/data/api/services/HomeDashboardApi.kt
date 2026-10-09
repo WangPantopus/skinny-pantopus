@@ -25,6 +25,7 @@ import retrofit2.http.Query
  * Kept separate from [HomesApi] (which is already at the detekt
  * `TooManyFunctions` threshold and is edited by every Homes surface).
  */
+@Suppress("TooManyFunctions")
 interface HomeDashboardApi {
     @Headers("Cache-Control: no-cache, no-store")
     @GET("api/homes/{id}/dashboard-access")
@@ -74,6 +75,13 @@ interface HomeDashboardApi {
         @Query("force") force: Boolean? = null,
     ): HomeHealthScoreDto
 
+    /** The recomputed [healthScore] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/health-score?force=true")
+    suspend fun healthScoreConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeHealthScoreDto>
+
     /**
      * `GET /api/homes/:id/seasonal-checklist` — route
      * `backend/routes/home.js:7504`. Idempotently generates the current
@@ -84,6 +92,13 @@ interface HomeDashboardApi {
     suspend fun seasonalChecklist(
         @Path("id") homeId: String,
     ): SeasonalChecklistDto
+
+    /** [seasonalChecklist] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/seasonal-checklist")
+    suspend fun seasonalChecklistConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<SeasonalChecklistDto>
 
     /**
      * `PATCH /api/homes/:id/seasonal-checklist/:itemId` — route
@@ -103,6 +118,13 @@ interface HomeDashboardApi {
         @Path("id") homeId: String,
     ): HomePropertyValueDto
 
+    /** [propertyValue] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/property-value")
+    suspend fun propertyValueConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomePropertyValueDto>
+
     /**
      * `GET /api/homes/:id/bill-trends` — route `backend/routes/home.js:7599`.
      * 403s for members without `finance.view` / `finance.manage`.
@@ -112,6 +134,14 @@ interface HomeDashboardApi {
         @Path("id") homeId: String,
         @Query("currency") currency: String = "USD",
     ): HomeBillTrendsDto
+
+    /** [billTrends] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/bill-trends?format=2")
+    suspend fun billTrendsConditional(
+        @Path("id") homeId: String,
+        @Query("currency") currency: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeBillTrendsDto>
 
     /** `PATCH /api/homes/:id/settings` — route `backend/routes/homeIam.js`; needs `home.edit`. */
     @PATCH("api/homes/{id}/settings")
