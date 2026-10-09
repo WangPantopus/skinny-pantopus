@@ -160,6 +160,7 @@ public struct RootTabView: View {
             ScreenStoreLive.start()
             await chatBadgeStore.start()
             model.messagesBadge = chatBadgeStore.unreadMessages
+            await TabWarmer.warm()
         }
         .task(id: signedInUserID) {
             // Another account never sees the previous account's You screen.
@@ -566,19 +567,33 @@ final class ChatBadgeStore {
         subscribeIfNeeded()
     }
 
+    /// The Messages list's own reads, through the screen store: the badge at
+    /// launch also warms the Messages tab (it opens on this copy) and its
+    /// saved copy.
     func refresh() async {
-        async let statsTask: ChatStatsResponse? = optional {
-            try await self.api.request(ChatEndpoints.stats())
+        let store = ScreenStore.store(for: api)
+        let statsTask = Task { [self] in
+            await optional {
+                try await store.load(ChatEndpoints.stats(), as: ChatStatsResponse.self, kind: .messagesList, topics: [ScreenTopic.chats])
+                    .value
+            }
         }
-        async let conversationsTask: UnifiedConversationsResponse? = optional {
-            try await self.api.request(ChatEndpoints.unifiedConversations())
+        let conversationsTask = Task { [self] in
+            await optional {
+                try await store.load(
+                    ChatEndpoints.unifiedConversations(),
+                    as: UnifiedConversationsResponse.self,
+                    kind: .messagesList,
+                    topics: [ScreenTopic.chats]
+                ).value
+            }
         }
-        guard let stats = await statsTask else {
+        guard let stats = await statsTask.value else {
             logger.warning("Chat badge refresh failed: stats unavailable")
             return
         }
         serverTotalUnread = stats.stats.totalUnread
-        if let conversations = await conversationsTask {
+        if let conversations = await conversationsTask.value {
             let mutedKeys = preferences.mutedKeys()
             cachedRows = conversations.conversations.map {
                 Self.snapshotRow(from: $0, mutedKeys: mutedKeys)
