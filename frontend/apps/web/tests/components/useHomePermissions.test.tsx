@@ -7,6 +7,7 @@
  */
 import React from 'react';
 import { renderHook, waitFor, act } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   HomePermissionsProvider,
   useHomePermissions,
@@ -51,11 +52,17 @@ function buildAccess(overrides: Partial<HomeAccess> = {}): HomeAccess {
   };
 }
 
+// As in the app, the provider reads the session's query cache (a Home dashboard's kept copy).
+let queryClient = new QueryClient();
+beforeEach(() => { queryClient = new QueryClient(); });
+
 function wrapper({ children }: { children: React.ReactNode }) {
   return (
-    <HomePermissionsProvider homeId="test-home-id">
-      {children}
-    </HomePermissionsProvider>
+    <QueryClientProvider client={queryClient}>
+      <HomePermissionsProvider homeId="test-home-id">
+        {children}
+      </HomePermissionsProvider>
+    </QueryClientProvider>
   );
 }
 

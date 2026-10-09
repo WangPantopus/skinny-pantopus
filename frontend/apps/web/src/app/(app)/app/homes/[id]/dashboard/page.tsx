@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject, type R
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import * as api from '@pantopus/api';
-import { ChevronLeft, Wallet, Package, Users, AlertCircle, Home, ClipboardList, AlertTriangle, Hammer, Clock, Building2 } from 'lucide-react';
+import { ChevronLeft, Wallet, Package, Users, AlertCircle, Home, ClipboardList, AlertTriangle, Hammer, Clock, Building2, Folder, Key, Siren } from 'lucide-react';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { toast } from '@/components/ui/toast-store';
 
@@ -24,6 +24,7 @@ import PackageSlidePanel from '@/components/home/PackageSlidePanel';
 import InviteMemberModal from '@/components/home/InviteMemberModal';
 
 import HomeHeader from '@/components/home/HomeHeader';
+import DashboardCard from '@/components/home/DashboardCard';
 import TodayCard from '@/components/home/TodayCard';
 import UnifiedFAB from '@/components/UnifiedFAB';
 import { QuickCreateIcons } from '@/lib/icons';
@@ -85,7 +86,7 @@ export default function HomeDashboardPage() {
   const homeId = params.id as string;
 
   return (
-    <HomePermissionsProvider key={homeId} homeId={homeId}>
+    <HomePermissionsProvider key={homeId} homeId={homeId} keepsCopy>
       <InvitationsLink homeId={homeId} />
       <HomeDashboardContent />
     </HomePermissionsProvider>
@@ -552,11 +553,14 @@ function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft, guestPass
           selectedBillType={selectedBillType}
           onBillTypeChange={setSelectedBillType}
           entityErrors={data.entityErrors}
+          fromCopy={data.fromCopy}
           onReloadData={() => void refresh()}
         />
       )}
 
-      {tab === 'share' && (
+      {/* Sharing hands out access codes and emergency info, which never show from a copy. */}
+      {tab === 'share' && data.fromCopy && <SensitiveSectionPending title="Share" icon={<Key className="w-5 h-5" />} />}
+      {tab === 'share' && !data.fromCopy && (
         <ShareCenter
           homeId={homeId}
           home={home}
@@ -658,6 +662,7 @@ function DashboardTab({
   selectedBillType,
   onBillTypeChange,
   entityErrors,
+  fromCopy,
   onReloadData,
 }: {
   home: Record<string, any>;
@@ -703,6 +708,7 @@ function DashboardTab({
   selectedBillType: string | null;
   onBillTypeChange: (type: string) => void;
   entityErrors: UseHomeDataReturn['entityErrors'];
+  fromCopy: boolean;
   onReloadData: () => void;
 }) {
   const router = useRouter();
@@ -720,6 +726,7 @@ function DashboardTab({
   };
   const cardEntities: Record<string, keyof UseHomeDataReturn['entityErrors']> = {
     homehelp: 'homeGigs', access: 'secrets', emergency: 'emergencies', pets: 'pets', polls: 'polls',
+    documents: 'documents', bills: 'bills',
   };
   if (expandedCard && ((cardPermissions[expandedCard] && !can(cardPermissions[expandedCard]))
     || (expandedCard === 'access' && !can('access.view_wifi') && !can('access.view_codes')))) {
@@ -728,6 +735,9 @@ function DashboardTab({
   const expandedError = expandedCard === 'homehelp' ? entityErrors.homeGigs || entityErrors.nearbyGigs
     : expandedCard ? entityErrors[cardEntities[expandedCard]] : undefined;
   if (expandedCard && expandedError) return <div><button onClick={onBack} className="mb-3 rounded-lg border px-3 py-2">Back to overview</button><HomeSummaryBoundary title="Home records" error={expandedError} loading={false} onRetry={onReloadData}>{null}</HomeSummaryBoundary></div>;
+  // Sensitive sections never show from the copy kept from your last visit.
+  const pendingCard = fromCopy && expandedCard ? SENSITIVE_CARDS[expandedCard] : undefined;
+  if (pendingCard) return <div><button onClick={onBack} className="mb-3 rounded-lg border px-3 py-2">Back to overview</button><SensitiveCardPending {...pendingCard} /></div>;
 
   // If a card is expanded, show its full-view detail component
   if (expandedCard) {
@@ -841,7 +851,7 @@ function DashboardTab({
   }
 
   // Empty state
-  const isEmpty = tasks.length === 0 && issues.length === 0 && bills.length === 0 &&
+  const isEmpty = !fromCopy && tasks.length === 0 && issues.length === 0 && bills.length === 0 &&
     packages.length === 0 && documents.length === 0 && homeGigs.length === 0 &&
     events.length === 0 && secrets.length === 0 && emergencies.length === 0 && pets.length === 0 && polls.length === 0 && Object.keys(entityErrors).length === 0;
 
@@ -925,9 +935,9 @@ function DashboardTab({
           )}
 
           {/* Launch cut #7 (Household extras): Bills, Calendar, Packages, Pets and Polls are hidden. */}
-          {launchFeatures.householdExtras && can('finance.view') && (
-            <BillsBudgetCardPreview bills={bills} billsDueCount={billsDueCount} onExpand={() => onExpandCard('bills')} />
-          )}
+          {launchFeatures.householdExtras && can('finance.view') && (fromCopy ? <SensitiveCardPending {...SENSITIVE_CARDS.bills} /> : (
+            <HomeSummaryBoundary title="Bills" error={entityErrors.bills || null} loading={false} onRetry={onReloadData}><BillsBudgetCardPreview bills={bills} billsDueCount={billsDueCount} onExpand={() => onExpandCard('bills')} /></HomeSummaryBoundary>
+          ))}
 
           {launchFeatures.householdExtras && can('calendar.view') && <CalendarCardPreview events={events} onExpand={() => onExpandCard('calendar')} />}
 
@@ -939,15 +949,15 @@ function DashboardTab({
             <MaintenanceCardPreview issues={issues} onExpand={() => onExpandCard('maintenance')} />
           )}
 
-          {can('docs.view') && (
-            <DocsCardPreview documents={documents} onExpand={() => onExpandCard('documents')} />
-          )}
+          {can('docs.view') && (fromCopy ? <SensitiveCardPending {...SENSITIVE_CARDS.documents} /> : (
+            <HomeSummaryBoundary title="Documents" error={entityErrors.documents || null} loading={false} onRetry={onReloadData}><DocsCardPreview documents={documents} onExpand={() => onExpandCard('documents')} /></HomeSummaryBoundary>
+          ))}
 
-          {(can('access.view_wifi') || can('access.view_codes')) && (
+          {(can('access.view_wifi') || can('access.view_codes')) && (fromCopy ? <SensitiveCardPending {...SENSITIVE_CARDS.access} /> : (
             <HomeSummaryBoundary title="Access information" error={entityErrors.secrets || null} loading={false} onRetry={onReloadData}><AccessCardPreview secrets={secrets} onExpand={() => onExpandCard('access')} /></HomeSummaryBoundary>
-          )}
+          ))}
 
-          {can('sensitive.view') && <HomeSummaryBoundary title="Emergency information" error={entityErrors.emergencies || null} loading={false} onRetry={onReloadData}><EmergencyCardPreview emergencies={emergencies} onExpand={() => onExpandCard('emergency')} /></HomeSummaryBoundary>}
+          {can('sensitive.view') && (fromCopy ? <SensitiveCardPending {...SENSITIVE_CARDS.emergency} /> : <HomeSummaryBoundary title="Emergency information" error={entityErrors.emergencies || null} loading={false} onRetry={onReloadData}><EmergencyCardPreview emergencies={emergencies} onExpand={() => onExpandCard('emergency')} /></HomeSummaryBoundary>)}
 
           {launchFeatures.householdExtras && <HomeSummaryBoundary title="Pets" error={entityErrors.pets || null} loading={false} onRetry={onReloadData}><PetsCardPreview pets={pets} onExpand={() => onExpandCard('pets')} /></HomeSummaryBoundary>}
 
@@ -973,6 +983,42 @@ function DashboardTab({
         </div>
       )}
     </div>
+  );
+}
+
+// Coming back to a Home shows the copy kept from your last visit while your access is checked again.
+// Access codes, emergency info, documents and bills are never part of that copy: their cards say
+// they are being checked until the re-check reads them (a moment after the page shows).
+const SENSITIVE_CARDS: Record<string, { title: string; icon: ReactNode; visibility: 'members' | 'sensitive' }> = {
+  documents: { title: 'Documents', icon: <Folder className="w-5 h-5" />, visibility: 'members' },
+  access: { title: 'Access Codes', icon: <Key className="w-5 h-5" />, visibility: 'sensitive' },
+  emergency: { title: 'Emergency', icon: <Siren className="w-5 h-5" />, visibility: 'members' },
+  bills: { title: 'Bills & Budget', icon: <Wallet className="w-5 h-5" />, visibility: 'members' },
+  calendar: { title: 'Calendar', icon: <Clock className="w-5 h-5" />, visibility: 'members' },
+};
+
+function PendingLines({ label }: { label: string }) {
+  return (
+    <div role="status" aria-label={label} className="animate-pulse space-y-2 py-1">
+      <div className="h-3 w-2/3 rounded bg-app-surface-sunken" />
+      <div className="h-3 w-1/2 rounded bg-app-surface-sunken" />
+    </div>
+  );
+}
+
+function SensitiveCardPending({ title, icon, visibility }: { title: string; icon: ReactNode; visibility: 'members' | 'sensitive' }) {
+  return (
+    <DashboardCard title={title} icon={icon} visibility={visibility}>
+      <PendingLines label={`Checking ${title.toLowerCase()}`} />
+    </DashboardCard>
+  );
+}
+
+function SensitiveSectionPending({ title, icon }: { title: string; icon: ReactNode }) {
+  return (
+    <DashboardCard title={title} icon={icon}>
+      <PendingLines label={`Checking your access before showing ${title.toLowerCase()}`} />
+    </DashboardCard>
   );
 }
 

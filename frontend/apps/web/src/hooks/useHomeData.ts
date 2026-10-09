@@ -1,12 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { homeAccessExpiry, homeAccessFingerprint, readCurrentHomeAccess, watchHomeAccessExpiry } from '@/components/home/homeAccessFingerprint';
 import { RETURN_REFRESH_MS, transientFailure } from '@/components/home/returnRefresh';
+import { dropHomeDashboardCopy, keepHomeDashboardCopy, keepsHomeCopy, readHomeDashboardCopy } from '@/components/home/homeDashboardCopy';
 import { fetchMe } from '@/lib/me';
+import { queryKeys } from '@/lib/query-keys';
 
 // ── Types ──
 
@@ -42,6 +45,9 @@ export interface UseHomeDataReturn extends HomeDataEntities {
   accessFingerprint: string | null;
   summaryCounts: api.homeProfile.HomeDashboardCounts | null;
   entityErrors: Partial<Record<keyof HomeDataEntities, string>>;
+  /** The page shows the copy kept from your last visit while access is checked again: the
+   * sensitive parts (access codes, emergency info, documents, bills) aren't there yet. */
+  fromCopy: boolean;
   can: (perm: string) => boolean;
   refresh: () => Promise<void>;
   refreshEntity: (entity: keyof HomeDataEntities) => Promise<void>;
@@ -65,12 +71,16 @@ type State = HomeDataEntities & {
   accessFingerprint: string | null;
   summaryCounts: api.homeProfile.HomeDashboardCounts | null;
   entityErrors: Partial<Record<keyof HomeDataEntities, string>>;
+  fromCopy: boolean;
+  /** The access read with these records (it is what a copy of them is kept with). */
+  shownAccess: api.homeIam.HomeAccess | null;
 };
 
 type Action =
   | { type: 'LOAD_START' }
   | { type: 'LOAD_ERROR'; error: string }
   | { type: 'LOAD_COMPLETE'; data: Partial<State> }
+  | { type: 'COPY_UNCONFIRMED' }
   | { type: 'SET_ENTITY'; entity: keyof HomeDataEntities; data: HomeDataEntities[keyof HomeDataEntities] }
   | { type: 'UPDATE_ENTITY'; entity: keyof HomeDataEntities; updater: (prev: Record<string, any>[]) => Record<string, any>[] }
   | { type: 'SET_ACCESS'; access: HomeAccessState }
@@ -103,7 +113,22 @@ const initialState: State = {
   summaryCounts: null,
   entityErrors: {},
   myAccess: { permissions: [], role_base: null, isOwner: false },
+  fromCopy: false,
+  shownAccess: null,
 };
+
+// Never kept between visits (contract §5): always read again before they show.
+const SENSITIVE_ENTITIES = ['secrets', 'emergencies', 'documents', 'bills'] as const;
+
+/** What a copy keeps of the page: everything shown except the sensitive parts and this visit's state. */
+type KeptState = Omit<State, 'loading' | 'error' | 'entityErrors' | 'taskSession' | 'fromCopy' | 'shownAccess' | typeof SENSITIVE_ENTITIES[number]>;
+
+function keptState(state: State): KeptState {
+  const { loading: _loading, error: _error, entityErrors: _errors, taskSession: _session, fromCopy: _fromCopy,
+    shownAccess: _access, secrets: _secrets, emergencies: _emergencies, documents: _documents, bills: _bills, ...kept } = state;
+  // Counts of sensitive records wait for the records themselves.
+  return { ...kept, summaryCounts: kept.summaryCounts ? { ...kept.summaryCounts, bills_due: 0, documents: 0 } : null };
+}
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -112,7 +137,11 @@ function reducer(state: State, action: Action): State {
     case 'LOAD_ERROR':
       return { ...initialState, loading: false, error: action.error };
     case 'LOAD_COMPLETE':
-      return { ...state, ...action.data, loading: false, error: null };
+      return { ...state, ...action.data, loading: false, error: null, fromCopy: false };
+    case 'COPY_UNCONFIRMED':
+      // The re-check couldn't reach the server: the copy stays, and the sensitive parts say so.
+      return { ...state, fromCopy: false, entityErrors: { ...state.entityErrors, ...Object.fromEntries(SENSITIVE_ENTITIES.map(entity =>
+        [entity, `Current ${ENTITY_ERROR_LABELS[entity] ?? entity} could not be loaded. Retry to check current information.`])) } };
     case 'SET_ENTITY':
       return { ...state, [action.entity]: action.data };
     case 'UPDATE_ENTITY': {
@@ -211,12 +240,37 @@ const ENTITY_FETCHERS: Record<
 
 // ── Hook ──
 
+/** True while this browser's session, API origin and generation are the ones a read started under. */
+function sessionCheck(revision: number, generation: { current: number }): () => boolean {
+  const token = getAuthToken(), origin = api.getApiBaseUrl();
+  const marker = typeof window === 'undefined' ? null : localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+  return () => revision === generation.current && token === getAuthToken()
+    && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+}
+
 export function useHomeData(homeId: string): UseHomeDataReturn {
   const router = useRouter();
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const queryClient = useQueryClient();
+  // Owners and household roles come back to the copy kept from their last visit (decision 3);
+  // it shows at once and the access is checked again behind it before anything sensitive loads.
+  const [copy] = useState(() => readHomeDashboardCopy<KeptState>(queryClient, homeId));
+  const [state, dispatch] = useReducer(reducer, copy, (kept): State => (kept
+    ? { ...initialState, ...kept.state, loading: false, fromCopy: true, shownAccess: kept.access }
+    : initialState));
   const generation = useRef(0);
   const scopeHome = useRef(homeId);
+  const copyHome = useRef(copy ? homeId : null);
   const ready = useRef<(() => boolean) | null>(null);
+  // The copy was shown under this session: it answers what may be shown until the re-check does.
+  const readyInitialized = useRef(false);
+  if (!readyInitialized.current) {
+    readyInitialized.current = true;
+    if (copy) ready.current = sessionCheck(generation.current, generation);
+  }
+  const showingCopy = useRef(state.fromCopy);
+  showingCopy.current = state.fromCopy;
+  // While the page is open its copy is in use, so the 30-minute drop of unused entries starts on leaving.
+  useQuery({ queryKey: queryKeys.homeDashboard(homeId), queryFn: skipToken });
   const stopExpiry = useRef<(() => void) | null>(null);
   const lastAttempt = useRef(0);
   const inFlight = useRef(0);
@@ -241,7 +295,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
       && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
       && (expiry === null || Date.now() < expiry);
     const reloadInFull = () => { if (current()) void loadDashboard(); };
-    if (!background) dispatch({ type: 'LOAD_START' });
+    if (!background) { copyHome.current = null; dispatch({ type: 'LOAD_START' }); }
     inFlight.current++;
     try {
       if (!token) {
@@ -269,7 +323,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
       if (accessRes.verification_required === true && !accessRes.hasAccess) {
         if (background) return;
         ready.current = current;
-        dispatch({ type: 'LOAD_COMPLETE', data: { accessFingerprint: homeAccessFingerprint(accessRes) } });
+        dispatch({ type: 'LOAD_COMPLETE', data: { accessFingerprint: homeAccessFingerprint(accessRes), shownAccess: accessRes } });
         return;
       }
       if (accessRes.hasAccess !== true || !Array.isArray(accessRes.permissions)) {
@@ -350,10 +404,15 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
       }
       if (result.home?.id !== homeId) throw new Error('The requested home could not be confirmed.');
       if (!background) ready.current = current;
+      result.shownAccess = finalAccess;
       dispatch({ type: 'LOAD_COMPLETE', data: result });
     } catch (e: unknown) {
       if (!current()) return;
-      if (background) { if (!transientFailure(e)) reloadInFull(); return; }
+      if (background) {
+        if (!transientFailure(e)) reloadInFull();
+        else if (showingCopy.current) dispatch({ type: 'COPY_UNCONFIRMED' });
+        return;
+      }
       ready.current = null;
       dispatch({
         type: 'LOAD_ERROR',
@@ -368,8 +427,19 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
     shownFingerprint.current = state.loading || state.error ? null : state.accessFingerprint;
   }, [state.loading, state.error, state.accessFingerprint]);
 
+  // The copy follows what the page shows (loads and your own edits), while the access allows one.
   useEffect(() => {
-    void loadDashboard();
+    if (scopeHome.current !== homeId || state.fromCopy) return;
+    if (state.loading || state.error || !keepsHomeCopy(state.shownAccess)) { dropHomeDashboardCopy(queryClient, homeId); return; }
+    keepHomeDashboardCopy(queryClient, homeId, { access: state.shownAccess, state: keptState(state) });
+  }, [state, homeId, queryClient]);
+
+  useEffect(() => {
+    // From a copy, the first load is the background re-check: same access, the records are
+    // replaced in place; changed or refused access, the page reloads in full.
+    const fromCopy = copyHome.current === homeId;
+    if (fromCopy && ready.current === null) ready.current = sessionCheck(generation.current, generation);
+    void loadDashboard(fromCopy);
     // Another account's Home must never show, so an account change clears the page and reloads it.
     const changed = () => { retireGeneration(); dispatch({ type: 'LOAD_START' }); void loadDashboard(); };
     // Coming back keeps the page and re-checks it behind the scenes (in full when nothing is shown).
@@ -384,7 +454,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
     document.addEventListener('visibilitychange', resume);
     return () => { retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
       window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume); };
-  }, [loadDashboard, retireGeneration]);
+  }, [loadDashboard, retireGeneration, homeId]);
 
   // A record refresh also refreshes current grants and aggregate counts; a
   // partial reply cannot revive an earlier session or leave old summary totals.
@@ -437,6 +507,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
     accessFingerprint: visibleState.accessFingerprint,
     summaryCounts: visibleState.summaryCounts,
     entityErrors: visibleState.entityErrors,
+    fromCopy: visibleState.fromCopy,
     can,
     refresh,
     refreshEntity,
