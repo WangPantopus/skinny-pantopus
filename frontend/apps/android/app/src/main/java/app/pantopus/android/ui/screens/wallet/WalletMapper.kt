@@ -19,8 +19,8 @@ import java.util.Locale
  * iOS `WalletViewModel` mapping. The withdraw/payout slots (payout method,
  * tax docs) stay null — they're wired in Phase 3 with Stripe, and the screen
  * hides those sections rather than showing fixture bank details / YTD
- * earnings. `holdState` stays null because the hold banner copy is
- * Stripe-specific.
+ * earnings. `holdState` is the A10.10 hold frame, shown while something is still
+ * owed (`owed_cents`).
  */
 @Suppress("TooManyFunctions")
 object WalletMapper {
@@ -46,12 +46,31 @@ object WalletMapper {
             payoutMethod = null,
             payoutAccount = payoutAccount(connectAccount),
             taxDocs = null,
-            holdState = null,
+            holdState = holdState(balance.wallet.owedCents ?: 0L),
             payoutsEnabled = payoutsEnabled,
             lifetimeEarned = balance.wallet.lifetimeReceived?.let(::centsToCurrency),
             lifetimeWithdrawn = balance.wallet.lifetimeWithdrawals?.let(::centsToCurrency),
             frozen = balance.wallet.frozen,
             hasBalance = balance.wallet.balance > 0L,
+        )
+    }
+
+    /**
+     * The hold frame while something is still owed for a payment refunded or disputed after it reached the wallet:
+     * the next earnings pay it first, and withdrawals wait until it's paid. Null when nothing is owed. Mirrors iOS
+     * `WalletViewModel.holdState(owedCents:)`.
+     */
+    fun holdState(owedCents: Long): WalletHoldState? {
+        if (owedCents <= 0L) return null
+        val owed = centsToCurrency(owedCents)
+        return WalletHoldState(
+            bannerHeadline = "Withdrawals paused",
+            bannerBody =
+                "$owed is still owed for a payment that was refunded or disputed after it reached your wallet. " +
+                    "Your next earnings pay it first.",
+            heroBannerHeadline = "$owed still owed",
+            heroBannerBody = "Paid from your next earnings.",
+            withdrawFootnote = "Withdrawals open again once what's owed is paid.",
         )
     }
 

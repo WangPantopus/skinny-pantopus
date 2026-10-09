@@ -163,8 +163,11 @@ export default function WithdrawModal({ balance, onClose, onSuccess, onUnsettled
       setSuccess(true);
       setTimeout(() => onSuccess(), 2000);
     } catch (err: unknown) {
-      const code = (err as { code?: string } | null)?.code;
-      const terminal = code === 'withdrawal_not_completed' || code === 'withdrawal_key_reused' || code === 'funds_clearing';
+      const { code, statusCode } = (err as { code?: string; statusCode?: number } | null) ?? {};
+      // A 400/403 refuses before any money moves (funds on hold, something still owed, no payout account, too
+      // little in the wallet), so the next try is a new withdrawal, whatever its amount.
+      const terminal = code === 'withdrawal_not_completed' || code === 'withdrawal_key_reused' || code === 'funds_clearing'
+        || statusCode === 400 || statusCode === 403;
       if (terminal && intent?.key) { clearPendingWithdrawal(intent.key); setPendingWithdrawal(null); }
       const message = getErrorMessage(err).trim();
       setError(message || 'Withdrawal failed. Please try again.');

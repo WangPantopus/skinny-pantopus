@@ -24,6 +24,8 @@ data class WalletDto(
     val frozen: Boolean = false,
     @Json(name = "lifetime_withdrawals") val lifetimeWithdrawals: Long? = null,
     @Json(name = "lifetime_received") val lifetimeReceived: Long? = null,
+    /** Still owed for a payment refunded or disputed after it reached the wallet; paid from the next earnings. */
+    @Json(name = "owed_cents") val owedCents: Long? = null,
 )
 
 // GET /api/wallet/transactions — backend/routes/wallet.js:124

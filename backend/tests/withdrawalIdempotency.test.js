@@ -104,6 +104,10 @@ describe('Withdrawal via walletService', () => {
       if (fnName === 'wallet_credit') {
         return { data: { id: `wtx-credit-${Date.now()}` }, error: null };
       }
+      // Nothing owed for refunded or disputed payments: withdrawals go ahead.
+      if (fnName === 'collect_wallet_refund_debts') {
+        return { data: { collected: 0, remaining: 0, cleared: 0 }, error: null };
+      }
       return { data: null, error: null };
     });
   });

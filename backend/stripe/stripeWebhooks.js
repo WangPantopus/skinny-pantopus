@@ -1406,6 +1406,20 @@ async function handleDisputeClosed(dispute) {
     if (recoveryError || !recovery || recovery.error) {
       throw new Error('Lost dispute wallet recovery failed');
     }
+    // What the wallet couldn't cover is owed: what is there now pays toward it, the rest comes out of the payee's
+    // next income, and withdrawals wait until it's paid (founder decision 2026-10-09). The accounting above is
+    // durable either way; a failed collection is retried by the next income or withdrawal.
+    let owedCents = Number(recovery.debt) || 0;
+    let collectedCents = 0;
+    if (owedCents > 0) {
+      try {
+        // The dispute notice below says what was taken and what is left, so this collection sends no notice of its own.
+        ({ remaining: owedCents, collected: collectedCents } = await require('../services/walletService')
+          .collectDebts(payment.payee_id, { notify: false }));
+      } catch (collectErr) {
+        logger.warn('Lost dispute: debt collection deferred', { paymentId: payment.id, error: collectErr.message });
+      }
+    }
 
     // The bank took the money back, so an invoice that was paid is not.
     await require('../services/paymentRefundService')
@@ -1424,7 +1438,7 @@ async function handleDisputeClosed(dispute) {
     // Notify both parties — dispute lost
     const lostInvoiceId = payment.metadata?.type === 'invoice_payment' ? payment.metadata.invoice_id : null;
     notifyDisputeResolved({ userId: payment.payer_id, gigId: payment.gig_id, gigTitle, won: true, invoiceId: lostInvoiceId });
-    notifyDisputeResolved({ userId: payment.payee_id, gigId: payment.gig_id, gigTitle, won: false, invoiceId: lostInvoiceId, isProvider: true });
+    notifyDisputeResolved({ userId: payment.payee_id, gigId: payment.gig_id, gigTitle, won: false, invoiceId: lostInvoiceId, isProvider: true, owedCents, collectedCents });
 
   } else {
     // warning_closed or other status

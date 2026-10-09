@@ -118,11 +118,16 @@ router.get('/', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // What can be withdrawn: income held for an open payment dispute is not ready.
-    const disputeHoldCents = walletResult.data?.balance
-      ? (await require('../services/walletService').getDisputeHold(userId).catch(() => ({ cents: 0 }))).cents
-      : 0;
-    const walletBalance = Math.max(0, (walletResult.data?.balance || 0) - disputeHoldCents);
+    // What can be withdrawn: income held for an open payment dispute is not ready, and what is still owed for a
+    // refunded or disputed payment is paid first.
+    const walletService = require('../services/walletService');
+    const [disputeHoldCents, owedCents] = walletResult.data?.balance
+      ? await Promise.all([
+        walletService.getDisputeHold(userId).then((hold) => hold.cents).catch(() => 0),
+        walletService.getOpenDebt(userId).catch(() => 0),
+      ])
+      : [0, 0];
+    const walletBalance = Math.max(0, (walletResult.data?.balance || 0) - disputeHoldCents - owedCents);
     const lifetimeReceived = walletResult.data?.lifetime_received ?? 0;
     const earningsFromPayments = (earningsRpcResult && typeof earningsRpcResult === 'object' && earningsRpcResult.total_earned != null)
       ? Number(earningsRpcResult.total_earned) || 0
