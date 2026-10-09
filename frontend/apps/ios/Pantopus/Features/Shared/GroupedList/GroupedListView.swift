@@ -42,6 +42,10 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.Color.appBg)
         .task { await dataSource.load() }
+        .refreshFailureToast(Binding(
+            get: { dataSource.refreshFailureMessage },
+            set: { dataSource.refreshFailureMessage = $0 }
+        ))
         .accessibilityIdentifier("groupedList")
     }
 
@@ -80,6 +84,9 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
         case .loading:
             loadingFrame
         case let .loaded(groups):
+            if let notice = dataSource.staleNotice {
+                RefreshNotice(text: notice) { Task { await dataSource.load() } }
+            }
             loadedFrame(groups)
         case let .error(message):
             errorFrame(message: message)

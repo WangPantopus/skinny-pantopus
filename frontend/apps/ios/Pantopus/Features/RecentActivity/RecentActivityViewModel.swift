@@ -52,10 +52,12 @@ public final class RecentActivityViewModel: ListOfRowsDataSource {
     }
 
     public private(set) var state: ListOfRowsState = .loading
+    public var refreshFailureMessage: String?
+    public private(set) var staleNotice: String?
 
     // MARK: - Dependencies
 
-    private let api: APIClient
+    private let store: ScreenStore
     private let onOpen: @MainActor (RecentActivityDestination) -> Void
     private let now: @Sendable () -> Date
 
@@ -64,21 +66,25 @@ public final class RecentActivityViewModel: ListOfRowsDataSource {
         onOpen: @escaping @MainActor (RecentActivityDestination) -> Void = { _ in },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
-        self.api = api
+        store = ScreenStore.store(for: api)
         self.now = now
         self.onOpen = onOpen
+        // The Hub's copy of the overview shows in the first frame.
+        if let copy = store.peek(HubStoreReads.overview, as: HubResponse.self) {
+            show(copy)
+        }
     }
 
     // MARK: - Load / refresh
 
+    /// Shows the shared overview at once; asks the server only once it is out
+    /// of date, keeping the rows on screen.
     public func load() async {
-        if case .loaded = state { return }
-        state = .loading
-        await fetch()
+        await fetch(force: false)
     }
 
     public func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     public func loadMoreIfNeeded() async {
@@ -87,13 +93,32 @@ public final class RecentActivityViewModel: ListOfRowsDataSource {
         // shows what the hub delivers.
     }
 
-    private func fetch() async {
+    private func fetch(force: Bool) async {
         do {
-            let hub: HubResponse = try await api.request(HubEndpoints.overview())
-            apply(hub.activity)
+            try await store.show(
+                HubStoreReads.overview,
+                as: HubResponse.self,
+                kind: HubStoreReads.kind,
+                topics: HubStoreReads.topics,
+                force: force
+            ) { show($0) }
+        } catch is CancellationError {
+            return
         } catch {
-            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't load activity.")
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load activity."
+            guard state.showsContent, !ScreenStore.isRefusal(error) else {
+                state = .error(message: message)
+                return
+            }
+            // The rows stay; a pull to refresh says it failed.
+            if force { refreshFailureMessage = message }
+            staleNotice = store.peek(HubStoreReads.overview, as: HubResponse.self)?.refreshNotice
         }
+    }
+
+    private func show(_ snapshot: ScreenSnapshot<HubResponse>) {
+        staleNotice = snapshot.refreshNotice
+        apply(snapshot.value.activity)
     }
 
     private func apply(_ allItems: [HubResponse.HubActivityItem]) {
