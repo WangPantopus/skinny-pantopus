@@ -41,6 +41,7 @@ struct HubView: View {
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .accessibilityIdentifier("hubScreen")
         .task { await viewModel.load() }
+        .refreshesOnStoreChange { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
         // A saved name or username changes the greeting.
         .onReceive(NotificationCenter.default.publisher(for: .pantopusProfileDidChange)) { _ in
