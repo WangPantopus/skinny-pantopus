@@ -97,6 +97,12 @@ function freshnessLabel(fetchedAt: string): string {
   return `${Math.round(mins / 60)}h ago`;
 }
 
+/** On a quiet day the summary is only the weather line ("Overcast."), which the card already shows. */
+function repeatsCondition(summary: string, label?: string | null): boolean {
+  const plain = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return !!label && plain(summary) === plain(label);
+}
+
 // ── Page ─────────────────────────────────────────────────────────
 
 export default function HubTodayPage() {
@@ -254,7 +260,7 @@ export default function HubTodayPage() {
               )}
 
               {/* Summary */}
-              {today.summary && (
+              {today.summary && !repeatsCondition(today.summary, today.weather?.condition_label) && (
                 <p className="px-5 pb-4 text-[15px] leading-relaxed text-app-text">
                   {today.summary}
                 </p>
