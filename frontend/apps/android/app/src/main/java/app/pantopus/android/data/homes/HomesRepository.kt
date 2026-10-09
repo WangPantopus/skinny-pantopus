@@ -57,10 +57,14 @@ import app.pantopus.android.data.api.models.homes.UpdatePollRequest
 import app.pantopus.android.data.api.models.homes.UploadEvidenceRequest
 import app.pantopus.android.data.api.models.homes.UploadEvidenceResponse
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.FilesApi
 import app.pantopus.android.data.api.services.HomeTasksApi
 import app.pantopus.android.data.api.services.HomesApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.Stored
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -83,9 +87,17 @@ open class HomesRepository
         private val api: HomesApi,
         private val tasksApi: HomeTasksApi,
         private val filesApi: FilesApi,
+        private val store: ScreenStore,
     ) {
         /** `GET /api/homes/my-homes`. */
         open suspend fun myHomes(): NetworkResult<MyHomesResponse> = safeApiCall { api.myHomes() }
+
+        /**
+         * My Homes through the screens' store (Instant Screens): a fresh copy returns without a request; otherwise
+         * one conditional request, shared with any read already in flight. [force] reads now (pull, own edits).
+         */
+        open suspend fun myHomesStored(force: Boolean = false): Stored<MyHomesResponse> =
+            store.read(StoreKeys.myHomes, force) { etag -> conditionalApiCall { api.myHomesConditional(etag) } }
 
         /** `GET /api/homes/:id`. */
         open suspend fun detail(id: String) = safeApiCall { api.detail(id) }

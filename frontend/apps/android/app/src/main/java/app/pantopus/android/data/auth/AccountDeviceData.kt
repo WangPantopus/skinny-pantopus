@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.gigs.GigDraftQueue
+import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.support_trains.SupportTrainReservationsStore
 import app.pantopus.android.data.widget.TodayWidgetStore
 import app.pantopus.android.data.widget.WidgetSnapshotStore
@@ -20,8 +21,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * What the device keeps for the signed-in account besides its tokens and the HTTP cache: Coil's image
- * caches (chat and mail photos, avatars), the home-screen widgets' snapshots, the chat badge
+ * What the device keeps for the signed-in account besides its tokens and the HTTP cache: the screens' store
+ * (Instant Screens), Coil's image caches (chat and mail photos, avatars), the home-screen widgets' snapshots, the chat badge
  * snapshot, chat mute/hide choices, Support Train reservation patches, the broadcast seed, queued
  * offline task drafts and the Today cards' per-home dismissals. Sign-out clears all of it so the next
  * person on the device finds nothing of the last account, as iOS `clearLocalSession` does.
@@ -38,10 +39,13 @@ class AccountDeviceData
         private val reservations: SupportTrainReservationsStore,
         private val broadcastSeeds: BroadcastDetailSeedCache,
         private val gigDrafts: GigDraftQueue,
+        private val screenStore: ScreenStore,
     ) {
         /** Never throws: a part that fails is logged and the rest is still cleared. */
         @OptIn(ExperimentalCoilApi::class)
         suspend fun clear() {
+            // First, so a reply still in flight can't write the last account's data back (generation number).
+            screenStore.wipe()
             chatBadges.reset()
             reservations.reset()
             broadcastSeeds.clear()

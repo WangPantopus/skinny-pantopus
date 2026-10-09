@@ -137,6 +137,7 @@ fun TodayTabScreen(
                                 radonContext = viewModel.radonContext,
                                 onOpenBallot = onOpenPlace?.let { open -> { viewModel.homeId?.let(open) } },
                                 alertsCheck = alertsCheck(age, refreshing),
+                                radonMemory = viewModel.radonMemory,
                             )
                         }
                         if (current.savedPlace != null) {
