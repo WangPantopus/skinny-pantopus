@@ -560,6 +560,15 @@ final class ChatBadgeStore {
         reconnectTask = nil
     }
 
+    /// Sign-out: stop listening and forget the last account's count and
+    /// conversation rows; the next account's tabs start it again.
+    func reset() {
+        stop()
+        serverTotalUnread = 0
+        cachedRows = []
+        unreadMessages = 0
+    }
+
     private func applyAdjustedUnread() {
         unreadMessages = ChatUnreadBadgeMath.adjustedTotal(
             serverTotal: serverTotalUnread,

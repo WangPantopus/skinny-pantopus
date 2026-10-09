@@ -43,7 +43,8 @@ public final class SupportTrainReservationsStore {
         patches.removeValue(forKey: reservationId)
     }
 
-    /// Test affordance — empty the store between unit tests.
+    /// Empty the store: on sign-out (the patches are the last account's
+    /// reservations) and between unit tests.
     public func reset() {
         patches.removeAll()
         revision = 0

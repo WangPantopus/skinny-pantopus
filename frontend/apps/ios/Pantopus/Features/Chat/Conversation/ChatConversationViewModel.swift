@@ -211,6 +211,12 @@ public final class AIConversationStore {
     public func didStartFresh(forUserId userId: String) -> Bool {
         freshStartUserIds.contains(userId)
     }
+
+    /// Sign-out: nothing of the last account's assistant thread stays in memory.
+    public func clear() {
+        conversationIdsByUserId.removeAll()
+        freshStartUserIds.removeAll()
+    }
 }
 
 @Observable
