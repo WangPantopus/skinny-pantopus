@@ -97,6 +97,7 @@ const createNextConfig = (phase) => ({
       { source: '/app/control-center', destination: '/app/hub', permanent: false },
       { source: '/app/neighborhood', destination: '/app/nearby', permanent: false },
       { source: '/app/businesses/new', destination: '/app/business/new', permanent: false },
+      { source: '/app/chat/new', destination: '/app/chat', permanent: false },
       { source: '/invite/lease/:token', destination: '/app/homes/invite?type=lease&code=:token', permanent: false },
     ];
   },
