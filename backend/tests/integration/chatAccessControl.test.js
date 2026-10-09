@@ -778,13 +778,19 @@ describe('Direct send denied at the persistence boundary', () => {
     failInsertWith({ message: 'column "actor_user_id" does not exist' }, { onlyFirst: true });
     const { app, mockIo } = createApp();
     const before = getTable('ChatMessage').length;
+    const { connectedUsers } = require('../../socket/chatSocketio');
+    connectedUsers.set(U2, new Set(['socket-u2']));
+    try {
+      const response = await send(app);
+      for (let i = 0; i < 50 && !mockIo.emit.mock.calls.length; i += 1) await new Promise((r) => setTimeout(r, 5));
 
-    const response = await send(app);
-
-    expect(response.status).toBe(201);
-    expect(insertSpy).toHaveBeenCalledTimes(2);
-    expect(getTable('ChatMessage')).toHaveLength(before + 1);
-    expect(mockIo.emit).toHaveBeenCalled();
+      expect(response.status).toBe(201);
+      expect(insertSpy).toHaveBeenCalledTimes(2);
+      expect(getTable('ChatMessage')).toHaveLength(before + 1);
+      expect(mockIo.emit).toHaveBeenCalledWith('message:new', expect.anything());
+    } finally {
+      connectedUsers.delete(U2);
+    }
   });
 
   test('the denial body is byte-identical to losing the pre-check', async () => {
