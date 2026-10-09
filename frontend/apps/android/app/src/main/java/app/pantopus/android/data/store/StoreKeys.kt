@@ -5,6 +5,8 @@ import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
+import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
+import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
@@ -103,6 +105,15 @@ object StoreKeys {
             kind = StoreKind.PLACE,
             topics = setOf("place:$homeId", "home:$homeId", StoreTopics.HOMES),
         )
+
+    /**
+     * The Nearby tab's density meter and map cells (contract §4 "Nearby": fresh 2 minutes). They follow the viewer's
+     * place, so a home added, left or verified marks them through `homes`.
+     */
+    val neighborhoodMeter =
+        StoreKey<NeighborhoodMeter>("api/neighborhood/meter", kind = StoreKind.NEARBY, topics = setOf(StoreTopics.HOMES))
+    val neighborhoodCells =
+        StoreKey<NeighborhoodCells>("api/neighborhood/cells", kind = StoreKind.NEARBY, topics = setOf(StoreTopics.HOMES))
 
     /** The viewer's own profile (contract §4 "You": fresh 10 minutes). */
     val ownProfile = StoreKey<ProfileResponse>("api/users/profile", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
