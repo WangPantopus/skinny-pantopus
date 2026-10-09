@@ -1089,6 +1089,8 @@ export interface PlaceIntelligence {
   verify_available?: boolean;
   /** Who is looking, on a Home's Place. Sections that don't apply to the role are left out. Omitted by older servers. */
   viewer?: PlaceViewer;
+  /** The Home's move-in date (YYYY-MM-DD) for the movers card; null without household access. Omitted by older servers and off a Home. */
+  move_in_date?: string | null;
   region_supported: boolean;
   /** ISO 8601. */
   generated_at: string;

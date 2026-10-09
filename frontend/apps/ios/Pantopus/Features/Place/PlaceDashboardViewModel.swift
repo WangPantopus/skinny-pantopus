@@ -28,8 +28,8 @@ final class PlaceDashboardViewModel {
     /// and this shows as a toast. The view clears it after display.
     var refreshFailureMessage: String?
     let homeId: String
-    /// `Home.move_in_date`, read alongside the intelligence; nil until the
-    /// detail fetch lands or when the home has none. Drives `JustMovedCard`.
+    /// `Home.move_in_date`, carried by the intelligence; nil when the home
+    /// has none or this account has no household access. Drives `JustMovedCard`.
     private(set) var moveInDate: String?
     /// A re-read of a loaded dashboard is in flight (pull to refresh or a
     /// section's "Try again").
@@ -122,16 +122,14 @@ final class PlaceDashboardViewModel {
     }
 
     private func fetch() async {
-        // The move-in date rides on the home detail; it is a nicety, so a
-        // failed detail read never blocks the dashboard.
-        async let detail: HomeDetailResponse? = try? api.request(HomesEndpoints.detail(homeId: homeId))
         do {
             let intelligence: PlaceIntelligence = try await api.request(
                 PlaceEndpoints.intelligence(homeId: homeId)
             )
-            // Only a successful detail read may change the date; a failed one
-            // keeps the last known value so the card does not blink out.
-            if let detail = await detail { moveInDate = detail.home.base.moveInDate }
+            // The move-in date rides on the intelligence (it used to need the
+            // whole Home detail, a 403 for a private setup). A failed refresh
+            // keeps the last value, so the card does not blink out.
+            moveInDate = intelligence.moveInDate
             accessDenied = false
             state = .loaded(intelligence)
         } catch {

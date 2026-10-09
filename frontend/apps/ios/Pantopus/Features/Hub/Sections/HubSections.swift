@@ -1016,9 +1016,11 @@ struct HubSkeleton: View {
             .padding(.horizontal, Spacing.s4)
             .padding(.top, Spacing.s3)
 
+            // Flexible widths: four fixed 100 pt chips (456 pt with gaps and
+            // padding) widened the whole skeleton past a 402 pt screen.
             HStack(spacing: Spacing.s2) {
                 ForEach(0..<4, id: \.self) { _ in
-                    Shimmer(width: 100, height: 36, cornerRadius: Radii.md)
+                    Shimmer(height: 36, cornerRadius: Radii.md)
                 }
             }
             .padding(.horizontal, Spacing.s4)

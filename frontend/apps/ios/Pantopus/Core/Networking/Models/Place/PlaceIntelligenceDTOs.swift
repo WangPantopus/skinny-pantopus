@@ -1612,9 +1612,13 @@ public struct PlaceIntelligence: Decodable, Sendable, Hashable {
     /// Who is looking; sections that don't apply to the role are left out.
     /// Nil from older servers.
     public var viewer: PlaceViewer?
+    /// `Home.move_in_date` (YYYY-MM-DD) for the movers card; nil without
+    /// household access (a private setup) and from older servers.
+    public var moveInDate: String?
 
     private enum CodingKeys: String, CodingKey {
         case place, tier, groups, viewer
+        case moveInDate = "move_in_date"
         case verifyAvailable = "verify_available"
         case regionSupported = "region_supported"
         case generatedAt = "generated_at"

@@ -1279,6 +1279,8 @@ data class PlaceIntelligence(
     @Json(name = "verify_available") val verifyAvailable: Boolean? = null,
     /** Who is looking; sections that don't apply to the role are left out. Null from older servers. */
     val viewer: PlaceViewer? = null,
+    /** `Home.move_in_date` (YYYY-MM-DD) for the movers card; null without household access and from older servers. */
+    @Json(name = "move_in_date") val moveInDate: String? = null,
 )
 
 // ─── Anonymous T0 preview (`GET /api/public/place`) ──────────
