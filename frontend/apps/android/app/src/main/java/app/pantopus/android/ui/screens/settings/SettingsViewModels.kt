@@ -100,8 +100,12 @@ class SettingsIndexViewModel
         private var stripeConnected: Boolean? = null
         private var isAdmin: Boolean = false
 
+        /**
+         * Entry and every Back from a sub-screen (Instant Screens): the index stays on screen, and a first entry shows
+         * the stored profile at once. The block count is read again quietly (an unblock shows on return); the
+         * profile only once the store says it is out of date.
+         */
         fun load() {
-            _state.value = GroupedListUiState.Loading
             val state = auth.state.value
             if (state is AuthRepository.State.SignedIn) {
                 // The session `UserDto` carries no verification flag, so the
@@ -109,6 +113,8 @@ class SettingsIndexViewModel
                 _footerCaption.value = "${state.user.email} · ID ${state.user.id.take(8)}"
                 isAdmin = state.user.isAdmin
             }
+            val shown = _state.value is GroupedListUiState.Loaded
+            if (!shown) showStoredProfile()
             viewModelScope.launch {
                 when (val blocks = privacy.blocks()) {
                     is NetworkResult.Success -> blockCount = blocks.data.blocks.size
@@ -116,20 +122,30 @@ class SettingsIndexViewModel
                 }
                 // Real verification state — `GET /api/users/profile` →
                 // `user.verified` (`backend/routes/users.js:1962`). Same
-                // field the Verification Center sub-screen reports; on
-                // failure we stay `null` (unknown).
-                when (val result = profile.ownProfile()) {
-                    is NetworkResult.Success -> {
-                        verified = result.data.user.verified
-                        profileVisibility = result.data.user.profileVisibility
-                    }
-                    is NetworkResult.Failure -> {
-                        verified = null
-                        profileVisibility = null
-                    }
+                // field the Verification Center sub-screen reports; a failed
+                // first read stays `null` (unknown), a failed re-read keeps it.
+                val user = profile.ownProfileStored().data?.user
+                if (user != null) {
+                    verified = user.verified
+                    profileVisibility = user.profileVisibility
+                } else if (!shown) {
+                    verified = null
+                    profileVisibility = null
                 }
                 rebuild()
             }
+        }
+
+        /** The stored profile's rows before any request; the skeleton only without one. */
+        private fun showStoredProfile() {
+            val user = profile.ownProfileCopy()?.user
+            if (user == null) {
+                _state.value = GroupedListUiState.Loading
+                return
+            }
+            verified = user.verified
+            profileVisibility = user.profileVisibility
+            rebuild()
         }
 
         fun consumeNavigation() {
