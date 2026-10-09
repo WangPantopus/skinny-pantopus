@@ -1131,15 +1131,22 @@ function buildPlaceRef(home, privacy) {
  *                                   Guests and service providers never get Ballot fields.
  * @returns {Promise<object|null>} The PlaceIntelligence response, or null if the home is missing.
  */
-async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false }) {
-  // Owner-only sections depend on whether the viewer's ownership is still
-  // pending; read it alongside the Home.
-  const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
-  const { data: home, error } = await supabaseAdmin
+// The Home row this response is composed from. The route starts it alongside
+// its access check (one round trip fewer) and uses it only once access holds.
+function readHome(homeId) {
+  return Promise.resolve(supabaseAdmin
     .from('Home')
     .select(HOME_SELECT)
     .eq('id', homeId)
-    .maybeSingle();
+    .maybeSingle())
+    .catch((error) => ({ data: null, error }));
+}
+
+async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false, homeRead = null }) {
+  // Owner-only sections depend on whether the viewer's ownership is still
+  // pending; read it alongside the Home.
+  const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
+  const { data: home, error } = await (homeRead || readHome(homeId));
 
   if (error || !home) {
     if (error) logger.warn('placeIntelligence: home fetch failed', { homeId, error: error.message });
@@ -1274,6 +1281,7 @@ async function composeSavedPlaceToday(place) {
 module.exports = {
   composeSavedPlaceToday,
   composeHomeIntelligence,
+  readHome,
   composeTodayForPoint,
   // Exported for unit testing.
   resolveTier,
