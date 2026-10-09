@@ -40,7 +40,8 @@ class TokenAcceptRepository
 
         suspend fun guestPass(token: String): NetworkResult<GuestPassResponse> = safeApiCall { api.guestPass(token) }
 
-        suspend fun acceptHomeInvite(token: String): NetworkResult<HomeAcceptResponse> = safeApiCall { api.acceptHomeInvite(token) }.homesChanged()
+        suspend fun acceptHomeInvite(token: String): NetworkResult<HomeAcceptResponse> =
+            safeApiCall { api.acceptHomeInvite(token) }.homesChanged()
 
         /** Joining a home changes the viewer's list of homes (contract §8 topic `homes`). */
         private fun <T> NetworkResult<T>.homesChanged(): NetworkResult<T> =

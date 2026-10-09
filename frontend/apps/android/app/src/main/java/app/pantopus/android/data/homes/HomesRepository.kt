@@ -65,8 +65,8 @@ import app.pantopus.android.data.api.services.HomesApi
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
-import app.pantopus.android.data.store.asResult
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.data.store.asResult
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
