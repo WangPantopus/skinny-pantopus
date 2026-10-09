@@ -32,6 +32,8 @@ public enum SettingsStackRoute: Hashable {
     /// (earnings-in) which lives under the Wallet tab.
     case payments
     case dataExport
+    /// This iPhone → Storage & data (photos, saved pages, Clear cache).
+    case storageData
     /// One route intentionally parked until P8.5: data export wizard.
     /// See `docs/t6-open-questions-decisions.md` Q7.
     case placeholder(label: String)
@@ -94,7 +96,7 @@ public struct SettingsView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("You'll need to sign in again to access your hub.")
+                Text("You'll need to sign in again to access your hub. Signing out removes what Pantopus saved on this phone.")
             }
     }
 
@@ -147,7 +149,7 @@ public struct SettingsView: View {
                 SettingsTopBar(title: label) { popLast() }
                 NotYetAvailableView(tabName: label, icon: .info) { popLast() }
             }
-        case .blockedUsers, .password, .securityDevices, .verification, .help, .about, .payments, .dataExport:
+        case .blockedUsers, .password, .securityDevices, .verification, .help, .about, .payments, .dataExport, .storageData:
             settingsDestination(for: route)
         }
     }
@@ -170,6 +172,8 @@ public struct SettingsView: View {
             PaymentsView(onBack: { popLast() }, onOpenWallet: onOpenWallet)
         case .dataExport:
             DataExportView { popLast() }
+        case .storageData:
+            StorageDataView { popLast() }
         default:
             EmptyView()
         }
@@ -214,28 +218,32 @@ public struct SettingsView: View {
     }
 
     private static func stackRoute(for route: SettingsRoute) -> SettingsStackRoute? {
-        switch route {
-        case .notifications: .notifications
         // Profiles & Privacy is the unified destination. Launch cut #2
         // (Personas): the Identity Center is hidden, so the row opens the
         // privacy settings themselves (Blocked users keeps its own row).
-        case .privacy: LaunchFeatures.personas ? SettingsStackRoute.identityCenter : SettingsStackRoute.privacy
-        case .blocks: .blockedUsers
-        case .password: .password
-        case .securityDevices: .securityDevices
-        case .verification: .verification
-        // Parked until P8.5 — see docs/t6-open-questions-decisions.md Q7.
-        case .dataExport: .dataExport
-        // P5.2 / A14.6 — Settings → Payments (payments-out · Stripe
-        // setup · payout routing). Distinct from A10.10 Wallet
-        // (earnings-in), which the host still surfaces via
-        // `onOpenWallet` for any tab-level entry that needs it.
-        case .paymentsPayouts: .payments
-        case .help: .help
-        case .legal: .legal
-        case .about: .about
-        default: nil
-        }
+        if route == .privacy { return LaunchFeatures.personas ? .identityCenter : .privacy }
+        return directStackRoutes[route]
+    }
+
+    /// Rows that open one sub-screen of this stack. Data export is parked
+    /// until P8.5 (docs/t6-open-questions-decisions.md Q7). Payments is
+    /// P5.2 / A14.6 (payments-out · Stripe setup · payout routing), distinct
+    /// from A10.10 Wallet (earnings-in), which the host still surfaces via
+    /// `onOpenWallet` for any tab-level entry that needs it.
+    private static var directStackRoutes: [SettingsRoute: SettingsStackRoute] {
+        [
+            .notifications: .notifications,
+            .blocks: .blockedUsers,
+            .password: .password,
+            .securityDevices: .securityDevices,
+            .verification: .verification,
+            .dataExport: .dataExport,
+            .storageData: .storageData,
+            .paymentsPayouts: .payments,
+            .help: .help,
+            .legal: .legal,
+            .about: .about
+        ]
     }
 }
 
