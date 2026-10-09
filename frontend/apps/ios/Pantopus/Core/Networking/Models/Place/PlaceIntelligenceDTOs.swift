@@ -1615,10 +1615,14 @@ public struct PlaceIntelligence: Decodable, Sendable, Hashable {
     /// `Home.move_in_date` (YYYY-MM-DD) for the movers card; nil without
     /// household access (a private setup) and from older servers.
     public var moveInDate: String?
+    /// The place's IANA time zone (`America/Los_Angeles`): Today turns over
+    /// at midnight there. Nil without coordinates and from older servers.
+    public var timeZone: String?
 
     private enum CodingKeys: String, CodingKey {
         case place, tier, groups, viewer
         case moveInDate = "move_in_date"
+        case timeZone = "time_zone"
         case verifyAvailable = "verify_available"
         case regionSupported = "region_supported"
         case generatedAt = "generated_at"
