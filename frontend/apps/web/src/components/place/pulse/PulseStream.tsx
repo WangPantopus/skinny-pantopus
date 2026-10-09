@@ -30,6 +30,7 @@ import { detailAddress } from '@/components/place/detail/sections';
 import PulseStreamView from './PulseStreamView';
 import PlaceShell from '../PlaceShell';
 import { usePrimaryHome } from '@/lib/primaryHome';
+import { PLACE_FRESH_MS, gatedStaleTime, showsPlaceCopy, useAfterRecheck } from '@/lib/householdCopy';
 
 const REDIRECT_TO = encodeURIComponent('/app/place/pulse');
 
@@ -107,13 +108,15 @@ export default function PulseStream() {
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
     queryFn: async () => api.place.getPlaceIntelligence(homeId as string),
     enabled: authed && !!homeId,
-    staleTime: 60_000,
+    staleTime: gatedStaleTime(PLACE_FRESH_MS, showsPlaceCopy),
   });
+  // A guest's or service provider's copy is used only once the re-check answers (decision 3).
+  const { data: intelligence } = useAfterRecheck(intelQuery, showsPlaceCopy);
 
   const homeAddress = home ? [home.address, home.city].filter(Boolean).join(' · ') : undefined;
-  const address = intelQuery.data ? detailAddress(intelQuery.data.place) : homeAddress;
-  const verifyAddress = intelQuery.data?.place.label ?? homeAddress;
-  const showVerify = intelQuery.data?.tier === 'T3';
+  const address = intelligence ? detailAddress(intelligence.place) : homeAddress;
+  const verifyAddress = intelligence?.place.label ?? homeAddress;
+  const showVerify = intelligence?.tier === 'T3';
 
   // ── States ───────────────────────────────────────────────
   // Coming back shows what this tab already loaded in the first frame; the skeleton is only for
