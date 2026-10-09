@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { launchFeatures } from '@/lib/featureFlags';
 import { getAuthToken } from '@pantopus/api';
@@ -9,6 +10,7 @@ import { buildSupportTrainShareUrl } from '@pantopus/utils';
 import ErrorState from '@/components/ui/ErrorState';
 import { toast } from '@/components/ui/toast-store';
 import { CONTRIBUTION_LABELS } from '@/components/support-trains/contributionLabels';
+import { forgetSupportTrain, refreshSupportTrains } from '@/components/support-trains/supportTrainQueries';
 import {
   ArrowLeft,
   Copy,
@@ -35,6 +37,7 @@ import {
 export default function ManageSupportTrainPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [data, setData] = useState<any>(null);
   const [reservations, setReservations] = useState<any[]>([]);
@@ -123,12 +126,13 @@ export default function ManageSupportTrainPage() {
       await api.supportTrains.postUpdate(id, { body, push_to_phones: pushToPhones });
       setUpdateBody('');
       toast.success('Update sent');
+      void refreshSupportTrains(queryClient);
     } catch (err: unknown) {
       toast.error(err instanceof Error && err.message ? err.message : 'Could not send the update. Try again.');
     } finally {
       setSendingUpdate(false);
     }
-  }, [id, updateBody, pushToPhones, sendingUpdate]);
+  }, [id, updateBody, pushToPhones, sendingUpdate, queryClient]);
 
   const handleDeleteSupportTrain = useCallback(async () => {
     if (deleting) return;
@@ -144,13 +148,14 @@ export default function ManageSupportTrainPage() {
     setDeleting(true);
     try {
       await api.supportTrains.deleteSupportTrain(id);
+      void forgetSupportTrain(queryClient, id);
       router.replace('/app/support-trains');
     } catch (err: any) {
       alert(err?.message || 'Failed to delete Support Train');
     } finally {
       setDeleting(false);
     }
-  }, [deleting, id, router]);
+  }, [deleting, id, router, queryClient]);
 
   const sortedReservations = [...reservations].sort((a, b) => {
     const va = a[sortField] || '';

@@ -114,6 +114,16 @@ export const queryKeys = {
   businessDetail: (id: string) =>
     ['businesses', 'detail', id] as const,
 
+  // ── Support Trains ────────────────────────────────────────
+  /** Every Support Train entry; a change to any train marks them out of date. */
+  supportTrains: () => ['supportTrains'] as const,
+  /** Your trains on the list page: every role tab. */
+  supportTrainLists: () => ['supportTrains', 'mine'] as const,
+  /** Your trains on the list page, per role tab ('all', 'organizer', 'helper'). */
+  supportTrainsMine: (role: string) => ['supportTrains', 'mine', role] as const,
+  /** One train, with its signups when you organize it. */
+  supportTrain: (id: string) => ['supportTrains', 'train', id] as const,
+
   // ── Audience zone (unified-IA §3.1, §3.6) ─────────────────
   audienceMe: () => ['audience', 'me'] as const,
 } as const;
