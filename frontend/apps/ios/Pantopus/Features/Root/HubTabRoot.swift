@@ -1044,6 +1044,13 @@ public struct HubTabRoot: View {
         // mount task in the same frame. Never push that stale value twice.
         guard let pending, pending == router.pending,
               Self.ownsDeepLink(pending, tab: owningTab) else { return }
+        // Mailbox is off for launch: a mailbox link or mail push opens the
+        // "not in the app yet" placeholder (the mailbox root's launch scope).
+        if pending.opensMailbox, !LaunchFeatures.mailbox {
+            path.append(.mailboxRoot)
+            _ = router.consume()
+            return
+        }
         switch pending {
         case let .gig(id) where !LaunchFeatures.openGigs:
             // Launch cut #4 (Open gigs): with the Tasks door hidden, a task's
@@ -1284,7 +1291,8 @@ public struct HubTabRoot: View {
             return false
         case .vacationHold, .mailDay, .stamps, .mailTask,
              .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem:
-            return tab == .mail
+            // With Mailbox off for launch, the Place stack shows the placeholder.
+            return tab == (LaunchFeatures.mailbox ? .mail : .place)
         default:
             return tab == .place
         }
@@ -3823,8 +3831,11 @@ extension HubRoute {
         // Launch cut #4 (Open gigs): browse, post, bids and gig offers. A
         // task's own detail (`.gigDetail`) and My tasks stay.
         case .gigsFeed, .gigSearch, .nearbyMapForGigs, .tasksMap, .composeGig, .quickPostGig, .editGig,
-             .myBids, .offers, .packageGig:
+             .myBids, .offers:
             LaunchFeatures.openGigs
+        // Launch cuts #4 + #10: a package's task, opened from its mail.
+        case .packageGig:
+            LaunchFeatures.openGigs && LaunchFeatures.mailbox
         // Launch cut #5 (Public scheduling); invoices, packages and payouts stay.
         case let .scheduling(route):
             route.isAvailableAtLaunch
@@ -3837,13 +3848,21 @@ extension HubRoute {
             LaunchFeatures.businessDirectory
         // Launch cut #7 (Household extras): pets, packages, bills, calendar, polls.
         case .homePets, .homePackages, .packageDetail, .logPackage, .homeBills, .billDetail, .addBill,
-             .homeCalendar, .addCalendarEvent, .calendarEventDetail, .homePolls, .pollDetail, .startPoll,
-             .unboxing:
+             .homeCalendar, .addCalendarEvent, .calendarEventDetail, .homePolls, .pollDetail, .startPoll:
             LaunchFeatures.householdExtras
-        // Launch cut #8 (Mail extras): letters, Mail Party, community mail,
-        // translations, and Earn (offers and ad earnings).
+        // Launch cuts #7 + #10: package unboxing starts from a mail item.
+        case .unboxing:
+            LaunchFeatures.householdExtras && LaunchFeatures.mailbox
+        // Launch cuts #8 + #10 (Mail extras, inside the mailbox): letters, Mail
+        // Party, community mail, translations, and Earn (offers and ad earnings).
         case .ceremonialMail, .ceremonialMailOpen, .mailParty, .communityMail, .mailTranslation, .earn:
-            LaunchFeatures.mailExtras
+            LaunchFeatures.mailExtras && LaunchFeatures.mailbox
+        // Launch cut #10 (Mailbox): received mail, the drawers, the vault and
+        // records, My mail day, vacation hold, stamps, mail tasks and search.
+        // Postcard address verification (`.postcardVerification`) stays.
+        case .mailboxRoot, .mailboxMap, .mailboxSearch, .mailboxVault, .mailItemDetail, .vacationHold,
+             .mailRoutingQueue, .mailDay, .stamps, .mailTask, .mailTaskList, .homeRecords:
+            LaunchFeatures.mailbox
         default:
             true
         }

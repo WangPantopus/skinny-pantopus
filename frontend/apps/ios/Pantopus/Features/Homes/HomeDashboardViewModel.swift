@@ -257,10 +257,10 @@ final class HomeDashboardViewModel {
 
     func canPerform(_ action: String) -> Bool {
         guard visible, isCurrent, accessUnexpired else { return false }
-        // Launch cuts #7 (Household extras) / #8 (Mail extras): bills,
-        // packages, pets, polls and the calendar; "Send Mail" writes a letter.
+        // Launch cuts #7 (Household extras) / #8 (Mail extras) / #10 (Mailbox):
+        // bills, packages, pets, polls and the calendar; "Send Mail" writes a letter.
         if Self.householdExtrasActions.contains(action), !LaunchFeatures.householdExtras { return false }
-        if action == "send_mail", !LaunchFeatures.mailExtras { return false }
+        if action == "send_mail", !(LaunchFeatures.mailExtras && LaunchFeatures.mailbox) { return false }
         if action == "add_task" { return canCreateTask }
         let permissions = [
             "track_bill": "finance.manage", "track_package": "packages.edit", "log_package": "packages.edit",
