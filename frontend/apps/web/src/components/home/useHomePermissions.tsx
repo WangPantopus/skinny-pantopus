@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import { homeAccessExpiry, homeAccessFingerprint, readCurrentHomeAccess, watchHomeAccessExpiry } from './homeAccessFingerprint';
 import { readHomeDashboardCopy } from './homeDashboardCopy';
 import { RETURN_REFRESH_MS, transientFailure } from './returnRefresh';
+import { onSyncTopic, touchesHome } from '@/lib/syncSignals';
 
 // ============================================================
 // Types
@@ -156,6 +157,8 @@ export function HomePermissionsProvider({
   const stopExpiry = useRef<(() => void) | null>(null);
   const lastAttempt = useRef(0);
   const inFlight = useRef(0);
+  // A change signal that arrived during a check: one more background check follows it.
+  const signalPending = useRef(false);
   // The access the page currently shows (null while loading or failed), for background re-checks.
   const shownFingerprint = useRef<string | null>(null);
   const retireGeneration = useCallback(() => {
@@ -230,6 +233,10 @@ export function HomePermissionsProvider({
     } finally {
       inFlight.current--;
       if (!background && current()) setLoading(false);
+      if (inFlight.current === 0 && signalPending.current && current()) {
+        signalPending.current = false;
+        void load(ready.current !== null);
+      }
     }
   }, [homeId, retireGeneration]);
 
@@ -250,11 +257,18 @@ export function HomePermissionsProvider({
         || Date.now() - lastAttempt.current < RETURN_REFRESH_MS) return;
       void load(ready.current !== null);
     };
+    // The server says this Home changed (a role, a membership, a claim): check access again now.
+    const signalled = (topic: string) => {
+      if (!touchesHome(topic, homeId)) return;
+      if (inFlight.current > 0) { signalPending.current = true; return; }
+      void load(ready.current !== null);
+    };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
     const unsubscribe = api.onTokenChange(changed);
+    const unsubscribeSync = onSyncTopic(signalled);
     window.addEventListener('storage', storage); window.addEventListener('focus', resume);
     document.addEventListener('visibilitychange', resume);
-    return () => { retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
+    return () => { retireGeneration(); unsubscribe(); unsubscribeSync(); signalPending.current = false; window.removeEventListener('storage', storage);
       window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume); };
   }, [load, retireGeneration, homeId]);
 

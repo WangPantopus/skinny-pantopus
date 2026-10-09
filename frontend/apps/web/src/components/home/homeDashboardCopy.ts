@@ -56,8 +56,9 @@ export type HomeSummaryName = 'health' | 'checklist' | 'property' | 'timeline';
 export function readHomeSummaryCopy<T>(client: QueryClient, homeId: string, name: HomeSummaryName): { data: T; at: number } | null {
   if (!readHomeDashboardCopy(client, homeId)) return null;
   const key = queryKeys.homeSummary(homeId, name);
-  const data = client.getQueryData<T>(key);
-  return data == null ? null : { data, at: client.getQueryState(key)?.dataUpdatedAt ?? 0 };
+  const state = client.getQueryState<T>(key);
+  // Marked out of date (a change signal): it shows, and is read again at once.
+  return state?.data == null ? null : { data: state.data, at: state.isInvalidated ? 0 : state.dataUpdatedAt };
 }
 
 export function keepHomeSummaryCopy<T>(client: QueryClient, homeId: string, name: HomeSummaryName, data: T): void {

@@ -9,6 +9,7 @@ import { homeAccessExpiry, homeAccessFingerprint, readCurrentHomeAccess, watchHo
 import { RETURN_REFRESH_MS, transientFailure } from '@/components/home/returnRefresh';
 import { dropHomeDashboardCopy, keepHomeDashboardCopy, keepsHomeCopy, readHomeDashboardCopy } from '@/components/home/homeDashboardCopy';
 import { fetchMe } from '@/lib/me';
+import { onSyncTopic, touchesHome } from '@/lib/syncSignals';
 import { queryKeys } from '@/lib/query-keys';
 
 // ── Types ──
@@ -276,6 +277,8 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
   const stopExpiry = useRef<(() => void) | null>(null);
   const lastAttempt = useRef(0);
   const inFlight = useRef(0);
+  // A change signal that arrived during a load: one more background re-check follows it.
+  const signalPending = useRef(false);
   // The access the page currently shows (null while loading or failed), for background re-checks.
   const shownFingerprint = useRef<string | null>(null);
   const retireGeneration = useCallback(() => {
@@ -422,6 +425,10 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
       });
     } finally {
       inFlight.current--;
+      if (inFlight.current === 0 && signalPending.current && current()) {
+        signalPending.current = false;
+        void loadDashboard(ready.current !== null);
+      }
     }
   }, [homeId, router, retireGeneration]);
 
@@ -450,11 +457,19 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         || Date.now() - lastAttempt.current < RETURN_REFRESH_MS) return;
       void loadDashboard(ready.current !== null);
     };
+    // The server says this Home (its records, members or your access) changed: re-check now,
+    // behind the page (contract §8), or right after the load already running.
+    const signalled = (topic: string) => {
+      if (!touchesHome(topic, homeId)) return;
+      if (inFlight.current > 0) { signalPending.current = true; return; }
+      void loadDashboard(ready.current !== null);
+    };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
     const unsubscribe = api.onTokenChange(changed);
+    const unsubscribeSync = onSyncTopic(signalled);
     window.addEventListener('storage', storage); window.addEventListener('focus', resume);
     document.addEventListener('visibilitychange', resume);
-    return () => { retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
+    return () => { retireGeneration(); unsubscribe(); unsubscribeSync(); signalPending.current = false; window.removeEventListener('storage', storage);
       window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume); };
   }, [loadDashboard, retireGeneration, homeId]);
 
