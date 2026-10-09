@@ -800,6 +800,7 @@ class PulseFeedViewModel
                             if (generation != fetchGeneration) return@launch
                             val known = loadedPosts.map { it.id }.toSet()
                             loadedPosts = loadedPosts + result.data.posts.filter { it.id !in known }
+                            repo.seedDetails(result.data.posts)
                             applyPagination(result.data.pagination)
                             rebuildLoadedState()
                         }
@@ -933,6 +934,8 @@ class PulseFeedViewModel
             lastArea = area
             updateFallbackAreaLabel(response.fallbackArea?.label, area)
             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
+            // Each card stands in for its post until the post's own read answers (a post opens at once).
+            repo.seedDetails(response.posts)
             if (inPlace && query == lastQuery && loadedPosts.size > response.posts.size) {
                 val refreshed = response.posts.associateBy { it.id }
                 loadedPosts = loadedPosts.map { refreshed[it.id] ?: it }
