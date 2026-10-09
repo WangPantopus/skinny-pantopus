@@ -26,7 +26,7 @@ Last checked: 2026-10-08 by L4.
 | `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
 | April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The live website links to both. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
-| Supabase | The April production project, a testing project, and `Pantopus-staging` (Free), reset to the canonical migrations on October 7 (S2). No production project yet (P2A). |
+| Supabase | The April production project and new empty `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon, with no migrations or backups yet. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
 | GitHub | `staging` has its secrets and variables and releases from `dev` (S5, S6). `production` has `BACKEND_DEPLOY_ENABLED=false` and `DB_MIGRATIONS_ENABLED=false` and no secrets, so each master push ends with "Backend deployment is disabled". `ios-release` and `android-release` have no secrets. |
 | AWS Lambdas | Staging stack `pantopus-seeder-staging` (October 7). The stack (`pantopus-seeder/deploy/template.yaml`) carries the seeder and the briefing, home-reminder, weather-alert, mail and job-trigger functions. **The April production stack `pantopus-seeder-production` (last deployed May 3) still runs** (checked October 8): its 14 EventBridge schedules read the April database through the secret `pantopus/seeder/production` every 5 to 15 minutes and send through `api.pantopus.com`, which answers 522, so nothing reaches anyone. At 01:00Z on October 8 its evening briefing tried three April users and failed. Pause it before P1 (start of section 3); P8 turns it into the production stack. The April `pantopus-seeder-dev` stack is inert: its functions were deleted in April, so its ten schedules have nothing to run. |
 
@@ -55,13 +55,12 @@ Each has a default that the steps below follow until you change it here.
   The alternative, shipping the native apps as updates to `com.pantopus.app`,
   means changing the native app IDs, push setup and signing; L4 doesn't
   recommend it this close to the pilot.
-- [ ] **D3 Production database.** Open (October 6): the founder asked whether April users must sign up again. With a new project they do, or L4 can prepare a rehearsed script that copies only their logins (email and password hash) into it, without the old Trains; the founder runs it, since it touches real people's data. Default (L4's recommendation): **a new
-  production Supabase project** built from the canonical migrations, exactly as
-  staging is. Keep the April project untouched and paused as an archive; the
-  April users (friends) sign up again in the new app. The alternative is to
-  adopt the April project (keeps their accounts and meal trains, but needs a
-  backup, a local rehearsal of the September forward-upgrade SQL on a copy of
-  real data, and a maintenance window; section P2B).
+- [x] **D3 Production database.** Decided October 8: create a new production
+  Supabase project from the canonical migrations and transfer April users'
+  logins and matching app profiles after an isolated rehearsal. Preserve the
+  Auth identities needed for email, Google and Apple sign-in; leave April's
+  Homes, Trains and other product data in the old project. The founder runs
+  the reviewed production import. See [the Auth transfer runbook](production-auth-transfer.md).
 - [x] **D4 Payments during the pilot.** Decided October 6, as recommended. Default: production uses Stripe **test**
   keys until you activate live payments; no pilot journey takes money. Pilot
   store builds then carry the matching `pk_test_` key (L4 adjusts the Android
@@ -416,25 +415,58 @@ production one and switches the schedules back on.
 **Check:** `curl -sI https://api.pantopus.com/` shows a valid certificate
 (after P6 the health check answers).
 
-### P2A. Production database: new project (default, founder)
+### P2A. Production database: new project (founder)
 
-1. Supabase → New project `pantopus-production`, **Pro** plan, region
-   `us-west-2` (Oregon, next to the server). Turn on daily backups (included in
-   Pro); point-in-time recovery is optional.
-2. On the Mac, with the `sb` alias from S2. Nothing should be connected to a
-   new project yet; if a production backend or worker already points at it
-   (from an earlier attempt), stop it first as in S2.
+1. The founder created `pantopus-production` (`falmvysvndmwtfxsrxek`) in
+   `us-west-2` (Oregon, next to the server). It is currently empty in the
+   existing `Pantopus` Free organization. It can stay there. If the founder
+   wants the April archive to remain on Free after the production upgrade,
+   transfer the new project to a separate organization first; Supabase plans
+   apply to the whole organization. **Before transferring April logins or
+   sending production traffic, upgrade the organization holding the new project
+   to Pro and confirm daily backups are available.**
+   Point-in-time recovery is optional.
+2. From a dedicated production worktree based on the latest `master`, after its
+   CI is green, use the CLI version pinned in S2. Do not relink the staging
+   checkout. The Mac's saved CLI login is for staging. The founder creates a
+   production Supabase access token and puts it and the new project's database
+   password in a private `0600` file outside the repository, as
+   `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`; never paste either into
+   chat or a command argument. The environment token overrides the saved
+   staging login. The founder loads that file only in this terminal session.
+   Nothing should be connected to the new project yet; if a production backend
+   or worker already points at it, stop it first. Verify that the linked ref is
+   exactly `falmvysvndmwtfxsrxek` and review the dry-run migration list before
+   the founder runs the push. `--skip-vault` prevents an unrelated Vault update.
    ```bash
-   sb link --project-ref <production ref>
-   sb db push --linked --dry-run   # lists every migration in supabase/migrations
-   sb db push --linked
+   alias sb='npx --yes supabase@2.116.0'
+   set -a
+   source ~/.config/pantopus/hosted-secrets/supabase-prod-cli.env
+   set +a
+   : "${SUPABASE_ACCESS_TOKEN:?missing production token}"
+   : "${SUPABASE_DB_PASSWORD:?missing production database password}"
+   sb link --project-ref falmvysvndmwtfxsrxek
+   sb projects list
+   sb db push --linked --skip-vault --dry-run
+   # Founder only, after checking the dry run and project ref:
+   sb db push --linked --skip-vault
+   sb migration list --linked
+   unset SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD
    ```
+   Never use `db reset --linked` or `--include-seed` on production.
 3. Storage buckets and the S3 access key as in S2.
-4. Keep the April project as it is (pause it; don't delete it).
-5. Supabase's daily backups cover the database only, not uploaded files. Set
+4. Transfer April logins and matching app profiles only after the private
+   export and isolated rehearsal in [the Auth transfer runbook](production-auth-transfer.md).
+   Check matching IDs, email/password and OAuth sign-in, and new-app access
+   before pointing the API at the project. The founder runs the reviewed import.
+5. Keep the April project available until the login transfer and sign-in checks
+   pass; don't delete it. A project in a Pro organization cannot be paused, so
+   keeping both projects in `Pantopus` will also keep the April archive active
+   and billed for its compute. Decide its long-term archive placement later.
+6. Supabase's daily backups cover the database only, not uploaded files. Set
    up the file backup in Appendix C before the first household signs up.
 
-**Check:** as in S2: `sb db push --linked --dry-run` reports nothing to
+**Check:** as in S2: `sb db push --linked --skip-vault --dry-run` reports nothing to
 push, and the three buckets exist with the right privacy.
 
 ### P2B. Production database: adopt the April project (only if D3 says so)
