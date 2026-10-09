@@ -23,13 +23,10 @@ final class PlaceDetailViewModel {
     /// The error is the server refusing this account the place (403): a
     /// retry can't change it, so the views drop their Try again.
     private(set) var accessDenied = false
-    /// When the shown copy was fetched.
+    /// When the server last confirmed the shown copy.
     private(set) var loadedAt: Date?
     /// Set when a pull to refresh fails while the content stays on screen.
     var refreshFailureMessage: String?
-    /// Today's fresh window (Instant Screens contract §4): coming back
-    /// within it sends no request.
-    static let todayFreshFor: TimeInterval = 10 * 60
     let homeId: String
     let savedPlaceId: String?
     var calendarHomeId: String? {
@@ -83,40 +80,67 @@ final class PlaceDetailViewModel {
 
     func load() async {
         if case .loaded = state { return }
-        await fetch(quietly: false)
+        // The dashboard or Today may already hold this copy (one store entry).
+        if let copy = PlaceStoreReads.peek(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections) {
+            show(copy)
+            await fetch(quietly: true, force: false)
+            return
+        }
+        await fetch(quietly: false, force: false)
     }
 
-    /// Coming back: the shown copy stays and is fetched again quietly once
-    /// it is older than `freshFor`.
-    func refreshIfStale(freshFor: TimeInterval) async {
-        guard case .loaded = state, let loadedAt else {
+    /// Coming back: the shown copy stays; the store refreshes it quietly only
+    /// once it is out of date (Today: 10 minutes, and at midnight).
+    func refreshIfStale() async {
+        guard case .loaded = state else {
             await load()
             return
         }
-        guard Date().timeIntervalSince(loadedAt) >= freshFor else { return }
-        await fetch(quietly: true)
+        await fetch(quietly: true, force: false)
     }
 
     /// Pull to refresh and Try again: always fetches now.
     func refresh() async {
-        await fetch(quietly: false)
+        await fetch(quietly: false, force: true)
+    }
+
+    private var storeKind: ScreenDataKind {
+        group == .today ? .today : .place
+    }
+
+    /// Today asks for only the sections it renders; detail pages read the full copy.
+    private var sections: [PlaceSectionID]? {
+        group == .today && savedPlaceId == nil ? PlaceStoreReads.todaySections : nil
+    }
+
+    private func show(_ snapshot: ScreenSnapshot<PlaceIntelligence>) {
+        guard loadedAt != snapshot.fetchedAt || !isLoaded else { return }
+        accessDenied = false
+        loadedAt = snapshot.fetchedAt
+        state = .loaded(snapshot.value)
+    }
+
+    private var isLoaded: Bool {
+        if case .loaded = state { return true }
+        return false
     }
 
     /// A failed fetch keeps loaded content on screen (a pull to refresh says
     /// so in a toast). A refusal (403 or 404) replaces it with the server's
     /// answer, and with nothing loaded the error shows.
-    private func fetch(quietly: Bool) async {
+    private func fetch(quietly: Bool, force: Bool) async {
         let hadFallback = fallbackCalendar != nil
         do {
-            let intelligence: PlaceIntelligence = try await api.request(
-                savedPlaceId.map { SavedPlacesEndpoints.today(id: $0) }
-                    ?? PlaceEndpoints.intelligence(homeId: homeId)
+            let snapshot = try await PlaceStoreReads.load(
+                homeId: homeId,
+                savedPlaceId: savedPlaceId,
+                sections: sections,
+                kind: storeKind,
+                force: force
             )
             try Task.checkCancellation()
-            accessDenied = false
             refreshFailureMessage = nil
-            loadedAt = Date()
-            state = .loaded(intelligence)
+            show(snapshot)
             // A refresh asks for the fallback calendar again; the shown one
             // stays until the new one arrives.
             if !quietly {

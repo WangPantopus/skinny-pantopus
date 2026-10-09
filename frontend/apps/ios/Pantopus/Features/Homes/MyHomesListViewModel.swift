@@ -1,3 +1,6 @@
+// Reading through the screen store (Instant Screens) pushed this past 500 lines.
+// swiftlint:disable file_length
+
 import Foundation
 import Observation
 import SwiftUI
@@ -38,6 +41,9 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
     var actionError: String?
     private(set) var deletingHomeId: String?
     private let api: APIClient
+    /// The screen store (Instant Screens): one home list for every screen,
+    /// shown at once and re-checked once out of date (Homes: 2 minutes).
+    private let store: ScreenStore
     private let scope: HomeClaimSessionScope
     private let onOpenHome: (String) -> Void
     private let onOpenTasks: (@Sendable (String) -> Void)?
@@ -67,6 +73,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         onOpenWaitingRoom: (@Sendable (String) -> Void)? = nil
     ) {
         self.api = api
+        store = ScreenStore.store(for: api)
         scope = HomeClaimSessionScope(api: api, identity: identity)
         self.onOpenHome = onOpenHome
         self.onOpenTasks = onOpenTasks
@@ -101,20 +108,31 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
     }
 
     func load() async {
-        if visible, case .loaded = state { return }
-        await refresh()
+        await reload(force: false)
     }
 
     func refresh() async {
+        await reload(force: true)
+    }
+
+    private func reload(force: Bool) async {
         guard isCurrent else { retireSession()
             return
         }
         suspend()
         visible = true
         let revision = generation
+        // The stored list and first page of requests show at once (no skeleton).
+        if !force, let homes = store.peek(HomesEndpoints.myHomes(), as: MyHomesResponse.self)?.value,
+           let page = store.peek(Self.residencyPage(cursor: nil), as: PersonalHomeResidencyPage.self)?.value {
+            entries = homes.homes
+            requests = page.requests
+            nextCursor = page.nextCursor
+            render(revision: revision)
+        }
         do {
             try scope.requireCurrent()
-            let response: MyHomesResponse = try await api.request(HomesEndpoints.myHomes())
+            let response = try await HomesStoreReads.myHomes(store: store, force: force).value
             guard current(revision), !Task.isCancelled else { return }
             guard response.homes.allSatisfy(\.hasValidListContext),
                   Set(response.homes.map(\.id)).count == response.homes.count else { throw APIError.invalidResponse }
@@ -124,7 +142,16 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
             homesError = "Your saved Homes could not be checked. Retry."
         }
         guard current(revision) else { return }
-        await loadHistory(revision: revision, cursor: nil)
+        await loadHistory(revision: revision, cursor: nil, force: force)
+    }
+
+    private static func residencyPage(cursor: String?) -> Endpoint {
+        Endpoint(
+            method: .get,
+            path: "/api/homes/my-residency",
+            query: cursor.map { ["after": $0] } ?? [:],
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
     }
 
     func loadMoreIfNeeded() async {
@@ -132,19 +159,26 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         await loadHistory(revision: generation, cursor: cursor)
     }
 
-    private func loadHistory(revision: Int, cursor: String?) async {
+    private func loadHistory(revision: Int, cursor: String?, force: Bool = false) async {
         guard current(revision), !loadingHistory else { return }
         loadingHistory = true
         historyError = nil
         render(revision: revision)
         do {
-            let page: PersonalHomeResidencyPage = try await api.request(Endpoint(
-                method: .get,
-                path: "/api/homes/my-residency",
-                query: cursor.map { ["after": $0] } ?? [:],
-                cachePolicy: .reloadIgnoringLocalCacheData
-            ))
+            // The first page is a store entry; later pages are not.
+            let page: PersonalHomeResidencyPage = if cursor == nil {
+                try await store.load(
+                    Self.residencyPage(cursor: nil),
+                    as: PersonalHomeResidencyPage.self,
+                    kind: .homes,
+                    topics: [ScreenTopic.homes],
+                    force: force
+                ).value
+            } else {
+                try await api.request(Self.residencyPage(cursor: cursor))
+            }
             guard current(revision), !Task.isCancelled else { return }
+            if cursor == nil { requests = [] }
             guard page.follows(cursor), Set(requests.map(\.id)).isDisjoint(with: page.requests.map(\.id)) else {
                 throw APIError.invalidResponse
             }
@@ -174,6 +208,7 @@ final class MyHomesListViewModel: ListOfRowsDataSource {
         do {
             try scope.requireCurrent()
             let _: DeleteHomeResponse = try await api.request(HomeAdminEndpoints.deleteHome(homeId: homeId))
+            store.markStale(topics: [ScreenTopic.homes, ScreenTopic.home(homeId), ScreenTopic.today])
             guard current(revision) else { return }
             await refresh()
         } catch {

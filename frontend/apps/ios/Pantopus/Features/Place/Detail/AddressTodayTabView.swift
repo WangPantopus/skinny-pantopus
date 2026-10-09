@@ -177,7 +177,9 @@ struct AddressTodayTabView: View {
         let scope = HomeClaimSessionScope(api: .shared)
         do {
             try scope.requireCurrent()
-            let response: MyHomesResponse = try await APIClient.shared.request(HomesEndpoints.myHomes())
+            // The store answers at once while its copy is fresh and asks the
+            // server only when it is out of date.
+            let response = try await HomesStoreReads.myHomes().value
             try Task.checkCancellation()
             try scope.requireCurrent()
             guard resolveID == requestID else { return }
@@ -192,7 +194,7 @@ struct AddressTodayTabView: View {
                 }
                 savedPlace = nil
             } else {
-                let saved: SavedPlacesListResponse = try await APIClient.shared.request(SavedPlacesEndpoints.list())
+                let saved = try await HomesStoreReads.savedPlaces().value
                 try Task.checkCancellation()
                 try scope.requireCurrent()
                 guard resolveID == requestID else { return }
@@ -316,9 +318,9 @@ private struct AddressTodayLoaded: View {
             guard scope.isCurrent else { sessionChanged = true
                 return
             }
-            // Coming back shows the last copy; it is fetched again quietly
-            // once older than Today's fresh window.
-            await viewModel.refreshIfStale(freshFor: PlaceDetailViewModel.todayFreshFor)
+            // Coming back shows the last copy; the store fetches it again
+            // quietly once out of date (Today: 10 minutes, and at midnight).
+            await viewModel.refreshIfStale()
             guard scope.isCurrent else { sessionChanged = true
                 return
             }

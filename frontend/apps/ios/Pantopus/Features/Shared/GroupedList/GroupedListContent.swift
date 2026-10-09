@@ -224,11 +224,26 @@ public protocol GroupedListDataSource: AnyObject, Observable {
     func tapBanner() async
     /// A14.7 — release the Privacy location-fuzz slider on `stop`.
     func setFuzz(_ rowId: String, stop: FuzzStop) async
+    /// Instant Screens: a refresh failed while the rows stay on screen (a toast).
+    var refreshFailureMessage: String? { get set }
+    /// Instant Screens: "Couldn't refresh. Showing 3:42 PM." with Retry, once
+    /// the rows are older than their kind's max shown age.
+    var staleNotice: String? { get }
 }
 
 /// Defaults so surfaces that predate A14.5/A14.7 (and those without a
 /// banner, channel matrix, or fuzz slider) conform without boilerplate.
 public extension GroupedListDataSource {
+    /// Screens not yet reading from the screen store have no refresh notices.
+    var refreshFailureMessage: String? {
+        get { nil }
+        set { _ = newValue }
+    }
+
+    var staleNotice: String? {
+        nil
+    }
+
     var banner: GroupedListBanner? {
         nil
     }

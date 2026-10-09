@@ -44,6 +44,8 @@ import FloatingPromoModal from '@/components/ui/FloatingPromoModal';
 import NamePrompt from '@/components/profile/NamePrompt';
 import { toast } from '@/components/ui/toast-store';
 import useViewerHome from '@/hooks/useViewerHome';
+import { useTabScroll } from '@/hooks/useTabScroll';
+import { useSyncChanged } from '@/hooks/useSyncChanged';
 import usePromoTriggers from '@/hooks/usePromoTriggers';
 import { prefetchHomeTiles } from '@/utils/tilePrefetch';
 import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated } from '@/lib/feedComposerEvents';
@@ -174,6 +176,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  // Each tab's page opens again where you left it.
+  useTabScroll(pathname);
+  // Live change signals mark what this session keeps out of date (contract §8).
+  useSyncChanged();
 
   // ── Responsive ────────────────────────────────────────────
   const { isMdUp, isLgUp } = useBreakpoints();

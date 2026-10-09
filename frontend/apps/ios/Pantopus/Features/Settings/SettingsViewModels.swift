@@ -74,17 +74,16 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
         // Block count (best-effort) — both lists the Blocked users screen
         // shows: Identity Firewall profile blocks and personal blocks
         // (`GET /api/users/blocked`).
-        let profileBlocksTask: Task<PrivacyBlocksResponse?, Never> = start { try await self.api.request(PrivacyEndpoints.blocks) }
-        let personalBlocksTask: Task<UserBlocksResponse?, Never> = start {
-            try await self.api.request(BlocksEndpoints.blocked, as: UserBlocksResponse.self)
-        }
+        let profileBlocksTask: Task<PrivacyBlocksResponse?, Never> = start { try await self.you(PrivacyEndpoints.blocks) }
+        let personalBlocksTask: Task<UserBlocksResponse?, Never> = start { try await self.you(BlocksEndpoints.blocked) }
         // Real verification state — `GET /api/users/profile` → `user.verified`
         // (`backend/routes/users.js:1962`). Same field the Verification
         // Center sub-screen reports; on failure we stay `nil` (unknown).
-        let profileTask: Task<ProfileResponse?, Never> = start { try await self.api.request(UsersEndpoints.profile()) }
+        let profileTask: Task<ProfileResponse?, Never> = start { try await self.you(UsersEndpoints.profile()) }
         // "Stripe connected" chip on Payments & payouts: only when the
         // connected account can take charges and pay out. No account (404)
-        // or a failed read shows the plain chevron.
+        // or a failed read shows the plain chevron. Payout status is
+        // sensitive: always read from the server, never kept.
         let connectTask: Task<ConnectAccountStatusResponse?, Never> = start {
             try await self.api.request(ConnectEndpoints.accountStatus())
         }
@@ -110,6 +109,12 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
     /// allocation").
     private func start<T: Sendable>(_ operation: @escaping @Sendable () async throws -> T) -> Task<T?, Never> {
         Task { try? await operation() }
+    }
+
+    /// Own profile and settings through the screen store (You: 10 minutes),
+    /// shared with the You screen.
+    private func you<Value: Decodable & Sendable>(_ endpoint: Endpoint) async throws -> Value {
+        try await ScreenStore.store(for: api).load(endpoint, as: Value.self, kind: .you, topics: [ScreenTopic.profileMe]).value
     }
 
     private func rebuild() {

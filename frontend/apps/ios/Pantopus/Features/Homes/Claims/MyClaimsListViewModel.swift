@@ -33,8 +33,10 @@ final class MyClaimsListViewModel: ListOfRowsDataSource {
     }
 
     private(set) var state: ListOfRowsState = .loading
+    var refreshFailureMessage: String?
+    private(set) var staleNotice: String?
 
-    private let api: APIClient
+    private let store: ScreenStore
     private let onStartNewClaim: @Sendable () -> Void
     private let onOpenClaim: @Sendable (String) -> Void
 
@@ -43,58 +45,80 @@ final class MyClaimsListViewModel: ListOfRowsDataSource {
         onStartNewClaim: @escaping @Sendable () -> Void = {},
         onOpenClaim: @escaping @Sendable (String) -> Void = { _ in }
     ) {
-        self.api = api
+        store = ScreenStore.store(for: api)
         self.onStartNewClaim = onStartNewClaim
         self.onOpenClaim = onOpenClaim
+        // The store's copy shows in the first frame (Instant Screens).
+        if let copy = store.peek(Self.endpoint, as: MyOwnershipClaimsResponse.self) {
+            show(copy)
+        }
     }
 
+    /// Claim status changes server-side, so coming back re-checks it once the
+    /// copy is out of date (Homes: 2 minutes), keeping the rows on screen.
     func load() async {
-        // Unlike MyHomes, we always refetch — claim status changes
-        // server-side within hours (per the success-step copy) and the
-        // user expects to see status flips on return-nav, not only via
-        // pull-to-refresh.
-        if case .loading = state {} else {
-            state = .loading
-        }
-        await fetch()
+        await fetch(force: false)
     }
 
     func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     /// Endpoint isn't paginated server-side.
     func loadMoreIfNeeded() async {}
 
-    private func fetch() async {
+    private static var endpoint: Endpoint {
+        HomesEndpoints.myOwnershipClaims()
+    }
+
+    private func fetch(force: Bool) async {
         do {
-            let response: MyOwnershipClaimsResponse =
-                try await api.request(HomesEndpoints.myOwnershipClaims())
-            if response.claims.isEmpty {
-                state = .empty(
-                    ListOfRowsState.EmptyContent(
-                        icon: .shieldCheck,
-                        headline: "No claims yet",
-                        // Empty-state CTA opens the AddHome wizard
-                        // (which kicks off verification when the user
-                        // selects "Owner" on the role step). The "Add a
-                        // home" copy matches the wizard the CTA actually
-                        // routes to, so the user doesn't expect a
-                        // claim-existing-home picker that doesn't exist.
-                        subcopy: "Submit a claim from a home dashboard. New here? Add a home and pick the Owner role to start.",
-                        ctaTitle: "Add a home",
-                        onCTA: onStartNewClaim
-                    )
-                )
-            } else {
-                let rows = response.claims.map { row(for: $0) }
-                state = .loaded(sections: [RowSection(rows: rows)], hasMore: false)
-            }
+            try await store.show(
+                Self.endpoint,
+                as: MyOwnershipClaimsResponse.self,
+                kind: .homes,
+                topics: [ScreenTopic.homes],
+                force: force
+            ) { show($0) }
+        } catch is CancellationError {
+            return
         } catch {
-            state = .error(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't load your claims."
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load your claims."
+            guard state.showsContent, !ScreenStore.isRefusal(error) else {
+                state = .error(message: message)
+                return
+            }
+            // The rows stay; a pull to refresh says it failed.
+            if force { refreshFailureMessage = message }
+            staleNotice = store.peek(Self.endpoint, as: MyOwnershipClaimsResponse.self)?.refreshNotice
+        }
+    }
+
+    private func show(_ snapshot: ScreenSnapshot<MyOwnershipClaimsResponse>) {
+        staleNotice = snapshot.refreshNotice
+        apply(snapshot.value)
+    }
+
+    private func apply(_ response: MyOwnershipClaimsResponse) {
+        if response.claims.isEmpty {
+            state = .empty(
+                ListOfRowsState.EmptyContent(
+                    icon: .shieldCheck,
+                    headline: "No claims yet",
+                    // Empty-state CTA opens the AddHome wizard
+                    // (which kicks off verification when the user
+                    // selects "Owner" on the role step). The "Add a
+                    // home" copy matches the wizard the CTA actually
+                    // routes to, so the user doesn't expect a
+                    // claim-existing-home picker that doesn't exist.
+                    subcopy: "Submit a claim from a home dashboard. New here? Add a home and pick the Owner role to start.",
+                    ctaTitle: "Add a home",
+                    onCTA: onStartNewClaim
+                )
             )
+        } else {
+            let rows = response.claims.map { row(for: $0) }
+            state = .loaded(sections: [RowSection(rows: rows)], hasMore: false)
         }
     }
 

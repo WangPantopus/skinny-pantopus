@@ -139,7 +139,9 @@ export default function HubPage() {
   );
 
   // ── Loading ────────────────────────────────────────────────
-  if (!mounted || loading) {
+  // Coming back shows what this tab already loaded in the first frame; the skeleton is only for
+  // nothing at all (a fresh page load starts with an empty cache, like the server).
+  if (!data && (!mounted || loading)) {
     return (
       <div className="min-h-screen bg-app">
         <div className="max-w-5xl mx-auto px-4 py-6"><HubSkeleton /></div>
@@ -148,7 +150,8 @@ export default function HubPage() {
   }
 
   // ── Error ──────────────────────────────────────────────────
-  if (error || !data) {
+  // A failed refresh keeps the Hub on screen (contract §3); the error shows only with nothing to show.
+  if (!data) {
     return (
       <div className="min-h-screen bg-app flex items-center justify-center">
         <div className="text-center">
