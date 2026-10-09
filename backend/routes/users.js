@@ -1546,6 +1546,10 @@ const findRepeatSignup = async (email, password) => {
     await revokeSessionByAccessToken(data.session.access_token, { source: 'register_repeat_check', userId: row.id });
     return null;
   }
+  // Supabase too busy to check the password: it is neither a repeat nor someone else's address yet.
+  if (authSessionService.isAuthServiceBusy(error)) {
+    throw Object.assign(new Error(`Repeat sign-up check refused: ${error.message}`), { authBusy: true });
+  }
   return /email not confirmed/i.test(error?.message || '') ? row : null;
 };
 
@@ -1936,7 +1940,7 @@ router.post(
         },
       });
     } catch (err) {
-      const transient = isTransientFetchError(err);
+      const transient = isTransientFetchError(err) || err.authBusy === true;
 
       logger.error('Registration error (uncaught)', {
         error: err.message,
@@ -1983,11 +1987,10 @@ router.post('/login', signInNetworkLimiters, validate(loginSchema), signInAccoun
     if (authError) {
       // Supabase Auth's own per-IP limit (every sign-in reaches it from this server's address)
       // or an outage is not the person's mistake: don't call it a wrong password or count it.
-      const authStatus = Number(authError.status) || 0;
-      if (authStatus === 429 || authStatus === 0 || authStatus >= 500) {
+      if (authSessionService.isAuthServiceBusy(authError)) {
         logger.error('Login failed - Supabase Auth refused or unreachable', {
           email,
-          status: authStatus,
+          status: authError.status,
           code: authError.code,
           error: authError.message,
         });
@@ -2180,6 +2183,11 @@ router.post('/reauthenticate', verifyToken, reauthLimiter, reauthAccountLimiter,
       email,
       password,
     });
+
+    if (authSessionService.isAuthServiceBusy(authError)) {
+      logger.error('Re-authentication failed - Supabase Auth refused or unreachable', { userId, status: authError.status, error: authError.message });
+      return res.status(503).json({ error: 'Checking your password is busy right now. Please try again in a minute.', code: 'AUTH_BUSY' });
+    }
 
     if (authError || !authData?.user || !authData?.session) {
       logger.warn('Re-authentication failed - invalid credentials', {
@@ -2379,6 +2387,11 @@ router.post('/password', verifyToken, reauthLimiter, reauthAccountLimiter, valid
         password: currentPassword,
       });
 
+      if (authSessionService.isAuthServiceBusy(authError)) {
+        logger.error('Password update failed - Supabase Auth refused or unreachable', { userId, status: authError.status, error: authError.message });
+        return res.status(503).json({ error: 'Checking your password is busy right now. Please try again in a minute.', code: 'AUTH_BUSY' });
+      }
+
       if (authError || !authData?.user || !authData?.session || authData.user.id !== userId) {
         logger.warn('Password update failed - current password invalid', {
           userId,
@@ -2558,6 +2571,16 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
     const { data, error } = await scopedClient.auth.refreshSession({ refresh_token: refreshToken });
 
     if (error) {
+      // Supabase's limit on refreshes is shared by everyone on hosted (one server address): a busy
+      // or unreachable Auth is a retry for the apps, never a sign-out.
+      if (authSessionService.isAuthServiceBusy(error)) {
+        logger.error('Token refresh failed - Supabase Auth refused or unreachable', {
+          status: error.status,
+          code: error.code,
+          error: error.message,
+        });
+        return res.status(503).json({ error: 'Could not verify this session right now. Please try again.', code: 'AUTH_UNAVAILABLE' });
+      }
       const isReuse = isRefreshReuseError(error);
       if (isReuse) {
         logger.warn('auth.refresh_token_reuse', {
@@ -4008,13 +4031,30 @@ router.post('/verify-email', validate(verifyEmailSchema), async (req, res) => {
     // Resent links are minted as `magiclink` (see /resend-verification) while
     // the original sign-up link is `signup`; native clients only know the
     // hashed token, so accept either purpose for a hashed token.
-    if (error && tokenHash && (type === 'signup' || type === 'magiclink')) {
+    if (error && tokenHash && (type === 'signup' || type === 'magiclink') && !authSessionService.isAuthServiceBusy(error)) {
       const alternateType = type === 'signup' ? 'magiclink' : 'signup';
       const retry = await authClient.auth.verifyOtp({ type: alternateType, token_hash: tokenHash });
       if (!retry.error) {
         logger.info('Email verification accepted with alternate link type', { type, alternateType });
         ({ data, error } = retry);
+      } else if (authSessionService.isAuthServiceBusy(retry.error)) {
+        // The other link type may be the right one: it wasn't checked.
+        error = retry.error;
       }
+    }
+    // Supabase's verify limit is shared by everyone on hosted (one server address). A refused or
+    // unanswered check didn't use the link, so don't call it invalid.
+    if (authSessionService.isAuthServiceBusy(error)) {
+      logger.error('Email verification failed - Supabase Auth refused or unreachable', {
+        type,
+        status: error.status,
+        code: error.code,
+        error: error.message,
+      });
+      return res.status(503).json({
+        error: `Email confirmation is busy right now. Your ${tokenHash ? 'link' : 'code'} still works: please try again in a minute.`,
+        code: 'AUTH_BUSY',
+      });
     }
     if (error) {
       logger.warn('Email verification failed', {
@@ -4146,6 +4186,11 @@ router.post('/forgot-password', forgotPasswordLimiters.network, validate(forgotP
   }
 });
 
+// Supabase refused or didn't answer before the link was used: the same link works again later.
+const RESET_BUSY_LINK_KEPT = 'Password reset is busy right now. Your link still works: please try again in a minute.';
+// Supabase accepted the link (a link works once) but then couldn't take the new password.
+const RESET_BUSY_LINK_USED = 'Password reset is busy right now. Please request a new reset link in a minute.';
+
 /**
  * POST /api/users/reset-password
  * Reset password using recovery token (token_hash) or access token
@@ -4159,6 +4204,10 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
     if (isJwtAccessToken) {
       const authClient = createAuthClient();
       const { data: userData, error: userError } = await authClient.auth.getUser(token);
+      if (authSessionService.isAuthServiceBusy(userError)) {
+        logger.error('Reset password failed - Supabase Auth refused or unreachable', { status: userError.status, error: userError.message });
+        return res.status(503).json({ error: RESET_BUSY_LINK_KEPT, code: 'AUTH_BUSY' });
+      }
       if (userError || !userData?.user?.id) {
         logger.warn('Reset password failed - invalid access token', { error: userError?.message });
         return res.status(400).json({ error: 'Invalid or expired reset token' });
@@ -4187,6 +4236,9 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
 
       if (updateError) {
         logger.error('Reset password failed - admin update failed', { error: updateError.message });
+        if (authSessionService.isAuthServiceBusy(updateError)) {
+          return res.status(503).json({ error: RESET_BUSY_LINK_KEPT, code: 'AUTH_BUSY' });
+        }
         return res.status(400).json({ error: 'Unable to reset password' });
       }
 
@@ -4210,6 +4262,12 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
       const authClient = createAuthClient();
       const { data: verifyData, error: verifyError } = await authClient.auth.verifyOtp(verifyPayload);
       const session = verifyData?.session;
+      // Supabase's verify limit is shared by everyone on hosted (one server address); a refused
+      // check didn't use the link.
+      if (authSessionService.isAuthServiceBusy(verifyError)) {
+        logger.error('Reset password failed - Supabase Auth refused or unreachable', { status: verifyError.status, error: verifyError.message });
+        return res.status(503).json({ error: RESET_BUSY_LINK_KEPT, code: 'AUTH_BUSY' });
+      }
       if (verifyError || !session?.access_token || !session?.refresh_token) {
         logger.warn('Reset password failed - verify otp failed', { error: verifyError?.message });
         return res.status(400).json({ error: 'Invalid or expired reset token' });
@@ -4226,6 +4284,9 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
           userId: verifyData?.user?.id,
         });
         logger.error('Reset password failed - set session failed', { error: sessionError.message });
+        if (authSessionService.isAuthServiceBusy(sessionError)) {
+          return res.status(503).json({ error: RESET_BUSY_LINK_USED, code: 'AUTH_BUSY' });
+        }
         return res.status(400).json({ error: 'Invalid reset session' });
       }
 
@@ -4236,6 +4297,9 @@ router.post('/reset-password', resetPasswordLimiter, validate(resetPasswordSchem
           userId: verifyData?.user?.id,
         });
         logger.error('Reset password failed - update user failed', { error: updateError.message });
+        if (authSessionService.isAuthServiceBusy(updateError)) {
+          return res.status(503).json({ error: RESET_BUSY_LINK_USED, code: 'AUTH_BUSY' });
+        }
         return res.status(400).json({ error: 'Unable to reset password' });
       }
 
@@ -4808,6 +4872,10 @@ router.post('/oauth/token', oauthLimiter, authRouteDpop(), async (req, res) => {
     // Verify the token and get the user
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
 
+    if (authSessionService.isAuthServiceBusy(userError)) {
+      logger.error('OAuth token login failed - Supabase Auth refused or unreachable', { status: userError.status, error: userError.message });
+      return res.status(503).json({ error: 'Sign-in is busy right now. Please try again in a minute.', code: 'AUTH_BUSY' });
+    }
     if (userError || !user) {
       logger.error('OAuth token verification error', { error: userError?.message });
       return res.status(401).json({ error: 'Invalid or expired access token' });
@@ -4833,6 +4901,10 @@ router.post('/oauth/token', oauthLimiter, authRouteDpop(), async (req, res) => {
     const { data: pairData, error: pairError } = await pairClient.auth.refreshSession({ refresh_token: refreshToken });
     const pairSession = pairData?.session;
     const pairUserId = pairData?.user?.id || authSessionService.sessionClaimsFromAccessToken(pairSession?.access_token)?.sub || null;
+    if (authSessionService.isAuthServiceBusy(pairError)) {
+      logger.error('OAuth token login failed - Supabase Auth refused or unreachable', { userId, status: pairError.status, error: pairError.message });
+      return res.status(503).json({ error: 'Sign-in is busy right now. Please try again in a minute.', code: 'AUTH_BUSY' });
+    }
     if (pairError || !pairSession?.access_token || !pairSession?.refresh_token) {
       logger.warn('OAuth token login failed — refresh token rejected', { userId, error: pairError?.message });
       return res.status(401).json({ error: 'Invalid or expired refresh token' });
@@ -4934,6 +5006,10 @@ router.post('/oauth/callback', oauthLimiter, authRouteDpop(), async (req, res) =
     const authClient = createAuthClient();
     const { data: sessionData, error: sessionError } = await authClient.auth.exchangeCodeForSession(code);
 
+    if (authSessionService.isAuthServiceBusy(sessionError)) {
+      logger.error('OAuth code exchange failed - Supabase Auth refused or unreachable', { status: sessionError.status, error: sessionError.message });
+      return res.status(503).json({ error: 'Sign-in is busy right now. Please try again in a minute.', code: 'AUTH_BUSY' });
+    }
     if (sessionError || !sessionData?.session) {
       logger.error('OAuth code exchange error', { error: sessionError?.message });
       return res.status(400).json({ error: 'Invalid or expired authorization code' });
@@ -5020,6 +5096,10 @@ router.post('/oauth/native', oauthLimiter, validate(oauthNativeSchema), authRout
     if (accessToken) credentials.access_token = accessToken;
     const { data: sessionData, error: sessionError } = await authClient.auth.signInWithIdToken(credentials);
 
+    if (authSessionService.isAuthServiceBusy(sessionError)) {
+      logger.error('OAuth native sign-in failed - Supabase Auth refused or unreachable', { provider, status: sessionError.status, error: sessionError.message });
+      return res.status(503).json({ error: 'Sign-in is busy right now. Please try again in a minute.', code: 'AUTH_BUSY' });
+    }
     if (sessionError || !sessionData?.session || !sessionData?.user) {
       logger.warn('OAuth native sign-in failed', { provider, error: sessionError?.message });
       return res.status(401).json({ error: 'Invalid or expired identity token' });

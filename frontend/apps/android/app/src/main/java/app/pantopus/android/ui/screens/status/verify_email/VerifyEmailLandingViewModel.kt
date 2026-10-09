@@ -25,8 +25,10 @@ import javax.inject.Inject
  * Reads `email` + `token` from [SavedStateHandle]. On first attach it POSTs
  * the token to the existing verify-email endpoint and walks three phases:
  *
- *   Verifying → Success   (token accepted)
- *   Verifying → Expired   (token rejected / missing / network error)
+ *   Verifying → Success      (token accepted)
+ *   Verifying → Expired      (token rejected / missing)
+ *   Verifying → Unavailable  (offline, rate-limited or Pantopus busy: the
+ *                             link wasn't checked and still works → Try again)
  *
  * The Expired phase offers a Resend (re-using the resend-verification
  * endpoint, honouring the same 30s cooldown as A18.1).
@@ -41,8 +43,8 @@ class VerifyEmailLandingViewModel
         /** Wall-clock source — replaced in tests with a fake clock. */
         var clock: Clock = Clock.systemUTC()
 
-        /** The three post-tap outcomes the design frames. */
-        enum class Phase { Verifying, Success, Expired }
+        /** The post-tap outcomes; Unavailable offers the same link again. */
+        enum class Phase { Verifying, Success, Expired, Unavailable }
 
         /** Transient confirmation surfaced after a Resend tap. */
         data class ResendToast(
@@ -54,6 +56,8 @@ class VerifyEmailLandingViewModel
             val email: String? = null,
             val token: String? = null,
             val phase: Phase = Phase.Verifying,
+            /** Why the link couldn't be checked ([Phase.Unavailable]), in the person's terms. */
+            val unavailableMessage: String = "",
             val isResending: Boolean = false,
             val toast: ResendToast? = null,
             val resendCooldownUntilEpochMs: Long? = null,
@@ -102,11 +106,25 @@ class VerifyEmailLandingViewModel
                     authRepository.verifyEmail(token)
                     _uiState.update { it.copy(phase = Phase.Success) }
                 } catch (e: Throwable) {
-                    // Any failure (rejected / expired token, network) → the
-                    // expired frame, which offers Resend + change-email.
-                    _uiState.update { it.copy(phase = Phase.Expired) }
+                    // Offline / busy → the link still works: Try again. A refused
+                    // link → the expired frame, which offers Resend + change-email.
+                    val unavailable = unavailableMessage(e)
+                    _uiState.update {
+                        if (unavailable != null) {
+                            it.copy(phase = Phase.Unavailable, unavailableMessage = unavailable)
+                        } else {
+                            it.copy(phase = Phase.Expired)
+                        }
+                    }
                 }
             }
+        }
+
+        /** "Try again" from the unavailable frame: checks the same link once more. */
+        fun retry() {
+            if (_uiState.value.phase != Phase.Unavailable) return
+            hasVerified = false
+            verifyOnAppearIfNeeded()
         }
 
         /**
@@ -150,5 +168,16 @@ class VerifyEmailLandingViewModel
             const val EMAIL_KEY = "email"
             const val TOKEN_KEY = "token"
             const val RESEND_COOLDOWN_MS: Long = 30_000
+
+            /** Copy for a failure that left the link unused (offline, rate-limited, busy); null when the link was refused. */
+            fun unavailableMessage(error: Throwable): String? =
+                when (error) {
+                    is AuthError.NetworkError ->
+                        "Can't reach Pantopus. Check your connection, then try again. Your link still works."
+                    is AuthError.RateLimited ->
+                        "Too many tries for now. Wait a minute, then try again. Your link still works."
+                    is AuthError.TemporarilyUnavailable -> error.detail
+                    else -> null
+                }
         }
     }

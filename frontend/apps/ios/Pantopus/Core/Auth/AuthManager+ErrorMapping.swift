@@ -68,8 +68,11 @@ extension AuthManager {
         case let .clientError(status, body):
             if status == 429 { return .rateLimited }
             return .serverError(extractMessage(from: body) ?? body ?? "")
-        case let .server(status, body):
-            return .serverError(extractMessage(from: body) ?? "Server error \(status).")
+        case let .server(_, body):
+            // A 5xx (Pantopus or its sign-in service busy) didn't use the link: it can be tried again.
+            return .temporarilyUnavailable(
+                extractMessage(from: body) ?? "We couldn't check your link just now. It still works: try again in a minute."
+            )
         case .transport: return .networkError
         default: return .unknown
         }
