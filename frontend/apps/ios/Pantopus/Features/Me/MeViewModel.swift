@@ -54,6 +54,8 @@ public final class MeViewModel {
     static let freshFor: TimeInterval = 10 * 60
 
     private let api: APIClient
+    /// The screen store (Instant Screens), shared with every other screen.
+    private let store: ScreenStore
     private let now: @Sendable () -> Date
     private let logger = Logger(label: "app.pantopus.ios.Me")
 
@@ -63,6 +65,7 @@ public final class MeViewModel {
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.api = api
+        store = ScreenStore.store(for: api)
         self.expandMonthlyReceipt = expandMonthlyReceipt
         self.now = now
     }
@@ -96,15 +99,16 @@ public final class MeViewModel {
 
     /// Opening the screen. The host keeps this model across openings, so
     /// content shows at once; it is fetched again quietly once older than
-    /// `freshFor`.
+    /// `freshFor`. The reads go through the screen store, which other screens
+    /// share (My Homes, the profile, Settings).
     public func load() async {
         if case .loaded = state, let loadedAt, now().timeIntervalSince(loadedAt) < Self.freshFor { return }
-        await fetch()
+        await fetch(force: false)
     }
 
-    /// Pull-to-refresh / retry.
+    /// Pull-to-refresh / retry / a saved profile edit: always asks the server.
     public func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     /// Switch identity pill — pure UI rebind, no refetch needed.
@@ -115,15 +119,17 @@ public final class MeViewModel {
 
     // MARK: - Fetch
 
-    private func fetch() async {
+    private func fetch(force: Bool) async {
         // Every read starts at once; only the stats (by profile id) and the
         // primary Home's dashboard wait for the profile and the Homes list.
-        let profileTask: Task<ProfileResponse?, Never> = start { try await self.api.request(UsersEndpoints.profile()) }
-        let homesTask: Task<MyHomesResponse?, Never> = start { try await self.api.request(HomesEndpoints.myHomes()) }
-        let businessesTask: Task<MyBusinessesResponse?, Never> = start {
-            try await self.api.request(BusinessesEndpoints.myBusinesses())
+        let profileTask: Task<ProfileResponse?, Never> = start { try await self.you(UsersEndpoints.profile(), force: force) }
+        let homesTask: Task<MyHomesResponse?, Never> = start {
+            try await HomesStoreReads.myHomes(store: self.store, force: force).value
         }
-        let insights = Task { await self.fetchInsights() }
+        let businessesTask: Task<MyBusinessesResponse?, Never> = start {
+            try await self.you(BusinessesEndpoints.myBusinesses(), force: force)
+        }
+        let insights = Task { await self.fetchInsights(force: force) }
         // Personal profile is the only hard requirement. Home and stats
         // failures degrade their own surface instead of failing the whole
         // screen. A failed refresh keeps what's on screen.
@@ -134,11 +140,13 @@ public final class MeViewModel {
 
         let homes = await homesTask.value
         let userId = profile.user.id
-        let statsTask: Task<UserStatsDTO?, Never> = start { try await self.api.request(UsersEndpoints.stats(userId: userId)) }
+        let statsTask: Task<UserStatsDTO?, Never> = start { try await self.you(UsersEndpoints.stats(userId: userId), force: force) }
         // The Home card's counts come from the primary Home's dashboard.
-        let primaryHomeId = Self.primaryHome(in: homes?.sharedHomes ?? [])?.home.id
-        let dashboardTask: Task<HomeDashboardResponse?, Never>? = primaryHomeId.map { homeId in
-            start { try await self.api.request(HomeDashboardEndpoints.dashboard(homeId: homeId)) }
+        let primary = Self.primaryHome(in: homes?.sharedHomes ?? [])
+        let dashboardTask: Task<HomeDashboardResponse?, Never>? = primary.map { primary in
+            let homeId = primary.home.id
+            let household = primary.showsCopyBeforeRecheck
+            return start { try await self.dashboard(homeId: homeId, household: household, force: force) }
         }
         let stats = await statsTask.value
         let dashboard = await dashboardTask?.value
@@ -164,22 +172,39 @@ public final class MeViewModel {
         await insights.value
     }
 
+    /// The primary Home's dashboard (household data: shown before the
+    /// re-check only for owners and household roles).
+    private func dashboard(homeId: String, household: Bool, force: Bool) async throws -> HomeDashboardResponse {
+        let gate: @Sendable (HomeDashboardResponse) -> Bool = { _ in household }
+        return try await store.load(
+            HomeDashboardEndpoints.dashboard(homeId: homeId),
+            as: HomeDashboardResponse.self,
+            kind: .homes,
+            topics: [ScreenTopic.home(homeId)],
+            force: force,
+            showsBeforeRecheck: gate
+        ).value
+    }
+
+    /// Own profile and settings reads (contract section 4, You: 10 minutes).
+    private func you<Value: Decodable & Sendable>(_ endpoint: Endpoint, force: Bool) async throws -> Value {
+        try await store.load(endpoint, as: Value.self, kind: .you, topics: [ScreenTopic.profileMe], force: force).value
+    }
+
     /// Monthly Receipt + invite progress + invite code, read at once. All
     /// three degrade to a hidden card rather than failing the tab, matching
     /// RN's `Promise.allSettled` handling in `(tabs)/profile.tsx:117`; a
     /// failed refresh keeps a card already shown.
-    private func fetchInsights() async {
+    private func fetchInsights(force: Bool) async {
         let period = Self.receiptPeriod(now: now())
         let receipt: Task<MonthlyReceiptDTO?, Never> = start {
-            try await self.api.request(
-                ProfileInsightsEndpoints.monthlyReceipt(year: period.year, month: period.month)
-            )
+            try await self.you(ProfileInsightsEndpoints.monthlyReceipt(year: period.year, month: period.month), force: force)
         }
         let progress: Task<InviteProgressDTO?, Never> = start {
-            try await self.api.request(ProfileInsightsEndpoints.inviteProgress())
+            try await self.you(ProfileInsightsEndpoints.inviteProgress(), force: force)
         }
         let code: Task<InviteCodeDTO?, Never> = start {
-            try await self.api.request(ProfileInsightsEndpoints.inviteCode())
+            try await self.you(ProfileInsightsEndpoints.inviteCode(), force: force)
         }
         let newReceipt = await receipt.value
         let newProgress = await progress.value

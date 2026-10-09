@@ -150,6 +150,17 @@ struct HubSetupBanner: View {
     let onStart: () -> Void
     let onDismiss: () -> Void
 
+    /// What verifying unlocks, without promising cut features: launch cuts
+    /// #4 (Open gigs) and #10 (Mailbox) leave the badge and neighbor messages.
+    static var unlockLine: String {
+        switch (LaunchFeatures.openGigs, LaunchFeatures.mailbox) {
+        case (true, true): "Unlock gigs + mail receiving."
+        case (false, true): "Unlock mail receiving."
+        case (true, false): "Unlock gigs + your verified badge."
+        case (false, false): "Unlock your verified badge and neighbor messages."
+        }
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: Spacing.s2) {
             // Leading 32pt icon disk — design uses warningLight bg + warning fg.
@@ -164,8 +175,7 @@ struct HubSetupBanner: View {
                 Text(content.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
-                // Launch cut #4 (Open gigs): verification doesn't advertise gigs.
-                Text(LaunchFeatures.openGigs ? "Unlock gigs + mail receiving." : "Unlock mail receiving.")
+                Text(Self.unlockLine)
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }

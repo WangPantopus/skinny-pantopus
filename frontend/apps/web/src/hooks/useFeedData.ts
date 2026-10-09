@@ -15,6 +15,7 @@ import type { FeedSurface, Post, PostType } from '@pantopus/api';
 import type { AudienceProfile, User } from '@pantopus/types';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { queryKeys } from '@/lib/query-keys';
+import { useFirstPageRefresh } from '@/lib/firstPageRefresh';
 import type { SportsMode, TopicKey } from '@/constants/feedTopics';
 import { fetchMe } from '@/lib/me';
 
@@ -52,6 +53,7 @@ interface UseFeedDataOptions {
 }
 
 type FeedPage = Awaited<ReturnType<typeof api.posts.getFeedV2>>;
+const FEED_FRESH_MS = 30_000;
 // Sports lane returns a richer cursor tuple: (rankBucket, createdAt, id).
 type FeedCursor = { createdAt: string; id: string; rankBucket?: number } | null;
 
@@ -138,8 +140,11 @@ export function useFeedData({
   }, [initialSurface]);
 
   // Place eligibility
-  const [placeEligible, setPlaceEligible] = useState(true);
-  const [eligibilityReason, setEligibilityReason] = useState<string | null>(null);
+  // The last answer for this area shows at once (the composer doesn't flicker); the check runs again.
+  const [keptEligibility] = useState(() => queryClient.getQueryData<{ eligible: boolean; reason: string | null }>(
+    ['posts', 'place-eligibility', viewingLat, viewingLng]));
+  const [placeEligible, setPlaceEligible] = useState(keptEligibility?.eligible ?? true);
+  const [eligibilityReason, setEligibilityReason] = useState<string | null>(keptEligibility?.reason ?? null);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -185,6 +190,7 @@ export function useFeedData({
         if (!latest) return;
         setPlaceEligible(r.eligible);
         setEligibilityReason(r.reason || null);
+        queryClient.setQueryData(['posts', 'place-eligibility', viewingLat, viewingLng], { eligible: r.eligible, reason: r.reason || null });
       })
       .catch(() => {
         if (latest) setPlaceEligible(true);
@@ -192,9 +198,11 @@ export function useFeedData({
     return () => {
       latest = false;
     };
-  }, [surface, viewingLat, viewingLng, gpsTimestamp, userLat, userLng]);
+  }, [surface, viewingLat, viewingLng, gpsTimestamp, userLat, userLng, queryClient]);
 
   // ── Feed data ──────────────────────────────────────────────
+  // Back after the fresh window, the feed refreshes its first page, not every page it had.
+  useFirstPageRefresh(currentKey, FEED_FRESH_MS);
   const feedQuery = useInfiniteQuery<FeedPage, Error, InfiniteData<FeedPage>, typeof currentKey, FeedCursor>({
     queryKey: currentKey,
     initialPageParam: null,
@@ -238,7 +246,7 @@ export function useFeedData({
     },
     getNextPageParam: (lastPage) =>
       lastPage.pagination.hasMore ? (lastPage.pagination.nextCursor ?? null) : undefined,
-    staleTime: 30_000,
+    staleTime: FEED_FRESH_MS,
     enabled: surface !== 'place' || areaReady,
   });
 

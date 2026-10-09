@@ -164,6 +164,8 @@ public final class FeedContextBarViewModel {
             let response: SetViewingLocationResponse = try await api.request(
                 ViewingLocationEndpoints.set(request)
             )
+            // The stored area is now another one; feeds re-read it.
+            ScreenStore.shared.remove(ViewingLocationEndpoints.current())
             applyCurrent(response.viewingLocation)
             if response.viewingLocation == nil { locationLabel = option.label }
             isSheetPresented = false
@@ -211,6 +213,7 @@ public final class FeedContextBarViewModel {
                 ViewingLocationEndpoints.setRadius(miles: miles)
             )
             radiusMiles = response.radiusMiles ?? miles
+            ScreenStore.shared.remove(ViewingLocationEndpoints.current())
             onChange()
             return true
         } catch {

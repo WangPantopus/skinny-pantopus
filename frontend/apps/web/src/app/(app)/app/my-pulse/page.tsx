@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useKeptState } from '@/lib/keptState';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { Post } from '@pantopus/types';
@@ -19,15 +20,22 @@ const PAGE_SIZE = 50;
 
 type PageCursor = { createdAt: string; id: string };
 type Tab = 'mine' | 'saved';
+// Coming back shows the lists as they were left (contract §3); read again after a minute.
+const LIST_FRESH_MS = 60 * 1000;
 
 export default function MyPulsePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+  const mine = useKeptState<{ posts: Post[]; nextCursor: PageCursor | null }>(['posts', 'mine'], LIST_FRESH_MS);
+  const [posts, setPosts] = useState<Post[]>(mine.initial?.posts ?? []);
+  const [loading, setLoading] = useState(!mine.initial);
   const [loadError, setLoadError] = useState(false);
   // Where the next (older) page starts; null once the server has no more.
-  const [nextCursor, setNextCursor] = useState<PageCursor | null>(null);
+  const [nextCursor, setNextCursor] = useState<PageCursor | null>(mine.initial?.nextCursor ?? null);
+  const { keep: keepMine } = mine;
+  const mineReadAt = useRef(mine.readAt);
+  const skipFirstLoad = useRef(mine.fresh);
+  const postsShown = useRef(posts.length > 0 || !!mine.initial);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   // Bumped by every first-page load so a page that lands later can't
@@ -41,10 +49,14 @@ export default function MyPulsePage() {
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<Tab>('mine');
   // Saved posts page by offset over saves; the server says where the next page starts.
-  const [saved, setSaved] = useState<Post[]>([]);
-  const [savedLoading, setSavedLoading] = useState(true);
+  const savedCopy = useKeptState<{ posts: Post[]; nextOffset: number | null }>(['posts', 'saved'], LIST_FRESH_MS);
+  const [saved, setSaved] = useState<Post[]>(savedCopy.initial?.posts ?? []);
+  const [savedLoading, setSavedLoading] = useState(!savedCopy.initial);
   const [savedLoadError, setSavedLoadError] = useState(false);
-  const [savedNextOffset, setSavedNextOffset] = useState<number | null>(null);
+  const [savedNextOffset, setSavedNextOffset] = useState<number | null>(savedCopy.initial?.nextOffset ?? null);
+  const { keep: keepSaved } = savedCopy;
+  const savedReadAt = useRef(savedCopy.readAt);
+  const savedShown = useRef(!!savedCopy.initial);
   const [savedLoadingMore, setSavedLoadingMore] = useState(false);
   const [savedLoadMoreFailed, setSavedLoadMoreFailed] = useState(false);
   const savedGeneration = useRef(0);
@@ -68,19 +80,23 @@ export default function MyPulsePage() {
   const loadPosts = useCallback(async () => {
     if (!userId) return;
     const generation = ++loadGeneration.current;
-    setLoading(true);
+    // A list already on screen refreshes quietly.
+    if (!postsShown.current) setLoading(true);
     setLoadError(false);
     setLoadingMore(false);
     setLoadMoreFailed(false);
     try {
       const result = await api.posts.getUserPosts(userId, { limit: PAGE_SIZE });
       if (generation !== loadGeneration.current) return;
+      mineReadAt.current = Date.now();
+      postsShown.current = true;
       setPosts(result?.posts || []);
       setNextCursor(result?.pagination?.hasMore ? result.pagination.nextCursor : null);
     } catch (err) {
       if (generation !== loadGeneration.current) return;
       console.error('Failed to load my posts:', err);
-      // A failed load is not an empty history: say so and offer a retry.
+      // A failed refresh keeps the list on screen; a failed first load is not an empty history.
+      if (postsShown.current) return;
       setPosts([]);
       setNextCursor(null);
       setLoadError(true);
@@ -89,7 +105,15 @@ export default function MyPulsePage() {
     }
   }, [userId]);
 
-  useEffect(() => { loadPosts(); }, [loadPosts]);
+  useEffect(() => {
+    if (!userId) return;
+    // The kept list is fresh: the first read waits for the next visit.
+    if (skipFirstLoad.current) { skipFirstLoad.current = false; return; }
+    loadPosts();
+  }, [loadPosts, userId]);
+  useEffect(() => {
+    if (!loading && !loadError) keepMine({ posts, nextCursor }, mineReadAt.current);
+  }, [posts, nextCursor, loading, loadError, keepMine]);
 
   const loadMore = useCallback(async () => {
     if (!userId || !nextCursor || loadingMore) return;
@@ -120,18 +144,22 @@ export default function MyPulsePage() {
   // ── Fetch saved posts (the Saved tab) ───────────────────
   const loadSaved = useCallback(async () => {
     const generation = ++savedGeneration.current;
-    setSavedLoading(true);
+    // A list already on screen refreshes quietly.
+    if (!savedShown.current) setSavedLoading(true);
     setSavedLoadError(false);
     setSavedLoadingMore(false);
     setSavedLoadMoreFailed(false);
     try {
       const result = await api.posts.getSavedPosts({ limit: PAGE_SIZE, offset: 0 });
       if (generation !== savedGeneration.current) return;
+      savedReadAt.current = Date.now();
+      savedShown.current = true;
       setSaved(result?.posts || []);
       setSavedNextOffset(result?.pagination?.hasMore ? result.pagination.nextOffset : null);
     } catch (err) {
       if (generation !== savedGeneration.current) return;
       console.error('Failed to load saved posts:', err);
+      if (savedShown.current) return;
       setSaved([]);
       setSavedNextOffset(null);
       setSavedLoadError(true);
@@ -140,8 +168,11 @@ export default function MyPulsePage() {
     }
   }, []);
 
-  // Every visit to the tab re-reads it, so posts saved elsewhere since show up.
+  // Every visit to the tab re-reads it, so posts saved elsewhere since show up (quietly over the kept list).
   useEffect(() => { if (tab === 'saved') void loadSaved(); }, [tab, loadSaved]);
+  useEffect(() => {
+    if (!savedLoading && !savedLoadError && savedShown.current) keepSaved({ posts: saved, nextOffset: savedNextOffset }, savedReadAt.current);
+  }, [saved, savedNextOffset, savedLoading, savedLoadError, keepSaved]);
 
   const loadMoreSaved = useCallback(async () => {
     if (savedNextOffset == null || savedLoadingMore) return;
