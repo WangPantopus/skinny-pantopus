@@ -41,6 +41,9 @@ public struct SettingsView: View {
     @Environment(AuthManager.self) private var auth
     @State private var showsSignOutConfirm = false
     @State private var path: [SettingsStackRoute] = []
+    /// The index's rows, kept while Settings is open: coming back from a
+    /// sub-screen shows them as they were and refreshes them quietly.
+    @State private var indexModel = SettingsIndexViewModel()
     /// Set when a caller opens Settings straight on a sub-screen (e.g.
     /// Payments). Its Back then returns to that caller, not to the index.
     private let initialRoute: SettingsStackRoute?
@@ -104,13 +107,9 @@ public struct SettingsView: View {
     }
 
     private var indexView: some View {
-        GroupedListView(
-            dataSource: SettingsIndexViewModel { route in
-                handle(route: route)
-            },
-            onBack: onClose
-        )
-        .accessibilityIdentifier("settings")
+        GroupedListView(dataSource: indexModel, onBack: onClose)
+            .accessibilityIdentifier("settings")
+            .onAppear { indexModel.onNavigate = { route in handle(route: route) } }
     }
 
     @ViewBuilder private func destination(for route: SettingsStackRoute) -> some View {

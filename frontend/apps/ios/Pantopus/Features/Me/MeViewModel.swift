@@ -45,7 +45,13 @@ public final class MeViewModel {
 
     /// Set when the profile was opened from the `monthly_receipt` push —
     /// the receipt card renders expanded.
-    public private(set) var expandMonthlyReceipt: Bool
+    public var expandMonthlyReceipt: Bool
+
+    /// When the shown content was fetched.
+    private var loadedAt: Date?
+    /// The You screen's fresh window (Instant Screens contract §4): opening
+    /// it again within it sends no request.
+    static let freshFor: TimeInterval = 10 * 60
 
     private let api: APIClient
     private let now: @Sendable () -> Date
@@ -88,9 +94,11 @@ public final class MeViewModel {
         return (year, month)
     }
 
-    /// First-time load — no-op when we already have content.
+    /// Opening the screen. The host keeps this model across openings, so
+    /// content shows at once; it is fetched again quietly once older than
+    /// `freshFor`.
     public func load() async {
-        if case .loaded = state { return }
+        if case .loaded = state, let loadedAt, now().timeIntervalSince(loadedAt) < Self.freshFor { return }
         await fetch()
     }
 
@@ -108,31 +116,31 @@ public final class MeViewModel {
     // MARK: - Fetch
 
     private func fetch() async {
+        // Every read starts at once; only the stats (by profile id) and the
+        // primary Home's dashboard wait for the profile and the Homes list.
+        async let profileTask: ProfileResponse? = optional { try await self.api.request(UsersEndpoints.profile()) }
+        async let homesTask: MyHomesResponse? = optional { try await self.api.request(HomesEndpoints.myHomes()) }
+        async let businessesTask: MyBusinessesResponse? = optional {
+            try await self.api.request(BusinessesEndpoints.myBusinesses())
+        }
+        async let insights: Void = fetchInsights()
         // Personal profile is the only hard requirement. Home and stats
         // failures degrade their own surface instead of failing the whole
-        // screen.
-        guard let profile: ProfileResponse = await optional({
-            try await self.api.request(UsersEndpoints.profile())
-        }) else {
-            state = .error(message: "Couldn't load your profile.")
+        // screen. A failed refresh keeps what's on screen.
+        guard let profile = await profileTask else {
+            if case .loaded = state {} else { state = .error(message: "Couldn't load your profile.") }
             return
         }
 
-        let homes: MyHomesResponse? = await optional {
-            try await self.api.request(HomesEndpoints.myHomes())
-        }
-        let stats: UserStatsDTO? = await optional {
-            try await self.api.request(UsersEndpoints.stats(userId: profile.user.id))
-        }
+        let homes = await homesTask
+        let userId = profile.user.id
+        async let statsTask: UserStatsDTO? = optional { try await self.api.request(UsersEndpoints.stats(userId: userId)) }
+        // The Home card's counts come from the primary Home's dashboard.
+        let primaryHomeId = Self.primaryHome(in: homes?.sharedHomes ?? [])?.home.id
+        async let dashboardTask = dashboard(homeId: primaryHomeId)
+        let (stats, dashboard, businesses) = await (statsTask, dashboardTask, businessesTask)
 
         let personal = Self.buildPersonal(profile: profile.user, stats: stats)
-        // The Home card's counts come from the primary Home's dashboard.
-        var dashboard: HomeDashboardResponse?
-        if let homeId = Self.primaryHome(in: homes?.sharedHomes ?? [])?.home.id {
-            dashboard = await optional {
-                try await self.api.request(HomeDashboardEndpoints.dashboard(homeId: homeId))
-            }
-        }
         // `homes == nil` is a failed read; it must not read as "No shared Home".
         let home = Self.buildHome(
             homes: homes?.sharedHomes ?? [],
@@ -140,9 +148,6 @@ public final class MeViewModel {
             homesFailed: homes == nil,
             dashboard: dashboard
         )
-        let businesses: MyBusinessesResponse? = await optional {
-            try await self.api.request(BusinessesEndpoints.myBusinesses())
-        }
         showBusiness = businesses == nil || !(businesses?.businesses.isEmpty ?? true)
         if !showBusiness, activeIdentity == .business { activeIdentity = .personal }
         let business = Self.buildBusiness(membership: businesses?.businesses.first, failed: businesses == nil)
@@ -151,28 +156,36 @@ public final class MeViewModel {
             home: Self.launchScoped(home),
             business: Self.launchScoped(business)
         )
-        await fetchInsights()
+        loadedAt = now()
+        await insights
     }
 
-    /// Monthly Receipt + invite progress + invite code. All three degrade to
-    /// a hidden card rather than failing the tab, matching RN's
-    /// `Promise.allSettled` handling in `(tabs)/profile.tsx:117`.
+    private func dashboard(homeId: String?) async -> HomeDashboardResponse? {
+        guard let homeId else { return nil }
+        return await optional { try await self.api.request(HomeDashboardEndpoints.dashboard(homeId: homeId)) }
+    }
+
+    /// Monthly Receipt + invite progress + invite code, read at once. All
+    /// three degrade to a hidden card rather than failing the tab, matching
+    /// RN's `Promise.allSettled` handling in `(tabs)/profile.tsx:117`; a
+    /// failed refresh keeps a card already shown.
     private func fetchInsights() async {
         let period = Self.receiptPeriod(now: now())
-        let receipt: MonthlyReceiptDTO? = await optional {
+        async let receipt: MonthlyReceiptDTO? = optional {
             try await self.api.request(
                 ProfileInsightsEndpoints.monthlyReceipt(year: period.year, month: period.month)
             )
         }
-        let progress: InviteProgressDTO? = await optional {
+        async let progress: InviteProgressDTO? = optional {
             try await self.api.request(ProfileInsightsEndpoints.inviteProgress())
         }
-        let code: InviteCodeDTO? = await optional {
+        async let code: InviteCodeDTO? = optional {
             try await self.api.request(ProfileInsightsEndpoints.inviteCode())
         }
-        monthlyReceipt = receipt
-        inviteProgress = progress
-        inviteCode = code?.inviteCode
+        let (newReceipt, newProgress, newCode) = await (receipt, progress, code)
+        monthlyReceipt = newReceipt ?? monthlyReceipt
+        inviteProgress = newProgress ?? inviteProgress
+        inviteCode = newCode?.inviteCode ?? inviteCode
     }
 
     private func optional<T: Sendable>(_ operation: @Sendable () async throws -> T) async -> T? {

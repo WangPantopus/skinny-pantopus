@@ -114,6 +114,12 @@ public struct RootTabView: View {
     /// inboxes, "Your audience") opens the cover on that screen.
     @State private var profileInitialRoute: YouRoute?
     @State private var addHomeRequest: UUID?
+    @Environment(AuthManager.self) private var auth
+    /// The You cover's model, kept across openings (Instant Screens): the
+    /// cover shows its last content at once and refreshes it quietly once
+    /// stale. Replaced for another account.
+    @State private var youModel = MeViewModel()
+    @State private var youModelUserID: String?
 
     public init() {}
 
@@ -153,6 +159,13 @@ public struct RootTabView: View {
             await chatBadgeStore.start()
             model.messagesBadge = chatBadgeStore.unreadMessages
         }
+        .task(id: signedInUserID) {
+            // Another account never sees the previous account's You screen.
+            if youModelUserID != signedInUserID {
+                if youModelUserID != nil { youModel = MeViewModel() }
+                youModelUserID = signedInUserID
+            }
+        }
         .onChange(of: chatBadgeStore.unreadMessages) { _, unread in
             model.messagesBadge = unread
         }
@@ -166,10 +179,15 @@ public struct RootTabView: View {
             isPresented: $showProfile,
             onDismiss: {
                 expandMonthlyReceipt = false
+                youModel.expandMonthlyReceipt = false
                 profileInitialRoute = nil
             },
             content: {
-                YouTabRoot(expandMonthlyReceipt: expandMonthlyReceipt, initialRoute: profileInitialRoute) {
+                YouTabRoot(
+                    expandMonthlyReceipt: expandMonthlyReceipt,
+                    initialRoute: profileInitialRoute,
+                    meViewModel: youModel
+                ) {
                     showProfile = false
                 }
                 // A cover doesn't see the tab view's environment; the profile can switch tabs under it.
@@ -265,6 +283,7 @@ public struct RootTabView: View {
             // `monthly_receipt` push — open the profile cover with the
             // receipt card expanded.
             expandMonthlyReceipt = true
+            youModel.expandMonthlyReceipt = true
             showProfile = true
             _ = router.consume()
         case .creatorInbox:
@@ -296,6 +315,10 @@ public struct RootTabView: View {
         case .monthlyReceipt, .resetPassword, .verifyEmail, .unknown: true
         default: false
         }
+    }
+
+    private var signedInUserID: String? {
+        if case let .signedIn(user) = auth.state { user.id } else { nil }
     }
 
     /// Persona screens live in the profile cover's own stack.
