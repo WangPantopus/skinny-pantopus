@@ -80,6 +80,8 @@ export const queryKeys = {
   homeDetail: (id: string) => ['homes', 'detail', id] as const,
   /** A Home's dashboard as last shown, with the access it was shown with; components/home/homeDashboardCopy.ts. */
   homeDashboard: (id: string) => ['homes', 'dashboard', id] as const,
+  /** A home's public-record property details (GET /api/homes/:id/property-details). */
+  homePropertyDetails: (id: string) => ['homes', 'property-details', id] as const,
   /** One of that dashboard's summary cards, kept beside its copy. */
   homeSummary: (id: string, name: string) => ['homes', 'dashboard', id, 'summary', name] as const,
 
