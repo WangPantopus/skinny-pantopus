@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.ui.components.ErrorState
@@ -83,6 +84,7 @@ fun NearbyScreen(
     viewModel: NearbyViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("nearby", state is NearbyUiState.Loaded)
     LaunchedEffect(Unit) { viewModel.load() }
     NearbyContent(state, onClaim, onOpenPulse, onOpenBeacons, onOpenConnections, onOpenMarketplace, onOpenTasks, viewModel::refresh)
 }
