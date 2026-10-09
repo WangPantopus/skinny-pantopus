@@ -269,7 +269,13 @@ public final class PulseFeedViewModel {
     /// First-time load. Refetches when still empty so a location fix can
     /// populate the feed after permissions are granted.
     public func load() async {
-        if case .loaded = state { return }
+        if case .loaded = state {
+            // Coming back: a quiet re-read once the first page is out of date
+            // (Nearby: 2 minutes, or marked); new posts wait behind the pill.
+            if let query = lastQuery, store.peek(feedEndpoint(query), as: FeedResponse.self)?.isFresh == true { return }
+            await fetch()
+            return
+        }
         showStoredFirstPage()
         await fetch()
     }
@@ -671,6 +677,13 @@ public final class PulseFeedViewModel {
                     newPostsCount = fresh
                     return
                 }
+                // Nothing new: the rows on screen take the server's counts and
+                // edits in place, and the older pages below stay.
+                let refreshed = Dictionary(response.posts.map { ($0.id, $0) }) { first, _ in first }
+                loadedItems = loadedItems.map { refreshed[$0.id] ?? $0 }
+                seedPostDetails(response.posts)
+                rebuildLoadedState()
+                return
             }
             pendingFirstPage = nil
             newPostsCount = 0
