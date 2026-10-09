@@ -142,6 +142,9 @@ class PlaceRepository
                 conditionalApiCall { placeApi.intelligenceConditional(homeId, StoreKeys.todaySectionsQuery, etag) }
             }
 
+        /** True while the home's stored Today is fresh and no topic marked it out of date (coming back reads nothing). */
+        fun todayIsCurrent(homeId: String): Boolean = store.isCurrent(StoreKeys.today(homeId))
+
         /** The anonymous, address-only T0 preview (no account required). */
         suspend fun publicPreview(address: String): NetworkResult<PlacePreview> = safeApiCall { placeApi.publicPreview(address) }
 
