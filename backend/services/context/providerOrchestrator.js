@@ -507,7 +507,9 @@ async function getHubToday(userId, options = {}) {
   const household = Boolean(internal.bills_due?.length || internal.tasks_due?.length
     || internal.calendar_events?.length || (location.homeId && addressCalendar));
   const signalled = syncChangedService.isLive() && !isLaunchFeatureEnabled('mailbox') && !internal.active_gigs?.length;
-  if (!isLaunchFeatureEnabled('household_extras') && (!household || signalled)) {
+  // A payload with a provider that didn't answer isn't kept: the apps' Retry (and the next read) asks again
+  // instead of getting the same failure back for the memo's lifetime.
+  if (!isLaunchFeatureEnabled('household_extras') && partialFailures.length === 0 && (!household || signalled)) {
     _hubTodayCache.set(memoKey, { result, expiresAt: Date.now() + HUB_TODAY_CACHE_TTL_MS, generations, household });
   }
   if (_hubTodayCache.size > HUB_TODAY_CACHE_MAX) {
