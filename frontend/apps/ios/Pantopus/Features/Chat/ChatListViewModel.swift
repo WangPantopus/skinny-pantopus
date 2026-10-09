@@ -36,6 +36,10 @@ public final class ChatListViewModel {
     public private(set) var unreadByFilter: [ChatFilter: Int] = [:]
 
     private let api: APIClient
+    /// The screen store (Instant Screens): the list shows its stored copy in the
+    /// first frame and is re-read once out of date (30 seconds); live messages
+    /// patch rows in place meanwhile.
+    private let store: ScreenStore
     private let socket: SocketClient
     private let preferences: ChatConversationPreferences
     private let logger = Logger(label: "app.pantopus.ios.ChatList")
@@ -69,8 +73,12 @@ public final class ChatListViewModel {
         preferences: ChatConversationPreferences = .shared
     ) {
         self.api = api
+        store = ScreenStore.store(for: api)
         self.socket = socket
         self.preferences = preferences
+        if let copy = store.peek(ChatEndpoints.unifiedConversations(), as: UnifiedConversationsResponse.self)?.value {
+            apply(copy, stats: store.peek(ChatEndpoints.stats(), as: ChatStatsResponse.self)?.value.stats)
+        }
     }
 
     // No `deinit { cancel }` — Swift 6's strict concurrency disallows
@@ -89,16 +97,16 @@ public final class ChatListViewModel {
     public func load() async {
         if case .loaded = state {
             subscribeToSockets()
-            await fetch()
+            await fetch(force: false)
             return
         }
-        await fetch()
+        await fetch(force: false)
         subscribeToSockets()
     }
 
     /// Pull-to-refresh / retry.
     public func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     /// Tap a filter tab. Pure UI — no refetch.
@@ -138,12 +146,24 @@ public final class ChatListViewModel {
 
     // MARK: - Fetch
 
-    private func fetch() async {
+    private func fetch(force: Bool) async {
         async let conversationsTask: UnifiedConversationsResponse? = optional {
-            try await self.api.request(ChatEndpoints.unifiedConversations())
+            try await self.store.load(
+                ChatEndpoints.unifiedConversations(),
+                as: UnifiedConversationsResponse.self,
+                kind: .messagesList,
+                topics: [ScreenTopic.chats],
+                force: force
+            ).value
         }
         async let statsTask: ChatStatsResponse? = optional {
-            try await self.api.request(ChatEndpoints.stats())
+            try await self.store.load(
+                ChatEndpoints.stats(),
+                as: ChatStatsResponse.self,
+                kind: .messagesList,
+                topics: [ScreenTopic.chats],
+                force: force
+            ).value
         }
         guard let response = await conversationsTask else {
             switch state {
@@ -155,7 +175,10 @@ public final class ChatListViewModel {
             }
             return
         }
-        let stats = await statsTask?.stats
+        await apply(response, stats: statsTask?.stats)
+    }
+
+    private func apply(_ response: UnifiedConversationsResponse, stats: ChatStatsResponse.Stats?) {
         loadPreferences()
         serverTotalUnread = stats?.totalUnread ?? response.totalUnread ?? rowsUnreadTotal(from: response.conversations)
         allRows = response.conversations.map { Self.project($0, mutedKeys: mutedKeys) }
@@ -300,6 +323,8 @@ public final class ChatListViewModel {
         // gig merged rows) or by room id (group / home). When neither
         // matches, trigger a full refetch so the new conversation
         // appears.
+        // The row is patched here; the stored list re-checks on the next visit.
+        store.markStale(topics: [ScreenTopic.chats])
         let targetId = event.otherUserId ?? event.roomId
         guard let index = allRows.firstIndex(where: { $0.id == targetId }) else {
             Task { await self.refresh() }

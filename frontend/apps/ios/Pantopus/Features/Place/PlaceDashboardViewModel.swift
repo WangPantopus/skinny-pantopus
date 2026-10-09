@@ -121,8 +121,13 @@ final class PlaceDashboardViewModel {
     /// example after the user read their notifications). A failed read
     /// keeps the last count.
     func refreshUnread() async {
-        guard let unread: NotificationUnreadCountResponse = try? await api.request(NotificationsEndpoints.unreadCount)
-        else { return }
+        // The store's count (Notifications: 30 seconds; reading notifications marks it out of date).
+        guard let unread = try? await ScreenStore.store(for: api).load(
+            NotificationsEndpoints.unreadCount,
+            as: NotificationUnreadCountResponse.self,
+            kind: .notifications,
+            topics: [ScreenTopic.notifications]
+        ).value else { return }
         unreadCount = unread.personalBellCount
     }
 

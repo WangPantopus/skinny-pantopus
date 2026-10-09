@@ -632,6 +632,8 @@ public final class PublicProfileViewModel {
                 as: EmptyResponse.self
             )
             blockState = .succeeded
+            // Blocked lists, the profile's block count and chats change.
+            ScreenStore.shared.markStale(topics: [ScreenTopic.profileMe, ScreenTopic.chats])
             // RN flips `connectionState` to 'blocked' on the same success,
             // which is what drops the Connect / Follow row
             // (`src/app/user/[id].tsx:322`).

@@ -3648,7 +3648,7 @@ public struct HubTabRoot: View {
     /// verification continues there, as My Homes does (a filed claim's Waiting
     /// Room, residency status, or ownership evidence); with none, Add Home.
     private func startVerification() async {
-        let response: MyHomesResponse? = try? await APIClient.shared.request(HomesEndpoints.myHomes())
+        let response = try? await HomesStoreReads.myHomes().value
         guard rootTabs.selected == owningTab else { return }
         path.append(Self.verificationRoute(response?.homes ?? []))
     }
@@ -3667,9 +3667,8 @@ public struct HubTabRoot: View {
     }
 
     private static func primaryHomeId() async throws -> String? {
-        let response: MyHomesResponse = try await APIClient.shared.request(
-            HomesEndpoints.myHomes()
-        )
+        // One home list for every screen (the screen store): shown at once while fresh.
+        let response = try await HomesStoreReads.myHomes().value
         // A resident's own private setup is their Place until a household shares
         // it (as on the web): public readings, with the Home's records waiting on
         // verification.

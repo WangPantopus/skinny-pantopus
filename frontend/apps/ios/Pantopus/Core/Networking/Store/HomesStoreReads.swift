@@ -15,9 +15,9 @@ enum HomesStoreReads {
     /// every home on it is an owner's or household member's with open-ended
     /// access (founder decision 3, 2026-10-09); a list with a guest, service
     /// provider or expiring access waits for the server each time.
-    static func myHomes(force: Bool = false) async throws -> ScreenSnapshot<MyHomesResponse> {
+    static func myHomes(store: ScreenStore = .shared, force: Bool = false) async throws -> ScreenSnapshot<MyHomesResponse> {
         let gate: @Sendable (MyHomesResponse) -> Bool = { $0.homes.allSatisfy(\.showsCopyBeforeRecheck) }
-        return try await ScreenStore.shared.load(
+        return try await store.load(
             HomesEndpoints.myHomes(),
             as: MyHomesResponse.self,
             kind: .homes,

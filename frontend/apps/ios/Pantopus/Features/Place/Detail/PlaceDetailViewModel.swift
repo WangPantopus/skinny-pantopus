@@ -81,7 +81,7 @@ final class PlaceDetailViewModel {
     func load() async {
         if case .loaded = state { return }
         // The dashboard or Today may already hold this copy (one store entry).
-        if let copy = PlaceStoreReads.peek(homeId: homeId, savedPlaceId: savedPlaceId) {
+        if let copy = PlaceStoreReads.peek(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections) {
             show(copy)
             await fetch(quietly: true, force: false)
             return
@@ -108,6 +108,11 @@ final class PlaceDetailViewModel {
         group == .today ? .today : .place
     }
 
+    /// Today asks for only the sections it renders; detail pages read the full copy.
+    private var sections: [PlaceSectionID]? {
+        group == .today && savedPlaceId == nil ? PlaceStoreReads.todaySections : nil
+    }
+
     private func show(_ snapshot: ScreenSnapshot<PlaceIntelligence>) {
         guard loadedAt != snapshot.fetchedAt || !isLoaded else { return }
         accessDenied = false
@@ -126,7 +131,13 @@ final class PlaceDetailViewModel {
     private func fetch(quietly: Bool, force: Bool) async {
         let hadFallback = fallbackCalendar != nil
         do {
-            let snapshot = try await PlaceStoreReads.load(homeId: homeId, savedPlaceId: savedPlaceId, kind: storeKind, force: force)
+            let snapshot = try await PlaceStoreReads.load(
+                homeId: homeId,
+                savedPlaceId: savedPlaceId,
+                sections: sections,
+                kind: storeKind,
+                force: force
+            )
             try Task.checkCancellation()
             refreshFailureMessage = nil
             show(snapshot)

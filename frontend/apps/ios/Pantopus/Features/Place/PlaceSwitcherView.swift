@@ -52,11 +52,15 @@ final class PlaceSwitcherViewModel {
         self.onSelect = onSelect
         self.onAddPlace = onAddPlace
         self.onClose = onClose
+        // The shared home list shows at once when the store has it.
+        if let copy = ScreenStore.store(for: api).peek(HomesEndpoints.myHomes(), as: MyHomesResponse.self) {
+            state = .loaded(copy.value.sharedHomes.map(Self.row(for:)))
+        }
     }
 
     func load() async {
         do {
-            let response: MyHomesResponse = try await api.request(HomesEndpoints.myHomes())
+            let response = try await HomesStoreReads.myHomes(store: ScreenStore.store(for: api)).value
             state = .loaded(response.sharedHomes.map(Self.row(for:)))
         } catch let error as APIError {
             state = .error(message: error.errorDescription ?? "Couldn't load your places.")

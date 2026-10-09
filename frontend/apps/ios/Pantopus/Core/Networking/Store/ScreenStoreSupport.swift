@@ -141,7 +141,7 @@ extension ScreenStore {
     }
 
     /// Coming back after 15 minutes marks every copy out of date; a memory
-    /// warning trims to what's on screen.
+    /// warning trims to what's on screen; a profile edit marks profile reads.
     func observeLifecycle() {
         let center = NotificationCenter.default
         let background = UIApplication.didEnterBackgroundNotification
@@ -159,6 +159,10 @@ extension ScreenStore {
         })
         observers.append(center.addObserver(forName: memory, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.trimForMemoryWarning() }
+        })
+        // A saved name, username or photo (own edit): profile reads re-check.
+        observers.append(center.addObserver(forName: .pantopusProfileDidChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.markStale(topics: [ScreenTopic.profileMe]) }
         })
     }
 }
