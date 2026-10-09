@@ -2339,6 +2339,8 @@ private fun launchPromptCards(): List<AiPromptCardFixture> =
                 AiPromptCardFixture("home", "Home", "What should I check around my home before winter?", PantopusIcon.Home)
             card.id == "tasks" && !LaunchFeatures.openGigs ->
                 AiPromptCardFixture("nearby", "Nearby", "What's happening near my home?", PantopusIcon.MapPin)
+            // Launch cut #10 (Mailbox): the question is about a paper letter, so it stays without the Mailbox label.
+            card.id == "mailbox" && !LaunchFeatures.mailbox -> card.copy(category = "Letters", icon = PantopusIcon.Mail)
             else -> card
         }
     }
