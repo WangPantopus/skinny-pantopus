@@ -26,6 +26,10 @@ export const queryKeys = {
   conversations: () => ['conversations'] as const,
   chatMessages: (roomId: string) =>
     ['chat', 'messages', roomId] as const,
+  chatTopics: (otherUserId: string) =>
+    ['chat', 'topics', otherUserId] as const,
+  chatRoom: (roomId: string, asBusinessUserId?: string) =>
+    ['chat', 'room', roomId, asBusinessUserId ?? 'me'] as const,
 
   // ── Notifications ──────────────────────────────────────────
   notifications: () => ['notifications'] as const,

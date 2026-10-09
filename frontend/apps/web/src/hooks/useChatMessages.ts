@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { ChatMessage, User } from '@pantopus/types';
 import { getDateKey, formatDateLabel } from '@pantopus/ui-utils';
 import { useSocket, useSocketConnected } from './useSocket';
 import { useSocketEvent, useSocketEmit } from './useSocket';
 import { chosenUsername } from '@pantopus/utils';
+import { queryKeys } from '@/lib/query-keys';
 
 // Re-export shared helpers so existing consumers don't break
 export { getDateKey, formatDateLabel };
@@ -93,6 +94,43 @@ function insertMessageSorted(messages: ChatMessage[], newMsg: ChatMessage): Chat
   const result = messages.slice();
   result.splice(lo, 0, newMsg);
   return result;
+}
+
+// ── Kept conversations (Instant Screens contract §4: memory only) ──
+// Coming back to a conversation shows what was there at once, then catches up
+// quietly. Nothing is written to browser storage; sign-out replaces the cache.
+
+interface ConversationSnapshot {
+  messages: ChatMessage[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  roomIds: string[];
+  resolvedRoomId: string | null;
+  peer: User | null;
+}
+
+function conversationCacheKey(roomId?: string, otherUserId?: string, topicId?: string | null, asBusinessUserId?: string) {
+  if (roomId) return queryKeys.chatMessages(`room:${roomId}:${asBusinessUserId ?? 'me'}`);
+  if (otherUserId) return queryKeys.chatMessages(`person:${otherUserId}:${topicId ?? 'all'}`);
+  return null;
+}
+
+const messageTime = (m: ChatMessage) => (m?.created_at ? new Date(m.created_at).getTime() : 0);
+const isUnsent = (m: ChatMessage) => Boolean((m as Record<string, any>)._failed);
+
+/**
+ * A fresh first page replaces the newest part of a kept conversation: messages
+ * deleted meanwhile go, older pages already loaded stay, unsent ones stay.
+ * When more than a page arrived while away (`gap`), only the page is kept.
+ */
+function mergeFirstPage(kept: ChatMessage[], page: ChatMessage[], pageSize: number): { messages: ChatMessage[]; gap: boolean } {
+  const pageIds = new Set(page.map((m) => String(m.id)));
+  const complete = page.length < pageSize;
+  const oldest = page.length ? Math.min(...page.map(messageTime)) : Infinity;
+  const keptNewest = Math.max(0, ...kept.filter((m) => !isUnsent(m)).map(messageTime));
+  const gap = !complete && oldest > keptNewest;
+  const survivors = kept.filter((m) => isUnsent(m) || pageIds.has(String(m.id)) || (!complete && !gap && messageTime(m) < oldest));
+  return { messages: mergeMessages(survivors, page), gap };
 }
 
 type ChatMessageLike = Partial<ChatMessage> & {
@@ -223,21 +261,32 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const { roomId, otherUserId, topicId, asBusinessUserId, currentUserId } = opts;
   const isRoomMode = Boolean(roomId);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const cacheKey = useMemo(() => conversationCacheKey(roomId, otherUserId, topicId, asBusinessUserId), [roomId, otherUserId, topicId, asBusinessUserId]);
+  const cacheKeyId = cacheKey ? JSON.stringify(cacheKey) : '';
+  const readSnapshot = useCallback(
+    () => (cacheKey ? queryClient.getQueryData<ConversationSnapshot>(cacheKey) : undefined),
+    [queryClient, cacheKey],
+  );
+  const [initialSnapshot] = useState(readSnapshot);
+  // Which conversation the messages on screen belong to; only those are kept.
+  const shownKeyRef = useRef<string | null>(initialSnapshot ? cacheKeyId : null);
+
+  const [messages, setMessages] = useState<ChatMessage[]>(() => initialSnapshot?.messages ?? []);
+  const [loading, setLoading] = useState(() => !initialSnapshot);
   const [error, setError] = useState<string | null>(null);
   const [loadFailure, setLoadFailure] = useState<ChatLoadFailure | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [sending, setSending] = useState(false);
   const attachmentSendInFlight = useRef(false);
   const pendingAttachmentSend = useRef<{ draft: string; clientMessageId: string } | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(() => initialSnapshot?.hasMore ?? false);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [resolvedRoomId, setResolvedRoomId] = useState<string | null>(roomId || null);
-  const [directChatPeer, setDirectChatPeer] = useState<User | null>(null);
+  const [resolvedRoomId, setResolvedRoomId] = useState<string | null>(() => roomId || initialSnapshot?.resolvedRoomId || null);
+  const [directChatPeer, setDirectChatPeer] = useState<User | null>(() => initialSnapshot?.peer ?? null);
   const [directChatError, setDirectChatError] = useState<string | null>(null);
-  const [conversationRoomIds, setConversationRoomIds] = useState<string[]>([]);
-  const nextCursorRef = useRef<string | null>(null);
+  const [conversationRoomIds, setConversationRoomIds] = useState<string[]>(() => initialSnapshot?.roomIds ?? []);
+  const nextCursorRef = useRef<string | null>(initialSnapshot?.nextCursor ?? null);
 
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
@@ -365,7 +414,10 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       setDirectChatPeer(null);
       return;
     }
-    setDirectChatPeer(null);
+    // A kept conversation shows its room and header at once while this re-checks.
+    const kept = readSnapshot();
+    setDirectChatPeer(kept?.peer ?? null);
+    if (kept?.resolvedRoomId) setResolvedRoomId(kept.resolvedRoomId);
     setDirectChatError(null);
     let cancelled = false;
     (async () => {
@@ -386,12 +438,47 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       }
     })();
     return () => { cancelled = true; };
-  }, [otherUserId, isRoomMode]);
+  }, [otherUserId, isRoomMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const key = roomId || otherUserId;
     if (!key) { setLoading(false); return; }
     let cancelled = false;
+    const kept = loadAttempt === 0 ? readSnapshot() : undefined;
+    if (kept) {
+      // Coming back: the conversation as it was, then only what changed.
+      setMessages(kept.messages);
+      setHasMore(kept.hasMore);
+      nextCursorRef.current = kept.nextCursor;
+      setLoading(false);
+      setError(null);
+      setLoadFailure(null);
+      shownKeyRef.current = cacheKeyId;
+      (async () => {
+        try {
+          const page = await fetchMessages(undefined, true);
+          if (cancelled) return;
+          const merged = mergeFirstPage(messagesRef.current, page, 100);
+          setMessages(merged.messages);
+          // Older pages already loaded keep their cursor; after a gap the page's cursor is the one.
+          if (!merged.gap && kept.messages.length > page.length) nextCursorRef.current = kept.nextCursor;
+          else setHasMore(page.length >= 100);
+          await markRead();
+        } catch (e: unknown) {
+          if (cancelled) return;
+          // Access ended: forget the kept copy and show the server's answer.
+          // Anything else (offline, a server error) keeps what is shown.
+          const status = (e as { statusCode?: number } | null)?.statusCode;
+          if (status === 403 || status === 404) {
+            if (cacheKey) queryClient.removeQueries({ queryKey: cacheKey, exact: true });
+            shownKeyRef.current = null;
+            setMessages([]);
+            setLoadFailure(status === 403 ? 'forbidden' : 'notFound');
+          }
+        }
+      })();
+      return () => { cancelled = true; };
+    }
     (async () => {
       setLoading(true);
       setError(null);
@@ -404,6 +491,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         if (!cancelled) {
           setMessages(sortAsc(msgs));
           setHasMore(msgs.length >= 100);
+          shownKeyRef.current = cacheKeyId;
           await markRead();
         }
       } catch (e: unknown) {
@@ -418,18 +506,44 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     return () => { cancelled = true; };
   }, [roomId, otherUserId, loadAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keep the conversation for the next visit (memory only), without sends still in flight.
+  useEffect(() => {
+    if (!cacheKey || loading || loadFailure || shownKeyRef.current !== cacheKeyId) return;
+    queryClient.setQueryData<ConversationSnapshot>(cacheKey, {
+      messages: messages.filter((m) => !(m as Record<string, any>)._optimistic),
+      hasMore,
+      nextCursor: nextCursorRef.current,
+      roomIds: conversationRoomIds,
+      resolvedRoomId,
+      peer: directChatPeer,
+    });
+  }, [queryClient, cacheKey, cacheKeyId, loading, loadFailure, messages, hasMore, conversationRoomIds, resolvedRoomId, directChatPeer]);
+
   const retryLoad = useCallback(() => setLoadAttempt((n) => n + 1), []);
 
   // ── Refetch on topic change (person-based mode) ─────────
 
+  const shownTopicRef = useRef(topicId);
   useEffect(() => {
+    if (shownTopicRef.current === topicId) return;
+    shownTopicRef.current = topicId;
     if (isRoomMode || loading || !otherUserId) return;
+    const kept = readSnapshot();
+    if (kept) {
+      setMessages(kept.messages);
+      setHasMore(kept.hasMore);
+      shownKeyRef.current = cacheKeyId;
+    } else {
+      shownKeyRef.current = null;
+    }
     let cancelled = false;
     (async () => {
       const msgs = await fetchMessages();
       if (!cancelled) {
-        setMessages(sortAsc(msgs));
-        setHasMore(msgs.length >= 100);
+        const merged = kept ? mergeFirstPage(messagesRef.current, msgs, 100) : null;
+        setMessages(merged ? merged.messages : sortAsc(msgs));
+        setHasMore(merged && !merged.gap && kept && kept.messages.length > msgs.length ? kept.hasMore : msgs.length >= 100);
+        shownKeyRef.current = cacheKeyId;
       }
     })();
     return () => { cancelled = true; };
