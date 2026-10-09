@@ -25,6 +25,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import { lostFoundContactLabel } from '@/components/feed/composer/LostFoundFields';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
 import { launchFeatures } from '@/lib/featureFlags';
+import { fetchMe } from '@/lib/me';
 
 // ─── Icon lookup (data from shared config, React icons stay local) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -85,7 +86,7 @@ export default function PostDetailPage() {
       try {
         const token = getAuthToken();
         if (!token) return;
-        const u = await api.users.getMyProfile();
+        const u = await fetchMe();
         setUser(u);
       } catch {}
     })();

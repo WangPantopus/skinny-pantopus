@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import * as api from "@pantopus/api";
 import type { SchedulingOwnerRef } from "@pantopus/types";
 import type { Pillar } from "@/components/scheduling/pillarTokens";
+import { fetchPrimaryHome } from "@/lib/primaryHome";
 
 export interface OwnerOption {
   owner: SchedulingOwnerRef | null;
@@ -39,7 +40,7 @@ export function useInsightsOwners(): {
     (async () => {
       const next = initial();
       try {
-        const { home } = await api.homes.getPrimaryHome();
+        const { home } = await fetchPrimaryHome();
         if (home?.id) {
           next.home = {
             owner: { ownerType: "home", homeId: home.id },

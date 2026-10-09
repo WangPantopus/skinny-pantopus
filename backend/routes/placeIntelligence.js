@@ -23,6 +23,7 @@ const { recordSystem, SYSTEM_KEYS } = require('../services/homeSystemsService');
 const { PLACE_SECTION_IDS } = require('../serializers/placeIntelligenceSerializer');
 const logger = require('../utils/logger');
 const homeListService = require('../services/homeListService');
+const { stableEtag } = require('../utils/stableEtag');
 
 const VALID_SECTION_IDS = new Set(PLACE_SECTION_IDS);
 
@@ -64,6 +65,8 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
       return res.status(400).json({ error: sectionsError });
     }
 
+    // The Home row is read alongside the access check and used only once access holds.
+    const homeRead = placeIntelligenceService.readHome(id);
     const access = await checkHomePermission(id, userId, 'home.view');
     let privateSetup = null;
     if (!access.hasAccess) {
@@ -81,6 +84,7 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
       access,
       sectionIds,
       ballot: await ballotOptIn(req),
+      homeRead,
     });
     if (privateSetup && JSON.stringify(await homeListService.readAccessState(id, userId)) !== JSON.stringify(privateSetup)) {
       throw Object.assign(new Error('Home access changed while loading. Please retry.'), { code: 'HOME_LIST_ACCESS_CHANGED', statusCode: 503 });
@@ -90,6 +94,8 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
     }
 
     res.setHeader('Cache-Control', 'private, no-store');
+    // Unchanged sections answer 304: the ETag leaves out when they were built.
+    res.setHeader('ETag', stableEtag(intelligence));
     return res.json(intelligence);
   } catch (err) {
     logger.error('Place intelligence error', { error: err.message, homeId: id });

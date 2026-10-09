@@ -53,6 +53,7 @@ import {
 } from "@/components/scheduling/bookings/owners";
 import { isPast } from "@/components/scheduling/bookings/bookingActions";
 import { viewerTz } from "@/components/scheduling/bookings/format";
+import { fetchMe } from "@/lib/me";
 
 type Sheet = null | "approve" | "reschedule" | "cancel" | "followUp";
 
@@ -94,7 +95,7 @@ export default function BookingDetailPage() {
     setResponseError(null);
     void (async () => {
       try {
-        const actor = await api.users.getMyProfile();
+        const actor = await fetchMe();
         if (generation.current !== requestGeneration) return;
         actorId.current = actor.id;
         const d = await api.scheduling.getBooking(id, owner);

@@ -16,6 +16,7 @@ import type { AudienceProfile, User } from '@pantopus/types';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { queryKeys } from '@/lib/query-keys';
 import type { SportsMode, TopicKey } from '@/constants/feedTopics';
+import { fetchMe } from '@/lib/me';
 
 export type FilterType = PostType | 'all';
 
@@ -153,7 +154,7 @@ export function useFeedData({
       try {
         const token = getAuthToken();
         if (!token) return;
-        const u = await api.users.getMyProfile();
+        const u = await fetchMe();
         setUser(u);
       } catch {}
     })();

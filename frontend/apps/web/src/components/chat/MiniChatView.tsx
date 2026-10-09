@@ -9,6 +9,7 @@ import ChatInput from './ChatInput';
 import GigPickerModal from './GigPickerModal';
 import ListingPickerModal from './ListingPickerModal';
 import type { ChatMessage } from './ChatMessageBubble';
+import { fetchMe } from '@/lib/me';
 
 interface MiniChatViewProps {
   roomId?: string;
@@ -28,7 +29,7 @@ export default function MiniChatView({ roomId, otherUserId, name, avatar, onBack
   useEffect(() => {
     (async () => {
       try {
-        const userData = await api.users.getMyProfile() as { id?: string };
+        const userData = await fetchMe() as { id?: string };
         setCurrentUserId(userData?.id || null);
       } catch {}
     })();

@@ -12,6 +12,7 @@ import LocationPicker, { type SelectedLocation } from '@/components/LocationPick
 import { CategoryIcon } from '../../iconMap';
 import { toast } from '@/components/ui/toast-store';
 import { CATEGORIES } from '../../constants';
+import { fetchMe } from '@/lib/me';
 
 // ── Location sharing options ────────────────────────────────
 type LocationMode = 'meetup' | 'neighborhood' | 'none' | 'exact';
@@ -69,7 +70,7 @@ export default function EditListingPage() {
       try {
         const [listingResult, userResult] = await Promise.all([
           api.listings.getListing(listingId),
-          api.users.getMyProfile(),
+          fetchMe(),
         ]);
 
         const listing = ((listingResult as Record<string, any>)?.listing ?? listingResult) as ListingDetail;

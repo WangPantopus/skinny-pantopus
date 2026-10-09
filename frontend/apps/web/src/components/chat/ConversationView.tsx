@@ -21,6 +21,7 @@ import { confirmStore } from '../ui/confirm-store';
 import { toast } from '../ui/toast-store';
 import { launchFeatures } from '@/lib/featureFlags';
 import { usernameHandle } from '@pantopus/utils';
+import { fetchMe } from '@/lib/me';
 
 // ============================================================
 // UNIFIED CONVERSATION VIEW (Person-Based)
@@ -103,7 +104,7 @@ export default function ConversationView({
       setCurrentUserId(null);
       const current = captureSafetyScope();
       if (api.getAuthToken()) {
-        void api.users.getMyProfile().then(user => {
+        void fetchMe().then(user => {
           if (current()) setCurrentUserId(user?.id || null);
         }).catch(() => {});
       }
