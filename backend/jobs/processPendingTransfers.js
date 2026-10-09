@@ -19,7 +19,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const walletService = require('../services/walletService');
 const walletSettlement = require('../services/walletSettlementService');
-const { getBusinessPrimaryOwnerId } = require('../utils/businessPermissions');
+const { getBusinessPrimaryOwnerId, getBusinessPayoutAccount } = require('../utils/businessPermissions');
 const { capturedFeeCents } = require('../stripe/gigPaymentProof');
 const { PAYMENT_STATES, transitionPaymentStatus } = require('../stripe/paymentStateMachine');
 const { createNotification } = require('../services/notificationService');
@@ -39,6 +39,65 @@ async function collectDebtsAfterIncome(payeeId, paymentId) {
       paymentId, payeeId, error: err.message,
     });
     return 0;
+  }
+}
+
+/**
+ * A business's wallet only passes money on: what it can withdraw goes to the business's own payout account, where
+ * Stripe holds the balance and pays out. Returns the cents sent (0 when nothing went: below the $1 minimum, an open
+ * dispute or debt, or a refusal that the next run retries).
+ */
+async function sendBusinessWalletToPayoutAccount(businessId) {
+  try {
+    const [wallet, hold, owed] = await Promise.all([
+      walletService.getWallet(businessId),
+      walletService.getDisputeHold(businessId),
+      walletService.getOpenDebt(businessId),
+    ]);
+    const amount = Number(wallet?.balance || 0) - hold.cents - owed;
+    if (amount < 100) return 0;
+    await walletService.withdraw(businessId, amount);
+    return amount;
+  } catch (err) {
+    logger.warn('processPendingTransfers: business payout not sent; next run retries', { businessId, error: err.message });
+    return 0;
+  }
+}
+
+/** Tells a business's primary owner that an invoice payment reached the business's payout account (or is on its way). */
+async function notifyBusinessPayout(payment, { amountFormatted, sent }) {
+  const businessId = payment.payee_id;
+  const ownerId = await getBusinessPrimaryOwnerId(businessId);
+  if (!ownerId) return;
+  const { data: business } = await supabaseAdmin.from('User').select('name').eq('id', businessId).maybeSingle();
+  const name = business?.name || 'your business';
+  await createNotification({
+    userId: ownerId,
+    type: 'payout_sent',
+    title: sent ? `${amountFormatted} sent to ${name}'s payout account` : `${amountFormatted} on its way to ${name}`,
+    body: sent
+      ? 'An invoice payment reached the business\'s Stripe account. Its balance and payouts are in the Stripe dashboard.'
+      : 'An invoice payment cleared. It goes to the business\'s Stripe account shortly.',
+    icon: '💰',
+    link: `/app/businesses/${businessId}/dashboard?tab=payments`,
+    metadata: { invoice_id: payment.metadata?.invoice_id, payment_id: payment.id, business_id: businessId },
+  });
+}
+
+/** Business wallets still holding money for a payout account Stripe has enabled (an earlier send that failed). */
+async function sendWaitingBusinessPayouts() {
+  const { data, error } = await supabaseAdmin
+    .from('Wallet')
+    .select('user_id, User!inner(account_type)')
+    .eq('User.account_type', 'business')
+    .gte('balance', 100);
+  if (error) {
+    logger.warn('processPendingTransfers: waiting business payouts unread', { error: error.message });
+    return;
+  }
+  for (const { user_id: businessId } of data || []) {
+    const account = await getBusinessPayoutAccount(businessId).catch(() => null);
+    if (account?.payouts_enabled) await sendBusinessWalletToPayoutAccount(businessId);
   }
 }
 
@@ -80,10 +139,11 @@ async function confirmInvoiceForRelease(payment) {
     });
     return false;
   }
-  // Paid before invoices went to the owner: the payee is the business account, which has no sign-in and so no
-  // wallet anyone can open. Its owner receives the money, never a wallet nobody can reach.
+  // A business is paid itself only through its own payout account (the money goes straight on to it). Without one
+  // that Stripe has enabled, its owner receives the money, never a wallet nobody can open (a business has no sign-in).
   const { data: payee } = await supabaseAdmin.from('User').select('account_type').eq('id', payment.payee_id).maybeSingle();
-  if (payee?.account_type === 'business') {
+  const businessAccount = payee?.account_type === 'business' ? await getBusinessPayoutAccount(payment.payee_id) : null;
+  if (payee?.account_type === 'business' && !businessAccount?.payouts_enabled) {
     const ownerId = await getBusinessPrimaryOwnerId(payment.payee_id);
     const { data: moved, error: moveError } = ownerId ? await supabaseAdmin.from('Payment')
       .update({ payee_id: ownerId, updated_at: new Date().toISOString() })
@@ -106,6 +166,7 @@ async function confirmInvoiceForRelease(payment) {
 }
 
 async function processPendingTransfers() {
+  await sendWaitingBusinessPayouts();
   const now = new Date();
   const nowIso = now.toISOString();
   const legacyCoolingFallbackIso = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
@@ -292,6 +353,10 @@ async function processPendingTransfers() {
 
         successCount++;
         const paidTowardDebt = await collectDebtsAfterIncome(payment.payee_id, payment.id);
+        // An invoice paid to the business itself goes straight on to its own payout account; its owner hears of it
+        // (a business account has no sign-in, so nobody reads its notices).
+        const businessPayee = invoicePayment && payment.payee_id === payment.metadata?.business_user_id;
+        const sentToPayoutAccount = businessPayee ? await sendBusinessWalletToPayoutAccount(payment.payee_id) : 0;
         // Money that went straight to what the payee owed isn't withdrawable; its own notice says where it went.
         const withdrawLine = paidTowardDebt > 0 ? '' : ' You can withdraw to your bank anytime.';
 
@@ -316,24 +381,30 @@ async function processPendingTransfers() {
             ? { booking_id: payment.booking_id }
             : { gig_id: payment.gig_id };
 
-        // Notify provider: funds added to wallet
-        createNotification({
-          userId: payment.payee_id,
-          type: 'payout_sent',
-          title: `${amountFormatted} added to your wallet`,
-          body: invoicePayment
-            ? `An invoice payment has been added to your Pantopus wallet.${withdrawLine}`
-            : isBooking
-              ? `Your booking payment has been added to your Pantopus wallet.${withdrawLine}`
-              : `Your payment for "${gigTitle}" has been added to your Pantopus wallet.${withdrawLine}`,
-          icon: '💰',
-          link: invoicePayment ? '/app/wallet' : '/app/settings/payments',
-          metadata: {
-            ...subjectMetadata,
-            payment_id: payment.id,
-            amount: transferAmount,
-          },
-        });
+        // Notify provider: funds added to wallet (a business: its owner, about its payout account)
+        if (businessPayee) {
+          notifyBusinessPayout(payment, { amountFormatted, sent: sentToPayoutAccount > 0 }).catch((err) => {
+            logger.warn('processPendingTransfers: business payout notice skipped', { paymentId: payment.id, error: err.message });
+          });
+        } else {
+          createNotification({
+            userId: payment.payee_id,
+            type: 'payout_sent',
+            title: `${amountFormatted} added to your wallet`,
+            body: invoicePayment
+              ? `An invoice payment has been added to your Pantopus wallet.${withdrawLine}`
+              : isBooking
+                ? `Your booking payment has been added to your Pantopus wallet.${withdrawLine}`
+                : `Your payment for "${gigTitle}" has been added to your Pantopus wallet.${withdrawLine}`,
+            icon: '💰',
+            link: invoicePayment ? '/app/wallet' : '/app/settings/payments',
+            metadata: {
+              ...subjectMetadata,
+              payment_id: payment.id,
+              amount: transferAmount,
+            },
+          });
+        }
 
         // Notify requester: payment complete
         createNotification({

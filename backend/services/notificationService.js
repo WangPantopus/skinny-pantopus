@@ -739,7 +739,7 @@ async function notifyTransferCompleted({ userId, gigId, gigTitle, amount }) {
 /**
  * Notify user about a dispute on their payment.
  */
-async function notifyDisputeCreated({ userId, gigId, gigTitle, role, invoiceId }) {
+async function notifyDisputeCreated({ userId, gigId, gigTitle, role, invoiceId, walletLink = '/app/wallet' }) {
   const isProvider = role === 'provider';
   // An invoice payment has no gig: the notice names the invoice and opens it (the payer) or the wallet (the owner).
   const subject = invoiceId ? 'an invoice' : `"${gigTitle || 'a gig'}"`;
@@ -751,7 +751,7 @@ async function notifyDisputeCreated({ userId, gigId, gigTitle, role, invoiceId }
       ? `A dispute has been filed for ${subject}. Funds are frozen while we investigate.`
       : `Your payment for ${subject} is under dispute. We'll keep you updated.`,
     icon: '⚖️',
-    link: invoiceId ? (isProvider ? '/app/wallet' : `/app/invoice/${invoiceId}`) : `/gigs/${gigId}`,
+    link: invoiceId ? (isProvider ? walletLink : `/app/invoice/${invoiceId}`) : `/gigs/${gigId}`,
     metadata: invoiceId ? { invoice_id: invoiceId, role } : { gig_id: gigId, role },
   });
 }
@@ -759,7 +759,9 @@ async function notifyDisputeCreated({ userId, gigId, gigTitle, role, invoiceId }
 /**
  * Notify user about a dispute resolution.
  */
-async function notifyDisputeResolved({ userId, gigId, gigTitle, won, invoiceId, isProvider, owedCents = 0, collectedCents = 0 }) {
+async function notifyDisputeResolved({
+  userId, gigId, gigTitle, won, invoiceId, isProvider, owedCents = 0, collectedCents = 0, walletLink = '/app/wallet',
+}) {
   const subject = invoiceId ? 'an invoice' : `"${gigTitle || 'a gig'}"`;
   // A lost dispute the payee's wallet couldn't cover: they owe the rest, paid from their next earnings.
   const owed = !won && isProvider && owedCents > 0 ? `$${(owedCents / 100).toFixed(2)}` : null;
@@ -775,7 +777,7 @@ async function notifyDisputeResolved({ userId, gigId, gigTitle, won, invoiceId, 
           + 'earnings, and withdrawals wait until it is paid.'
         : `The dispute for ${subject} has been resolved. Funds have been adjusted.`,
     icon: won ? '✅' : '📋',
-    link: invoiceId ? (isProvider ? '/app/wallet' : `/app/invoice/${invoiceId}`) : `/gigs/${gigId}`,
+    link: invoiceId ? (isProvider ? walletLink : `/app/invoice/${invoiceId}`) : `/gigs/${gigId}`,
     metadata: invoiceId ? { invoice_id: invoiceId, won } : { gig_id: gigId, won },
   });
 }

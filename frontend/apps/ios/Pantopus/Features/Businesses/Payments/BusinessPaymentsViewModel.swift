@@ -49,7 +49,7 @@ public struct BusinessPaymentsContent: Sendable, Equatable {
 
     public var headline: String {
         switch stage {
-        case .notConnected: "No payout account connected"
+        case .notConnected: "No payout account yet"
         case .setupIncomplete: "Account setup incomplete"
         case .verifying: "Account verification in progress"
         case .onboarded: "Stripe account connected"
@@ -58,10 +58,10 @@ public struct BusinessPaymentsContent: Sendable, Equatable {
 
     public var subcopy: String {
         switch stage {
-        case .notConnected: "Connect Stripe to accept payments and receive payouts."
-        case .setupIncomplete: "Your account needs additional information."
-        case .verifying: "Stripe is verifying your identity. Usually 1–2 business days."
-        case .onboarded: "Payouts are enabled."
+        case .notConnected: "Until you set one up, invoice payments go to your personal wallet."
+        case .setupIncomplete: "Stripe needs more information before it can pay this business."
+        case .verifying: "Stripe is verifying the business. Usually 1–2 business days."
+        case .onboarded: "Invoice payments go to this account. Its balance and payouts are in Stripe."
         }
     }
 }

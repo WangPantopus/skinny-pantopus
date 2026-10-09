@@ -198,18 +198,31 @@ const money = (cents) => `$${(cents / 100).toFixed(2)}`;
  */
 async function notifyDebtCollected(userId, { collected, remaining }) {
   const { createNotification } = require('./notificationService');
+  // A business's wallet: its primary owner hears of it (a business account has no sign-in).
+  const { data: account } = await supabaseAdmin.from('User').select('account_type').eq('id', userId).maybeSingle();
+  const businessId = account?.account_type === 'business' ? userId : null;
+  const ownerId = businessId ? await require('../utils/businessPermissions').getBusinessPrimaryOwnerId(businessId) : null;
+  if (businessId && !ownerId) return;
   await createNotification({
-    userId,
+    userId: ownerId || userId,
     type: 'dispute_resolved',
-    title: remaining > 0 ? `${money(collected)} went toward what you owe` : 'What you owed is paid off',
-    body: remaining > 0
-      ? `${money(collected)} from your wallet went toward a payment that was refunded or disputed after it reached you. `
-        + `${money(remaining)} is still owed and comes out of your next earnings; withdrawals wait until then.`
-      : `${money(collected)} from your wallet paid off what you owed for a payment that was refunded or disputed after `
-        + 'it reached you. You can withdraw again.',
+    title: businessId
+      ? (remaining > 0 ? `${money(collected)} went toward what the business owes` : 'What the business owed is paid off')
+      : (remaining > 0 ? `${money(collected)} went toward what you owe` : 'What you owed is paid off'),
+    body: businessId
+      ? (remaining > 0
+        ? `${money(collected)} of the business's invoice money went toward a payment that was refunded or disputed. `
+          + `${money(remaining)} is still owed and comes out of its next invoice payments before they go to its payout account.`
+        : `${money(collected)} of the business's invoice money paid off what it owed for a refunded or disputed payment. `
+          + 'Its invoice payments go to its payout account again.')
+      : (remaining > 0
+        ? `${money(collected)} from your wallet went toward a payment that was refunded or disputed after it reached you. `
+          + `${money(remaining)} is still owed and comes out of your next earnings; withdrawals wait until then.`
+        : `${money(collected)} from your wallet paid off what you owed for a payment that was refunded or disputed after `
+          + 'it reached you. You can withdraw again.'),
     icon: '📋',
-    link: '/app/wallet',
-    metadata: { collected_cents: collected, remaining_cents: remaining },
+    link: businessId ? `/app/businesses/${businessId}/dashboard?tab=payments` : '/app/wallet',
+    metadata: { collected_cents: collected, remaining_cents: remaining, ...(businessId ? { business_id: businessId } : {}) },
   });
 }
 
