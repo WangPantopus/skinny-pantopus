@@ -1,14 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import * as api from '@pantopus/api';
+import { useQuery } from '@tanstack/react-query';
 import { getAuthToken } from '@pantopus/api';
 import {
   ArrowLeft, AlertTriangle, ChevronLeft, ChevronRight, Calendar, List, Printer,
   ChefHat, ShoppingCart, Truck,
 } from 'lucide-react';
 import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
+import { supportTrainQuery } from '@/components/support-trains/supportTrainQueries';
 
 // ============================================================
 // SUPPORT TRAIN CALENDAR VIEW (Web)
@@ -29,33 +30,25 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export default function SupportTrainCalendarPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The same entry as the train's page (opened from it), so the schedule shows at once.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const signedIn = mounted && !!getAuthToken();
+  useEffect(() => {
+    if (mounted && !getAuthToken()) router.push('/login');
+  }, [mounted, router]);
+  const trainQuery = useQuery({ ...supportTrainQuery(id), enabled: signedIn });
+  const data = trainQuery.data?.train ?? null;
+  const error = !data && trainQuery.isError
+    ? ((trainQuery.error as { message?: string } | null)?.message || 'Failed to load schedule')
+    : null;
+  const loading = !data && (!error || trainQuery.isFetching);
+  const fetchData = () => { void trainQuery.refetch(); };
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-
-  const fetchData = useCallback(async () => {
-    if (!getAuthToken()) { router.push('/login'); return; }
-    setLoading(true);
-    setData(null);
-    setError(null);
-    try {
-      const result = await api.supportTrains.getSupportTrain(id);
-      setData(result);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load schedule');
-    } finally {
-      setLoading(false);
-    }
-  }, [id, router]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const slots: any[] = data?.slots || [];
 

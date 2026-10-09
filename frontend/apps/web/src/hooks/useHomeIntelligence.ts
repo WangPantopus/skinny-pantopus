@@ -1,18 +1,37 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { HomeHealthScore, SeasonalChecklist, BillTrendData, PropertyValueData, HomeTimelineItem } from '@pantopus/types';
 import { validBillTrendData } from '@/components/home/validBillTrendData';
+import { dropHomeSummaryCopy, keepHomeSummaryCopy, readHomeSummaryCopy, type HomeSummaryName } from '@/components/home/homeDashboardCopy';
 
 type SummaryKey = 'health' | 'checklist' | 'bills' | 'property' | 'timeline';
 const HEALTH_READ_PERMISSIONS = ['home.view', 'maintenance.view', 'finance.view', 'members.view', 'docs.view', 'sensitive.view'];
+// A summary card read less than this long ago isn't asked again on coming back (contract §4, Homes and household).
+const SUMMARY_FRESH_MS = 2 * 60 * 1000;
 
-/** A read belongs to one mounted Home/account and cannot outlive a newer read. */
-function useSummaryRead<T>(homeId: string | undefined, request: () => Promise<T>, name: string, onDenied: () => void) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
+/**
+ * A read belongs to one mounted Home/account and cannot outlive a newer read. With `kept`, the card
+ * is kept beside the dashboard's copy while `allowed` (owners and household roles without an end
+ * date): coming back shows it at once, and a refresh replaces it without a loading state. A failed
+ * refresh keeps it, unless the server refused (403/404).
+ */
+function useSummaryRead<T>(homeId: string | undefined, request: () => Promise<T>, name: string, onDenied: () => void,
+  kept?: { name: HomeSummaryName; allowed: boolean }) {
+  const queryClient = useQueryClient();
+  const keptName = kept?.name;
+  const [initial] = useState(() => (kept?.allowed && homeId && keptName ? readHomeSummaryCopy<T>(queryClient, homeId, keptName) : null));
+  const [data, setData] = useState<T | null>(initial?.data ?? null);
+  const [loading, setLoading] = useState(!initial);
   const [error, setError] = useState<string | null>(null);
+  const shown = useRef<T | null>(data);
+  shown.current = data;
+  const allowed = useRef(kept?.allowed === true);
+  allowed.current = kept?.allowed === true;
+  // Read within the fresh window: the first load on this visit is skipped.
+  const freshUntil = useRef(initial ? initial.at + SUMMARY_FRESH_MS : 0);
   const lifetime = useRef({ retired: true });
   const revision = useRef(0);
   useEffect(() => {
@@ -32,22 +51,43 @@ function useSummaryRead<T>(homeId: string | undefined, request: () => Promise<T>
     const current = capture(), sequence = ++revision.current;
     if (!current()) return;
     const active = () => current() && sequence === revision.current;
-    setLoading(true); setError(null);
+    // A card already on screen refreshes quietly (contract §3: no indicator for background refreshes).
+    if (shown.current === null) setLoading(true);
+    setError(null);
     try {
       const result = await read();
-      if (active()) setData(result);
+      if (active()) {
+        setData(result);
+        if (keptName && homeId) {
+          if (allowed.current) keepHomeSummaryCopy(queryClient, homeId, keptName, result);
+          else dropHomeSummaryCopy(queryClient, homeId, keptName);
+        }
+      }
     } catch (failure) {
       if (active()) {
-        setData(null); setError(`${name} could not be loaded. Retry to check current information.`);
-        if ((failure as { statusCode?: number })?.statusCode === 403) onDenied();
+        const status = (failure as { statusCode?: number })?.statusCode;
+        if (shown.current === null || status === 403 || status === 404) {
+          setData(null); setError(`${name} could not be loaded. Retry to check current information.`);
+          if (keptName && homeId) dropHomeSummaryCopy(queryClient, homeId, keptName);
+        }
+        if (status === 403) onDenied();
       }
     } finally { if (active()) setLoading(false); }
-  }, [request, capture, name, onDenied]);
-  const failAction = useCallback((message: string) => { revision.current++; setData(null); setLoading(false); setError(message); }, []);
-  return { data, loading, error, load, capture, failAction };
+  }, [request, capture, name, onDenied, keptName, homeId, queryClient]);
+  /** The first load of a visit: skipped while the kept card is fresh. */
+  const open = useCallback(() => {
+    if (Date.now() < freshUntil.current) { freshUntil.current = 0; return Promise.resolve(); }
+    freshUntil.current = 0;
+    return load();
+  }, [load]);
+  const failAction = useCallback((message: string) => {
+    revision.current++; setData(null); setLoading(false); setError(message);
+    if (keptName && homeId) dropHomeSummaryCopy(queryClient, homeId, keptName);
+  }, [keptName, homeId, queryClient]);
+  return { data, loading, error, load, open, capture, failAction };
 }
 
-export function useHomeIntelligence(homeId: string | undefined, can: (permission: string) => boolean, onDenied: () => void) {
+export function useHomeIntelligence(homeId: string | undefined, can: (permission: string) => boolean, onDenied: () => void, keepsCopy = false) {
   const [billCurrency, setBillCurrency] = useState('USD');
   const readHealth = useCallback(async () => {
     const result = await api.homeProfile.getHomeHealthScore(homeId!, { force: true });
@@ -84,13 +124,14 @@ export function useHomeIntelligence(homeId: string | undefined, can: (permission
         || !Number.isFinite(Date.parse(item.created_at)))) throw new Error('Invalid timeline response');
     return { items: result.items, page, hasMore: result.hasMore };
   }, [homeId]);
-  const health = useSummaryRead<HomeHealthScore>(homeId, readHealth, 'Home health', onDenied);
-  const checklist = useSummaryRead<SeasonalChecklist>(homeId, readChecklist, 'Seasonal checklist', onDenied);
+  const health = useSummaryRead<HomeHealthScore>(homeId, readHealth, 'Home health', onDenied, { name: 'health', allowed: keepsCopy });
+  const checklist = useSummaryRead<SeasonalChecklist>(homeId, readChecklist, 'Seasonal checklist', onDenied, { name: 'checklist', allowed: keepsCopy });
+  // Bill trends come from bills, which are never kept (contract §5).
   const bills = useSummaryRead<BillTrendData>(homeId, readBills, 'Bill trends', onDenied);
-  const property = useSummaryRead<PropertyValueData>(homeId, readProperty, 'Property information', onDenied);
-  const timeline = useSummaryRead<{ items: HomeTimelineItem[]; page: number; hasMore: boolean }>(homeId, readTimelinePage, 'Home activity', onDenied);
-  const { load: loadHealth } = health, { load: loadChecklist } = checklist;
-  const { load: loadBills } = bills, { load: loadProperty } = property, { load: loadTimeline } = timeline;
+  const property = useSummaryRead<PropertyValueData>(homeId, readProperty, 'Property information', onDenied, { name: 'property', allowed: keepsCopy });
+  const timeline = useSummaryRead<{ items: HomeTimelineItem[]; page: number; hasMore: boolean }>(homeId, readTimelinePage, 'Home activity', onDenied, { name: 'timeline', allowed: keepsCopy });
+  const { load: loadHealth, open: openHealth } = health, { load: loadChecklist, open: openChecklist } = checklist;
+  const { load: loadBills } = bills, { load: loadProperty, open: openProperty } = property, { load: loadTimeline, open: openTimeline } = timeline;
   const canReadHealth = HEALTH_READ_PERMISSIONS.every(can), canReadBills = can('finance.view'), canReadTimeline = can('members.manage');
   const deferred = useRef({ bills: false, property: false, timeline: false });
   const actionBusy = useRef({ checklist: false, bills: false });
@@ -100,7 +141,7 @@ export function useHomeIntelligence(homeId: string | undefined, can: (permission
 
   useEffect(() => { deferred.current = { bills: false, property: false, timeline: false }; }, [homeId]);
   useEffect(() => { if (canReadBills && deferred.current.bills) void loadBills(); }, [canReadBills, loadBills]);
-  useEffect(() => { if (canReadHealth) void loadHealth(); void loadChecklist(); }, [canReadHealth, loadHealth, loadChecklist]);
+  useEffect(() => { if (canReadHealth) void openHealth(); void openChecklist(); }, [canReadHealth, openHealth, openChecklist]);
   useEffect(() => {
     const season = checklist.data?.season;
     if (!season) return;
@@ -111,11 +152,11 @@ export function useHomeIntelligence(homeId: string | undefined, can: (permission
     if (canReadBills && !deferred.current.bills) { deferred.current.bills = true; void loadBills(); }
   }, [canReadBills, loadBills]);
   const ensurePropertyValue = useCallback(() => {
-    if (!deferred.current.property) { deferred.current.property = true; void loadProperty(); }
-  }, [loadProperty]);
+    if (!deferred.current.property) { deferred.current.property = true; void openProperty(); }
+  }, [openProperty]);
   const ensureTimeline = useCallback(() => {
-    if (canReadTimeline && !deferred.current.timeline) { deferred.current.timeline = true; void loadTimeline(); }
-  }, [canReadTimeline, loadTimeline]);
+    if (canReadTimeline && !deferred.current.timeline) { deferred.current.timeline = true; void openTimeline(); }
+  }, [canReadTimeline, openTimeline]);
   const reloadSummary = useCallback(async (key: SummaryKey) => {
     if (key === 'health' && canReadHealth) await loadHealth();
     if (key === 'checklist') await loadChecklist();

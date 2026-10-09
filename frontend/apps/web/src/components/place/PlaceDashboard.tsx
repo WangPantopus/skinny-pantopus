@@ -130,11 +130,15 @@ export default function PlaceDashboard() {
   });
 
   // ── States ───────────────────────────────────────────────
-  if (!mounted || !authed) {
+  // Coming back to Place shows what this tab already loaded in the first frame; the skeleton is
+  // only for nothing at all (a fresh page load starts with an empty cache, like the server).
+  const kept = intelQuery.data !== undefined;
+  if (!kept && (!mounted || !authed)) {
     return <Shell><PlaceDashboardSkeleton /></Shell>;
   }
 
-  if (homeQuery.isError) {
+  // A failed refresh keeps the place on screen (contract §3); errors show only with nothing to show.
+  if (homeQuery.isError && !kept) {
     return (
       <Shell>
         <ErrorState message="We couldn't load your place. Check your connection and try again." onRetry={() => homeQuery.refetch()} />
@@ -153,11 +157,11 @@ export default function PlaceDashboard() {
     );
   }
 
-  if (homeQuery.isPending || intelQuery.isPending) {
+  if (!kept && (homeQuery.isPending || intelQuery.isPending)) {
     return <Shell><PlaceDashboardSkeleton /></Shell>;
   }
 
-  if (intelQuery.isError || !intelQuery.data) {
+  if (!intelQuery.data) {
     // A 403 means this account can't see the place (e.g. ?home= from another
     // account): not a connection problem, and a retry can't change it.
     const denied = (intelQuery.error as { statusCode?: number } | null)?.statusCode === 403;
