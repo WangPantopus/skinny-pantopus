@@ -10,6 +10,12 @@
 //  have no clean backend source, so they stay empty / nil. An injectable
 //  `loader` seam (non-nil) bypasses the network for previews + tests.
 //
+//  Instant Screens: the read goes through the screen store (a home's facts,
+//  10 minutes), so coming back shows the copy in the first frame and asks
+//  again only once it is out of date. Only an owner's or household member's
+//  open-ended access, as the Home dashboard last confirmed it, sees the copy
+//  before the re-check (`HomeCopyGate`); anyone else waits for the server.
+//
 
 import Foundation
 import Observation
@@ -19,9 +25,11 @@ import Observation
 final class PropertyDetailsViewModel {
     /// Currently displayed state.
     private(set) var state: PropertyDetailsState = .loading
+    /// "Couldn't refresh. Showing 3:42 PM." once a failed refresh leaves an old copy on screen.
+    private(set) var staleNotice: String?
 
     private let homeId: String
-    private let api: APIClient
+    private let store: ScreenStore
     /// Preview/test seam. When non-nil, `load()` projects this loader's
     /// output instead of calling the backend.
     private let loader: (@Sendable (String) throws -> PropertyDetailsContent)?
@@ -32,37 +40,81 @@ final class PropertyDetailsViewModel {
         loader: (@Sendable (String) throws -> PropertyDetailsContent)? = nil
     ) {
         self.homeId = homeId
-        self.api = api
+        store = ScreenStore.store(for: api)
         self.loader = loader
+        // The store's copy shows in the first frame (Instant Screens), for household access only.
+        if loader == nil, HomeCopyGate.showsCopy(homeId: homeId, store: store),
+           let copy = store.peek(endpoint, as: PropertyDetailsResponse.self) {
+            show(copy)
+        }
     }
 
-    /// Initial load; no-op once content is resolved.
+    /// On appear: the copy at once, re-checked once it is out of date. The
+    /// preview/test loader runs once.
     func load() async {
-        guard case .loading = state else { return }
-        await apply()
-    }
-
-    /// Retry after an error.
-    func refresh() async {
-        await apply()
-    }
-
-    private func apply() async {
-        if let loader {
-            do {
-                let content = try loader(homeId)
-                state = content.banner == nil ? .clean(content) : .mismatch(content)
-            } catch {
-                state = .error(message: "Couldn't load property details. Pull to retry.")
-            }
+        guard loader == nil else {
+            guard case .loading = state else { return }
+            applyLoader()
             return
         }
+        await fetch(force: false)
+    }
+
+    /// Retry: always asks the server.
+    func refresh() async {
+        guard loader == nil else {
+            applyLoader()
+            return
+        }
+        await fetch(force: true)
+    }
+
+    private var endpoint: Endpoint {
+        HomesEndpoints.propertyDetails(homeId: homeId)
+    }
+
+    private var showsContent: Bool {
+        switch state {
+        case .clean, .mismatch: true
+        case .loading, .error: false
+        }
+    }
+
+    private func fetch(force: Bool) async {
+        let household = HomeCopyGate.showsCopy(homeId: homeId, store: store)
+        let gate: @Sendable (PropertyDetailsResponse) -> Bool = { _ in household }
         do {
-            let response = try await api.request(
-                HomesEndpoints.propertyDetails(homeId: homeId),
-                as: PropertyDetailsResponse.self
-            )
-            let content = Self.content(from: response.home)
+            // Without household access in hand, every visit waits for the server.
+            try await store.show(
+                endpoint,
+                as: PropertyDetailsResponse.self,
+                kind: .place,
+                topics: [ScreenTopic.home(homeId)],
+                force: force || !household,
+                showsBeforeRecheck: gate
+            ) { show($0) }
+        } catch is CancellationError {
+            return
+        } catch {
+            // A refusal (403/404) or nothing on screen: the error. Otherwise the copy stays.
+            guard showsContent, !ScreenStore.isRefusal(error) else {
+                state = .error(message: "Couldn't load property details. Pull to retry.")
+                return
+            }
+            staleNotice = store.peek(endpoint, as: PropertyDetailsResponse.self)?.refreshNotice
+        }
+    }
+
+    private func show(_ snapshot: ScreenSnapshot<PropertyDetailsResponse>) {
+        staleNotice = snapshot.refreshNotice
+        let content = Self.content(from: snapshot.value.home)
+        state = content.banner == nil ? .clean(content) : .mismatch(content)
+    }
+
+    private func applyLoader() {
+        guard let loader else { return }
+        do {
+            let content = try loader(homeId)
             state = content.banner == nil ? .clean(content) : .mismatch(content)
         } catch {
             state = .error(message: "Couldn't load property details. Pull to retry.")

@@ -560,49 +560,110 @@ public struct FeedView: View {
     }
 
     private func populatedFrame(_ rows: [PulsePostCardContent]) -> some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            // Card gap is 10 per the A03 frame (off-scale by design).
-            LazyVStack(spacing: 10) {
-                if rows.isEmpty, !viewModel.searchText.isEmpty {
-                    Text("No posts match your search")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, Spacing.s8)
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                postList(rows)
+            }
+            .refreshable { await viewModel.refresh() }
+            .overlay(alignment: .top) {
+                if viewModel.newPostsCount > 0 {
+                    newPostsPill { withAnimation { proxy.scrollTo(firstPostID ?? Self.listTopID, anchor: .top) } }
                 }
-                ForEach(rows) { row in
-                    postCard(row)
-                        .onAppear {
-                            let id = row.id
-                            Task { await viewModel.loadMoreIfNeeded(rowId: id) }
-                        }
+            }
+        }
+        .accessibilityIdentifier("pulseFeedList")
+    }
+
+    private static let listTopID = "pulseFeedTop"
+
+    /// The first post on screen now: the pill scrolls to it (a lazy list
+    /// can always find a post's row; the 1 pt marker is gone once far away).
+    private var firstPostID: String? {
+        guard case let .loaded(rows) = viewModel.state else { return nil }
+        return rows.first?.id
+    }
+
+    /// Scrolled less than this from the top still reads as "at the top".
+    private static let topSlack: CGFloat = 40
+
+    /// "3 new posts": a refresh found new posts while the reader was further
+    /// down; tapping shows them and goes back to the top.
+    private func newPostsPill(scrollToTop: @escaping @MainActor () -> Void) -> some View {
+        Button {
+            viewModel.showNewPosts()
+            // After the new page is in the list: a scroll in the same update is
+            // undone by the list keeping the reader's rows in place.
+            Task { @MainActor in scrollToTop() }
+        } label: {
+            HStack(spacing: Spacing.s1) {
+                Icon(.arrowUp, size: 14, color: Theme.Color.appTextInverse)
+                Text(viewModel.newPostsCount == 1 ? "1 new post" : "\(viewModel.newPostsCount) new posts")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appTextInverse)
+            }
+            .padding(.horizontal, Spacing.s4)
+            .frame(minHeight: 36)
+            .background(Theme.Color.primary600)
+            .clipShape(Capsule())
+            .pantopusShadow(.sm)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, Spacing.s2)
+        .accessibilityIdentifier("pulseFeedNewPosts")
+    }
+
+    private func postList(_ rows: [PulsePostCardContent]) -> some View {
+        // Card gap is 10 per the A03 frame (off-scale by design).
+        LazyVStack(spacing: 10) {
+            // Whether the reader is at the top decides if new posts slide in or
+            // wait behind the pill: where this marker is in the scroll view, not
+            // whether it appeared (a pushed post coming back re-appears it).
+            Color.clear
+                .frame(height: 1)
+                .id(Self.listTopID)
+                .onGeometryChange(for: Bool.self) { proxy in
+                    proxy.frame(in: .scrollView).minY > -Self.topSlack
+                } action: { atTop in
+                    viewModel.isReadingAtTop = atTop
                 }
-                if viewModel.isLoadingMore {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Spacing.s3)
-                        .accessibilityLabel("Loading more posts")
-                } else if let message = viewModel.loadMoreError {
-                    VStack(spacing: Spacing.s2) {
-                        Text(message)
-                            .font(.system(size: 13.5))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                        Button("Try again") {
-                            Task { await viewModel.retryLoadMore() }
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("pulseFeedLoadMoreRetry")
+                .accessibilityHidden(true)
+            if rows.isEmpty, !viewModel.searchText.isEmpty {
+                Text("No posts match your search")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, Spacing.s8)
+            }
+            ForEach(rows) { row in
+                postCard(row)
+                    .onAppear {
+                        let id = row.id
+                        Task { await viewModel.loadMoreIfNeeded(rowId: id) }
                     }
+            }
+            if viewModel.isLoadingMore {
+                ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Spacing.s3)
+                    .accessibilityLabel("Loading more posts")
+            } else if let message = viewModel.loadMoreError {
+                VStack(spacing: Spacing.s2) {
+                    Text(message)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    Button("Try again") {
+                        Task { await viewModel.retryLoadMore() }
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("pulseFeedLoadMoreRetry")
                 }
-                Spacer(minLength: 80)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.s3)
             }
-            .padding(Spacing.s3)
+            Spacer(minLength: 80)
         }
-        .refreshable { await viewModel.refresh() }
-        .accessibilityIdentifier("pulseFeedList")
+        .padding(Spacing.s3)
     }
 
     private func postCard(_ row: PulsePostCardContent) -> some View {

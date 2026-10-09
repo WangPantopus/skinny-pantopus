@@ -24,6 +24,8 @@ public final class NetworkMonitor {
     /// `true` so first-launch UI doesn't flicker through an offline
     /// state before the monitor reports.
     public private(set) var isOnline: Bool = true
+    /// Low Data Mode (a constrained path): nothing is loaded ahead of need.
+    public private(set) var isLowData: Bool = false
 
     private let monitor: NWPathMonitor
     private let queue = DispatchQueue(label: "app.pantopus.NetworkMonitor")
@@ -32,8 +34,10 @@ public final class NetworkMonitor {
         monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
             let online = path.status == .satisfied
+            let constrained = path.isConstrained
             Task { @MainActor [weak self] in
                 self?.isOnline = online
+                self?.isLowData = constrained
             }
         }
         monitor.start(queue: queue)

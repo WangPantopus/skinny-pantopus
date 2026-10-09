@@ -115,14 +115,14 @@ function joinText(parts: unknown[], separator: string): string {
     .join(separator);
 }
 
-const PROPERTY_DETAILS_FRESH_MS = 24 * 60 * 60 * 1000;
+const PROPERTY_DETAILS_FRESH_MS = 10 * 60 * 1000;
 
 export default function HomePropertyDetailsPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const homeId = params.id;
 
-  // Public-record facts about the home (contract §4, public place facts: fresh 24 hours), kept in the
+  // The home's property facts (contract §4, Place: a home's facts, fresh 10 minutes, as iOS), kept in the
   // session's cache so coming back shows them at once. A 403/404 drops them (lib/query-provider) and
   // shows the server's answer; signing out or switching accounts replaces the whole cache.
   // Decision 3: only an owner's or household member's home (no end date) on your kept homes list shows

@@ -39,6 +39,7 @@ struct AddressTodayTabView: View {
         .task(id: resolveKey) {
             if rootTabs.selected == .today { await resolveHome() }
         }
+        .refreshesOnStoreChange { if rootTabs.selected == .today { await resolveHome() } }
         .accessibilityIdentifier("addressTodayTab")
     }
 
