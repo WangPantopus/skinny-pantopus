@@ -255,8 +255,8 @@ describe('GET /api/homes/:id/intelligence', () => {
 
       // Rows without a usable temperature are dropped, not rendered as gaps.
       expect(w.data.hourly).toEqual([
-        { time: '2026-06-07T10:00:00.000Z', temp_f: 63, condition_code: 'partly_cloudy', precip_chance: 5 },
-        { time: '2026-06-07T11:00:00.000Z', temp_f: 65, condition_code: 'rain', precip_chance: 70 },
+        { time: '2026-06-07T10:00:00.000Z', temp_f: 63, condition_code: 'partly_cloudy', precip_chance: 5, wind_mph: null },
+        { time: '2026-06-07T11:00:00.000Z', temp_f: 65, condition_code: 'rain', precip_chance: 70, wind_mph: null },
       ]);
 
       // A day missing either bound is dropped — the contract types both as numbers.

@@ -352,6 +352,7 @@ async function getHubToday(userId, options = {}) {
       uv_index: weather.current.uv_index ?? null,
       dew_point_f: weather.current.dew_point_f ?? null,
       wind_mph: weather.current.wind_mph ?? null,
+      wind_direction: weather.current.wind_direction ?? null,
       hourly: weather.hourly || [],
       daily: weather.daily || [],
     } : {}),
