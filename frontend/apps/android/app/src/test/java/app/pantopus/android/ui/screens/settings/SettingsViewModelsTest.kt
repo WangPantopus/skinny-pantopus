@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
 import io.mockk.coEvery
@@ -52,6 +53,14 @@ class SettingsViewModelsTest {
         every { auth.state } returns MutableStateFlow<AuthRepository.State>(signedInUser)
         coEvery { auth.signOut() } returns Unit
         coEvery { profile.ownProfile() } returns NetworkResult.Failure(NetworkError.NotFound)
+        // The index reads the profile through the screens' store; here it reads the stubbed profile.
+        every { profile.ownProfileCopy() } returns null
+        coEvery { profile.ownProfileStored(any()) } coAnswers {
+            when (val result = profile.ownProfile()) {
+                is NetworkResult.Success -> Stored(result.data, fetchedAt = System.currentTimeMillis())
+                is NetworkResult.Failure -> Stored(failure = result.error)
+            }
+        }
     }
 
     /** Minimal `GET /api/users/profile` envelope with a chosen `verified`. */

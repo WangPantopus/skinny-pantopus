@@ -2,9 +2,9 @@ package app.pantopus.android.ui.screens.homes
 
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
 import app.pantopus.android.data.homes.HomeDashboardAccessRepository
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKey
-import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 
@@ -20,7 +20,7 @@ class HomeCopyGate(
     private val store: ScreenStore,
     keys: List<StoreKey<*>>,
 ) {
-    private val keys: List<StoreKey<*>> = keys + StoreKeys.homeAccess(homeId)
+    private val keys: List<StoreKey<*>> = keys + HomeStoreKeys.access(homeId)
 
     /** The last known access is a household one: copies may show before the re-check, and they stay stored. */
     var showsCopy: Boolean = householdAccess(access.storedAuthority(homeId))

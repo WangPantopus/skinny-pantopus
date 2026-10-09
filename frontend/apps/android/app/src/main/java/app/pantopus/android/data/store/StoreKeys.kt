@@ -1,22 +1,23 @@
 package app.pantopus.android.data.store
 
+import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
-import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
-import app.pantopus.android.data.api.models.homes.HomeAccessDto
-import app.pantopus.android.data.api.models.homes.HomeDetailResponse
-import app.pantopus.android.data.api.models.homes.HomeOwnershipSecurityResponse
-import app.pantopus.android.data.api.models.homes.HomePrivacyResponse
+import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
-import app.pantopus.android.data.api.models.homes.OccupantsResponse
-import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
+import app.pantopus.android.data.api.models.users.InviteCodeDto
+import app.pantopus.android.data.api.models.users.InviteProgressDto
+import app.pantopus.android.data.api.models.users.ProfileResponse
 
 /** Change topics (contract §8) that more than one key or repository names. */
 object StoreTopics {
+    /** The viewer's own profile and settings (a name, username or photo saved, here or on another device). */
+    const val PROFILE_ME = "profile:me"
+
     /** The viewer's conversation list: a chat created or left, a message sent or read. */
     const val CHATS = "chats"
 
@@ -25,7 +26,6 @@ object StoreTopics {
 }
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
-@Suppress("TooManyFunctions") // One function per stored endpoint.
 object StoreKeys {
     /** My Homes: one source for every screen that lists the viewer's homes. */
     val myHomes = StoreKey<MyHomesResponse>("api/homes/my-homes", kind = StoreKind.HOMES, topics = setOf(StoreTopics.HOMES))
@@ -104,6 +104,29 @@ object StoreKeys {
             topics = setOf("place:$homeId", "home:$homeId", StoreTopics.HOMES),
         )
 
+    /** The viewer's own profile (contract §4 "You": fresh 10 minutes). */
+    val ownProfile = StoreKey<ProfileResponse>("api/users/profile", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** The businesses the viewer belongs to (the You tab's Business card). */
+    val myBusinesses =
+        StoreKey<MyBusinessesResponse>("api/businesses/my-businesses", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** The viewer's invite progress and invite code (the You tab's invite card). */
+    val inviteProgress =
+        StoreKey<InviteProgressDto>("api/users/me/invite-progress", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+    val inviteCode = StoreKey<InviteCodeDto>("api/users/me/invite-code", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /**
+     * A home's dashboard (household data: counts, members, recent activity), kind Homes. Shown from a copy only to
+     * owners and household roles (founder decision 3); callers check `MyHome.showsCopyBeforeRecheck` first.
+     */
+    fun homeDashboard(homeId: String) =
+        StoreKey<HomeDashboardResponse>(
+            "api/homes/$homeId/dashboard",
+            kind = StoreKind.HOMES,
+            topics = setOf("home:$homeId", StoreTopics.HOMES),
+        )
+
     /** A home's Today: [TODAY_SECTIONS] of its Place intelligence. */
     fun today(homeId: String) =
         StoreKey<PlaceIntelligence>(
@@ -111,47 +134,5 @@ object StoreKeys {
             mapOf("ballot" to "1", "sections" to todaySectionsQuery),
             kind = StoreKind.TODAY,
             topics = setOf("today", "home:$homeId", "place:$homeId"),
-        )
-
-    /**
-     * The viewer's access to a Home (role, permissions, expiry). Founder decision 3: decides who may see a Home
-     * screen's stored copy (owners and household roles without an expiry).
-     */
-    fun homeAccess(homeId: String) =
-        StoreKey<HomeDashboardAuthorityDto>(
-            "api/homes/$homeId/dashboard-access",
-            kind = StoreKind.HOMES,
-            topics = setOf("home:$homeId", StoreTopics.HOMES),
-        )
-
-    /** A Home as the viewer sees it. */
-    fun homeDetail(homeId: String) =
-        StoreKey<HomeDetailResponse>(
-            "api/homes/$homeId",
-            kind = StoreKind.HOMES,
-            topics = setOf("home:$homeId", StoreTopics.HOMES, "place:$homeId"),
-        )
-
-    /** The viewer's effective permissions in a Home. */
-    fun homeMe(homeId: String) = StoreKey<HomeAccessDto>("api/homes/$homeId/me", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
-
-    /** A Home's occupants and pending invitations. */
-    fun homeOccupants(homeId: String) =
-        StoreKey<OccupantsResponse>("api/homes/$homeId/occupants", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
-
-    /** A Home's privacy toggles. */
-    fun homePrivacy(homeId: String) =
-        StoreKey<HomePrivacyResponse>("api/homes/$homeId/privacy", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
-
-    /** A Home's ownership security policy. */
-    fun homeSecurity(homeId: String) =
-        StoreKey<HomeOwnershipSecurityResponse>("api/homes/$homeId/security", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
-
-    /** A Home's property facts. */
-    fun homePropertyDetails(homeId: String) =
-        StoreKey<PropertyDetailsResponse>(
-            "api/homes/$homeId/property-details",
-            kind = StoreKind.HOMES,
-            topics = setOf("home:$homeId", "place:$homeId"),
         )
 }

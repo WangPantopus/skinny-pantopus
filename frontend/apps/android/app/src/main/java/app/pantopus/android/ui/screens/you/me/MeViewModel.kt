@@ -11,6 +11,7 @@ import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.businesses.BusinessMembership
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHome
+import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.MonthlyReceiptDto
 import app.pantopus.android.data.api.models.users.UserProfile
@@ -99,72 +100,101 @@ class MeViewModel
         /** The [ProfileChanges] version the shown profile was read at. */
         private var readAtVersion = -1
 
-        /** Reads the profile unless it's showing and no name or username was saved since. */
+        /** The stats shown last: never stored (they carry earnings), so a reopen shows the profile's own counts. */
+        private var lastStats: UserStatsDto? = null
+
+        /**
+         * Entry and every return (Instant Screens): what's on screen stays, and a first entry shows the stored profile,
+         * homes, businesses and dashboard at once. A request goes out only for what is out of date; a name or username
+         * saved since (ProfileChanges) reads the profile now.
+         */
         fun load() {
-            if (_state.value is MeUiState.Loaded && !businessReadFailed && readAtVersion == ProfileChanges.version.value) return
-            fetch()
+            val profileChanged = readAtVersion != ProfileChanges.version.value
+            val shown = _state.value is MeUiState.Loaded
+            val current = !businessReadFailed && !profileChanged && profileRepo.ownProfileIsCurrent()
+            if (shown && current) return
+            if (!shown) showCopies()
+            fetch(force = shown && profileChanged)
         }
 
-        fun refresh() = fetch()
+        /** Retry: read everything now. */
+        fun refresh() = fetch(force = true)
 
         fun selectIdentity(identity: MeIdentity) {
             if (_activeIdentity.value == identity) return
             _activeIdentity.value = identity
         }
 
-        private fun fetch() {
+        /** The stored copies, shown before any request; only when the profile, homes and businesses are all there. */
+        private fun showCopies() {
+            val profile = profileRepo.ownProfileCopy()?.user ?: return
+            val homes = homesRepo.myHomesCopy() ?: return
+            val businesses = businessesRepo.myBusinessesCopy() ?: return
+            val home = primaryHome(homes.sharedHomes)
+            // Founder decision 3: household counts from a copy only for owners and household roles.
+            val dashboard = home?.takeIf { it.showsCopyBeforeRecheck }?.let { homeDashboard.dashboardCopy(it.id) }
+            publish(profile, homes.sharedHomes, homesFailed = false, businesses.businesses, dashboard, lastStats)
+        }
+
+        private fun fetch(force: Boolean) {
             if (loadJob?.isActive == true) return
             readAtVersion = ProfileChanges.version.value
             loadJob =
                 viewModelScope.launch {
-                    val profileDeferred = async { profileRepo.ownProfile() }
-                    // The shared My Homes copy when it is fresh (Instant Screens); a read otherwise.
-                    val homesDeferred = async { homesRepo.myHomesStored() }
-                    val businessesDeferred = async { businessesRepo.myBusinesses() }
-                    val profileResult = profileDeferred.await()
-                    val homesResult = homesDeferred.await()
-                    val businessesResult = businessesDeferred.await()
-                    businessReadFailed = businessesResult is NetworkResult.Failure
-                    val businesses = (businessesResult as? NetworkResult.Success)?.data?.businesses
-                    val showBusiness = businesses == null || businesses.isNotEmpty()
-                    if (!showBusiness && _activeIdentity.value == MeIdentity.Business) _activeIdentity.value = MeIdentity.Personal
+                    val profileDeferred = async { profileRepo.ownProfileStored(force) }
+                    // The shared My Homes copy when it is fresh; a read otherwise.
+                    val homesDeferred = async { homesRepo.myHomesStored(force) }
+                    val businessesDeferred = async { businessesRepo.myBusinessesStored(force) }
+                    val profileStored = profileDeferred.await()
+                    val homesStored = homesDeferred.await()
+                    val businesses = businessesDeferred.await().data?.businesses
+                    businessReadFailed = businesses == null
 
                     val profile =
-                        (profileResult as? NetworkResult.Success)?.data?.user
-                            ?: run {
-                                val message =
-                                    (profileResult as? NetworkResult.Failure)
-                                        ?.error?.message
-                                        ?: "Couldn't load your profile."
-                                _state.value = MeUiState.Error(message)
-                                return@launch
+                        profileStored.data?.user ?: run {
+                            // A failed read keeps what's on screen; only an empty screen shows the error.
+                            if (_state.value !is MeUiState.Loaded) {
+                                _state.value = MeUiState.Error(profileStored.failure?.message ?: "Couldn't load your profile.")
                             }
-                    val homes: List<MyHome> = homesResult.data?.sharedHomes.orEmpty()
-                    // A failed homes read must not read as "No shared Home".
-                    val homesFailed = homesResult.data == null
+                            return@launch
+                        }
+                    val homes: List<MyHome> = homesStored.data?.sharedHomes.orEmpty()
                     // The Home card's counts come from the primary Home's dashboard.
-                    val dashboard = primaryHomeDashboard(homes)
-
-                    val stats =
-                        (profileRepo.stats(profile.id) as? NetworkResult.Success)?.data
-
-                    _state.value =
-                        MeUiState.Loaded(
-                            personal = launchScoped(buildPersonal(profile, stats)),
-                            home =
-                                launchScoped(
-                                    buildHome(
-                                        homes,
-                                        profileLocality = localityOf(profile),
-                                        homesFailed = homesFailed,
-                                        dashboard = dashboard,
-                                    ),
-                                ),
-                            business = launchScoped(buildBusiness(businesses?.firstOrNull(), businesses == null)),
-                            showBusiness = showBusiness,
-                        )
-                    fetchInsights()
+                    val dashboard = primaryHomeDashboard(homes, force)
+                    val stats = (profileRepo.stats(profile.id) as? NetworkResult.Success)?.data ?: lastStats
+                    lastStats = stats
+                    // A failed homes read must not read as "No shared Home".
+                    publish(profile, homes, homesFailed = homesStored.data == null, businesses, dashboard, stats)
+                    fetchInsights(force)
                 }
+        }
+
+        @Suppress("LongParameterList")
+        private fun publish(
+            profile: UserProfile,
+            homes: List<MyHome>,
+            homesFailed: Boolean,
+            businesses: List<BusinessMembership>?,
+            dashboard: HomeDashboardResponse?,
+            stats: UserStatsDto?,
+        ) {
+            val showBusiness = businesses == null || businesses.isNotEmpty()
+            if (!showBusiness && _activeIdentity.value == MeIdentity.Business) _activeIdentity.value = MeIdentity.Personal
+            _state.value =
+                MeUiState.Loaded(
+                    personal = launchScoped(buildPersonal(profile, stats)),
+                    home =
+                        launchScoped(
+                            buildHome(
+                                homes,
+                                profileLocality = localityOf(profile),
+                                homesFailed = homesFailed,
+                                dashboard = dashboard,
+                            ),
+                        ),
+                    business = launchScoped(buildBusiness(businesses?.firstOrNull(), businesses == null)),
+                    showBusiness = showBusiness,
+                )
         }
 
         /**
@@ -172,14 +202,13 @@ class MeViewModel
          * a hidden card rather than failing the tab, matching RN's
          * `Promise.allSettled` handling in `(tabs)/profile.tsx:117`.
          */
-        private suspend fun fetchInsights() {
+        private suspend fun fetchInsights(force: Boolean) {
             val (year, month) = receiptPeriod(clock())
+            // The receipt holds earnings (Sensitive tier): always read, never stored.
             _monthlyReceipt.value =
                 (insightsRepo.monthlyReceipt(year, month) as? NetworkResult.Success)?.data
-            _inviteProgress.value =
-                (insightsRepo.inviteProgress() as? NetworkResult.Success)?.data
-            _inviteCode.value =
-                (insightsRepo.inviteCode() as? NetworkResult.Success)?.data?.inviteCode
+            _inviteProgress.value = insightsRepo.inviteProgressStored(force).data
+            _inviteCode.value = insightsRepo.inviteCodeStored(force).data?.inviteCode
         }
 
         /** Test seam — pin the clock so the receipt period is deterministic. */
@@ -360,10 +389,17 @@ class MeViewModel
 
         private fun primaryHome(homes: List<MyHome>): MyHome? = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
 
-        /** The primary Home's dashboard; null with no Home or when it didn't load. */
-        private suspend fun primaryHomeDashboard(homes: List<MyHome>): HomeDashboardResponse? {
-            val homeId = primaryHome(homes)?.id ?: return null
-            return (homeDashboard.dashboard(homeId) as? NetworkResult.Success)?.data
+        /**
+         * The primary Home's dashboard; null with no Home or when it didn't load. Owners and household roles read it
+         * through the store (founder decision 3); guests, service providers and expiring access read it now.
+         */
+        private suspend fun primaryHomeDashboard(
+            homes: List<MyHome>,
+            force: Boolean,
+        ): HomeDashboardResponse? {
+            val home = primaryHome(homes) ?: return null
+            if (home.showsCopyBeforeRecheck) return homeDashboard.dashboardStored(home.id, force).data
+            return (homeDashboard.dashboard(home.id) as? NetworkResult.Success)?.data
         }
 
         /** The Home card's counts. A count the person may not see, or one that didn't load, stays "—". */

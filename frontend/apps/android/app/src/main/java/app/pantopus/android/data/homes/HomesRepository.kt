@@ -64,6 +64,7 @@ import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.FilesApi
 import app.pantopus.android.data.api.services.HomeTasksApi
 import app.pantopus.android.data.api.services.HomesApi
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
@@ -125,10 +126,10 @@ open class HomesRepository
             id: String,
             force: Boolean = false,
         ): Stored<HomeDetailResponse> =
-            store.read(StoreKeys.homeDetail(id), force) { etag -> conditionalApiCall { api.detailConditional(id, etag) } }
+            store.read(HomeStoreKeys.detail(id), force) { etag -> conditionalApiCall { api.detailConditional(id, etag) } }
 
         /** The stored Home, without a request. */
-        open fun storedDetail(id: String): HomeDetailResponse? = store.peek(StoreKeys.homeDetail(id)).data
+        open fun storedDetail(id: String): HomeDetailResponse? = store.peek(HomeStoreKeys.detail(id)).data
 
         /** `GET /api/homes/:id/public-profile`. */
         open suspend fun publicProfile(id: String) = safeApiCall { api.publicProfile(id) }
@@ -141,10 +142,10 @@ open class HomesRepository
             id: String,
             force: Boolean = false,
         ): Stored<PropertyDetailsResponse> =
-            store.read(StoreKeys.homePropertyDetails(id), force) { etag -> conditionalApiCall { api.propertyDetailsConditional(id, etag) } }
+            store.read(HomeStoreKeys.propertyDetails(id), force) { etag -> conditionalApiCall { api.propertyDetailsConditional(id, etag) } }
 
         /** The stored property facts, without a request. */
-        open fun storedPropertyDetails(id: String): PropertyDetailsResponse? = store.peek(StoreKeys.homePropertyDetails(id)).data
+        open fun storedPropertyDetails(id: String): PropertyDetailsResponse? = store.peek(HomeStoreKeys.propertyDetails(id)).data
 
         /** `POST /api/homes/property-suggestions`. */
         open suspend fun propertySuggestions(request: PropertySuggestionsRequest) = safeApiCall { api.propertySuggestions(request) }

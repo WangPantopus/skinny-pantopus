@@ -12,8 +12,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeAdminApi
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
-import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
@@ -42,12 +42,12 @@ open class HomeAdminRepository
             homeId: String,
             force: Boolean = false,
         ): Stored<HomeAccessDto> =
-            store.read(StoreKeys.homeMe(homeId), force) { etag ->
+            store.read(HomeStoreKeys.me(homeId), force) { etag ->
                 conditionalApiCall { api.myAccessConditional(homeId, etag) }
             }
 
         /** The stored `/me` reply, without a request. */
-        open fun storedMyAccess(homeId: String): HomeAccessDto? = store.peek(StoreKeys.homeMe(homeId)).data
+        open fun storedMyAccess(homeId: String): HomeAccessDto? = store.peek(HomeStoreKeys.me(homeId)).data
 
         /** `GET /api/homes/:id/me`, verification slice. */
         open suspend fun myVerificationAccess(homeId: String): NetworkResult<HomeVerificationAccessDto> =

@@ -17,7 +17,7 @@ import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomeSettingsRepository
 import app.pantopus.android.data.homes.HomesRepository
-import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
@@ -128,7 +128,7 @@ class HomeSettingsViewModel
 
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate =
-            gates.create(homeId, listOf(StoreKeys.homeDetail(homeId), StoreKeys.homeOccupants(homeId), StoreKeys.homeMe(homeId)))
+            gates.create(homeId, listOf(HomeStoreKeys.detail(homeId), HomeStoreKeys.occupants(homeId), HomeStoreKeys.me(homeId)))
         private var readGeneration = 0L
 
         private val _identity =

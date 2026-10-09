@@ -8,8 +8,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeMembersApi
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
-import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,12 +34,12 @@ open class HomeMembersRepository
             homeId: String,
             force: Boolean = false,
         ): Stored<OccupantsResponse> =
-            store.read(StoreKeys.homeOccupants(homeId), force) { etag ->
+            store.read(HomeStoreKeys.occupants(homeId), force) { etag ->
                 conditionalApiCall { api.listOccupantsConditional(homeId, etag) }
             }
 
         /** The stored occupants, without a request. */
-        open fun storedOccupants(homeId: String): OccupantsResponse? = store.peek(StoreKeys.homeOccupants(homeId)).data
+        open fun storedOccupants(homeId: String): OccupantsResponse? = store.peek(HomeStoreKeys.occupants(homeId)).data
 
         /** `POST /api/homes/:id/invite`. */
         open suspend fun invite(

@@ -8,7 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertyHomeDto
 import app.pantopus.android.data.homes.HomesRepository
-import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
@@ -59,7 +59,7 @@ class PropertyDetailsViewModel
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
-        private val gate = gates.create(homeId, listOf(StoreKeys.homePropertyDetails(homeId)))
+        private val gate = gates.create(homeId, listOf(HomeStoreKeys.propertyDetails(homeId)))
         private var readGeneration = 0L
 
         /** Preview/test constructor — injects a synchronous loader seam. */

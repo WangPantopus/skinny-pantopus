@@ -7,8 +7,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeOwnershipSecurityApi
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
-import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,12 +29,12 @@ class HomeOwnershipSecurityRepository
             homeId: String,
             force: Boolean = false,
         ): Stored<HomeOwnershipSecurityResponse> =
-            store.read(StoreKeys.homeSecurity(homeId), force) { etag ->
+            store.read(HomeStoreKeys.security(homeId), force) { etag ->
                 conditionalApiCall { api.getSecurityConditional(homeId, etag) }
             }
 
         /** The stored policy, without a request. */
-        fun storedSecurity(homeId: String): HomeOwnershipSecurityResponse? = store.peek(StoreKeys.homeSecurity(homeId)).data
+        fun storedSecurity(homeId: String): HomeOwnershipSecurityResponse? = store.peek(HomeStoreKeys.security(homeId)).data
 
         /** `PATCH /api/homes/:id/security`. */
         suspend fun updateSecurity(

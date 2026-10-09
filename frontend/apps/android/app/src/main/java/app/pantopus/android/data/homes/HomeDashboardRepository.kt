@@ -10,8 +10,12 @@ import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemDto
 import app.pantopus.android.data.api.models.homedashboard.UpdateSeasonalChecklistItemRequest
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeDashboardApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,9 +29,23 @@ open class HomeDashboardRepository
     @Inject
     constructor(
         private val api: HomeDashboardApi,
+        private val store: ScreenStore,
     ) {
         /** `GET /api/homes/:id/dashboard`. */
         open suspend fun dashboard(homeId: String): NetworkResult<HomeDashboardResponse> = safeApiCall { api.dashboard(homeId) }
+
+        /**
+         * The dashboard through the screens' store (kind Homes, fresh 2 minutes; [force] reads now). Only for viewers
+         * who may see a copy before the re-check (founder decision 3); everyone else calls [dashboard].
+         */
+        open suspend fun dashboardStored(
+            homeId: String,
+            force: Boolean = false,
+        ): Stored<HomeDashboardResponse> =
+            store.read(StoreKeys.homeDashboard(homeId), force) { etag -> conditionalApiCall { api.dashboardConditional(homeId, etag) } }
+
+        /** The stored dashboard as it is now, without a request. */
+        open fun dashboardCopy(homeId: String): HomeDashboardResponse? = store.peek(StoreKeys.homeDashboard(homeId)).data
 
         /** `GET /api/homes/:id/health-score?force=true`. */
         open suspend fun healthScore(

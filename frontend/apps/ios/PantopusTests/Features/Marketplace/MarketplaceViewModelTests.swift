@@ -189,10 +189,13 @@ final class MarketplaceViewModelTests: XCTestCase {
         ]
         let vm = MarketplaceViewModel(api: makeAPI(), location: location)
         let initialLoad = Task { await vm.load() }
-        // The slow response must go to the initial load: wait until its request is in flight
-        // instead of sleeping 100 ms, which a busy CI simulator outran (the chip's fetch then
-        // took the slow 3-row response).
-        await waitFor { !SequencedURLProtocol.capturedRequests.isEmpty }
+        // The slow response must go to the initial load: wait until its listings request is in
+        // flight. The first captured request is the viewing-location read (`/api/location`), so
+        // waiting for any request let the chip's fetch race the initial one to the slow 3-row
+        // response on a busy CI simulator.
+        await waitFor {
+            SequencedURLProtocol.capturedRequests.contains { $0.url?.path.hasPrefix("/api/listings") == true }
+        }
         await vm.selectCategory(.free)
         await initialLoad.value
         XCTAssertEqual(vm.activeCategory, .free)
