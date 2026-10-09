@@ -28,7 +28,7 @@ struct TodaySkyPainter {
     var home: SkyHome = .house
     var streetLights = 0
     /// Sustained wind, mph (that hour's while sliding), and where it blows
-    /// from ("SW"); nil when the forecast didn't say (`TodaySkyWind.swift`).
+    /// from ("SW"); nil when the forecast didn't say (`SkyWind.swift`).
     var windMph: Double?
     var windFrom: String?
     let still: Bool

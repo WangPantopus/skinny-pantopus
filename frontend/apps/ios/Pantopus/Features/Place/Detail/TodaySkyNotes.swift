@@ -31,7 +31,7 @@ extension SkyNote {
             { bins(now: now, moment: moment, pickups: pickups, calendar: calendar) },
             { Self.air(air) },
             { frost(weather: weather, moment: moment) },
-            { wind(weather: weather) },
+            { strongWind(weather: weather) },
             { clear ? meteors(now: now, moment: moment, calendar: calendar) : nil },
             { moon(moment: moment, clear: clear) },
             { solsticeOrEquinox(now: now, calendar: calendar) },
@@ -59,7 +59,7 @@ extension SkyNote {
 
     /// Sustained wind of 30 mph or more (about where wind advisories start),
     /// now or in the next six hours: rare, and a reason to secure loose things.
-    static func wind(weather: PlaceWeatherData) -> SkyNote? {
+    static func strongWind(weather: PlaceWeatherData) -> SkyNote? {
         if let now = weather.windMph, now >= 30 {
             let mph = Int(now.rounded())
             return SkyNote(kind: .wind, kicker: "💨 STRONG WIND NOW", spoken: "Strong wind now, \(mph) miles per hour.")

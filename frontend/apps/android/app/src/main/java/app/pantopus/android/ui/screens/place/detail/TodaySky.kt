@@ -129,7 +129,7 @@ fun TodaySkyHero(
             Modifier
                 .fillMaxWidth()
                 // Grows with large fonts instead of clipping the reading; the ground stays at the bottom.
-                .heightIn(min = if (scrub.index == null) 188.dp else maxOf(188f, restHeight).dp)
+                .heightIn(min = cardMinHeight(scrub.index != null, restHeight))
                 .shadow(elevation = 10.dp, shape = shape, ambientColor = sky.mid, spotColor = sky.mid)
                 .clip(shape)
                 // Behind the crossfade between two hours, so the page never shows through.
@@ -183,6 +183,12 @@ fun TodaySkyHero(
         SkyScrubHint(hours.size, scrubbing = scrub.index != null)
     }
 }
+
+/** At least 188 dp; while sliding, the card's height at rest, so an hour with fewer chips never shrinks it under the finger. */
+private fun cardMinHeight(
+    scrubbing: Boolean,
+    rest: Float,
+) = if (scrubbing) maxOf(188f, rest).dp else 188.dp
 
 /** What the card shows at a moment: now, or a forecast hour slid to. */
 private data class SkyView(

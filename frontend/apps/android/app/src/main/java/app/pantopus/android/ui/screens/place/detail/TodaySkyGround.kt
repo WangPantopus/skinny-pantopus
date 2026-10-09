@@ -28,7 +28,7 @@ internal class TodaySkyGround(
     private val scene: SkyScene,
     private val weather: SkyPalette.Weather,
     private val moment: SkyMoment,
-    /** How the trees lean and the chimney smoke bends (`TodaySkyWind.kt`). */
+    /** How the trees lean and the chimney smoke bends (`SkyWind.kt`). */
     private val wind: SkyWind,
     private val cold: Boolean,
     private val still: Boolean,

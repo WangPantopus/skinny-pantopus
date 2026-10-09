@@ -20,7 +20,7 @@ import kotlin.math.sin
  * lean and sway, the chimney smoke bends, the clouds drift, rain and snow slant, and from 12 mph
  * streaks of air (from 20 a few leaves too) cross the sky. Under 5 mph it's calm, and none of
  * that moves. With motion off the trees hold a still lean. The scene looks south (the sun rises
- * on the left), so a west wind blows to the left. Parity twin of iOS `TodaySkyWind.swift`; the
+ * on the left), so a west wind blows to the left. Parity twin of iOS `SkyWind.swift`; the
  * numbers match.
  */
 
@@ -104,8 +104,10 @@ internal fun DrawScope.paintWind(
     season: SkySeason,
 ) {
     val moving = if (still) 0.0 else scene.time
+
     // A position along the wind, as x in the picture: mirrored when it blows to the left.
     fun across(along: Float) = if (wind.toward < 0) scene.width - along else along
+
     if (wind.mph >= 20 && season != SkySeason.WINTER) {
         val random = SkyRandom(31)
         val color = if (night) SkyPalette.leafNight.copy(alpha = 0.7f) else SkyPalette.leafDay.copy(alpha = 0.85f)

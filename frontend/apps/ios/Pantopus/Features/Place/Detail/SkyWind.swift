@@ -1,5 +1,5 @@
 //
-//  TodaySkyWind.swift
+//  SkyWind.swift
 //  Pantopus
 //
 //  The wind in the living sky. The forecast's sustained speed sets how hard
@@ -9,7 +9,7 @@
 //  With motion off the trees hold a still lean. The scene looks south (the
 //  sun rises on the left), so a west wind blows to the left. Shared with the
 //  widget extension (see `project.yml`). Parity twin of Android's
-//  `TodaySkyWind.kt`; the numbers match.
+//  `SkyWind.kt`; the numbers match.
 //
 
 import SwiftUI

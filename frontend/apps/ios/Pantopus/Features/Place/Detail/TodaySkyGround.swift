@@ -25,7 +25,7 @@ struct TodaySkyGround {
     var home: SkyHome = .house
     /// Lights on the far hill after dusk, from the block's density bucket.
     var streetLights = 0
-    /// How the trees lean and the chimney smoke bends (`TodaySkyWind.swift`).
+    /// How the trees lean and the chimney smoke bends (`SkyWind.swift`).
     var wind = SkyWind(mph: nil, from: nil, condition: .clear)
 
     struct Tones {

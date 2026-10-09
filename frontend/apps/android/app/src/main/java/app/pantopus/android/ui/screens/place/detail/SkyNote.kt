@@ -66,7 +66,7 @@ data class SkyNote(
                 ?: bins(now, moment, pickups)
                 ?: air(air)
                 ?: frost(weather, moment)
-                ?: wind(weather)
+                ?: strongWind(weather)
                 ?: (if (clear) meteors(now, moment) else null)
                 ?: moon(moment, clear)
                 ?: solsticeOrEquinox(now)
@@ -115,22 +115,6 @@ data class SkyNote(
                     .minOfOrNull { it.tempF }
                     ?.takeIf { moment.minutes >= 15 * 60 && it <= 32 } ?: return null
             return SkyNote(Kind.FROST, "❄️ FROST TONIGHT", "Frost likely tonight, down to ${low.roundToInt()}°.")
-        }
-
-        /**
-         * Sustained wind of 30 mph or more (about where wind advisories start), now or in the next six
-         * hours: rare, and a reason to secure loose things.
-         */
-        fun wind(weather: PlaceWeatherData): SkyNote? {
-            weather.windMph?.takeIf { it >= 30 }?.let {
-                return SkyNote(Kind.WIND, "💨 STRONG WIND NOW", "Strong wind now, ${it.roundToInt()} miles per hour.")
-            }
-            val peak = weather.hourly.take(6).mapNotNull { it.windMph }.maxOrNull()?.takeIf { it >= 30 } ?: return null
-            return SkyNote(
-                Kind.WIND,
-                "💨 STRONG WIND AHEAD",
-                "Strong wind ahead, up to ${peak.roundToInt()} miles per hour in the next six hours.",
-            )
         }
 
         /** Air at 101 or worse: "🌫️ SMOKY AIR · AQI 168" when smoke leads it. */
@@ -243,6 +227,22 @@ data class SkyNote(
                 .ofSecondOfDay((minutes * 60).toLong().coerceIn(0L, 86_399L))
                 .format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
     }
+}
+
+/**
+ * Sustained wind of 30 mph or more (about where wind advisories start), now or in the next six hours:
+ * rare, and a reason to secure loose things.
+ */
+private fun strongWind(weather: PlaceWeatherData): SkyNote? {
+    weather.windMph?.takeIf { it >= 30 }?.let {
+        return SkyNote(SkyNote.Kind.WIND, "💨 STRONG WIND NOW", "Strong wind now, ${it.roundToInt()} miles per hour.")
+    }
+    val peak = weather.hourly.take(6).mapNotNull { it.windMph }.maxOrNull()?.takeIf { it >= 30 } ?: return null
+    return SkyNote(
+        SkyNote.Kind.WIND,
+        "💨 STRONG WIND AHEAD",
+        "Strong wind ahead, up to ${peak.roundToInt()} miles per hour in the next six hours.",
+    )
 }
 
 /**

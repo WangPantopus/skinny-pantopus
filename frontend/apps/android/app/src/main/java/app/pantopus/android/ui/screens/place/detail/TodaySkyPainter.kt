@@ -46,7 +46,7 @@ data class SkyDetails(
     val home: SkyHome = SkyHome.HOUSE,
     /** Lights on the far hill after dusk, from the block's density bucket. */
     val streetLights: Int = 0,
-    /** Sustained wind, mph (that hour's while sliding); null when the forecast didn't say (`TodaySkyWind.kt`). */
+    /** Sustained wind, mph (that hour's while sliding); null when the forecast didn't say (`SkyWind.kt`). */
     val windMph: Double? = null,
     /** Where the wind blows from ("SW"); null when unknown. */
     val windFrom: String? = null,
