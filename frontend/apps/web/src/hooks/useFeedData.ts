@@ -45,6 +45,9 @@ interface UseFeedDataOptions {
   userLng: number | null;
   gpsTimestamp: string | null;
   radiusMiles: number | null;
+  /** False while the viewing area is still being read: the Place feed waits for it instead of
+   * first asking without coordinates. */
+  areaReady?: boolean;
   showToast: (msg: string) => void;
 }
 
@@ -114,6 +117,7 @@ export function useFeedData({
   userLng,
   gpsTimestamp,
   radiusMiles,
+  areaReady = true,
   showToast,
 }: UseFeedDataOptions) {
   const queryClient = useQueryClient();
@@ -235,6 +239,7 @@ export function useFeedData({
     getNextPageParam: (lastPage) =>
       lastPage.pagination.hasMore ? (lastPage.pagination.nextCursor ?? null) : undefined,
     staleTime: 30_000,
+    enabled: surface !== 'place' || areaReady,
   });
 
   // Flatten pages into a single deduped array for consumers
