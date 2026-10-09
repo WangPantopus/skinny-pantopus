@@ -185,7 +185,7 @@ function ConnectionsPageContent() {
             // The count is its own span with only a margin before it, so the name read out was "Requests1".
             aria-label={tab.count > 0 ? `${tab.label} (${tab.count})` : undefined}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex-1 whitespace-nowrap py-2.5 px-4 rounded-lg text-sm font-medium transition ${
+            className={`flex-1 whitespace-nowrap py-2.5 px-2 sm:px-4 rounded-lg text-sm font-medium transition ${
               activeTab === tab.key
                 ? 'bg-app-surface text-app-text shadow-sm'
                 : 'text-app-text-secondary hover:text-app-text'
@@ -414,18 +414,19 @@ function UserCard({
   );
 
   return (
-    <div className="bg-app-surface rounded-xl border border-app-border p-4 flex items-center gap-4">
+    // On a phone the actions wrap below the person instead of squeezing their name.
+    <div className="bg-app-surface rounded-xl border border-app-border p-4 flex flex-wrap items-center gap-x-4 gap-y-3">
       {/* Avatar and name: one link to the profile, so a keyboard reaches it too */}
       {href ? (
-        <Link href={href} className="flex-1 min-w-0 flex items-center gap-4 rounded-lg">
+        <Link href={href} className="flex-1 min-w-[12rem] flex items-center gap-4 rounded-lg">
           {identity}
         </Link>
       ) : (
-        <div className="flex-1 min-w-0 flex items-center gap-4">{identity}</div>
+        <div className="flex-1 min-w-[12rem] flex items-center gap-4">{identity}</div>
       )}
 
       {/* Actions */}
-      <div className="flex-shrink-0">{actions}</div>
+      <div className="flex-shrink-0 ml-auto">{actions}</div>
     </div>
   );
 }
