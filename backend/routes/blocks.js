@@ -6,6 +6,7 @@ const logger = require('../utils/logger');
 const { invalidateBlockCache } = require('../services/blockService');
 const { invalidateFilterCache } = require('../services/feedService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
+const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 /**
  * POST /api/users/:userId/block
@@ -146,7 +147,7 @@ router.get('/blocked', verifyToken, async (req, res) => {
 
     const { data, error } = await supabaseAdmin
       .from('UserBlock')
-      .select('id, blocked_user_id, reason, created_at, blocked_user:blocked_user_id(id, username, name, profile_picture_url)')
+      .select('id, blocked_user_id, reason, created_at, blocked_user:blocked_user_id(id, username, name, first_name, last_name, profile_picture_url)')
       .eq('blocker_user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -159,8 +160,11 @@ router.get('/blocked', verifyToken, async (req, res) => {
       blocked: (data || []).map((b) => ({
         id: b.id,
         user_id: b.blocked_user_id,
-        username: b.blocked_user?.username || null,
-        name: b.blocked_user?.name || null,
+        // Only a username the person chose (a made-up one can show part of their email address).
+        username: chosenUsernameOrNull(b.blocked_user?.username),
+        name: b.blocked_user?.name
+          || [b.blocked_user?.first_name, b.blocked_user?.last_name].filter(Boolean).join(' ')
+          || null,
         profile_picture_url: b.blocked_user?.profile_picture_url || null,
         reason: b.reason,
         created_at: b.created_at,

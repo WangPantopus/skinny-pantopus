@@ -231,7 +231,7 @@ function ConnectionsPageContent() {
                     actions={
                       <div className="flex gap-2">
                         <button
-                          onClick={() => router.push(`/${rel.other_user?.username}`)}
+                          onClick={() => { const href = profileHref(rel.other_user); if (href) router.push(href); }}
                           className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700"
                         >
                           View
@@ -366,9 +366,10 @@ function ConnectionsPageContent() {
 
 // ============ Sub-Components ============
 
-/** The card's link to a person's profile; none when the person has no username. */
+/** The card's link to a person's profile: their username, or their id when they haven't chosen one. */
 function profileHref(user: RelationshipUser | null | undefined): string | undefined {
-  return user?.username ? `/${user.username}` : undefined;
+  if (user?.username) return `/${user.username}`;
+  return user?.id ? `/${user.id}` : undefined;
 }
 
 function UserCard({
