@@ -278,6 +278,8 @@ final class HomeMemberRemovalViewModel {
         next.outcome = outcome
         try store.replace(scope: scope, expected: original, next: next)
         saved = next
+        // A finished removal changes the household: the Home's kept screen copies are out of date.
+        if outcome.isTerminal { ScreenStore.store(for: api).markStale(topics: [ScreenTopic.home(original.homeId)]) }
     }
 
     private func readSession(_ revision: Int) async throws -> String {
