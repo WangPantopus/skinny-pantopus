@@ -1713,7 +1713,8 @@ public struct YouTabRoot: View {
                     onFindPeople: { showFindPeople = true },
                     onOpenProfile: { userId in
                         Task { @MainActor in path.append(.publicProfile(userId: userId)) }
-                    }
+                    },
+                    onOpenBlockedUsers: { Task { @MainActor in path.append(.blockedUsers) } }
                 )
             )
         case .supportTrains:

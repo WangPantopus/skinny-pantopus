@@ -348,6 +348,8 @@ public enum HubRoute: Hashable {
     case notificationSettings
     /// Privacy → "Download your data": the existing Data export screen.
     case dataExport
+    /// Settings → Blocked users, opened from the Connections Blocked tab.
+    case blockedUsers
     /// Privacy → "What we collect": a Legal document (the privacy policy).
     case legalContent(LegalDocument)
     /// Edit profile form — pushed by Settings → "Edit profile". P1.4.
@@ -847,7 +849,7 @@ public struct HubTabRoot: View {
         case .savePlace, .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
              .documentDetail, .packageDetail, .homePhotos, .trustedNeighbors, .propertyDetails,
              .helpCenter, .publicProfile, .homeSettings, .homeSecurity, .homeOwnershipSecurity,
-             .homeNotifications, .privacySettings, .notificationSettings, .dataExport, .editProfile, .menu,
+             .homeNotifications, .privacySettings, .notificationSettings, .dataExport, .blockedUsers, .editProfile, .menu,
              .paymentsSettings, .securityDevices, .mailItemDetail,
              .gigDetail, .listingDetail, .invoiceDetail, .businessProfile, .businessProfilePage,
              .editBusinessPage, .pulseFeed, .gigsFeed, .marketplace, .beaconInsights,
@@ -2707,7 +2709,8 @@ public struct HubTabRoot: View {
                     onFindPeople: { showFindPeople = true },
                     onOpenProfile: { userId in
                         Task { @MainActor in push(.publicProfile(userId: userId)) }
-                    }
+                    },
+                    onOpenBlockedUsers: { Task { @MainActor in push(.blockedUsers) } }
                 )
             )
         case .supportTrains:
@@ -3423,6 +3426,8 @@ public struct HubTabRoot: View {
             NotificationSettingsView { Task { @MainActor in pop() } }
         case .dataExport:
             DataExportView { Task { @MainActor in pop() } }
+        case .blockedUsers:
+            BlockedUsersView { Task { @MainActor in pop() } }
         case let .legalContent(doc):
             LegalContentView(document: doc) { Task { @MainActor in pop() } }
         case let .waitingRoom(homeId):
