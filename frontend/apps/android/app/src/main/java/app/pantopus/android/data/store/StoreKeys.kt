@@ -7,6 +7,8 @@ import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
+import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
+import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
@@ -17,6 +19,9 @@ import app.pantopus.android.data.api.models.users.ProfileResponse
 
 /** Change topics (contract §8) that more than one key or repository names. */
 object StoreTopics {
+    /** The viewer's notifications: one created, read or deleted. */
+    const val NOTIFICATIONS = "notifications"
+
     /** The viewer's own profile and settings (a name, username or photo saved, here or on another device). */
     const val PROFILE_ME = "profile:me"
 
@@ -114,6 +119,26 @@ object StoreKeys {
         StoreKey<NeighborhoodMeter>("api/neighborhood/meter", kind = StoreKind.NEARBY, topics = setOf(StoreTopics.HOMES))
     val neighborhoodCells =
         StoreKey<NeighborhoodCells>("api/neighborhood/cells", kind = StoreKind.NEARBY, topics = setOf(StoreTopics.HOMES))
+
+    /** The bell's unread count (kind Notifications: fresh 30 seconds, never saved on the phone). */
+    val notificationsUnreadCount =
+        StoreKey<NotificationUnreadCountResponse>(
+            "api/notifications/unread-count",
+            kind = StoreKind.NOTIFICATIONS,
+            topics = setOf(StoreTopics.NOTIFICATIONS),
+        )
+
+    /** The first page of one notifications list (a zone's context, all or unread); later pages are never stored. */
+    fun notificationsFirstPage(
+        limit: Int,
+        unreadOnly: Boolean?,
+        context: String?,
+    ) = StoreKey<NotificationsListResponse>(
+        "api/notifications",
+        mapOf("limit" to "$limit", "offset" to "0", "unread" to unreadOnly?.toString(), "context" to context),
+        kind = StoreKind.NOTIFICATIONS,
+        topics = setOf(StoreTopics.NOTIFICATIONS),
+    )
 
     /** The viewer's own profile (contract §4 "You": fresh 10 minutes). */
     val ownProfile = StoreKey<ProfileResponse>("api/users/profile", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))

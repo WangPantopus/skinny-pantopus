@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.notifications.NotificationsListRespo
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.notifications.NotificationsRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
@@ -56,6 +57,14 @@ class HomeTaskNotificationTapTest {
         DeepLinkRouter.bindSignedInUserIdProvider { identity.accounts.value }
         DeepLinkRouter.clearPending()
         coEvery { repo.markRead(any()) } returns NetworkResult.Success(NotificationActionEcho(ok = true))
+        // The first page goes through the screens' store (Instant Screens); here it reads the stubbed list.
+        every { repo.firstPageCopy(any(), any(), any()) } returns null
+        coEvery { repo.firstPageStored(any(), any(), any(), any()) } coAnswers {
+            when (val page = repo.list(firstArg(), 0, secondArg(), thirdArg())) {
+                is NetworkResult.Success -> Stored(page.data, fetchedAt = System.currentTimeMillis())
+                is NetworkResult.Failure -> Stored(failure = page.error)
+            }
+        }
     }
 
     @After fun teardown() {
