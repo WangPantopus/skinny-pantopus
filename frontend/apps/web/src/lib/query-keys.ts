@@ -75,6 +75,15 @@ export const queryKeys = {
   feedPreferences: () => ['me', 'feed-preferences'] as const,
   profile: (username: string) =>
     ['profile', username] as const,
+  /** Your pending reviews (GET /api/reviews/my-pending), read on other people's profiles. */
+  myPendingReviews: () => ['me', 'pending-reviews'] as const,
+
+  // ── Other people ──────────────────────────────────────────
+  /** What one person shares, as their profile reads it; app/[username]/PublicProfileClient.tsx. */
+  person: (id: string) => ['people', id] as const,
+  personPortfolio: (id: string) => ['people', id, 'portfolio'] as const,
+  personPosts: (id: string) => ['people', id, 'posts'] as const,
+  personReviews: (id: string) => ['people', id, 'reviews'] as const,
 
   // ── Homes ─────────────────────────────────────────────────
   homeDetail: (id: string) => ['homes', 'detail', id] as const,
