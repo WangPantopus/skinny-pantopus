@@ -14,8 +14,10 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainUpdateDto
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -60,6 +62,23 @@ interface SupportTrainsApi {
         @Query("radius_meters") radiusMeters: Double? = null,
         @Query("limit") limit: Int = 40,
     ): SupportTrainsNearbyResponse
+
+    /** [mine]'s first page for the screens' store: sends the stored ETag; a 304 means the copy is current. */
+    @GET("api/activities/support-trains/me/support-trains")
+    suspend fun mineConditional(
+        @Query("limit") limit: Int,
+        @Query("offset") offset: Int,
+        @Header("If-None-Match") etag: String?,
+    ): Response<SupportTrainsListResponse>
+
+    /** [nearby] for the screens' store: sends the stored ETag; a 304 means the copy is current. */
+    @GET("api/activities/support-trains/nearby")
+    suspend fun nearbyConditional(
+        @Query("latitude") latitude: Double,
+        @Query("longitude") longitude: Double,
+        @Query("limit") limit: Int,
+        @Header("If-None-Match") etag: String?,
+    ): Response<SupportTrainsNearbyResponse>
 
     /**
      * `GET /api/support-trains/:id/reservations` — organizer-only feed

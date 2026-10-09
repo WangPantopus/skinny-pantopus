@@ -42,6 +42,8 @@ fun SupportTrainsScreen(
     viewModel: SupportTrainsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val topBarAction by viewModel.topBarAction.collectAsStateWithLifecycle()
@@ -86,6 +88,8 @@ fun SupportTrainsScreen(
             topBarAction = topBarAction,
             fab = fab,
             onBack = onBack,
+            refreshing = refreshing,
+            refreshNotice = refreshNotice,
         )
     }
 }

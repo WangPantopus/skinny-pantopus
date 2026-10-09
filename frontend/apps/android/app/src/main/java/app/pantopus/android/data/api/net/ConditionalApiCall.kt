@@ -32,3 +32,14 @@ suspend inline fun <T> conditionalApiCall(crossinline block: suspend () -> Respo
             else -> throw HttpException(response)
         }
     }
+
+/** Maps the data of a [Conditional.Fresh] reply (a 304 and failures pass through unchanged). */
+inline fun <A, B> NetworkResult<Conditional<A>>.mapFresh(transform: (A) -> B): NetworkResult<Conditional<B>> =
+    when (this) {
+        is NetworkResult.Success ->
+            when (val reply = data) {
+                is Conditional.Fresh -> NetworkResult.Success(Conditional.Fresh(transform(reply.data), reply.etag))
+                Conditional.NotModified -> NetworkResult.Success(Conditional.NotModified)
+            }
+        is NetworkResult.Failure -> this
+    }

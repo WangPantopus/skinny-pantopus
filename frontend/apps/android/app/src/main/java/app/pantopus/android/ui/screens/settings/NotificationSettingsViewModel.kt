@@ -10,6 +10,8 @@ import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.QuietHoursPatch
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
@@ -70,6 +72,10 @@ class NotificationSettingsViewModel
         private val _toast = MutableStateFlow<ToastMessage?>(null)
         val toast: StateFlow<ToastMessage?> = _toast.asStateFlow()
 
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
         /** Server truth, mutated optimistically ahead of the debounced PUT. */
         private var preferences: NotificationPreferences? = null
         private var pendingPatch = NotificationPreferencesPatch()
@@ -80,13 +86,15 @@ class NotificationSettingsViewModel
         /** Overridable in tests so the debounce never races the assertions. */
         internal var saveDebounceMillis: Long = DEFAULT_SAVE_DEBOUNCE_MS
 
+        /** Screen entry and every return: the store answers from a fresh copy (10 minutes) without a request. */
         fun load() {
             if (preferences == null) _state.value = GroupedListUiState.Loading
-            viewModelScope.launch { fetch() }
+            viewModelScope.launch { fetch(force = false) }
         }
 
+        /** Retry: read now. */
         fun refresh() {
-            viewModelScope.launch { fetch() }
+            viewModelScope.launch { fetch(force = true) }
         }
 
         fun consumeToast() {
@@ -192,18 +200,17 @@ class NotificationSettingsViewModel
 
         // MARK: - Networking
 
-        private suspend fun fetch() {
-            when (val result = repository.preferences()) {
-                is NetworkResult.Success -> publish(result.data)
-                is NetworkResult.Failure ->
-                    if (preferences == null) {
-                        _state.value = GroupedListUiState.Error(result.error.message)
-                    } else {
-                        // Something is already on screen — keep it and
-                        // surface the failure as a toast, like RN.
-                        _toast.value = ToastMessage("Failed to load preferences", ToastKind.Error)
-                    }
+        private suspend fun fetch(force: Boolean) {
+            val stored = repository.preferencesStored(force)
+            val data = stored.data
+            when {
+                // A local change still saving wins over a copy read meanwhile; the save publishes the server's row.
+                data != null && (saveInFlight || !pendingPatch.isEmpty) -> Unit
+                data != null -> publish(data)
+                preferences == null -> _state.value = GroupedListUiState.Error(stored.failure?.message ?: "Couldn't load preferences.")
             }
+            // Something is on screen: it stays, and only a copy past its max shown age says so (contract §3).
+            _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.YOU) }
         }
 
         /** Apply locally, re-project, and (re)arm the debounce timer. */
@@ -248,7 +255,7 @@ class NotificationSettingsViewModel
                         }
                         is NetworkResult.Failure -> {
                             _toast.value = ToastMessage("Failed to save", ToastKind.Error)
-                            fetch()
+                            fetch(force = true)
                         }
                     }
                 }

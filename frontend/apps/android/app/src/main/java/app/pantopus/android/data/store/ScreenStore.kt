@@ -136,9 +136,29 @@ class ScreenStore
             return slot.state.value.cast()
         }
 
-        /** Marks every entry carrying [topic] out of date (contract §8): the next read of it sends a request. */
+        /**
+         * Marks every entry carrying [topic] out of date (contract §8): the next read of it sends a request. A key
+         * topic ending in `:*` (a list's "supporttrain:*") matches every topic with that prefix.
+         */
         fun markStale(topic: String) {
-            synchronized(slots) { slots.values.forEach { if (topic in it.key.topics) it.stale = true } }
+            synchronized(slots) { slots.values.forEach { if (it.key.matches(topic)) it.stale = true } }
+        }
+
+        /**
+         * Own edit (contract §6): the server's reply to a save becomes the entry, counted as read now. The old ETag no
+         * longer names it, so the next read after the window asks without one.
+         */
+        fun <T : Any> put(
+            key: StoreKey<T>,
+            data: T,
+        ) {
+            val account = accountId() ?: return
+            synchronized(slots) {
+                val slot = slotLocked(key, account)
+                slot.etag = null
+                slot.stale = false
+                slot.state.value = Stored(data, fetchedAt = System.currentTimeMillis())
+            }
         }
 
         /** Marks every entry of [kinds] out of date, e.g. the household ones after a socket reconnect. */

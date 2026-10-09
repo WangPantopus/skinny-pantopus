@@ -56,6 +56,8 @@ import app.pantopus.android.ui.components.ChannelTriad
 import app.pantopus.android.ui.components.FuzzStop
 import app.pantopus.android.ui.components.LocationFuzzSlider
 import app.pantopus.android.ui.components.PauseBanner
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StealthBanner
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -103,6 +105,8 @@ fun GroupedListScreen(
      * surfaces.
      */
     header: (@Composable () -> Unit)? = null,
+    /** Instant Screens contract §3: the quiet "Couldn't refresh. Showing 3:42 PM." line above the groups. */
+    refreshNotice: RefreshNotice? = null,
 ) {
     Column(
         modifier =
@@ -112,6 +116,9 @@ fun GroupedListScreen(
                 .testTag("groupedList"),
     ) {
         TopBar(title = title, onBack = callbacks.onBack)
+        if (refreshNotice != null && state is GroupedListUiState.Loaded) {
+            RefreshFailedLine(refreshNotice, modifier = Modifier.padding(horizontal = Spacing.s4))
+        }
         when (state) {
             is GroupedListUiState.Loading -> LoadingFrame()
             is GroupedListUiState.Error -> ErrorFrame(message = state.message, onRetry = callbacks.onRetry)

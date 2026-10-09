@@ -6,9 +6,9 @@ import app.pantopus.android.data.api.models.support_trains.SupportTrainListItemD
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.support_trains.SupportTrainsRepository
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
@@ -94,10 +94,10 @@ class SupportTrainsViewModelTest {
     @Test
     fun load_populated_renders_loaded() =
         runTest {
-            coEvery { repo.mine(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsListResponse(supportTrains = listOf(mineRow("st1", "filling"))))
-            coEvery { repo.nearby(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsNearbyResponse(supportTrains = emptyList()))
+            coEvery { repo.mineStored(any()) } returns
+                Stored(SupportTrainsListResponse(supportTrains = listOf(mineRow("st1", "filling"))), fetchedAt = System.currentTimeMillis())
+            coEvery { repo.nearbyStored(any(), any(), any()) } returns
+                Stored(SupportTrainsNearbyResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { 40.0 to -73.0 }
             vm.load()
@@ -110,8 +110,8 @@ class SupportTrainsViewModelTest {
     @Test
     fun load_empty_renders_empty_with_start_train_cta() =
         runTest {
-            coEvery { repo.mine(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsListResponse(supportTrains = emptyList()))
+            coEvery { repo.mineStored(any()) } returns
+                Stored(SupportTrainsListResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { null }
             vm.load()
@@ -125,10 +125,8 @@ class SupportTrainsViewModelTest {
     @Test
     fun both_fetches_failing_transitions_to_error() =
         runTest {
-            coEvery { repo.mine(any(), any(), any(), any()) } returns
-                NetworkResult.Failure(NetworkError.Server(500, null))
-            coEvery { repo.nearby(any(), any(), any(), any()) } returns
-                NetworkResult.Failure(NetworkError.Server(500, null))
+            coEvery { repo.mineStored(any()) } returns Stored(failure = NetworkError.Server(500, null))
+            coEvery { repo.nearbyStored(any(), any(), any()) } returns Stored(failure = NetworkError.Server(500, null))
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { 40.0 to -73.0 }
             vm.load()
@@ -140,8 +138,8 @@ class SupportTrainsViewModelTest {
     @Test
     fun invitations_tab_segments_invited_rows() =
         runTest {
-            coEvery { repo.mine(any(), any(), any(), any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.mineStored(any()) } returns
+                Stored(
                     SupportTrainsListResponse(
                         supportTrains =
                             listOf(
@@ -149,9 +147,9 @@ class SupportTrainsViewModelTest {
                                 mineRow("st3", "invited", role = "helper"),
                             ),
                     ),
-                )
-            coEvery { repo.nearby(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsNearbyResponse(supportTrains = emptyList()))
+                , fetchedAt = System.currentTimeMillis())
+            coEvery { repo.nearbyStored(any(), any(), any()) } returns
+                Stored(SupportTrainsNearbyResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { null }
             vm.load()
@@ -163,8 +161,8 @@ class SupportTrainsViewModelTest {
     @Test
     fun nearby_tab_gracefully_degrades_without_location() =
         runTest {
-            coEvery { repo.mine(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsListResponse(supportTrains = emptyList()))
+            coEvery { repo.mineStored(any()) } returns
+                Stored(SupportTrainsListResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { null }
             vm.load()
@@ -182,10 +180,10 @@ class SupportTrainsViewModelTest {
     @Test
     fun my_trains_row_uses_generic_archetype_when_type_missing() =
         runTest {
-            coEvery { repo.mine(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsListResponse(supportTrains = listOf(mineRow("st1", "active"))))
-            coEvery { repo.nearby(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsNearbyResponse(supportTrains = emptyList()))
+            coEvery { repo.mineStored(any()) } returns
+                Stored(SupportTrainsListResponse(supportTrains = listOf(mineRow("st1", "active"))), fetchedAt = System.currentTimeMillis())
+            coEvery { repo.nearbyStored(any(), any(), any()) } returns
+                Stored(SupportTrainsNearbyResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { null }
             vm.load()
@@ -198,14 +196,14 @@ class SupportTrainsViewModelTest {
     @Test
     fun nearby_row_uses_meal_archetype_and_renders_slot_progress() =
         runTest {
-            coEvery { repo.mine(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsListResponse(supportTrains = emptyList()))
-            coEvery { repo.nearby(any(), any(), any(), any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.mineStored(any()) } returns
+                Stored(SupportTrainsListResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
+            coEvery { repo.nearbyStored(any(), any(), any()) } returns
+                Stored(
                     SupportTrainsNearbyResponse(
                         supportTrains = listOf(nearbyRow("n1", "meal_support", 12, 18, "For the Chen family")),
                     ),
-                )
+                , fetchedAt = System.currentTimeMillis())
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { 40.0 to -73.0 }
             vm.load()
@@ -221,10 +219,10 @@ class SupportTrainsViewModelTest {
     @Test
     fun nearby_row_metaTail_falls_back_to_distance_when_no_slots() =
         runTest {
-            coEvery { repo.mine(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsListResponse(supportTrains = emptyList()))
-            coEvery { repo.nearby(any(), any(), any(), any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.mineStored(any()) } returns
+                Stored(SupportTrainsListResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
+            coEvery { repo.nearbyStored(any(), any(), any()) } returns
+                Stored(
                     SupportTrainsNearbyResponse(
                         supportTrains =
                             listOf(
@@ -239,7 +237,7 @@ class SupportTrainsViewModelTest {
                                 ),
                             ),
                     ),
-                )
+                , fetchedAt = System.currentTimeMillis())
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { 40.0 to -73.0 }
             vm.load()
@@ -251,10 +249,10 @@ class SupportTrainsViewModelTest {
     @Test
     fun row_tap_fires_open_train_callback() =
         runTest {
-            coEvery { repo.mine(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsListResponse(supportTrains = listOf(mineRow("st42", "active"))))
-            coEvery { repo.nearby(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsNearbyResponse(supportTrains = emptyList()))
+            coEvery { repo.mineStored(any()) } returns
+                Stored(SupportTrainsListResponse(supportTrains = listOf(mineRow("st42", "active"))), fetchedAt = System.currentTimeMillis())
+            coEvery { repo.nearbyStored(any(), any(), any()) } returns
+                Stored(SupportTrainsNearbyResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
             val vm = SupportTrainsViewModel(repo, noLocation)
             var captured: String? = null
             vm.onOpenTrain = { captured = it }
@@ -268,10 +266,10 @@ class SupportTrainsViewModelTest {
     @Test
     fun helper_filter_passed_through_to_repository() =
         runTest {
-            coEvery { repo.mine(role = null, status = null, limit = 20, offset = 0) } returns
-                NetworkResult.Success(SupportTrainsListResponse(supportTrains = emptyList()))
-            coEvery { repo.nearby(any(), any(), any(), any()) } returns
-                NetworkResult.Success(SupportTrainsNearbyResponse(supportTrains = emptyList()))
+            coEvery { repo.mineStored(any()) } returns
+                Stored(SupportTrainsListResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
+            coEvery { repo.nearbyStored(any(), any(), any()) } returns
+                Stored(SupportTrainsNearbyResponse(supportTrains = emptyList()), fetchedAt = System.currentTimeMillis())
             val vm = SupportTrainsViewModel(repo, noLocation)
             vm.locationProvider = { null }
             vm.load()
