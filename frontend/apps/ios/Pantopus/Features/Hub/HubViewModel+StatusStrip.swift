@@ -76,9 +76,16 @@ extension HubViewModel {
     }
 
     /// Launch cut #7 (Household extras): bill-due and package pills are
-    /// hidden for the first launch (the bill and package screens are).
+    /// hidden for the first launch (the bill and package screens are). Launch
+    /// cut #10 (Mailbox): so are the new-mail and offer pills into the mailbox.
     static func isStatusItemAvailableAtLaunch(_ raw: HubResponse.HubStatusItem) -> Bool {
-        LaunchFeatures.householdExtras || !["bill_due", "package_update"].contains(raw.type)
+        if !LaunchFeatures.mailbox, raw.type == "mail_new" || isMailboxRoute(raw.route) { return false }
+        return LaunchFeatures.householdExtras || !["bill_due", "package_update"].contains(raw.type)
+    }
+
+    /// A server route into the mailbox (`/app/mailbox…`).
+    static func isMailboxRoute(_ route: String?) -> Bool {
+        route?.contains("/mailbox") ?? false
     }
 
     /// First-launch scope: an activity row whose type or route opens a
@@ -138,7 +145,11 @@ extension HubViewModel {
                 progressFraction: nil
             )
         }
-        let serverItems = hub.jumpBackIn.filter { LaunchFeatures.openGigs || !$0.route.hasPrefix("/gigs") }.map { raw in
+        // Launch cut #10 (Mailbox): no "Mailbox" tile either.
+        let launchItems = hub.jumpBackIn.filter {
+            (LaunchFeatures.openGigs || !$0.route.hasPrefix("/gigs")) && (LaunchFeatures.mailbox || !isMailboxRoute($0.route))
+        }
+        let serverItems = launchItems.map { raw in
             JumpBackItem(
                 id: raw.title,
                 title: raw.title,

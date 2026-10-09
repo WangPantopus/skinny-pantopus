@@ -2,12 +2,14 @@
 //  RootTabView.swift
 //  Pantopus
 //
-//  The 4-tab bottom bar — Place · Today · Nearby · Mail — that sits above
-//  every signed-in screen (wedge Phase 1.5 IA: every tab alive at zero
-//  density). Place is selected at launch. Today is the daily briefing;
+//  The 4-tab bottom bar — Place · Today · Nearby · Messages — that sits
+//  above every signed-in screen (wedge Phase 1.5 IA: every tab alive at
+//  zero density). Place is selected at launch. Today is the daily briefing;
 //  Nearby is the density-gated door (Pulse / Tasks / Marketplace present
-//  as sheets from it); Mail hosts the mailbox AND the Messages inbox as
-//  two segments, with the unread badge on the tab.
+//  as sheets from it). The fourth tab is Messages, with the unread badge,
+//  while Mailbox is off for launch (`LaunchFeatures.mailbox`, founder
+//  decision 2026-10-09). With Mailbox on it reads Mail and hosts the
+//  mailbox and the Messages inbox as two segments.
 //
 
 // swiftlint:disable file_length
@@ -20,13 +22,14 @@ import SwiftUI
 public enum RootTab: Hashable, CaseIterable {
     case place, today, nearby, mail
 
-    /// Human-readable label rendered under each tab icon.
+    /// Human-readable label rendered under each tab icon. The fourth tab is
+    /// "Messages" while Mailbox is off for launch; its id stays `mail`.
     public var label: String {
         switch self {
         case .place: "Place"
         case .today: "Today"
         case .nearby: "Nearby"
-        case .mail: "Mail"
+        case .mail: LaunchFeatures.mailbox ? "Mail" : "Messages"
         }
     }
 
@@ -46,7 +49,7 @@ public enum RootTab: Hashable, CaseIterable {
         case .place: .home
         case .today: .sun
         case .nearby: .compass
-        case .mail: .mail
+        case .mail: LaunchFeatures.mailbox ? .mail : .messageCircle
         }
     }
 }
@@ -85,7 +88,7 @@ public final class MailTabStore {
 public final class RootTabModel {
     /// Currently selected tab. Starts at `.place`.
     public var selected: RootTab = .place
-    /// Unread Messages count rendered as the Mail tab badge.
+    /// Unread Messages count rendered as the Messages (Mail) tab badge.
     public var messagesBadge: Int = 0
     /// The Place stack is on its Hub root (kept current by `HubTabRoot`).
     public var placeAtRoot = false
@@ -231,11 +234,13 @@ public struct RootTabView: View {
             model.selected = .nearby
             NeighborhoodDoorStore.shared.pendingSurface = .marketplace
         // Mailbox-cluster destinations resolve in the Mail tab's stack
-        // (a mailbox-rooted HubTabRoot sharing the same destinations).
+        // (a mailbox-rooted HubTabRoot sharing the same destinations). While
+        // Mailbox is off for launch, the Place stack shows its "not in the
+        // app yet" placeholder for them instead.
         case .vacationHold, .mailDay,
              .stamps, .mailTask, .mailTranslation, .unboxing, .packageGig, .earn,
              .mailbox, .mailItem:
-            model.selected = .mail
+            model.selected = LaunchFeatures.mailbox ? .mail : .place
         case .supportTrain, .supportTrainManage, .user, .beaconProfile,
              .connections, .beacons, .discoverHub,
              .homeDetail, .homeDashboard, .homeTask, .homeMemberRequests, .homeResidency,
@@ -269,8 +274,9 @@ public struct RootTabView: View {
         case .creatorAudienceMembers:
             openProfile(at: .creatorAudienceMembers)
         case .conversation:
-            // Chat lives in the Mail tab's Messages segment.
-            MailTabStore.shared.pendingSegment = .messages
+            // Chat lives in the Messages tab (the Mail tab's Messages segment
+            // while Mailbox is on).
+            if LaunchFeatures.mailbox { MailTabStore.shared.pendingSegment = .messages }
             model.selected = .mail
         case .home:
             model.selected = .place
@@ -418,7 +424,9 @@ public struct TodayTabRoot: View {
     }
 }
 
-/// Mail tab — the mailbox and the Messages inbox as two segments under
+/// The fourth tab. While Mailbox is off for launch it is Messages: the
+/// conversation list itself, with no Mailbox/Messages switch. With Mailbox
+/// on it is Mail — the mailbox and the Messages inbox as two segments under
 /// one tab. Only the visible segment is mounted, so each root's own
 /// deep-link consumption keeps working unchanged.
 public struct MailTabRoot: View {
@@ -437,6 +445,14 @@ public struct MailTabRoot: View {
     }
 
     public var body: some View {
+        if LaunchFeatures.mailbox {
+            segmentedMail
+        } else {
+            InboxTabRoot()
+        }
+    }
+
+    private var segmentedMail: some View {
         VStack(spacing: 0) {
             if segment == .mailbox ? store.mailboxAtRoot : store.messagesAtRoot {
                 Picker("Mail", selection: $segment) {

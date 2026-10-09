@@ -3051,8 +3051,11 @@ extension YouRoute {
         // Launch cut #4 (Open gigs): browse, post, bids and gig offers. A
         // task's own detail (`.gigDetail`) and My tasks stay.
         case .offers, .myBids, .gigsFeed, .gigSearch, .tasksMap, .composeTask, .composeChecklistHire,
-             .editGig, .packageGig:
+             .editGig:
             LaunchFeatures.openGigs
+        // Launch cuts #4 + #10: a package's task, opened from its mail.
+        case .packageGig:
+            LaunchFeatures.openGigs && LaunchFeatures.mailbox
         // Launch cut #5 (Public scheduling); invoices, packages and payouts stay.
         case let .scheduling(route):
             route.isAvailableAtLaunch
@@ -3062,12 +3065,20 @@ extension YouRoute {
         // Launch cut #7 (Household extras): bills, pets, calendar, packages, polls.
         case .homeBills, .billDetail, .addBill, .homePets, .homeCalendar, .addCalendarEvent,
              .calendarEventDetail, .homePackages, .packageDetail, .logPackage, .homePolls,
-             .pollDetail, .startPoll, .unboxing:
+             .pollDetail, .startPoll:
             LaunchFeatures.householdExtras
-        // Launch cut #8 (Mail extras): letters, Mail Party, community mail,
-        // translations, and Earn (offers and ad earnings).
+        // Launch cuts #7 + #10: package unboxing starts from a mail item.
+        case .unboxing:
+            LaunchFeatures.householdExtras && LaunchFeatures.mailbox
+        // Launch cuts #8 + #10 (Mail extras, inside the mailbox): letters, Mail
+        // Party, community mail, translations, and Earn (offers and ad earnings).
         case .ceremonialMail, .ceremonialMailOpen, .mailParty, .communityMail, .mailTranslation, .earn:
-            LaunchFeatures.mailExtras
+            LaunchFeatures.mailExtras && LaunchFeatures.mailbox
+        // Launch cut #10 (Mailbox): received mail, the vault and records, My
+        // mail day, vacation hold, stamps, mail tasks and search.
+        case .mailboxRoot, .mailboxMap, .mailboxSearch, .mailItemDetail, .vacationHold, .mailRoutingQueue,
+             .mailDay, .stamps, .mailTask, .mailTaskList, .homeRecords:
+            LaunchFeatures.mailbox
         default:
             true
         }
