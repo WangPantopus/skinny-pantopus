@@ -60,6 +60,7 @@ export const queryKeys = {
 
   // ── Posts ──────────────────────────────────────────────────
   postDetail: (id: string) => ['posts', 'detail', id] as const,
+  postComments: (id: string) => ['posts', 'comments', id] as const,
 
   // ── Profiles ──────────────────────────────────────────────
   /** Your own profile (GET /api/users/profile); read it through lib/me.ts. */
