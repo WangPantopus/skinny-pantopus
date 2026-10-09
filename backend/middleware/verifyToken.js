@@ -137,6 +137,15 @@ const verifyToken = async (req, res, next) => {
     // Verify token with Supabase
     const { data, error } = await supabase.auth.getUser(token);
 
+    // Supabase Auth didn't answer (its rate limit, shared by everyone on hosted; a 5xx; the
+    // network): the token wasn't checked, so nothing gets through. A 401 here would blame the
+    // person and send every client to /refresh at once, spending the app-wide refresh limit,
+    // so say busy as /refresh does; the session stays as it is.
+    if (error && authSessionService.isAuthServiceBusy(error)) {
+      logger.warn('auth.verify_unavailable', { ip: req.ip, method: req._authMethod, status: error.status, name: error.name });
+      return res.status(503).json({ error: 'Could not verify this session right now. Please try again.', code: 'AUTH_UNAVAILABLE' });
+    }
+
     if (error || !data.user) {
       logger.warn('auth.token_invalid', { ip: req.ip, method: req._authMethod });
       return res.status(401).json({ error: 'Invalid or expired token' });
