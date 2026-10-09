@@ -221,7 +221,8 @@ private struct ChatListTopBar: View {
 
     var body: some View {
         HStack {
-            Text("Chat")
+            // The tab is Messages while Mailbox is off for launch; the title matches it.
+            Text(LaunchFeatures.mailbox ? "Chat" : "Messages")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
             Spacer()
