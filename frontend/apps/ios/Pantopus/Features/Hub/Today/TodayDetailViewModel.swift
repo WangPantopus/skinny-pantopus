@@ -182,9 +182,11 @@ final class TodayDetailViewModel {
         let alerts = payload?.alerts ?? []
         let hasAlert = !alerts.isEmpty
         let storedSignals = briefing?.signalsSnapshot ?? []
-        // Launch cut #7 (Household extras): bill-due and home-calendar signals are hidden.
+        // Launch cut #7 (Household extras): bill-due and home-calendar signals are hidden;
+        // launch cut #10 (Mailbox): so are mail signals.
         let rawSignals = (storedSignals.isEmpty ? (payload?.signals ?? []) : storedSignals)
             .filter { LaunchFeatures.householdExtras || !["bill_due", "calendar"].contains($0.kind ?? "") }
+            .filter { LaunchFeatures.mailbox || $0.kind != "mail" }
         let signals = rawSignals.map(signal(from:))
         let label = payload?.location?.label ?? "Today"
         let storedSummary = briefing?.summaryText?.isEmpty == false ? briefing?.summaryText : nil

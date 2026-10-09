@@ -20,6 +20,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -2612,7 +2613,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         }
                     }
                     val landingError = placeLanding as? HomeLanding.Error
-                    if (placeLanding is HomeLanding.Loading) {
+                    // The Hub under Your Place loads once someone sees it. An owner's launch lands straight on
+                    // the dashboard, and composing the Hub first ran its whole request chain unseen.
+                    var hubShown by rememberSaveable { mutableStateOf(false) }
+                    val linkPending = pendingDeepLink != null || app.pantopus.android.core.routing.PendingDeepLinkStore.peek() != null
+                    val landingOnDashboard = placeLanding is HomeLanding.PlaceDashboard && !didLandPlace && !linkPending
+                    val landingSettled = placeLanding is HomeLanding.Hub || placeLanding is HomeLanding.PlaceDashboard
+                    val onHubRoot = backStackEntry?.destination?.route == PantopusRoute.Place.path
+                    val showHub = hubShown || (landingSettled && onHubRoot && !landingOnDashboard)
+                    SideEffect { if (showHub) hubShown = true }
+                    if (placeLanding is HomeLanding.Loading || (landingSettled && !showHub)) {
                         HubSkeleton()
                     } else if (landingError != null) {
                         ErrorState(

@@ -56,24 +56,33 @@ struct PlaceVerifyBenefit: Identifiable {
 }
 
 /// The T4 unlocks that actually exist (Wedge v2 D4): proof you live here,
-/// your rank on the block, and the rooms only verified neighbors see.
-let placeVerifyBenefits: [PlaceVerifyBenefit] = [
-    .init(
-        icon: .badgeCheck,
-        label: "Proof you live here",
-        sub: "Your verified badge, a residency letter, and a shareable Residency Pass"
-    ),
-    .init(
-        icon: .mailbox,
-        label: "Your mailbox and your rank",
-        sub: "The digital mailbox opens, and you take a permanent Block Founder number"
-    ),
-    .init(
-        icon: .messageCircle,
-        label: "What only verified neighbors see",
-        sub: "Real rents on your block, neighbor messages, the Fridge Card, rate watch"
-    )
-]
+/// your rank on the block, and the rooms only verified neighbors see. The
+/// digital mailbox joins the rank while Mailbox is on (launch cut #10).
+var placeVerifyBenefits: [PlaceVerifyBenefit] {
+    [
+        .init(
+            icon: .badgeCheck,
+            label: "Proof you live here",
+            sub: "Your verified badge, a residency letter, and a shareable Residency Pass"
+        ),
+        LaunchFeatures.mailbox
+            ? .init(
+                icon: .mailbox,
+                label: "Your mailbox and your rank",
+                sub: "The digital mailbox opens, and you take a permanent Block Founder number"
+            )
+            : .init(
+                icon: .hash,
+                label: "Your rank on the block",
+                sub: "You take a permanent Block Founder number"
+            ),
+        .init(
+            icon: .messageCircle,
+            label: "What only verified neighbors see",
+            sub: "Real rents on your block, neighbor messages, the Fridge Card, rate watch"
+        )
+    ]
+}
 
 // MARK: - B1 — the verify sheet
 

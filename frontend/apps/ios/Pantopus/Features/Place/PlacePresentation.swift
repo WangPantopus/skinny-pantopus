@@ -470,7 +470,12 @@ struct PlaceVerifyLockedItem: Identifiable {
 extension PlacePresentation {
     /// Trust/identity tools shown locked on the claimed (T3) dashboard,
     /// routing to address verification. Port of VERIFY_LOCKED_SECTIONS.
-    static let verifyLockedItems: [PlaceVerifyLockedItem] = [
+    /// Launch cut #10 (Mailbox): no mailbox promise while it is off.
+    static var verifyLockedItems: [PlaceVerifyLockedItem] {
+        allVerifyLockedItems.filter { LaunchFeatures.mailbox || $0.title != "Your mailbox" }
+    }
+
+    private static let allVerifyLockedItems: [PlaceVerifyLockedItem] = [
         .init(
             icon: .messageCircle,
             title: "Neighbor messaging",

@@ -1,6 +1,7 @@
 package app.pantopus.android.ui.screens.place.today
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +32,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,11 +47,15 @@ import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.screens.place.components.placeCard
+import app.pantopus.android.ui.screens.place.detail.LocalPlaceDetailRetry
 import app.pantopus.android.ui.screens.place.detail.PlaceTodayDetailContent
+import app.pantopus.android.ui.screens.place.detail.TodayAlertsCheck
 import app.pantopus.android.ui.screens.place.detail.rememberMinuteClock
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import java.time.Instant
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -69,15 +76,18 @@ fun TodayTabScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("today", state is TodayTabUiState.Loaded || state == TodayTabUiState.NoPlace)
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val showMorningCard by viewModel.showMorningCard.collectAsStateWithLifecycle()
     val preferenceBusy by viewModel.preferenceBusy.collectAsStateWithLifecycle()
     val preferenceError by viewModel.preferenceError.collectAsStateWithLifecycle()
+    // Coming back keeps what's on screen; the view model reads again only once it is out of date.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.load() }
-    // Pull to refresh, like iOS's Today tab (`.refreshable`): the tab stays mounted, so without it
-    // weather, air and alerts keep their first load. The spinner shows only for a pull, not the first load.
+    // Pull to refresh, like iOS's Today tab (`.refreshable`): it always reads now, with the pull indicator
+    // over the content instead of placeholders. The indicator shows only for a pull, not the first load.
     var pulled by remember { mutableStateOf(false) }
     var visibleFrame by remember { mutableStateOf(Rect.Zero) }
-    LaunchedEffect(state) { if (state !is TodayTabUiState.Loading) pulled = false }
+    LaunchedEffect(refreshing) { if (!refreshing) pulled = false }
+    val nowMs = rememberMinuteClock().toInstant().toEpochMilli()
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("todayTab")) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -96,7 +106,7 @@ fun TodayTabScreen(
             }
         }
         PullToRefreshBox(
-            isRefreshing = pulled && state is TodayTabUiState.Loading,
+            isRefreshing = pulled && refreshing,
             onRefresh = {
                 pulled = true
                 viewModel.refresh()
@@ -111,17 +121,24 @@ fun TodayTabScreen(
                     Column(
                         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                     ) {
+                        val age = nowMs - current.fetchedAt
+                        if (current.refreshFailed && age > TODAY_MAX_SHOWN_AGE_MS) {
+                            RefreshFailedLine(current.fetchedAt, onRetry = viewModel::refresh)
+                        }
                         if (current.savedAnchorMatches) {
                             StatusChip("Saved place · Only you", modifier = Modifier.padding(bottom = 12.dp))
                         }
-                        PlaceTodayDetailContent(
-                            current.intelligence,
-                            viewModel.takeIf { current.calendarHomeId != null },
-                            radonFactory = viewModel.radonFactory.takeIf { current.calendarHomeId != null },
-                            pilotEvents = viewModel.pilotEvents,
-                            radonContext = viewModel.radonContext,
-                            onOpenBallot = onOpenPlace?.let { open -> { viewModel.homeId?.let(open) } },
-                        )
+                        CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh) {
+                            PlaceTodayDetailContent(
+                                current.intelligence,
+                                viewModel.takeIf { current.calendarHomeId != null },
+                                radonFactory = viewModel.radonFactory.takeIf { current.calendarHomeId != null },
+                                pilotEvents = viewModel.pilotEvents,
+                                radonContext = viewModel.radonContext,
+                                onOpenBallot = onOpenPlace?.let { open -> { viewModel.homeId?.let(open) } },
+                                alertsCheck = alertsCheck(age, refreshing),
+                            )
+                        }
                         if (current.savedPlace != null) {
                             SavedPlaceReminders(onClaim)
                         }
@@ -134,6 +151,50 @@ fun TodayTabScreen(
         }
     }
 }
+
+/** Contract §4: an alert check past 30 minutes is never shown as "no alerts". */
+private fun alertsCheck(
+    ageMs: Long,
+    refreshing: Boolean,
+): TodayAlertsCheck =
+    when {
+        ageMs <= TODAY_ALERTS_MAX_SHOWN_AGE_MS -> TodayAlertsCheck.CURRENT
+        refreshing -> TodayAlertsCheck.CHECKING
+        else -> TodayAlertsCheck.UNAVAILABLE
+    }
+
+/** Contract §3: one quiet line when a read failed and the copy on screen is past Today's max shown age. */
+@Composable
+private fun RefreshFailedLine(
+    fetchedAt: Long,
+    onRetry: () -> Unit,
+) {
+    val shownTime = remember(fetchedAt) { REFRESH_TIME_FORMAT.format(Instant.ofEpochMilli(fetchedAt)) }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).testTag("todayRefreshFailed"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Couldn't refresh. Showing $shownTime.",
+            fontSize = 13.sp,
+            color = PantopusColors.appTextSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Retry",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.primary600,
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(role = Role.Button, onClick = onRetry)
+                    .padding(horizontal = 10.dp, vertical = 12.dp),
+        )
+    }
+}
+
+private val REFRESH_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US).withZone(ZoneId.systemDefault())
 
 @Composable
 private fun SavedPlaceReminders(onAddHome: () -> Unit) {
