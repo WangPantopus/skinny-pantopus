@@ -125,8 +125,10 @@ final class ScreenStore {
     /// - A 304 keeps the copy and resets its time; a 200 replaces it.
     /// - A 403 or 404 deletes the copy and rethrows (the screen shows the
     ///   server's answer); a 401 runs the existing sign-in flow in `APIClient`.
-    /// - A network error, or a 200 that `failedIf` rejects, keeps the copy,
-    ///   marks the failure and rethrows; a screen with content stays as it is.
+    /// - A network error keeps the copy and marks the failure; a quiet read
+    ///   then answers with that copy (if it may show before a re-check), a
+    ///   forced one rethrows. A 200 that `failedIf` rejects does the same but
+    ///   always rethrows; a screen with content stays as it is.
     /// - A reply that lands after a wipe or an account change throws
     ///   `CancellationError` and writes nothing.
     /// - `showsBeforeRecheck` decides from the reply whether the copy may show
@@ -163,8 +165,14 @@ final class ScreenStore {
             try dropIfLate(start)
             if Self.isRefusal(error) {
                 remove(key)
-            } else {
-                markFailed(key, kind)
+                throw error
+            }
+            markFailed(key, kind)
+            // A quiet read that can't reach the server answers with the copy it
+            // has (marked failed: offline, the saved copy opens the screen); a
+            // forced one (pull to refresh, Try again) says it failed.
+            if !force, let entry = held ?? entries[key], entry.showsBeforeRecheck, let value = decoded(entry, as: type) {
+                return snapshot(entry, value)
             }
             throw error
         }
