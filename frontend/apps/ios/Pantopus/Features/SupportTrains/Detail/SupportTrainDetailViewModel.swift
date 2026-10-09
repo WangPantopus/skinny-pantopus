@@ -48,6 +48,8 @@ public final class SupportTrainDetailViewModel {
     public var toast: String?
     /// Last action failure, surfaced as an inline banner + alert.
     public var actionError: String?
+    /// A pull to refresh failed while the train stays on screen (a toast).
+    public var refreshFailureMessage: String?
 
     /// Shown when "Sign up for a slot" finds nothing open — a notice, not a failure.
     public static let noOpenDatesNotice = "There are no open dates left on this train."
@@ -65,6 +67,9 @@ public final class SupportTrainDetailViewModel {
 
     private let trainId: String
     private let api: APIClient
+    /// The screen store (Instant Screens): a train is fresh for a minute and
+    /// out of date at once after an action here or a `supporttrain:` signal.
+    private let store: ScreenStore
     /// Offline override. When set, `load()` resolves from it instead of the
     /// network — used by QA / previews to swap variants on a row tap.
     private let resolver: Resolver?
@@ -88,8 +93,13 @@ public final class SupportTrainDetailViewModel {
     ) {
         self.trainId = trainId
         self.api = api
+        store = ScreenStore.store(for: api)
         self.resolver = resolver
         seeded = false
+        // The store's copy shows in the first frame (opening the train again).
+        if resolver == nil, let copy = store.peek(endpoint, as: SupportTrainDetailDTO.self) {
+            state = .loaded(Self.project(copy.value))
+        }
     }
 
     /// Seed an explicit state — used by previews and tests to exercise the
@@ -98,6 +108,7 @@ public final class SupportTrainDetailViewModel {
     public init(seedState: State, trainId: String = "seeded") {
         self.trainId = trainId
         api = .shared
+        store = .shared
         resolver = nil
         state = seedState
         seeded = true
@@ -108,10 +119,24 @@ public final class SupportTrainDetailViewModel {
         self.init(seedState: .loaded(content), trainId: content.trainId)
     }
 
+    /// Opening the train: the store's copy, re-read once a minute old.
     public func load() async {
+        await fetch(force: false)
+    }
+
+    /// Pull to refresh and Try again: always asks the server.
+    public func refresh() async {
+        await fetch(force: true, announcesFailure: true)
+    }
+
+    private var endpoint: Endpoint {
+        SupportTrainsEndpoints.detail(supportTrainId: trainId)
+    }
+
+    private func fetch(force: Bool, announcesFailure: Bool = false) async {
         guard !seeded else { return }
         // Keep a loaded train on screen while reloading (a helper action
-        // re-runs `load()`), as Manage does; the skeleton is for the first load.
+        // re-reads it), as Manage does; the skeleton is for the first load.
         if case .loaded = state {} else { state = .loading }
         if let resolver {
             guard let content = resolver(trainId) else {
@@ -122,19 +147,32 @@ public final class SupportTrainDetailViewModel {
             return
         }
         do {
-            let dto: SupportTrainDetailDTO = try await api.request(
-                SupportTrainsEndpoints.detail(supportTrainId: trainId)
-            )
-            state = .loaded(Self.project(dto))
+            try await store.show(
+                endpoint,
+                as: SupportTrainDetailDTO.self,
+                kind: .supportTrain,
+                topics: [ScreenTopic.supportTrain(trainId)],
+                force: force
+            ) { state = .loaded(Self.project($0.value)) }
+        } catch is CancellationError {
+            return
         } catch {
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load this support train."
+            // A failed refresh keeps the train on screen; a refusal (403/404)
+            // or a first load shows the server's answer.
+            if case .loaded = state, !ScreenStore.isRefusal(error) {
+                if announcesFailure { refreshFailureMessage = message }
+                return
+            }
             state = .error(message: message)
         }
     }
 
-    public func refresh() async {
-        guard !seeded else { return }
-        await load()
+    /// An action here changed the train: its copy and the trains lists are
+    /// out of date, and the train is read again now.
+    private func reloadAfterChange() async {
+        store.markStale(topics: [ScreenTopic.supportTrain(trainId), ScreenTopic.supportTrains])
+        await fetch(force: true)
     }
 
     /// Convenience accessor used by the dock-handler hook in the view.
@@ -169,7 +207,7 @@ public final class SupportTrainDetailViewModel {
         reserveSelection = nil
         guard pendingReserveRefresh else { return }
         pendingReserveRefresh = false
-        Task { await load() }
+        Task { await reloadAfterChange() }
     }
 
     /// `POST /:id/slots/:slotId/reserve`. Returns an error message on
@@ -250,7 +288,7 @@ public final class SupportTrainDetailViewModel {
         defer { isSubmitting = false }
         do {
             _ = try await api.request(endpoint, as: EmptyResponse.self)
-            await load()
+            await reloadAfterChange()
             toast = success
         } catch {
             actionError = (error as? APIError)?.errorDescription ?? failure
