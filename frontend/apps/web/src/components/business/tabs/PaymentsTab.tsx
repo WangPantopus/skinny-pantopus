@@ -2,52 +2,69 @@ import { useEffect, useState } from 'react';
 import * as api from '@pantopus/api';
 import type { StripeAccount } from '@pantopus/types';
 
-export default function PaymentsTab() {
+const errorMessage = (err: unknown, fallback: string) =>
+  (err as { message?: string } | null)?.message || fallback;
+
+/**
+ * The business's own Stripe payout account. Once Stripe enables its payouts, invoice payments go to it and its balance
+ * and payouts are in Stripe's dashboard; until then they go to the primary owner's personal wallet.
+ */
+export default function PaymentsTab({ businessId }: { businessId: string }) {
   const [stripeAccount, setStripeAccount] = useState<StripeAccount | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     (async () => {
       try {
-        const result = await api.payments.getStripeAccount();
+        const result = await api.businesses.getBusinessStripeAccount(businessId);
         setStripeAccount(result.account || null);
       } catch {
+        // 404: the business has no payout account yet.
         setStripeAccount(null);
       }
       setLoading(false);
     })();
-  }, []);
+  }, [businessId]);
+
+  const openOnboarding = async () => {
+    const result = await api.businesses.refreshBusinessStripeLink(businessId);
+    if (result.accountLink) window.location.href = result.accountLink;
+  };
 
   const handleConnect = async () => {
+    setError('');
     try {
-      const result = await api.payments.connectStripeAccount();
-      if (result.accountLink) {
-        window.location.href = result.accountLink;
+      try {
+        await api.businesses.connectBusinessStripe(businessId);
+      } catch (err) {
+        // An account that already exists goes on to its setup link.
+        if ((err as { statusCode?: number } | null)?.statusCode !== 400) throw err;
       }
+      await openOnboarding();
     } catch (err) {
-      console.error('Connect failed:', err);
+      setError(errorMessage(err, "Couldn't start Stripe setup. Please try again."));
     }
   };
 
   const handleContinue = async () => {
+    setError('');
     try {
-      const result = await api.payments.refreshStripeAccountLink();
-      if (result.accountLink) {
-        window.location.href = result.accountLink;
-      }
+      await openOnboarding();
     } catch (err) {
-      console.error('Refresh link failed:', err);
+      setError(errorMessage(err, "Couldn't open Stripe setup. Please try again."));
     }
   };
 
   const handleDashboard = async () => {
+    setError('');
     try {
-      const result = await api.payments.connectStripeDashboard();
+      const result = await api.businesses.getBusinessStripeDashboardLink(businessId);
       if (result.dashboardUrl) {
         window.open(result.dashboardUrl, '_blank');
       }
     } catch (err) {
-      console.error('Dashboard link failed:', err);
+      setError(errorMessage(err, "Couldn't open the Stripe dashboard. Please try again."));
     }
   };
 
@@ -65,8 +82,14 @@ export default function PaymentsTab() {
       <div className="bg-surface rounded-xl border border-app p-6">
         <h3 className="text-lg font-semibold text-app mb-1">Business Payout Account</h3>
         <p className="text-sm text-app-secondary mb-4">
-          Set up Stripe once to withdraw what your business earns
+          Where this business&apos;s invoice payments go
         </p>
+
+        {error ? (
+          <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </p>
+        ) : null}
 
         {isOnboarded ? (
           <div className="space-y-4">
@@ -79,7 +102,7 @@ export default function PaymentsTab() {
               <div className="flex-1">
                 <p className="font-medium text-green-800">Stripe account connected</p>
                 <p className="text-sm text-green-600">
-                  Payouts are enabled for your business.
+                  Invoice payments go to this account. Its balance and payouts are in Stripe.
                 </p>
               </div>
             </div>
@@ -122,7 +145,7 @@ export default function PaymentsTab() {
                 !hasAccount ? 'text-amber-800' : needsInfo ? 'text-orange-800' : 'text-blue-800'
               }`}>
                 {!hasAccount
-                  ? 'No payout account connected'
+                  ? 'No payout account yet'
                   : needsInfo
                     ? 'Account setup incomplete'
                     : 'Account verification in progress'}
@@ -131,10 +154,10 @@ export default function PaymentsTab() {
                 !hasAccount ? 'text-amber-600' : needsInfo ? 'text-orange-600' : 'text-blue-600'
               }`}>
                 {!hasAccount
-                  ? 'Connect Stripe to accept payments and receive payouts for business gigs.'
+                  ? "Until you set one up, invoice payments go to your personal wallet. Stripe asks for the business's details: its EIN, or your SSN as a sole proprietor."
                   : needsInfo
-                    ? 'Your account needs additional information before payouts can be enabled.'
-                    : 'Stripe is verifying your identity. This usually takes 1-2 business days.'}
+                    ? 'Stripe needs more information before it can pay this business.'
+                    : 'Stripe is verifying the business. This usually takes 1-2 business days.'}
               </p>
             </div>
 
@@ -143,7 +166,7 @@ export default function PaymentsTab() {
                 onClick={handleConnect}
                 className="w-full px-4 py-3 bg-violet-600 text-white font-medium rounded-lg hover:bg-violet-700 transition"
               >
-                Connect with Stripe
+                Set up payouts
               </button>
             ) : needsInfo ? (
               <button
@@ -168,8 +191,8 @@ export default function PaymentsTab() {
       {/* Info note */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-700">
-          <strong>Note:</strong> Business payment settings are linked to your personal Stripe account.
-          Payouts from business gigs will be sent to the same connected account as your personal payouts.
+          <strong>Note:</strong> Only the business&apos;s primary owner can set this up. The account signs in to Stripe
+          with the owner&apos;s email.
         </p>
       </div>
     </div>

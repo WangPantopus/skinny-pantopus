@@ -223,7 +223,7 @@ export default function BusinessDashboardPage() {
           <TeamTab team={team} businessId={businessId} access={access} onUpdate={refresh} />
         )}
         {tab === 'reviews' && <ReviewsTab businessId={businessId} businessName={business?.name || 'Business'} />}
-        {tab === 'payments' && <PaymentsTab />}
+        {tab === 'payments' && <PaymentsTab businessId={businessId} />}
         {tab === 'insights' && <InsightsTab businessId={businessId} />}
         {tab === 'invoices' && <InvoicesTab businessId={businessId} />}
         {tab === 'legal' && <LegalTab businessId={businessId} businessType={profile?.business_type} />}

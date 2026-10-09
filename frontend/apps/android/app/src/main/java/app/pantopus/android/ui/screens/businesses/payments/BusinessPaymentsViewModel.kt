@@ -47,7 +47,7 @@ data class BusinessPaymentsContent(
     val headline: String
         get() =
             when (stage) {
-                BusinessPayoutStage.NotConnected -> "No payout account connected"
+                BusinessPayoutStage.NotConnected -> "No payout account yet"
                 BusinessPayoutStage.SetupIncomplete -> "Account setup incomplete"
                 BusinessPayoutStage.Verifying -> "Account verification in progress"
                 BusinessPayoutStage.Onboarded -> "Stripe account connected"
@@ -56,10 +56,10 @@ data class BusinessPaymentsContent(
     val subcopy: String
         get() =
             when (stage) {
-                BusinessPayoutStage.NotConnected -> "Connect Stripe to accept payments and receive payouts."
-                BusinessPayoutStage.SetupIncomplete -> "Your account needs additional information."
-                BusinessPayoutStage.Verifying -> "Stripe is verifying your identity. Usually 1–2 business days."
-                BusinessPayoutStage.Onboarded -> "Payouts are enabled."
+                BusinessPayoutStage.NotConnected -> "Until you set one up, invoice payments go to your personal wallet."
+                BusinessPayoutStage.SetupIncomplete -> "Stripe needs more information before it can pay this business."
+                BusinessPayoutStage.Verifying -> "Stripe is verifying the business. Usually 1–2 business days."
+                BusinessPayoutStage.Onboarded -> "Invoice payments go to this account. Its balance and payouts are in Stripe."
             }
 }
 

@@ -73,6 +73,7 @@ const {
   hasPermission,
   getUserAccess,
   getBusinessPrimaryOwnerId,
+  getBusinessPayoutAccount,
   writeAuditLog,
   BUSINESS_ROLE_RANK,
 } = require('../utils/businessPermissions');
@@ -4649,10 +4650,11 @@ router.get('/:businessId/matched-posts', verifyToken, async (req, res) => {
 });
 
 // ============ BUSINESS STRIPE CONNECT ============
-// A business account has no sign-in and so no wallet anyone can open: what it earns (invoices) is credited to its primary
-// owner's wallet and leaves it through that owner's own payout account (see getBusinessPrimaryOwnerId). So the business's
-// Payments screen sets up and shows that account, the same one the owner's Wallet withdraws to. Setting up a second,
-// business-level account would pay nobody.
+// A business has a payout account of its own (founder decision 2026-10-09: the account that receives the money holds
+// the balance, gets the payouts and is the 1099-K payee). Its primary owner sets it up here, and Stripe collects the
+// business's legal name and EIN, or the owner's SSN for a sole proprietor. Once Stripe enables its payouts, invoice
+// payments go to it, and its balance and payouts are in Stripe's Express dashboard. Until then invoice payments go to
+// the primary owner's wallet (see getBusinessPrimaryOwnerId).
 
 /**
  * The primary owner of the business, when the caller is that owner and may manage its payments; otherwise a response is
@@ -4670,7 +4672,7 @@ async function requirePrimaryOwner(req, res, deniedMessage) {
   const primaryOwnerId = await getBusinessPrimaryOwnerId(businessId);
   if (primaryOwnerId !== userId) {
     res.status(403).json({
-      error: "This business's payments go to its primary owner's payout account.",
+      error: "Only the business's primary owner can manage its payout account.",
       code: 'NOT_PRIMARY_OWNER',
     });
     return null;
@@ -4680,7 +4682,7 @@ async function requirePrimaryOwner(req, res, deniedMessage) {
 
 /**
  * POST /:businessId/stripe/connect
- * Create the primary owner's Stripe Connect payout account (the one their Wallet withdraws to).
+ * Create the business's own Stripe Connect payout account. Its Express dashboard signs in with the owner's email.
  */
 router.post('/:businessId/stripe/connect', verifyToken, async (req, res) => {
   try {
@@ -4698,10 +4700,11 @@ router.post('/:businessId/stripe/connect', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Business not found' });
     }
 
-    const result = await stripeService.createConnectAccount(ownerId, {
+    const result = await stripeService.createConnectAccount(businessId, {
       email: owner.email,
       country: req.body.country || 'US',
-      business_type: req.body.businessType || 'individual',
+      // Unless the app says, Stripe's onboarding asks whether the business is a company or a sole proprietor.
+      business_type: req.body.businessType || null,
     });
 
     if (!result.success) {
@@ -4729,8 +4732,8 @@ router.post('/:businessId/stripe/connect', verifyToken, async (req, res) => {
 
 /**
  * GET /:businessId/stripe/account
- * The business's payout account status (its primary owner's). The owner sees the account; the rest of the crew see
- * only whether it can take payments and pay out.
+ * The business's own payout account status (404 when it has none: invoice payments go to the primary owner's wallet).
+ * The primary owner sees the account; the rest of the crew see only whether it can take payments and pay out.
  */
 router.get('/:businessId/stripe/account', verifyToken, async (req, res) => {
   try {
@@ -4742,17 +4745,13 @@ router.get('/:businessId/stripe/account', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No access to this business' });
     }
 
-    const primaryOwnerId = await getBusinessPrimaryOwnerId(businessId);
-    if (!primaryOwnerId) {
-      return res.status(404).json({ error: 'No Stripe account found' });
-    }
-
-    const result = await stripeService.getConnectAccount(primaryOwnerId);
+    const result = await stripeService.getConnectAccount(businessId);
 
     if (!result.success) {
       return res.status(404).json({ error: result.error });
     }
 
+    const primaryOwnerId = await getBusinessPrimaryOwnerId(businessId);
     const { account } = result;
     res.json({
       account: primaryOwnerId === userId
@@ -4771,7 +4770,7 @@ router.get('/:businessId/stripe/account', verifyToken, async (req, res) => {
 
 /**
  * POST /:businessId/stripe/refresh-link
- * Refresh the onboarding link for the primary owner's Stripe payout account.
+ * Refresh the onboarding link for the business's own Stripe payout account.
  */
 router.post('/:businessId/stripe/refresh-link', verifyToken, async (req, res) => {
   try {
@@ -4784,7 +4783,7 @@ router.post('/:businessId/stripe/refresh-link', verifyToken, async (req, res) =>
     const returnUrl = `${clientUrl}/app/businesses/${businessId}/dashboard?tab=payments&onboarding=success`;
     const refreshUrl = `${clientUrl}/app/businesses/${businessId}/dashboard?tab=payments&onboarding=refresh`;
 
-    const result = await stripeService.createAccountLink(ownerId, returnUrl, refreshUrl);
+    const result = await stripeService.createAccountLink(businessId, returnUrl, refreshUrl);
 
     res.json({ accountLink: result.url, expiresAt: result.expiresAt });
   } catch (err) {
@@ -4795,14 +4794,14 @@ router.post('/:businessId/stripe/refresh-link', verifyToken, async (req, res) =>
 
 /**
  * POST /:businessId/stripe/dashboard-link
- * Create an Express dashboard link for the primary owner's Stripe payout account.
+ * Create an Express dashboard link for the business's own Stripe payout account: its balance and payouts.
  */
 router.post('/:businessId/stripe/dashboard-link', verifyToken, async (req, res) => {
   try {
     const ownerId = await requirePrimaryOwner(req, res, 'Only the business owner can open the Stripe dashboard');
     if (!ownerId) return;
 
-    const result = await stripeService.createLoginLink(ownerId);
+    const result = await stripeService.createLoginLink(req.params.businessId);
 
     res.json({ dashboardUrl: result.url });
   } catch (err) {
@@ -4991,15 +4990,17 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
       });
     }
 
-    // A business account has no wallet anyone can open, so its owner receives the money (see getBusinessPrimaryOwnerId);
-    // with nobody to receive it, nothing is charged.
-    const payeeUserId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
-    if (!payeeUserId) {
+    // A business whose own payout account Stripe has enabled is paid itself; otherwise its primary owner's wallet
+    // receives the money (see getBusinessPrimaryOwnerId). With nobody to receive it, nothing is charged.
+    const ownerId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
+    if (!ownerId) {
       return res.status(409).json({ error: "This business can't take payments right now.", code: 'BUSINESS_CANNOT_RECEIVE' });
     }
-    if (payeeUserId === userId) {
+    if (ownerId === userId) {
       return res.status(400).json({ error: "You can't pay an invoice from your own business.", code: 'OWN_BUSINESS' });
     }
+    const businessAccount = await getBusinessPayoutAccount(invoice.business_user_id);
+    const payeeUserId = businessAccount?.payouts_enabled ? invoice.business_user_id : ownerId;
 
     // Create payment intent. The key ties it to the payment it replaces, so a double tap makes one.
     const result = await stripeService.createPaymentIntentForGig({
@@ -5090,29 +5091,33 @@ async function captureInvoicePayment(paymentId) {
 }
 
 /**
- * Tells the business's owner that an invoice was paid, when it is: the money reaches their wallet after the 48-hour
- * review (processPendingTransfers says so again then), but they should not have to open the app to find out.
+ * Tells the business's owner that an invoice was paid, when it is: the money reaches the business's payout account
+ * (or, without one, the owner's wallet) after the 48-hour review (processPendingTransfers says so again then), but
+ * they should not have to open the app to find out.
  */
 async function notifyInvoicePaid(invoice) {
   const ownerId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
   if (!ownerId) return;
-  const [{ data: payer }, { data: payment }] = await Promise.all([
+  const [{ data: payer }, { data: payment }, { data: business }] = await Promise.all([
     supabaseAdmin.from('User').select('name, username').eq('id', invoice.recipient_user_id).maybeSingle(),
     invoice.payment_id
-      ? supabaseAdmin.from('Payment').select('amount_to_payee').eq('id', invoice.payment_id).maybeSingle()
+      ? supabaseAdmin.from('Payment').select('amount_to_payee, payee_id').eq('id', invoice.payment_id).maybeSingle()
       : Promise.resolve({ data: null }),
+    supabaseAdmin.from('User').select('name').eq('id', invoice.business_user_id).maybeSingle(),
   ]);
   const total = `$${(invoice.total_cents / 100).toFixed(2)}`;
   const payerName = payer?.name || chosenUsernameOrNull(payer?.username) || 'A customer';
   const net = payment?.amount_to_payee ? `$${(payment.amount_to_payee / 100).toFixed(2)}` : null;
+  const toBusiness = payment?.payee_id === invoice.business_user_id;
+  const destination = toBusiness ? `${business?.name || "the business"}'s payout account` : 'your wallet';
   await require('../services/notificationService').createNotification({
     userId: ownerId,
     type: 'invoice_paid',
     title: `Invoice paid: ${total}`,
     body: net
-      ? `${payerName} paid your invoice. ${net} will reach your wallet after a short review.`
+      ? `${payerName} paid your invoice. ${net} will reach ${destination} after a short review.`
       : `${payerName} paid your invoice.`,
-    link: '/app/wallet',
+    link: toBusiness ? `/app/businesses/${invoice.business_user_id}/dashboard?tab=payments` : '/app/wallet',
     metadata: { invoice_id: invoice.id, business_id: invoice.business_user_id, amount_cents: invoice.total_cents },
     context: 'personal',
     idempotencyKey: `invoice-paid:${invoice.id}`,
