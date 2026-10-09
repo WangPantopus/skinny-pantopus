@@ -17,6 +17,7 @@ import app.pantopus.android.data.homes.HomeDashboardRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.profile.ProfileInsightsRepository
 import app.pantopus.android.data.profile.ProfileRepository
+import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -124,7 +125,8 @@ class MeViewModelTest {
     @Test fun load_produces_all_three_identities_when_home_exists() =
         runTest {
             coEvery { profileRepo.ownProfile() } returns NetworkResult.Success(ProfileResponse(profile(), null))
-            coEvery { homesRepo.myHomes() } returns NetworkResult.Success(MyHomesResponse(listOf(home()), null))
+            coEvery { homesRepo.myHomesStored(any()) } returns
+                Stored(MyHomesResponse(listOf(home()), null), fetchedAt = System.currentTimeMillis())
             coEvery { profileRepo.stats("u1") } returns NetworkResult.Success(stats())
             val vm = MeViewModel(profileRepo, homesRepo, homeDashboardRepo, insightsRepo, businessesRepo)
             vm.load()
@@ -181,7 +183,8 @@ class MeViewModelTest {
     @Test fun load_produces_unbound_home_when_no_home() =
         runTest {
             coEvery { profileRepo.ownProfile() } returns NetworkResult.Success(ProfileResponse(profile(), null))
-            coEvery { homesRepo.myHomes() } returns NetworkResult.Success(MyHomesResponse(emptyList(), null))
+            coEvery { homesRepo.myHomesStored(any()) } returns
+                Stored(MyHomesResponse(emptyList(), null), fetchedAt = System.currentTimeMillis())
             coEvery { profileRepo.stats("u1") } returns NetworkResult.Success(stats())
             val vm = MeViewModel(profileRepo, homesRepo, homeDashboardRepo, insightsRepo, businessesRepo)
             vm.load()
@@ -193,7 +196,8 @@ class MeViewModelTest {
     @Test fun select_identity_flips_active_without_refetch() =
         runTest {
             coEvery { profileRepo.ownProfile() } returns NetworkResult.Success(ProfileResponse(profile(), null))
-            coEvery { homesRepo.myHomes() } returns NetworkResult.Success(MyHomesResponse(listOf(home()), null))
+            coEvery { homesRepo.myHomesStored(any()) } returns
+                Stored(MyHomesResponse(listOf(home()), null), fetchedAt = System.currentTimeMillis())
             coEvery { profileRepo.stats("u1") } returns NetworkResult.Success(stats())
             val vm = MeViewModel(profileRepo, homesRepo, homeDashboardRepo, insightsRepo, businessesRepo)
             vm.load()
@@ -207,7 +211,8 @@ class MeViewModelTest {
     @Test fun profile_failure_transitions_error() =
         runTest {
             coEvery { profileRepo.ownProfile() } returns NetworkResult.Failure(NetworkError.Server(500, null))
-            coEvery { homesRepo.myHomes() } returns NetworkResult.Success(MyHomesResponse(emptyList(), null))
+            coEvery { homesRepo.myHomesStored(any()) } returns
+                Stored(MyHomesResponse(emptyList(), null), fetchedAt = System.currentTimeMillis())
             val vm = MeViewModel(profileRepo, homesRepo, homeDashboardRepo, insightsRepo, businessesRepo)
             vm.load()
             assertTrue(vm.state.value is MeUiState.Error)

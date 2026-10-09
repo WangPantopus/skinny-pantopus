@@ -146,7 +146,7 @@ public struct BusinessHeader: View {
     @ViewBuilder
     private var bannerBackground: some View {
         if let bannerURL {
-            AsyncImage(url: bannerURL) { phase in
+            CachedAsyncImage(url: bannerURL) { phase in
                 switch phase {
                 case let .success(image):
                     image.resizable().aspectRatio(contentMode: .fill)
@@ -189,7 +189,7 @@ public struct BusinessHeader: View {
     @ViewBuilder
     private var logoSurface: some View {
         if let logoURL {
-            AsyncImage(url: logoURL) { phase in
+            CachedAsyncImage(url: logoURL) { phase in
                 switch phase {
                 case let .success(image):
                     image.resizable().aspectRatio(contentMode: .fill)

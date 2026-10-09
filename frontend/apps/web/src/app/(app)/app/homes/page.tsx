@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { myHomesQuery, type MyHomesReply } from '@/lib/myHomes';
+import { showsMyHomesCopy } from '@/lib/householdCopy';
 import { getAuthToken } from '@pantopus/api';
 import { removalLink } from '@/components/home/member-removals/removalModel';
 import { useSavedRemoval } from '@/components/home/member-removals/useSavedRemoval';
@@ -31,9 +32,12 @@ export default function HomesPage() {
   const queryClient = useQueryClient();
   // Coming back shows your homes at once from the list Place and the switcher share (lib/myHomes.ts).
   // Homes still in verification, ownership claims and residency requests are verification, never
-  // shown from a copy: they appear when the re-check (always run) answers.
-  const [seed] = useState(() => (queryClient.getQueryData<MyHomesReply>(myHomesQuery().queryKey)?.homes ?? [])
-    .filter((h) => h.access_kind !== 'verification'));
+  // shown from a copy: they appear when the re-check (always run) answers. A list with a guest home or
+  // access that ends shows nothing before the re-check (decision 3, lib/householdCopy.ts).
+  const [seed] = useState(() => {
+    const kept = queryClient.getQueryData<MyHomesReply>(myHomesQuery().queryKey);
+    return showsMyHomesCopy(kept) ? (kept?.homes ?? []).filter((h) => h.access_kind !== 'verification') : [];
+  });
   const seeded = useRef(seed.length > 0);
   const [homes, setHomes] = useState<MyHome[]>(seed);
   const savedRemoval = useSavedRemoval();

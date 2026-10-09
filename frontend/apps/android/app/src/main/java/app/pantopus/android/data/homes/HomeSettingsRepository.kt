@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeSettingsApi
 import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreTopics
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,7 +27,7 @@ open class HomeSettingsRepository
                 // The Home's stored screens and every list that names it read again on their next use.
                 if (result is NetworkResult.Success) {
                     store.markStale("home:$homeId")
-                    store.markStale("homes")
+                    store.markStale(StoreTopics.HOMES)
                 }
             }
     }

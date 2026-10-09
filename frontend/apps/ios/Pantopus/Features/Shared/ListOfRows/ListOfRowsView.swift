@@ -768,7 +768,7 @@ private struct ListingContextHeader: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().aspectRatio(contentMode: .fill)
@@ -1323,7 +1323,7 @@ private struct LeadingView: View {
                     )
                 }
                 if let url = imageURL {
-                    AsyncImage(url: url) { image in
+                    CachedAsyncImage(url: url) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Text(initials)
@@ -1367,7 +1367,7 @@ private struct LeadingView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().aspectRatio(contentMode: .fill)

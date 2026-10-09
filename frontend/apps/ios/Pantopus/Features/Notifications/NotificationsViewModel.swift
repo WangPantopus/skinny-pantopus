@@ -444,6 +444,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             notifications = previous
             unreadCount = previousUnread
             rebuild()
+            actionFailure = "Couldn't mark it as read. Try again."
         }
     }
 

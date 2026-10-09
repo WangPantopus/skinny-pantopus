@@ -72,7 +72,7 @@ public struct PolaroidFrame: View {
 
     @ViewBuilder private var photo: some View {
         if let imageURL {
-            AsyncImage(url: imageURL) { phase in
+            CachedAsyncImage(url: imageURL, keepsOnDisk: false) { phase in
                 switch phase {
                 case let .success(image):
                     image.resizable().scaledToFill()

@@ -589,7 +589,7 @@ struct FollowingAvatar: View {
             ZStack {
                 Circle().fill(color)
                 if let imageURL {
-                    AsyncImage(url: imageURL) { image in
+                    CachedAsyncImage(url: imageURL) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         initialsText

@@ -320,7 +320,7 @@ public struct TransactionalDetailShell: View {
                 )
                 .frame(height: 300)
                 if let url = cover.imageUrl {
-                    AsyncImage(url: url) { phase in
+                    CachedAsyncImage(url: url) { phase in
                         switch phase {
                         case let .success(image):
                             image.resizable().aspectRatio(contentMode: .fill)
@@ -787,7 +787,7 @@ public struct TransactionalDetailShell: View {
         .aspectRatio(1, contentMode: .fit)
         .overlay {
             if let url = tile.imageURL {
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     if case let .success(image) = phase {
                         image.resizable().scaledToFill()
                     } else {
@@ -1313,7 +1313,7 @@ private struct AvatarView: View {
         ZStack(alignment: .bottomTrailing) {
             Group {
                 if let imageUrl {
-                    AsyncImage(url: imageUrl) { phase in
+                    CachedAsyncImage(url: imageUrl) { phase in
                         switch phase {
                         case let .success(image):
                             image.resizable().scaledToFill()
