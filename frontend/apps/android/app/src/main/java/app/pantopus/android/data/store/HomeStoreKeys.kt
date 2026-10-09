@@ -5,10 +5,12 @@ import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthority
 import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
 import app.pantopus.android.data.api.models.homedashboard.HomePropertyValueDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistDto
+import app.pantopus.android.data.api.models.homes.GetHomeMaintenanceResponse
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeAuditLogResponse
 import app.pantopus.android.data.api.models.homes.HomeDetailResponse
+import app.pantopus.android.data.api.models.homes.HomeIssuesResponse
 import app.pantopus.android.data.api.models.homes.HomeOwnershipSecurityResponse
 import app.pantopus.android.data.api.models.homes.HomePrivacyResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
@@ -87,6 +89,14 @@ object HomeStoreKeys {
     /** A Home's owners. */
     fun owners(homeId: String) =
         StoreKey<OwnersResponse>("api/homes/$homeId/owners", kind = StoreKind.HOMES, topics = setOf("home:$homeId", StoreTopics.HOMES))
+
+    /** A Home's issues (every status and severity). */
+    fun issues(homeId: String) =
+        StoreKey<HomeIssuesResponse>("api/homes/$homeId/issues", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
+
+    /** A Home's maintenance log (every status). */
+    fun maintenance(homeId: String) =
+        StoreKey<GetHomeMaintenanceResponse>("api/homes/$homeId/maintenance", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
 
     /** A Home's task list for the viewer (with its per-session task scope). */
     fun tasks(homeId: String) =

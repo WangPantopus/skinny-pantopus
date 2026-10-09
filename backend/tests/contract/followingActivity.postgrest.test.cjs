@@ -17,9 +17,9 @@ describe('Following activity against PostgreSQL 17 / PostgREST 14', {
   const name = `pantopus-following-contract-${process.pid}-${randomUUID().slice(0, 8)}`;
   const database = `${name}-db`;
   const api = `${name}-api`;
-  // PostgREST's upstream registry carries the same v14.10 image as Supabase's
-  // ECR mirror, which rate-limits shared CI runners. Pin the verified digest.
-  const postgrestImage = 'postgrest/postgrest:v14.10@sha256:bca3f86f69d8ef7aa1e5ee65e66ce9a20c6c147be637517a7be8399e102901d1';
+  // Supabase's GHCR mirror carries the same v14.10 digest as Docker Hub.
+  // Avoid anonymous Docker Hub token requests on shared CI runners.
+  const postgrestImage = 'ghcr.io/supabase/postgrest:v14.10@sha256:bca3f86f69d8ef7aa1e5ee65e66ce9a20c6c147be637517a7be8399e102901d1';
   let db;
   const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8', timeout: 90_000 }).trim();
   const runSql = (sql) => execFileSync('docker', ['exec', '-i', database, 'psql', '-h', '127.0.0.1', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
@@ -29,7 +29,7 @@ describe('Following activity against PostgreSQL 17 / PostgREST 14', {
   before(async () => {
     docker('network', 'create', name);
     docker('run', '--rm', '-d', '--name', database, '--network', name,
-      '--tmpfs', '/var/lib/postgresql/data', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', 'postgres:17-alpine');
+      '--tmpfs', '/var/lib/postgresql/data', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', 'public.ecr.aws/docker/library/postgres:17-alpine');
     let ready = false;
     // The image's temporary initialization server accepts Unix sockets but
     // disables TCP. Wait for the final TCP server used by PostgREST, and use
