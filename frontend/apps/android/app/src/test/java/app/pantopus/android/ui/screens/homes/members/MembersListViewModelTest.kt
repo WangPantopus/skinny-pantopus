@@ -23,6 +23,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.screens.homes.HomeCopyGate
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
@@ -43,6 +46,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -71,6 +75,7 @@ class MembersListViewModelTest {
     private val adminRepo: HomeAdminRepository = mockk()
     private val auth: AuthRepository = mockk(relaxed = true)
     private val sender: HomeInvitationSenderFactory = mockk()
+    private val gates: HomeCopyGateFactory = mockk(relaxed = true)
     private val readSession: HomeClaimSessionScope = mockk()
     private var senderRows: List<PendingInviteDto> = emptyList()
 
@@ -84,7 +89,21 @@ class MembersListViewModelTest {
         stubRequests()
         stubAuditLog()
         coEvery { sender.list("home_1") } coAnswers { senderRows }
+        // The screens' store hands back what the endpoints answered (Instant Screens).
+        coEvery { adminRepo.myAccessStored(any(), any()) } coAnswers { adminRepo.myAccess(firstArg()).stored() }
+        coEvery { repo.listOccupantsStored(any(), any()) } coAnswers { repo.listOccupants(firstArg()).stored() }
+        coEvery { adminRepo.householdAccessRequestsStored(any(), any()) } coAnswers {
+            adminRepo.householdAccessRequests(firstArg()).stored()
+        }
+        coEvery { adminRepo.auditLogStored(any(), any()) } coAnswers { adminRepo.auditLog(firstArg()).stored() }
     }
+
+    /** What the screens' store hands back for a read with this outcome. */
+    private fun <T : Any> NetworkResult<T>.stored(): Stored<T> =
+        when (this) {
+            is NetworkResult.Success -> Stored(data, fetchedAt = System.currentTimeMillis())
+            is NetworkResult.Failure -> Stored(failure = error)
+        }
 
     @After
     fun tearDown() {
@@ -150,6 +169,7 @@ class MembersListViewModelTest {
             adminRepo = adminRepo,
             auth = auth,
             sender = sender,
+            gates = gates,
             savedStateHandle = SavedStateHandle(mapOf(MEMBERS_LIST_HOME_ID_KEY to "home_1")),
         )
 
@@ -268,27 +288,26 @@ class MembersListViewModelTest {
         }
 
     @Test
-    fun held_current_read_cannot_restore_cached_rows_counts_or_authority_through_tabs() =
+    fun held_refresh_keeps_rows_counts_and_authority_until_the_read_lands() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
             val vm = makeVm()
             vm.load()
             assertTrue(vm.canManageMembers)
+            val counts = vm.tabs.value.map { it.count }
             val held = CompletableDeferred<NetworkResult<OccupantsResponse>>()
             coEvery { repo.listOccupants("home_1") } coAnswers { held.await() }
             vm.refresh()
+            // Instant Screens (contract §3): a pull keeps what's on screen while it reads, behind the pull indicator.
+            assertTrue(vm.refreshing.value)
             for (tab in listOf(MembersTab.PENDING, MembersTab.GUESTS, MembersTab.MEMBERS)) {
                 vm.selectTab(tab)
-                assertTrue(vm.state.value is ListOfRowsUiState.Loading)
-                assertTrue(vm.tabs.value.all { it.count == null })
-                assertEquals(false, vm.canManageMembers)
+                assertFalse(vm.state.value is ListOfRowsUiState.Loading)
+                assertEquals(counts, vm.tabs.value.map { it.count })
+                assertTrue(vm.canManageMembers)
             }
-            vm.requestRemoval("u_admin")
-            assertNull(vm.pendingEvent.value)
-            vm.requestInvite()
-            assertEquals(MembersListEvent.OpenInvite, vm.pendingEvent.value)
-            vm.acknowledgeEvent()
             held.complete(NetworkResult.Success(populated()))
+            assertFalse(vm.refreshing.value)
             assertTrue(vm.state.value is ListOfRowsUiState.Loaded)
             assertTrue(vm.canManageMembers)
             assertEquals(2, vm.tabs.value.single { it.id == MembersTab.MEMBERS }.count)
@@ -335,13 +354,22 @@ class MembersListViewModelTest {
         }
 
     @Test
-    fun load_is_idempotent_after_loaded() =
+    fun a_return_asks_the_store_without_forcing_and_keeps_the_rows() =
         runTest {
             coEvery { repo.listOccupants("home_1") } returns NetworkResult.Success(populated())
+            // An owner: the store may answer a return from its fresh copy (no request).
+            val gate = mockk<HomeCopyGate>(relaxed = true)
+            every { gate.showsCopy } returns true
+            every { gates.create(any(), any()) } returns gate
+            every { repo.storedOccupants("home_1") } returns null
+            every { adminRepo.storedMyAccess("home_1") } returns null
             val vm = makeVm()
             vm.load()
+            assertTrue(vm.state.value is ListOfRowsUiState.Loaded)
             vm.load()
-            coVerify(exactly = 1) { repo.listOccupants("home_1") }
+            assertTrue(vm.state.value is ListOfRowsUiState.Loaded)
+            coVerify(exactly = 0) { repo.listOccupantsStored("home_1", true) }
+            coVerify(exactly = 2) { repo.listOccupantsStored("home_1", false) }
         }
 
     // ─── Tab buckets ──────────────────────────────────────────────

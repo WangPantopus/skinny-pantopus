@@ -32,7 +32,7 @@ open class HomeAdminRepository
     ) {
         /** `DELETE /api/homes/:id`. */
         open suspend fun deleteHome(homeId: String): NetworkResult<DeleteHomeResponse> =
-            safeApiCall { api.deleteHome(homeId) }.also { if (it is NetworkResult.Success) store.markStale(StoreTopics.HOMES) }
+            safeApiCall { api.deleteHome(homeId) }.also { changed(homeId, it) }
 
         /** `GET /api/homes/:id/me`. */
         open suspend fun myAccess(homeId: String): NetworkResult<HomeAccessDto> = safeApiCall { api.myAccess(homeId) }
@@ -60,6 +60,16 @@ open class HomeAdminRepository
             offset: Int = 0,
         ): NetworkResult<HomeAuditLogResponse> = safeApiCall { api.auditLog(homeId, limit, offset) }
 
+        /** The audit log's first page through the screens' store: a fresh copy answers without a request. */
+        open suspend fun auditLogStored(
+            homeId: String,
+            force: Boolean = false,
+        ): Stored<HomeAuditLogResponse> =
+            store.read(HomeStoreKeys.auditLog(homeId), force) { etag -> conditionalApiCall { api.auditLogConditional(homeId, etag) } }
+
+        /** The stored audit log, without a request. */
+        open fun storedAuditLog(homeId: String): HomeAuditLogResponse? = store.peek(HomeStoreKeys.auditLog(homeId)).data
+
         /** `POST /api/homes/:id/members/:userId/role`. */
         open suspend fun changeMemberRole(
             homeId: String,
@@ -68,7 +78,7 @@ open class HomeAdminRepository
         ): NetworkResult<ChangeMemberRoleResponse> =
             safeApiCall {
                 api.changeMemberRole(homeId, userId, ChangeMemberRoleRequest(roleBase = roleBase))
-            }
+            }.also { changed(homeId, it) }
 
         /** `GET /api/homes/:id/household-access-requests?status=…`. */
         open suspend fun householdAccessRequests(
@@ -76,15 +86,40 @@ open class HomeAdminRepository
             status: String = "pending",
         ): NetworkResult<HouseholdAccessRequestsResponse> = safeApiCall { api.householdAccessRequests(homeId, status) }
 
+        /** Pending access requests through the screens' store: a fresh copy answers without a request. */
+        open suspend fun householdAccessRequestsStored(
+            homeId: String,
+            force: Boolean = false,
+        ): Stored<HouseholdAccessRequestsResponse> =
+            store.read(HomeStoreKeys.accessRequests(homeId), force) { etag ->
+                conditionalApiCall { api.householdAccessRequestsConditional(homeId, etag) }
+            }
+
+        /** The stored pending access requests, without a request. */
+        open fun storedHouseholdAccessRequests(homeId: String): HouseholdAccessRequestsResponse? =
+            store.peek(HomeStoreKeys.accessRequests(homeId)).data
+
         /** `POST …/household-access-requests/:requestId/approve`. */
         open suspend fun approveHouseholdAccessRequest(
             homeId: String,
             requestId: String,
-        ): NetworkResult<HouseholdAccessRequestActionResponse> = safeApiCall { api.approveHouseholdAccessRequest(homeId, requestId) }
+        ): NetworkResult<HouseholdAccessRequestActionResponse> =
+            safeApiCall { api.approveHouseholdAccessRequest(homeId, requestId) }.also { changed(homeId, it) }
 
         /** `POST …/household-access-requests/:requestId/reject`. */
         open suspend fun rejectHouseholdAccessRequest(
             homeId: String,
             requestId: String,
-        ): NetworkResult<HouseholdAccessRequestActionResponse> = safeApiCall { api.rejectHouseholdAccessRequest(homeId, requestId) }
+        ): NetworkResult<HouseholdAccessRequestActionResponse> =
+            safeApiCall { api.rejectHouseholdAccessRequest(homeId, requestId) }.also { changed(homeId, it) }
+
+        /** Own edit: this Home's stored screens, and the lists that name it, read again on their next use. */
+        private fun changed(
+            homeId: String,
+            result: NetworkResult<*>,
+        ) {
+            if (result !is NetworkResult.Success) return
+            store.markStale("home:$homeId")
+            store.markStale(StoreTopics.HOMES)
+        }
     }

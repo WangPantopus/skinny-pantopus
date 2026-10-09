@@ -26,6 +26,7 @@ import retrofit2.http.Query
  * its own service; all three share the Retrofit instance provided by
  * `di/NetworkModule.kt`.
  */
+@Suppress("TooManyFunctions")
 interface HomeAdminApi {
     /**
      * `DELETE /api/homes/:id` — route `backend/routes/home.js:3191`.
@@ -86,6 +87,13 @@ interface HomeAdminApi {
         @Query("offset") offset: Int = 0,
     ): HomeAuditLogResponse
 
+    /** The first page of [auditLog] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/audit-log?limit=50&offset=0")
+    suspend fun auditLogConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeAuditLogResponse>
+
     /**
      * `POST /api/homes/:id/members/:userId/role` — route
      * `backend/routes/homeIam.js:212`.
@@ -113,6 +121,13 @@ interface HomeAdminApi {
         @Path("id") homeId: String,
         @Query("status") status: String = "pending",
     ): HouseholdAccessRequestsResponse
+
+    /** Pending [householdAccessRequests] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/household-access-requests?status=pending")
+    suspend fun householdAccessRequestsConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HouseholdAccessRequestsResponse>
 
     /**
      * `POST /api/homes/:id/household-access-requests/:requestId/approve`
