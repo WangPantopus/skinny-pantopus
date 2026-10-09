@@ -12,13 +12,33 @@ import Foundation
 
 @MainActor
 enum PlaceStoreReads {
-    static func endpoint(homeId: String, savedPlaceId: String?) -> Endpoint {
-        savedPlaceId.map { SavedPlacesEndpoints.today(id: $0) } ?? PlaceEndpoints.intelligence(homeId: homeId)
+    /// The sections the Today tab renders, so it asks the server for only
+    /// those (contract section 8, "Today on the phones"): the sky, weather,
+    /// air, alerts, sun, "good day to", the address calendar, the radon card
+    /// and the ballot card, plus the home type and block density the sky draws.
+    static let todaySections: [PlaceSectionID] = [
+        .weather, .airQuality, .alerts, .sunriseSunset, .goodDayTo, .addressCalendar,
+        .leadRadon, .blockDensity, .civicElection, .yourHome
+    ]
+
+    static func endpoint(homeId: String, savedPlaceId: String?, sections: [PlaceSectionID]? = nil) -> Endpoint {
+        savedPlaceId.map { SavedPlacesEndpoints.today(id: $0) }
+            ?? PlaceEndpoints.intelligence(homeId: homeId, sections: sections)
     }
 
-    /// The shared copy, when it may show before the re-check.
-    static func peek(homeId: String, savedPlaceId: String? = nil) -> ScreenSnapshot<PlaceIntelligence>? {
-        ScreenStore.shared.peek(endpoint(homeId: homeId, savedPlaceId: savedPlaceId), as: PlaceIntelligence.self)
+    /// The shared copy, when it may show before the re-check. A screen that
+    /// asks for some sections also takes the full copy (the dashboard's).
+    static func peek(
+        homeId: String,
+        savedPlaceId: String? = nil,
+        sections: [PlaceSectionID]? = nil
+    ) -> ScreenSnapshot<PlaceIntelligence>? {
+        let store = ScreenStore.shared
+        if let own = store.peek(endpoint(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections), as: PlaceIntelligence.self) {
+            return own
+        }
+        guard sections != nil, savedPlaceId == nil else { return nil }
+        return store.peek(endpoint(homeId: homeId, savedPlaceId: nil), as: PlaceIntelligence.self)
     }
 
     /// The shared copy if fresh, else one (shared) request. `force` for pull
@@ -26,9 +46,14 @@ enum PlaceStoreReads {
     static func load(
         homeId: String,
         savedPlaceId: String? = nil,
+        sections: [PlaceSectionID]? = nil,
         kind: ScreenDataKind,
         force: Bool = false
     ) async throws -> ScreenSnapshot<PlaceIntelligence> {
+        // A fresh full copy (the dashboard's) serves a screen that wants only some sections.
+        if !force, sections != nil, savedPlaceId == nil, let full = peek(homeId: homeId), full.isFresh {
+            return full
+        }
         var topics: Set<String> = [ScreenTopic.today]
         if savedPlaceId == nil, !homeId.isEmpty {
             topics.formUnion([ScreenTopic.home(homeId), ScreenTopic.place(homeId)])
@@ -39,7 +64,7 @@ enum PlaceStoreReads {
             gate = { intelligence in PlaceStoreReads.showsBeforeRecheck(intelligence) }
         }
         return try await ScreenStore.shared.load(
-            endpoint(homeId: homeId, savedPlaceId: savedPlaceId),
+            endpoint(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections),
             as: PlaceIntelligence.self,
             kind: kind,
             topics: topics,
