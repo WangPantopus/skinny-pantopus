@@ -189,12 +189,17 @@ open class HomeIssuesListViewModel
         fun suspendContent() {
             active = false
             readGeneration += 1
+            accessConfirmed = false
+            issues?.let(::render)
             if (!gate.showsCopy) clearCopy()
             gate.leave()
         }
 
         private fun clearCopy() {
             issues = null
+            _tabs.value = tabsWithCounts(null)
+            pendingEvent.value = null
+            toast.value = null
             access = null
             accessConfirmed = false
             _banner.value = null
@@ -256,6 +261,7 @@ open class HomeIssuesListViewModel
             title: String,
             description: String?,
         ): Boolean {
+            if (!active || !canReport) return false
             val trimmedTitle = title.trim()
             if (trimmedTitle.isEmpty()) return false
             val trimmedDescription = description?.trim()?.takeIf { it.isNotEmpty() }
@@ -285,6 +291,7 @@ open class HomeIssuesListViewModel
             issueId: String,
             status: String,
         ) {
+            if (!active || !canUpdate) return
             viewModelScope.launch {
                 when (
                     val result =

@@ -21,6 +21,7 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.theme.PantopusColors
 
 /**
@@ -49,6 +50,12 @@ fun HomeIssuesListScreen(
     var reporting by remember { mutableStateOf(false) }
     var dismissTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
+    LaunchedEffect(state) {
+        if (state is ListOfRowsUiState.Loading || state is ListOfRowsUiState.Error) {
+            reporting = false
+            dismissTarget = null
+        }
+    }
 
     LaunchedEffect(pendingEvent) {
         when (val event = pendingEvent) {
