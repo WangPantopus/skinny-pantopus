@@ -247,7 +247,13 @@ class OwnersListViewModel
                     val result = repo.remove(homeId, ownerId)
                     if (!active || revision != readGeneration) return@launch
                     when (result) {
-                        is NetworkResult.Success -> owners = owners.filter { it.id != ownerId }
+                        is NetworkResult.Success -> {
+                            if (result.data.quorumActionId == null) {
+                                owners = owners.filter { it.id != ownerId }
+                            } else {
+                                _removalError.value = "Removal needs approval from other owners. This owner still has access."
+                            }
+                        }
                         is NetworkResult.Failure ->
                             _removalError.value =
                                 "We couldn't confirm the owner removal. " +

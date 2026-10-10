@@ -182,7 +182,7 @@ fun OwnersListScreen(
     removalError?.let { message ->
         AlertDialog(
             onDismissRequest = viewModel::acknowledgeRemovalError,
-            title = { Text("Couldn't confirm removal") },
+            title = { Text("Owner removal") },
             text = { Text(message) },
             confirmButton = {
                 TextButton(
