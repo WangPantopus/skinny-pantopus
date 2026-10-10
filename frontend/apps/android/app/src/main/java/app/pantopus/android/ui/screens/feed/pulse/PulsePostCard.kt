@@ -116,6 +116,8 @@ data class PulsePostCardContent(
     val isVisitor: Boolean = false,
     /** Curator attribution comes from `origin`, never the cold-start fact flag. */
     val origin: String? = null,
+    val likePending: Boolean = false,
+    val savePending: Boolean = false,
 ) {
     val isCurator: Boolean get() = origin == "curator"
 
@@ -210,6 +212,9 @@ fun PulsePostCard(
                 onToggleSave = onToggleSave,
                 onToggleRepost = onToggleRepost,
             )
+            if (content.likePending || content.savePending) {
+                Text("Pending", fontSize = 11.sp, color = PantopusColors.appTextSecondary, modifier = Modifier.testTag("pulsePostPending_${content.id}"))
+            }
         }
     }
 }
@@ -445,7 +450,7 @@ private fun ReactionStrip(
             ReactionPill(
                 reaction = reaction,
                 active = content.userHasReacted && reaction.kind == content.reactions.firstOrNull()?.kind,
-                onClick = if (reaction.isInteractive) onPrimary else null,
+                onClick = if (reaction.isInteractive && !content.likePending) onPrimary else null,
                 postId = content.id,
             )
         }
@@ -458,7 +463,7 @@ private fun ReactionStrip(
                 modifier =
                     Modifier
                         .size(24.dp)
-                        .clickable(onClick = onToggleSave)
+                        .clickable(enabled = !content.savePending, onClick = onToggleSave)
                         .semantics {
                             contentDescription =
                                 if (content.actions.isSaved) "Remove bookmark" else "Save post"
@@ -660,6 +665,7 @@ private fun PulseIntent.tintColors(): Pair<Color, Color> =
 private fun buildA11yLabel(content: PulsePostCardContent): String {
     val parts = mutableListOf<String>()
     parts.add(content.authorName)
+    if (content.likePending || content.savePending) parts.add("Pending")
     if (content.chipLabel.isNotEmpty()) parts.add(content.chipLabel)
     if (content.isCurator) parts.add("Pantopus curator")
     if (content.isVisitor) parts.add("Visitor")

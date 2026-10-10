@@ -103,6 +103,11 @@ class PulsePostDetailViewModel
         private val _nearbyProviders = MutableStateFlow<List<NearbyProviderRow>>(emptyList())
         val nearbyProviders: StateFlow<List<NearbyProviderRow>> = _nearbyProviders.asStateFlow()
 
+        private val _likePending = MutableStateFlow(false)
+        val likePending: StateFlow<Boolean> = _likePending.asStateFlow()
+        private val _savePending = MutableStateFlow(false)
+        val savePending: StateFlow<Boolean> = _savePending.asStateFlow()
+
         private var composerRevision = 0L
         private var pendingComment: PostCommentRequest? = null
         private val _composerText = MutableStateFlow("")
@@ -246,7 +251,8 @@ class PulsePostDetailViewModel
          */
         fun tapReaction(kind: PostReactionKind) {
             val loaded = _state.value as? PulsePostDetailUiState.Loaded ?: return
-            if (!kind.isBackendWired) return
+            if (!kind.isBackendWired || _likePending.value) return
+            _likePending.value = true
             val initialReactions = loaded.content.reactions
             val wasOn = initialReactions.userReaction == PostReactionKind.Helpful
             if (wasOn) _selectedReactionEmoji.value = null
@@ -258,6 +264,7 @@ class PulsePostDetailViewModel
             _state.value = PulsePostDetailUiState.Loaded(loaded.content.copy(reactions = optimistic))
 
             viewModelScope.launch {
+                try {
                 when (val result = repo.toggleLike(postId, liked = !wasOn)) {
                     is NetworkResult.Success -> {
                         val reconciled =
@@ -283,6 +290,9 @@ class PulsePostDetailViewModel
                             } ?: current
                         }
                     }
+                }
+                } finally {
+                    _likePending.value = false
                 }
             }
         }
@@ -370,9 +380,12 @@ class PulsePostDetailViewModel
 
         /** Toggle the bookmark — optimistic with reconcile/rollback. */
         fun toggleSave() {
+            if (_savePending.value) return
+            _savePending.value = true
             val before = _isSaved.value
             _isSaved.value = !before
             viewModelScope.launch {
+                try {
                 when (val result = repo.toggleSave(postId, saved = !before)) {
                     is NetworkResult.Success -> {
                         _isSaved.value = result.data.saved
@@ -383,6 +396,9 @@ class PulsePostDetailViewModel
                         _isSaved.value = before
                         _toastMessage.value = "Couldn't update the bookmark"
                     }
+                }
+                } finally {
+                    _savePending.value = false
                 }
             }
         }

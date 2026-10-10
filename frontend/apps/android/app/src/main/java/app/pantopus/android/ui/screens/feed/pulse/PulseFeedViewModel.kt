@@ -298,6 +298,8 @@ class PulseFeedViewModel
 
         /** Optimistic per-post state layered over [loadedPosts]. */
         private var overrides: Map<String, PulsePostOverride> = emptyMap()
+        private val liking = mutableSetOf<String>()
+        private val saving = mutableSetOf<String>()
 
         /**
          * Posts removed client-side by *this* surface (deleted / dismissed).
@@ -549,6 +551,7 @@ class PulseFeedViewModel
          */
         fun tapReaction(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (!liking.add(postId)) return
             val original = effectiveHasReacted(post)
             val originalCount = effectiveLikeCount(post)
             val toggled = !original
@@ -556,17 +559,21 @@ class PulseFeedViewModel
                 it.copy(hasReacted = toggled, likeCount = (originalCount + if (toggled) 1 else -1).coerceAtLeast(0))
             }
             rebuildLoadedState()
-
             viewModelScope.launch {
-                when (val result = repo.toggleLike(postId, liked = toggled)) {
-                    is NetworkResult.Success ->
-                        putOverride(postId) {
+                try {
+                    when (val result = repo.toggleLike(postId, liked = toggled)) {
+                        is NetworkResult.Success -> putOverride(postId) {
                             it.copy(hasReacted = result.data.liked, likeCount = result.data.likeCount)
                         }
-                    is NetworkResult.Failure ->
-                        putOverride(postId) { it.copy(hasReacted = original, likeCount = originalCount) }
+                        is NetworkResult.Failure -> {
+                            putOverride(postId) { it.copy(hasReacted = original, likeCount = originalCount) }
+                            _toastMessage.value = "Couldn't update your reaction. Try again."
+                        }
+                    }
+                } finally {
+                    liking.remove(postId)
+                    rebuildLoadedState()
                 }
-                rebuildLoadedState()
             }
         }
 
@@ -578,22 +585,26 @@ class PulseFeedViewModel
          */
         fun toggleSave(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (!saving.add(postId)) return
             val original = effectiveIsSaved(post)
             putOverride(postId) { it.copy(isSaved = !original) }
             rebuildLoadedState()
             viewModelScope.launch {
-                when (val result = repo.toggleSave(postId, saved = !original)) {
-                    is NetworkResult.Success -> {
-                        putOverride(postId) { it.copy(isSaved = result.data.saved) }
-                        _toastMessage.value =
-                            if (result.data.saved) "Saved to your bookmarks." else "Removed from bookmarks."
+                try {
+                    when (val result = repo.toggleSave(postId, saved = !original)) {
+                        is NetworkResult.Success -> {
+                            putOverride(postId) { it.copy(isSaved = result.data.saved) }
+                            _toastMessage.value = if (result.data.saved) "Saved to your bookmarks." else "Removed from bookmarks."
+                        }
+                        is NetworkResult.Failure -> {
+                            putOverride(postId) { it.copy(isSaved = original) }
+                            _toastMessage.value = "Couldn't update your bookmark."
+                        }
                     }
-                    is NetworkResult.Failure -> {
-                        putOverride(postId) { it.copy(isSaved = original) }
-                        _toastMessage.value = "Couldn't update your bookmark."
-                    }
+                } finally {
+                    saving.remove(postId)
+                    rebuildLoadedState()
                 }
-                rebuildLoadedState()
             }
         }
 
@@ -1135,6 +1146,8 @@ class PulseFeedViewModel
             val isSolved = effectiveIsSolved(post)
             return PulsePostCardContent(
                 id = post.id,
+                likePending = post.id in liking,
+                savePending = post.id in saving,
                 authorName = authorName,
                 authorInitials = initials(authorName),
                 // Beacon credentials come from the public profile, never the surface.
