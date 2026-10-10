@@ -47,6 +47,12 @@ const RULES = {
   HomeEmergency: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
   HomeDocument: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
   HomeIssue: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
+  // The Home screens' maintenance log, seasonal checklist, privacy, preferences and pending ownership votes.
+  HomeMaintenanceLog: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
+  HomeSeasonalChecklistItem: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
+  HomePrivacy: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
+  HomePreference: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
+  HomeQuorumAction: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
   HomeGuestPass: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
   HomePermissionOverride: { scope: 'home', topics: ({ h }) => [`home:${h}`, 'today'] },
   HomeScopedGrant: { scope: 'home', topics: ({ h }) => [`home:${h}`] },
