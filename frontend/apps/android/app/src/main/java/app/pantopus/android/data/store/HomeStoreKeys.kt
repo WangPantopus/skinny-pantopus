@@ -123,5 +123,4 @@ object HomeStoreKeys {
     /** A Home's estimated value. */
     fun propertyValue(homeId: String) =
         StoreKey<HomePropertyValueDto>("api/homes/$homeId/property-value", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
-
 }

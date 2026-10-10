@@ -22,9 +22,10 @@ class HomeCopyGate(
     keys: List<StoreKey<*>>,
 ) {
     private val keys: List<StoreKey<*>> =
-        keys + listOf(
-            HomeStoreKeys.access(homeId), HomeStoreKeys.detail(homeId), HomeStoreKeys.me(homeId), StoreKeys.homeDashboard(homeId),
-        )
+        keys +
+            listOf(
+                HomeStoreKeys.access(homeId), HomeStoreKeys.detail(homeId), HomeStoreKeys.me(homeId), StoreKeys.homeDashboard(homeId),
+            )
 
     /** The last known access is a household one: copies may show before the re-check, and they stay stored. */
     private var allowsCopy: Boolean = householdAccess(access.storedAuthority(homeId))

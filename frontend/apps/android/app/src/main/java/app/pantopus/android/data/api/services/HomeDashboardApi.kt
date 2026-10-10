@@ -135,7 +135,6 @@ interface HomeDashboardApi {
         @Query("currency") currency: String = "USD",
     ): HomeBillTrendsDto
 
-
     /** `PATCH /api/homes/:id/settings` — route `backend/routes/homeIam.js`; needs `home.edit`. */
     @PATCH("api/homes/{id}/settings")
     suspend fun setBillBenchmarkOptIn(
