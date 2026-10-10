@@ -49,6 +49,7 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.compose.gig.GigChecklistLink
 import app.pantopus.android.ui.screens.gigs.GigsCategory
@@ -120,6 +121,7 @@ fun HomeDashboardScreen(
     onOpenOwnership: ((String) -> Unit)? = null,
     viewModel: HomeDashboardViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::recheck)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown(
         "home_dashboard",
