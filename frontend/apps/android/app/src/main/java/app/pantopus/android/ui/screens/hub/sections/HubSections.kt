@@ -270,9 +270,14 @@ fun HubSetupBanner(
                 style = PantopusTextStyle.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appText,
             )
-            // Launch cut #4 (Open Gigs): verification doesn't advertise gigs.
+            // Verification stays available without promising features that are disabled at launch.
             Text(
-                if (LaunchFeatures.openGigs) "Unlock gigs + mail receiving." else "Unlock mail receiving.",
+                when {
+                    LaunchFeatures.openGigs && LaunchFeatures.mailbox -> "Unlock gigs + mail receiving."
+                    LaunchFeatures.openGigs -> "Unlock gigs."
+                    LaunchFeatures.mailbox -> "Unlock mail receiving."
+                    else -> "Confirm this is your home."
+                },
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
