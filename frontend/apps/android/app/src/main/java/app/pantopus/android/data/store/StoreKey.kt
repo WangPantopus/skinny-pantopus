@@ -2,6 +2,7 @@ package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import java.lang.reflect.Type
 
 /**
  * One store entry's address (Instant Screens contract §6): method, path and sorted query. The store adds the server
@@ -13,7 +14,12 @@ class StoreKey<T : Any>(
     query: Map<String, String?> = emptyMap(),
     val kind: StoreKind,
     val topics: Set<String> = emptySet(),
+    /** The reply's type, for the saved copy on the phone; null keeps the entry in memory only. */
+    val type: Type? = null,
 ) {
+    /** Whether this entry may be written to the phone at all (its kind allows it and its type is known). */
+    val savable: Boolean get() = type != null && kind.savedOnPhone
+
     val id: String =
         buildString {
             append("GET ").append(path)

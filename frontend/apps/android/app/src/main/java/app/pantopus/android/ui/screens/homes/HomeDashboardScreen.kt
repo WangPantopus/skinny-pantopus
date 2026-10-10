@@ -43,7 +43,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.compose.gig.GigChecklistLink
 import app.pantopus.android.ui.screens.gigs.GigsCategory
@@ -115,6 +118,10 @@ fun HomeDashboardScreen(
     viewModel: HomeDashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown(
+        "home_dashboard",
+        state is HomeDashboardUiState.Loaded || state is HomeDashboardUiState.Empty || state is HomeDashboardUiState.NeedsAttention,
+    )
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val healthScore by viewModel.healthScore.collectAsStateWithLifecycle()
     val checklist by viewModel.checklist.collectAsStateWithLifecycle()
@@ -124,6 +131,7 @@ fun HomeDashboardScreen(
     val billCurrencies by viewModel.billCurrencies.collectAsStateWithLifecycle()
     val billSharing by viewModel.billSharing.collectAsStateWithLifecycle()
     val pendingChecklistItemIds by viewModel.pendingChecklistItemIds.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(viewModel, lifecycleOwner) {
@@ -131,7 +139,9 @@ fun HomeDashboardScreen(
         val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_RESUME -> viewModel.load()
+                    // From ON_START (Instant Screens first frame): the stored copy shows while the screen opens, not
+                    // after its enter transition; ON_RESUME is then a no-op.
+                    Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> viewModel.load()
                     Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> viewModel.suspendContent()
                     else -> Unit
                 }
@@ -362,6 +372,7 @@ fun HomeDashboardScreen(
                 DashboardLayout(
                     content = current.content,
                     intelligence = intelligenceStack,
+                    refreshNotice = refreshNotice,
                     brandNew = null,
                     selectedTab = selectedTab,
                     onSelectTab = ::openTab,
@@ -411,6 +422,7 @@ fun HomeDashboardScreen(
                 DashboardLayout(
                     content = current.content,
                     intelligence = intelligenceStack,
+                    refreshNotice = refreshNotice,
                     brandNew = null,
                     selectedTab = selectedTab,
                     onSelectTab = ::openTab,
@@ -516,6 +528,8 @@ private fun DashboardLayout(
     intelligence: @Composable () -> Unit = {},
     canPerform: (String) -> Boolean = { true },
     can: (String) -> Boolean = { true },
+    /** Instant Screens contract §3: the copy stays; one quiet line says a refresh failed. */
+    refreshNotice: RefreshNotice? = null,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.weight(1f)) {
@@ -535,6 +549,7 @@ private fun DashboardLayout(
                 },
                 body = {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+                        refreshNotice?.let { RefreshFailedLine(it) }
                         content.securityBanner?.let { banner ->
                             HomeSecurityStatusBanner(
                                 content = banner,
