@@ -503,8 +503,7 @@ class ManageTrainViewModel
         /** Keep the confirmation open until both the optional thanks and close are confirmed. */
         fun confirmClose() {
             val current = _state.value
-            if (current.isSubmitting || !canAct) return
-            val content = (current.state as? ManageTrainState.Loaded)?.content ?: return
+            val content = (current.state as? ManageTrainState.Loaded)?.content?.takeIf { !current.isSubmitting && canAct } ?: return
             val note = current.thankYouNote.trim()
             _state.update { it.copy(isSubmitting = true, actionError = null, toast = null) }
             viewModelScope.launch {
