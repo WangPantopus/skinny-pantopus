@@ -49,6 +49,25 @@ class SavedCopies
 
         private val envelopes = moshi.adapter(Envelope::class.java)
 
+        init {
+            // An offline upgrade might never open an old household entry: retire it before any screen reads.
+            val now = System.currentTimeMillis()
+            root.walkTopDown().filter { it.isFile }.forEach { file ->
+                if (file.extension == "tmp") {
+                    file.delete()
+                } else if (file.extension == "json") {
+                    val envelope = runCatching {
+                        file.bufferedReader().use { reader -> reader.readLine()?.let { envelopes.fromJson(it) } }
+                    }.getOrNull()
+                    if (!usable(envelope, now)) file.delete()
+                }
+            }
+        }
+
+        private fun usable(envelope: Envelope?, now: Long): Boolean =
+            envelope != null && envelope.schema == SCHEMA && envelope.build == build &&
+                now - envelope.fetchedAt in 0 until MAX_AGE_MS
+
         /** One saved entry as read back: the reply, when it was read (wall clock) and its ETag. */
         data class Copy<T>(
             val data: T,
@@ -80,12 +99,7 @@ class SavedCopies
                 val text = file.readText(Charsets.UTF_8)
                 val split = text.indexOf('\n')
                 val envelope = if (split > 0) envelopes.fromJson(text.substring(0, split)) else null
-                val usable =
-                    envelope != null &&
-                        envelope.schema == SCHEMA &&
-                        envelope.build == build &&
-                        now - envelope.fetchedAt in 0 until MAX_AGE_MS
-                val data = if (usable) moshi.adapter<T>(type).fromJson(text.substring(split + 1)) else null
+                val data = if (usable(envelope, now)) moshi.adapter<T>(type).fromJson(text.substring(split + 1)) else null
                 if (data == null || envelope == null) {
                     file.delete()
                     null

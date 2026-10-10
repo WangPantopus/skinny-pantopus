@@ -56,6 +56,7 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotSeasonBlock
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.place.components.JustMovedCard
 import app.pantopus.android.ui.screens.place.components.PlaceGroupLabel
 import app.pantopus.android.ui.screens.place.components.PlaceHeroCard
@@ -110,7 +111,7 @@ fun PlaceDashboardScreen(
     LaunchedEffect(state) {
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
     }
-    LaunchedEffect(homeId) { viewModel.load(homeId) }
+    HomeCopyLifecycle({ viewModel.load(homeId) }, viewModel::suspendContent)
 
     var showSwitcher by remember { mutableStateOf(false) }
     var showVerify by remember { mutableStateOf(false) }
