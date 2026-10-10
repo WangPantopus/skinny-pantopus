@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
@@ -91,6 +93,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
 
 /**
@@ -114,6 +117,8 @@ fun FeedScreen(
     contextBarViewModel: FeedContextBarViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
+    app.pantopus.android.ui.components.RefreshOnStoreChange(viewModel::load)
+    val newPostCount by viewModel.newPostCount.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activeIntent by viewModel.activeIntent.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
@@ -154,13 +159,18 @@ fun FeedScreen(
     // List / Map segment — mirrors RN `FeedHeader.tsx:35-52`.
     var viewMode by remember { mutableStateOf(FeedViewMode.List) }
 
+    var configured by remember { mutableStateOf(false) }
+    LifecycleResumeEffect(configured) {
+        if (configured) viewModel.load()
+        onPauseOrDispose { }
+    }
     LaunchedEffect(Unit) {
         if (surface == FeedSurface.Pulse) {
             contextBarViewModel.onChange = { viewModel.refresh() }
             viewModel.onViewingAreaResolved = contextBarViewModel::applyCurrent
         }
         viewModel.configureSurface(surface)
-        viewModel.load()
+        configured = true
         Analytics.track(AnalyticsEvent.ScreenPulseFeedViewed(intent = activeIntent.key))
     }
 
@@ -330,6 +340,9 @@ fun FeedScreen(
                     is PulseFeedUiState.Loaded ->
                         PopulatedFrame(
                             state = s,
+                            newPostCount = newPostCount,
+                            onShowNewPosts = viewModel::showNewPosts,
+                            onReadingPosition = viewModel::readingPosition,
                             onTapPost = onOpenPost,
                             onTapReaction = viewModel::tapReaction,
                             isRefreshing = isRefreshing,
@@ -1075,16 +1088,29 @@ private fun PopulatedFrame(
     onRowAppeared: (String) -> Unit = {},
     searchActive: Boolean = false,
     rowActions: PulseFeedRowActions = PulseFeedRowActions(),
+    newPostCount: Int = 0,
+    onShowNewPosts: () -> Unit = {},
+    onReadingPosition: (Boolean) -> Unit = {},
 ) {
     val pullState = rememberPullRefreshState(refreshing = isRefreshing, onRefresh = onRefresh)
     val listState = rememberLazyListState()
+    var scrollToNewPosts by remember { mutableStateOf(false) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+            .distinctUntilChanged().collect { onReadingPosition(it) }
+    }
     // A new first post (yours after posting, or one a refresh brought in) is inserted above the row the list is
     // anchored to, so it would sit out of sight: show it when the person was at the top.
     val firstRowId = state.rows.firstOrNull()?.id
     var seenFirstRowId by remember { mutableStateOf(firstRowId) }
-    LaunchedEffect(firstRowId) {
+    LaunchedEffect(firstRowId, scrollToNewPosts) {
         val previous = seenFirstRowId
         seenFirstRowId = firstRowId
+        if (scrollToNewPosts) {
+            listState.scrollToItem(0)
+            scrollToNewPosts = false
+            return@LaunchedEffect
+        }
         if (previous == null || firstRowId == null || previous == firstRowId) return@LaunchedEffect
         if (listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0)
     }
@@ -1156,6 +1182,20 @@ private fun PopulatedFrame(
                 }
             }
             item { Spacer(modifier = Modifier.height(80.dp)) }
+        }
+        if (newPostCount > 0) {
+            TextButton(
+                onClick = {
+                    scrollToNewPosts = true
+                    onShowNewPosts()
+                },
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = Spacing.s2)
+                    .clip(RoundedCornerShape(Radii.pill)).background(PantopusColors.appSurface)
+                    .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
+                    .testTag("pulseNewPosts"),
+            ) {
+                Text(if (newPostCount == 1) "1 new post ↑" else "$newPostCount new posts ↑", color = PantopusColors.appText)
+            }
         }
         PullRefreshIndicator(
             refreshing = isRefreshing,

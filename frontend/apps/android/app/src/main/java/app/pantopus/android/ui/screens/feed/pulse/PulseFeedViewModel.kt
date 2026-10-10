@@ -44,6 +44,8 @@ import java.time.Instant
 import javax.inject.Inject
 
 /** Where a feed request looks: coordinates plus the viewing radius, when known. */
+private const val MAX_HELD_POSTS = 100
+
 private data class FeedArea(
     val latitude: Double?,
     val longitude: Double?,
@@ -271,6 +273,25 @@ class PulseFeedViewModel
 
         /** All pages loaded so far — search filters project from this. */
         private var loadedPosts: List<FeedPost> = emptyList()
+        private var heldPosts: List<FeedPost> = emptyList()
+        private var readingAtTop = true
+        private val _newPostCount = MutableStateFlow(0)
+        val newPostCount: StateFlow<Int> = _newPostCount.asStateFlow()
+
+        /** New head rows wait while the reader is below the top, just as on web. */
+        fun readingPosition(atTop: Boolean) {
+            readingAtTop = atTop
+            if (atTop) showNewPosts()
+        }
+
+        fun showNewPosts() {
+            if (heldPosts.isEmpty()) return
+            loadedPosts = (heldPosts + loadedPosts).distinctBy { it.id }
+            heldPosts = emptyList()
+            _newPostCount.value = 0
+            rebuildLoadedState()
+        }
+
         private var nextCursorCreatedAt: String? = null
         private var nextCursorId: String? = null
         private var hasMore = false
@@ -870,6 +891,10 @@ class PulseFeedViewModel
             quiet: Boolean = false,
         ) {
             val generation = ++fetchGeneration
+            if (!quiet) {
+                heldPosts = emptyList()
+                _newPostCount.value = 0
+            }
             _isLoadingMore.value = false
             _loadMoreError.value = null
             loading = true
@@ -936,12 +961,12 @@ class PulseFeedViewModel
             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
             // Each card stands in for its post until the post's own read answers (a post opens at once).
             repo.seedDetails(response.posts)
-            if (inPlace && query == lastQuery && loadedPosts.size > response.posts.size) {
-                val refreshed = response.posts.associateBy { it.id }
-                loadedPosts = loadedPosts.map { refreshed[it.id] ?: it }
-                rebuildLoadedState()
+            if (inPlace && query == lastQuery && loadedPosts.isNotEmpty() && response.posts.isNotEmpty()) {
+                keepReadingPosition(response)
                 return
             }
+            heldPosts = emptyList()
+            _newPostCount.value = 0
             lastQuery = query
             loadedPosts = response.posts
             postsLoaded = true
@@ -954,6 +979,21 @@ class PulseFeedViewModel
                     PulseFeedUiState.Loaded(rows = emptyList())
                 }
             if (response.posts.isNotEmpty()) rebuildLoadedState()
+        }
+
+        private fun keepReadingPosition(response: FeedResponse) {
+            val shownIds = loadedPosts.map { it.id }.toSet()
+            val newHead = response.posts.takeWhile { it.id !in shownIds }.filter { it.userId != viewerId }
+            if (readingAtTop) {
+                heldPosts = emptyList()
+            } else {
+                heldPosts = (newHead + heldPosts).distinctBy { it.id }.take(MAX_HELD_POSTS)
+            }
+            val heldIds = heldPosts.map { it.id }.toSet()
+            loadedPosts = (response.posts.filterNot { it.id in heldIds } + loadedPosts).distinctBy { it.id }
+            _newPostCount.value = heldPosts.size
+            if (!hasMore && response.pagination?.hasMore == true) applyPagination(response.pagination)
+            rebuildLoadedState()
         }
 
         /** The stored first page for what is already known (no waiting), on screen at once. False without one. */
