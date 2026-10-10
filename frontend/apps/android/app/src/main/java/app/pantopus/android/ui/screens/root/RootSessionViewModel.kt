@@ -10,6 +10,7 @@ import app.pantopus.android.data.chats.ChatRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.neighborhood.NeighborhoodRepository
 import app.pantopus.android.data.place.PlaceRepository
+import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.ui.screens.place.today.primaryHomeId
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,6 +38,7 @@ class RootSessionViewModel
         private val place: PlaceRepository,
         private val nearby: NeighborhoodRepository,
         private val chats: ChatRepository,
+        private val savedPlaces: SavedPlacesRepository,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
         init {
@@ -61,8 +63,14 @@ class RootSessionViewModel
         private suspend fun warmTabs() = coroutineScope {
             launch {
                 val response = homes.myHomesStored().data ?: return@launch
-                val homeId = primaryHomeId(response) ?: return@launch
-                if (mayPrefetch()) place.todayStored(homeId)
+                val homeId = primaryHomeId(response)
+                if (!mayPrefetch()) return@launch
+                if (homeId != null) {
+                    place.todayStored(homeId)
+                } else {
+                    val savedId = savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.id ?: return@launch
+                    if (mayPrefetch()) savedPlaces.todayStored(savedId)
+                }
             }
             launch { if (mayPrefetch()) nearby.meterStored() }
             launch { if (mayPrefetch()) nearby.cellsStored() }

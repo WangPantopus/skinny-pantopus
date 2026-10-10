@@ -38,6 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import app.pantopus.android.ui.components.RefreshOnStoreChange
+import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -69,13 +72,18 @@ fun SavedPlacesScreen(
     viewModel: SavedPlacesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val actionTarget by viewModel.actionTarget.collectAsStateWithLifecycle()
     val undo by viewModel.undo.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    RefreshOnStoreChange(viewModel::load)
     LaunchedEffect(toast) {
         if (toast != null) {
             delay(TOAST_DISMISS_DELAY_MS)
@@ -98,6 +106,7 @@ fun SavedPlacesScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             SavedPlacesTopBar(state = state, onBack = onBack)
+            refreshNotice?.let { RefreshFailedLine(it) }
             when (val s = state) {
                 is SavedPlacesUiState.Loading -> SavedPlacesLoadingList()
                 is SavedPlacesUiState.Loaded -> {

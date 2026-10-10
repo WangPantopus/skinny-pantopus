@@ -17,6 +17,7 @@ import app.pantopus.android.data.api.models.notifications.NotificationsListRespo
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
+import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.users.InviteCodeDto
@@ -47,6 +48,17 @@ object StoreTopics {
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
 object StoreKeys {
+    /** Private bookmarks share one memory copy; household/Today signals include SavedPlace changes. */
+    val savedPlaces = StoreKey<SavedPlacesListResponse>(
+        "api/saved-places", kind = StoreKind.YOU, topics = setOf(StoreTopics.HOMES, StoreTopics.TODAY),
+    )
+
+    /** Public Today facts for the viewer's saved place; a deleted bookmark refuses the copy. */
+    fun savedPlaceToday(id: String) = StoreKey<PlaceIntelligence>(
+        "api/saved-places/$id/today", kind = StoreKind.TODAY, topics = setOf(StoreTopics.TODAY, "place:$id"),
+        type = PlaceIntelligence::class.java,
+    )
+
     /** My Homes: one source for every screen that lists the viewer's homes. */
     val myHomes =
         StoreKey<MyHomesResponse>(

@@ -5,6 +5,8 @@ import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDeleteResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
+import retrofit2.Response
+import retrofit2.http.Header
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -21,6 +23,12 @@ interface SavedPlacesApi {
      */
     @GET("api/saved-places")
     suspend fun list(): SavedPlacesListResponse
+
+    @GET("api/saved-places")
+    suspend fun listConditional(@Header("If-None-Match") etag: String?): Response<SavedPlacesListResponse>
+
+    @GET("api/saved-places/{id}/today")
+    suspend fun todayConditional(@Path("id") id: String, @Header("If-None-Match") etag: String?): Response<PlaceIntelligence>
 
     @GET("api/saved-places/{id}/today")
     suspend fun today(

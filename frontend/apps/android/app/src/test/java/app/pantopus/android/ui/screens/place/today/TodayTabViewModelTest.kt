@@ -64,8 +64,9 @@ class TodayTabViewModelTest {
         coEvery { homes.myHomesStored(any()) } returns Stored(MyHomesResponse(emptyList(), null), fetchedAt = System.currentTimeMillis())
         // No saved copy on the phone in these tests: Today waits for its read.
         every { homes.myHomesCopy() } returns null
-        coEvery { saved.list() } returns NetworkResult.Success(SavedPlacesListResponse(listOf(place)))
-        coEvery { saved.today(place.id) } returns NetworkResult.Success(mockk<PlaceIntelligence>())
+        coEvery { saved.listStored(any()) } returns Stored(SavedPlacesListResponse(listOf(place)), fetchedAt = System.currentTimeMillis())
+        every { saved.todayCopy(place.id) } returns Stored()
+        coEvery { saved.todayStored(place.id, any()) } returns Stored(mockk<PlaceIntelligence>(), fetchedAt = System.currentTimeMillis())
         coEvery { hub.todayDetail() } returns
             NetworkResult.Success(HubTodayPayload(location = TodayLocationDto(source = "saved_place", latitude = 0.0, longitude = 0.0)))
         coEvery { preferences.preferences() } answers { NetworkResult.Success(stored) }

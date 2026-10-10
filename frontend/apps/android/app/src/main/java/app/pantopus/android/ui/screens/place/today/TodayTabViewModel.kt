@@ -172,8 +172,8 @@ class TodayTabViewModel
             when (val shown = _state.value) {
                 is TodayTabUiState.Loaded ->
                     when {
-                        // A saved place's Today isn't kept in the store: every visit checks it quietly.
-                        shown.savedPlace != null -> refresh(force = false)
+                        // The shared bookmark and Today copies decide whether this visit needs a request.
+                        shown.savedPlace != null -> refresh(force = !shown.isSameDay())
                         // Midnight in the home's time zone (contract §4) ends the copy even inside its window.
                         !shown.isSameDay() -> refresh(force = true)
                         shown.calendarHomeId?.let(repo::todayIsCurrent) == true -> Unit
@@ -189,7 +189,14 @@ class TodayTabViewModel
 
         /** A first entry (a cold start too) shows the stored Today of the primary home at once; the read revalidates it. */
         private fun showStoredToday() {
-            val id = homesRepository.myHomesCopy()?.let(::primaryHomeId) ?: return
+            val homes = homesRepository.myHomesCopy() ?: return
+            val id = primaryHomeId(homes)
+            if (id == null) {
+                val saved = savedPlacesRepository.listCopy()?.savedPlaces?.firstOrNull() ?: return
+                val copy = savedPlacesRepository.todayCopy(saved.id)
+                copy.data?.let { _state.value = TodayTabUiState.Loaded(it, savedPlace = saved, fetchedAt = copy.fetchedAt) }
+                return
+            }
             val copy = repo.todayCopy(id)
             val data = copy.data ?: return
             homeId = id
@@ -232,7 +239,7 @@ class TodayTabViewModel
                         }
                         val id = primaryHomeId(homesList)
                         if (id == null) {
-                            loadSavedPlace(version)
+                            loadSavedPlace(version, force)
                             return@launch
                         }
                         homeId = id
@@ -291,45 +298,56 @@ class TodayTabViewModel
             return allowed && version == loadVersion
         }
 
-        private suspend fun loadSavedPlace(version: Long) {
+        private suspend fun loadSavedPlace(version: Long, force: Boolean) {
             homeId = null
-            val saved = savedPlacesRepository.list()
+            val saved = savedPlacesRepository.listStored(force)
             if (!current(version)) return
-            val place =
-                when (saved) {
-                    is NetworkResult.Success -> saved.data.savedPlaces.firstOrNull()
-                    is NetworkResult.Failure -> {
-                        val shown = _state.value
-                        val noHome = shown.takeIf { it == TodayTabUiState.NoPlace || (it as? TodayTabUiState.Loaded)?.savedPlace != null }
-                        _state.value = noHome.afterFailedRead(saved.error.displayMessage("Couldn't load your place."))
-                        return
-                    }
+            val places = saved.data
+            if (places == null) {
+                val samePlace = _state.value.takeIf { it == TodayTabUiState.NoPlace || (it as? TodayTabUiState.Loaded)?.savedPlace != null }
+                _state.value = if (saved.failure is NetworkError.Forbidden || saved.failure == NetworkError.NotFound) {
+                    TodayTabUiState.Error(saved.failure.sentence("Couldn't load your place."))
+                } else {
+                    samePlace.afterFailedRead(saved.failure.sentence("Couldn't load your place."))
                 }
+                return
+            }
+            val place = places.savedPlaces.firstOrNull()
             if (place == null) {
                 _state.value = TodayTabUiState.NoPlace
                 return
             }
-            val result = savedPlacesRepository.today(place.id)
+            val copy = savedPlacesRepository.todayCopy(place.id)
+            copy.data?.let { _state.value = TodayTabUiState.Loaded(it, savedPlace = place, fetchedAt = copy.fetchedAt) }
+            val result = savedPlacesRepository.todayStored(place.id, force)
             if (!current(version)) return
-            when (result) {
-                is NetworkResult.Failure -> {
-                    val samePlace = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.savedPlace?.id == place.id }
-                    _state.value = samePlace.afterFailedRead(result.error.displayMessage("Couldn't load today."))
+            val intelligence = result.data
+            if (intelligence == null) {
+                val samePlace = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.savedPlace?.id == place.id }
+                _state.value = if (result.failure is NetworkError.Forbidden || result.failure == NetworkError.NotFound) {
+                    TodayTabUiState.Error(result.failure.sentence("Couldn't load today."))
+                } else {
+                    samePlace.afterFailedRead(result.failure.sentence("Couldn't load today."))
                 }
-                is NetworkResult.Success -> loadSavedToday(version, place, result.data)
+                return
             }
+            loadSavedToday(version, place, intelligence, result.fetchedAt, result.failure != null)
         }
 
         private suspend fun loadSavedToday(
             version: Long,
             place: SavedPlaceDto,
             intelligence: PlaceIntelligence,
+            fetchedAt: Long,
+            failed: Boolean,
         ) {
+            // The copy is visible before checking the optional morning-briefing anchor.
+            val shown = TodayTabUiState.Loaded(intelligence, savedPlace = place, fetchedAt = fetchedAt, refreshFailed = failed)
+            _state.value = shown
             val matches = checkSavedAnchor(place)
             if (!current(version)) return
-            val now = System.currentTimeMillis()
-            _state.value = TodayTabUiState.Loaded(intelligence, savedPlace = place, savedAnchorMatches = matches, fetchedAt = now)
-            if (::todayWidget.isInitialized) todayWidget.write(intelligence.todayWidgetSnapshot())
+            _state.value = shown.copy(savedAnchorMatches = matches)
+            if (!failed && ::todayWidget.isInitialized) todayWidget.write(intelligence.todayWidgetSnapshot())
             if (!matches) return
             val preferences = preferencesRepository.preferences()
             if (!current(version)) return
