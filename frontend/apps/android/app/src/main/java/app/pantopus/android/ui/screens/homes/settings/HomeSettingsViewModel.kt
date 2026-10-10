@@ -180,6 +180,9 @@ class HomeSettingsViewModel
         private fun clearCopy() {
             loadedOnce = false
             viewerAccess = null
+            currentName = ""
+            _rename.value = HomeRenameState()
+            _navigation.value = null
             _refreshNotice.value = null
             _state.value = GroupedListUiState.Loading
         }

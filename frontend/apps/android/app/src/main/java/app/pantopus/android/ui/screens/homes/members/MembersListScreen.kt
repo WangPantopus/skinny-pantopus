@@ -25,6 +25,7 @@ import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusIcon
 
@@ -67,6 +68,15 @@ fun MembersListScreen(
     var roleTarget by remember { mutableStateOf<MemberActionTarget?>(null) }
     var approveTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     var declineTarget by remember { mutableStateOf<Triple<String, String, String>?>(null) }
+
+    LaunchedEffect(state) {
+        if (state is ListOfRowsUiState.Loading || state is ListOfRowsUiState.Error) {
+            actionsTarget = null
+            roleTarget = null
+            approveTarget = null
+            declineTarget = null
+        }
+    }
 
     LaunchedEffect(Unit) {
         Analytics.track(AnalyticsEvent.ScreenMembersListViewed)
