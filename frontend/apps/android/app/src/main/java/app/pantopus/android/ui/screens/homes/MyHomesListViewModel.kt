@@ -257,7 +257,9 @@ class MyHomesListViewModel
         private fun current(revision: Long) = visible && revision == generation && session.isCurrent
 
         /** Entry and every return (Instant Screens): the stored Homes show at once and are re-read quietly. */
-        fun load() = read(force = false)
+        fun load() {
+            if (!visible) read(force = false)
+        }
 
         /** Pull to refresh, Retry and after a delete: read now. */
         fun refresh() = read(force = true)
