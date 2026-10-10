@@ -109,11 +109,12 @@ private struct RefreshOnStoreChange: ViewModifier {
                 guard probe.isOnScreen, UIApplication.shared.applicationState == .active, affects(note) else { return }
                 Task { await action() }
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-                guard probe.isOnScreen else { return }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                // Clear before the app snapshot and even if UIKit already
+                // detached this retained screen from its window.
                 recheckOnResume = onBackground?() ?? false
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 guard recheckOnResume, probe.isOnScreen else { return }
                 recheckOnResume = false
                 Task { await action() }
