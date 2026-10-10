@@ -50,6 +50,12 @@ class StoreSync
                 }
             }
             scope.launch {
+                socket.eventsOf("notification:new").collect { store.markStale(StoreTopics.NOTIFICATIONS) }
+            }
+            scope.launch {
+                socket.eventsOf("badge:update").collect { store.markStale(StoreTopics.NOTIFICATIONS) }
+            }
+            scope.launch {
                 var connectedBefore = false
                 socket.connectionState.collect { state ->
                     if (state != SocketManager.ConnectionState.Connected) return@collect

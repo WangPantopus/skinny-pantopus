@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 
 /** Test tag on the recent activity root container. Mirrors iOS. */
@@ -27,6 +28,7 @@ fun RecentActivityScreen(
     onOpen: (RecentActivityDestination) -> Unit,
     viewModel: RecentActivityViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::load)
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
