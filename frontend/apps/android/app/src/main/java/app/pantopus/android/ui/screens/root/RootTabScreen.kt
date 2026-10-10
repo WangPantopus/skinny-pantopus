@@ -1580,13 +1580,11 @@ private object ChildRoutes {
         topicType: String? = null,
         topicRefId: String? = null,
         topicTitle: String? = null,
-        avatarUrl: String? = null,
     ): String {
         fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/person/${enc(userId)}?" +
             "$CHAT_NAME_KEY=${enc(displayName)}" +
             "&$CHAT_INITIALS_KEY=${enc(initials)}" +
-            "&$CHAT_AVATAR_KEY=${enc(avatarUrl.orEmpty())}" +
             "&$CHAT_VERIFIED_KEY=$verified" +
             "&$CHAT_IDENTITY_KEY=" +
             "&$CHAT_LOCALITY_KEY=${enc(locality ?: "")}" +
@@ -1597,6 +1595,16 @@ private object ChildRoutes {
             "&$CHAT_TOPIC_TYPE_KEY=${enc(topicType ?: "")}" +
             "&$CHAT_TOPIC_REF_ID_KEY=${enc(topicRefId ?: "")}" +
             "&$CHAT_TOPIC_TITLE_KEY=${enc(topicTitle ?: "")}"
+    }
+
+    /** Keeps an already-fetched photo when a profile or link opens a person thread. */
+    fun withAvatar(
+        route: String,
+        avatarUrl: String?,
+    ): String {
+        if (avatarUrl.isNullOrBlank()) return route
+        val encoded = java.net.URLEncoder.encode(avatarUrl, "UTF-8").replace("+", "%20")
+        return "$route&$CHAT_AVATAR_KEY=$encoded"
     }
 
     /** Adds the linked room id to a person-thread route (see [CHAT_ARRIVAL_ROOM_KEY]). */
@@ -2184,23 +2192,24 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // failed read, opens the room exactly as before.
                 val person = pending.id.takeIf { it.isNotBlank() }?.let { deepLinkChatResolver.directCounterpart(it) }
                 if (person != null) {
+                    val chatRoute =
+                        ChildRoutes.chatConversationFromPicker(
+                            userId = person.userId,
+                            displayName = person.displayName,
+                            initials =
+                                person.displayName
+                                    .split(" ")
+                                    .take(2)
+                                    .mapNotNull { it.firstOrNull()?.toString() }
+                                    .joinToString("")
+                                    .uppercase()
+                                    .ifEmpty { "?" },
+                            verified = false,
+                            locality = null,
+                        )
                     navController.navigate(
                         ChildRoutes.withArrivalRoom(
-                            ChildRoutes.chatConversationFromPicker(
-                                userId = person.userId,
-                                displayName = person.displayName,
-                                initials =
-                                    person.displayName
-                                        .split(" ")
-                                        .take(2)
-                                        .mapNotNull { it.firstOrNull()?.toString() }
-                                        .joinToString("")
-                                        .uppercase()
-                                        .ifEmpty { "?" },
-                                verified = false,
-                                locality = null,
-                                avatarUrl = person.avatarUrl,
-                            ),
+                            ChildRoutes.withAvatar(chatRoute, person.avatarUrl),
                             pending.id,
                         ),
                     )
@@ -4679,15 +4688,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 // Return to the existing conversation and its unsent draft.
                                 navController.popBackStack()
                             } else {
-                                navController.navigate(
+                                val chatRoute =
                                     ChildRoutes.chatConversationFromPicker(
                                         userId = profile.id,
                                         displayName = profile.displayName,
                                         initials = initialsFromName(profile.displayName),
                                         verified = profile.residency?.get("verified") == true,
                                         locality = profile.locality,
-                                        avatarUrl = profile.profilePictureUrl ?: profile.avatarUrl,
-                                    ),
+                                    )
+                                navController.navigate(
+                                    ChildRoutes.withAvatar(chatRoute, profile.profilePictureUrl ?: profile.avatarUrl),
                                 )
                             }
                         },
