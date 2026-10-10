@@ -79,6 +79,7 @@ fun HouseholdTaskDetailScreen(
             }
             state.task?.let { task ->
                 HouseholdTaskReadOnlyContent(task, state.assignee)
+                if (state.pendingCompletion) Text("Pending", style = MaterialTheme.typography.bodySmall)
                 TextButton(onClick = recurrenceViewModel.controller::show, enabled = !state.busy) { Text("Repeat schedule") }
                 TextButton(onClick = mediaViewModel.controller::show, enabled = !state.busy) { Text("Private attachments") }
                 // Launch cut #4 (Open Gigs): publishing a household task as an open Gig is hidden.
