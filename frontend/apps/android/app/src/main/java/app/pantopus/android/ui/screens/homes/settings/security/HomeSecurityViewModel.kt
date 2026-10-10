@@ -164,7 +164,7 @@ class HomeSecurityViewModel
             rowId: String,
             isOn: Boolean,
         ) {
-            if (!active || _state.value !is GroupedListUiState.Loaded || isSaving || !_toggles.containsKey(rowId)) return
+            if (!active || _state.value !is GroupedListUiState.Loaded || isSaving) return
             val previous = _toggles[rowId] ?: return
             saveError = null
             // Optimistic flip.
