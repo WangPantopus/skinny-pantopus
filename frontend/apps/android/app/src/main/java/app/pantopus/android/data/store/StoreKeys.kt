@@ -57,6 +57,7 @@ object StoreTopics {
 }
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
+@Suppress("TooManyFunctions") // Declarative endpoint keys form the single audited cache allowlist.
 object StoreKeys {
     fun relationships(status: String?, limit: Int = 50, offset: Int = 0) = StoreKey<RelationshipsListResponse>(
         "api/relationships", mapOf("status" to status, "limit" to limit.toString(), "offset" to offset.toString()),
