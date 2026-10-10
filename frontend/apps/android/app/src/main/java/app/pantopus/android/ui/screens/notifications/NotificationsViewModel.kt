@@ -542,8 +542,9 @@ class NotificationsViewModel
          * disappears immediately and is restored if the call fails.
          */
         fun delete(id: String) {
+            if (id in pendingReads || markingAllRead) return
+            val generation = fetchGeneration
             val target = notifications.firstOrNull { it.id == id } ?: return
-            val previous = notifications.toList()
             val previousCount = _unreadCount.value
             notifications = notifications.filterNot { it.id == id }.toMutableList()
             if (target.isRead != true) {
@@ -556,8 +557,11 @@ class NotificationsViewModel
                     is NetworkResult.Failure -> {
                         // Already deleted (say on another device): the row stays gone.
                         if (result.error == NetworkError.NotFound) return@launch
-                        notifications = previous.toMutableList()
-                        _unreadCount.value = previousCount
+                        if (generation != fetchGeneration || _state.value is ListOfRowsUiState.Error) return@launch
+                        if (notifications.none { it.id == target.id }) {
+                            notifications = sortedByRecency(notifications + target).toMutableList()
+                            if (target.isRead != true) _unreadCount.value++
+                        }
                         applyState()
                         _toast.value = ToastMessage("Couldn't delete the notification. Try again.", ToastKind.Error)
                     }
@@ -669,7 +673,7 @@ class NotificationsViewModel
             keepTail: Boolean = false,
         ) {
             val refusal = pages.mapNotNull { it.second as? NetworkResult.Failure }
-                .firstOrNull { it.error is NetworkError.Forbidden || it.error == NetworkError.NotFound }
+                .firstOrNull { it.error is NetworkError.Forbidden || it.error == NetworkError.NotFound || it.error == NetworkError.Unauthorized }
             if (refusal != null) {
                 notifications.clear()
                 offsets.clear()
@@ -839,6 +843,7 @@ class NotificationsViewModel
                             row.copy(
                                 chips = row.chips.orEmpty() + RowChip("Pending", tint = RowChip.Tint.Status(StatusChipVariant.Neutral)),
                                 wrapChips = true,
+                                destructiveAction = null,
                             )
                         } else {
                             row

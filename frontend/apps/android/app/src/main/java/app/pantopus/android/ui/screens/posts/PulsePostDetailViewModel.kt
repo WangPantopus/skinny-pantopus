@@ -476,7 +476,7 @@ class PulsePostDetailViewModel
         private suspend fun fetch(force: Boolean) {
             val stored = repo.detailStored(postId, force)
             val failure = stored.failure
-            val gone = failure == NetworkError.NotFound || failure is NetworkError.Forbidden
+            val gone = failure == NetworkError.NotFound || failure is NetworkError.Forbidden || failure == NetworkError.Unauthorized
             val detail = stored.data
             if (detail != null && !gone) {
                 _commentsLoading.value = false

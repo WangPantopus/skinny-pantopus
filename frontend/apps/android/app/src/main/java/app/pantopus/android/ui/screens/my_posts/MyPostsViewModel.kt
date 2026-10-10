@@ -308,7 +308,7 @@ class MyPostsViewModel
                         applyState()
                     }
                     is NetworkResult.Failure -> {
-                        if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) {
+                        if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) {
                             posts = emptyList()
                             nextPage = null
                             loadedAtLeastOnce = false

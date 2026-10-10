@@ -85,7 +85,7 @@ class SavedPlacesViewModel
                         items = data.savedPlaces
                         loadedAtLeastOnce = true
                         rebuild()
-                    } else if (!loadedAtLeastOnce || stored.failure is NetworkError.Forbidden || stored.failure == NetworkError.NotFound) {
+                    } else if (!loadedAtLeastOnce || stored.failure is NetworkError.Forbidden || stored.failure == NetworkError.NotFound || stored.failure == NetworkError.Unauthorized) {
                         items = emptyList()
                         loadedAtLeastOnce = false
                         _state.value = SavedPlacesUiState.Error(stored.failure?.displayMessage("Couldn't load saved places.") ?: "Couldn't load saved places.")

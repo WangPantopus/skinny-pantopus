@@ -420,7 +420,7 @@ class ConnectionsViewModel
                     true
                 }
                 is NetworkResult.Failure -> {
-                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) sent = emptyList()
+                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) sent = emptyList()
                     false
                 }
             }
@@ -432,7 +432,7 @@ class ConnectionsViewModel
                     true
                 }
                 is NetworkResult.Failure -> {
-                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) blocked = emptyList()
+                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) blocked = emptyList()
                     false
                 }
             }
@@ -444,7 +444,7 @@ class ConnectionsViewModel
                     true
                 }
                 is NetworkResult.Failure -> {
-                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) accepted = emptyList()
+                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) accepted = emptyList()
                     false
                 }
             }
@@ -456,7 +456,7 @@ class ConnectionsViewModel
                     true
                 }
                 is NetworkResult.Failure -> {
-                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) pending = emptyList()
+                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) pending = emptyList()
                     false
                 }
             }

@@ -259,7 +259,7 @@ class TodayTabViewModel
                                 if (failure == null && ::todayWidget.isInitialized) todayWidget.write(data.todayWidgetSnapshot())
                             }
                             // Access ended (contract §3): the store dropped the copy, and the server's answer shows.
-                            failure is NetworkError.Forbidden || failure == NetworkError.NotFound ->
+                            failure is NetworkError.Forbidden || failure == NetworkError.NotFound || failure == NetworkError.Unauthorized ->
                                 _state.value = TodayTabUiState.Error(failure.displayMessage("Couldn't load today."))
                             else -> {
                                 val sameHome = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.calendarHomeId == id }
@@ -305,7 +305,7 @@ class TodayTabViewModel
             val places = saved.data
             if (places == null) {
                 val samePlace = _state.value.takeIf { it == TodayTabUiState.NoPlace || (it as? TodayTabUiState.Loaded)?.savedPlace != null }
-                _state.value = if (saved.failure is NetworkError.Forbidden || saved.failure == NetworkError.NotFound) {
+                _state.value = if (saved.failure is NetworkError.Forbidden || saved.failure == NetworkError.NotFound || saved.failure == NetworkError.Unauthorized) {
                     TodayTabUiState.Error(saved.failure.sentence("Couldn't load your place."))
                 } else {
                     samePlace.afterFailedRead(saved.failure.sentence("Couldn't load your place."))
@@ -324,7 +324,7 @@ class TodayTabViewModel
             val intelligence = result.data
             if (intelligence == null) {
                 val samePlace = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.savedPlace?.id == place.id }
-                _state.value = if (result.failure is NetworkError.Forbidden || result.failure == NetworkError.NotFound) {
+                _state.value = if (result.failure is NetworkError.Forbidden || result.failure == NetworkError.NotFound || result.failure == NetworkError.Unauthorized) {
                     TodayTabUiState.Error(result.failure.sentence("Couldn't load today."))
                 } else {
                     samePlace.afterFailedRead(result.failure.sentence("Couldn't load today."))

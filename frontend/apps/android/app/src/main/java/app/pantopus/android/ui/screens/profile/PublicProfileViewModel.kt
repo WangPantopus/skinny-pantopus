@@ -792,7 +792,7 @@ class PublicProfileViewModel
                     loadRelationship(profile.id)
                 }
                 is NetworkResult.Failure -> {
-                    if (_state.value !is PublicProfileUiState.Loaded || result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) {
+                    if (_state.value !is PublicProfileUiState.Loaded || result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) {
                         _canFollow.value = false
                         _relationshipLoaded.value = false
                         _state.value = PublicProfileUiState.Error(friendlyMessage(result.error))
