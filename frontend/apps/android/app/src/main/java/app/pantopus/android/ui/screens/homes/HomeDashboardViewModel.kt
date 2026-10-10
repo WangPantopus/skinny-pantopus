@@ -276,6 +276,9 @@ class HomeDashboardViewModel
         val billSharing: StateFlow<BillSharingState> = _billSharing.asStateFlow()
 
         private val _pendingChecklistItemIds = MutableStateFlow<Set<String>>(emptySet())
+        private val checklistOriginals = mutableMapOf<String, SeasonalChecklistItemDto>()
+        private val _checklistActionError = MutableStateFlow<String?>(null)
+        val checklistActionError: StateFlow<String?> = _checklistActionError.asStateFlow()
 
         /**
          * Checklist item ids with an in-flight PATCH — the row disables
@@ -358,6 +361,10 @@ class HomeDashboardViewModel
          * while it is re-checked); guests, service providers and any access with an expiry are cleared now.
          */
         fun suspendContent() {
+            checklistOriginals.values.toList().forEach { applyChecklistItem(it, remember = false) }
+            checklistOriginals.clear()
+            _pendingChecklistItemIds.value = emptySet()
+            _checklistActionError.value = null
             generation += 1
             visible = false
             refreshJob?.cancel()
@@ -389,6 +396,8 @@ class HomeDashboardViewModel
             billReadId += 1
             _billTrends.value = HomeIntelligenceCardState.Loading
             _pendingChecklistItemIds.value = emptySet()
+            checklistOriginals.clear()
+            _checklistActionError.value = null
             _state.value = HomeDashboardUiState.Loading
         }
 
@@ -475,6 +484,7 @@ class HomeDashboardViewModel
         fun refresh() = refresh(force = true)
 
         private fun refresh(force: Boolean) {
+            if (_pendingChecklistItemIds.value.isNotEmpty()) return
             if (!visible) return
             refreshJob?.cancel()
             generation += 1
@@ -854,8 +864,14 @@ class HomeDashboardViewModel
             status: String,
         ) {
             if (!can("home.edit") || _pendingChecklistItemIds.value.contains(itemId)) return
+            val checklist = _checklist.value.valueOrNull() ?: return
+            val original = (checklist.items + checklist.carryover?.items.orEmpty()).firstOrNull { it.id == itemId } ?: return
+            if (original.isResolved) return
             val revision = generation
+            checklistOriginals[itemId] = original
+            _checklistActionError.value = null
             _pendingChecklistItemIds.value = _pendingChecklistItemIds.value + itemId
+            applyChecklistItem(original.copy(status = status), remember = false)
             try {
                 authorize(revision)
                 val updated = intelligenceRepo.updateSeasonalChecklistItem(homeId, itemId, status).homeValue()
@@ -863,22 +879,28 @@ class HomeDashboardViewModel
                 check(HomeIntelligenceValidation.item(updated, homeId) && updated.id == itemId && updated.status == status) {
                     "The checklist update was not confirmed."
                 }
+                checklistOriginals.remove(itemId)
                 applyChecklistItem(updated)
                 loadHealthScore()
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: NetworkError.Forbidden) {
-                retireAccess(revision)
+            } catch (error: NetworkError) {
+                if (error.code in listOf(401, 403, 404)) {
+                    retireAccess(revision)
+                } else if (current(revision)) {
+                    applyChecklistItem(original, remember = false)
+                    _checklistActionError.value = error.displayMessage("Couldn't confirm that task update. Try again.")
+                }
             } catch (_: Throwable) {
                 if (current(revision)) {
-                    _checklist.value =
-                        HomeIntelligenceCardState.Failed(
-                            "Couldn't confirm that task update. Reload to try again.",
-                            afterChange = true,
-                        )
+                    applyChecklistItem(original, remember = false)
+                    _checklistActionError.value = "Couldn't confirm that task update. Try again."
                 }
             } finally {
-                if (revision == generation) _pendingChecklistItemIds.value = _pendingChecklistItemIds.value - itemId
+                if (revision == generation) {
+                    checklistOriginals.remove(itemId)
+                    _pendingChecklistItemIds.value = _pendingChecklistItemIds.value - itemId
+                }
             }
         }
 
@@ -887,7 +909,10 @@ class HomeDashboardViewModel
          * and recompute progress the same way the backend does
          * (`home.js:7526`).
          */
-        private fun applyChecklistItem(updated: SeasonalChecklistItemDto) {
+        private fun applyChecklistItem(
+            updated: SeasonalChecklistItemDto,
+            remember: Boolean = true,
+        ) {
             val current = _checklist.value.valueOrNull() ?: return
             val items = current.items.map { if (it.id == updated.id) updated else it }
             val carryover =
@@ -911,7 +936,22 @@ class HomeDashboardViewModel
                 )
             _checklist.value = HomeIntelligenceCardState.Loaded(spliced)
             // Own edit (contract §3): a return shows the confirmed change, not the copy from before it.
-            intelligenceRepo.rememberChecklist(homeId, spliced)
+            if (remember) {
+                // A different row may still be pending; only confirmed rows enter the shared copy.
+                val confirmed = spliced.copy(
+                    items = spliced.items.map { checklistOriginals[it.id] ?: it },
+                    carryover = spliced.carryover?.let { block -> block.copy(items = block.items.map { checklistOriginals[it.id] ?: it }) },
+                )
+                val done = confirmed.items.count { it.isResolved }
+                intelligenceRepo.rememberChecklist(
+                    homeId,
+                    confirmed.copy(progress = SeasonalChecklistProgressDto(
+                        total = confirmed.items.size,
+                        completed = done,
+                        percentage = HomeDashboardProjection.percentage(done, confirmed.items.size),
+                    )),
+                )
+            }
         }
 
         // ── Projection ──────────────────────────────────────────────
