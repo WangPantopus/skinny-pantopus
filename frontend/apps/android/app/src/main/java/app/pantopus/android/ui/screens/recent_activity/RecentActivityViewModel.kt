@@ -86,7 +86,10 @@ class RecentActivityViewModel
                 when {
                     hub != null -> apply(hub.activity)
                     // A failed read keeps the rows; only an empty screen, or the server's refusal, shows the error.
-                    failure != null && (!shown || failure is NetworkError.Forbidden || failure == NetworkError.NotFound || failure == NetworkError.Unauthorized) ->
+                    failure != null && (!shown ||
+                        failure is NetworkError.Forbidden ||
+                        failure == NetworkError.NotFound ||
+                        failure == NetworkError.Unauthorized) ->
                         _state.value = ListOfRowsUiState.Error(failure.displayMessage("Couldn't load the list."))
                 }
             }

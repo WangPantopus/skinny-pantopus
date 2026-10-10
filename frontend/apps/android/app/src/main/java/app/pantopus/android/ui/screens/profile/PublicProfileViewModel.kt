@@ -795,14 +795,21 @@ class PublicProfileViewModel
                     // feeding them into the broadcast card would invent a
                     // visibility chip the API never sent.
                     val previous = (_state.value as? PublicProfileUiState.Loaded)?.content?.takeIf { it.profile.id == profile.id }
-                    val firstFrame = if (kind == PublicProfileKind.Local) previous?.posts ?: posts.userPostsCopy(profile.id, 50, includeArchived = false).data?.posts.orEmpty().map(::project) else emptyList()
+                        val firstFrame = if (kind == PublicProfileKind.Local) {
+                            previous?.posts ?: posts.userPostsCopy(profile.id, 50, includeArchived = false).data?.posts.orEmpty().map(::project)
+                        } else {
+                            emptyList()
+                        }
                     _state.value = PublicProfileUiState.Loaded(build(profile, kind, firstFrame))
                     val feed = if (kind == PublicProfileKind.Local) loadUserPosts(profile.id, force) else emptyList()
                     _state.value = PublicProfileUiState.Loaded(build(profile, kind, feed))
                     loadRelationship(profile.id)
                 }
                 is NetworkResult.Failure -> {
-                    if (_state.value !is PublicProfileUiState.Loaded || result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) {
+                    if (_state.value !is PublicProfileUiState.Loaded ||
+                        result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized) {
                         _canFollow.value = false
                         _relationshipLoaded.value = false
                         _state.value = PublicProfileUiState.Error(friendlyMessage(result.error))

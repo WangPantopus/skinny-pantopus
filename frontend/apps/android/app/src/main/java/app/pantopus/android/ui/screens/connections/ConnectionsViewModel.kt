@@ -421,7 +421,9 @@ class ConnectionsViewModel
                     true
                 }
                 is NetworkResult.Failure -> {
-                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) sent = emptyList()
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized) sent = emptyList()
                     false
                 }
             }
@@ -433,7 +435,9 @@ class ConnectionsViewModel
                     true
                 }
                 is NetworkResult.Failure -> {
-                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) blocked = emptyList()
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized) blocked = emptyList()
                     false
                 }
             }
@@ -445,7 +449,9 @@ class ConnectionsViewModel
                     true
                 }
                 is NetworkResult.Failure -> {
-                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) accepted = emptyList()
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized) accepted = emptyList()
                     false
                 }
             }
@@ -457,7 +463,9 @@ class ConnectionsViewModel
                     true
                 }
                 is NetworkResult.Failure -> {
-                    if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) pending = emptyList()
+                    if (result.error is NetworkError.Forbidden ||
+                        result.error == NetworkError.NotFound ||
+                        result.error == NetworkError.Unauthorized) pending = emptyList()
                     false
                 }
             }

@@ -42,7 +42,8 @@ class RelationshipsRepository
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
-        fun listCopy(status: String?, limit: Int = 50): Stored<RelationshipsListResponse> = store.peek(StoreKeys.relationships(status, limit))
+        fun listCopy(status: String?, limit: Int = 50): Stored<RelationshipsListResponse> =
+            store.peek(StoreKeys.relationships(status, limit))
 
         /**
          * `GET /api/relationships/requests/pending` — list pending
@@ -50,7 +51,9 @@ class RelationshipsRepository
          * `backend/routes/relationships.js:669`.
          */
         suspend fun pendingRequests(force: Boolean = false): NetworkResult<PendingRequestsResponse> {
-            val stored = store.read(StoreKeys.pendingConnections, force) { etag -> conditionalApiCall { api.pendingRequestsConditional(etag) } }
+            val stored = store.read(StoreKeys.pendingConnections, force) { etag ->
+                conditionalApiCall { api.pendingRequestsConditional(etag) }
+            }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 

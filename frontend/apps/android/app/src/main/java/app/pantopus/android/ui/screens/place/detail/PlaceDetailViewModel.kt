@@ -227,7 +227,8 @@ class PlaceDetailViewModel
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice = _refreshNotice.asStateFlow()
 
-        private fun householdViewer(): Boolean = homesRepo.myHomesCopy()?.homes?.any { it.id == homeId && it.showsCopyBeforeRecheck } == true
+        private fun householdViewer(): Boolean =
+            homesRepo.myHomesCopy()?.homes?.any { it.id == homeId && it.showsCopyBeforeRecheck } == true
 
         // These pages contain private verification/financial panels; they always reopen with a re-check.
         private val sensitiveGroup: Boolean get() = group == PlaceDetailGroup.IDENTITY || group == PlaceDetailGroup.MONEY
@@ -276,10 +277,18 @@ class PlaceDetailViewModel
                 _refreshNotice.value = if (stored.showsRefreshFailure(StoreKind.PLACE)) RefreshNotice(stored.fetchedAt, ::refresh) else null
                 when {
                     stored.data != null -> _state.value = PlaceDetailUiState.Loaded(stored.data)
-                    stored.failure is NetworkError.Forbidden || stored.failure == NetworkError.NotFound || stored.failure == NetworkError.Unauthorized -> {
-                        _state.value = PlaceDetailUiState.Error(stored.failure.displayMessage("Couldn't load this place."), denied = stored.failure is NetworkError.Forbidden)
+                    stored.failure is NetworkError.Forbidden ||
+                        stored.failure == NetworkError.NotFound ||
+                        stored.failure == NetworkError.Unauthorized -> {
+                            _state.value = PlaceDetailUiState.Error(
+                                stored.failure.displayMessage("Couldn't load this place."),
+                                denied = stored.failure is NetworkError.Forbidden,
+                            )
                     }
-                    _state.value !is PlaceDetailUiState.Loaded -> _state.value = PlaceDetailUiState.Error(stored.failure?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.")
+                        _state.value !is PlaceDetailUiState.Loaded ->
+                            _state.value = PlaceDetailUiState.Error(
+                                stored.failure?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.",
+                            )
                 }
             }
         }

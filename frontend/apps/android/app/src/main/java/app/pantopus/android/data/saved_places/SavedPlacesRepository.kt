@@ -35,14 +35,16 @@ class SavedPlacesRepository
         suspend fun listStored(force: Boolean = false): Stored<SavedPlacesListResponse> =
             store.read(StoreKeys.savedPlaces, force) { etag -> conditionalApiCall { api.listConditional(etag) } }
 
-        suspend fun list(): NetworkResult<SavedPlacesListResponse> = listStored().let { it.data?.let { data -> NetworkResult.Success(data) } ?: it.asResult() }
+        suspend fun list(): NetworkResult<SavedPlacesListResponse> =
+            listStored().let { it.data?.let { data -> NetworkResult.Success(data) } ?: it.asResult() }
 
         fun todayCopy(id: String): Stored<PlaceIntelligence> = store.peek(StoreKeys.savedPlaceToday(id))
 
         suspend fun todayStored(id: String, force: Boolean = false): Stored<PlaceIntelligence> =
             store.read(StoreKeys.savedPlaceToday(id), force) { etag -> conditionalApiCall { api.todayConditional(id, etag) } }
 
-        suspend fun today(id: String): NetworkResult<PlaceIntelligence> = todayStored(id).let { it.data?.let { data -> NetworkResult.Success(data) } ?: it.asResult() }
+        suspend fun today(id: String): NetworkResult<PlaceIntelligence> =
+            todayStored(id).let { it.data?.let { data -> NetworkResult.Success(data) } ?: it.asResult() }
 
         suspend fun save(body: SavePlaceBody): NetworkResult<SavedPlaceResponse> = safeApiCall { api.save(body) }.changed()
 

@@ -954,7 +954,10 @@ class PulseFeedViewModel
             isRefresh: Boolean,
         ) {
             val message = error.displayMessage("Couldn't load your viewing area. Try again.")
-            if (_state.value !is PulseFeedUiState.Loaded || error is NetworkError.Forbidden || error == NetworkError.NotFound || error == NetworkError.Unauthorized) {
+            if (_state.value !is PulseFeedUiState.Loaded ||
+                error is NetworkError.Forbidden ||
+                error == NetworkError.NotFound ||
+                error == NetworkError.Unauthorized) {
                 loadedPosts = emptyList()
                 _state.value = PulseFeedUiState.Error(message)
             } else if (isRefresh) {

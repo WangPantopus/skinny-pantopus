@@ -82,7 +82,9 @@ class FeedActionsRepository
 
         /** `GET /api/posts/feed-preferences`. */
         suspend fun feedPreferences(force: Boolean = false): NetworkResult<FeedPreferencesResponse> {
-            val stored = store.read(StoreKeys.feedPreferences, force) { etag -> conditionalApiCall { api.feedPreferencesConditional(etag) } }
+            val stored = store.read(StoreKeys.feedPreferences, force) { etag ->
+                conditionalApiCall { api.feedPreferencesConditional(etag) }
+            }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 

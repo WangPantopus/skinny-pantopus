@@ -684,7 +684,9 @@ class NotificationsViewModel
             keepTail: Boolean = false,
         ) {
             val refusal = pages.mapNotNull { it.second as? NetworkResult.Failure }
-                .firstOrNull { it.error is NetworkError.Forbidden || it.error == NetworkError.NotFound || it.error == NetworkError.Unauthorized }
+                .firstOrNull { it.error is NetworkError.Forbidden ||
+                    it.error == NetworkError.NotFound ||
+                    it.error == NetworkError.Unauthorized }
             if (refusal != null) {
                 notifications.clear()
                 offsets.clear()
@@ -721,7 +723,8 @@ class NotificationsViewModel
                     }
                     is NetworkResult.Failure -> {
                         failure = result
-                        if (keepTail) incoming.addAll(notifications.filter { context == UNSCOPED || (it.context ?: NotificationContext.PERSONAL) == context })
+                        if (keepTail) incoming.addAll(notifications.filter { context == UNSCOPED ||
+                            (it.context ?: NotificationContext.PERSONAL) == context })
                     }
                 }
             }

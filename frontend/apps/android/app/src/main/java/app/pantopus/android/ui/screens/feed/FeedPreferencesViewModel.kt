@@ -80,7 +80,9 @@ class FeedPreferencesViewModel
                     when (result) {
                         is NetworkResult.Success -> _state.value = FeedPreferencesUiState.Loaded(result.data.preferences)
                         is NetworkResult.Failure -> {
-                            val refused = result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized
+                            val refused = result.error is NetworkError.Forbidden ||
+                                result.error == NetworkError.NotFound ||
+                                result.error == NetworkError.Unauthorized
                             if (refused || _state.value !is FeedPreferencesUiState.Loaded) {
                                 _state.value = FeedPreferencesUiState.Error(result.error.displayMessage("Couldn't load preferences."))
                             }
