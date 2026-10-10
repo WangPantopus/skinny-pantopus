@@ -78,6 +78,9 @@ class SettingsIndexViewModel
 
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+        private var reading = false
 
         private val _footerCaption = MutableStateFlow<String?>(null)
         val footerCaption: StateFlow<String?> = _footerCaption.asStateFlow()
@@ -113,7 +116,14 @@ class SettingsIndexViewModel
          * the stored profile at once. The block count is read again quietly (an unblock shows on return); the
          * profile only once the store says it is out of date.
          */
-        fun load() {
+        fun load() = read(force = false)
+
+        fun refresh() = read(force = true)
+
+        private fun read(force: Boolean) {
+            if (reading) return
+            reading = true
+            _refreshing.value = force && _state.value is GroupedListUiState.Loaded
             val state = auth.state.value
             if (state is AuthRepository.State.SignedIn) {
                 // The session `UserDto` carries no verification flag, so the
@@ -129,23 +139,28 @@ class SettingsIndexViewModel
                 if (_state.value is GroupedListUiState.Loaded) rebuild()
             }
             viewModelScope.launch {
-                when (val blocks = privacy.blocks()) {
-                    is NetworkResult.Success -> blockCount = blocks.data.blocks.size
-                    else -> Unit
+                try {
+                    when (val blocks = privacy.blocks()) {
+                        is NetworkResult.Success -> blockCount = blocks.data.blocks.size
+                        else -> Unit
+                    }
+                    // Real verification state — `GET /api/users/profile` →
+                    // `user.verified` (`backend/routes/users.js:1962`). Same
+                    // field the Verification Center sub-screen reports; a failed
+                    // first read stays `null` (unknown), a failed re-read keeps it.
+                    val user = profile.ownProfileStored(force).data?.user
+                    if (user != null) {
+                        verified = user.verified
+                        profileVisibility = user.profileVisibility
+                    } else if (!shown) {
+                        verified = null
+                        profileVisibility = null
+                    }
+                    rebuild()
+                } finally {
+                    reading = false
+                    _refreshing.value = false
                 }
-                // Real verification state — `GET /api/users/profile` →
-                // `user.verified` (`backend/routes/users.js:1962`). Same
-                // field the Verification Center sub-screen reports; a failed
-                // first read stays `null` (unknown), a failed re-read keeps it.
-                val user = profile.ownProfileStored().data?.user
-                if (user != null) {
-                    verified = user.verified
-                    profileVisibility = user.profileVisibility
-                } else if (!shown) {
-                    verified = null
-                    profileVisibility = null
-                }
-                rebuild()
             }
         }
 
@@ -460,6 +475,8 @@ class PrivacySettingsViewModel
         val accountDeleted: StateFlow<Boolean> = _accountDeleted.asStateFlow()
 
         private var searchPrivacyLoading = false
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
         fun load() = readPrivacy(force = false)
 
@@ -468,6 +485,7 @@ class PrivacySettingsViewModel
         private fun readPrivacy(force: Boolean) {
             if (searchPrivacyLoading || searchPrivacySaving) return
             searchPrivacyLoading = true
+            _refreshing.value = force && _state.value is GroupedListUiState.Loaded
             configureAppLockForSignedInUser()
             appLock.refreshCapability()
             privacy.settingsCopy()?.let { copy ->
@@ -490,6 +508,7 @@ class PrivacySettingsViewModel
                     rebuild()
                 } finally {
                     searchPrivacyLoading = false
+                    _refreshing.value = false
                 }
             }
         }

@@ -60,6 +60,8 @@ class NotificationSettingsViewModel
 
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
         /**
          * Which zone the server interprets the briefing times in.
@@ -94,7 +96,15 @@ class NotificationSettingsViewModel
 
         /** Retry: read now. */
         fun refresh() {
-            viewModelScope.launch { fetch(force = true) }
+            if (_refreshing.value) return
+            _refreshing.value = _state.value is GroupedListUiState.Loaded
+            viewModelScope.launch {
+                try {
+                    fetch(force = true)
+                } finally {
+                    _refreshing.value = false
+                }
+            }
         }
 
         fun consumeToast() {

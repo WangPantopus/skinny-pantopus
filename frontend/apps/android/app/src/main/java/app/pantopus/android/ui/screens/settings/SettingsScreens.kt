@@ -53,6 +53,7 @@ fun SettingsIndexScreen(
     viewModel: SettingsIndexViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val footer by viewModel.footerCaption.collectAsStateWithLifecycle()
     val navigation by viewModel.navigation.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
@@ -69,13 +70,15 @@ fun SettingsIndexScreen(
     GroupedListScreen(
         title = viewModel.title,
         state = state,
+        refreshing = refreshing,
+        onRefresh = viewModel::refresh,
         footerCaption = footer,
         callbacks =
             GroupedListCallbacks(
                 onBack = onClose,
                 // Log out asks first, as the You screen does.
                 onTapRow = { rowId -> if (rowId == "signOut") confirmSignOut = true else viewModel.onRow(rowId) },
-                onRetry = viewModel::load,
+                onRetry = viewModel::refresh,
             ),
     )
 
@@ -113,6 +116,7 @@ fun NotificationSettingsScreen(
     viewModel: NotificationSettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val footer by viewModel.footerCaption.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
@@ -145,6 +149,8 @@ fun NotificationSettingsScreen(
         GroupedListScreen(
             title = viewModel.title,
             state = state,
+            refreshing = refreshing,
+            onRefresh = viewModel::refresh,
             footerCaption = footer,
             refreshNotice = refreshNotice,
             // Parity with iOS `NotificationSettingsViewModel.banner`.
@@ -165,7 +171,7 @@ fun NotificationSettingsScreen(
                     onToggleRow = viewModel::onToggle,
                     onSelectRadio = viewModel::onSelectRadio,
                     onSelectChip = viewModel::onSelectChip,
-                    onRetry = viewModel::load,
+                    onRetry = viewModel::refresh,
                     onTapBanner = { context.openAppNotificationSettings() },
                 ),
         )
@@ -197,6 +203,7 @@ fun PrivacySettingsScreen(
     viewModel: PrivacySettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val banner by viewModel.banner.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val deleteSheetVisible by viewModel.deleteSheetVisible.collectAsStateWithLifecycle()
@@ -240,6 +247,8 @@ fun PrivacySettingsScreen(
         GroupedListScreen(
             title = viewModel.title,
             state = state,
+            refreshing = refreshing,
+            onRefresh = viewModel::refresh,
             banner = banner,
             callbacks =
                 GroupedListCallbacks(
