@@ -454,6 +454,8 @@ class MembersListViewModel
         }
 
         private fun retireSnapshot() {
+            _pendingEvent.value = null
+            _actionError.value = null
             rosterConfirmed = false
             access = null
             occupants = emptyList()
