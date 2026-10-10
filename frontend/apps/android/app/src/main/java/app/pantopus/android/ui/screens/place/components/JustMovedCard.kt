@@ -221,7 +221,7 @@ fun JustMovedCard(
                         color = PantopusColors.appText,
                     )
                     Text(
-                        "Five things it can do for you now, before there are neighbors to meet.",
+                        "$total things it can do for you now, before there are neighbors to meet.",
                         fontSize = 13.5.sp,
                         lineHeight = 19.sp,
                         color = PantopusColors.appTextSecondary,
