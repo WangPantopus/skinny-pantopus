@@ -313,6 +313,8 @@ class HomeDashboardViewModel
         /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
         private var authoritySnapshot: HomeDashboardAuthorityDto? = null
         private var generation = 0L
         private var visible = false
@@ -356,6 +358,7 @@ class HomeDashboardViewModel
             generation += 1
             visible = false
             refreshJob?.cancel()
+            _refreshing.value = false
             billReadId += 1
             _billTrends.value = HomeIntelligenceCardState.Loading
             if (!gate.showsCopy) {
@@ -386,6 +389,7 @@ class HomeDashboardViewModel
             _pendingChecklistItemIds.value = emptySet()
             checklistOriginals.clear()
             _checklistActionError.value = null
+            _refreshing.value = false
             _state.value = HomeDashboardUiState.Loading
         }
 
@@ -487,7 +491,15 @@ class HomeDashboardViewModel
                 _state.value = HomeDashboardUiState.Error("Your session changed. Reopen this Home to continue.")
                 return
             }
-            refreshJob = viewModelScope.launch { fetchAll(revision, force) }
+            _refreshing.value = force && detailData != null
+            refreshJob =
+                viewModelScope.launch {
+                    try {
+                        fetchAll(revision, force)
+                    } finally {
+                        if (generation == revision) _refreshing.value = false
+                    }
+                }
         }
 
         /** The stored dashboard, shown before the re-check when every core piece checks out. */
