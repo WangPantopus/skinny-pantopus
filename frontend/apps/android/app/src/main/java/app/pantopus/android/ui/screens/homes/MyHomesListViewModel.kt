@@ -3,6 +3,7 @@ package app.pantopus.android.ui.screens.homes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.MyHome
+import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.PersonalHomeResidencyRequest
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.net.NetworkError
@@ -14,6 +15,7 @@ import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
@@ -241,7 +243,10 @@ class MyHomesListViewModel
                 if (entries.isEmpty()) {
                     ListOfRowsUiState.Loading
                 } else {
-                    ListOfRowsUiState.Loaded(listOf(RowSection(id = "my-homes", rows = entries.map { rowFor(it, generation) })))
+                    ListOfRowsUiState.Loaded(
+                        listOf(RowSection(id = "my-homes", rows = entries.map { rowFor(it, generation) })),
+                        hasMore = false,
+                    )
                 }
             _banner.value = null
             _pendingEvent.value = null
@@ -278,12 +283,7 @@ class MyHomesListViewModel
                         _refreshing.value = false
                         _refreshNotice.value =
                             RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
-                        val homes =
-                            stored.data?.homes?.takeUnless { rows ->
-                                val rejectedCopy = stored.failure != null && rows.any { !it.showsCopyBeforeRecheck }
-                                if (rejectedCopy) store.remove(StoreKeys.myHomes)
-                                rejectedCopy
-                            }
+                        val homes = stored.homesForPresentation(store)
                         when {
                             homes == null -> {
                                 entries = emptyList()
@@ -589,11 +589,6 @@ class MyHomesListViewModel
                 },
             )
 
-        private fun unitLabel(home: MyHome): String? {
-            if (home.accessKind == "verification") return null
-            return home.address2?.trim()?.takeIf { it.isNotEmpty() }?.let { homeUnitText(it) }
-        }
-
         private fun roleLabel(home: MyHome): String? =
             when (home.accessKind) {
                 "private_setup" -> "Your private Home"
@@ -614,3 +609,18 @@ class MyHomesListViewModel
                     }
             }
     }
+
+private fun unitLabel(home: MyHome): String? {
+    if (home.accessKind == "verification") return null
+    return home.address2?.trim()?.takeIf { it.isNotEmpty() }?.let { homeUnitText(it) }
+}
+
+/** A failed guest or expiring read never reuses a list from a previous visit. */
+private fun Stored<MyHomesResponse>.homesForPresentation(store: ScreenStore): List<MyHome>? {
+    val rows = data?.homes ?: return null
+    if (failure != null && rows.any { !it.showsCopyBeforeRecheck }) {
+        store.remove(StoreKeys.myHomes)
+        return null
+    }
+    return rows
+}
