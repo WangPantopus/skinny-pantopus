@@ -4,14 +4,14 @@ import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.users.FollowActionResponse
 import app.pantopus.android.data.api.models.users.UserRelationshipDto
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.net.conditionalApiCall
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.UserSocialApi
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.store.asResult
-import app.pantopus.android.data.api.services.UserSocialApi
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,11 +27,15 @@ class UserSocialRepository
         private val store: ScreenStore,
     ) {
         /** `GET /api/users/username/:username` — `backend/routes/users.js:3367`. */
-        suspend fun publicProfileByUsername(username: String, force: Boolean = false): NetworkResult<PublicProfileDto> {
+        suspend fun publicProfileByUsername(
+            username: String,
+            force: Boolean = false,
+        ): NetworkResult<PublicProfileDto> {
             val handle = normalizeHandle(username)
-            val stored = store.read(StoreKeys.publicProfile(handle, byUsername = true), force) { etag ->
-                conditionalApiCall { api.publicProfileByUsernameConditional(handle, etag) }
-            }
+            val stored =
+                store.read(StoreKeys.publicProfile(handle, byUsername = true), force) { etag ->
+                    conditionalApiCall { api.publicProfileByUsernameConditional(handle, etag) }
+                }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
@@ -47,9 +51,10 @@ class UserSocialRepository
         /** `GET /api/users/:id/relationship` — `backend/routes/users.js:3685`. */
         suspend fun relationship(userId: String): NetworkResult<UserRelationshipDto> = safeApiCall { api.relationship(userId) }
 
-        private fun <T> NetworkResult<T>.changed(): NetworkResult<T> = also {
-            if (it is NetworkResult.Success) store.markEdited(StoreTopics.PROFILE_ME)
-        }
+        private fun <T> NetworkResult<T>.changed(): NetworkResult<T> =
+            also {
+                if (it is NetworkResult.Success) store.markEdited(StoreTopics.PROFILE_ME)
+            }
 
         companion object {
             private val UUID_REGEX =

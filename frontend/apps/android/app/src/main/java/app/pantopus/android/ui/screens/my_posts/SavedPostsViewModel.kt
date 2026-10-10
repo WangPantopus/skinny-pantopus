@@ -6,12 +6,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.store.StoreKind
-import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowBodyEmphasis
@@ -105,7 +105,8 @@ class SavedPostsViewModel
                     is NetworkResult.Failure -> {
                         if (result.error is NetworkError.Forbidden ||
                             result.error == NetworkError.NotFound ||
-                            result.error == NetworkError.Unauthorized) {
+                            result.error == NetworkError.Unauthorized
+                        ) {
                             posts = emptyList()
                             nextOffset = null
                             loadedOnce = false
@@ -124,13 +125,14 @@ class SavedPostsViewModel
         private fun replaceRefreshedHead(response: SavedPostsResponse) {
             val boundary = response.posts.lastOrNull()?.savedAt?.let { MyPostsViewModel.parseInstant(it) }
             val refreshedIds = response.posts.mapTo(HashSet()) { it.id }
-            val older = if (response.pagination?.hasMore == true && boundary != null) {
-                posts.filter { row ->
-                    row.id !in refreshedIds && MyPostsViewModel.parseInstant(row.savedAt)?.let { it <= boundary } == true
+            val older =
+                if (response.pagination?.hasMore == true && boundary != null) {
+                    posts.filter { row ->
+                        row.id !in refreshedIds && MyPostsViewModel.parseInstant(row.savedAt)?.let { it <= boundary } == true
+                    }
+                } else {
+                    emptyList()
                 }
-            } else {
-                emptyList()
-            }
             posts = (response.posts + older).distinctBy { it.id }
             // Offsets count raw saves, including posts hidden by the visibility check. A visible-row delta cannot
             // adjust them safely; paging rechecks the retained tail and skips duplicates until it reaches new rows.

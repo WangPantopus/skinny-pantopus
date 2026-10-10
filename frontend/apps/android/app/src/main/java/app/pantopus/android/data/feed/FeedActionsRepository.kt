@@ -11,15 +11,15 @@ import app.pantopus.android.data.api.models.feed.FeedPreferencesUpdateRequest
 import app.pantopus.android.data.api.models.feed.FeedSeededDismissResponse
 import app.pantopus.android.data.api.models.feed.FeedSolveResponse
 import app.pantopus.android.data.api.models.feed.MutedEntitiesResponse
+import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.FeedActionsApi
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.store.asResult
-import app.pantopus.android.data.api.net.conditionalApiCall
-import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.api.net.safeApiCall
-import app.pantopus.android.data.api.services.FeedActionsApi
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -82,9 +82,10 @@ class FeedActionsRepository
 
         /** `GET /api/posts/feed-preferences`. */
         suspend fun feedPreferences(force: Boolean = false): NetworkResult<FeedPreferencesResponse> {
-            val stored = store.read(StoreKeys.feedPreferences, force) { etag ->
-                conditionalApiCall { api.feedPreferencesConditional(etag) }
-            }
+            val stored =
+                store.read(StoreKeys.feedPreferences, force) { etag ->
+                    conditionalApiCall { api.feedPreferencesConditional(etag) }
+                }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 

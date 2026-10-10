@@ -423,7 +423,10 @@ class ConnectionsViewModel
                 is NetworkResult.Failure -> {
                     if (result.error is NetworkError.Forbidden ||
                         result.error == NetworkError.NotFound ||
-                        result.error == NetworkError.Unauthorized) sent = emptyList()
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        sent = emptyList()
+                    }
                     false
                 }
             }
@@ -437,7 +440,10 @@ class ConnectionsViewModel
                 is NetworkResult.Failure -> {
                     if (result.error is NetworkError.Forbidden ||
                         result.error == NetworkError.NotFound ||
-                        result.error == NetworkError.Unauthorized) blocked = emptyList()
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        blocked = emptyList()
+                    }
                     false
                 }
             }
@@ -451,7 +457,10 @@ class ConnectionsViewModel
                 is NetworkResult.Failure -> {
                     if (result.error is NetworkError.Forbidden ||
                         result.error == NetworkError.NotFound ||
-                        result.error == NetworkError.Unauthorized) accepted = emptyList()
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        accepted = emptyList()
+                    }
                     false
                 }
             }
@@ -465,7 +474,10 @@ class ConnectionsViewModel
                 is NetworkResult.Failure -> {
                     if (result.error is NetworkError.Forbidden ||
                         result.error == NetworkError.NotFound ||
-                        result.error == NetworkError.Unauthorized) pending = emptyList()
+                        result.error == NetworkError.Unauthorized
+                    ) {
+                        pending = emptyList()
+                    }
                     false
                 }
             }

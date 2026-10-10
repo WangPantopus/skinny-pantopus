@@ -238,16 +238,17 @@ class ScreenStore
         /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
         fun <T : Any> writer(key: StoreKey<T>): (T) -> Unit {
             val account = accountId() ?: return {}
-            val (slot, ticket) = synchronized(slots) {
-                val slot = slotLocked(key, account)
-                slot.edits++
-                slot.etag = null
-                slot.markStaleLocked()
-                slot.inFlight?.cancel()
-                slot.inFlight = null
-                slot.state.value = slot.state.value.copy(refreshing = false)
-                slot to Ticket(generation, identity(account), slot.edits, slot.marks)
-            }
+            val (slot, ticket) =
+                synchronized(slots) {
+                    val slot = slotLocked(key, account)
+                    slot.edits++
+                    slot.etag = null
+                    slot.markStaleLocked()
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    slot to Ticket(generation, identity(account), slot.edits, slot.marks)
+                }
             return { data ->
                 synchronized(slots) {
                     if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {

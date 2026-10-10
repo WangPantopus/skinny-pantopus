@@ -270,9 +270,10 @@ class HubViewModel
             val hub = overview.data
             if (hub == null) {
                 val failure = overview.failure
-                val endsAccess = failure is NetworkError.Forbidden ||
-                    failure == NetworkError.NotFound ||
-                    failure == NetworkError.Unauthorized
+                val endsAccess =
+                    failure is NetworkError.Forbidden ||
+                        failure == NetworkError.NotFound ||
+                        failure == NetworkError.Unauthorized
                 if (!hasContent() || endsAccess) _state.value = HubUiState.Error(failure?.message ?: "Couldn't load your hub.")
                 return
             }
