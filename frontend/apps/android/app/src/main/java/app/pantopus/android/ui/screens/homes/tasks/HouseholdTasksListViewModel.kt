@@ -481,19 +481,22 @@ class HouseholdTasksListViewModel
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: NetworkError) {
-                if (current(revision)) {
-                    if (pendingOriginal != null && error.code !in listOf(401, 403, 404)) {
-                        rollbackCompletion()
-                        _actionError.value = error.displayMessage("Couldn't confirm the task change. Try again.")
-                    } else {
-                        if (error.code in listOf(401, 403, 404)) gate?.invalidate()
-                        fail(error.displayMessage("Could not refresh task access. Try again."))
-                    }
-                }
+                handleTaskFailure(error, revision)
             } catch (error: IllegalStateException) {
                 if (active && revision == generation) fail(error.message ?: TASK_ACCESS_CHANGED)
             } catch (error: IllegalArgumentException) {
                 if (active && revision == generation) fail(error.message ?: TASK_ACCESS_CHANGED)
+            }
+        }
+
+        private fun handleTaskFailure(error: NetworkError, revision: Int) {
+            if (!current(revision)) return
+            if (pendingOriginal != null && error.code !in listOf(401, 403, 404)) {
+                rollbackCompletion()
+                _actionError.value = error.displayMessage("Couldn't confirm the task change. Try again.")
+            } else {
+                if (error.code in listOf(401, 403, 404)) gate?.invalidate()
+                fail(error.displayMessage("Could not refresh task access. Try again."))
             }
         }
 

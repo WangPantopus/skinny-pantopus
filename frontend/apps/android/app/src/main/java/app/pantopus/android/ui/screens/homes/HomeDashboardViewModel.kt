@@ -11,7 +11,6 @@ import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthority
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
 import app.pantopus.android.data.api.models.homedashboard.HomePropertyValueDto
-import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistCarryoverDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistProgressDto
@@ -344,18 +343,6 @@ class HomeDashboardViewModel
             return isLaunchAvailableAction(action) && permission?.let(::can) == true
         }
 
-        /** Launch cut (2026-09-27): "+" rows and tiles into features hidden for the first launch. */
-        private fun isLaunchAvailableAction(action: String): Boolean =
-            when (action) {
-                // Launch cut #7 (Household extras): bills, packages, pets, polls and the Home calendar.
-                "track_bill", "track_package", "log_package", "add_pet", "create_poll",
-                "view_bills", "view_packages", "view_polls", "pets", "calendar",
-                -> LaunchFeatures.householdExtras
-                // Launch cut #8 (Mail extras): "Send Mail" opens the letter composer.
-                "send_mail" -> LaunchFeatures.mailExtras
-                else -> true
-            }
-
         /**
          * Pause and leave. Founder decision 3: owners and household roles keep what's on screen (shown again on return
          * while it is re-checked); guests, service providers and any access with an expiry are cleared now.
@@ -653,15 +640,6 @@ class HomeDashboardViewModel
                 null
             }
 
-        /** A stored read's data, kept even when its refresh failed; no data rethrows the failure. */
-        private fun <T : Any> Stored<T>.value(): T = data ?: throw (failure ?: NetworkError.NotFound)
-
-        private fun <T> NetworkResult<T>.homeValue(): T =
-            when (this) {
-                is NetworkResult.Success -> data
-                is NetworkResult.Failure -> throw error
-            }
-
         private suspend fun authorize(revision: Long) {
             requireCurrent(revision)
             val snapshot = authority.read()
@@ -766,23 +744,6 @@ class HomeDashboardViewModel
             }
             _billTrends.value = result
         }
-
-        private fun <T> NetworkResult<T>.toCardState(): HomeIntelligenceCardState<T> =
-            when (this) {
-                is NetworkResult.Success -> HomeIntelligenceCardState.Loaded(data)
-                is NetworkResult.Failure ->
-                    if (error is NetworkError.Forbidden) {
-                        HomeIntelligenceCardState.Forbidden
-                    } else {
-                        HomeIntelligenceCardState.Failed(
-                            when (error) {
-                                is NetworkError.Decoding -> "Current Home information is unavailable. Reload this card."
-                                is NetworkError.Server -> "This Home information couldn't be loaded. Please retry."
-                                else -> error.displayMessage("Couldn't load this card.")
-                            },
-                        )
-                    }
-            }
 
         // ── Seasonal checklist actions ──────────────────────────────
 
@@ -914,26 +875,7 @@ class HomeDashboardViewModel
             remember: Boolean = true,
         ) {
             val current = _checklist.value.valueOrNull() ?: return
-            val items = current.items.map { if (it.id == updated.id) updated else it }
-            val carryover =
-                current.carryover?.let { block ->
-                    SeasonalChecklistCarryoverDto(
-                        season = block.season,
-                        items = block.items.map { if (it.id == updated.id) updated else it },
-                    )
-                }
-            val completed = items.count { it.isResolved }
-            val spliced =
-                current.copy(
-                    items = items,
-                    progress =
-                        SeasonalChecklistProgressDto(
-                            total = items.size,
-                            completed = completed,
-                            percentage = HomeDashboardProjection.percentage(completed, items.size),
-                        ),
-                    carryover = carryover,
-                )
+            val spliced = current.replacingItems(mapOf(updated.id to updated))
             _checklist.value = HomeIntelligenceCardState.Loaded(spliced)
             // Own edit (contract §3): a return shows the confirmed change, not the copy from before it.
             if (remember) rememberConfirmedChecklist(spliced)
@@ -941,23 +883,7 @@ class HomeDashboardViewModel
 
         private fun rememberConfirmedChecklist(shown: SeasonalChecklistDto) {
             // A different row may still be pending; only confirmed rows enter the shared copy.
-            val items = shown.items.map { checklistOriginals[it.id] ?: it }
-            val completed = items.count { it.isResolved }
-            val confirmed =
-                shown.copy(
-                    items = items,
-                    progress =
-                        SeasonalChecklistProgressDto(
-                            total = items.size,
-                            completed = completed,
-                            percentage = HomeDashboardProjection.percentage(completed, items.size),
-                        ),
-                    carryover =
-                        shown.carryover?.let { block ->
-                            block.copy(items = block.items.map { checklistOriginals[it.id] ?: it })
-                        },
-                )
-            intelligenceRepo.rememberChecklist(homeId, confirmed)
+            intelligenceRepo.rememberChecklist(homeId, shown.replacingItems(checklistOriginals))
         }
 
         // ── Projection ──────────────────────────────────────────────
@@ -1085,3 +1011,57 @@ class HomeDashboardViewModel
                 }
         }
     }
+
+
+/** A stored read's data, kept even when its refresh failed; no data rethrows the failure. */
+private fun <T : Any> Stored<T>.value(): T = data ?: throw (failure ?: NetworkError.NotFound)
+
+private fun <T> NetworkResult<T>.homeValue(): T =
+    when (this) {
+        is NetworkResult.Success -> data
+        is NetworkResult.Failure -> throw error
+    }
+
+private fun <T> NetworkResult<T>.toCardState(): HomeIntelligenceCardState<T> =
+    when (this) {
+        is NetworkResult.Success -> HomeIntelligenceCardState.Loaded(data)
+        is NetworkResult.Failure ->
+            if (error is NetworkError.Forbidden) {
+                HomeIntelligenceCardState.Forbidden
+            } else {
+                HomeIntelligenceCardState.Failed(
+                    when (error) {
+                        is NetworkError.Decoding -> "Current Home information is unavailable. Reload this card."
+                        is NetworkError.Server -> "This Home information couldn't be loaded. Please retry."
+                        else -> error.displayMessage("Couldn't load this card.")
+                    },
+                )
+            }
+    }
+
+/** Launch cut (2026-09-27): "+" rows and tiles into features hidden for the first launch. */
+private fun isLaunchAvailableAction(action: String): Boolean =
+    when (action) {
+        // Launch cut #7 (Household extras): bills, packages, pets, polls and the Home calendar.
+        "track_bill", "track_package", "log_package", "add_pet", "create_poll",
+        "view_bills", "view_packages", "view_polls", "pets", "calendar",
+        -> LaunchFeatures.householdExtras
+        // Launch cut #8 (Mail extras): "Send Mail" opens the letter composer.
+        "send_mail" -> LaunchFeatures.mailExtras
+        else -> true
+    }
+
+/** Apply confirmed or pending rows to the same checklist projection, including carryover and progress. */
+private fun SeasonalChecklistDto.replacingItems(replacements: Map<String, SeasonalChecklistItemDto>): SeasonalChecklistDto {
+    val updatedItems = items.map { replacements[it.id] ?: it }
+    val completed = updatedItems.count { it.isResolved }
+    return copy(
+        items = updatedItems,
+        progress = SeasonalChecklistProgressDto(
+            total = updatedItems.size,
+            completed = completed,
+            percentage = HomeDashboardProjection.percentage(completed, updatedItems.size),
+        ),
+        carryover = carryover?.let { block -> block.copy(items = block.items.map { replacements[it.id] ?: it }) },
+    )
+}
