@@ -912,7 +912,7 @@ class HomeDashboardViewModel
                     {
                         val stored = intelligenceRepo.seasonalChecklistStored(homeId, force = true)
                         // A failed recheck must not replace our confirmed edits with the older shared copy.
-                        if (stored.failure != null) Stored(failure = stored.failure) else stored
+                        if (stored.failure != null) Stored<SeasonalChecklistDto>(failure = stored.failure) else stored
                     },
                 ) { HomeIntelligenceValidation.checklist(it, homeId) }
             if (revision != checklistRevision) return
