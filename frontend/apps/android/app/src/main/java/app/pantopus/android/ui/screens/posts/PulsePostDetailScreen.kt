@@ -107,6 +107,7 @@ fun PulsePostDetailScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
+    app.pantopus.android.core.perf.ReportContentShown("post", state is PulsePostDetailUiState.Loaded)
     val composer by viewModel.composerText.collectAsStateWithLifecycle()
     val isSending by viewModel.isSendingComment.collectAsStateWithLifecycle()
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
