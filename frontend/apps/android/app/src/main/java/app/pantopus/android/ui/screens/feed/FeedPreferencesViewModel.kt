@@ -6,6 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.feed.FeedPreferencesDto
 import app.pantopus.android.data.api.models.feed.FeedPreferencesUpdateRequest
+import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.feed.FeedActionsRepository
@@ -52,23 +55,38 @@ class FeedPreferencesViewModel
         private val _toastMessage = MutableStateFlow<String?>(null)
         val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
 
-        fun load() {
-            if (_state.value is FeedPreferencesUiState.Loaded) return
-            refresh()
-        }
+        private var loading = false
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
-        fun refresh() {
-            _state.value = FeedPreferencesUiState.Loading
+        fun load() = read(force = false)
+
+        fun refresh() = read(force = true)
+
+        private fun read(force: Boolean) {
+            if (loading || _isSaving.value) return
+            loading = true
+            if (_state.value !is FeedPreferencesUiState.Loaded) {
+                _state.value = repo.feedPreferencesCopy().data?.let { FeedPreferencesUiState.Loaded(it.preferences) }
+                    ?: FeedPreferencesUiState.Loading
+            }
             viewModelScope.launch {
-                when (val result = repo.feedPreferences()) {
-                    is NetworkResult.Success ->
-                        _state.value = FeedPreferencesUiState.Loaded(result.data.preferences)
-                    is NetworkResult.Failure ->
-                        _state.value =
-                            FeedPreferencesUiState.Error(
-                                result.error.displayMessage("Couldn't load preferences."),
-                            )
-                }
+                try {
+                    val result = repo.feedPreferences(force)
+                    val copy = repo.feedPreferencesCopy()
+                    _refreshNotice.value = if (copy.showsRefreshFailure(StoreKind.YOU)) RefreshNotice(copy.fetchedAt, ::refresh) else null
+                    // A preference tap while this quiet read ran owns the newer local value.
+                    if (_isSaving.value) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> _state.value = FeedPreferencesUiState.Loaded(result.data.preferences)
+                        is NetworkResult.Failure -> {
+                            val refused = result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized
+                            if (refused || _state.value !is FeedPreferencesUiState.Loaded) {
+                                _state.value = FeedPreferencesUiState.Error(result.error.displayMessage("Couldn't load preferences."))
+                            }
+                        }
+                    }
+                } finally { loading = false }
             }
         }
 

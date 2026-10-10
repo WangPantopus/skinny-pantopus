@@ -10,6 +10,8 @@ import app.pantopus.android.data.api.models.feed.FeedPreferencesUpdateRequest
 import app.pantopus.android.data.api.models.feed.FeedSeededDismissResponse
 import app.pantopus.android.data.api.models.feed.FeedSolveResponse
 import app.pantopus.android.data.api.models.feed.MutedEntitiesResponse
+import retrofit2.Response
+import retrofit2.http.Header
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.HTTP
@@ -106,6 +108,9 @@ interface FeedActionsApi {
      */
     @GET("api/posts/feed-preferences")
     suspend fun feedPreferences(): FeedPreferencesResponse
+
+    @GET("api/posts/feed-preferences")
+    suspend fun feedPreferencesConditional(@Header("If-None-Match") etag: String?): Response<FeedPreferencesResponse>
 
     /**
      * `PUT /api/posts/feed-preferences` — partial update; only the keys
