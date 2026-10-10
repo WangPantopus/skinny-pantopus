@@ -20,8 +20,8 @@ import app.pantopus.android.data.gigs.GigExtrasRepository
 import app.pantopus.android.data.hub.HubRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.store.StoreKind
-import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async

@@ -239,8 +239,7 @@ class PostsRepository
         suspend fun deleteComment(
             postId: String,
             commentId: String,
-        ): NetworkResult<PostActionAckResponse> =
-            safeApiCall { api.deleteComment(postId, commentId) }.also { markPostChanged(postId, it) }
+        ): NetworkResult<PostActionAckResponse> = safeApiCall { api.deleteComment(postId, commentId) }.also { markPostChanged(postId, it) }
 
         /** `POST /api/posts/:id/share`. */
         suspend fun share(
