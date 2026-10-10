@@ -93,8 +93,8 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
               Pantopus Assistant
             </h2>
             <p className="text-xs text-app-text-muted">
-              {/* Launch cuts #3/#4: the copy names only drafts still offered. */}
-              {isStreaming ? 'Thinking…' : launchFeatures.openGigs && launchFeatures.marketplace ? 'Ask me to draft gigs, listings, posts, or summarize mail' : `Ask me to draft ${[launchFeatures.openGigs && 'gigs', launchFeatures.marketplace && 'listings', 'posts'].filter(Boolean).join(', ')} or summarize mail`}
+              {/* Name only capabilities available under the launch flags. */}
+              {isStreaming ? 'Thinking…' : `Ask me to draft ${[launchFeatures.openGigs && 'gigs', launchFeatures.marketplace && 'listings', 'posts'].filter(Boolean).join(', ')}${launchFeatures.mailbox ? ' or summarize mail' : ''}`}
             </p>
           </div>
         </div>
@@ -121,10 +121,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
               Hi! I&apos;m Pantopus
             </h3>
             <p className="text-sm text-app-text-muted mb-6 max-w-sm">
-              {/* Launch cuts #3/#4: the copy names only features still shown. */}
-              {launchFeatures.openGigs && launchFeatures.marketplace
-                ? 'I can help you draft gigs, create listings, write posts, and summarize your mail. Just describe what you need!'
-                : `I can help you ${[launchFeatures.openGigs && 'draft gigs', launchFeatures.marketplace && 'create listings', 'write posts'].filter(Boolean).join(', ')} and summarize your mail. Just describe what you need!`}
+              {`I can help you ${[launchFeatures.openGigs && 'draft gigs', launchFeatures.marketplace && 'create listings', 'write posts'].filter(Boolean).join(', ')}${launchFeatures.mailbox ? ' and summarize your mail' : ''}. Just describe what you need!`}
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {QUICK_PROMPTS.map((prompt) => (
