@@ -240,7 +240,7 @@ class MyHomesListViewModel
             _state.value = if (entries.isEmpty()) {
                 ListOfRowsUiState.Loading
             } else {
-                ListOfRowsUiState.Loaded(listOf(RowSection(id = "my-homes", rows = entries.map { rowFor(it, generation) })))
+                ListOfRowsUiState.Loaded(listOf(RowSection(id = "my-homes", rows = entries.map { rowFor(it, generation) })), hasMore = false)
             }
             _banner.value = null
             _pendingEvent.value = null
