@@ -79,6 +79,21 @@ interface ChatApi {
         @Query("topicId") topicId: String? = null,
     ): ChatMessagesResponse
 
+    @GET("api/chat/rooms/{roomId}/messages")
+    suspend fun roomMessagesConditional(
+        @Path("roomId") roomId: String,
+        @Query("limit") limit: Int,
+        @Header("If-None-Match") etag: String?,
+    ): Response<ChatMessagesResponse>
+
+    @GET("api/chat/conversations/{otherUserId}/messages")
+    suspend fun conversationMessagesConditional(
+        @Path("otherUserId") otherUserId: String,
+        @Query("limit") limit: Int,
+        @Query("topicId") topicId: String?,
+        @Header("If-None-Match") etag: String?,
+    ): Response<ChatMessagesResponse>
+
     /**
      * `POST /api/chat/direct` — find-or-create the 1:1 direct room with
      * another user. Idempotent server-side (`get_or_create_direct_chat`),

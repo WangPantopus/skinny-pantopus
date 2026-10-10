@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
@@ -47,6 +48,7 @@ import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
@@ -432,6 +434,7 @@ import app.pantopus.android.ui.screens.settings.legal.LegalIndexScreen
 import app.pantopus.android.ui.screens.settings.password.PasswordChangeScreen
 import app.pantopus.android.ui.screens.settings.payments.PaymentsScreen
 import app.pantopus.android.ui.screens.settings.security.DevicesScreen
+import app.pantopus.android.ui.screens.settings.storage.StorageDataScreen
 import app.pantopus.android.ui.screens.settings.verification.VerificationCenterScreen
 import app.pantopus.android.ui.screens.status.StatusWaitingContent
 import app.pantopus.android.ui.screens.status.StatusWaitingScreen
@@ -1703,6 +1706,9 @@ private object ChildRoutes {
 
     /** WS5.3 — GDPR data-export request (mailto until backend job ships). */
     const val SETTINGS_DATA_EXPORT = "settings/data-export"
+
+    /** Settings → This phone → Storage & data (Instant Screens contract §7). */
+    const val SETTINGS_STORAGE = "settings/storage"
     const val PROPERTY_DETAILS_HOME_ID_KEY = "homeId"
     const val PROPERTY_DETAILS = "homes/{$PROPERTY_DETAILS_HOME_ID_KEY}/property"
 
@@ -2066,6 +2072,17 @@ private fun schedulingHomeNavArg() = optionalStringNavArg(SchedulingRoutes.ARG_H
  * @param inboxBadgeCount Unread count shown on the Messages tab. Wired to
  *     live data in Prompt P8.
  */
+/** Home and specialist screens host their own strip; these shared tab and account routes did not. */
+private fun usesSavedPageOfflineStrip(route: String?): Boolean =
+    route in setOf(
+        PantopusRoute.Place.path, PantopusRoute.Today.path, PantopusRoute.Nearby.path, PantopusRoute.Mail.path,
+        PantopusRoute.Messages.path, PantopusRoute.Pulse.path, ChildRoutes.PLACE_DASHBOARD, ChildRoutes.PLACE_DETAIL,
+        ChildRoutes.PULSE_FEED, ChildRoutes.PULSE_POST, ChildRoutes.CHAT_CONVERSATION, ChildRoutes.PROFILE,
+        ChildRoutes.PUBLIC_PROFILE, ChildRoutes.NOTIFICATIONS_ROUTE, ChildRoutes.CONNECTIONS_ROUTE, ChildRoutes.MY_POSTS,
+        ChildRoutes.SAVED_PLACES, ChildRoutes.RECENT_ACTIVITY, ChildRoutes.MENU,
+        ChildRoutes.SETTINGS_NOTIFICATIONS, ChildRoutes.SETTINGS_PRIVACY,
+    )
+
 @Composable
 fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navController = rememberNavController()
@@ -2080,6 +2097,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val currentHandle by sessionViewModel.currentHandle.collectAsStateWithLifecycle()
+    val online by sessionViewModel.isOnline.collectAsStateWithLifecycle()
     val liveInboxBadgeCount by chatBadgeViewModel.unreadMessages.collectAsStateWithLifecycle()
     // §1C-b — context-aware navigation drawer, opened from the Hub menu button
     // (repurposed from "open Settings"; Settings now lives as a drawer row).
@@ -2543,6 +2561,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         },
     ) {
         Scaffold(
+            topBar = {
+                if (!online && usesSavedPageOfflineStrip(backStackEntry?.destination?.route)) {
+                    OfflineBannerHost(isOffline = true, modifier = Modifier.statusBarsPadding()) { }
+                }
+            },
             bottomBar = {
                 PantopusBottomBar(
                     selected = currentRoute,
@@ -2576,6 +2599,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     // stays reachable (back) and is the no-home fallback;
                     // parity with the iOS HubTabRoot auto-land.
                     val placeHostVm: HomeTabHostViewModel = hiltViewModel()
+                    app.pantopus.android.ui.components.RefreshOnStoreChange(placeHostVm::resolve)
                     val placeLanding by placeHostVm.landing.collectAsStateWithLifecycle()
                     val verifyScope = rememberCoroutineScope()
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
@@ -5674,6 +5698,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     navController.navigate(ChildRoutes.REVIEW_CLAIMS)
                                 }
                                 SettingsRoute.DidSignOut -> navController.popBackStack()
+                                SettingsRoute.StorageData -> navController.navigate(ChildRoutes.SETTINGS_STORAGE)
                             }
                         },
                     )
@@ -5683,6 +5708,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(ChildRoutes.SETTINGS_NOTIFICATIONS) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })
+                }
+                composable(ChildRoutes.SETTINGS_STORAGE) {
+                    StorageDataScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.SETTINGS_PRIVACY) {
                     PrivacySettingsScreen(

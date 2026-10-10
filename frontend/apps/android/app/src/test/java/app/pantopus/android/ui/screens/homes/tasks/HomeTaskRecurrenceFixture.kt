@@ -15,6 +15,7 @@ import app.pantopus.android.data.homes.PendingHomeTaskRecurrenceStore
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import java.time.ZoneId
@@ -32,7 +33,11 @@ internal class HomeTaskRecurrenceFixture {
             it.storedAccount = actor
         }
     val server = HomeTaskSessionDto(actor, home, "a".repeat(64))
-    val repository = mockk<HomeTasksRepository>(relaxUnitFun = true)
+    val repository =
+        mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
+            every { homeTasksWriter(any()) } returns {}
+            every { homeTaskWriter(any(), any()) } returns {}
+        }
     val store = RecurrenceMemoryStore()
     var task = HomeTaskDto(taskId, home, "chore", "Private recurrence source", dueAt = stamp, updatedAt = stamp)
     var state = HomeTaskRecurrenceState(true, home, taskId, true, stamp, 0, server)

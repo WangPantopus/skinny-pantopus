@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,6 +39,7 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.screens.homes.HomeOfflineContent
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
@@ -94,7 +94,7 @@ fun OwnersListScreen(
     onBack: () -> Unit,
     viewModel: OwnersListViewModel = hiltViewModel(),
 ) {
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_owners", state.showsContent())
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
@@ -133,7 +133,7 @@ fun OwnersListScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().testTag(OWNERS_LIST_TAG)) {
-        Box(modifier = Modifier.weight(1f)) {
+        HomeOfflineContent(modifier = Modifier.weight(1f)) {
             ListOfRowsScreen(
                 title = "Owners",
                 state = state,

@@ -45,6 +45,7 @@ import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.screens.homes.HomeOfflineContent
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -66,7 +67,7 @@ fun MaintenanceDetailScreen(
     onEdit: () -> Unit,
     viewModel: MaintenanceDetailViewModel = hiltViewModel(),
 ) {
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_maintenance_entry", state is MaintenanceDetailUiState.Loaded)
     val isMutating by viewModel.isMutating.collectAsStateWithLifecycle()
@@ -109,7 +110,7 @@ internal fun MaintenanceDetailContent(
     LaunchedEffect(state) {
         if (state !is MaintenanceDetailUiState.Loaded) showDeleteConfirm = false
     }
-    Box(modifier = Modifier.testTag("maintenanceDetail")) {
+    HomeOfflineContent(modifier = Modifier.testTag("maintenanceDetail")) {
         when (state) {
             MaintenanceDetailUiState.Loading -> LoadingBody(onBack = onBack)
             is MaintenanceDetailUiState.Error ->

@@ -31,6 +31,7 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.screens.homes.HomeOfflineContent
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListCallbacks
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListScreen
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
@@ -60,8 +61,9 @@ fun HomeSettingsScreen(
     val footerCaption by viewModel.footerCaption.collectAsStateWithLifecycle()
     val rename by viewModel.rename.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     LaunchedEffect(navigation) {
         navigation?.let {
             viewModel.consumeNavigation()
@@ -69,28 +71,32 @@ fun HomeSettingsScreen(
         }
     }
 
-    GroupedListScreen(
-        title = viewModel.title,
-        state = state,
-        footerCaption = footerCaption,
-        refreshNotice = refreshNotice,
-        callbacks =
-            GroupedListCallbacks(
-                onBack = onBack,
-                onTapRow = viewModel::onRow,
-                onRetry = viewModel::refresh,
-            ),
-        header = {
-            HomeSettingsIdentityCard(
-                identity = identity,
-                rename = rename,
-                onBeginRename = viewModel::beginRenaming,
-                onRenameDraftChange = viewModel::updateRenameDraft,
-                onSaveRename = viewModel::saveRenaming,
-                onCancelRename = viewModel::cancelRenaming,
-            )
-        },
-    )
+    HomeOfflineContent {
+        GroupedListScreen(
+            title = viewModel.title,
+            state = state,
+            footerCaption = footerCaption,
+            refreshNotice = refreshNotice,
+            refreshing = refreshing,
+            onRefresh = viewModel::refresh,
+            callbacks =
+                GroupedListCallbacks(
+                    onBack = onBack,
+                    onTapRow = viewModel::onRow,
+                    onRetry = viewModel::refresh,
+                ),
+            header = {
+                HomeSettingsIdentityCard(
+                    identity = identity,
+                    rename = rename,
+                    onBeginRename = viewModel::beginRenaming,
+                    onRenameDraftChange = viewModel::updateRenameDraft,
+                    onSaveRename = viewModel::saveRenaming,
+                    onCancelRename = viewModel::cancelRenaming,
+                )
+            },
+        )
+    }
 }
 
 /**

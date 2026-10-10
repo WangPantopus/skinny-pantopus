@@ -2,7 +2,6 @@
 
 package app.pantopus.android.ui.screens.homes
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -24,8 +23,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalDialog
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalTarget
 import app.pantopus.android.ui.screens.homes.members.SavedRemovalLink
@@ -68,10 +69,14 @@ fun MyHomesListScreen(
     onOpenWaitingRoom: ((String) -> Unit)? = null,
     viewModel: MyHomesListViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::recheck)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("my_homes", state.showsContent())
     val banner by viewModel.banner.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
     var removalRecovery by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -94,7 +99,7 @@ fun MyHomesListScreen(
         val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_RESUME -> viewModel.refresh()
+                    Lifecycle.Event.ON_RESUME -> viewModel.load()
                     Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
                         deleteTarget = null
                         viewModel.suspendContent()
@@ -122,7 +127,7 @@ fun MyHomesListScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG).semantics { testTagsAsResourceId = true }) {
+    HomeOfflineContent(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG).semantics { testTagsAsResourceId = true }) {
         ListOfRowsScreen(
             title = "My homes",
             customHeader = {
@@ -149,6 +154,8 @@ fun MyHomesListScreen(
                 ),
             onBack = onBack,
             banner = banner,
+            refreshing = refreshing,
+            refreshNotice = refreshNotice,
         )
     }
 

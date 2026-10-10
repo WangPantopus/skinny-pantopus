@@ -82,6 +82,9 @@ open class HomeDashboardRepository
                 propertyValue = store.peek(HomeStoreKeys.propertyValue(homeId)).data,
             )
 
+        /** Capture before a checklist mutation; publish only a confirmed projection after validating access. */
+        open fun checklistWriter(homeId: String): (SeasonalChecklistDto) -> Unit = store.writer(HomeStoreKeys.seasonalChecklist(homeId))
+
         /** A checklist the screen spliced an own confirmed change into becomes the stored copy. */
         open fun rememberChecklist(
             homeId: String,

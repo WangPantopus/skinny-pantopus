@@ -54,6 +54,7 @@ import app.pantopus.android.ui.components.SectionHeader
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.SourcePill
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.screens.homes.HomeOfflineContent
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevations
@@ -84,16 +85,18 @@ fun PropertyDetailsScreen(
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
 
-    PropertyDetailsScreenContent(
-        state = state,
-        onBack = onBack,
-        onRetry = viewModel::refresh,
-        onRequestCorrection = onRequestCorrection,
-        refreshNotice = refreshNotice,
-        refreshing = refreshing,
-    )
+    HomeOfflineContent {
+        PropertyDetailsScreenContent(
+            state = state,
+            onBack = onBack,
+            onRetry = viewModel::refresh,
+            onRequestCorrection = onRequestCorrection,
+            refreshNotice = refreshNotice,
+            refreshing = refreshing,
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

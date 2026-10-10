@@ -108,6 +108,9 @@ class HouseholdTaskDetailViewModel
          */
         fun reload() = read(force = true)
 
+        /** A visible-screen signal reads quietly; manual refresh still forces a read. */
+        fun recheck() = read(force = false)
+
         private fun read(force: Boolean) {
             if (inFlight || !active) return
             if (_state.value.task == null && showsCopy) access.storedTask(taskId)?.let(::show)

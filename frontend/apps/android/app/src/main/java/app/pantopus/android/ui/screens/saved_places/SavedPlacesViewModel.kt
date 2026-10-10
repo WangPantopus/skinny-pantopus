@@ -6,9 +6,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
+import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,30 +58,48 @@ class SavedPlacesViewModel
         private var nowProvider: () -> Instant = { Instant.now() }
         private var items: List<SavedPlaceDto> = emptyList()
         private var loadedAtLeastOnce = false
+        private var loading = false
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
-        fun load() {
-            if (loadedAtLeastOnce && _state.value is SavedPlacesUiState.Loaded) return
-            fetch()
-        }
+        fun load() = fetch(force = false)
 
-        fun refresh() = fetch()
+        fun refresh() = fetch(force = true)
 
-        private fun fetch() {
-            if (!loadedAtLeastOnce) _state.value = SavedPlacesUiState.Loading
+        private fun fetch(force: Boolean) {
+            if (loading) return
+            loading = true
+            if (!loadedAtLeastOnce) {
+                repository.listCopy()?.let {
+                    items = it.savedPlaces
+                    loadedAtLeastOnce = true
+                    rebuild()
+                }
+                if (!loadedAtLeastOnce) _state.value = SavedPlacesUiState.Loading
+            }
             viewModelScope.launch {
-                when (val result = repository.list()) {
-                    is NetworkResult.Success -> {
-                        items = result.data.savedPlaces
+                try {
+                    val stored = repository.listStored(force)
+                    val data = stored.data
+                _refreshNotice.value = if (stored.showsRefreshFailure(StoreKind.YOU)) {
+                    RefreshNotice(stored.fetchedAt, ::refresh)
+                } else {
+                    null
+                }
+                    if (data != null) {
+                        items = data.savedPlaces
                         loadedAtLeastOnce = true
                         rebuild()
+                    } else if (!loadedAtLeastOnce ||
+                        stored.failure.refusesStoredCopy) {
+                        items = emptyList()
+                        loadedAtLeastOnce = false
+                    _state.value = SavedPlacesUiState.Error(
+                        stored.failure?.displayMessage("Couldn't load saved places.") ?: "Couldn't load saved places.",
+                    )
                     }
-                    is NetworkResult.Failure -> {
-                        if (!loadedAtLeastOnce) {
-                            _state.value = SavedPlacesUiState.Error(result.error.displayMessage("Couldn't load saved places."))
-                        } else {
-                            _toast.value = SavedPlacesToast("Couldn't refresh.", isError = true)
-                        }
-                    }
+                } finally {
+                    loading = false
                 }
             }
         }
