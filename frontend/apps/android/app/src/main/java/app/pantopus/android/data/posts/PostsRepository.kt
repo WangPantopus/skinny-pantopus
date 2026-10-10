@@ -25,10 +25,35 @@ import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateResponse
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.PostsApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreTopics
+import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * One feed query, the first page's store key and its request (Instant Screens). Coordinates arrive rounded with
+ * [StoreKeys.roundCoordinate], so a few meters of GPS drift reuse the copy.
+ */
+data class FeedQuery(
+    val surface: String,
+    val latitude: Double?,
+    val longitude: Double?,
+    val radiusMiles: Double?,
+    val postType: String?,
+    val topic: String?,
+    val sportsMode: String?,
+    val eventKey: String?,
+) {
+    companion object {
+        /** Posts per page, the first and every later one. */
+        const val PAGE_SIZE = 20
+    }
+}
 
 /** Wraps [PostsApi] in the [NetworkResult] taxonomy. */
 @Singleton
@@ -36,6 +61,7 @@ class PostsRepository
     @Inject
     constructor(
         private val api: PostsApi,
+        private val store: ScreenStore,
     ) {
         /** `GET /api/posts/feed`. */
         suspend fun feed(
@@ -67,14 +93,46 @@ class PostsRepository
                 )
             }
 
+        /**
+         * A feed query's first page through the screens' store (contract §4 "Nearby": fresh 2 minutes; [force] reads
+         * now). Later pages go through [feed] with their cursor and are never stored.
+         */
+        suspend fun feedFirstPageStored(
+            query: FeedQuery,
+            force: Boolean = false,
+        ): Stored<FeedResponse> =
+            store.read(StoreKeys.feedFirstPage(query), force) { etag ->
+                conditionalApiCall {
+                    api.feedConditional(
+                        surface = query.surface,
+                        latitude = query.latitude,
+                        longitude = query.longitude,
+                        radiusMiles = query.radiusMiles,
+                        postType = query.postType,
+                        limit = FeedQuery.PAGE_SIZE,
+                        topic = query.topic,
+                        sportsMode = query.sportsMode,
+                        eventKey = query.eventKey,
+                        etag = etag,
+                    )
+                }
+            }
+
+        /** The stored first page of [query] as it is now (a first frame), without a request. */
+        fun feedFirstPageCopy(query: FeedQuery): FeedResponse? = store.peek(StoreKeys.feedFirstPage(query)).data
+
+        /** True while [query]'s first page is fresh and unmarked: coming back reads nothing. */
+        fun feedFirstPageIsCurrent(query: FeedQuery): Boolean = store.isCurrent(StoreKeys.feedFirstPage(query))
+
         /** `POST /api/posts` — create a new post. */
-        suspend fun createPost(body: PostCreateRequest): NetworkResult<PostCreateResponse> = safeApiCall { api.createPost(body) }
+        suspend fun createPost(body: PostCreateRequest): NetworkResult<PostCreateResponse> =
+            safeApiCall { api.createPost(body) }.also(::markPostsChanged)
 
         /** `PATCH /api/posts/:id` — author-only edit. */
         suspend fun updatePost(
             id: String,
             body: PostUpdateRequest,
-        ): NetworkResult<PostUpdateResponse> = safeApiCall { api.updatePost(id, body) }
+        ): NetworkResult<PostUpdateResponse> = safeApiCall { api.updatePost(id, body) }.also(::markPostsChanged)
 
         /** `GET /api/posts/:id`. */
         suspend fun detail(id: String): NetworkResult<PostDetailResponse> = safeApiCall { api.detail(id) }
@@ -120,13 +178,15 @@ class PostsRepository
         ): NetworkResult<SavedPostsResponse> = safeApiCall { api.savedPosts(limit, offset) }
 
         /** `DELETE /api/posts/:id`. */
-        suspend fun deletePost(id: String): NetworkResult<Unit> = safeApiCall { api.deletePost(id) }
+        suspend fun deletePost(id: String): NetworkResult<Unit> = safeApiCall { api.deletePost(id) }.also(::markPostsChanged)
 
         /** `POST /api/posts/:id/archive`. */
-        suspend fun archivePost(id: String): NetworkResult<PostArchiveResponse> = safeApiCall { api.archivePost(id) }
+        suspend fun archivePost(id: String): NetworkResult<PostArchiveResponse> =
+            safeApiCall { api.archivePost(id) }.also(::markPostsChanged)
 
         /** `POST /api/posts/:id/unarchive`. */
-        suspend fun unarchivePost(id: String): NetworkResult<PostArchiveResponse> = safeApiCall { api.unarchivePost(id) }
+        suspend fun unarchivePost(id: String): NetworkResult<PostArchiveResponse> =
+            safeApiCall { api.unarchivePost(id) }.also(::markPostsChanged)
 
         /** `POST /api/posts/:postId/comments/:commentId/like`. */
         suspend fun toggleCommentLike(
@@ -178,4 +238,9 @@ class PostsRepository
                     gpsLongitude = gpsLongitude,
                 )
             }
+
+        /** An own post created, edited, deleted or archived: every feed's stored first page goes out of date. */
+        private fun markPostsChanged(result: NetworkResult<*>) {
+            if (result is NetworkResult.Success) store.markStale(StoreTopics.POSTS)
+        }
     }

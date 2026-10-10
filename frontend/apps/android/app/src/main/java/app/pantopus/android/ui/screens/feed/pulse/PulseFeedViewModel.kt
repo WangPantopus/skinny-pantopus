@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.FeedPost
+import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.location.ViewingLocationDto
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -23,9 +24,11 @@ import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.ViewingLocationRepository
+import app.pantopus.android.data.posts.FeedQuery
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.sports.SportsRepository
+import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.ui.screens.feed.FeedEmptyContent
 import app.pantopus.android.ui.screens.feed.FeedRadiusSuggestion
 import app.pantopus.android.ui.screens.feed.FeedSurface
@@ -255,6 +258,9 @@ class PulseFeedViewModel
 
         /** The area the last first-page fetch used; later pages reuse it. */
         private var lastArea: FeedArea? = null
+
+        /** The query of the first page on screen; later pages continue it. */
+        private var lastQuery: FeedQuery? = null
         private var loading = false
 
         /**
@@ -311,8 +317,17 @@ class PulseFeedViewModel
             _showsSurfaceToggle.value = surface in FeedSurface.toggleSurfaces
         }
 
+        /**
+         * Entry and every return (Instant Screens). A first entry shows the stored first page for the stored area and
+         * the current filters at once; coming back (from a post) reads again only once the store says the page is out
+         * of date (Nearby: 2 minutes, or an own post).
+         */
         fun load() {
-            if (_state.value is PulseFeedUiState.Loaded) return
+            if (_state.value is PulseFeedUiState.Loaded) {
+                val query = lastQuery
+                if (query == null || !repo.feedFirstPageIsCurrent(query)) fetch(quiet = true)
+                return
+            }
             fetch()
         }
 
@@ -763,22 +778,22 @@ class PulseFeedViewModel
             _isLoadingMore.value = true
             viewModelScope.launch {
                 try {
-                    // Later pages stay in the area the first page used.
-                    val area = lastArea ?: resolvedArea()
+                    // Later pages continue the first page's query: its area and filters.
+                    val query = lastQuery ?: feedQuery(lastArea ?: resolvedArea())
                     if (generation != fetchGeneration) return@launch
                     when (
                         val result =
                             repo.feed(
-                                surface = _surface.value.backendSurface,
-                                latitude = area.latitude,
-                                longitude = area.longitude,
-                                postType = if (isInSportsLane) null else _activeIntent.value.postType,
+                                surface = query.surface,
+                                latitude = query.latitude,
+                                longitude = query.longitude,
+                                postType = query.postType,
                                 cursorCreatedAt = cursorCreatedAt,
                                 cursorId = cursorId,
-                                topic = topicQueryValue(),
-                                sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
-                                eventKey = if (isInSportsLane) resolvedEventKey() else null,
-                                radiusMiles = area.radiusMiles,
+                                topic = query.topic,
+                                sportsMode = query.sportsMode,
+                                eventKey = query.eventKey,
+                                radiusMiles = query.radiusMiles,
                             )
                     ) {
                         is NetworkResult.Success -> {
@@ -844,62 +859,57 @@ class PulseFeedViewModel
             _state.value = PulseFeedUiState.Loaded(rows = matched.map(::projectCard))
         }
 
-        private fun fetch(isRefresh: Boolean = false) {
+        /**
+         * Reads the first page through the screens' store. A pull ([isRefresh]) reads now and keeps the posts on screen;
+         * a [quiet] read (coming back) never blanks them; any other fetch is a new query (a filter, the surface, the area)
+         * and shows that query's stored first page at once, or the skeleton.
+         */
+        private fun fetch(
+            isRefresh: Boolean = false,
+            quiet: Boolean = false,
+        ) {
             val generation = ++fetchGeneration
             _isLoadingMore.value = false
             _loadMoreError.value = null
-            _radiusSuggestion.value = null
-            postsLoaded = false
             loading = true
             if (isRefresh) _isRefreshing.value = true
-            // A different query must recreate the list, including its page-boundary effects.
-            if (!isRefresh || _state.value !is PulseFeedUiState.Loaded) {
+            if (!isRefresh && !quiet) {
+                // A different query must recreate the list, including its page-boundary effects.
+                _radiusSuggestion.value = null
+                postsLoaded = false
+                if (!showStoredFirstPage()) _state.value = PulseFeedUiState.Loading
+            } else if (_state.value !is PulseFeedUiState.Loaded) {
                 _state.value = PulseFeedUiState.Loading
             }
             viewModelScope.launch {
                 try {
-                    val area = resolvedArea()
+                    // A pull reads the chosen area again too: it may have changed on another device.
+                    val area = resolvedArea(force = isRefresh)
                     if (generation != fetchGeneration) return@launch
                     area.viewingLocation?.let(onViewingAreaResolved)
-                    val result =
-                        repo.feed(
-                            surface = _surface.value.backendSurface,
-                            latitude = area.latitude,
-                            longitude = area.longitude,
-                            postType = if (isInSportsLane) null else _activeIntent.value.postType,
-                            topic = topicQueryValue(),
-                            sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
-                            eventKey = if (isInSportsLane) resolvedEventKey() else null,
-                            radiusMiles = area.radiusMiles,
-                        )
+                    val query = feedQuery(area)
+                    val stored = repo.feedFirstPageStored(query, force = isRefresh)
                     // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
                     if (generation != fetchGeneration) return@launch
-                    when (result) {
-                        is NetworkResult.Success -> {
-                            val response = result.data
-                            lastArea = area
-                            updateFallbackAreaLabel(response.fallbackArea?.label, area)
-                            scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
-                            loadedPosts = response.posts
-                            postsLoaded = true
-                            applyPagination(response.pagination)
-                            recomputeRadiusSuggestion()
-                            _state.value =
-                                if (response.posts.isEmpty()) {
-                                    emptyState(noAreaSearched = response.requiresViewingLocation == true)
-                                } else {
-                                    PulseFeedUiState.Loaded(rows = emptyList())
-                                }
-                            if (response.posts.isNotEmpty()) rebuildLoadedState()
+                    val response = stored.data
+                    val failure = stored.failure
+                    when {
+                        response != null -> applyFirstPage(response, area, query, inPlace = !isRefresh)
+                        // A failed read keeps the posts on screen; a pull says why.
+                        _state.value is PulseFeedUiState.Loaded && query == lastQuery -> {
+                            if (isRefresh) _toastMessage.value = failure.displayMessageOr("Couldn't refresh Pulse.")
                         }
-                        is NetworkResult.Failure -> {
-                            _state.value = PulseFeedUiState.Error(result.error.displayMessage("Couldn't load Pulse."))
-                        }
+                        else -> _state.value = PulseFeedUiState.Error(failure.displayMessageOr("Couldn't load Pulse."))
                     }
                 } catch (error: NetworkError) {
                     if (generation == fetchGeneration) {
-                        _state.value =
-                            PulseFeedUiState.Error(error.displayMessage("Couldn't load your viewing area. Try again."))
+                        val message = error.displayMessage("Couldn't load your viewing area. Try again.")
+                        // The posts on screen stay; only an empty screen shows the error.
+                        if (_state.value !is PulseFeedUiState.Loaded) {
+                            _state.value = PulseFeedUiState.Error(message)
+                        } else if (isRefresh) {
+                            _toastMessage.value = message
+                        }
                     }
                 } finally {
                     if (generation == fetchGeneration) {
@@ -909,6 +919,74 @@ class PulseFeedViewModel
                 }
             }
         }
+
+        /**
+         * Puts a first page on screen. [inPlace] (a quiet read of the query already on screen, with later pages loaded
+         * below): the rows on screen take the server's counts and edits in place and the pages below stay.
+         */
+        private fun applyFirstPage(
+            response: FeedResponse,
+            area: FeedArea,
+            query: FeedQuery,
+            inPlace: Boolean,
+        ) {
+            lastArea = area
+            updateFallbackAreaLabel(response.fallbackArea?.label, area)
+            scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
+            if (inPlace && query == lastQuery && loadedPosts.size > response.posts.size) {
+                val refreshed = response.posts.associateBy { it.id }
+                loadedPosts = loadedPosts.map { refreshed[it.id] ?: it }
+                rebuildLoadedState()
+                return
+            }
+            lastQuery = query
+            loadedPosts = response.posts
+            postsLoaded = true
+            applyPagination(response.pagination)
+            recomputeRadiusSuggestion()
+            _state.value =
+                if (response.posts.isEmpty()) {
+                    emptyState(noAreaSearched = response.requiresViewingLocation == true)
+                } else {
+                    PulseFeedUiState.Loaded(rows = emptyList())
+                }
+            if (response.posts.isNotEmpty()) rebuildLoadedState()
+        }
+
+        /** The stored first page for what is already known (no waiting), on screen at once. False without one. */
+        private fun showStoredFirstPage(): Boolean {
+            val area = storedArea() ?: return false
+            val query = feedQuery(area)
+            val copy = repo.feedFirstPageCopy(query) ?: return false
+            area.viewingLocation?.let(onViewingAreaResolved)
+            applyFirstPage(copy, area, query, inPlace = false)
+            return true
+        }
+
+        /** [resolvedArea] without waiting: the explicit coordinates, the stored viewing location, or a known fix. */
+        private fun storedArea(): FeedArea? {
+            explicitCoordinates()?.let { (lat, lng) -> return FeedArea(lat, lng) }
+            if (_surface.value == FeedSurface.Pulse) {
+                // Without the stored area it isn't known whether one was chosen: no guess.
+                val stored = viewingLocation.currentCopy() ?: return null
+                stored.viewingLocation?.let { return FeedArea(it.latitude, it.longitude, it.radiusMiles, it) }
+            }
+            storedCoordinates()?.let { (lat, lng) -> return FeedArea(lat, lng) }
+            return locationProvider.cachedCoordinate()?.let { FeedArea(it.latitude, it.longitude) }
+        }
+
+        /** The first page's query for [area] and the current filters (coordinates rounded to about 110 m). */
+        private fun feedQuery(area: FeedArea): FeedQuery =
+            FeedQuery(
+                surface = _surface.value.backendSurface,
+                latitude = area.latitude?.let(StoreKeys::roundCoordinate),
+                longitude = area.longitude?.let(StoreKeys::roundCoordinate),
+                radiusMiles = area.radiusMiles,
+                postType = if (isInSportsLane) null else _activeIntent.value.postType,
+                topic = topicQueryValue(),
+                sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
+                eventKey = if (isInSportsLane) resolvedEventKey() else null,
+            )
 
         /**
          * A load with no posts. With no area searched, "be the first to share" or
@@ -929,9 +1007,9 @@ class PulseFeedViewModel
          * no coordinates when location was off and stayed empty however many
          * times an area was picked.
          */
-        private suspend fun resolvedArea(): FeedArea =
+        private suspend fun resolvedArea(force: Boolean = false): FeedArea =
             explicitCoordinates()?.let { (lat, lng) -> FeedArea(lat, lng) }
-                ?: viewingArea()
+                ?: viewingArea(force)
                 ?: (storedCoordinates() ?: awaitFreshCoordinates())?.let { (lat, lng) -> FeedArea(lat, lng) }
                 ?: FeedArea(null, null)
 
@@ -949,10 +1027,10 @@ class PulseFeedViewModel
         }
 
         /** A failed read is not an absent selection: never silently fall back to a different area. */
-        private suspend fun viewingArea(): FeedArea? {
+        private suspend fun viewingArea(force: Boolean): FeedArea? {
             if (_surface.value != FeedSurface.Pulse) return null
             val chosen =
-                when (val result = viewingLocation.current()) {
+                when (val result = viewingLocation.current(force)) {
                     is NetworkResult.Success -> result.data.viewingLocation
                     is NetworkResult.Failure -> throw result.error
                 } ?: return null
@@ -1107,3 +1185,6 @@ class PulseFeedViewModel
             return parts.mapNotNull { it.firstOrNull()?.toString() }.joinToString("").uppercase()
         }
     }
+
+/** A read's failure as people read it, or [fallback] when there is none (a read dropped by a wipe). */
+private fun NetworkError?.displayMessageOr(fallback: String): String = this?.displayMessage(fallback) ?: fallback
