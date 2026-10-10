@@ -64,6 +64,21 @@ The pilot can't start until the Lambda stack runs against the hosted backend
   removes the cap.
 - **Password length.** Production Supabase accepts 6-character passwords; set
   12 as S3 says.
+- **The server.** AWS read-only calls on October 10: the instance
+  `Pantopus-backend` (t3.small, 2 GiB RAM, one 8 GB unencrypted gp3 disk) is
+  running in us-west-2 with the Elastic IP attached and passing both status
+  checks; CPU averaged about 3% over the previous day with a full credit
+  balance. It carries staging and, from P6, production (D8). Ports 80 and 443
+  are open as intended. Port 22 is open to the internet (the CI deploy connects
+  over SSH from GitHub's runners), so confirm the server accepts keys only and
+  consider restricting it. CloudWatch has no memory or disk metrics, so run
+  `free -m` and `df -h` on the server before starting production's two
+  containers beside staging's.
+- **Postmark.** Not checked: its login was signed out in the founder's browser.
+  Before the first public sign-up, confirm the account is approved to send to
+  addresses outside pantopus.com (a new Postmark account can send only to its
+  own domain until it is approved) and that the `pantopus.com` domain shows
+  DKIM and Return-Path as verified.
 
 ## 1. Decisions (founder)
 
