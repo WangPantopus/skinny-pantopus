@@ -358,6 +358,7 @@ class HomeDashboardViewModel
          * while it is re-checked); guests, service providers and any access with an expiry are cleared now.
          */
         fun suspendContent() {
+            if (!visible) return
             generation += 1
             visible = false
             refreshJob?.cancel()
