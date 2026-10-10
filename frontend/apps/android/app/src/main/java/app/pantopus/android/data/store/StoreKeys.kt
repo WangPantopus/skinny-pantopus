@@ -180,7 +180,7 @@ object StoreKeys {
 
     fun publicProfile(identifier: String, byUsername: Boolean = false) = StoreKey<PublicProfileDto>(
         "api/users/${if (byUsername) "username" else "id"}/$identifier", kind = StoreKind.PEOPLE,
-        topics = setOf("profile:$identifier", StoreTopics.PROFILE_ME),
+        topics = setOf("profile:$identifier", StoreTopics.PROFILE_ME, StoreTopics.CHATS),
     )
 
     fun userPosts(userId: String, limit: Int, includeArchived: Boolean) = StoreKey<MyPostsResponse>(
