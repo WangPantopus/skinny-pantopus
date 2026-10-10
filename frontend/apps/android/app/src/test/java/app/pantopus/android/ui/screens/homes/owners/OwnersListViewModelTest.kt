@@ -56,6 +56,7 @@ class OwnersListViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { gates.create(any(), any()).checkForRead(any(), any()) } returns null
         coEvery { adminRepo.myAccess("home_1") } returns
             NetworkResult.Success(
                 HomeAccessDto(
