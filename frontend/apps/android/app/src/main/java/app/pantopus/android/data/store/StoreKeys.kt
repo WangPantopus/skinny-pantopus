@@ -124,6 +124,7 @@ object StoreKeys {
             ),
             kind = StoreKind.NEARBY,
             topics = setOf(StoreTopics.POSTS),
+            type = FeedResponse::class.java,
         )
 
     /**
