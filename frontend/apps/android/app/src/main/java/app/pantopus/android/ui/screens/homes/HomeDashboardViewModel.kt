@@ -537,7 +537,7 @@ class HomeDashboardViewModel
         /** The viewer's access for this batch: from the store (owners and household roles), else read now. */
         private suspend fun openingAuthority(fromCopy: Boolean): Stored<HomeDashboardAuthorityDto> {
             val stored = authority.readStored(force = !fromCopy)
-            if (!gate.showsCopy && stored.failure != null) throw stored.failure
+            if (stored.data != null && !gate.showsCopy && stored.failure != null) throw stored.failure
             if (stored.data != null) return stored
             // No access: the direct read keeps the server's typed refusal (verification kind) for the limited view.
             if (stored.failure is NetworkError.Forbidden || stored.failure == NetworkError.NotFound) {
