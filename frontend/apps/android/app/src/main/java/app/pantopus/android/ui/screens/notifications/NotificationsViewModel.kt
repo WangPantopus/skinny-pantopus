@@ -841,7 +841,10 @@ class NotificationsViewModel
                     section.copy(rows = section.rows.map { row ->
                         if (row.id in pendingReads) {
                             row.copy(
-                                chips = row.chips.orEmpty() + RowChip("Pending", tint = RowChip.Tint.Status(StatusChipVariant.Neutral)),
+                                chips = row.chips.orEmpty() + RowChip(
+                                    "Pending",
+                                    tint = RowChip.Tint.Status(StatusChipVariant.Neutral),
+                                ),
                                 wrapChips = true,
                                 destructiveAction = null,
                             )
