@@ -207,7 +207,11 @@ fun PrivacySettingsScreen(
     val toastController = remember { ToastController() }
     val shownToast by toastController.current.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    RefreshOnStoreChange(viewModel::load)
     LaunchedEffect(toast) {
         toast?.let {
             toastController.show(it)
@@ -255,7 +259,7 @@ fun PrivacySettingsScreen(
                             else -> viewModel.onTapRow(rowId)
                         }
                     },
-                    onRetry = viewModel::load,
+                    onRetry = viewModel::refresh,
                 ),
         )
         // Tag mirrors iOS `PrivacyView`'s `privacySettingsToast`

@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.notifications.NotificationUnreadCoun
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
@@ -48,6 +49,11 @@ object StoreTopics {
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
 object StoreKeys {
+    /** Search privacy preferences are copied in memory and removed after a PATCH. */
+    val privacySettings = StoreKey<PrivacySettingsResponse>(
+        "api/privacy/settings", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME),
+    )
+
     /** Private bookmarks share one memory copy; household/Today signals include SavedPlace changes. */
     val savedPlaces = StoreKey<SavedPlacesListResponse>(
         "api/saved-places", kind = StoreKind.YOU, topics = setOf(StoreTopics.HOMES, StoreTopics.TODAY),

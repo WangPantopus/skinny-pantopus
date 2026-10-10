@@ -3,6 +3,8 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.settings.PrivacyBlocksResponse
 import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
 import app.pantopus.android.data.api.models.settings.PrivacySettingsUpdate
+import retrofit2.Response
+import retrofit2.http.Header
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -14,6 +16,9 @@ interface PrivacyApi {
     /** `GET /api/privacy/settings` — route `backend/routes/privacy.js:50`. */
     @GET("api/privacy/settings")
     suspend fun settings(): PrivacySettingsResponse
+
+    @GET("api/privacy/settings")
+    suspend fun settingsConditional(@Header("If-None-Match") etag: String?): Response<PrivacySettingsResponse>
 
     /** `PATCH /api/privacy/settings` — partial update.
      *  Route `backend/routes/privacy.js:95`. */

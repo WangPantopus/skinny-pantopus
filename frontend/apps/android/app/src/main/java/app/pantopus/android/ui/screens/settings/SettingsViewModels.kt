@@ -459,25 +459,37 @@ class PrivacySettingsViewModel
         private val _accountDeleted = MutableStateFlow(false)
         val accountDeleted: StateFlow<Boolean> = _accountDeleted.asStateFlow()
 
-        fun load() {
+        private var searchPrivacyLoading = false
+
+        fun load() = readPrivacy(force = false)
+
+        fun refresh() = readPrivacy(force = true)
+
+        private fun readPrivacy(force: Boolean) {
+            if (searchPrivacyLoading || searchPrivacySaving) return
+            searchPrivacyLoading = true
             configureAppLockForSignedInUser()
             appLock.refreshCapability()
-            viewModelScope.launch {
-                fetchSearchPrivacy()
+            privacy.settingsCopy()?.let { copy ->
+                searchVisibility = copy.settings.searchVisibility ?: "everyone"
+                findableByName = copy.settings.findableByName ?: false
+                searchPrivacyLoadFailed = false
                 rebuild()
             }
-        }
-
-        /** `GET /api/privacy/settings` — `backend/routes/privacy.js:50`. A
-         *  failure never blanks the screen. */
-        private suspend fun fetchSearchPrivacy() {
-            when (val result = privacy.settings()) {
-                is NetworkResult.Success -> {
-                    searchVisibility = result.data.settings.searchVisibility ?: "everyone"
-                    findableByName = result.data.settings.findableByName ?: false
-                    searchPrivacyLoadFailed = false
+            viewModelScope.launch {
+                try {
+                    when (val result = privacy.settings(force)) {
+                        is NetworkResult.Success -> if (!searchPrivacySaving) {
+                            searchVisibility = result.data.settings.searchVisibility ?: "everyone"
+                            findableByName = result.data.settings.findableByName ?: false
+                            searchPrivacyLoadFailed = false
+                        }
+                        is NetworkResult.Failure -> searchPrivacyLoadFailed = true
+                    }
+                    rebuild()
+                } finally {
+                    searchPrivacyLoading = false
                 }
-                is NetworkResult.Failure -> searchPrivacyLoadFailed = true
             }
         }
 
@@ -542,7 +554,7 @@ class PrivacySettingsViewModel
                 _deleteSheetVisible.value = true
                 loadOrganizedLiveTrainCount()
             }
-            if (rowId == ROW_SEARCH_PRIVACY_RETRY) load()
+            if (rowId == ROW_SEARCH_PRIVACY_RETRY) refresh()
         }
 
         fun consumeToast() {
