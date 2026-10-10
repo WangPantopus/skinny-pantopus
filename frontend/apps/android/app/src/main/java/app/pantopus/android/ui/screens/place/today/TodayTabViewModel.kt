@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
@@ -275,8 +276,7 @@ class TodayTabViewModel
                         if (homesList == null) {
                             // A failed lookup isn't "no place": offer a retry instead of
                             // sending a resident off to claim an address they already have.
-                            if (homes.failure is NetworkError.Forbidden || homes.failure == NetworkError.NotFound ||
-                                homes.failure == NetworkError.Unauthorized) {
+                            if (homes.failure.refusesStoredCopy) {
                                 homeId?.let(::clearHomeCopy)
                             }
                             _state.value = _state.value.afterFailedRead(homes.failure.sentence("Couldn't load your place."))
@@ -324,8 +324,8 @@ class TodayTabViewModel
                     if (keep && failure == null && ::todayWidget.isInitialized) todayWidget.write(data.todayWidgetSnapshot())
                 }
                 // Access ended (contract §3): the store dropped the copy, and the server's answer shows.
-                failure is NetworkError.Forbidden || failure == NetworkError.NotFound || failure == NetworkError.Unauthorized ->
-                    _state.value = TodayTabUiState.Error(failure.displayMessage("Couldn't load today."))
+                failure.refusesStoredCopy ->
+                    _state.value = TodayTabUiState.Error(failure.sentence("Couldn't load today."))
                 else -> {
                     val sameHome = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.calendarHomeId == id }
                     _state.value = sameHome.afterFailedRead(failure.sentence("Couldn't load today."))
