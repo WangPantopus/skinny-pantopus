@@ -64,6 +64,16 @@ data class SupportTrainDetailDto(
     /** Only the primary may unpublish / archive / delete / edit organizers. */
     val viewerIsPrimaryOrganizer: Boolean
         get() = viewerSupportTrainRole == "primary"
+
+    /** Only the train and its slots may outlive this visit. Recipient, medical and delivery details never do. */
+    fun summaryCopy(): SupportTrainDetailDto =
+        SupportTrainDetailDto(
+            id = id,
+            title = title,
+            status = status,
+            supportModes = supportModes,
+            slots = slots,
+        )
 }
 
 /** `support_modes` block — which contribution lanes the train accepts. */
