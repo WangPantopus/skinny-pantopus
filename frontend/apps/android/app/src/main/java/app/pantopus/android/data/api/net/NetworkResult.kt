@@ -118,6 +118,10 @@ sealed class NetworkError(
         NetworkError(null, "The server is having trouble. Please try again.")
 }
 
+/** Instant Screens: a refused session, lost access or missing resource immediately retires its copy. */
+internal val NetworkError?.refusesStoredCopy: Boolean
+    get() = this?.code in setOf(401, 403, 404)
+
 private const val FORBIDDEN_FALLBACK = "You don't have permission to do that."
 
 private val MACHINE_TOKEN = Regex("[A-Za-z][.][A-Za-z]")
