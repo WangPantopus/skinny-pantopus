@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalDialog
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalTarget
 import app.pantopus.android.ui.screens.homes.members.SavedRemovalLink
@@ -69,6 +70,7 @@ fun MyHomesListScreen(
     onOpenWaitingRoom: ((String) -> Unit)? = null,
     viewModel: MyHomesListViewModel = hiltViewModel(),
 ) {
+    RefreshOnStoreChange(viewModel::recheck)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("my_homes", state.showsContent())
     val banner by viewModel.banner.collectAsStateWithLifecycle()
