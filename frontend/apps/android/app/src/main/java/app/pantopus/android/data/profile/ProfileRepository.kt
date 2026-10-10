@@ -17,6 +17,7 @@ import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.data.store.asResult
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,7 +33,8 @@ class ProfileRepository
         suspend fun publicProfile(id: String): NetworkResult<PublicProfileDto> = safeApiCall { api.publicProfile(id) }
 
         /** `GET /api/users/profile` — route `backend/routes/users.js:1962`. */
-        suspend fun ownProfile(): NetworkResult<ProfileResponse> = safeApiCall { api.profile() }
+        suspend fun ownProfile(): NetworkResult<ProfileResponse> =
+            ownProfileStored().let { it.data?.let { data -> NetworkResult.Success(data) } ?: it.asResult() }
 
         /** The viewer's profile through the screens' store (fresh 10 minutes; [force] reads now). */
         suspend fun ownProfileStored(force: Boolean = false): Stored<ProfileResponse> =
@@ -55,6 +57,7 @@ class ProfileRepository
          */
         suspend fun updateSkills(skills: List<String>): NetworkResult<UpdateSkillsResponse> =
             safeApiCall { api.updateSkills(UpdateSkillsRequest(skills = skills)) }
+                .also { if (it is NetworkResult.Success) store.markStale(StoreTopics.PROFILE_ME) }
 
         /**
          * `GET /api/users/username-availability?username=` — can the signed-in person change their

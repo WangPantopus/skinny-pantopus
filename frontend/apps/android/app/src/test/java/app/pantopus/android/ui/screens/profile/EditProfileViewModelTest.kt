@@ -105,6 +105,7 @@ class EditProfileViewModelTest {
         )
 
     private suspend fun loaded(): EditProfileViewModel {
+        every { repo.ownProfileCopy() } returns null
         coEvery { repo.ownProfile() } returns
             NetworkResult.Success(ProfileResponse(user = seededProfile(), inviteProgress = null))
         val vm = viewModel()
