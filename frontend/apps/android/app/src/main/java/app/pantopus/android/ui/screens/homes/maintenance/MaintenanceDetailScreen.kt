@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
@@ -65,6 +66,7 @@ fun MaintenanceDetailScreen(
     viewModel: MaintenanceDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_maintenance_entry", state is MaintenanceDetailUiState.Loaded)
     val isMutating by viewModel.isMutating.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
     val event by viewModel.event.collectAsStateWithLifecycle()

@@ -62,7 +62,8 @@ public final class SupportTrainDetailViewModel {
     /// Slot the reserve sheet is open for. `nil` hides the sheet;
     /// `.some(nil)` opens it on the slot-picker step.
     public var reserveSelection: ReserveSheetSelection?
-    /// A signup landed while the sheet was up — refresh on dismissal.
+    /// A signup landed, or someone changed the train, while the sheet was
+    /// up — refresh on dismissal.
     private var pendingReserveRefresh = false
 
     private let trainId: String
@@ -127,6 +128,23 @@ public final class SupportTrainDetailViewModel {
     /// Pull to refresh and Try again: always asks the server.
     public func refresh() async {
         await fetch(force: true, announcesFailure: true)
+    }
+
+    /// A change signal names this train (`supporttrain:{id}`).
+    func isAffected(by note: Notification) -> Bool {
+        note.names(topic: ScreenTopic.supportTrain(trainId))
+    }
+
+    /// Someone took or left a slot, or the organizer changed the train, while
+    /// it's on screen: re-read what went stale. With the reserve sheet up the
+    /// re-read waits for it to close, so the slot options don't change under
+    /// the helper mid-signup.
+    public func refreshFromSignal() async {
+        guard reserveSelection == nil else {
+            pendingReserveRefresh = true
+            return
+        }
+        await load()
     }
 
     private var endpoint: Endpoint {
@@ -199,10 +217,11 @@ public final class SupportTrainDetailViewModel {
         reserveSelection = ReserveSheetSelection(slotId: resolved)
     }
 
-    /// Closes the sheet and — when a signup landed — refreshes the
-    /// screen. The refresh is deferred to dismissal on purpose: calling
-    /// `load()` while the sheet is up would blank `currentContent` for a
-    /// frame and tear down the sheet's success step.
+    /// Closes the sheet and — when a signup landed or the train changed —
+    /// refreshes the screen. The refresh is deferred to dismissal on
+    /// purpose: calling `load()` while the sheet is up would change the
+    /// options its steps read. Also the sheet's `onDismiss`, so a swipe
+    /// down refreshes too (a second call finds nothing pending).
     public func dismissReserve() {
         reserveSelection = nil
         guard pendingReserveRefresh else { return }

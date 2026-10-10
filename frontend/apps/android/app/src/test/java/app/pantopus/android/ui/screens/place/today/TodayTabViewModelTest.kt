@@ -62,6 +62,8 @@ class TodayTabViewModelTest {
         coEvery { homes.myHomes() } returns NetworkResult.Success(MyHomesResponse(emptyList(), null))
         // Today reads My Homes through the screens' store.
         coEvery { homes.myHomesStored(any()) } returns Stored(MyHomesResponse(emptyList(), null), fetchedAt = System.currentTimeMillis())
+        // No saved copy on the phone in these tests: Today waits for its read.
+        every { homes.myHomesCopy() } returns null
         coEvery { saved.list() } returns NetworkResult.Success(SavedPlacesListResponse(listOf(place)))
         coEvery { saved.today(place.id) } returns NetworkResult.Success(mockk<PlaceIntelligence>())
         coEvery { hub.todayDetail() } returns

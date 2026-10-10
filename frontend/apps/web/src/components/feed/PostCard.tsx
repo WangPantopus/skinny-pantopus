@@ -69,7 +69,9 @@ interface PostCardProps {
   /** Dismisses a cold-start tip (a seeded fact, not a post). */
   onDismissSeeded?: (factId: string) => void;
   currentUserId?: string;
+  /** A like or save is waiting for the server: the button shows it as pending. */
   isLiking?: boolean;
+  isSaving?: boolean;
   surface?: string;
   showToast?: (msg: string) => void;
 }
@@ -90,6 +92,7 @@ function PostCard({
   onDismissSeeded,
   currentUserId,
   isLiking,
+  isSaving,
   surface,
   showToast,
 }: PostCardProps) {
@@ -466,8 +469,9 @@ function PostCard({
         <button
           onClick={() => onLike(post.id)}
           disabled={isLiking}
+          aria-busy={isLiking || undefined}
           aria-label={post.userHasLiked ? 'Unlike post' : 'Like post'}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isLiking ? 'opacity-60 ' : ''}${
             post.userHasLiked
               ? 'text-red-500 bg-red-50 hover:bg-red-100'
                 : 'text-app-muted hover-bg-app'
@@ -492,8 +496,10 @@ function PostCard({
         {/* Bookmark */}
         <button
           onClick={() => onSave?.(post.id)}
+          disabled={isSaving}
+          aria-busy={isSaving || undefined}
           aria-label={post.userHasSaved ? 'Remove from saved' : 'Save post'}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isSaving ? 'opacity-60 ' : ''}${
             post.userHasSaved ? 'text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300' : 'text-app-muted hover-bg-app'
           }`}
         >
@@ -579,8 +585,10 @@ function PostCard({
         {config.ctaLabel && (
           <button
             onClick={() => (ctaSaves ? onSave?.(post.id) : onComment(post.id))}
+            disabled={ctaSaves && isSaving}
             aria-pressed={ctaSaves ? Boolean(post.userHasSaved) : undefined}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 hover:shadow-sm active:scale-95 ${POST_TYPE_THEMED_TEXT}`}
+            aria-busy={(ctaSaves && isSaving) || undefined}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 hover:shadow-sm active:scale-95 ${ctaSaves && isSaving ? 'opacity-60 ' : ''}${POST_TYPE_THEMED_TEXT}`}
             style={{
               background: `${config.color}10`,
               border: `1px solid ${config.color}25`,
@@ -604,6 +612,7 @@ export default React.memo(PostCard, (prev, next) => {
     && prev.post.comment_count === next.post.comment_count
     && prev.post.userHasSaved === next.post.userHasSaved
     && prev.isLiking === next.isLiking
+    && prev.isSaving === next.isSaving
     && prev.currentUserId === next.currentUserId
     && prev.surface === next.surface
     && prev.onLike === next.onLike

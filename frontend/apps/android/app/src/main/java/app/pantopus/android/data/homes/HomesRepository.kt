@@ -106,7 +106,8 @@ open class HomesRepository
          * one conditional request, shared with any read already in flight. [force] reads now (pull, own edits).
          */
         open suspend fun myHomesStored(force: Boolean = false): Stored<MyHomesResponse> =
-            store.read(StoreKeys.myHomes, force) { etag -> conditionalApiCall { api.myHomesConditional(etag) } }
+            // The viewer's own list of homes: saved on the phone so a cold start lands at once (contract §6).
+            store.read(StoreKeys.myHomes, force, persist = true) { etag -> conditionalApiCall { api.myHomesConditional(etag) } }
 
         /** The stored My Homes as it is now, without a request (null before the first read or after a wipe). */
         open fun myHomesCopy(): MyHomesResponse? = store.peek(StoreKeys.myHomes).data
@@ -465,18 +466,32 @@ open class HomesRepository
             status: String? = null,
         ): NetworkResult<GetHomeMaintenanceResponse> = safeApiCall { api.getHomeMaintenance(homeId, status) }
 
+        /** The whole maintenance log through the screens' store: a fresh copy answers without a request. */
+        open suspend fun getHomeMaintenanceStored(
+            homeId: String,
+            force: Boolean = false,
+        ): Stored<GetHomeMaintenanceResponse> =
+            store.read(HomeStoreKeys.maintenance(homeId), force) { etag ->
+                conditionalApiCall { api.getHomeMaintenanceConditional(homeId, etag) }
+            }
+
+        /** The stored maintenance log, without a request. */
+        open fun storedMaintenance(homeId: String): GetHomeMaintenanceResponse? = store.peek(HomeStoreKeys.maintenance(homeId)).data
+
         /** `POST /api/homes/:id/maintenance`. */
         open suspend fun createHomeMaintenance(
             homeId: String,
             request: CreateMaintenanceRequest,
-        ): NetworkResult<HomeMaintenanceResponse> = safeApiCall { api.createHomeMaintenance(homeId, request) }
+        ): NetworkResult<HomeMaintenanceResponse> =
+            safeApiCall { api.createHomeMaintenance(homeId, request) }.also { markHomeStale(homeId, it) }
 
         /** `PUT /api/homes/:id/maintenance/:taskId`. */
         open suspend fun updateHomeMaintenance(
             homeId: String,
             taskId: String,
             request: UpdateMaintenanceRequest,
-        ): NetworkResult<HomeMaintenanceResponse> = safeApiCall { api.updateHomeMaintenance(homeId, taskId, request) }
+        ): NetworkResult<HomeMaintenanceResponse> =
+            safeApiCall { api.updateHomeMaintenance(homeId, taskId, request) }.also { markHomeStale(homeId, it) }
 
         /** `DELETE /api/homes/:id/maintenance/:taskId`. */
         open suspend fun deleteHomeMaintenance(
@@ -489,7 +504,15 @@ open class HomesRepository
                     throw retrofit2.HttpException(response)
                 }
                 Unit
-            }
+            }.also { markHomeStale(homeId, it) }
+
+        /** Own edit: this Home's stored screens read again on their next use. */
+        private fun markHomeStale(
+            homeId: String,
+            result: NetworkResult<*>,
+        ) {
+            if (result is NetworkResult.Success) store.markStale("home:$homeId")
+        }
 
         /**
          * Upload one binary file to `POST /api/files/upload` and return

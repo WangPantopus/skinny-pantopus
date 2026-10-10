@@ -80,8 +80,9 @@ feed screens; new code should depend on the smaller feature APIs.
   retries idempotent GET / HEAD up to 2 additional times on 502/503/504
   and `IOException`, with 300ms and ~900ms jittered delays.
   Non-idempotent methods are never retried.
-- **Cache.** A 10MB on-disk OkHttp `Cache` lives at `cacheDir/pantopus-http/`;
-  OkHttp honours `ETag`, `Cache-Control`, and `If-None-Match` automatically.
+- **Cache.** The API client has no HTTP cache: replies carry private data
+  (door codes, medical cards, the wallet, the profile) and never go to disk.
+  Coil keeps images in its own cache at `cacheDir/image_cache/`.
 
 ## Icons
 

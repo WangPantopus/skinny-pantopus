@@ -7,6 +7,7 @@ const { randomUUID, randomBytes, createHmac } = require('node:crypto');
 const { setTimeout: delay } = require('node:timers/promises');
 const { createClient } = require('@supabase/supabase-js');
 const { loadFollowingActivity } = require('../../services/followingActivityService');
+const { ensureContractImage } = require('../../../scripts/db/contract-images.cjs');
 
 describe('Canonical baseline through real SDK, PostgREST JWT roles and Following service', {
   skip: process.env.PANTOPUS_BASELINE_CONTRACT !== '1', timeout: 180_000,
@@ -16,7 +17,6 @@ describe('Canonical baseline through real SDK, PostgREST JWT roles and Following
   const database = `supabase_db_${project}`;
   const network = `supabase_network_${project}`;
   const api = `pantopus-baseline-contract-${process.pid}-${randomUUID().slice(0, 8)}`;
-  const image = 'postgrest/postgrest:v14.10@sha256:bca3f86f69d8ef7aa1e5ee65e66ce9a20c6c147be637517a7be8399e102901d1';
   const secret = randomBytes(32).toString('hex');
   const owner = randomUUID(); const persona = randomUUID();
   const ids = { free: randomUUID(), member: randomUUID(), draft: randomUUID(), archived: randomUUID(), personal: randomUUID() };
@@ -52,9 +52,10 @@ describe('Canonical baseline through real SDK, PostgREST JWT roles and Following
     assert.equal(sql("SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename='Post' AND policyname='post_persona_service_only';"), '1');
     assert.equal(sql("SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version IN ('20260908234526','20260908234527');"), '2');
     docker('network', 'inspect', network);
+    const image = ensureContractImage('postgrest');
     // Authenticator can assume only the database roles verified by PostgREST's
     // signature check; this does not test a Supabase Auth sign-in session.
-    docker('run', '--rm', '-d', '--name', api, '--network', network, '-p', '127.0.0.1::3000',
+    docker('run', '--rm', '--pull=never', '-d', '--name', api, '--network', network, '-p', '127.0.0.1::3000',
       '-e', `PGRST_DB_URI=postgres://authenticator:postgres@${database}:5432/postgres`,
       '-e', 'PGRST_DB_ANON_ROLE=anon', '-e', 'PGRST_DB_SCHEMAS=public',
       '-e', `PGRST_JWT_SECRET=${secret}`, image);

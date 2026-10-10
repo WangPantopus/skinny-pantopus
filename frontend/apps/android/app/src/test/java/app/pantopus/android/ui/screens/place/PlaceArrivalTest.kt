@@ -68,6 +68,7 @@ class PlaceArrivalTest {
         coEvery { homes.myHomes() } returns NetworkResult.Failure(NetworkError.Server(503, null))
         // The Place landing reads the shared My Homes copy through the store.
         coEvery { homes.myHomesStored(any()) } returns Stored(failure = NetworkError.Server(503, null))
+        every { homes.myHomesCopy() } returns null
     }
 
     @After fun tearDown() {

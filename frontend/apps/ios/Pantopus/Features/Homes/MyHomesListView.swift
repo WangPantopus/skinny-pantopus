@@ -63,6 +63,11 @@ struct MyHomesListView: View {
                 viewModel.retireSession()
             }
         }
+        // A home added, claimed, verified or left, or a household change
+        // (`homes`): the open list re-reads, its rows staying on screen.
+        .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.homes, kind: .homes) }, perform: {
+            await viewModel.refreshIfShown()
+        })
         .onChange(of: viewModel.pendingEvent) { _, event in
             handle(event)
         }

@@ -42,7 +42,13 @@ object StoreTopics {
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
 object StoreKeys {
     /** My Homes: one source for every screen that lists the viewer's homes. */
-    val myHomes = StoreKey<MyHomesResponse>("api/homes/my-homes", kind = StoreKind.HOMES, topics = setOf(StoreTopics.HOMES))
+    val myHomes =
+        StoreKey<MyHomesResponse>(
+            "api/homes/my-homes",
+            kind = StoreKind.HOMES,
+            topics = setOf(StoreTopics.HOMES),
+            type = MyHomesResponse::class.java,
+        )
 
     /**
      * The sections the Today tab renders (contract §8 "Today on the phones"): weather and its sky, air, alerts, the
@@ -67,7 +73,12 @@ object StoreKeys {
 
     /** The viewer's notification and briefing preferences (their own settings). */
     val notificationPreferences =
-        StoreKey<NotificationPreferences>("api/hub/preferences", kind = StoreKind.YOU, topics = setOf("profile:me"))
+        StoreKey<NotificationPreferences>(
+            "api/hub/preferences",
+            kind = StoreKind.YOU,
+            topics = setOf("profile:me"),
+            type = NotificationPreferences::class.java,
+        )
 
     /** Support Trains the viewer organizes or helps with (first page), for My trains and Invitations. */
     val mySupportTrains =
@@ -114,6 +125,7 @@ object StoreKeys {
             ),
             kind = StoreKind.NEARBY,
             topics = setOf(StoreTopics.POSTS),
+            type = FeedResponse::class.java,
         )
 
     /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */
@@ -130,6 +142,7 @@ object StoreKeys {
             mapOf("limit" to "100"),
             kind = StoreKind.MESSAGES_LIST,
             topics = setOf(StoreTopics.CHATS),
+            type = UnifiedConversationsResponse::class.java,
         )
 
     /**
@@ -142,16 +155,27 @@ object StoreKeys {
             mapOf("ballot" to "1"),
             kind = StoreKind.PLACE,
             topics = setOf("place:$homeId", "home:$homeId", StoreTopics.HOMES),
+            type = PlaceIntelligence::class.java,
         )
 
     /**
-     * The Nearby tab's density meter and map cells (contract §4 "Nearby": fresh 2 minutes). They follow the viewer's
-     * place, so a home added, left or verified marks them through `homes`.
+     * The Nearby tab's density meter and map cells (contract §4 "Nearby": fresh 2 minutes, saved on the phone). They
+     * follow the viewer's place, so a home added, left or verified marks them through `homes`.
      */
     val neighborhoodMeter =
-        StoreKey<NeighborhoodMeter>("api/neighborhood/meter", kind = StoreKind.NEARBY, topics = setOf(StoreTopics.HOMES))
+        StoreKey<NeighborhoodMeter>(
+            "api/neighborhood/meter",
+            kind = StoreKind.NEARBY,
+            topics = setOf(StoreTopics.HOMES),
+            type = NeighborhoodMeter::class.java,
+        )
     val neighborhoodCells =
-        StoreKey<NeighborhoodCells>("api/neighborhood/cells", kind = StoreKind.NEARBY, topics = setOf(StoreTopics.HOMES))
+        StoreKey<NeighborhoodCells>(
+            "api/neighborhood/cells",
+            kind = StoreKind.NEARBY,
+            topics = setOf(StoreTopics.HOMES),
+            type = NeighborhoodCells::class.java,
+        )
 
     /** The bell's unread count (kind Notifications: fresh 30 seconds, never saved on the phone). */
     val notificationsUnreadCount =
@@ -174,16 +198,38 @@ object StoreKeys {
     )
 
     /** The viewer's own profile (contract §4 "You": fresh 10 minutes). */
-    val ownProfile = StoreKey<ProfileResponse>("api/users/profile", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+    val ownProfile =
+        StoreKey<ProfileResponse>(
+            "api/users/profile",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.PROFILE_ME),
+            type = ProfileResponse::class.java,
+        )
 
     /** The businesses the viewer belongs to (the You tab's Business card). */
     val myBusinesses =
-        StoreKey<MyBusinessesResponse>("api/businesses/my-businesses", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+        StoreKey<MyBusinessesResponse>(
+            "api/businesses/my-businesses",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.PROFILE_ME),
+            type = MyBusinessesResponse::class.java,
+        )
 
     /** The viewer's invite progress and invite code (the You tab's invite card). */
     val inviteProgress =
-        StoreKey<InviteProgressDto>("api/users/me/invite-progress", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
-    val inviteCode = StoreKey<InviteCodeDto>("api/users/me/invite-code", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+        StoreKey<InviteProgressDto>(
+            "api/users/me/invite-progress",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.PROFILE_ME),
+            type = InviteProgressDto::class.java,
+        )
+    val inviteCode =
+        StoreKey<InviteCodeDto>(
+            "api/users/me/invite-code",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.PROFILE_ME),
+            type = InviteCodeDto::class.java,
+        )
 
     /**
      * A home's dashboard (household data: counts, members, recent activity), kind Homes. Shown from a copy only to
@@ -203,5 +249,6 @@ object StoreKeys {
             mapOf("ballot" to "1", "sections" to todaySectionsQuery),
             kind = StoreKind.TODAY,
             topics = setOf("today", "home:$homeId", "place:$homeId"),
+            type = PlaceIntelligence::class.java,
         )
 }

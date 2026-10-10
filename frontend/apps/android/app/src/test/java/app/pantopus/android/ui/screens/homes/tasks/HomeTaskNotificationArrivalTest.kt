@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.homes.HomeTaskSessionDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeTasksRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import io.mockk.coEvery
@@ -37,7 +38,7 @@ class HomeTaskNotificationArrivalTest {
     private val task = "b1000000-0000-4000-8000-000000000002"
     private val destination = DeepLinkRouter.Destination.HomeTask(home, task)
     private val identity = HomeClaimScopeTestFixture()
-    private val repo = mockk<HomeTasksRepository>()
+    private val repo = mockk<HomeTasksRepository>(relaxUnitFun = true)
     private lateinit var model: HouseholdTaskDetailViewModel
     private val response =
         HomeTaskResponse(
@@ -50,12 +51,23 @@ class HomeTaskNotificationArrivalTest {
         mockkObject(DeepLinkRouter)
         every { DeepLinkRouter.completeArrival(any()) } returns Unit
         coEvery { repo.getHomeTask(any(), any(), any()) } returns NetworkResult.Success(response)
+        // The screens' store hands back what the endpoint answered (Instant Screens).
+        coEvery { repo.getHomeTaskStored(any(), any(), any(), any(), any()) } coAnswers {
+            repo.getHomeTask(firstArg(), secondArg(), thirdArg(), arg(3)).stored()
+        }
         model =
             HouseholdTaskDetailViewModel(
                 HomeTaskAccessFactory(repo, claimScopeFactory(identity)),
                 SavedStateHandle(mapOf("homeId" to home, "taskId" to task)),
             )
     }
+
+    /** What the screens' store hands back for a read with this outcome. */
+    private fun <T : Any> NetworkResult<T>.stored(): Stored<T> =
+        when (this) {
+            is NetworkResult.Success -> Stored(data, fetchedAt = System.currentTimeMillis())
+            is NetworkResult.Failure -> Stored(failure = error)
+        }
 
     @After fun teardown() {
         unmockkObject(DeepLinkRouter)
