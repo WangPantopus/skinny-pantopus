@@ -82,6 +82,7 @@ class MembersListViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { gates.create(any(), any()).checkForRead(any(), any()) } returns null
         every { auth.state } returns MutableStateFlow(AuthRepository.State.SignedOut)
         every { sender.session(any()) } returns readSession
         coEvery { readSession.requireCurrent() } returns Unit
