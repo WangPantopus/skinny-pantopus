@@ -25,6 +25,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.theme.PantopusIcon
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -62,7 +63,11 @@ import java.time.Instant
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HouseholdTasksListViewModelTest {
-    private val repo: HomeTasksRepository = mockk(relaxUnitFun = true)
+    private val repo: HomeTasksRepository =
+        mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
+            every { homeTasksWriter(any()) } returns {}
+            every { homeTaskWriter(any(), any()) } returns {}
+        }
 
     /** Fixed clock so chip derivation and subtitle formatting are
      *  deterministic — 2026-05-15T12:00:00Z. */

@@ -38,6 +38,7 @@ class HomeCopyGate(
 
     /** The last known access is a household one: copies may show before the re-check, and they stay stored. */
     private var allowsCopy: Boolean = householdAccess(access.storedAuthority(homeId))
+    private var hasLeft = false
     var showsCopy: Boolean
         get() = allowsCopy && householdAccess(access.storedAuthority(homeId))
         private set(value) {
@@ -48,11 +49,14 @@ class HomeCopyGate(
      * Re-checks the viewer's access through the store, alongside the screen's own reads. [force] for pull to refresh
      * and Retry; a viewer not known to hold household access always reads now.
      */
-    suspend fun recheck(force: Boolean): Stored<HomeDashboardAuthorityDto> =
-        access.readStored(homeId, force || !showsCopy).also { showsCopy = householdAccess(it.data) }
+    suspend fun recheck(force: Boolean): Stored<HomeDashboardAuthorityDto> {
+        hasLeft = false
+        return access.readStored(homeId, force || !showsCopy).also { showsCopy = householdAccess(it.data) }
+    }
 
     /** A screen that reads the viewer's access itself (the dashboard) reports what it read. */
     fun observe(authority: HomeDashboardAuthorityDto?) {
+        hasLeft = false
         showsCopy = householdAccess(authority)
     }
 
@@ -86,6 +90,10 @@ class HomeCopyGate(
 
     /** The screen left: the entries of a viewer without household access go with it. */
     fun leave() {
+        // PAUSE, STOP, disposal and onCleared can all follow the same visit. The next screen may already be
+        // reading shared Home keys, so only the first departure may remove them.
+        if (hasLeft) return
+        hasLeft = true
         if (!showsCopy) keys.forEach(store::remove)
     }
 
@@ -134,17 +142,18 @@ fun HomeCopyLifecycle(
                             active = true
                             currentLoad()
                         }
-                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
-                        active = false
-                        currentPause()
-                    }
+                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP ->
+                        if (active) {
+                            active = false
+                            currentPause()
+                        }
                     else -> Unit
                 }
             }
         owner.lifecycle.addObserver(observer)
         onDispose {
             owner.lifecycle.removeObserver(observer)
-            currentPause()
+            if (active) currentPause()
         }
     }
 }
