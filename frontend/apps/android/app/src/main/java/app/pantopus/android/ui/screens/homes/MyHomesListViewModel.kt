@@ -306,9 +306,6 @@ class MyHomesListViewModel
                 }
         }
 
-        private fun listChecksOut(homes: List<MyHome>): Boolean =
-            homes.none { !it.hasValidListContext } && homes.map { it.id }.distinct().size == homes.size
-
         fun acknowledgeEvent() {
             _pendingEvent.value = null
         }
@@ -624,3 +621,6 @@ private fun Stored<MyHomesResponse>.homesForPresentation(store: ScreenStore): Li
     }
     return rows
 }
+
+private fun listChecksOut(homes: List<MyHome>): Boolean =
+    homes.none { !it.hasValidListContext } && homes.map { it.id }.distinct().size == homes.size
