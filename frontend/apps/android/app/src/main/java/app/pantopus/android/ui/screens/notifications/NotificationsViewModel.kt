@@ -256,6 +256,7 @@ class NotificationsViewModel
         private var hasMore = false
         private var loading = false
         private var quietRefreshPending = false
+        private var forceRefreshPending = false
         private val pendingReads = mutableSetOf<String>()
         private var markingAllRead = false
         private var notifications: MutableList<NotificationDto> = mutableListOf()
@@ -400,7 +401,9 @@ class NotificationsViewModel
                 quietRefreshPending = true
                 return
             }
-            fetchPage(reset = true, keepTail = true)
+            val force = forceRefreshPending
+            forceRefreshPending = false
+            fetchPage(reset = true, force = force, keepTail = true)
         }
 
         /** Pull-to-refresh / retry: reads now, with the rows kept under the pull indicator. */
@@ -507,7 +510,14 @@ class NotificationsViewModel
             generation: Int,
             unread: Int,
         ) {
-            if (generation != fetchGeneration || _state.value is ListOfRowsUiState.Error) return
+            if (_state.value is ListOfRowsUiState.Error) return
+            if (generation != fetchGeneration) {
+                // A pull or tab switch may have projected this still-pending action onto a newer response. Read
+                // the current filter again after the action finishes, without restoring the previous filter's rows.
+                quietRefreshPending = true
+                forceRefreshPending = true
+                return
+            }
             notifications = notifications.map { if (it.id in ids) it.copy(isRead = false) else it }.toMutableList()
             _unreadCount.value += unread
         }
