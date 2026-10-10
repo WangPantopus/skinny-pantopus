@@ -10,30 +10,13 @@
 //  optional thank-you note as a final broadcast first). Both mutate local
 //  state optimistically so the toast / chip flip stay instant.
 //
-//  PROJECTION GAPS (degrade gracefully): `/:id` exposes per-slot
-//  filled/capacity counts but not a helper roster, dropout count, or
-//  audience segmentation, and `/:id/updates` broadcasts to everyone — so
-//  the helper count is proxied from covered slots, dropout shows 0, and
-//  the audience picker + push-to-phones toggle stay client-only. The
-//  backend has no single "close with thanks" route; see the P1-E notes.
+//  The reservations endpoint supplies helper/delivery counts. Updates
+//  broadcast to all helpers; the backend has no combined close-with-thanks route.
 //
 
 import Foundation
 
 // MARK: - Content models
-
-/// One audience chip in the Send-an-update form (`All helpers 12` etc).
-public struct AudienceChipContent: Sendable, Hashable, Identifiable {
-    public let id: String
-    public let label: String
-    public let count: String
-
-    public init(id: String, label: String, count: String) {
-        self.id = id
-        self.label = label
-        self.count = count
-    }
-}
 
 /// Visual tone for an Organize-section row's leading icon tile.
 public enum OrganizeRowTone: Sendable, Hashable {
@@ -69,29 +52,6 @@ public struct OrganizeRowContent: Sendable, Hashable, Identifiable {
         self.meta = meta
         self.sub = sub
         self.isDestructive = isDestructive
-    }
-}
-
-/// The CloseTrainSheet's static copy. Editable thank-you note lives on the VM.
-public struct CloseTrainSheetContent: Sendable, Hashable {
-    public let daysEarlyLabel: String
-    public let mealsDelivered: String
-    public var neighborsHelped: String
-    public let coverageDays: String
-    public let recipientQuote: String
-
-    public init(
-        daysEarlyLabel: String,
-        mealsDelivered: String,
-        neighborsHelped: String,
-        coverageDays: String,
-        recipientQuote: String
-    ) {
-        self.daysEarlyLabel = daysEarlyLabel
-        self.mealsDelivered = mealsDelivered
-        self.neighborsHelped = neighborsHelped
-        self.coverageDays = coverageDays
-        self.recipientQuote = recipientQuote
     }
 }
 
@@ -257,6 +217,10 @@ public final class ManageTrainViewModel {
 
     private let trainId: String
     let api: APIClient
+    private let store: ScreenStore
+    private let sessionScope: HomeClaimSessionScope
+    private var readGeneration = 0
+    private var initializedDrafts = false
     /// Explicit offline content (previews / tests). When set `load()`
     /// renders it directly instead of hitting the network.
     private let seed: ManageTrainContent?
@@ -269,9 +233,11 @@ public final class ManageTrainViewModel {
 
     /// Designated init — module-internal because `APIClient` is. Tests
     /// inject a stubbed client here.
-    init(trainId: String, api: APIClient, content: ManageTrainContent? = nil) {
+    init(trainId: String, api: APIClient, content: ManageTrainContent? = nil, identity: (() -> String?)? = nil) {
         self.trainId = trainId
         self.api = api
+        store = ScreenStore.store(for: api)
+        sessionScope = HomeClaimSessionScope(api: api, identity: identity)
         seed = content
     }
 
@@ -282,16 +248,48 @@ public final class ManageTrainViewModel {
         }
         if case .loaded = state {} else { state = .loading }
         deliveredMeals = nil
+        readGeneration += 1
+        let read = readGeneration
+        let cache = store.generation
+        guard readIsCurrent(read, cache: cache) else { return }
         do {
             let dto: SupportTrainDetailDTO = try await api.request(
                 SupportTrainsEndpoints.detail(supportTrainId: trainId)
             )
+            guard readIsCurrent(read, cache: cache) else { return }
             apply(Self.project(dto))
             slotRows = Self.slotRows(dto.slots ?? [])
-            await loadOrganizerSurfaces()
+            await loadOrganizerSurfaces(read: read, cache: cache)
         } catch {
+            guard readIsCurrent(read, cache: cache), !(error is CancellationError) else { return }
+            suspend()
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load this support train."
-            state = .error(message: message)
+            if case .loaded = state, !ScreenStore.isRefusal(error) {
+                actionError = message
+            } else {
+                state = .error(message: message)
+            }
+        }
+    }
+
+    func readIsCurrent(_ read: Int, cache: Int) -> Bool {
+        sessionScope.isCurrent && read == readGeneration && cache == store.generation && !Task.isCancelled
+    }
+
+    /// Keep unsent update/thanks/slot drafts; clear recipient and helper replies.
+    public func suspend() {
+        guard seed == nil else { return }
+        readGeneration += 1
+        helperRows = []
+        organizerRows = []
+        fund = nil
+        deliveredMeals = nil
+        helpersFailed = true
+        pendingConfirm = nil
+        actionError = nil
+        if case var .loaded(content) = state {
+            content.close.recipientQuote = ""
+            state = .loaded(content)
         }
     }
 
@@ -345,6 +343,8 @@ public final class ManageTrainViewModel {
     /// Push a loaded content payload into state + the editable draft fields.
     private func apply(_ content: ManageTrainContent) {
         state = .loaded(content)
+        guard !initializedDrafts else { return }
+        initializedDrafts = true
         draftMessage = content.draftMessage
         selectedAudienceId = content.selectedAudienceId
         pushToPhones = content.pushToPhones

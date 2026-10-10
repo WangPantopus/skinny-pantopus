@@ -16,6 +16,42 @@
 
 import Foundation
 
+/// One audience chip in the Send-an-update form (`All helpers 12` etc).
+public struct AudienceChipContent: Sendable, Hashable, Identifiable {
+    public let id: String
+    public let label: String
+    public let count: String
+
+    public init(id: String, label: String, count: String) {
+        self.id = id
+        self.label = label
+        self.count = count
+    }
+}
+
+/// The CloseTrainSheet's static copy. Editable thank-you note lives on the VM.
+public struct CloseTrainSheetContent: Sendable, Hashable {
+    public let daysEarlyLabel: String
+    public let mealsDelivered: String
+    public var neighborsHelped: String
+    public let coverageDays: String
+    public var recipientQuote: String
+
+    public init(
+        daysEarlyLabel: String,
+        mealsDelivered: String,
+        neighborsHelped: String,
+        coverageDays: String,
+        recipientQuote: String
+    ) {
+        self.daysEarlyLabel = daysEarlyLabel
+        self.mealsDelivered = mealsDelivered
+        self.neighborsHelped = neighborsHelped
+        self.coverageDays = coverageDays
+        self.recipientQuote = recipientQuote
+    }
+}
+
 extension ManageTrainViewModel {
     /// Derive the organizer dashboard from the detail payload. `nonisolated`
     /// so unit tests can assert it without an actor hop.

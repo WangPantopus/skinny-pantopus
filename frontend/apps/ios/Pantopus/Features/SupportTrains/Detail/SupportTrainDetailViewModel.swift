@@ -68,9 +68,11 @@ public final class SupportTrainDetailViewModel {
 
     private let trainId: String
     private let api: APIClient
-    /// The screen store (Instant Screens): a train is fresh for a minute and
-    /// out of date at once after an action here or a `supporttrain:` signal.
+    /// Only safe train/slot fields enter this memory-only store.
     private let store: ScreenStore
+    private let sessionScope: HomeClaimSessionScope
+    private var readGeneration = 0
+    public private(set) var recipientDetailsAvailable = false
     /// Offline override. When set, `load()` resolves from it instead of the
     /// network — used by QA / previews to swap variants on a row tap.
     private let resolver: Resolver?
@@ -90,11 +92,13 @@ public final class SupportTrainDetailViewModel {
     init(
         trainId: String,
         api: APIClient,
-        resolver: Resolver? = nil
+        resolver: Resolver? = nil,
+        identity: (() -> String?)? = nil
     ) {
         self.trainId = trainId
         self.api = api
         store = ScreenStore.store(for: api)
+        sessionScope = HomeClaimSessionScope(api: api, identity: identity)
         self.resolver = resolver
         seeded = false
         // The store's copy shows in the first frame (opening the train again).
@@ -110,9 +114,11 @@ public final class SupportTrainDetailViewModel {
         self.trainId = trainId
         api = .shared
         store = .shared
+        sessionScope = HomeClaimSessionScope(api: .shared)
         resolver = nil
         state = seedState
         seeded = true
+        recipientDetailsAvailable = true
     }
 
     /// Convenience for previews — seed with a known content payload.
@@ -120,14 +126,14 @@ public final class SupportTrainDetailViewModel {
         self.init(seedState: .loaded(content), trainId: content.trainId)
     }
 
-    /// Opening the train: the store's copy, re-read once a minute old.
+    /// Safe train/slot content is instant; recipient details always re-check.
     public func load() async {
-        await fetch(force: false)
+        await fetch()
     }
 
     /// Pull to refresh and Try again: always asks the server.
     public func refresh() async {
-        await fetch(force: true, announcesFailure: true)
+        await fetch(announcesFailure: true)
     }
 
     /// A change signal names this train (`supporttrain:{id}`).
@@ -151,7 +157,7 @@ public final class SupportTrainDetailViewModel {
         SupportTrainsEndpoints.detail(supportTrainId: trainId)
     }
 
-    private func fetch(force: Bool, announcesFailure: Bool = false) async {
+    private func fetch(announcesFailure: Bool = false) async {
         guard !seeded else { return }
         // Keep a loaded train on screen while reloading (a helper action
         // re-reads it), as Manage does; the skeleton is for the first load.
@@ -162,35 +168,92 @@ public final class SupportTrainDetailViewModel {
                 return
             }
             state = .loaded(content)
+            recipientDetailsAvailable = true
             return
         }
+        readGeneration += 1
+        let read = readGeneration
+        let cache = store.generation
         do {
-            try await store.show(
+            try requireCurrentRead(read, cache: cache)
+            let reply = try await api.requestDataResponse(endpoint)
+            try requireCurrentRead(read, cache: cache)
+            let dto = try ScreenStore.decoder().decode(SupportTrainDetailDTO.self, from: reply.data)
+            // Never put the mixed response into the store. Only this allowlisted
+            // preview may survive closing/backgrounding; no ETag can skip rechecking.
+            try store.put(
                 endpoint,
-                as: SupportTrainDetailDTO.self,
+                data: Self.safePreviewData(reply.data),
                 kind: .supportTrain,
                 topics: [ScreenTopic.supportTrain(trainId)],
-                force: force
-            ) { state = .loaded(Self.project($0.value)) }
-        } catch is CancellationError {
-            return
+                showsBeforeRecheck: true
+            )
+            state = .loaded(Self.project(dto))
+            recipientDetailsAvailable = true
         } catch {
+            guard read == readGeneration, cache == store.generation,
+                  sessionScope.isCurrent, !(error is CancellationError) else { return }
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load this support train."
-            // A failed refresh keeps the train on screen; a refusal (403/404)
-            // or a first load shows the server's answer.
-            if case .loaded = state, !ScreenStore.isRefusal(error) {
+            redactRecipientDetails()
+            if ScreenStore.isRefusal(error) {
+                store.remove(endpoint)
+                state = .error(message: message)
+            } else if case .loaded = state {
                 if announcesFailure { refreshFailureMessage = message }
-                return
+            } else {
+                state = .error(message: message)
             }
-            state = .error(message: message)
         }
+    }
+
+    private func requireCurrentRead(_ read: Int, cache: Int) throws {
+        guard sessionScope.isCurrent, read == readGeneration, cache == store.generation else { throw CancellationError() }
+        try Task.checkCancellation()
+    }
+
+    /// Keep the sheet and its unsent fields alive while dropping server secrets.
+    public func suspend() {
+        guard !seeded, resolver == nil else { return }
+        readGeneration += 1
+        redactRecipientDetails()
+    }
+
+    private func redactRecipientDetails() {
+        recipientDetailsAvailable = false
+        if case let .loaded(content) = state { state = .loaded(content.withoutRecipientDetails) }
+    }
+
+    /// Unknown fields are excluded too: adding a server field must not opt it into caching.
+    private nonisolated static func safePreviewData(_ data: Data) throws -> Data {
+        guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw APIError.invalidResponse }
+        let allowed: Set<String> = ["id", "title", "status", "published_at"]
+        var safe = body.filter { allowed.contains($0.key) }
+        safe["support_modes"] = (body["support_modes"] as? [String: Any])?
+            .filter { ["home_cooked_meals", "takeout", "groceries"].contains($0.key) }
+        let slotFields: Set<String> = [
+            "id",
+            "slot_date",
+            "slot_label",
+            "support_mode",
+            "start_time",
+            "end_time",
+            "status",
+            "filled_count",
+            "capacity"
+        ]
+        safe["slots"] = (body["slots"] as? [[String: Any]])?.map { row in row.filter { slotFields.contains($0.key) } }
+        let reservationFields: Set<String> = ["id", "slot_id", "status", "contribution_mode"]
+        safe["my_reservations"] = (body["my_reservations"] as? [[String: Any]])?
+            .map { row in row.filter { reservationFields.contains($0.key) } }
+        safe["coarse_location"] = (body["coarse_location"] as? [String: Any])?.filter { ["city", "state"].contains($0.key) }
+        return try JSONSerialization.data(withJSONObject: safe)
     }
 
     /// An action here changed the train: its copy and the trains lists are
     /// out of date, and the train is read again now.
     private func reloadAfterChange() async {
         store.markStale(topics: [ScreenTopic.supportTrain(trainId), ScreenTopic.supportTrains])
-        await fetch(force: true)
+        await fetch()
     }
 
     /// Convenience accessor used by the dock-handler hook in the view.
@@ -233,6 +296,8 @@ public final class SupportTrainDetailViewModel {
     /// failure (the sheet renders it inline, matching RN's ReserveSheet
     /// error box) and `nil` on success.
     public func reserve(slotId: String, body: ReserveSlotBody) async -> String? {
+        guard sessionScope.isCurrent,
+              recipientDetailsAvailable else { return "Check the recipient details before signing up. Please retry." }
         guard !isSubmitting else { return nil }
         isSubmitting = true
         defer { isSubmitting = false }
@@ -793,5 +858,34 @@ extension SupportTrainDetailViewModel {
         let words = name.split(separator: " ").prefix(2)
         let letters = words.compactMap { $0.first.map(String.init) }.joined().uppercased()
         return letters.isEmpty ? "ST" : letters
+    }
+}
+
+extension SupportTrainDetailContent {
+    /// Safe display during a new access check. Drafts belong to the sheet, not this reply.
+    var withoutRecipientDetails: Self {
+        Self(
+            trainId: trainId,
+            recipient: RecipientCardContent(
+                initials: recipient.initials,
+                householdName: typeDates.title,
+                identityTag: recipient.identityTag,
+                verified: false,
+                address: recipient.address,
+                quote: ""
+            ),
+            typeDates: typeDates,
+            calendarDays: calendarDays,
+            sections: sections,
+            hostedBy: HostedByFooter(organizerInitials: "O", organizerDisplayName: "Organizer", neighborHint: nil),
+            dock: dock,
+            celebrationBanner: celebrationBanner,
+            reserveOptions: reserveOptions,
+            reserveContext: ReserveSheetContext(
+                enabledModes: reserveContext.enabledModes,
+                restrictionChips: [],
+                contactlessPreferred: false
+            )
+        )
     }
 }

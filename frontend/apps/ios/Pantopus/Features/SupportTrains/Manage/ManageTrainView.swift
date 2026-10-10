@@ -25,6 +25,8 @@ import SwiftUI
 
 @MainActor
 public struct ManageTrainView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isVisible = false
     @State private var viewModel: ManageTrainViewModel
     private let onClose: @MainActor () -> Void
     /// Runs after a successful delete instead of `onClose`, so a host can
@@ -72,6 +74,18 @@ public struct ManageTrainView: View {
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.load() }
+        .onAppear { isVisible = true }
+        .onDisappear {
+            isVisible = false
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                viewModel.suspend()
+            } else if isVisible {
+                Task { await viewModel.load() }
+            }
+        }
         .overlay(alignment: .bottom) { closeSheetOverlay }
         .overlay(alignment: .bottom) { toastOverlay }
         .accessibilityIdentifier("manageTrain")

@@ -235,7 +235,7 @@ final class SupportTrainDetailViewModelTests: XCTestCase {
 
     func testLoadFetchesDetailAndProjects() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.detailJSON)]
-        let vm = SupportTrainDetailViewModel(trainId: "t1", api: makeAPI())
+        let vm = SupportTrainDetailViewModel(trainId: "t1", api: makeAPI()) { "support-train-tests" }
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             return XCTFail("Expected loaded, got \(vm.state)")
@@ -271,7 +271,7 @@ final class SupportTrainDetailViewModelTests: XCTestCase {
         }
         """
         SequencedURLProtocol.sequence = [.status(200, body: json)]
-        let vm = SupportTrainDetailViewModel(trainId: "t2", api: makeAPI())
+        let vm = SupportTrainDetailViewModel(trainId: "t2", api: makeAPI()) { "support-train-tests" }
         await vm.load()
         guard case let .loaded(content) = vm.state else {
             return XCTFail("Expected loaded, got \(vm.state)")
@@ -285,7 +285,7 @@ final class SupportTrainDetailViewModelTests: XCTestCase {
 
     func testLoadServerErrorSurfacesError() async {
         SequencedURLProtocol.sequence = [.status(500, body: "{\"error\":\"boom\"}")]
-        let vm = SupportTrainDetailViewModel(trainId: "t3", api: makeAPI())
+        let vm = SupportTrainDetailViewModel(trainId: "t3", api: makeAPI()) { "support-train-tests" }
         await vm.load()
         guard case .error = vm.state else {
             return XCTFail("Expected error, got \(vm.state)")
