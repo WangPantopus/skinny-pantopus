@@ -353,17 +353,19 @@ class OwnersListViewModelTest {
     fun remove_owner_waits_for_confirmation_before_dropping_row() =
         runTest {
             coEvery { repo.list("home_1") } returns NetworkResult.Success(OwnersResponse(owners = threeOwners))
-            val pending = CompletableDeferred<NetworkResult<RemoveOwnerResponse>>()
-            coEvery { repo.remove("home_1", "o2") } coAnswers { pending.await() }
-            val vm = makeVm()
-            vm.load()
-            vm.removeOwner("o2")
-            assertEquals(3, (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.size)
-            pending.complete(NetworkResult.Success(RemoveOwnerResponse(message = "Owner removed")))
-            val loaded = vm.state.value as ListOfRowsUiState.Loaded
-            assertEquals(2, loaded.sections.first().rows.size)
-            assertNull(loaded.sections.first().rows.firstOrNull { it.id == "o2" })
-            assertNull(vm.removalError.value)
+            for (quorumId in listOf("waiting-for-approval", null)) {
+                val pending = CompletableDeferred<NetworkResult<RemoveOwnerResponse>>()
+                coEvery { repo.remove("home_1", "o2") } coAnswers { pending.await() }
+                val vm = makeVm()
+                vm.load()
+                vm.removeOwner("o2")
+                assertEquals(3, (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.size)
+                pending.complete(NetworkResult.Success(RemoveOwnerResponse(message = "Accepted", quorumActionId = quorumId)))
+                val loaded = vm.state.value as ListOfRowsUiState.Loaded
+                assertEquals(if (quorumId == null) 2 else 3, loaded.sections.first().rows.size)
+                assertEquals(quorumId != null, loaded.sections.first().rows.any { it.id == "o2" })
+                assertEquals(quorumId != null, vm.removalError.value != null)
+            }
         }
 
     @Test
