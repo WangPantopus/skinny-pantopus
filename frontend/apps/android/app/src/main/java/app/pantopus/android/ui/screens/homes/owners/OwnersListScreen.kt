@@ -42,6 +42,7 @@ import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -104,6 +105,10 @@ fun OwnersListScreen(
 
     var removeTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     val refreshAfterTransfer = rememberRefreshAfterTransfer { viewModel.refresh() }
+
+    LaunchedEffect(state) {
+        if (state is ListOfRowsUiState.Loading || state is ListOfRowsUiState.Error) removeTarget = null
+    }
 
     LaunchedEffect(Unit) {
         Analytics.track(AnalyticsEvent.ScreenOwnersListViewed)

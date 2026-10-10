@@ -123,11 +123,11 @@ class OwnersListViewModel
          * Invite, transfer and remove wait until this visit's access read confirms them; a copy's access only shows
          * the roster (as on iOS).
          */
-        private val _confirmedAccess = MutableStateFlow<HomeAccessDto?>(null)
-        val access: StateFlow<HomeAccessDto?> = _confirmedAccess.asStateFlow()
+        private val confirmedAccess = MutableStateFlow<HomeAccessDto?>(null)
+        val access: StateFlow<HomeAccessDto?> = confirmedAccess.asStateFlow()
 
         private val canManageOwnership: Boolean
-            get() = _confirmedAccess.value?.can("ownership.manage") == true
+            get() = confirmedAccess.value?.can("ownership.manage") == true
 
         /** Cached roster — preserves backend ordering and drives
          *  optimistic-remove rollback. */
@@ -152,15 +152,17 @@ class OwnersListViewModel
         fun suspendContent() {
             active = false
             readGeneration += 1
-            _confirmedAccess.value = null
+            confirmedAccess.value = null
             if (!gate.showsCopy) clearCopy()
             gate.leave()
         }
 
         private fun clearCopy() {
             owners = emptyList()
+            _pendingEvent.value = null
+            _removalError.value = null
             _access.value = null
-            _confirmedAccess.value = null
+            confirmedAccess.value = null
             _refreshing.value = false
             _refreshNotice.value = null
             _state.value = ListOfRowsUiState.Loading
@@ -237,6 +239,7 @@ class OwnersListViewModel
         /** Optimistic remove + rollback on failure. */
         fun removeOwner(ownerId: String) {
             if (!canManageOwnership) return
+            val revision = readGeneration
             val previous = owners
             if (previous.none { it.id == ownerId }) return
             _removalError.value = null
@@ -246,6 +249,7 @@ class OwnersListViewModel
                 when (repo.remove(homeId, ownerId)) {
                     is NetworkResult.Success -> Unit
                     is NetworkResult.Failure -> {
+                        if (!active || revision != readGeneration) return@launch
                         owners = previous
                         applyState()
                         _removalError.value =
@@ -266,7 +270,7 @@ class OwnersListViewModel
 
         private fun reload(force: Boolean) {
             if (!active) return
-            _confirmedAccess.value = null
+            confirmedAccess.value = null
             val generation = ++readGeneration
             if (_access.value == null) _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
@@ -306,13 +310,13 @@ class OwnersListViewModel
                     _access.value = viewer
                     // Confirmed = the server answered for this access within the Homes window (a fresh copy or this read);
                     // an older copy kept after a failed re-read (offline) shows the roster but confirms nothing.
-                    _confirmedAccess.value = viewer.takeIf { access.isFresh(StoreKind.HOMES) }
+                    confirmedAccess.value = viewer.takeIf { access.isFresh(StoreKind.HOMES) }
                     owners = list.owners
                     applyState()
                 }
                 list != null -> {
                     _access.value = null
-                    _confirmedAccess.value = null
+                    confirmedAccess.value = null
                     _state.value =
                         ListOfRowsUiState.Error(
                             (access.failure ?: NetworkError.NotFound).displayMessage("Couldn't load owner permissions."),
@@ -320,7 +324,7 @@ class OwnersListViewModel
                 }
                 roster.failure is NetworkError.Forbidden -> {
                     _access.value = null
-                    _confirmedAccess.value = null
+                    confirmedAccess.value = null
                     // Not (or no longer) an owner, e.g. right after transferring
                     // the Home: a retry can't change that, so say so plainly.
                     _state.value =
@@ -332,7 +336,7 @@ class OwnersListViewModel
                 }
                 else -> {
                     _access.value = null
-                    _confirmedAccess.value = null
+                    confirmedAccess.value = null
                     _state.value =
                         ListOfRowsUiState.Error((roster.failure ?: NetworkError.NotFound).displayMessage("Couldn't load the list."))
                 }
