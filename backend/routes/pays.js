@@ -950,6 +950,8 @@ router.post('/:paymentId/admin-refund', verifyToken, requireAdmin, validate(admi
  * Get user's payment methods
  */
 router.get('/methods', verifyToken, async (req, res) => {
+  // Saved cards are never kept in a device's HTTP cache.
+  res.set('Cache-Control', 'private, no-store');
   try {
     const userId = req.user.id;
     

@@ -4,8 +4,10 @@ import app.pantopus.android.data.api.models.homes.CreateHomeIssueRequest
 import app.pantopus.android.data.api.models.homes.HomeIssueResponse
 import app.pantopus.android.data.api.models.homes.HomeIssuesResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeIssueRequest
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -31,6 +33,13 @@ interface HomeIssuesApi {
         @Query("status") status: String? = null,
         @Query("severity") severity: String? = null,
     ): HomeIssuesResponse
+
+    /** Every issue ([getHomeIssues] without filters) for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/issues")
+    suspend fun getHomeIssuesConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeIssuesResponse>
 
     /** `POST /api/homes/:id/issues` — route `backend/routes/home.js:4420`. */
     @POST("api/homes/{id}/issues")

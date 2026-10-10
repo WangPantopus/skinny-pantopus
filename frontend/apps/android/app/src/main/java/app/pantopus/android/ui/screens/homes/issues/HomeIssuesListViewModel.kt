@@ -8,12 +8,19 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.CreateHomeIssueRequest
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeIssueDto
+import app.pantopus.android.data.api.models.homes.HomeIssuesResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeIssueRequest
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeIssuesRepository
+import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerConfig
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerCtaTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.CompactButtonVariant
@@ -32,6 +39,8 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -102,6 +111,7 @@ open class HomeIssuesListViewModel
     constructor(
         private val repo: HomeIssuesRepository,
         private val adminRepo: HomeAdminRepository,
+        gates: HomeCopyGateFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private val homeId: String =
@@ -127,24 +137,65 @@ open class HomeIssuesListViewModel
         /** Inline error surfaced as a snackbar after a failed mutation. */
         val toast = MutableStateFlow<String?>(null)
 
+        /** Pull to refresh is reading while the rows stay (Instant Screens): the pull indicator only. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate = gates.create(homeId, listOf(HomeStoreKeys.issues(homeId), HomeStoreKeys.me(homeId)))
+        private var readGeneration = 0L
+
         private var issues: List<HomeIssueDto>? = null
         private var pendingCreate: Pair<CreateHomeIssueRequest, String>? = null
 
         /** The viewer's effective Home permissions; unreadable access leaves the list read-only. */
         private var access: HomeAccessDto? = null
 
+        /**
+         * Report and status actions wait until this visit's access read confirms them (a fresh answer); a copy's
+         * access only shows the list (as on iOS).
+         */
+        private var accessConfirmed = false
+
         /** As the server allows: maintenance editors report issues; maintenance managers and home editors update them. */
         private val canReport: Boolean
-            get() = access?.let { it.can("maintenance.edit") || it.can("maintenance.manage") } == true
+            get() = accessConfirmed && access?.let { it.can("maintenance.edit") || it.can("maintenance.manage") } == true
 
         private val canUpdate: Boolean
-            get() = access?.let { it.can("home.edit") || it.can("maintenance.manage") } == true
+            get() = accessConfirmed && access?.let { it.can("home.edit") || it.can("maintenance.manage") } == true
 
-        fun load() = refresh()
+        /**
+         * Screen entry and every return (Instant Screens): owners and household roles see the stored issues at once,
+         * and the store answers a fresh copy without a request or revalidates an older one quietly.
+         */
+        fun load() {
+            if (issues == null && gate.showsCopy) showStoredCopy()
+            read(force = false)
+        }
 
+        /** Pull to refresh and Retry: read now. */
         fun refresh() {
-            _state.value = ListOfRowsUiState.Loading
-            viewModelScope.launch { fetch() }
+            _refreshing.value = issues != null
+            read(force = true)
+        }
+
+        override fun onCleared() {
+            gate.leave()
+        }
+
+        private fun read(force: Boolean) {
+            if (issues == null) _state.value = ListOfRowsUiState.Loading
+            viewModelScope.launch { fetch(force) }
+        }
+
+        private fun showStoredCopy() {
+            val stored = repo.storedIssues(homeId) ?: return
+            access = adminRepo.storedMyAccess(homeId)
+            publish(stored.issues)
         }
 
         fun selectTab(id: String) {
@@ -198,7 +249,7 @@ open class HomeIssuesListViewModel
             ) {
                 is NetworkResult.Success -> {
                     pendingCreate = null
-                    fetch()
+                    fetch(force = true)
                     true
                 }
                 is NetworkResult.Failure -> {
@@ -218,7 +269,7 @@ open class HomeIssuesListViewModel
                     val result =
                         repo.updateHomeIssue(homeId, issueId, UpdateHomeIssueRequest(status = status))
                 ) {
-                    is NetworkResult.Success -> fetch()
+                    is NetworkResult.Success -> fetch(force = true)
                     is NetworkResult.Failure ->
                         toast.value = result.error.displayMessage("Failed to update issue")
                 }
@@ -233,23 +284,47 @@ open class HomeIssuesListViewModel
 
         // MARK: - Fetch + render
 
-        private suspend fun fetch() {
-            when (val result = repo.getHomeIssues(homeId)) {
-                is NetworkResult.Success -> {
-                    access = (adminRepo.myAccess(homeId) as? NetworkResult.Success)?.data
-                    issues = result.data.issues
-                    _tabs.value = tabsWithCounts(result.data.issues)
-                    render(result.data.issues)
-                }
-                is NetworkResult.Failure -> {
-                    issues = null
-                    _banner.value = null
-                    _state.value =
-                        ListOfRowsUiState.Error(
-                            result.error.displayMessage("Couldn't load this home's issues."),
-                        )
-                }
+        private suspend fun fetch(force: Boolean) {
+            val generation = ++readGeneration
+            val fromCopy = gate.showsCopy && !force
+            var reads = readAll(force = !fromCopy)
+            // Household access ended meanwhile: whatever came from a copy is read again now.
+            if (fromCopy && !gate.showsCopy) reads = readAll(force = true)
+            if (generation != readGeneration) return
+            _refreshing.value = false
+            val (stored, me) = reads
+            val loaded = stored.data
+            if (loaded != null) {
+                access = me.data
+                // Confirmed = the server answered for this access within the Homes window (a fresh copy or this read); an
+                // older copy kept after a failed re-read (offline) shows the list but confirms nothing.
+                accessConfirmed = me.isFresh(StoreKind.HOMES)
+                publish(loaded.issues)
+            } else {
+                issues = null
+                _banner.value = null
+                _state.value =
+                    ListOfRowsUiState.Error(
+                        (stored.failure ?: NetworkError.NotFound).displayMessage("Couldn't load this home's issues."),
+                    )
             }
+            _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
+        }
+
+        /** The issues and the viewer's access, read side by side with the access re-check. */
+        private suspend fun readAll(force: Boolean): Pair<Stored<HomeIssuesResponse>, Stored<HomeAccessDto>> =
+            coroutineScope {
+                val recheck = async { gate.recheck(force) }
+                val loaded = async { repo.getHomeIssuesStored(homeId, force) }
+                val me = async { adminRepo.myAccessStored(homeId, force) }
+                recheck.await()
+                loaded.await() to me.await()
+            }
+
+        private fun publish(loaded: List<HomeIssueDto>) {
+            issues = loaded
+            _tabs.value = tabsWithCounts(loaded)
+            render(loaded)
         }
 
         private fun render(loaded: List<HomeIssueDto>) {

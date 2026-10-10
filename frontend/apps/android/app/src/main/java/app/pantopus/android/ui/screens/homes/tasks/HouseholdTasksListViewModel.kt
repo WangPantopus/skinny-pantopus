@@ -7,12 +7,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
+import app.pantopus.android.data.api.models.homes.OccupantDto
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeMembersRepository
+import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerConfig
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerCtaTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
@@ -34,6 +39,8 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -159,13 +166,15 @@ class HouseholdTasksListViewModel
         savedStateHandle: SavedStateHandle,
         private val clock: () -> Instant = Instant::now,
         private val membersRepo: HomeMembersRepository? = null,
+        gates: HomeCopyGateFactory? = null,
     ) : ViewModel() {
         @Inject
         constructor(
             accessFactory: HomeTaskAccessFactory,
             savedStateHandle: SavedStateHandle,
             membersRepo: HomeMembersRepository,
-        ) : this(accessFactory, savedStateHandle, Instant::now, membersRepo)
+            gates: HomeCopyGateFactory,
+        ) : this(accessFactory, savedStateHandle, Instant::now, membersRepo, gates)
 
         private val homeId: String =
             checkNotNull(savedStateHandle.get<String>(HOUSEHOLD_TASKS_HOME_ID_KEY)) {
@@ -173,6 +182,10 @@ class HouseholdTasksListViewModel
             }
 
         private val access = accessFactory.create(homeId, viewModelScope)
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate = gates?.create(homeId, listOf(HomeStoreKeys.tasks(homeId), HomeStoreKeys.occupants(homeId)))
+        private val showsCopy: Boolean get() = gate?.showsCopy == true
         private var generation = 0
         private var acting = false
         private var canCreate = false
@@ -202,6 +215,14 @@ class HouseholdTasksListViewModel
         private val _actionError = MutableStateFlow<String?>(null)
         val actionError: StateFlow<String?> = _actionError.asStateFlow()
 
+        /** Pull to refresh is reading while the rows stay (Instant Screens): the pull indicator only. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
         private var tasks: List<HomeTaskDto>? = null
 
         /** Members' names by user id, for assignees; empty when the viewer can't read members ("Member 1A2B"). */
@@ -211,6 +232,9 @@ class HouseholdTasksListViewModel
         private var onEditRecurring: (String) -> Unit = {}
 
         init {
+            // First frame (Instant Screens): owners and household roles see the stored list while the screen opens; the
+            // read waits for the screen to resume.
+            if (showsCopy) showStoredCopy()
             viewModelScope.launch {
                 access.invalidated.collect { if (it) fail(TASK_SESSION_CHANGED) }
             }
@@ -226,13 +250,15 @@ class HouseholdTasksListViewModel
             this.onEditRecurring = onEditRecurring
         }
 
-        fun load() {
-            refresh()
-        }
+        /**
+         * Screen entry and every return (Instant Screens): owners and household roles see the stored list at once,
+         * and the store answers a fresh copy without a request or revalidates an older one quietly.
+         */
+        fun load() = read(force = false)
 
         fun resume() {
             active = true
-            refresh()
+            read(force = false)
         }
 
         fun pause() {
@@ -241,42 +267,83 @@ class HouseholdTasksListViewModel
             work?.cancel()
             work = null
             acting = false
-            clearContent()
-            memberNames = emptyMap()
             _actionError.value = null
-            _state.value = ListOfRowsUiState.Loading
+            _refreshing.value = false
+            // Founder decision 3: owners and household roles keep what's on screen while away; anyone else blanks
+            // and re-checks on return.
+            if (!showsCopy) {
+                clearContent()
+                memberNames = emptyMap()
+                _state.value = ListOfRowsUiState.Loading
+            }
         }
 
-        fun refresh() {
+        /** Pull to refresh and Retry: read now. */
+        fun refresh() = read(force = true)
+
+        override fun onCleared() {
+            gate?.leave()
+        }
+
+        private fun read(force: Boolean) {
             if (acting || !active) return
             val revision = ++generation
-            clearContent()
-            _state.value = ListOfRowsUiState.Loading
+            if (tasks == null && showsCopy) showStoredCopy()
+            if (tasks == null) _state.value = ListOfRowsUiState.Loading
+            _refreshing.value = force && tasks != null
             work?.cancel()
             work =
                 viewModelScope.launch {
                     taskAttempt(revision) {
-                        val result = access.list()
+                        val fromCopy = showsCopy && !force
+                        var stored = readTasks(fromCopy)
+                        // Household access ended meanwhile: whatever came from a copy is read again now.
+                        if (fromCopy && !showsCopy) stored = readTasks(fromCopy = false)
                         if (!current(revision)) return@taskAttempt
+                        _refreshing.value = false
+                        val result = stored.data ?: throw (stored.failure ?: NetworkError.NotFound)
                         canCreate = result.collectionCapabilities?.canCreate == true
                         applySuccess(result.tasks)
-                        loadMemberNames(revision)
+                        _refreshNotice.value =
+                            RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
+                        loadMemberNames(revision, force = !fromCopy)
                     }
                 }
         }
 
+        /** The task list, read side by side with the access re-check; checked like a direct read. */
+        private suspend fun readTasks(fromCopy: Boolean): Stored<GetHomeTasksResponse> =
+            coroutineScope {
+                val recheck = async { gate?.recheck(!fromCopy) }
+                val list = async { access.listStored(force = !fromCopy) }
+                recheck.await()
+                list.await()
+            }
+
+        private fun showStoredCopy() {
+            val stored = access.storedList() ?: return
+            canCreate = stored.collectionCapabilities?.canCreate == true
+            membersRepo?.storedOccupants(homeId)?.let { occupants -> memberNames = namesOf(occupants.occupants) }
+            applySuccess(stored.tasks)
+        }
+
         /** Only when a task has an assignee, so an unassigned list costs no extra request. */
-        private suspend fun loadMemberNames(revision: Int) {
+        private suspend fun loadMemberNames(
+            revision: Int,
+            force: Boolean,
+        ) {
             val repo = membersRepo ?: return
             if (tasks.orEmpty().none { !it.assignedTo.isNullOrEmpty() }) return
-            val result = repo.listOccupants(homeId) as? NetworkResult.Success ?: return
+            val occupants = repo.listOccupantsStored(homeId, force).data ?: return
             if (!current(revision)) return
-            memberNames =
-                result.data.occupants
-                    .mapNotNull(HouseholdTaskAssignableMember::from)
-                    .associate { it.id to it.displayName }
+            memberNames = namesOf(occupants.occupants)
             tasks?.let(::renderForCurrentTab)
         }
+
+        private fun namesOf(occupants: List<OccupantDto>): Map<String, String> =
+            occupants
+                .mapNotNull(HouseholdTaskAssignableMember::from)
+                .associate { it.id to it.displayName }
 
         fun selectTab(id: String) {
             _selectedTab.value = id
@@ -411,6 +478,7 @@ class HouseholdTasksListViewModel
         private fun fail(message: String) {
             generation++
             acting = false
+            _refreshing.value = false
             clearContent()
             memberNames = emptyMap()
             _state.value = ListOfRowsUiState.Error(message)

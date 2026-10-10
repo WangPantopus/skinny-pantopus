@@ -48,6 +48,10 @@ public struct NotificationSettingsView: View {
                 }
             }
             .pantopusAnimation(.componentState, value: viewModel.toast?.text)
+            // Your preferences changed on another device (`profile:me`).
+            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.profileMe) }, perform: {
+                await viewModel.refreshFromSignal()
+            })
             // The notifications-off banner sends people to iOS Settings; drop
             // it as soon as they come back with notifications allowed.
             .onChange(of: scenePhase) { _, phase in

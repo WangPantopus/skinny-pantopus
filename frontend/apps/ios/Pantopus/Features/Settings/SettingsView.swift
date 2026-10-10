@@ -112,6 +112,8 @@ public struct SettingsView: View {
         GroupedListView(dataSource: indexModel, onBack: onClose)
             .accessibilityIdentifier("settings")
             .onAppear { indexModel.onNavigate = { route in handle(route: route) } }
+            // Your profile or settings changed elsewhere (`profile:me`): the rows re-read.
+            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.profileMe) }, perform: { await indexModel.load() })
     }
 
     @ViewBuilder private func destination(for route: SettingsStackRoute) -> some View {
