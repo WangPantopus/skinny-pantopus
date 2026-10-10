@@ -23,9 +23,11 @@ import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.sports.SportsRepository
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.feed.FeedSurface
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -78,6 +80,8 @@ class PulseFeedViewModelTest {
         // The first page reads through the screens' store (Instant Screens); no copies before the first read here.
         every { repo.feedFirstPageCopy(any()) } returns null
         every { repo.feedFirstPageIsCurrent(any()) } returns false
+        // Each card stands in for its post (the post detail's first frame).
+        every { repo.seedDetails(any()) } just Runs
     }
 
     private fun page(response: FeedResponse) = Stored(response, fetchedAt = System.currentTimeMillis())
