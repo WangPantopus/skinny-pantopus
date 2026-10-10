@@ -515,7 +515,7 @@ class TodayTabViewModel
     }
 
 /** The home Today shows: the primary home, else the first shared one, else the newest private setup; null for none. */
-private fun primaryHomeId(response: MyHomesResponse): String? {
+internal fun primaryHomeId(response: MyHomesResponse): String? {
     val homes = response.sharedHomes
     val privateHome =
         response.homes.filter { it.hasValidListContext && it.accessKind == "private_setup" }
