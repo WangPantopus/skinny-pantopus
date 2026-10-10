@@ -233,6 +233,16 @@ class ScreenStore
             _changes.update { it + 1 }
         }
 
+        /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
+        fun <T : Any> writer(key: StoreKey<T>): (T) -> Unit {
+            val captured = synchronized(slots) { generation to identity() }
+            return { data ->
+                synchronized(slots) {
+                    if (captured.first == generation && captured.second != null && captured.second == identity()) put(key, data)
+                }
+            }
+        }
+
         /**
          * Own edit (contract §6): the server's reply to a save becomes the entry, counted as read now. The old ETag no
          * longer names it, so the next read after the window asks without one.
