@@ -453,14 +453,15 @@ class NotificationsViewModel
             applyState()
             viewModelScope.launch {
                 try {
-                    if (!confirmTaskScope(target)) return@launch
+                    if (!confirmTaskScope(target)) {
+                        undoPendingReads(setOf(id), generation, 1)
+                        return@launch
+                    }
                     when (repo.markRead(id)) {
                         is NetworkResult.Success -> Unit
                         is NetworkResult.Failure -> {
-                            if (!confirmTaskScope(target)) return@launch
                             // Restore this action only: another read or a newly arrived row must survive the failure.
-                            notifications = notifications.map { if (it.id == id) it.copy(isRead = false) else it }.toMutableList()
-                            if (generation == fetchGeneration) _unreadCount.value++
+                            undoPendingReads(setOf(id), generation, 1)
                             _toast.value = ToastMessage("Couldn't mark as read. Try again.", ToastKind.Error)
                         }
                     }
@@ -488,8 +489,7 @@ class NotificationsViewModel
                     when (repo.markAllRead(contexts)) {
                         is NetworkResult.Success -> Unit
                         is NetworkResult.Failure -> {
-                            notifications = notifications.map { if (it.id in targets) it.copy(isRead = false) else it }.toMutableList()
-                            if (generation == fetchGeneration) _unreadCount.value += previousCount
+                            undoPendingReads(targets, generation, previousCount)
                             _toast.value = ToastMessage("Couldn't mark all as read. Try again.", ToastKind.Error)
                         }
                     }
@@ -499,6 +499,17 @@ class NotificationsViewModel
                     finishReadAction()
                 }
             }
+        }
+
+        /** A rejected write cannot change a newer tab, replace new rows, or restore an access-refused list. */
+        private fun undoPendingReads(
+            ids: Set<String>,
+            generation: Int,
+            unread: Int,
+        ) {
+            if (generation != fetchGeneration || _state.value is ListOfRowsUiState.Error) return
+            notifications = notifications.map { if (it.id in ids) it.copy(isRead = false) else it }.toMutableList()
+            _unreadCount.value += unread
         }
 
         private fun finishReadAction() {
