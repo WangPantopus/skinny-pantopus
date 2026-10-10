@@ -6,9 +6,9 @@ import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.notifications.personalBellCount
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.place.PlaceRepository
@@ -146,21 +146,33 @@ class PlaceDashboardViewModel
             _refreshing.value = force && _state.value is PlaceDashboardUiState.Loaded
             readJob =
                 viewModelScope.launch {
-                    val homes = homesRepo.myHomesStored(force || !householdViewer(id))
-                    if (!active || version != readVersion || homeId != id) return@launch
-                    val home = homes.data?.homes?.firstOrNull { it.id == id }
-                    val keep = home?.showsCopyBeforeRecheck == true
-                    if (!keep) clearPrivateCopy(id)
-                    val stored =
-                        when {
-                            home == null -> Stored(failure = homes.failure ?: NetworkError.NotFound)
-                            !keep && homes.failure != null -> Stored(failure = homes.failure)
-                            else -> repo.placeStored(id, force || !keep, persist = keep)
-                        }
-                    if (!active || version != readVersion || homeId != id) return@launch
+                    val stored = readAuthorized(id, force, version)
+                    if (!current(id, version)) return@launch
                     _refreshing.value = false
                     publish(stored)
                 }
+        }
+
+        private fun current(
+            id: String,
+            version: Long,
+        ): Boolean = active && version == readVersion && homeId == id
+
+        private suspend fun readAuthorized(
+            id: String,
+            force: Boolean,
+            version: Long,
+        ): Stored<PlaceIntelligence> {
+            val homes = homesRepo.myHomesStored(force || !householdViewer(id))
+            if (!current(id, version)) return Stored()
+            val home = homes.data?.homes?.firstOrNull { it.id == id }
+            val keep = home?.showsCopyBeforeRecheck == true
+            if (!keep) clearPrivateCopy(id)
+            return when {
+                home == null -> Stored(failure = homes.failure ?: NetworkError.NotFound)
+                !keep && homes.failure != null -> Stored(failure = homes.failure)
+                else -> repo.placeStored(id, force || !keep, persist = keep)
+            }
         }
 
         private fun publish(stored: Stored<PlaceIntelligence>) {

@@ -350,6 +350,7 @@ class HomeDashboardViewModel
          * while it is re-checked); guests, service providers and any access with an expiry are cleared now.
          */
         fun suspendContent() {
+            if (!visible) return
             checklistOriginals.values.toList().forEach { applyChecklistItem(it, remember = false) }
             checklistOriginals.clear()
             _pendingChecklistItemIds.value = emptySet()
