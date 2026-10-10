@@ -11,7 +11,6 @@ import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthority
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.homes.HomeDashboardAccessRepository
 import app.pantopus.android.data.store.HomeStoreKeys
-import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKey
 import app.pantopus.android.data.store.StoreKeys
@@ -30,8 +29,6 @@ class HomeCopyGate(
     private val store: ScreenStore,
     keys: List<StoreKey<*>>,
 ) {
-    private val keys: List<StoreKey<*>> = keys + HomeStoreKeys.access(homeId)
-
     private val keys: List<StoreKey<*>> =
         keys +
             listOf(
