@@ -2,7 +2,6 @@
 
 package app.pantopus.android.ui.screens.homes
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -122,7 +121,7 @@ fun MyHomesListScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG).semantics { testTagsAsResourceId = true }) {
+    HomeOfflineContent(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG).semantics { testTagsAsResourceId = true }) {
         ListOfRowsScreen(
             title = "My homes",
             customHeader = {
