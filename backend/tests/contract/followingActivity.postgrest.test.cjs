@@ -9,17 +9,15 @@ const { setTimeout: delay } = require('node:timers/promises');
 const { createClient } = require('@supabase/supabase-js');
 const { loadFollowingActivity } = require('../../services/followingActivityService');
 const { filterFollowingPosts, personaPostVisibleToViewer } = require('../../utils/personaPostVisibility');
+const { ensureContractImage } = require('../../../scripts/db/contract-images.cjs');
 
 describe('Following activity against PostgreSQL 17 / PostgREST 14', {
   skip: process.env.PANTOPUS_POSTGREST_CONTRACT !== '1',
-  timeout: 120_000,
+  timeout: 300_000,
 }, () => {
   const name = `pantopus-following-contract-${process.pid}-${randomUUID().slice(0, 8)}`;
   const database = `${name}-db`;
   const api = `${name}-api`;
-  // PostgREST's upstream registry carries the same v14.10 image as Supabase's
-  // ECR mirror, which rate-limits shared CI runners. Pin the verified digest.
-  const postgrestImage = 'postgrest/postgrest:v14.10@sha256:bca3f86f69d8ef7aa1e5ee65e66ce9a20c6c147be637517a7be8399e102901d1';
   let db;
   const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8', timeout: 90_000 }).trim();
   const runSql = (sql) => execFileSync('docker', ['exec', '-i', database, 'psql', '-h', '127.0.0.1', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], {
@@ -27,9 +25,11 @@ describe('Following activity against PostgreSQL 17 / PostgREST 14', {
   });
 
   before(async () => {
+    const postgresImage = ensureContractImage('postgres');
+    const postgrestImage = ensureContractImage('postgrest');
     docker('network', 'create', name);
-    docker('run', '--rm', '-d', '--name', database, '--network', name,
-      '--tmpfs', '/var/lib/postgresql/data', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', 'postgres:17-alpine');
+    docker('run', '--rm', '--pull=never', '-d', '--name', database, '--network', name,
+      '--tmpfs', '/var/lib/postgresql/data', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', postgresImage);
     let ready = false;
     // The image's temporary initialization server accepts Unix sockets but
     // disables TCP. Wait for the final TCP server used by PostgREST, and use
@@ -50,7 +50,7 @@ describe('Following activity against PostgreSQL 17 / PostgREST 14', {
       CREATE INDEX ON "Post" (identity_context_id, target_tier_rank, created_at DESC)
         WHERE identity_context_type = 'persona' AND archived_at IS NULL;
     `);
-    docker('run', '--rm', '-d', '--name', api, '--network', name,
+    docker('run', '--rm', '--pull=never', '-d', '--name', api, '--network', name,
       '-p', '127.0.0.1::3000', '-e', `PGRST_DB_URI=postgres://postgres@${database}:5432/postgres`,
       '-e', 'PGRST_DB_ANON_ROLE=postgres', postgrestImage);
     const port = docker('port', api, '3000/tcp').split(':').pop();

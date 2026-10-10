@@ -3,9 +3,11 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.homes.HomeTaskRecurrenceState
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeTasksRepository
+import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskRecurrenceFixture
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -29,7 +31,7 @@ class HomeTaskRecurrenceApiTest {
         val retrofit =
             Retrofit.Builder().baseUrl(server.url("/"))
                 .addConverterFactory(MoshiConverterFactory.create(moshi)).build()
-        repository = HomeTasksRepository(retrofit.create(HomeTasksApi::class.java))
+        repository = HomeTasksRepository(retrofit.create(HomeTasksApi::class.java), mockk<ScreenStore>(relaxed = true))
     }
 
     @After fun teardown() = server.shutdown()

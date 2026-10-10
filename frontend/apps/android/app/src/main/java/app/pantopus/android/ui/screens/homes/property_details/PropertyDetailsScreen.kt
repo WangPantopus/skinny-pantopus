@@ -19,10 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,11 +45,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.DataRow
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.SectionHeader
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.SourcePill
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevations
@@ -75,17 +80,23 @@ fun PropertyDetailsScreen(
     viewModel: PropertyDetailsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_property_details", state is PropertyDetailsUiState.Clean || state is PropertyDetailsUiState.Mismatch)
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
 
     PropertyDetailsScreenContent(
         state = state,
         onBack = onBack,
         onRetry = viewModel::refresh,
         onRequestCorrection = onRequestCorrection,
+        refreshNotice = refreshNotice,
+        refreshing = refreshing,
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PropertyDetailsScreenContent(
     state: PropertyDetailsUiState,
@@ -93,8 +104,14 @@ internal fun PropertyDetailsScreenContent(
     onRetry: () -> Unit,
     onRequestCorrection: () -> Unit,
     renderGoogleMap: Boolean = true,
+    refreshNotice: RefreshNotice? = null,
+    refreshing: Boolean = false,
 ) {
-    Box(modifier = Modifier.fillMaxSize().testTag("propertyDetails")) {
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = onRetry,
+        modifier = Modifier.fillMaxSize().testTag("propertyDetails"),
+    ) {
         when (state) {
             PropertyDetailsUiState.Loading -> LoadingBody(onBack = onBack)
             is PropertyDetailsUiState.Clean ->
@@ -104,6 +121,7 @@ internal fun PropertyDetailsScreenContent(
                     onBack = onBack,
                     onRequestCorrection = onRequestCorrection,
                     renderGoogleMap = renderGoogleMap,
+                    refreshNotice = refreshNotice,
                 )
             is PropertyDetailsUiState.Mismatch ->
                 LoadedBody(
@@ -112,6 +130,7 @@ internal fun PropertyDetailsScreenContent(
                     onBack = onBack,
                     onRequestCorrection = onRequestCorrection,
                     renderGoogleMap = renderGoogleMap,
+                    refreshNotice = refreshNotice,
                 )
             is PropertyDetailsUiState.Error ->
                 ErrorBody(message = state.message, onBack = onBack, onRetry = onRetry)
@@ -126,6 +145,7 @@ private fun LoadedBody(
     onBack: () -> Unit,
     onRequestCorrection: () -> Unit,
     renderGoogleMap: Boolean,
+    refreshNotice: RefreshNotice?,
 ) {
     ContentDetailShell(
         title = "Property details",
@@ -147,6 +167,8 @@ private fun LoadedBody(
                 modifier = Modifier.padding(horizontal = Spacing.s4),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s5),
             ) {
+                // Instant Screens contract §3: the copy stays; only one quiet line says a refresh failed.
+                refreshNotice?.let { RefreshFailedLine(it) }
                 if (isMismatch && content.banner != null) {
                     MismatchBanner(data = content.banner)
                 }

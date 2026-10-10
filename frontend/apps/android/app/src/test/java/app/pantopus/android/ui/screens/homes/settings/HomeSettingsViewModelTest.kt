@@ -18,6 +18,8 @@ import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomeSettingsRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
 import io.mockk.coEvery
@@ -48,10 +50,12 @@ class HomeSettingsViewModelTest {
     private val homeMembersRepository: HomeMembersRepository = mockk()
     private val homeAdminRepository: HomeAdminRepository = mockk()
     private val homeSettingsRepository: HomeSettingsRepository = mockk()
+    private val gates: HomeCopyGateFactory = mockk(relaxed = true)
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { gates.create(any(), any()).checkForRead(any(), any()) } returns null
     }
 
     @After
@@ -101,18 +105,26 @@ class HomeSettingsViewModelTest {
             NetworkResult.Success(UpdateHomeResponse(message = "Home updated successfully", home = homeRow())),
         homeId: String = "home-1",
     ): HomeSettingsViewModel {
-        coEvery { homesRepository.detail(any()) } returns detail
-        coEvery { homeMembersRepository.listOccupants(any()) } returns occupants
-        coEvery { homeAdminRepository.myAccess(any()) } returns access
+        coEvery { homesRepository.detailStored(any(), any()) } returns detail.stored()
+        coEvery { homeMembersRepository.listOccupantsStored(any(), any()) } returns occupants.stored()
+        coEvery { homeAdminRepository.myAccessStored(any(), any()) } returns access.stored()
         coEvery { homeSettingsRepository.updateHome(any(), any()) } returns updateHome
         return HomeSettingsViewModel(
             homesRepository = homesRepository,
             homeMembersRepository = homeMembersRepository,
             homeAdminRepository = homeAdminRepository,
             homeSettingsRepository = homeSettingsRepository,
+            gates = gates,
             savedStateHandle = SavedStateHandle(mapOf(HOME_SETTINGS_HOME_ID_KEY to homeId)),
         )
     }
+
+    /** What the screens' store hands back for a read with this outcome. */
+    private fun <T : Any> NetworkResult<T>.stored(): Stored<T> =
+        when (this) {
+            is NetworkResult.Success -> Stored(data, fetchedAt = System.currentTimeMillis())
+            is NetworkResult.Failure -> Stored(failure = error)
+        }
 
     private fun homeRow(name: String? = "The Lane House") =
         HomeDto(

@@ -3,8 +3,10 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesResponse
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PUT
 import retrofit2.http.Tag
 
@@ -23,6 +25,12 @@ interface NotificationPreferencesApi {
      */
     @GET("api/hub/preferences")
     suspend fun preferences(): NotificationPreferencesResponse
+
+    /** [preferences] for the screens' store: sends the stored ETag; a 304 means the copy is current. */
+    @GET("api/hub/preferences")
+    suspend fun preferencesConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<NotificationPreferencesResponse>
 
     /**
      * `PUT /api/hub/preferences` — route `backend/routes/hub.js:716`.

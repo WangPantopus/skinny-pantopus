@@ -9,6 +9,8 @@ import app.pantopus.android.data.api.models.homediscovery.SubmitResidencyClaimRe
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HomeDiscoveryApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreTopics
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,6 +23,7 @@ open class HomeDiscoveryRepository
     @Inject
     constructor(
         private val api: HomeDiscoveryApi,
+        private val store: ScreenStore,
     ) {
         /** `GET /api/homes/discover`. */
         open suspend fun discover(query: String): NetworkResult<HomeDiscoverResponse> = safeApiCall { api.discover(query) }
@@ -50,5 +53,5 @@ open class HomeDiscoveryRepository
                     homeId,
                     SubmitResidencyClaimRequest(claimedRole = claimedRole),
                 )
-            }
+            }.also { if (it is NetworkResult.Success) store.markStale(StoreTopics.HOMES) }
     }

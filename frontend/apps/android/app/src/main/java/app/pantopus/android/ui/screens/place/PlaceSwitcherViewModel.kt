@@ -3,7 +3,6 @@ package app.pantopus.android.ui.screens.place
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.MyHome
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,16 +42,23 @@ class PlaceSwitcherViewModel
         private val _state = MutableStateFlow<PlaceSwitcherUiState>(PlaceSwitcherUiState.Loading)
         val state: StateFlow<PlaceSwitcherUiState> = _state.asStateFlow()
 
+        /**
+         * Shows the shared My Homes copy at once (Instant Screens) and reads it again when it is out of date, so a
+         * home added or left elsewhere still shows.
+         */
         fun load() {
-            if (_state.value is PlaceSwitcherUiState.Loaded) return
-            _state.value = PlaceSwitcherUiState.Loading
+            homesRepository.myHomesCopy()?.let { _state.value = PlaceSwitcherUiState.Loaded(it.sharedHomes.map(::rowFor)) }
+            if (_state.value !is PlaceSwitcherUiState.Loaded) _state.value = PlaceSwitcherUiState.Loading
             viewModelScope.launch {
-                _state.value =
-                    when (val result = homesRepository.myHomes()) {
-                        is NetworkResult.Success ->
-                            PlaceSwitcherUiState.Loaded(result.data.sharedHomes.map(::rowFor))
-                        is NetworkResult.Failure -> PlaceSwitcherUiState.Error(result.error.displayMessage("Couldn't load homes."))
+                val homes = homesRepository.myHomesStored()
+                val data = homes.data
+                when {
+                    data != null -> _state.value = PlaceSwitcherUiState.Loaded(data.sharedHomes.map(::rowFor))
+                    _state.value !is PlaceSwitcherUiState.Loaded -> {
+                        val message = homes.failure?.displayMessage("Couldn't load homes.") ?: "Couldn't load homes."
+                        _state.value = PlaceSwitcherUiState.Error(message)
                     }
+                }
             }
         }
 

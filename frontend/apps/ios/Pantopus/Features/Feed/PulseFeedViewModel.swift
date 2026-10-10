@@ -189,11 +189,34 @@ public final class PulseFeedViewModel {
     private var resolvedLongitude: Double?
     /// Reads the area chosen in the Nearby context bar (`GET /api/location`).
     private let chosenArea: @MainActor () async throws -> ViewingLocationDTO?
+    /// The screen store (Instant Screens): reopening Pulse shows the stored
+    /// first page for the area at once; it is re-read once out of date.
+    private let store: ScreenStore
+    /// The chosen area comes from the store too (not an injected reader), so
+    /// a reopened sheet can resolve it without waiting.
+    private let readsAreaFromStore: Bool
     /// The area the last first-page fetch used; later pages reuse it.
     private var lastArea: FeedArea?
     /// Identity of the query that produced the visible rows and cursor.
     private var lastQuery: FeedQuery?
     private var loadedItems: [FeedPostDTO] = []
+    /// Taps shown at once that the server hasn't confirmed yet, per post.
+    private var pendingActions: [String: Set<PulsePendingAction>] = [:]
+    /// A quiet refresh that found new posts while the reader is further down
+    /// holds its page here, behind the "N new posts" pill (Instant Screens).
+    private var pendingFirstPage: PendingFirstPage?
+    /// New posts waiting behind the pill; 0 hides it.
+    public private(set) var newPostsCount = 0
+    /// Set by the list: its first card is on screen.
+    public var isReadingAtTop = true
+
+    private struct PendingFirstPage {
+        let response: FeedResponse
+        let area: FeedArea
+        let query: FeedQuery
+        let viewingLocation: ViewingLocationDTO?
+    }
+
     private var isLoading = false
     /// Bumped per fetch; only the latest fetch's response is applied, so a
     /// filter tapped while a load is in flight still takes effect.
@@ -230,22 +253,36 @@ public final class PulseFeedViewModel {
         self.locationProvider = locationProvider
         explicitViewerId = viewerId
         self.moderation = moderation
-        self.chosenArea = chosenArea ?? { [api] in
-            let payload: ViewingLocationPayload = try await api.request(ViewingLocationEndpoints.current())
-            return payload.viewingLocation
+        let store = ScreenStore.store(for: api)
+        self.store = store
+        readsAreaFromStore = chosenArea == nil
+        self.chosenArea = chosenArea ?? {
+            try await store.load(
+                ViewingLocationEndpoints.current(),
+                as: ViewingLocationPayload.self,
+                kind: .you,
+                topics: [ScreenTopic.profileMe]
+            ).value.viewingLocation
         }
     }
 
     /// First-time load. Refetches when still empty so a location fix can
     /// populate the feed after permissions are granted.
     public func load() async {
-        if case .loaded = state { return }
+        if case .loaded = state {
+            // Coming back: a quiet re-read once the first page is out of date
+            // (Nearby: 2 minutes, or marked); new posts wait behind the pill.
+            if let query = lastQuery, store.peek(feedEndpoint(query), as: FeedResponse.self)?.isFresh == true { return }
+            await fetch()
+            return
+        }
+        showStoredFirstPage()
         await fetch()
     }
 
     /// Pull-to-refresh / retry.
     public func refresh() async {
-        await fetch()
+        await fetch(force: true)
     }
 
     /// Nearby ↔ Connections toggle. Clears the chip filter like RN's
@@ -354,7 +391,12 @@ public final class PulseFeedViewModel {
         let toggled = !current
         overrides[postId, default: PulsePostOverride()].hasReacted = toggled
         overrides[postId, default: PulsePostOverride()].likeCount = max(0, currentCount + (toggled ? 1 : -1))
+        pendingActions[postId, default: []].insert(.reaction)
         rebuildLoadedState()
+        defer {
+            pendingActions[postId]?.remove(.reaction)
+            rebuildLoadedState()
+        }
 
         do {
             let response = try await api.request(
@@ -366,8 +408,8 @@ public final class PulseFeedViewModel {
         } catch {
             overrides[postId, default: PulsePostOverride()].hasReacted = current
             overrides[postId, default: PulsePostOverride()].likeCount = currentCount
+            toastMessage = "Couldn't update your reaction."
         }
-        rebuildLoadedState()
     }
 
     // MARK: - Overflow actions
@@ -383,6 +425,7 @@ public final class PulseFeedViewModel {
         guard let item = loadedItems.first(where: { $0.id == postId }) else { return }
         let original = effectiveIsSaved(item)
         overrides[postId, default: PulsePostOverride()].isSaved = !original
+        pendingActions[postId, default: []].insert(.save)
         rebuildLoadedState()
         do {
             let response = try await api.request(
@@ -395,6 +438,7 @@ public final class PulseFeedViewModel {
             overrides[postId, default: PulsePostOverride()].isSaved = original
             toastMessage = "Couldn't update your bookmark."
         }
+        pendingActions[postId]?.remove(.save)
         rebuildLoadedState()
     }
 
@@ -406,7 +450,12 @@ public final class PulseFeedViewModel {
         let originalCount = effectiveShareCount(item)
         overrides[postId, default: PulsePostOverride()].isReposted = !original
         overrides[postId, default: PulsePostOverride()].shareCount = max(0, originalCount + (original ? -1 : 1))
+        pendingActions[postId, default: []].insert(.repost)
         rebuildLoadedState()
+        defer {
+            pendingActions[postId]?.remove(.repost)
+            rebuildLoadedState()
+        }
         do {
             let response = try await api.request(
                 PostsEndpoints.share(id: postId, shareType: "repost", reposted: !original),
@@ -580,7 +629,7 @@ public final class PulseFeedViewModel {
 
     // MARK: - Fetch
 
-    private func fetch() async {
+    private func fetch(force: Bool = false) async {
         fetchGeneration += 1
         let generation = fetchGeneration
         isLoadingMore = false
@@ -597,14 +646,7 @@ public final class PulseFeedViewModel {
                 viewingRadiusMiles = area.radiusMiles ?? 100
                 onAreaResolved?(viewingLocation)
             }
-            let query = FeedQuery(
-                surface: surface.backendSurface,
-                area: area,
-                postType: isInSportsLane ? nil : activeIntent.postType,
-                topic: topicQueryValue,
-                sportsMode: isInSportsLane ? sportsMode.rawValue : nil,
-                eventKey: isInSportsLane ? resolvedEventKey : nil
-            )
+            let query = makeQuery(area: area)
             if query != lastQuery {
                 // A changed filter or area cannot retain the old query's
                 // rows or cursor if its first page fails.
@@ -616,36 +658,39 @@ public final class PulseFeedViewModel {
                 lastQuery = nil
                 state = .loading
             }
-            let response: FeedResponse = try await api.request(
-                PostsEndpoints.feed(
-                    surface: query.surface,
-                    latitude: query.area.latitude,
-                    longitude: query.area.longitude,
-                    radiusMiles: query.area.radiusMiles,
-                    postType: query.postType,
-                    limit: 20,
-                    topic: query.topic,
-                    sportsMode: query.sportsMode,
-                    eventKey: query.eventKey
-                )
-            )
+            // The first page is a store entry (Nearby: 2 minutes); later pages are not.
+            let response = try await store.load(
+                feedEndpoint(query),
+                as: FeedResponse.self,
+                kind: .nearby,
+                topics: [ScreenTopic.posts],
+                force: force
+            ).value
             // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
             guard generation == fetchGeneration else { return }
-            lastArea = area
-            lastQuery = query
-            loadedItems = response.posts
-            postsLoaded = true
-            needsArea = response.requiresViewingLocation == true
-            // With no area chosen the server names the place it fell back to; when the feed looked around the
-            // device instead (location already allowed), say so rather than "Set an area".
-            let aroundDevice = surface == .pulse && viewingLocation == nil && latitude == nil && area.latitude != nil
-            onFallbackArea?(response.fallbackArea?.label ?? (aroundDevice ? "Near your location" : nil))
-            applyPagination(response.pagination)
-            scopeLabel = response.posts.first?.locationName ?? scopeLabel
-            recomputeRadiusSuggestion()
-            // Nothing was searched, so "no posts within 100 mi" would mislead.
-            if needsArea { radiusSuggestion = nil }
-            rebuildLoadedState()
+            // New posts never move what someone is reading: below the top they
+            // wait behind the pill; at the top (or on a pull) they slide in.
+            if !force, !isReadingAtTop, case .loaded = state, query == lastQuery {
+                let known = Set(loadedItems.map(\.id))
+                let fresh = response.posts.filter { !known.contains($0.id) }.count
+                if fresh > 0 {
+                    pendingFirstPage = PendingFirstPage(response: response, area: area, query: query, viewingLocation: viewingLocation)
+                    newPostsCount = fresh
+                    return
+                }
+                // Nothing new: the rows on screen take the server's counts and
+                // edits in place, and the older pages below stay.
+                let refreshed = Dictionary(response.posts.map { ($0.id, $0) }) { first, _ in first }
+                loadedItems = loadedItems.map { refreshed[$0.id] ?? $0 }
+                seedPostDetails(response.posts)
+                rebuildLoadedState()
+                return
+            }
+            pendingFirstPage = nil
+            newPostsCount = 0
+            applyFirstPage(response, area: area, query: query, viewingLocation: viewingLocation)
+        } catch is CancellationError {
+            return
         } catch {
             guard generation == fetchGeneration else { return }
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load posts."
@@ -662,6 +707,99 @@ public final class PulseFeedViewModel {
                 state = .error(message: message)
             }
         }
+    }
+
+    private func makeQuery(area: FeedArea) -> FeedQuery {
+        FeedQuery(
+            surface: surface.backendSurface,
+            area: area,
+            postType: isInSportsLane ? nil : activeIntent.postType,
+            topic: topicQueryValue,
+            sportsMode: isInSportsLane ? sportsMode.rawValue : nil,
+            eventKey: isInSportsLane ? resolvedEventKey : nil
+        )
+    }
+
+    private func feedEndpoint(_ query: FeedQuery) -> Endpoint {
+        PostsEndpoints.feed(
+            surface: query.surface,
+            latitude: query.area.latitude,
+            longitude: query.area.longitude,
+            radiusMiles: query.area.radiusMiles,
+            postType: query.postType,
+            limit: 20,
+            topic: query.topic,
+            sportsMode: query.sportsMode,
+            eventKey: query.eventKey
+        )
+    }
+
+    /// Each card stands in for its post's detail until that read answers
+    /// (a post opened from the feed shows at once; Instant Screens).
+    private func seedPostDetails(_ posts: [FeedPostDTO]) {
+        for post in posts where post.userId != nil {
+            store.seed(post, for: PostsEndpoints.detail(id: post.id))
+        }
+    }
+
+    private func applyFirstPage(_ response: FeedResponse, area: FeedArea, query: FeedQuery, viewingLocation: ViewingLocationDTO?) {
+        lastArea = area
+        lastQuery = query
+        loadedItems = response.posts
+        seedPostDetails(response.posts)
+        postsLoaded = true
+        needsArea = response.requiresViewingLocation == true
+        // With no area chosen the server names the place it fell back to; when the feed looked around the
+        // device instead (location already allowed), say so rather than "Set an area".
+        let aroundDevice = surface == .pulse && viewingLocation == nil && latitude == nil && area.latitude != nil
+        onFallbackArea?(response.fallbackArea?.label ?? (aroundDevice ? "Near your location" : nil))
+        applyPagination(response.pagination)
+        scopeLabel = response.posts.first?.locationName ?? scopeLabel
+        recomputeRadiusSuggestion()
+        // Nothing was searched, so "no posts within 100 mi" would mislead.
+        if needsArea { radiusSuggestion = nil }
+        rebuildLoadedState()
+    }
+
+    /// The pill: the held page goes on screen (the list scrolls to its top).
+    public func showNewPosts() {
+        guard let pending = pendingFirstPage else { return }
+        pendingFirstPage = nil
+        newPostsCount = 0
+        applyFirstPage(pending.response, area: pending.area, query: pending.query, viewingLocation: pending.viewingLocation)
+    }
+
+    /// Reopening Pulse: the stored first page for the stored area and the
+    /// current filters, before anything is awaited (no skeleton).
+    private func showStoredFirstPage() {
+        guard let (area, viewingLocation) = storedArea() else { return }
+        let query = makeQuery(area: area)
+        guard let copy = store.peek(feedEndpoint(query), as: FeedResponse.self) else { return }
+        if surface == .pulse {
+            viewingRadiusMiles = area.radiusMiles ?? 100
+            onAreaResolved?(viewingLocation)
+        }
+        applyFirstPage(copy.value, area: area, query: query, viewingLocation: viewingLocation)
+    }
+
+    /// `resolvedArea()` without waiting: only what is already known.
+    private func storedArea() -> (FeedArea, ViewingLocationDTO?)? {
+        if let latitude, let longitude {
+            return (FeedArea(latitude: latitude, longitude: longitude), nil)
+        }
+        if surface == .pulse {
+            guard readsAreaFromStore,
+                  let stored = store.peek(ViewingLocationEndpoints.current(), as: ViewingLocationPayload.self)
+            else { return nil }
+            if let chosen = stored.value.viewingLocation {
+                return (FeedArea(latitude: chosen.latitude, longitude: chosen.longitude, radiusMiles: chosen.radiusMiles), chosen)
+            }
+        }
+        if let resolvedLatitude, let resolvedLongitude {
+            return (FeedArea(latitude: resolvedLatitude, longitude: resolvedLongitude), nil)
+        }
+        guard let cached = locationProvider.cachedCoordinate() else { return nil }
+        return (FeedArea(latitude: cached.latitude, longitude: cached.longitude), nil)
     }
 
     /// Keyset-paged follow-up fetch — appends below the loaded rows.
@@ -694,6 +832,7 @@ public final class PulseFeedViewModel {
             // Seeded/system cards can repeat across pages — dedupe by id.
             let known = Set(loadedItems.map(\.id))
             loadedItems += response.posts.filter { !known.contains($0.id) }
+            seedPostDetails(response.posts)
             applyPagination(response.pagination)
             rebuildLoadedState()
         } catch {
@@ -875,7 +1014,8 @@ public final class PulseFeedViewModel {
                 muteEntityId: post.businessAuthorId ?? post.userId,
                 muteEntityName: post.creator?.displayName ?? "this author",
                 postType: post.postType,
-                topicLabel: intent.cardChipLabel
+                topicLabel: intent.cardChipLabel,
+                pending: pendingActions[post.id] ?? []
             ),
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
             isVisitor: post.isVisitorPost,

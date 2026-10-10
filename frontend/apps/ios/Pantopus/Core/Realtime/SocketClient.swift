@@ -134,6 +134,17 @@ final class SocketClient {
                 self.logger.info("Socket disconnected")
             }
         }
+        // An unexpected drop: Socket.IO reconnects on its own and reports it
+        // as `reconnect`, never `disconnect`, so the state reads "connecting"
+        // until `connect` comes back. Then the screens catch up on what they
+        // missed meanwhile (`ScreenStoreLive`), and an open chat polls until then.
+        socket.on(clientEvent: .reconnect) { [weak self] _, _ in
+            Task { @MainActor in
+                guard let self, self.connectionGeneration == generation else { return }
+                self.setConnectionState(.connecting)
+                self.logger.info("Socket reconnecting")
+            }
+        }
         socket.on(clientEvent: .error) { [weak self] data, _ in
             Task { @MainActor in
                 guard let self, self.connectionGeneration == generation else { return }

@@ -4,6 +4,7 @@ import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthority
 import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.homes.HomeDashboardAccessRepository
 import app.pantopus.android.data.homes.HomeTasksRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimReviewSnapshot
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
@@ -39,6 +40,36 @@ class HomeDashboardAccess(
 
     /** A fresh exact collection capability in the same captured account/session. */
     suspend fun readTasks() = HomeTaskAccess(homeId, tasks, session).list()
+
+    /** [readTasks] through the screens' store (Instant Screens); [force] reads now. */
+    suspend fun readTasksStored(force: Boolean) = HomeTaskAccess(homeId, tasks, session).listStored(force)
+
+    /** The stored task list, without a request, when it checks out. */
+    fun storedTasks() = HomeTaskAccess(homeId, tasks, session).storedList()
+
+    /**
+     * [read] through the screens' store (Instant Screens): a fresh copy answers without a request, [force] reads now.
+     * A copy is checked like a reply. No data with a 403 means no access: [read] keeps the server's typed refusal.
+     */
+    suspend fun readStored(force: Boolean): Stored<HomeDashboardAuthorityDto> {
+        session.requireCurrent()
+        check(UUID.fromString(homeId).toString() == homeId) { "Invalid Home identity." }
+        val stored = repository.readStored(homeId, force)
+        currentCoroutineContext().ensureActive()
+        session.requireCurrent()
+        val response = stored.data ?: return stored
+        check(confirmed(response)) { "Current Home authority could not be confirmed." }
+        return stored.copy(data = response.copy(permissions = response.permissions.distinct().sorted()))
+    }
+
+    /** The stored authority without a request, when it checks out like a reply; null otherwise. */
+    fun storedAuthority(): HomeDashboardAuthorityDto? =
+        repository.storedAuthority(homeId)?.takeIf(::confirmed)?.let { it.copy(permissions = it.permissions.distinct().sorted()) }
+
+    private fun confirmed(response: HomeDashboardAuthorityDto): Boolean =
+        response.homeId == homeId &&
+            HomeClaimReviewSnapshot.validToken(response.accessRevision) &&
+            response.expiryMillis()?.let { it > System.currentTimeMillis() } != false
 
     suspend fun read(): HomeDashboardAuthorityDto {
         session.requireCurrent()

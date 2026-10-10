@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.hub.QuietHoursPatch
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.settings.NotificationSettingsViewModel.GroupId
 import app.pantopus.android.ui.screens.settings.NotificationSettingsViewModel.RowId
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
@@ -52,7 +53,7 @@ class NotificationSettingsViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         // The launch cut hides the Beacon push toggle; these tests pin it.
         LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
-        coEvery { repository.preferences() } returns NetworkResult.Success(prefs())
+        coEvery { repository.preferencesStored(any()) } returns Stored(prefs(), fetchedAt = System.currentTimeMillis())
         coEvery { repository.updatePreferences(any()) } returns NetworkResult.Success(prefs())
     }
 
@@ -116,8 +117,11 @@ class NotificationSettingsViewModelTest {
     }
 
     @Test fun alert_switches_mirror_server_values() {
-        coEvery { repository.preferences() } returns
-            NetworkResult.Success(prefs(weather = false, aqi = true, mail = false, gigs = true, homeReminders = false))
+        coEvery { repository.preferencesStored(any()) } returns
+            Stored(
+                prefs(weather = false, aqi = true, mail = false, gigs = true, homeReminders = false),
+                fetchedAt = System.currentTimeMillis(),
+            )
         val vm = makeVm()
         vm.load()
         val groups = vm.groups()
@@ -133,7 +137,7 @@ class NotificationSettingsViewModelTest {
             val started = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
             val patches = mutableListOf<NotificationPreferencesPatch>()
-            coEvery { repository.preferences() } returns NetworkResult.Success(prefs(beacon = false))
+            coEvery { repository.preferencesStored(any()) } returns Stored(prefs(beacon = false), fetchedAt = System.currentTimeMillis())
             coEvery { repository.updatePreferences(any()) } coAnswers {
                 val patch = firstArg<NotificationPreferencesPatch>()
                 patches.add(patch)
@@ -174,8 +178,8 @@ class NotificationSettingsViewModelTest {
         }
 
     @Test fun time_chips_only_render_when_the_briefing_is_on() {
-        coEvery { repository.preferences() } returns
-            NetworkResult.Success(prefs(dailyEnabled = true, dailyTime = "08:30", eveningEnabled = false))
+        coEvery { repository.preferencesStored(any()) } returns
+            Stored(prefs(dailyEnabled = true, dailyTime = "08:30", eveningEnabled = false), fetchedAt = System.currentTimeMillis())
         val vm = makeVm()
         vm.load()
         assertEquals(
@@ -191,8 +195,8 @@ class NotificationSettingsViewModelTest {
         assertEquals(RowControl.Toggle(false), vm.groups().row(RowId.QUIET_HOURS)?.control)
         assertNull(vm.groups().row(RowId.QUIET_HOURS_START))
 
-        coEvery { repository.preferences() } returns
-            NetworkResult.Success(prefs(quietStart = "23:00", quietEnd = "06:00"))
+        coEvery { repository.preferencesStored(any()) } returns
+            Stored(prefs(quietStart = "23:00", quietEnd = "06:00"), fetchedAt = System.currentTimeMillis())
         vm.refresh()
         assertEquals(RowControl.Toggle(true), vm.groups().row(RowId.QUIET_HOURS)?.control)
         assertEquals(
@@ -206,8 +210,8 @@ class NotificationSettingsViewModelTest {
     }
 
     @Test fun location_radios_reflect_stored_mode() {
-        coEvery { repository.preferences() } returns
-            NetworkResult.Success(prefs(locationMode = NotificationPreferences.MODE_DEVICE_LOCATION))
+        coEvery { repository.preferencesStored(any()) } returns
+            Stored(prefs(locationMode = NotificationPreferences.MODE_DEVICE_LOCATION), fetchedAt = System.currentTimeMillis())
         val vm = makeVm()
         vm.load()
         assertEquals(RowControl.Radio(false), vm.groups().row(RowId.LOCATION_PRIMARY_HOME)?.control)
@@ -216,14 +220,15 @@ class NotificationSettingsViewModelTest {
     }
 
     @Test fun footer_caption_names_the_briefing_timezone() {
-        coEvery { repository.preferences() } returns NetworkResult.Success(prefs(timezone = "America/New_York"))
+        coEvery { repository.preferencesStored(any()) } returns
+            Stored(prefs(timezone = "America/New_York"), fetchedAt = System.currentTimeMillis())
         val vm = makeVm()
         vm.load()
         assertEquals("Briefing times use America/New_York", vm.footerCaption.value)
     }
 
     @Test fun load_failure_produces_error_state() {
-        coEvery { repository.preferences() } returns NetworkResult.Failure(NetworkError.Server(500, null))
+        coEvery { repository.preferencesStored(any()) } returns Stored(failure = NetworkError.Server(500, null))
         val vm = makeVm()
         vm.load()
         assertTrue(vm.state.value is GroupedListUiState.Error)
@@ -310,7 +315,7 @@ class NotificationSettingsViewModelTest {
 
     @Test fun failed_save_toasts_and_rolls_back_to_server_truth() =
         runTest {
-            coEvery { repository.preferences() } returns NetworkResult.Success(prefs(mail = true))
+            coEvery { repository.preferencesStored(any()) } returns Stored(prefs(mail = true), fetchedAt = System.currentTimeMillis())
             coEvery { repository.updatePreferences(any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = makeVm()
@@ -327,12 +332,16 @@ class NotificationSettingsViewModelTest {
             )
         }
 
-    @Test fun refresh_failure_keeps_content_and_toasts() {
+    @Test fun refresh_failure_keeps_content_quietly() {
         val vm = makeVm()
         vm.load()
-        coEvery { repository.preferences() } returns NetworkResult.Failure(NetworkError.Server(500, null))
+        // The store keeps the copy and marks the failed read (Instant Screens contract §3): no toast, and no
+        // "Couldn't refresh" line while the copy is inside its max shown age.
+        coEvery { repository.preferencesStored(any()) } returns
+            Stored(prefs(), fetchedAt = System.currentTimeMillis(), failure = NetworkError.Server(500, null))
         vm.refresh()
-        assertEquals("Failed to load preferences", vm.toast.value?.text)
+        assertNull(vm.toast.value)
+        assertNull(vm.refreshNotice.value)
         assertFalse(vm.groups().isEmpty())
     }
 

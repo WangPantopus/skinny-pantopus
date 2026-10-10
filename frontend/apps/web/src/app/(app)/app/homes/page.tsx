@@ -3,7 +3,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
+import { myHomesQuery, type MyHomesReply } from '@/lib/myHomes';
+import { showsMyHomesCopy } from '@/lib/householdCopy';
 import { getAuthToken } from '@pantopus/api';
 import { removalLink } from '@/components/home/member-removals/removalModel';
 import { useSavedRemoval } from '@/components/home/member-removals/useSavedRemoval';
@@ -26,10 +29,23 @@ const FOCUS_REFRESH_MS = 30_000;
 
 export default function HomesPage() {
   const router = useRouter();
-  const [homes, setHomes] = useState<MyHome[]>([]);
+  const queryClient = useQueryClient();
+  // Coming back shows your homes at once from the list Place and the switcher share (lib/myHomes.ts).
+  // Homes still in verification, ownership claims and residency requests are verification, never
+  // shown from a copy: they appear when the re-check (always run) answers. A list with a guest home or
+  // access that ends shows nothing before the re-check (decision 3, lib/householdCopy.ts).
+  const [seed] = useState(() => {
+    const kept = queryClient.getQueryData<MyHomesReply>(myHomesQuery().queryKey);
+    return showsMyHomesCopy(kept) ? (kept?.homes ?? []).filter((h) => h.access_kind !== 'verification') : [];
+  });
+  const seeded = useRef(seed.length > 0);
+  const [homes, setHomes] = useState<MyHome[]>(seed);
+  const mayKeep = useRef(false);
+  mayKeep.current = homes.length > 0 && showsMyHomesCopy({ homes });
+  const recheckOnResume = useRef(false);
   const savedRemoval = useSavedRemoval();
   const [pendingClaims, setPendingClaims] = useState<Array<{ claim: Claim; addressLine: string; cityLine: string }>>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!seeded.current);
   const [error, setError] = useState('');
   const [residencyRequests, setResidencyRequests] = useState<ResidencyRequest[]>([]);
   const [residencyCursor, setResidencyCursor] = useState<string | null>(null);
@@ -71,7 +87,8 @@ export default function HomesPage() {
       marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
       if (!token) { router.push('/login'); return; }
       const [homesRes, claimsRes, residencyRes] = await Promise.all([
-        api.homes.getMyHomes(),
+        // Read now (never from the copy), shared with any read already on its way, and kept for Place.
+        queryClient.fetchQuery({ ...myHomesQuery(), staleTime: 0 }),
         api.homeOwnership.getMyOwnershipClaims(),
         api.homes.getMyResidencyRequests(),
       ]);
@@ -103,7 +120,8 @@ export default function HomesPage() {
         }),
       );
       if (!current()) return;
-      if (!background) ready.current = current;
+      // A page that opened on the kept list becomes ready with its first confirmed answer.
+      if (!background || ready.current === null) ready.current = current;
       setHomes(list); setPendingClaims(enriched);
       // Keep the older requests someone already paged through; a refresh only renews the first page.
       if (!background || !morePages.current) {
@@ -119,7 +137,7 @@ export default function HomesPage() {
       inFlight.current--;
       if (generation.current === revision) setLoading(false);
     }
-  }, [router]);
+  }, [router, queryClient]);
 
   const loadMoreResidency = async () => {
     const opening = ready.current, cursor = residencyCursor, epoch = residencyEpoch.current;
@@ -146,20 +164,36 @@ export default function HomesPage() {
     // Coming back keeps the list visible and refreshes it behind the scenes (a full load only
     // after an error, when there's no list to keep).
     const refresh = () => {
-      if (document.visibilityState === 'hidden' || inFlight.current > 0
+      if (document.visibilityState === 'hidden') return;
+      if (recheckOnResume.current) {
+        recheckOnResume.current = false;
+        const revision = generation.current;
+        // Cancel the older shared read before starting this visit's check.
+        void queryClient.cancelQueries({ queryKey: myHomesQuery().queryKey, exact: true }).then(() => {
+          if (generation.current === revision) void load();
+        });
+        return;
+      }
+      if (inFlight.current > 0
         || Date.now() - lastAttempt.current < FOCUS_REFRESH_MS) return;
       void load(ready.current !== null);
     };
-    const visibility = () => { if (document.visibilityState !== 'hidden') refresh(); };
+    const leave = () => {
+      if (mayKeep.current || recheckOnResume.current) return;
+      recheckOnResume.current = true;
+      retire();
+    };
+    const visibility = () => { if (document.visibilityState === 'hidden') leave(); else refresh(); };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) restart(); };
-    void load();
+    // Opened on the kept list: the first load re-checks behind it instead of clearing the page.
+    void load(seeded.current);
     const unsubscribe = api.onTokenChange(restart);
-    window.addEventListener('focus', refresh); window.addEventListener('storage', storage);
+    window.addEventListener('focus', refresh); window.addEventListener('blur', leave); window.addEventListener('storage', storage);
     document.addEventListener('visibilitychange', visibility);
     return () => { retire(); unsubscribe();
-      window.removeEventListener('focus', refresh); window.removeEventListener('storage', storage);
+      window.removeEventListener('focus', refresh); window.removeEventListener('blur', leave); window.removeEventListener('storage', storage);
       document.removeEventListener('visibilitychange', visibility); };
-  }, [load, retire]);
+  }, [load, retire, queryClient]);
 
   const remove = async (homeId: string) => {
     const opening = ready.current;

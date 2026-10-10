@@ -5,9 +5,14 @@ package app.pantopus.android.ui.screens.homes.property_details
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertyHomeDto
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +39,7 @@ class PropertyDetailsViewModel
     constructor(
         savedStateHandle: SavedStateHandle,
         private val homesRepository: HomesRepository,
+        gates: HomeCopyGateFactory,
     ) : ViewModel() {
         private val homeId: String =
             requireNotNull(savedStateHandle[PROPERTY_DETAILS_HOME_ID_KEY]) {
@@ -46,45 +52,102 @@ class PropertyDetailsViewModel
         /** Observed state. */
         val state: StateFlow<PropertyDetailsUiState> = _state.asStateFlow()
 
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate = gates.create(homeId, listOf(HomeStoreKeys.propertyDetails(homeId)))
+        private var readGeneration = 0L
+        private var active = true
+
         /** Preview/test constructor — injects a synchronous loader seam. */
         internal constructor(
             savedStateHandle: SavedStateHandle,
             homesRepository: HomesRepository,
+            gates: HomeCopyGateFactory,
             loader: (String) -> PropertyDetailsContent,
-        ) : this(savedStateHandle, homesRepository) {
+        ) : this(savedStateHandle, homesRepository, gates) {
             this.loader = loader
         }
 
-        /** Initial load; no-op after content resolves. */
+        /**
+         * Screen entry and every return (Instant Screens): owners and household roles see the stored facts at once,
+         * and the store answers a fresh copy without a request or revalidates an older one quietly.
+         */
         fun load() {
-            if (_state.value !is PropertyDetailsUiState.Loading) return
-            apply()
+            active = true
+            if (loader != null) {
+                if (_state.value is PropertyDetailsUiState.Loading) apply()
+                return
+            }
+            if (_state.value is PropertyDetailsUiState.Loading && gate.showsCopy) {
+                homesRepository.storedPropertyDetails(homeId)?.let { _state.value = projection(contentFrom(it.home)) }
+            }
+            read(force = false)
         }
 
-        /** Retry after an error. */
+        /** Pull or Retry: read now without blanking a household copy. */
         fun refresh() {
-            apply()
+            if (loader != null) apply() else read(force = true)
+        }
+
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            _refreshing.value = false
+            if (!gate.showsCopy) clearCopy()
+            gate.leave()
+        }
+
+        private fun clearCopy() {
+            _refreshing.value = false
+            _refreshNotice.value = null
+            _state.value = PropertyDetailsUiState.Loading
+        }
+
+        override fun onCleared() {
+            gate.leave()
         }
 
         private fun apply() {
-            val seam = loader
-            if (seam != null) {
-                _state.value =
-                    try {
-                        projection(seam(homeId))
-                    } catch (_: Exception) {
-                        PropertyDetailsUiState.Error("Couldn't load property details. Pull to retry.")
-                    }
-                return
-            }
+            val seam = loader ?: return
+            _state.value =
+                try {
+                    projection(seam(homeId))
+                } catch (_: Exception) {
+                    PropertyDetailsUiState.Error("Couldn't load property details. Pull to retry.")
+                }
+        }
+
+        private fun read(force: Boolean) {
+            if (!active) return
+            val generation = ++readGeneration
+            _refreshing.value =
+                force && (_state.value is PropertyDetailsUiState.Clean || _state.value is PropertyDetailsUiState.Mismatch)
+            if (_state.value is PropertyDetailsUiState.Error) _state.value = PropertyDetailsUiState.Loading
             viewModelScope.launch {
+                val stored = readDetails(force, generation)
+                if (generation != readGeneration) return@launch
+                _refreshing.value = false
                 _state.value =
-                    when (val result = homesRepository.propertyDetails(homeId)) {
-                        is NetworkResult.Success -> projection(contentFrom(result.data.home))
-                        is NetworkResult.Failure ->
-                            PropertyDetailsUiState.Error("Couldn't load property details. Pull to retry.")
-                    }
+                    stored.data?.let { projection(contentFrom(it.home)) }
+                        ?: PropertyDetailsUiState.Error("Couldn't load property details. Pull to retry.")
+                _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
             }
+        }
+
+        private suspend fun readDetails(
+            force: Boolean,
+            generation: Long,
+        ): Stored<PropertyDetailsResponse> {
+            val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (refusal != null) return Stored(failure = refusal)
+            if (generation != readGeneration) return Stored()
+            val stored = homesRepository.propertyDetailsStored(homeId, force || !gate.showsCopy)
+            return if (!gate.showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
         }
 
         private fun projection(content: PropertyDetailsContent): PropertyDetailsUiState =

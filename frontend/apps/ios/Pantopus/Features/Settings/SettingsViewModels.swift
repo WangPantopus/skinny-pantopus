@@ -34,7 +34,8 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
 
     private let api: APIClient
     private let auth: AuthManager
-    private let onNavigate: @MainActor (SettingsRoute) -> Void
+    /// Set by the hosting Settings screen, which keeps this model while it is open.
+    @ObservationIgnored var onNavigate: @MainActor (SettingsRoute) -> Void
     private var footer: String?
     private var stripeConnected: Bool?
     /// Tri-state on purpose. `nil` = we could not read the account's real
@@ -48,6 +49,8 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
     private var profileVisibility: String?
     private var blockCount: Int = 0
     private var isAdmin: Bool = false
+    /// What Pantopus keeps on this iPhone (Storage & data); nil until measured.
+    private var storageBytes: Int?
 
     init(
         api: APIClient = .shared,
@@ -60,7 +63,9 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
     }
 
     public func load() async {
-        state = .loading
+        // Coming back from a sub-screen keeps the rows on screen; only the
+        // first load shows the skeleton. The four reads run at once.
+        if case .loaded = state {} else { state = .loading }
         // Identity + footer from auth state. The session `UserDTO` carries
         // no verification flag, so the chip is fetched below rather than
         // guessed from the email.
@@ -71,27 +76,48 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
         // Block count (best-effort) — both lists the Blocked users screen
         // shows: Identity Firewall profile blocks and personal blocks
         // (`GET /api/users/blocked`).
-        let profileBlocks: PrivacyBlocksResponse? = try? await api.request(PrivacyEndpoints.blocks)
-        let personalBlocks = try? await api.request(BlocksEndpoints.blocked, as: UserBlocksResponse.self)
-        if profileBlocks != nil || personalBlocks != nil {
-            blockCount = (profileBlocks?.blocks.count ?? 0) + (personalBlocks?.blocked.count ?? 0)
-        }
+        let profileBlocksTask: Task<PrivacyBlocksResponse?, Never> = start { try await self.you(PrivacyEndpoints.blocks) }
+        let personalBlocksTask: Task<UserBlocksResponse?, Never> = start { try await self.you(BlocksEndpoints.blocked) }
         // Real verification state — `GET /api/users/profile` → `user.verified`
         // (`backend/routes/users.js:1962`). Same field the Verification
         // Center sub-screen reports; on failure we stay `nil` (unknown).
-        if let profile: ProfileResponse = try? await api.request(UsersEndpoints.profile()) {
+        let profileTask: Task<ProfileResponse?, Never> = start { try await self.you(UsersEndpoints.profile()) }
+        // "Stripe connected" chip on Payments & payouts: only when the
+        // connected account can take charges and pay out. No account (404)
+        // or a failed read shows the plain chevron. Payout status is
+        // sensitive: always read from the server, never kept.
+        let connectTask: Task<ConnectAccountStatusResponse?, Never> = start {
+            try await self.api.request(ConnectEndpoints.accountStatus())
+        }
+        let profileBlocks = await profileBlocksTask.value
+        let personalBlocks = await personalBlocksTask.value
+        if profileBlocks != nil || personalBlocks != nil {
+            blockCount = (profileBlocks?.blocks.count ?? 0) + (personalBlocks?.blocked.count ?? 0)
+        }
+        if let profile = await profileTask.value {
             verified = profile.user.verified
             profileVisibility = profile.user.profileVisibility
         } else {
             verified = nil
             profileVisibility = nil
         }
-        // "Stripe connected" chip on Payments & payouts: only when the
-        // connected account can take charges and pay out. No account (404)
-        // or a failed read shows the plain chevron.
-        let connect: ConnectAccountStatusResponse? = try? await api.request(ConnectEndpoints.accountStatus())
-        stripeConnected = connect.map { $0.account.chargesEnabled && $0.account.payoutsEnabled }
+        stripeConnected = await connectTask.value.map { $0.account.chargesEnabled && $0.account.payoutsEnabled }
+        storageBytes = await StorageDataViewModel.measure().total
         rebuild()
+    }
+
+    /// Starts one best-effort read now. Reads run side by side as tasks
+    /// awaited through `.value`, not `async let`: the `async let` fan-out
+    /// crashed the iOS 18 test host ("freed pointer was not the last
+    /// allocation").
+    private func start<T: Sendable>(_ operation: @escaping @Sendable () async throws -> T) -> Task<T?, Never> {
+        Task { try? await operation() }
+    }
+
+    /// Own profile and settings through the screen store (You: 10 minutes),
+    /// shared with the You screen.
+    private func you<Value: Decodable & Sendable>(_ endpoint: Endpoint) async throws -> Value {
+        try await ScreenStore.store(for: api).load(endpoint, as: Value.self, kind: .you, topics: [ScreenTopic.profileMe]).value
     }
 
     private func rebuild() {
@@ -100,6 +126,7 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
             securityGroup(),
             privacyGroup(),
             notificationsGroup(),
+            thisIPhoneGroup(),
             paymentsGroup(),
             supportGroup()
         ]
@@ -183,6 +210,20 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
         )
     }
 
+    /// Storage & data (Instant Screens contract section 7), after Notifications.
+    private func thisIPhoneGroup() -> GroupedListGroup {
+        let size: RowControl = storageBytes.map {
+            .chipStatus(label: StorageDataViewModel.format($0), tone: .neutral, includesChevron: true)
+        } ?? .chevron
+        return GroupedListGroup(
+            id: "thisIPhone",
+            overline: "This iPhone",
+            rows: [
+                GroupedListRow(id: "storageData", label: "Storage & data", subtext: "Photos and saved pages", control: size)
+            ]
+        )
+    }
+
     private func paymentsGroup() -> GroupedListGroup {
         let stripeChip: RowControl =
             stripeConnected == true
@@ -250,6 +291,7 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
         case "blocks": onNavigate(.blocks)
         case "visibility": onNavigate(.privacy)
         case "notificationPreferences": onNavigate(.notifications)
+        case "storageData": onNavigate(.storageData)
         case "export": onNavigate(.dataExport)
         case "paymentsPayouts": onNavigate(.paymentsPayouts)
         case "help": onNavigate(.help)
@@ -298,6 +340,8 @@ public enum SettingsRoute: Sendable, Hashable {
     case notifications
     case privacy
     case dataExport
+    /// This iPhone → Storage & data (Instant Screens contract section 7).
+    case storageData
     case paymentsPayouts
     case help
     case legal

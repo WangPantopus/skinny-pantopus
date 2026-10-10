@@ -1044,6 +1044,13 @@ public struct HubTabRoot: View {
         // mount task in the same frame. Never push that stale value twice.
         guard let pending, pending == router.pending,
               Self.ownsDeepLink(pending, tab: owningTab) else { return }
+        // Mailbox is off for launch: a mailbox link or mail push opens the
+        // "not in the app yet" placeholder (the mailbox root's launch scope).
+        if pending.opensMailbox, !LaunchFeatures.mailbox {
+            path.append(.mailboxRoot)
+            _ = router.consume()
+            return
+        }
         switch pending {
         case let .gig(id) where !LaunchFeatures.openGigs:
             // Launch cut #4 (Open gigs): with the Tasks door hidden, a task's
@@ -1284,7 +1291,8 @@ public struct HubTabRoot: View {
             return false
         case .vacationHold, .mailDay, .stamps, .mailTask,
              .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem:
-            return tab == .mail
+            // With Mailbox off for launch, the Place stack shows the placeholder.
+            return tab == (LaunchFeatures.mailbox ? .mail : .place)
         default:
             return tab == .place
         }
@@ -3589,6 +3597,15 @@ public struct HubTabRoot: View {
             path.append(.placeArrival)
             return
         }
+        // The home list the phone kept (owners and household roles only) lands
+        // at once, also offline; the server's list then confirms it.
+        if let copy = HomesStoreReads.peekMyHomes(), let homeId = Self.primaryHomeId(in: copy.value) {
+            didAutoLandPlace = true
+            path.append(.placeDashboard(homeId: homeId))
+            isResolvingPlace = false
+            await confirmPlaceLanding(homeId)
+            return
+        }
         do {
             let homeId = try await Self.primaryHomeId()
             // A tab change, link, or newer retry must win over this response.
@@ -3609,6 +3626,22 @@ public struct HubTabRoot: View {
             guard !Task.isCancelled, canResolvePlaceLanding else { return placeLandingDropped() }
             placeResolutionError = (error as? APIError)?.errorDescription
                 ?? "Check your connection and try again."
+        }
+    }
+
+    /// A landing made from the kept home list: when the server's list names
+    /// another home (or none) while that dashboard is still the only screen
+    /// open, the landing follows the server. A failed read keeps the landing.
+    private func confirmPlaceLanding(_ homeId: String) async {
+        guard let response = try? await HomesStoreReads.myHomes().value else { return }
+        let current = Self.primaryHomeId(in: response)
+        guard current != homeId, path.last == .placeDashboard(homeId: homeId) else { return }
+        path.removeLast()
+        if let current {
+            path.append(.placeDashboard(homeId: current))
+        } else {
+            didAutoLandPlace = false
+            placeLandingNeedsHome = true
         }
     }
 
@@ -3640,7 +3673,7 @@ public struct HubTabRoot: View {
     /// verification continues there, as My Homes does (a filed claim's Waiting
     /// Room, residency status, or ownership evidence); with none, Add Home.
     private func startVerification() async {
-        let response: MyHomesResponse? = try? await APIClient.shared.request(HomesEndpoints.myHomes())
+        let response = try? await HomesStoreReads.myHomes().value
         guard rootTabs.selected == owningTab else { return }
         path.append(Self.verificationRoute(response?.homes ?? []))
     }
@@ -3659,13 +3692,15 @@ public struct HubTabRoot: View {
     }
 
     private static func primaryHomeId() async throws -> String? {
-        let response: MyHomesResponse = try await APIClient.shared.request(
-            HomesEndpoints.myHomes()
-        )
+        // One home list for every screen (the screen store): shown at once while fresh.
+        try await primaryHomeId(in: HomesStoreReads.myHomes().value)
+    }
+
+    private static func primaryHomeId(in response: MyHomesResponse) -> String? {
         // A resident's own private setup is their Place until a household shares
         // it (as on the web): public readings, with the Home's records waiting on
         // verification.
-        return response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
+        response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
             ?? response.sharedHomes.first?.id
             ?? response.homes.first { $0.hasValidListContext && $0.accessKind == "private_setup" }?.id
     }
@@ -3823,8 +3858,11 @@ extension HubRoute {
         // Launch cut #4 (Open gigs): browse, post, bids and gig offers. A
         // task's own detail (`.gigDetail`) and My tasks stay.
         case .gigsFeed, .gigSearch, .nearbyMapForGigs, .tasksMap, .composeGig, .quickPostGig, .editGig,
-             .myBids, .offers, .packageGig:
+             .myBids, .offers:
             LaunchFeatures.openGigs
+        // Launch cuts #4 + #10: a package's task, opened from its mail.
+        case .packageGig:
+            LaunchFeatures.openGigs && LaunchFeatures.mailbox
         // Launch cut #5 (Public scheduling); invoices, packages and payouts stay.
         case let .scheduling(route):
             route.isAvailableAtLaunch
@@ -3837,13 +3875,21 @@ extension HubRoute {
             LaunchFeatures.businessDirectory
         // Launch cut #7 (Household extras): pets, packages, bills, calendar, polls.
         case .homePets, .homePackages, .packageDetail, .logPackage, .homeBills, .billDetail, .addBill,
-             .homeCalendar, .addCalendarEvent, .calendarEventDetail, .homePolls, .pollDetail, .startPoll,
-             .unboxing:
+             .homeCalendar, .addCalendarEvent, .calendarEventDetail, .homePolls, .pollDetail, .startPoll:
             LaunchFeatures.householdExtras
-        // Launch cut #8 (Mail extras): letters, Mail Party, community mail,
-        // translations, and Earn (offers and ad earnings).
+        // Launch cuts #7 + #10: package unboxing starts from a mail item.
+        case .unboxing:
+            LaunchFeatures.householdExtras && LaunchFeatures.mailbox
+        // Launch cuts #8 + #10 (Mail extras, inside the mailbox): letters, Mail
+        // Party, community mail, translations, and Earn (offers and ad earnings).
         case .ceremonialMail, .ceremonialMailOpen, .mailParty, .communityMail, .mailTranslation, .earn:
-            LaunchFeatures.mailExtras
+            LaunchFeatures.mailExtras && LaunchFeatures.mailbox
+        // Launch cut #10 (Mailbox): received mail, the drawers, the vault and
+        // records, My mail day, vacation hold, stamps, mail tasks and search.
+        // Postcard address verification (`.postcardVerification`) stays.
+        case .mailboxRoot, .mailboxMap, .mailboxSearch, .mailboxVault, .mailItemDetail, .vacationHold,
+             .mailRoutingQueue, .mailDay, .stamps, .mailTask, .mailTaskList, .homeRecords:
+            LaunchFeatures.mailbox
         default:
             true
         }

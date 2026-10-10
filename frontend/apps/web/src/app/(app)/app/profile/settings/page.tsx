@@ -1,32 +1,50 @@
-// @ts-nocheck
 'use client';
 
 import { clearPendingPlaces } from '@/components/place/pendingPlace';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken, clearAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import AccountDeleteModal from '@/components/profile/AccountDeleteModal';
 import StepUpPasswordModal from '@/components/settings/StepUpPasswordModal';
+import StorageDataSection from '@/components/settings/StorageDataSection';
 import ErrorState from '@/components/ui/ErrorState';
 import { ACCOUNT_DELETED_NOTICE_KEY, hardNavigate } from '@/lib/session-refresh';
-import type { User } from '@pantopus/types';
-import { fetchMe, setMe } from '@/lib/me';
+import { setMe, useMe } from '@/lib/me';
+
+type SettingField = 'email_notifications' | 'push_notifications' | 'profile_visibility' | 'show_email' | 'show_phone';
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  // The session cookie is readable only in the browser: until mount, the page
+  // renders what the cache already has (nothing on a fresh load), like the server.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const signedIn = mounted && !!getAuthToken();
+  useEffect(() => {
+    if (mounted && !getAuthToken()) router.push('/login');
+  }, [mounted, router]);
 
-  // Settings state
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [pushNotifications, setPushNotifications] = useState(true);
-  const [profileVisibility, setProfileVisibility] = useState('public');
-  const [showEmail, setShowEmail] = useState(false);
-  const [showPhone, setShowPhone] = useState(false);
+  // Your settings are part of your profile (lib/me.ts), so coming back shows them at once.
+  const meQuery = useMe({ enabled: signedIn });
+  const user = meQuery.data ?? null;
+  // Never show the form on defaults: saving it would overwrite the real
+  // settings (a private profile would turn public).
+  const loadError = !user && meQuery.isError
+    ? "We couldn't load your settings. Check your connection and try again."
+    : null;
+  const loading = !user && (!loadError || meQuery.isFetching);
+  const loadSettings = () => { void meQuery.refetch(); };
+
+  // A switch shows what you chose while its save is on the way; otherwise the profile as saved.
+  const [pending, setPending] = useState<Partial<Record<SettingField, boolean | string>>>({});
+  const emailNotifications = (pending.email_notifications ?? user?.email_notifications ?? true) as boolean;
+  const pushNotifications = (pending.push_notifications ?? user?.push_notifications ?? true) as boolean;
+  const profileVisibility = (pending.profile_visibility ?? (user?.profile_visibility || 'public')) as string;
+  const showEmail = (pending.show_email ?? user?.show_email ?? false) as boolean;
+  const showPhone = (pending.show_phone ?? user?.show_phone ?? false) as boolean;
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const deleteOperation = useRef<symbol | null>(null);
@@ -36,61 +54,27 @@ export default function SettingsPage() {
 
   useEffect(() => () => { deleteOperation.current = null; }, []);
 
-  const loadSettings = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const token = getAuthToken();
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
-      const userData = await fetchMe();
-      setUser(userData);
-
-      // Load saved preferences (from userData or localStorage)
-      setEmailNotifications(userData.email_notifications ?? true);
-      setPushNotifications(userData.push_notifications ?? true);
-      setProfileVisibility(userData.profile_visibility || 'public');
-      setShowEmail(userData.show_email ?? false);
-      setShowPhone(userData.show_phone ?? false);
-
-    } catch (err) {
-      // Never show the form on defaults: saving it would overwrite the real
-      // settings (a private profile would turn public).
-      console.error('Failed to load settings:', err);
-      setLoadError("We couldn't load your settings. Check your connection and try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
-  useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
-
   // Each switch and the visibility menu saves when it changes; a bottom "Save Settings" button
   // lost every change made without it. Saves run one after another, so an older "on" can't land
   // after a newer "off" (as on Notification Preferences), and only the newest save of a setting
-  // may undo the screen.
+  // may undo the screen: when it fails, the switch goes back to the saved value.
   const saveSeq = useRef<Record<string, number>>({});
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
-  const saveSetting = (
-    field: 'email_notifications' | 'push_notifications' | 'profile_visibility' | 'show_email' | 'show_phone',
-    value: boolean | string,
-    revert: () => void,
-  ) => {
+  const saveSetting = (field: SettingField, value: boolean | string) => {
     const seq = (saveSeq.current[field] ?? 0) + 1;
     saveSeq.current[field] = seq;
+    setPending((current) => ({ ...current, [field]: value }));
+    const settle = () => setPending(({ [field]: _settled, ...rest }) => rest);
     saveQueue.current = saveQueue.current.then(async () => {
       try {
         const { user: saved } = await api.users.updateProfile({ [field]: value } as Record<string, unknown>);
         setMe(saved);
-        if (saveSeq.current[field] === seq) toast.success('Saved');
+        if (saveSeq.current[field] !== seq) return;
+        settle();
+        toast.success('Saved');
       } catch (err: unknown) {
         if (saveSeq.current[field] !== seq) return;
-        revert();
+        settle();
         toast.error(err instanceof Error ? err.message : "Couldn't save that setting");
       }
     });
@@ -99,7 +83,10 @@ export default function SettingsPage() {
   const handleLogout = async () => {
     try {
       await api.auth.logout();
-    } catch {
+    } catch (err) {
+      // A concurrent session-revoked reply can finish sign-out before this
+      // response arrives. An account switch also owns its own navigation.
+      if ((err as { code?: string } | null)?.code === 'AUTH_SESSION_CHANGED') return;
       toast.error('Could not confirm sign-out. Please try again.');
       return;
     }
@@ -211,21 +198,13 @@ export default function SettingsPage() {
                 label="Email Notifications"
                 description="Receive email updates, like your monthly summary"
                 checked={emailNotifications}
-                onChange={(value) => {
-                  const previous = emailNotifications;
-                  setEmailNotifications(value);
-                  saveSetting('email_notifications', value, () => setEmailNotifications(previous));
-                }}
+                onChange={(value) => saveSetting('email_notifications', value)}
               />
               <ToggleSetting
                 label="Push Notifications"
                 description="Receive push notifications on your device"
                 checked={pushNotifications}
-                onChange={(value) => {
-                  const previous = pushNotifications;
-                  setPushNotifications(value);
-                  saveSetting('push_notifications', value, () => setPushNotifications(previous));
-                }}
+                onChange={(value) => saveSetting('push_notifications', value)}
               />
               <button
                 onClick={() => router.push('/app/settings/notifications')}
@@ -256,12 +235,7 @@ export default function SettingsPage() {
                 <select
                   id="settings-profile-visibility"
                   value={profileVisibility}
-                  onChange={(e) => {
-                    const previous = profileVisibility;
-                    const value = e.target.value;
-                    setProfileVisibility(value);
-                    saveSetting('profile_visibility', value, () => setProfileVisibility(previous));
-                  }}
+                  onChange={(e) => saveSetting('profile_visibility', e.target.value)}
                   className="w-full px-4 py-2 border border-app-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="public">Public - Anyone can view</option>
@@ -273,21 +247,13 @@ export default function SettingsPage() {
                 label="Show Email on Profile"
                 description="Display your email address on your public profile"
                 checked={showEmail}
-                onChange={(value) => {
-                  const previous = showEmail;
-                  setShowEmail(value);
-                  saveSetting('show_email', value, () => setShowEmail(previous));
-                }}
+                onChange={(value) => saveSetting('show_email', value)}
               />
               <ToggleSetting
                 label="Show Phone Number"
                 description="Display your phone number on your public profile"
                 checked={showPhone}
-                onChange={(value) => {
-                  const previous = showPhone;
-                  setShowPhone(value);
-                  saveSetting('show_phone', value, () => setShowPhone(previous));
-                }}
+                onChange={(value) => saveSetting('show_phone', value)}
               />
               <button
                 onClick={() => router.push('/app/profile/settings/privacy')}
@@ -378,7 +344,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between py-3">
                 <div>
                   <p className="font-medium text-app">Account Type</p>
-                  <p className="text-sm text-app-secondary capitalize">{user?.accountType || user?.account_type || 'Individual'}</p>
+                  <p className="text-sm text-app-secondary capitalize">{user?.accountType || (user as { account_type?: string } | null)?.account_type || 'Individual'}</p>
                 </div>
                 <button
                   onClick={() => router.push('/app/business/new')}
@@ -407,6 +373,9 @@ export default function SettingsPage() {
               </svg>
             </button>
           </div>
+
+          {/* Storage & data: what this browser keeps (contract §7) */}
+          <StorageDataSection />
 
           {/* Legal */}
           <div className="bg-surface rounded-xl border border-app p-6">

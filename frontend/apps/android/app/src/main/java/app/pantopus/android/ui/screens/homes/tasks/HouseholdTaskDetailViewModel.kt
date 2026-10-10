@@ -7,10 +7,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
+import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeMembersRepository
+import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -18,12 +23,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection.HTTP_FORBIDDEN
+import java.net.HttpURLConnection.HTTP_NOT_FOUND
+import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
 import javax.inject.Inject
 
 data class HouseholdTaskDetailState(
     val task: HomeTaskDto? = null,
     val loading: Boolean = true,
     val busy: Boolean = false,
+    val pendingCompletion: Boolean = false,
+    val refreshing: Boolean = false,
+    val refreshNotice: RefreshNotice? = null,
     val error: String? = null,
     val deleted: Boolean = false,
     /** "you", a member's name, or the short "Member 1A2B" label; null when nobody is assigned. */
@@ -36,27 +46,37 @@ class HouseholdTaskDetailViewModel
     constructor(
         accessFactory: HomeTaskAccessFactory,
         savedStateHandle: SavedStateHandle,
-        // Nullable so tests can construct without it; Hilt always supplies the singleton.
+        // Nullable so tests can construct without them; Hilt always supplies the singletons.
         private val membersRepo: HomeMembersRepository?,
+        gates: HomeCopyGateFactory?,
     ) : ViewModel() {
         internal constructor(accessFactory: HomeTaskAccessFactory, savedStateHandle: SavedStateHandle) :
-            this(accessFactory, savedStateHandle, null)
+            this(accessFactory, savedStateHandle, null, null)
 
         private val homeId = checkNotNull(savedStateHandle.get<String>(ADD_HOUSEHOLD_TASK_HOME_ID_KEY))
         private val taskId = checkNotNull(savedStateHandle.get<String>(ADD_HOUSEHOLD_TASK_TASK_ID_KEY))
         private val access = accessFactory.create(homeId, viewModelScope)
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate =
+            gates?.create(homeId, listOf(HomeStoreKeys.task(homeId, taskId), HomeStoreKeys.tasks(homeId), HomeStoreKeys.occupants(homeId)))
+        private val showsCopy: Boolean get() = gate?.showsCopy == true
         private val _state = MutableStateFlow(HouseholdTaskDetailState())
         val state = _state.asStateFlow()
         private var generation = 0
         private var inFlight = false
         private var active = true
         private var work: Job? = null
+        private var completionOriginal: HomeTaskDto? = null
 
         /** Members' names by user id; null until read. Empty when the viewer may not list members. */
         private var memberNames: Map<String, String>? = null
         private var namesWork: Job? = null
 
         init {
+            // First frame (Instant Screens): owners and household roles see the stored task while the screen opens; the
+            // read waits for the screen to resume.
+            if (showsCopy) access.storedTask(taskId)?.let(::show)
             viewModelScope.launch {
                 access.invalidated.collect { if (it) deny(TASK_SESSION_CHANGED) }
             }
@@ -64,7 +84,7 @@ class HouseholdTaskDetailViewModel
 
         fun resume() {
             active = true
-            reload()
+            read(force = false)
         }
 
         fun pause() {
@@ -73,16 +93,51 @@ class HouseholdTaskDetailViewModel
             work?.cancel()
             work = null
             inFlight = false
-            _state.value = HouseholdTaskDetailState()
+            completionOriginal?.let { _state.value = _state.value.copy(task = it, pendingCompletion = false, busy = false) }
+            completionOriginal = null
+            _state.value = _state.value.copy(busy = false, refreshing = false)
+            // Founder decision 3: owners and household roles keep the task on screen while away; anyone else blanks.
+            if (!showsCopy) _state.value = HouseholdTaskDetailState()
+            gate?.leave()
         }
 
-        fun reload() {
+        /**
+         * Every return (Instant Screens): owners and household roles see the stored task at once (its own copy, else
+         * its row in the stored list), and the store answers a fresh copy without a request or revalidates an older
+         * one. "Reload task" after an error reads now. Actions keep reading the task now before they act.
+         */
+        fun reload() = read(force = true)
+
+        private fun read(force: Boolean) {
             if (inFlight || !active) return
-            _state.value = HouseholdTaskDetailState()
-            runAction({ access.read(taskId) }) { task ->
-                show(task)
+            if (_state.value.task == null && showsCopy) access.storedTask(taskId)?.let(::show)
+            if (_state.value.task == null) _state.value = HouseholdTaskDetailState()
+            runAction(
+                { readTaskStored(fromCopy = showsCopy && !force) },
+                refreshing = force && _state.value.task != null,
+            ) { stored ->
+                show(stored.data?.task ?: throw (stored.failure ?: NetworkError.NotFound))
+                _state.value =
+                    _state.value.copy(
+                        refreshNotice = RefreshNotice(stored.fetchedAt, ::reload).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) },
+                    )
                 finishArrival()
             }
+        }
+
+        override fun onCleared() {
+            gate?.leave()
+        }
+
+        private suspend fun readTaskStored(fromCopy: Boolean): Stored<HomeTaskResponse> {
+            val refusal =
+                gate?.checkForRead(!fromCopy) {
+                    memberNames = null
+                    _state.value = HouseholdTaskDetailState()
+                }
+            if (refusal != null) return Stored(failure = refusal)
+            val stored = access.readStored(taskId, force = !fromCopy || !showsCopy)
+            return if (!showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
         }
 
         /** Only this exact current account's task arrival can be completed. */
@@ -93,7 +148,10 @@ class HouseholdTaskDetailViewModel
         fun complete() {
             val current = _state.value.task ?: return
             if (current.capabilities?.canComplete != true) return
-            runAction({ access.complete(taskId, current.status != "done") }) { task -> show(task) }
+            runAction(
+                { access.complete(taskId, current.status != "done") },
+                optimistic = current.copy(status = if (current.status == "done") "open" else "done"),
+            ) { task -> show(task) }
         }
 
         fun delete() {
@@ -133,14 +191,17 @@ class HouseholdTaskDetailViewModel
             if (id.isNullOrEmpty() || id == access.actorId) return
             namesWork =
                 viewModelScope.launch {
-                    when (val result = repo.listOccupants(homeId)) {
-                        is NetworkResult.Success ->
-                            memberNames =
-                                result.data.occupants
-                                    .mapNotNull(HouseholdTaskAssignableMember::from)
-                                    .associate { it.id to it.displayName }
+                    // Through the store: the list and the dashboard share the household's roster.
+                    val result = repo.listOccupantsStored(homeId)
+                    val roster = result.data
+                    if (roster != null) {
+                        memberNames =
+                            roster.occupants
+                                .mapNotNull(HouseholdTaskAssignableMember::from)
+                                .associate { it.id to it.displayName }
+                    } else if (result.failure?.code == HTTP_FORBIDDEN) {
                         // A refusal won't change on retry; other failures try again on the next read.
-                        is NetworkResult.Failure -> if (result.error.code == HTTP_FORBIDDEN) memberNames = emptyMap()
+                        memberNames = emptyMap()
                     }
                     // Whatever task is shown now (a completion may have replaced it) gets the name.
                     val shown = _state.value.task
@@ -150,6 +211,8 @@ class HouseholdTaskDetailViewModel
 
         private fun <T> runAction(
             action: suspend () -> T,
+            optimistic: HomeTaskDto? = null,
+            refreshing: Boolean = false,
             publish: (T) -> Unit,
         ) {
             if (!active || inFlight || _state.value.deleted) return
@@ -159,7 +222,15 @@ class HouseholdTaskDetailViewModel
             }
             inFlight = true
             val revision = ++generation
-            _state.value = _state.value.copy(busy = true, error = null)
+            completionOriginal = _state.value.task.takeIf { optimistic != null }
+            _state.value =
+                _state.value.copy(
+                    task = optimistic ?: _state.value.task,
+                    pendingCompletion = optimistic != null,
+                    busy = true,
+                    refreshing = refreshing,
+                    error = null,
+                )
             work =
                 viewModelScope.launch {
                     try {
@@ -168,7 +239,7 @@ class HouseholdTaskDetailViewModel
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: NetworkError) {
-                        if (current(revision)) deny(error.displayMessage("Could not refresh task access. Try again."))
+                        if (current(revision)) reportNetworkFailure(error)
                     } catch (error: IllegalStateException) {
                         reportCurrentFailure(revision, error)
                     } catch (error: IllegalArgumentException) {
@@ -176,10 +247,26 @@ class HouseholdTaskDetailViewModel
                     } finally {
                         if (revision == generation) {
                             inFlight = false
-                            _state.value = _state.value.copy(busy = false)
+                            completionOriginal = null
+                            _state.value = _state.value.copy(busy = false, refreshing = false, pendingCompletion = false)
                         }
                     }
                 }
+        }
+
+        private fun reportNetworkFailure(error: NetworkError) {
+            val original = completionOriginal
+            val refused = error.code in listOf(HTTP_UNAUTHORIZED, HTTP_FORBIDDEN, HTTP_NOT_FOUND)
+            if (original != null && !refused) {
+                _state.value =
+                    _state.value.copy(
+                        task = original,
+                        error = error.displayMessage("Couldn't confirm the task change. Try again."),
+                    )
+            } else {
+                if (refused) gate?.invalidate()
+                deny(error.displayMessage("Could not refresh task access. Try again."))
+            }
         }
 
         private fun reportCurrentFailure(
@@ -197,6 +284,7 @@ class HouseholdTaskDetailViewModel
             memberNames = null
             generation++
             inFlight = false
+            completionOriginal = null
             _state.value = HouseholdTaskDetailState(loading = false, error = message)
         }
     }

@@ -462,26 +462,28 @@ public struct ActivityEntry: Identifiable, Sendable {
 
 extension ActionChipContent {
     /// Launch cut #4 (Open gigs): "Post task" posts an open task. Launch
-    /// cut #3 (Marketplace): "Snap & sell" creates a listing. Launch cut #7
-    /// (Household extras): mail scanning is cut, so "Scan mail" only opened
-    /// the Mailbox list, which the Mail tab already is.
+    /// cut #3 (Marketplace): "Snap & sell" creates a listing. Launch cuts #7
+    /// (Household extras) + #10 (Mailbox): mail scanning is cut, so "Scan
+    /// mail" only opened the Mailbox list, which the Mail tab already is.
     var isAvailableAtLaunch: Bool {
         switch kind {
         case .postTask: LaunchFeatures.openGigs
         case .snapAndSell: LaunchFeatures.marketplace
-        case .scanMail: LaunchFeatures.householdExtras
+        case .scanMail: LaunchFeatures.householdExtras && LaunchFeatures.mailbox
         case .addHome: true
         }
     }
 }
 
 extension PillarTile {
-    /// Launch cuts #3 (Marketplace) / #4 (Open gigs): their pillar tiles are hidden.
+    /// Launch cuts #3 (Marketplace) / #4 (Open gigs) / #10 (Mailbox): their
+    /// pillar tiles are hidden.
     var isAvailableAtLaunch: Bool {
         switch pillar {
         case .marketplace: LaunchFeatures.marketplace
         case .gigs: LaunchFeatures.openGigs
-        case .pulse, .mail: true
+        case .mail: LaunchFeatures.mailbox
+        case .pulse: true
         }
     }
 }

@@ -2,7 +2,6 @@ package app.pantopus.android.ui.screens.root
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatRepository
@@ -38,18 +37,19 @@ class ChatBadgeViewModel
             subscribeToListSnapshots()
         }
 
+        /**
+         * Reads the Messages list through the screens' store (Instant Screens), the same copy the Messages tab
+         * shows: one request at launch instead of the list and the stats, and none when the copy is fresh.
+         */
         fun refresh() {
             viewModelScope.launch {
-                val statsResult = repo.stats()
-                val conversationsResult = repo.unifiedConversations()
-                val stats =
-                    (statsResult as? NetworkResult.Success)?.data?.stats ?: run {
-                        Timber.w("Chat badge refresh failed: stats unavailable")
+                val response =
+                    repo.conversationsStored().data ?: run {
+                        Timber.w("Chat badge refresh failed: the Messages list is unavailable")
                         return@launch
                     }
-                serverTotalUnread = stats.totalUnread
-                val conversations =
-                    (conversationsResult as? NetworkResult.Success)?.data?.conversations.orEmpty()
+                serverTotalUnread = response.totalUnread ?: response.conversations.sumOf { it.totalUnread }
+                val conversations = response.conversations
                 val mutedKeys = preferences.mutedKeys()
                 val rows =
                     conversations.map { dto ->
@@ -102,9 +102,16 @@ class ChatBadgeViewModel
                 }
             }
             viewModelScope.launch {
+                var connectedBefore = false
                 socket.connectionState
                     .filter { it == SocketManager.ConnectionState.Connected }
-                    .collect { refresh() }
+                    .collect {
+                        // After a reconnect the list may have missed messages (contract §8): read it again. The
+                        // first connection follows the launch read, whose copy is still fresh.
+                        if (connectedBefore) repo.conversationsChanged()
+                        connectedBefore = true
+                        refresh()
+                    }
             }
         }
 

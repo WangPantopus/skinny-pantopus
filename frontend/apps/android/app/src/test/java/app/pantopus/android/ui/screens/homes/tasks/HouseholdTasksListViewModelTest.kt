@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.homes.HomeTaskSessionDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeTasksRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
@@ -61,7 +62,7 @@ import java.time.Instant
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HouseholdTasksListViewModelTest {
-    private val repo: HomeTasksRepository = mockk()
+    private val repo: HomeTasksRepository = mockk(relaxUnitFun = true)
 
     /** Fixed clock so chip derivation and subtitle formatting are
      *  deterministic — 2026-05-15T12:00:00Z. */
@@ -73,7 +74,18 @@ class HouseholdTasksListViewModelTest {
         coEvery { repo.getHomeTask(any(), any(), any()) } answers {
             NetworkResult.Success(HomeTaskResponse(makeTask(id = secondArg()), server))
         }
+        // The screens' store hands back what the endpoint answered (Instant Screens).
+        coEvery { repo.getHomeTasksStored(any(), any(), any(), any()) } coAnswers {
+            repo.getHomeTasks(firstArg(), secondArg(), thirdArg()).stored()
+        }
     }
+
+    /** What the screens' store hands back for a read with this outcome. */
+    private fun <T : Any> NetworkResult<T>.stored(): Stored<T> =
+        when (this) {
+            is NetworkResult.Success -> Stored(data, fetchedAt = System.currentTimeMillis())
+            is NetworkResult.Failure -> Stored(failure = error)
+        }
 
     @After fun tearDown() {
         Dispatchers.resetMain()
@@ -379,7 +391,7 @@ class HouseholdTasksListViewModelTest {
 
     // ─── Optimistic toggle ─────────────────────────────────────
 
-    @Test fun failed_mutation_hides_stale_rows_until_current_reload() =
+    @Test fun failed_completion_rolls_back_the_row_with_a_reason() =
         runTest {
             coEvery { repo.getHomeTasks(any(), any()) } returns
                 NetworkResult.Success(
@@ -400,8 +412,10 @@ class HouseholdTasksListViewModelTest {
             val vm = makeVm()
             vm.load()
             vm.toggleDone("t1")
-            assertTrue(vm.state.value is ListOfRowsUiState.Error)
-            assertNull(vm.fab())
+            val row = (vm.state.value as ListOfRowsUiState.Loaded).sections.single().rows.single()
+            assertEquals("t1", row.id)
+            assertEquals("Vacuum", row.title)
+            assertFalse(row.trailing is RowTrailing.Status)
             assertNotNull(vm.actionError.value)
         }
 

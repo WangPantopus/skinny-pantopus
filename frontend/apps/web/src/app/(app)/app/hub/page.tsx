@@ -24,15 +24,19 @@ import {
 import ProfileCompletionCard from '@/components/hub/ProfileCompletionCard';
 import type { HubPayload } from '@/components/hub';
 import type { HubToday } from '@pantopus/types';
+import { activeQueryClient } from '@/lib/active-query-client';
+import { myHomesQuery } from '@/lib/myHomes';
 
 const HUB_STALE_TIME = 120_000; // 2 minutes
 
 // Fetches the hub payload + (in parallel) the user's homes, merging them
-// so the UI shows homes even when hub returns none.
+// so the UI shows homes even when hub returns none. The homes come from the
+// list Place and the switcher share (lib/myHomes.ts): one read for all three.
 async function fetchHubData(): Promise<HubPayload> {
+  const client = activeQueryClient();
   const [hubPayload, myHomesRes] = await Promise.all([
     api.hub.getHub(),
-    api.homes.getMyHomes().catch(() => null),
+    (client ? client.fetchQuery(myHomesQuery()) : api.homes.getMyHomes()).catch(() => null),
   ]);
 
   let homes: api.HubHome[] = hubPayload.homes ?? [];
@@ -139,7 +143,9 @@ export default function HubPage() {
   );
 
   // ── Loading ────────────────────────────────────────────────
-  if (!mounted || loading) {
+  // Coming back shows what this tab already loaded in the first frame; the skeleton is only for
+  // nothing at all (a fresh page load starts with an empty cache, like the server).
+  if (!data && (!mounted || loading)) {
     return (
       <div className="min-h-screen bg-app">
         <div className="max-w-5xl mx-auto px-4 py-6"><HubSkeleton /></div>
@@ -148,7 +154,8 @@ export default function HubPage() {
   }
 
   // ── Error ──────────────────────────────────────────────────
-  if (error || !data) {
+  // A failed refresh keeps the Hub on screen (contract §3); the error shows only with nothing to show.
+  if (!data) {
     return (
       <div className="min-h-screen bg-app flex items-center justify-center">
         <div className="text-center">

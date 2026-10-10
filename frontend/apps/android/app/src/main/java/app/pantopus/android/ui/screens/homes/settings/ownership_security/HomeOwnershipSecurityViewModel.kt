@@ -6,10 +6,16 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.HomeOwnershipSecurityDto
+import app.pantopus.android.data.api.models.homes.HomeOwnershipSecurityResponse
 import app.pantopus.android.data.api.models.homes.UpdateHomeOwnershipSecurityRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeOwnershipSecurityRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListRow
@@ -56,6 +62,7 @@ class HomeOwnershipSecurityViewModel
     constructor(
         private val repository: HomeOwnershipSecurityRepository,
         networkMonitor: NetworkMonitor,
+        gates: HomeCopyGateFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         val title: String = "Ownership & Security"
@@ -76,42 +83,97 @@ class HomeOwnershipSecurityViewModel
         private val _footerCaption = MutableStateFlow<String?>(null)
         val footerCaption: StateFlow<String?> = _footerCaption.asStateFlow()
 
+        /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate = gates.create(homeId, listOf(HomeStoreKeys.security(homeId)))
+        private var readGeneration = 0L
+        private var active = true
+
         /** Last loaded policy block. Null until the first successful fetch. */
         var policy: HomeOwnershipSecurityDto? = null
             private set
 
         private var isSaving = false
+        private var refreshAfterSave = false
         private var saveError: String? = null
         private var lastTouchedGroupId: String? = null
         private var pendingApprovalMessage: String? = null
 
+        /**
+         * Screen entry and every return (Instant Screens): owners and household roles see the stored policy at once,
+         * and the store answers a fresh copy without a request or revalidates an older one quietly.
+         */
         fun load() {
-            _state.value = GroupedListUiState.Loading
+            active = true
             saveError = null
+            if (policy == null && gate.showsCopy) repository.storedSecurity(homeId)?.let(::show)
+            read(force = false)
+        }
+
+        /** Retry, and after a saved change: read now. */
+        fun refresh() = read(force = true)
+
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            if (!gate.showsCopy) clearCopy()
+            gate.leave()
+        }
+
+        private fun clearCopy() {
+            _refreshNotice.value = null
+            policy = null
+            _banner.value = null
+            _state.value = GroupedListUiState.Loading
+        }
+
+        override fun onCleared() {
+            gate.leave()
+        }
+
+        private fun read(force: Boolean) {
+            if (!active) return
+            val generation = ++readGeneration
+            if (policy == null) _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
-                when (val result = repository.getSecurity(homeId)) {
-                    is NetworkResult.Success -> {
-                        policy = result.data.security
-                        refreshBanner()
-                        _footerCaption.value = footerFor(result.data.security)
-                        _state.value = GroupedListUiState.Loaded(groups(result.data.security))
-                    }
-                    is NetworkResult.Failure -> {
+                val stored = readSecurity(force, generation)
+                if (generation != readGeneration) return@launch
+                val data = stored.data
+                when {
+                    // A change still saving wins over a copy read meanwhile; the save publishes its own answer.
+                    data != null && isSaving -> Unit
+                    data != null -> show(data)
+                    else -> {
                         policy = null
                         _banner.value = null
-                        _state.value =
-                            GroupedListUiState.Error(
-                                result.error.message.ifBlank {
-                                    "We couldn't load this home's security policy. " +
-                                        "Check your connection and try again."
-                                },
-                            )
+                        val fallback = "We couldn't load this home's security policy. Check your connection and try again."
+                        _state.value = GroupedListUiState.Error(stored.failure?.message?.takeIf { it.isNotBlank() } ?: fallback)
                     }
                 }
+                _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
             }
         }
 
-        fun refresh() = load()
+        private suspend fun readSecurity(
+            force: Boolean,
+            generation: Long,
+        ): Stored<HomeOwnershipSecurityResponse> {
+            val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (refusal != null) return Stored(failure = refusal)
+            if (generation != readGeneration) return Stored()
+            val stored = repository.getSecurityStored(homeId, force || !gate.showsCopy)
+            return if (!gate.showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
+        }
+
+        private fun show(response: HomeOwnershipSecurityResponse) {
+            policy = response.security
+            refreshBanner()
+            _footerCaption.value = footerFor(response.security)
+            _state.value = GroupedListUiState.Loaded(groups(response.security))
+        }
 
         /** Dismiss the "requires owner approval" banner. */
         fun onDismissBanner() {
@@ -122,7 +184,7 @@ class HomeOwnershipSecurityViewModel
         @Suppress("ReturnCount")
         fun onSelectRadio(rowId: String) {
             val current = policy ?: return
-            if (isSaving) return
+            if (!active || isSaving) return
 
             val request: UpdateHomeOwnershipSecurityRequest
             when {
@@ -158,8 +220,15 @@ class HomeOwnershipSecurityViewModel
             isSaving = true
             saveError = null
             _state.value = GroupedListUiState.Loaded(groups(current))
+            val generation = readGeneration
             viewModelScope.launch {
-                when (val result = repository.updateSecurity(homeId, request)) {
+                val result = repository.updateSecurity(homeId, request)
+                if (!active || generation != readGeneration) {
+                    isSaving = false
+                    if (active) refresh()
+                    return@launch
+                }
+                when (result) {
                     is NetworkResult.Success -> {
                         val body = result.data
                         if (body.requiresOwnerApproval) {
@@ -184,14 +253,22 @@ class HomeOwnershipSecurityViewModel
                             _footerCaption.value = footerFor(merged)
                         }
                         refreshBanner()
+                        if (!body.requiresOwnerApproval) refreshAfterSave = true
                     }
                     is NetworkResult.Failure -> {
                         saveError =
                             result.error.message.ifBlank { "Couldn't update that setting. Try again." }
+                        // Reads that landed while saving were set aside: show the server's row, read now.
+                        refreshAfterSave = true
                     }
                 }
                 isSaving = false
                 _state.value = GroupedListUiState.Loaded(groups(policy ?: current))
+                // The stored policy was marked out of date by the save: read it now so the next visit shows it.
+                if (refreshAfterSave) {
+                    refreshAfterSave = false
+                    refresh()
+                }
             }
         }
 

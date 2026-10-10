@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
@@ -56,14 +57,14 @@ class HomeTabHostViewModel
             _landing.value = HomeLanding.Loading
             resolveJob =
                 viewModelScope.launch {
+                    // The shared My Homes copy when it is fresh (Instant Screens); a read otherwise.
+                    val homes = homesRepository.myHomesStored()
+                    val data = homes.data
                     _landing.value =
-                        when (val result = homesRepository.myHomes()) {
-                            is NetworkResult.Success -> {
-                                val primary = landingHome(result.data.homes)
-                                if (primary != null) HomeLanding.PlaceDashboard(primary.id) else HomeLanding.Hub
-                            }
-                            is NetworkResult.Failure ->
-                                HomeLanding.Error(result.error.displayMessage("Couldn't load your place. Please try again."))
+                        if (data != null) {
+                            landingHome(data.homes)?.let { HomeLanding.PlaceDashboard(it.id) } ?: HomeLanding.Hub
+                        } else {
+                            HomeLanding.Error(homes.failure.landingMessage())
                         }
                 }
         }
@@ -215,6 +216,9 @@ sealed interface HomeLanding {
 
     data object Hub : HomeLanding
 }
+
+private fun NetworkError?.landingMessage(): String =
+    this?.displayMessage("Couldn't load your place. Please try again.") ?: "Couldn't load your place. Please try again."
 
 /** My Homes' choice for one Home, or null when it isn't waiting on verification. */
 private fun hubVerificationTargetFor(home: MyHome): HubVerificationTarget? =

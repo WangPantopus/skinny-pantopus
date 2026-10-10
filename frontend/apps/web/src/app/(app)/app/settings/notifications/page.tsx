@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { UserNotificationPreferences } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
+import { setNotificationPreferences, useNotificationPreferences } from '@/lib/me';
 
 type Prefs = UserNotificationPreferences;
 
@@ -29,9 +30,25 @@ const LOCATION_MODES = [
 
 export default function NotificationPreferencesPage() {
   const router = useRouter();
-  const [prefs, setPrefs] = useState<Prefs | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // The session cookie is readable only in the browser: until mount, the page
+  // renders what the cache already has (nothing on a fresh load), like the server.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const signedIn = mounted && !!getAuthToken();
+  useEffect(() => {
+    if (mounted && !getAuthToken()) router.replace('/login');
+  }, [mounted, router]);
+
+  // Your preferences are one shared entry (lib/me.ts), so coming back shows them at once.
+  // Changes the server hasn't confirmed yet show over the saved copy.
+  const prefsQuery = useNotificationPreferences({ enabled: signedIn });
+  const { refetch: refetchPrefs } = prefsQuery;
+  const [changes, setChanges] = useState<Partial<Prefs>>({});
+  const prefs: Prefs | null = prefsQuery.data ? { ...prefsQuery.data, ...changes } : null;
+  const error = !prefs && prefsQuery.isError
+    ? ((prefsQuery.error as { message?: string } | null)?.message || 'Failed to load preferences')
+    : '';
+  const loading = !prefs && (!error || prefsQuery.isFetching);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,25 +56,10 @@ export default function NotificationPreferencesPage() {
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const revision = useRef(0);
 
-  const fetchPrefs = useCallback(async () => {
-    try {
-      const token = getAuthToken();
-      if (!token) { router.replace('/login'); return; }
-      const res = await api.getHubPreferences();
-      setPrefs(res.preferences);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load preferences');
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
-  useEffect(() => { fetchPrefs(); }, [fetchPrefs]);
-
   const update = useCallback((patch: Partial<Prefs>) => {
     const currentRevision = ++revision.current;
     pendingPatch.current = { ...pendingPatch.current, ...patch };
-    setPrefs((prev) => prev ? { ...prev, ...patch } : prev);
+    setChanges((prev) => ({ ...prev, ...patch }));
     setSaveStatus('saving');
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (statusTimer.current) clearTimeout(statusTimer.current);
@@ -69,18 +71,22 @@ export default function NotificationPreferencesPage() {
       saveQueue.current = saveQueue.current.then(async () => {
         try {
           const res = await api.updateHubPreferences(batch);
+          // Every confirmed save is the saved copy; newer changes still show over it.
+          setNotificationPreferences(res.preferences);
           if (revision.current !== currentRevision) return;
-          setPrefs(res.preferences);
+          setChanges({});
           setSaveStatus('saved');
           statusTimer.current = setTimeout(() => setSaveStatus('idle'), 2000);
         } catch {
           if (revision.current !== currentRevision) return;
+          // Show what the server has: drop the unsaved changes and ask for the saved copy.
           setSaveStatus('error');
-          await fetchPrefs();
+          setChanges({});
+          await refetchPrefs();
         }
       });
     }, 600);
-  }, [fetchPrefs]);
+  }, [refetchPrefs]);
 
   // Loading
   if (loading) {
@@ -103,7 +109,7 @@ export default function NotificationPreferencesPage() {
       <div className="min-h-screen bg-app flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error || 'Something went wrong'}</p>
-          <button onClick={() => { setLoading(true); setError(''); fetchPrefs(); }}
+          <button onClick={() => { void refetchPrefs(); }}
             className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition">
             Retry
           </button>

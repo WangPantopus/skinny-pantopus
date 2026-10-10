@@ -1,10 +1,13 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as api from '@pantopus/api';
 import { homeAccessExpiry, homeAccessFingerprint, readCurrentHomeAccess, watchHomeAccessExpiry } from './homeAccessFingerprint';
+import { readHomeDashboardCopy } from './homeDashboardCopy';
 import { RETURN_REFRESH_MS, transientFailure } from './returnRefresh';
+import { onSyncTopic, touchesHome } from '@/lib/syncSignals';
 
 // ============================================================
 // Types
@@ -117,22 +120,45 @@ export function useHomePermissions() {
 // Provider
 // ============================================================
 
+/** True while this browser's session, API origin and generation are the ones a read started under. */
+function sessionCheck(revision: number, generation: { current: number }): () => boolean {
+  const token = api.getAuthToken(), origin = api.getApiBaseUrl();
+  const marker = typeof window === 'undefined' ? null : localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+  return () => revision === generation.current && token === api.getAuthToken()
+    && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+}
+
 export function HomePermissionsProvider({
   homeId,
+  keepsCopy = false,
   children,
 }: {
   homeId: string;
+  /** Start from the access kept with the Home dashboard's copy (owners and household roles,
+   * components/home/homeDashboardCopy.ts) and check it again behind it. */
+  keepsCopy?: boolean;
   children: ReactNode;
 }) {
-  const [access, setAccess] = useState<HomeAccess | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const [copied] = useState(() => (keepsCopy ? readHomeDashboardCopy(queryClient, homeId)?.access as HomeAccess | undefined : undefined) ?? null);
+  const [access, setAccess] = useState<HomeAccess | null>(copied);
+  const [loading, setLoading] = useState(!copied);
   const [error, setError] = useState<string | null>(null);
   const generation = useRef(0);
   const scopeHome = useRef(homeId);
+  const copyHome = useRef(copied ? homeId : null);
   const ready = useRef<(() => boolean) | null>(null);
+  // The copied access was shown under this session: it answers what may be shown until the re-check does.
+  const readyInitialized = useRef(false);
+  if (!readyInitialized.current) {
+    readyInitialized.current = true;
+    if (copied) ready.current = sessionCheck(generation.current, generation);
+  }
   const stopExpiry = useRef<(() => void) | null>(null);
   const lastAttempt = useRef(0);
   const inFlight = useRef(0);
+  // A change signal that arrived during a check: one more background check follows it.
+  const signalPending = useRef(false);
   // The access the page currently shows (null while loading or failed), for background re-checks.
   const shownFingerprint = useRef<string | null>(null);
   const retireGeneration = useCallback(() => {
@@ -153,7 +179,7 @@ export function HomePermissionsProvider({
     const current = () => revision === generation.current && token === api.getAuthToken()
       && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
       && (expiry === null || Date.now() < expiry);
-    if (!background) { setAccess(null); setLoading(true); setError(null); }
+    if (!background) { copyHome.current = null; setAccess(null); setLoading(true); setError(null); }
     inFlight.current++;
     try {
       if (!token) throw new Error('Sign in again to check current home access.');
@@ -161,6 +187,8 @@ export function HomePermissionsProvider({
       if (!current()) return;
       if (background) {
         if (homeAccessFingerprint(data) !== shownFingerprint.current) void load();
+        // The same access: its other details (claim and challenge windows) follow the server.
+        else setAccess(previous => (previous && JSON.stringify(previous) === JSON.stringify(data) ? previous : data as HomeAccess));
         return;
       }
       const confirmed = data as HomeAccess;
@@ -205,6 +233,10 @@ export function HomePermissionsProvider({
     } finally {
       inFlight.current--;
       if (!background && current()) setLoading(false);
+      if (inFlight.current === 0 && signalPending.current && current()) {
+        signalPending.current = false;
+        void load(ready.current !== null);
+      }
     }
   }, [homeId, retireGeneration]);
 
@@ -213,7 +245,10 @@ export function HomePermissionsProvider({
   }, [access, loading, error]);
 
   useEffect(() => {
-    void load();
+    // From a copy, the first load is the background re-check (a changed access reloads in full).
+    const fromCopy = copyHome.current === homeId;
+    if (fromCopy && ready.current === null) ready.current = sessionCheck(generation.current, generation);
+    void load(fromCopy);
     // Another account's access must never show, so an account change clears it and reloads.
     const changed = () => { retireGeneration(); setAccess(null); setLoading(true); setError(null); void load(); };
     // Coming back keeps the page and re-checks access behind the scenes (in full when nothing is shown).
@@ -222,13 +257,20 @@ export function HomePermissionsProvider({
         || Date.now() - lastAttempt.current < RETURN_REFRESH_MS) return;
       void load(ready.current !== null);
     };
+    // The server says this Home changed (a role, a membership, a claim): check access again now.
+    const signalled = (topic: string) => {
+      if (!touchesHome(topic, homeId)) return;
+      if (inFlight.current > 0) { signalPending.current = true; return; }
+      void load(ready.current !== null);
+    };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
     const unsubscribe = api.onTokenChange(changed);
+    const unsubscribeSync = onSyncTopic(signalled);
     window.addEventListener('storage', storage); window.addEventListener('focus', resume);
     document.addEventListener('visibilitychange', resume);
-    return () => { retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
+    return () => { retireGeneration(); unsubscribe(); unsubscribeSync(); signalPending.current = false; window.removeEventListener('storage', storage);
       window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume); };
-  }, [load, retireGeneration]);
+  }, [load, retireGeneration, homeId]);
 
   const visibleAccess = scopeHome.current === homeId ? access : null;
   const opening = ready.current;

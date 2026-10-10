@@ -1,6 +1,7 @@
 // Fetches the Hub overview and companion reads for `HubView`.
 
-// swiftlint:disable type_body_length
+// Reading through the screen store (Instant Screens) pushed this past 500 lines.
+// swiftlint:disable type_body_length file_length
 
 import Foundation
 import Observation
@@ -56,32 +57,61 @@ final class HubViewModel {
         set { UserDefaults.standard.set(newValue, forKey: bannerDismissedKey) }
     }
 
+    /// The screen store (Instant Screens): the hub and its companions show
+    /// from its copies at once and are re-read only once out of date.
+    private let store: ScreenStore
+
     init(api: APIClient = .shared) {
         self.api = api
+        store = ScreenStore.store(for: api)
+        showStoredCopies()
     }
 
-    /// Initial load — no-op when the hub (populated or first-run) is
-    /// already on screen, so returning to it doesn't flash a skeleton.
+    /// Showing the hub: the stored copies at once (a skeleton only when there
+    /// are none), then a quiet refresh of whatever is out of date.
     func load() async {
-        switch state {
-        case .populated, .firstRun: return
-        case .skeleton, .error: break
-        }
-        state = .skeleton
-        await fetch()
+        if case .error = state { state = .skeleton }
+        await fetch(force: false)
     }
 
     /// Pull-to-refresh / retry.
     func refresh() async {
-        await fetch()
+        await fetch(force: true)
+    }
+
+    /// The first frame from the store, when it holds the overview.
+    private func showStoredCopies() {
+        guard let hub = store.peek(HubStoreReads.overview, as: HubResponse.self)?.value else { return }
+        let unread = store.peek(NotificationsEndpoints.unreadCount, as: NotificationUnreadCountResponse.self)?.value
+        applyResults(
+            hub: hub,
+            today: store.peek(HubEndpoints.today(), as: HubTodayResponse.self)?.value,
+            discovery: store.peek(discoveryEndpoint(discoveryFilter.queryValue), as: HubDiscoveryResponse.self)?.value,
+            personalUnread: unread?.personalBellCount ?? 0,
+            audienceUnread: unread?.byContext?.audience ?? 0
+        )
+    }
+
+    private func discoveryEndpoint(_ filter: String) -> Endpoint {
+        HubEndpoints.discovery(filter: filter, limit: 10)
+    }
+
+    private func discovery(_ filter: String, force: Bool = false) async throws -> HubDiscoveryResponse {
+        try await store.load(discoveryEndpoint(filter), as: HubDiscoveryResponse.self, kind: .nearby, force: force).value
     }
 
     /// Re-read only the unread counts when the hub reappears (for example
     /// after the user read their notifications), so the bell's dot and the
     /// megaphone don't go stale. A failed read leaves them as they are.
     func refreshUnread() async {
+        // The store's count (Notifications: 30 seconds; reading notifications marks it out of date).
         let unread: NotificationUnreadCountResponse? = await optional {
-            try await self.api.request(NotificationsEndpoints.unreadCount)
+            try await self.store.load(
+                NotificationsEndpoints.unreadCount,
+                as: NotificationUnreadCountResponse.self,
+                kind: .notifications,
+                topics: [ScreenTopic.notifications]
+            ).value
         }
         guard let unread else { return }
         state = state.withUnread(personal: unread.personalBellCount, audience: unread.byContext?.audience ?? 0)
@@ -125,7 +155,7 @@ final class HubViewModel {
         defer { if generation == discoveryGeneration { discoveryLoading = false } }
         let filter = discoveryFilter.queryValue
         let response: HubDiscoveryResponse? = await optional {
-            try await self.api.request(HubEndpoints.discovery(filter: filter, limit: 10))
+            try await self.discovery(filter)
         }
         guard generation == discoveryGeneration, filter == discoveryFilter.queryValue else { return }
         discoveryFailed = response == nil
@@ -169,13 +199,21 @@ final class HubViewModel {
 
     // MARK: - Fetch
 
-    private func fetch() async {
+    private func fetch(force: Bool) async {
         // Hub first; its failure aborts the screen. Companions run in
         // parallel *after* a successful hub response so a test sequence
         // can predict which stub each call consumes.
         let hub: HubResponse
         do {
-            hub = try await api.request(HubEndpoints.overview())
+            hub = try await store.load(
+                HubStoreReads.overview,
+                as: HubResponse.self,
+                kind: HubStoreReads.kind,
+                topics: HubStoreReads.topics,
+                force: force
+            ).value
+        } catch is CancellationError {
+            return
         } catch {
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load your hub."
             switch state {
@@ -187,8 +225,17 @@ final class HubViewModel {
             }
             return
         }
+        // A 200 that says the briefing context was unavailable keeps the last copy.
+        let todayFailed: @Sendable (HubTodayResponse) -> Bool = { $0.today == nil && $0.error != nil }
         async let todayTask: HubTodayResponse? = optional {
-            try await self.api.request(HubEndpoints.today())
+            try await self.store.load(
+                HubEndpoints.today(),
+                as: HubTodayResponse.self,
+                kind: .today,
+                topics: [ScreenTopic.today],
+                force: force,
+                failedIf: todayFailed
+            ).value
         }
         discoveryGeneration += 1
         let generation = discoveryGeneration
@@ -196,20 +243,27 @@ final class HubViewModel {
         defer { if generation == discoveryGeneration { discoveryLoading = false } }
         let filter = discoveryFilter.queryValue
         async let discoveryTask: HubDiscoveryResponse? = optional {
-            try await self.api.request(HubEndpoints.discovery(filter: filter, limit: 10))
+            try await self.discovery(filter, force: force)
         }
         let today = await todayTask
         let discovery = await discoveryTask
         // Optional unread counts power the Beacon notification shortcut.
         let unread: NotificationUnreadCountResponse? = await optional {
-            try await self.api.request(NotificationsEndpoints.unreadCount)
+            try await self.store.load(
+                NotificationsEndpoints.unreadCount,
+                as: NotificationUnreadCountResponse.self,
+                kind: .notifications,
+                topics: [ScreenTopic.notifications],
+                force: force
+            ).value
         }
         // Rebookable helpers feed the "Jump back in" rail (RN
         // `(tabs)/index.tsx:344-358`). Optional so an empty / failing
         // gigs call never blanks the hub.
-        let rebookable: RebookableGigsResponse? = await optional {
+        // Launch cut #4 (Open gigs) hides the rebook cards, so nothing is asked for them.
+        let rebookable: RebookableGigsResponse? = LaunchFeatures.openGigs ? await optional {
             try await self.api.request(GigExtrasEndpoints.rebookable())
-        }
+        } : nil
         guard generation == discoveryGeneration, filter == discoveryFilter.queryValue else { return }
         discoveryFailed = discovery == nil
         applyResults(

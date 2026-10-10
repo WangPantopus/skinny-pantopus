@@ -127,6 +127,10 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
             }
         }
         .task { await dataSource.load() }
+        .refreshFailureToast(Binding(
+            get: { dataSource.refreshFailureMessage },
+            set: { dataSource.refreshFailureMessage = $0 }
+        ))
     }
 
     @ViewBuilder private var stateBody: some View {
@@ -134,6 +138,9 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
         case .loading:
             LoadingRows()
         case let .loaded(sections, hasMore):
+            if let notice = dataSource.staleNotice {
+                RefreshNotice(text: notice) { Task { await dataSource.refresh() } }
+            }
             LoadedList(
                 sections: sections,
                 hasMore: hasMore,
@@ -761,7 +768,7 @@ private struct ListingContextHeader: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().aspectRatio(contentMode: .fill)
@@ -1316,7 +1323,7 @@ private struct LeadingView: View {
                     )
                 }
                 if let url = imageURL {
-                    AsyncImage(url: url) { image in
+                    CachedAsyncImage(url: url) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Text(initials)
@@ -1360,7 +1367,7 @@ private struct LeadingView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().aspectRatio(contentMode: .fill)

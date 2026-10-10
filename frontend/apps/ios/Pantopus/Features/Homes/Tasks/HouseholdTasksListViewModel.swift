@@ -178,6 +178,9 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
     private var canCreate = false
     private var generation = 0
     private var isActing = false
+    /// A done / not-done tap waiting for the server: its row shows the new
+    /// state, dimmed, until the server confirms (contract section 3).
+    private var pendingStatus: [String: String] = [:]
     private var visible = false
     private var pendingReload = false
 
@@ -331,13 +334,18 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
         isActing = true
         generation += 1
         let revision = generation
+        let target = task.status == "done" ? "open" : "done"
+        pendingStatus[taskId] = target
+        rebuildState()
         defer { finishAction() }
         do {
-            let updated = try await access.complete(taskId: taskId, status: task.status == "done" ? "open" : "done")
+            let updated = try await access.complete(taskId: taskId, status: target)
+            pendingStatus[taskId] = nil
             guard revision == generation else { return }
             if let index = tasks?.firstIndex(where: { $0.id == taskId }) { tasks?[index] = updated }
             rebuildState()
         } catch {
+            pendingStatus[taskId] = nil
             guard revision == generation else { return }
             clearRecords(error)
             actionError = error.localizedDescription
@@ -478,6 +486,15 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
         projection _: HouseholdTaskRowProjection,
         taskId: String
     ) -> RowTrailing {
+        if let pending = pendingStatus[taskId] {
+            // Waiting for the server: the new state, dimmed and not tappable.
+            return .circularAction(
+                icon: pending == "done" ? .check : .circle,
+                accessibilityLabel: "Saving",
+                background: Theme.Color.appSurfaceSunken,
+                foreground: Theme.Color.appTextMuted
+            ) {}
+        }
         guard isCurrent, !isActing else { return .chevron }
         let canComplete = task.capabilities?.canComplete == true
         let canDelete = task.capabilities?.canDelete == true

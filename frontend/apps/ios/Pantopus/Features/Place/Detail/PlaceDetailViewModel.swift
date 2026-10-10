@@ -23,6 +23,10 @@ final class PlaceDetailViewModel {
     /// The error is the server refusing this account the place (403): a
     /// retry can't change it, so the views drop their Try again.
     private(set) var accessDenied = false
+    /// When the server last confirmed the shown copy.
+    private(set) var loadedAt: Date?
+    /// Set when a pull to refresh fails while the content stays on screen.
+    var refreshFailureMessage: String?
     let homeId: String
     let savedPlaceId: String?
     var calendarHomeId: String? {
@@ -76,32 +80,100 @@ final class PlaceDetailViewModel {
 
     func load() async {
         if case .loaded = state { return }
-        await fetch()
+        // The dashboard or Today may already hold this copy (one store entry).
+        if let copy = PlaceStoreReads.peek(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections) {
+            show(copy)
+            await fetch(quietly: true, force: false)
+            return
+        }
+        await fetch(quietly: false, force: false)
     }
 
+    /// Coming back: the shown copy stays; the store refreshes it quietly only
+    /// once it is out of date (Today: 10 minutes, and at midnight).
+    func refreshIfStale() async {
+        guard case .loaded = state else {
+            await load()
+            return
+        }
+        await fetch(quietly: true, force: false)
+    }
+
+    /// Pull to refresh and Try again: always fetches now.
     func refresh() async {
-        await fetch()
+        await fetch(quietly: false, force: true)
     }
 
-    private func fetch() async {
-        fallbackRequested = false
-        fallbackCalendar = nil
+    /// A change signal concerns this page's copy: one of its topics (`today`,
+    /// `home:{id}`, `place:{id}`), or its kind after a reconnect.
+    func isAffected(by note: Notification) -> Bool {
+        PlaceStoreReads.topics(homeId: homeId, savedPlaceId: savedPlaceId).contains { note.names(topic: $0) }
+            || note.names(kind: storeKind)
+    }
+
+    private var storeKind: ScreenDataKind {
+        group == .today ? .today : .place
+    }
+
+    /// Today asks for only the sections it renders; detail pages read the full copy.
+    private var sections: [PlaceSectionID]? {
+        group == .today && savedPlaceId == nil ? PlaceStoreReads.todaySections : nil
+    }
+
+    private func show(_ snapshot: ScreenSnapshot<PlaceIntelligence>) {
+        guard loadedAt != snapshot.fetchedAt || !isLoaded else { return }
+        accessDenied = false
+        loadedAt = snapshot.fetchedAt
+        state = .loaded(snapshot.value)
+    }
+
+    private var isLoaded: Bool {
+        if case .loaded = state { return true }
+        return false
+    }
+
+    /// A failed fetch keeps loaded content on screen (a pull to refresh says
+    /// so in a toast). A refusal (403 or 404) replaces it with the server's
+    /// answer, and with nothing loaded the error shows.
+    private func fetch(quietly: Bool, force: Bool) async {
+        let hadFallback = fallbackCalendar != nil
         do {
-            let intelligence: PlaceIntelligence = try await api.request(
-                savedPlaceId.map { SavedPlacesEndpoints.today(id: $0) }
-                    ?? PlaceEndpoints.intelligence(homeId: homeId)
+            let snapshot = try await PlaceStoreReads.load(
+                homeId: homeId,
+                savedPlaceId: savedPlaceId,
+                sections: sections,
+                kind: storeKind,
+                force: force
             )
             try Task.checkCancellation()
-            accessDenied = false
-            state = .loaded(intelligence)
+            refreshFailureMessage = nil
+            show(snapshot)
+            // A refresh asks for the fallback calendar again; the shown one
+            // stays until the new one arrives.
+            if !quietly {
+                fallbackRequested = false
+                if hadFallback { await loadFallbackCalendar() }
+            }
         } catch is CancellationError {
             return
-        } catch let error as APIError {
-            if case .forbidden = error { accessDenied = true } else { accessDenied = false }
-            state = .error(message: error.errorDescription ?? "Couldn't load this section.")
         } catch {
-            accessDenied = false
-            state = .error(message: "Couldn't load this section.")
+            let apiError = error as? APIError
+            if case .loaded = state, !Self.isRefusal(apiError) {
+                if !quietly { refreshFailureMessage = "Couldn't refresh. Pull down to try again." }
+                return
+            }
+            if case .forbidden = apiError { accessDenied = true } else { accessDenied = false }
+            fallbackRequested = false
+            fallbackCalendar = nil
+            loadedAt = nil
+            state = .error(message: apiError?.errorDescription ?? "Couldn't load this section.")
+        }
+    }
+
+    private static func isRefusal(_ error: APIError?) -> Bool {
+        switch error {
+        case .forbidden, .notFound: true
+        default: false
         }
     }
 
@@ -115,7 +187,8 @@ final class PlaceDetailViewModel {
             try sessionScope.requireCurrent()
             fallbackCalendar = response.calendar
         } catch {
-            fallbackCalendar = nil
+            // A failed refresh keeps the shown calendar; another account never sees it.
+            if !sessionScope.isCurrent { fallbackCalendar = nil }
         }
     }
 

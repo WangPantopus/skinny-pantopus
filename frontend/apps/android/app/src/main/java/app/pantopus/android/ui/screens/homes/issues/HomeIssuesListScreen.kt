@@ -17,7 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.theme.PantopusColors
 
 /**
@@ -34,7 +38,9 @@ fun HomeIssuesListScreen(
     onBack: (() -> Unit)? = null,
     viewModel: HomeIssuesListViewModel = hiltViewModel(),
 ) {
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_issues", state.showsContent())
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
     val banner by viewModel.banner.collectAsStateWithLifecycle()
@@ -44,7 +50,12 @@ fun HomeIssuesListScreen(
     var reporting by remember { mutableStateOf(false) }
     var dismissTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LaunchedEffect(state) {
+        if (state is ListOfRowsUiState.Loading || state is ListOfRowsUiState.Error) {
+            reporting = false
+            dismissTarget = null
+        }
+    }
 
     LaunchedEffect(pendingEvent) {
         when (val event = pendingEvent) {
@@ -80,28 +91,19 @@ fun HomeIssuesListScreen(
             fab = viewModel.fab(),
             onBack = onBack,
             banner = banner,
+            refreshing = viewModel.refreshing.collectAsStateWithLifecycle().value,
+            refreshNotice = viewModel.refreshNotice.collectAsStateWithLifecycle().value,
         )
     }
 
     dismissTarget?.let { (issueId, title) ->
-        AlertDialog(
-            onDismissRequest = { dismissTarget = null },
-            title = { Text("Dismiss issue?") },
-            text = { Text("“$title” will be moved to History. You can still see it there.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.dismissIssue(issueId)
-                        dismissTarget = null
-                    },
-                    modifier = Modifier.testTag("homeIssues_dismissConfirm"),
-                ) {
-                    Text("Dismiss", color = PantopusColors.error)
-                }
+        DismissIssueDialog(
+            title = title,
+            onConfirm = {
+                viewModel.dismissIssue(issueId)
+                dismissTarget = null
             },
-            dismissButton = {
-                TextButton(onClick = { dismissTarget = null }) { Text("Cancel") }
-            },
+            onDismiss = { dismissTarget = null },
         )
     }
 
@@ -115,4 +117,23 @@ fun HomeIssuesListScreen(
             },
         )
     }
+}
+
+@Composable
+private fun DismissIssueDialog(
+    title: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Dismiss issue?") },
+        text = { Text("“$title” will be moved to History. You can still see it there.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm, modifier = Modifier.testTag("homeIssues_dismissConfirm")) {
+                Text("Dismiss", color = PantopusColors.error)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

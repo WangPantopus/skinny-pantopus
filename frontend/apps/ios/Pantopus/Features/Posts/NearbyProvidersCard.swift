@@ -217,7 +217,7 @@ public struct NearbyProvidersCard: View {
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                 .fill(Theme.Color.appSurfaceSunken)
             if let url = row.avatarURL {
-                AsyncImage(url: url) { image in
+                CachedAsyncImage(url: url) { image in
                     image.resizable().aspectRatio(contentMode: .fill)
                 } placeholder: {
                     Icon(.shoppingBag, size: 18, color: Theme.Color.appTextMuted)

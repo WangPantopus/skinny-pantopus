@@ -19,9 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusIcon
 
@@ -48,11 +52,15 @@ fun MembersListScreen(
     onReviewResidency: () -> Unit = {},
     viewModel: MembersListViewModel = hiltViewModel(),
 ) {
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_members", state.showsContent())
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
     var inviting by remember { mutableStateOf<HomeInvitationSenderTarget?>(null) }
     var removeTarget by remember { mutableStateOf<HomeMemberRemovalTarget?>(null) }
@@ -61,8 +69,16 @@ fun MembersListScreen(
     var approveTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     var declineTarget by remember { mutableStateOf<Triple<String, String, String>?>(null) }
 
+    LaunchedEffect(state) {
+        if (state is ListOfRowsUiState.Loading || state is ListOfRowsUiState.Error) {
+            actionsTarget = null
+            roleTarget = null
+            approveTarget = null
+            declineTarget = null
+        }
+    }
+
     LaunchedEffect(Unit) {
-        viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenMembersListViewed)
     }
 
@@ -124,6 +140,8 @@ fun MembersListScreen(
                     null
                 },
             onBack = onBack,
+            refreshing = refreshing,
+            refreshNotice = refreshNotice,
         )
     }
 
@@ -178,25 +196,14 @@ fun MembersListScreen(
         )
     }
 
-    approveTarget?.let { (requestId, _) ->
-        AlertDialog(
-            onDismissRequest = { approveTarget = null },
-            title = { Text("Send invitation") },
-            text = { Text("This will create a personal invitation for them to accept in the app.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.approveAccessRequest(requestId)
-                        approveTarget = null
-                    },
-                    modifier = Modifier.testTag("membersList_approveRequestConfirm"),
-                ) { Text("Approve") }
-            },
-            dismissButton = {
-                TextButton(onClick = { approveTarget = null }) { Text("Cancel") }
-            },
-        )
-    }
+    ApproveMemberRequestDialog(
+        target = approveTarget,
+        onApprove = { requestId ->
+            viewModel.approveAccessRequest(requestId)
+            approveTarget = null
+        },
+        onDismiss = { approveTarget = null },
+    )
 
     declineTarget?.let { (requestId, name, identity) ->
         AlertDialog(
@@ -218,16 +225,7 @@ fun MembersListScreen(
         )
     }
 
-    actionError?.let { message ->
-        AlertDialog(
-            onDismissRequest = { viewModel.clearActionError() },
-            title = { Text("Something went wrong") },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = { viewModel.clearActionError() }) { Text("OK") }
-            },
-        )
-    }
+    MemberActionErrorDialog(message = actionError, onDismiss = viewModel::clearActionError)
 }
 
 /**
@@ -297,4 +295,41 @@ private fun ChangeMemberRoleDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
+}
+
+@Composable
+private fun ApproveMemberRequestDialog(
+    target: Pair<String, String>?,
+    onApprove: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    target?.let { (requestId, _) ->
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Send invitation") },
+            text = { Text("This will create a personal invitation for them to accept in the app.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { onApprove(requestId) },
+                    modifier = Modifier.testTag("membersList_approveRequestConfirm"),
+                ) { Text("Approve") }
+            },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun MemberActionErrorDialog(
+    message: String?,
+    onDismiss: () -> Unit,
+) {
+    message?.let {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Something went wrong") },
+            text = { Text(it) },
+            confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+        )
+    }
 }

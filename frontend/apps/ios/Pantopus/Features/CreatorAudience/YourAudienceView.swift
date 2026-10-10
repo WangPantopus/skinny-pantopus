@@ -491,7 +491,7 @@ public struct YourAudienceView: View {
         let tint = palette[audienceStableIndex(member.handle, count: palette.count)]
         return ZStack {
             if let url = member.avatarURL {
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().scaledToFill()

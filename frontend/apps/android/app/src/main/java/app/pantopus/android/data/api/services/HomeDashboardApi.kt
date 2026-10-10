@@ -10,8 +10,10 @@ import app.pantopus.android.data.api.models.homedashboard.HomeSettingsUpdateResp
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemDto
 import app.pantopus.android.data.api.models.homedashboard.UpdateSeasonalChecklistItemRequest
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.PATCH
 import retrofit2.http.Path
@@ -23,11 +25,22 @@ import retrofit2.http.Query
  * Kept separate from [HomesApi] (which is already at the detekt
  * `TooManyFunctions` threshold and is edited by every Homes surface).
  */
+@Suppress("TooManyFunctions")
 interface HomeDashboardApi {
     @Headers("Cache-Control: no-cache, no-store")
     @GET("api/homes/{id}/dashboard-access")
     suspend fun dashboardAuthority(
         @Path("id") homeId: String,
+    ): retrofit2.Response<HomeDashboardAuthorityDto>
+
+    /**
+     * [dashboardAuthority] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. No
+     * `Cache-Control: no-cache` here: Express answers 200 to any conditional request that carries it.
+     */
+    @GET("api/homes/{id}/dashboard-access")
+    suspend fun dashboardAuthorityConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
     ): retrofit2.Response<HomeDashboardAuthorityDto>
 
     /**
@@ -42,6 +55,13 @@ interface HomeDashboardApi {
         @Query("include_health_score") includeHealthScore: Boolean? = null,
     ): HomeDashboardResponse
 
+    /** [dashboard] (without the health score) for the screens' store: a 304 means the copy is current. */
+    @GET("api/homes/{id}/dashboard")
+    suspend fun dashboardConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeDashboardResponse>
+
     /**
      * `GET /api/homes/:id/health-score` — route `backend/routes/home.js:7482`.
      *
@@ -55,6 +75,13 @@ interface HomeDashboardApi {
         @Query("force") force: Boolean? = null,
     ): HomeHealthScoreDto
 
+    /** The recomputed [healthScore] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/health-score?force=true")
+    suspend fun healthScoreConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeHealthScoreDto>
+
     /**
      * `GET /api/homes/:id/seasonal-checklist` — route
      * `backend/routes/home.js:7504`. Idempotently generates the current
@@ -65,6 +92,13 @@ interface HomeDashboardApi {
     suspend fun seasonalChecklist(
         @Path("id") homeId: String,
     ): SeasonalChecklistDto
+
+    /** [seasonalChecklist] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/seasonal-checklist")
+    suspend fun seasonalChecklistConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<SeasonalChecklistDto>
 
     /**
      * `PATCH /api/homes/:id/seasonal-checklist/:itemId` — route
@@ -83,6 +117,13 @@ interface HomeDashboardApi {
     suspend fun propertyValue(
         @Path("id") homeId: String,
     ): HomePropertyValueDto
+
+    /** [propertyValue] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/property-value")
+    suspend fun propertyValueConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomePropertyValueDto>
 
     /**
      * `GET /api/homes/:id/bill-trends` — route `backend/routes/home.js:7599`.

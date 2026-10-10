@@ -10,6 +10,8 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeOwnershipSecurityRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
@@ -39,6 +41,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeOwnershipSecurityViewModelTest {
     private val repository: HomeOwnershipSecurityRepository = mockk(relaxed = true)
+    private val gates: HomeCopyGateFactory = mockk(relaxed = true)
 
     private val networkMonitor: NetworkMonitor =
         mockk<NetworkMonitor>(relaxed = true).also {
@@ -47,6 +50,7 @@ class HomeOwnershipSecurityViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { gates.create(any(), any()).checkForRead(any(), any()) } returns null
     }
 
     @After fun tearDown() {
@@ -76,15 +80,19 @@ class HomeOwnershipSecurityViewModelTest {
         HomeOwnershipSecurityViewModel(
             repository = repository,
             networkMonitor = networkMonitor,
+            gates = gates,
             savedStateHandle = SavedStateHandle(mapOf(HOME_OWNERSHIP_SECURITY_HOME_ID_KEY to homeId)),
         )
+
+    /** What the screens' store hands back for a successful read. */
+    private fun stored(response: HomeOwnershipSecurityResponse) = Stored(response, fetchedAt = System.currentTimeMillis())
 
     private fun groups(vm: HomeOwnershipSecurityViewModel): List<GroupedListGroup> = (vm.state.value as GroupedListUiState.Loaded).groups
 
     @Test fun load_projects_three_radio_groups() =
         runTest {
-            coEvery { repository.getSecurity(any()) } returns
-                NetworkResult.Success(HomeOwnershipSecurityResponse(dto()))
+            coEvery { repository.getSecurityStored(any(), any()) } returns
+                stored(HomeOwnershipSecurityResponse(dto()))
             val vm = makeVm()
             vm.load()
             val projected = groups(vm)
@@ -102,8 +110,8 @@ class HomeOwnershipSecurityViewModelTest {
 
     @Test fun load_failure_surfaces_error_state() =
         runTest {
-            coEvery { repository.getSecurity(any()) } returns
-                NetworkResult.Failure(NetworkError.Forbidden)
+            coEvery { repository.getSecurityStored(any(), any()) } returns
+                Stored(failure = NetworkError.Forbidden)
             val vm = makeVm()
             vm.load()
             assertTrue(vm.state.value is GroupedListUiState.Error)
@@ -112,8 +120,8 @@ class HomeOwnershipSecurityViewModelTest {
 
     @Test fun claim_window_surfaces_banner_and_locks_review_required() =
         runTest {
-            coEvery { repository.getSecurity(any()) } returns
-                NetworkResult.Success(
+            coEvery { repository.getSecurityStored(any(), any()) } returns
+                stored(
                     HomeOwnershipSecurityResponse(
                         dto(
                             state = "claim_window",
@@ -137,8 +145,8 @@ class HomeOwnershipSecurityViewModelTest {
 
     @Test fun pending_quorum_response_surfaces_owner_approval_banner() =
         runTest {
-            coEvery { repository.getSecurity(any()) } returns
-                NetworkResult.Success(HomeOwnershipSecurityResponse(dto()))
+            coEvery { repository.getSecurityStored(any(), any()) } returns
+                stored(HomeOwnershipSecurityResponse(dto()))
             coEvery { repository.updateSecurity(any(), any()) } returns
                 NetworkResult.Success(
                     UpdateHomeOwnershipSecurityResponse(
@@ -162,8 +170,12 @@ class HomeOwnershipSecurityViewModelTest {
 
     @Test fun applied_patch_updates_selection() =
         runTest {
-            coEvery { repository.getSecurity(any()) } returns
-                NetworkResult.Success(HomeOwnershipSecurityResponse(dto()))
+            // After an applied change the policy is read again, and the server answers the saved one.
+            coEvery { repository.getSecurityStored(any(), any()) } returnsMany
+                listOf(
+                    stored(HomeOwnershipSecurityResponse(dto())),
+                    stored(HomeOwnershipSecurityResponse(dto(mask = "high", memberAttach = "verified_only"))),
+                )
             coEvery { repository.updateSecurity(any(), any()) } returns
                 NetworkResult.Success(
                     UpdateHomeOwnershipSecurityResponse(

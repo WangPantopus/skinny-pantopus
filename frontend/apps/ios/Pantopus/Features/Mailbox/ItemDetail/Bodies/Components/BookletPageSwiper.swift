@@ -90,7 +90,7 @@ private struct BookletPage: View {
 
     var body: some View {
         BookletPaperPageChrome(hasNextPage: hasNextPage) {
-            AsyncImage(url: url) { phase in
+            CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
                 switch phase {
                 case let .success(image):
                     image

@@ -27,10 +27,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListCallbacks
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListScreen
+import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -51,12 +54,14 @@ fun HomeSettingsScreen(
     viewModel: HomeSettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_settings", state is GroupedListUiState.Loaded)
     val navigation by viewModel.navigation.collectAsStateWithLifecycle()
     val identity by viewModel.identity.collectAsStateWithLifecycle()
     val footerCaption by viewModel.footerCaption.collectAsStateWithLifecycle()
     val rename by viewModel.rename.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     LaunchedEffect(navigation) {
         navigation?.let {
             viewModel.consumeNavigation()
@@ -68,6 +73,7 @@ fun HomeSettingsScreen(
         title = viewModel.title,
         state = state,
         footerCaption = footerCaption,
+        refreshNotice = refreshNotice,
         callbacks =
             GroupedListCallbacks(
                 onBack = onBack,

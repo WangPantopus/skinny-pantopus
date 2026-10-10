@@ -12,7 +12,6 @@ import app.pantopus.android.push.FcmTokenProvider
 import app.pantopus.android.push.NotificationDispatcher
 import io.mockk.every
 import io.mockk.mockk
-import okhttp3.Cache
 
 /**
  * Shared test doubles for the persistent-login layer so `AuthRepositoryTest`,
@@ -144,7 +143,6 @@ object AuthTestSupport {
         presenceVerifier: PresenceVerifier = FakePresenceVerifier(),
         fcmTokenProvider: FcmTokenProvider = FakeFcmTokenProvider(),
         notifications: NotificationDispatcher = mockk(relaxed = true),
-        httpCache: Cache = mockk(relaxed = true),
         accountDeviceData: AccountDeviceData = mockk(relaxed = true),
     ): AuthRepository =
         AuthRepository(
@@ -164,7 +162,6 @@ object AuthTestSupport {
             presenceVerifier = presenceVerifier,
             fcmTokenProvider = fcmTokenProvider,
             notifications = notifications,
-            httpCache = httpCache,
             accountDeviceData = accountDeviceData,
         )
 }

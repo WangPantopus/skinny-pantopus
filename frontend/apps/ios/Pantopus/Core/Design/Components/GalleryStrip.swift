@@ -124,7 +124,7 @@ public struct GalleryStrip: View {
 
     @ViewBuilder private func tileBackground(_ tile: GalleryTile) -> some View {
         if let url = tile.imageURL {
-            AsyncImage(url: url) { phase in
+            CachedAsyncImage(url: url) { phase in
                 switch phase {
                 case let .success(image): image.resizable().scaledToFill()
                 default: tile.tint

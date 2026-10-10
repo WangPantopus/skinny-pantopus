@@ -26,7 +26,8 @@
 //  (`hub.js:699-709`), so never format them for display locale.
 //
 
-// swiftlint:disable type_body_length
+// Live refresh while open (Instant Screens) pushed this past 500 lines.
+// swiftlint:disable type_body_length file_length
 
 import Foundation
 import Observation
@@ -61,7 +62,9 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     /// arrive until they are back on in Settings.
     public private(set) var systemNotificationsDenied = false
 
-    private let api: APIClient
+    let api: APIClient
+    /// Your preferences as last read or saved (You: fresh 10 minutes); see `+Copy`.
+    let store: ScreenStore
     private let saveDebounce: Duration
     private let systemAuthorization: @Sendable () async -> UNAuthorizationStatus
     /// Wire-name keys accumulated since the last flush. Merged rather
@@ -79,8 +82,11 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         }
     ) {
         self.api = api
+        store = ScreenStore.store(for: api)
         self.saveDebounce = saveDebounce
         self.systemAuthorization = systemAuthorization
+        preferences = storedPreferences()
+        if preferences != nil { state = .loaded(groups()) }
     }
 
     // MARK: - GroupedListDataSource
@@ -109,11 +115,19 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     public func load() async {
         if preferences == nil { state = .loading }
         await refreshSystemPermission()
-        await fetch()
+        await fetch(force: false)
     }
 
     public func refresh() async {
-        await fetch()
+        await fetch(force: true)
+    }
+
+    /// `profile:me` while the screen is open (a change on another device, or
+    /// this phone's own save coming back): re-read what went stale. Not while
+    /// a change here waits to save or is saving: its reply is the newer copy.
+    public func refreshFromSignal() async {
+        guard saveTask == nil, !saveInFlight, pendingPatch.isEmpty else { return }
+        await fetch(force: false)
     }
 
     public func tapRow(_: String) async {}
@@ -183,14 +197,17 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
 
     // MARK: - Networking
 
-    private func fetch() async {
+    private func fetch(force: Bool) async {
+        // A change made here while the read is out is newer than its reply
+        // (the change's own save answers it), so that reply is dropped.
+        let edits = saveRevision
         do {
-            let response: NotificationPreferencesResponseDTO = try await api.request(
-                NotificationPreferencesEndpoints.fetch()
-            )
+            let response = try await readPreferences(force: force)
+            guard edits == saveRevision else { return }
             preferences = response.preferences
             state = .loaded(groups())
         } catch {
+            guard edits == saveRevision else { return }
             guard preferences != nil else {
                 state = .error(
                     message: (error as? APIError)?.errorDescription
@@ -239,9 +256,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
             let revision = saveRevision
             pendingPatch = [:]
             do {
-                let response: NotificationPreferencesResponseDTO = try await api.request(
-                    NotificationPreferencesEndpoints.update(patch)
-                )
+                let response = try await savePreferences(patch)
                 guard revision == saveRevision else { continue }
                 preferences = response.preferences
                 state = .loaded(groups())
@@ -249,7 +264,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
             } catch {
                 guard revision == saveRevision else { continue }
                 toast = ToastMessage(text: "Failed to save", kind: .error)
-                await fetch()
+                await fetch(force: true)
             }
         }
     }
@@ -372,8 +387,11 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
                     subtext: "Daily mailbox digest",
                     control: .toggle(isOn: prefs.mailSummaryEnabled)
                 )
-                // Launch cut #1 (Beacon): no Beacon push toggle.
-            ].filter { $0.id != RowID.beaconPush || LaunchFeatures.beacon }
+                // Launch cut #1 (Beacon): no Beacon push toggle; launch cut #10
+                // (Mailbox): no mail summary.
+            ].filter {
+                ($0.id != RowID.beaconPush || LaunchFeatures.beacon) && ($0.id != RowID.mailSummary || LaunchFeatures.mailbox)
+            }
         )
     }
 

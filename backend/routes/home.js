@@ -26,6 +26,7 @@ const homeInvitationSender = require('../services/homeInvitationSenderService');
 const homeAccessSecretService = require('../services/homeAccessSecretService');
 const homeRecordService = require('../services/homeRecordService');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
+const { stableEtag } = require('../utils/stableEtag');
 const {
   checkHomePermission,
   writeAuditLog,
@@ -4104,6 +4105,8 @@ router.delete('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => 
  * GET /api/homes/:id/access
  */
 router.get('/:id/access', verifyToken, async (req, res) => {
+  // Door, gate and Wi-Fi codes: never kept in a device's HTTP cache.
+  res.set('Cache-Control', 'private, no-store');
   try {
     res.json({ secrets: await homeAccessSecretService.list(req.params.id, req.user.id) });
   } catch (err) {
@@ -5199,8 +5202,11 @@ router.get('/:id/bill-trends', verifyToken, async (req, res) => {
     }
     const snapshot = await getHomeBillComparison(homeId, userId, req.query.currency);
     if (!snapshot.can_view_finance) return res.status(403).json({ error: 'No finance access' });
+    const payload = format === '2' ? asBillTrendData(snapshot) : asLegacyBillTrendData(snapshot);
     res.setHeader('Cache-Control', 'private, no-store');
-    res.json(format === '2' ? asBillTrendData(snapshot) : asLegacyBillTrendData(snapshot));
+    // `as_of` is when this read ran: it stays in the body and out of the ETag, so an unchanged comparison answers 304.
+    res.setHeader('ETag', stableEtag(payload));
+    res.json(payload);
   } catch (err) {
     logger.error('Bill trends error', { error: err.message, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.statusCode ? err.message : 'Current bill trends could not be loaded.', code: err.code || 'HOME_BILLS_UNAVAILABLE' });

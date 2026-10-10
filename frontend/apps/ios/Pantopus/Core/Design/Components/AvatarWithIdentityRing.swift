@@ -84,7 +84,7 @@ public struct AvatarWithIdentityRing: View {
 
     @ViewBuilder private var avatarBody: some View {
         if let imageURL {
-            AsyncImage(url: imageURL) { phase in
+            CachedAsyncImage(url: imageURL) { phase in
                 switch phase {
                 case let .success(image): image.resizable().scaledToFill()
                 default: initialsView

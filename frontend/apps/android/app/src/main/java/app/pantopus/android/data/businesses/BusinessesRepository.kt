@@ -22,21 +22,34 @@ import app.pantopus.android.data.api.models.businesses.UpdateBusinessLocationReq
 import app.pantopus.android.data.api.models.businesses.UpdateBusinessRequest
 import app.pantopus.android.data.api.models.businesses.UsernameAvailabilityDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.BusinessesApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /** Wraps the `/api/businesses` owner / staff endpoints in the
  *  [NetworkResult] taxonomy. */
 @Singleton
+@Suppress("TooManyFunctions") // one function per business endpoint, plus the store reads
 open class BusinessesRepository
     @Inject
     constructor(
         private val api: BusinessesApi,
+        private val store: ScreenStore,
     ) {
         /** T6.3f / P14 — backs My businesses. Owner + staff seats. */
         open suspend fun myBusinesses(): NetworkResult<MyBusinessesResponse> = safeApiCall { api.myBusinesses() }
+
+        /** The viewer's businesses through the screens' store (fresh 10 minutes; [force] reads now). */
+        open suspend fun myBusinessesStored(force: Boolean = false): Stored<MyBusinessesResponse> =
+            store.read(StoreKeys.myBusinesses, force) { etag -> conditionalApiCall { api.myBusinessesConditional(etag) } }
+
+        /** The stored businesses as they are now, without a request. */
+        open fun myBusinessesCopy(): MyBusinessesResponse? = store.peek(StoreKeys.myBusinesses).data
 
         /** P1.6 — backs the Business Profile detail fetch. */
         open suspend fun business(businessId: String): NetworkResult<BusinessDetailResponse> = safeApiCall { api.business(businessId) }

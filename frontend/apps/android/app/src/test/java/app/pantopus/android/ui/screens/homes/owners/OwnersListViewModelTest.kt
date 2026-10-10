@@ -15,6 +15,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeOwnersRepository
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBackground
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBadgeSize
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
@@ -27,6 +29,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,10 +51,12 @@ class OwnersListViewModelTest {
     private val repo: HomeOwnersRepository = mockk()
     private val adminRepo: HomeAdminRepository = mockk()
     private val authRepository: AuthRepository = mockk()
+    private val gates: HomeCopyGateFactory = mockk(relaxed = true)
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { gates.create(any(), any()).checkForRead(any(), any()) } returns null
         coEvery { adminRepo.myAccess("home_1") } returns
             NetworkResult.Success(
                 HomeAccessDto(
@@ -59,6 +64,9 @@ class OwnersListViewModelTest {
                     permissions = listOf("ownership.manage", "ownership.transfer"),
                 ),
             )
+        // The screens' store hands back what the endpoints answered (Instant Screens).
+        coEvery { repo.listStored(any(), any()) } coAnswers { repo.list(firstArg()).stored() }
+        coEvery { adminRepo.myAccessStored(any(), any()) } coAnswers { adminRepo.myAccess(firstArg()).stored() }
         // Default: viewer is Maria — drives the "You" chip on row o1.
         every { authRepository.state } returns
             MutableStateFlow(
@@ -83,8 +91,16 @@ class OwnersListViewModelTest {
             repo = repo,
             adminRepo = adminRepo,
             authRepository = authRepository,
+            gates = gates,
             savedStateHandle = SavedStateHandle(mapOf(OWNERS_LIST_HOME_ID_KEY to "home_1")),
         )
+
+    /** What the screens' store hands back for a read with this outcome. */
+    private fun <T : Any> NetworkResult<T>.stored(): Stored<T> =
+        when (this) {
+            is NetworkResult.Success -> Stored(data, fetchedAt = System.currentTimeMillis())
+            is NetworkResult.Failure -> Stored(failure = error)
+        }
 
     private fun owner(
         id: String,
@@ -207,8 +223,8 @@ class OwnersListViewModelTest {
                 awaitItem() // Loading
                 vm.load()
                 awaitItem() // Loaded
-                vm.load() // No new emit
-                expectNoEvents()
+                vm.load() // A return reads quietly: the rows never drop back to Loading.
+                assertTrue(expectMostRecentItem() is ListOfRowsUiState.Loaded)
                 cancelAndConsumeRemainingEvents()
             }
         }
@@ -334,22 +350,26 @@ class OwnersListViewModelTest {
     // MARK: - Mutations
 
     @Test
-    fun remove_owner_optimistically_drops_row() =
+    fun remove_owner_waits_for_confirmation_before_dropping_row() =
         runTest {
             coEvery { repo.list("home_1") } returns NetworkResult.Success(OwnersResponse(owners = threeOwners))
-            coEvery { repo.remove("home_1", "o2") } returns
-                NetworkResult.Success(RemoveOwnerResponse(message = "Owner removed"))
-            val vm = makeVm()
-            vm.load()
-            vm.removeOwner("o2")
-            val loaded = vm.state.value as ListOfRowsUiState.Loaded
-            assertEquals(2, loaded.sections.first().rows.size)
-            assertNull(loaded.sections.first().rows.firstOrNull { it.id == "o2" })
-            assertNull(vm.removalError.value)
+            for (quorumId in listOf("waiting-for-approval", null)) {
+                val pending = CompletableDeferred<NetworkResult<RemoveOwnerResponse>>()
+                coEvery { repo.remove("home_1", "o2") } coAnswers { pending.await() }
+                val vm = makeVm()
+                vm.load()
+                vm.removeOwner("o2")
+                assertEquals(3, (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.size)
+                pending.complete(NetworkResult.Success(RemoveOwnerResponse(message = "Accepted", quorumActionId = quorumId)))
+                val loaded = vm.state.value as ListOfRowsUiState.Loaded
+                assertEquals(if (quorumId == null) 2 else 3, loaded.sections.first().rows.size)
+                assertEquals(quorumId != null, loaded.sections.first().rows.any { it.id == "o2" })
+                assertEquals(quorumId != null, vm.removalError.value != null)
+            }
         }
 
     @Test
-    fun remove_failure_rolls_back() =
+    fun remove_failure_keeps_the_roster() =
         runTest {
             coEvery { repo.list("home_1") } returns NetworkResult.Success(OwnersResponse(owners = threeOwners))
             coEvery { repo.remove("home_1", "o2") } returns

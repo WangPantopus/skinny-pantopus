@@ -16,6 +16,8 @@ export const queryKeys = {
   // ── Feed ───────────────────────────────────────────────────
   feed: (surface: string, filter: string) =>
     ['feed', surface, filter] as const,
+  /** Your saved viewing area (GET /api/location/resolve); hooks/useAreaPicker.ts. */
+  viewingArea: () => ['location', 'viewing'] as const,
 
   // ── Gigs ───────────────────────────────────────────────────
   gigs: (filters: Record<string, any>) =>
@@ -65,11 +67,32 @@ export const queryKeys = {
   // ── Profiles ──────────────────────────────────────────────
   /** Your own profile (GET /api/users/profile); read it through lib/me.ts. */
   me: () => ['me'] as const,
+  /** Your notification preferences (GET /api/hub/preferences); lib/me.ts. */
+  notificationPreferences: () => ['me', 'notification-preferences'] as const,
+  /** Your privacy settings (GET /api/privacy/settings); lib/me.ts. */
+  privacySettings: () => ['me', 'privacy'] as const,
+  /** Your feed preferences (GET /api/posts/feed-preferences); hooks/useFeedPreferences.ts. */
+  feedPreferences: () => ['me', 'feed-preferences'] as const,
   profile: (username: string) =>
     ['profile', username] as const,
+  /** Your pending reviews (GET /api/reviews/my-pending), read on other people's profiles. */
+  myPendingReviews: () => ['me', 'pending-reviews'] as const,
+
+  // ── Other people ──────────────────────────────────────────
+  /** What one person shares, as their profile reads it; app/[username]/PublicProfileClient.tsx. */
+  person: (id: string) => ['people', id] as const,
+  personPortfolio: (id: string) => ['people', id, 'portfolio'] as const,
+  personPosts: (id: string) => ['people', id, 'posts'] as const,
+  personReviews: (id: string) => ['people', id, 'reviews'] as const,
 
   // ── Homes ─────────────────────────────────────────────────
   homeDetail: (id: string) => ['homes', 'detail', id] as const,
+  /** A Home's dashboard as last shown, with the access it was shown with; components/home/homeDashboardCopy.ts. */
+  homeDashboard: (id: string) => ['homes', 'dashboard', id] as const,
+  /** A home's public-record property details (GET /api/homes/:id/property-details). */
+  homePropertyDetails: (id: string) => ['homes', 'property-details', id] as const,
+  /** One of that dashboard's summary cards, kept beside its copy. */
+  homeSummary: (id: string, name: string) => ['homes', 'dashboard', id, 'summary', name] as const,
 
   // ── Place (address-led home intelligence) ─────────────────
   placePrimaryHome: () => ['place', 'primary-home'] as const,
@@ -109,6 +132,16 @@ export const queryKeys = {
   // ── Businesses ────────────────────────────────────────────
   businessDetail: (id: string) =>
     ['businesses', 'detail', id] as const,
+
+  // ── Support Trains ────────────────────────────────────────
+  /** Every Support Train entry; a change to any train marks them out of date. */
+  supportTrains: () => ['supportTrains'] as const,
+  /** Your trains on the list page: every role tab. */
+  supportTrainLists: () => ['supportTrains', 'mine'] as const,
+  /** Your trains on the list page, per role tab ('all', 'organizer', 'helper'). */
+  supportTrainsMine: (role: string) => ['supportTrains', 'mine', role] as const,
+  /** One train, with its signups when you organize it. */
+  supportTrain: (id: string) => ['supportTrains', 'train', id] as const,
 
   // ── Audience zone (unified-IA §3.1, §3.6) ─────────────────
   audienceMe: () => ['audience', 'me'] as const,

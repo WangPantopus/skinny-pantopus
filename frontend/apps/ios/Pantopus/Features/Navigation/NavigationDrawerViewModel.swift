@@ -132,6 +132,8 @@ enum NavigationDrawerDestination: Equatable {
         case .discoverNeighbors: LaunchFeatures.businessDirectory && LaunchFeatures.openGigs && LaunchFeatures.marketplace
         // Launch cut #7 (Household extras): bills and package tracking.
         case .homeBills, .homePackages: LaunchFeatures.householdExtras
+        // Launch cut #10 (Mailbox).
+        case .mailbox, .homeMailbox: LaunchFeatures.mailbox
         default: true
         }
     }

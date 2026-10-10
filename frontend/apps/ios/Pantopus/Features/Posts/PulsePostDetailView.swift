@@ -158,6 +158,7 @@ public struct PulsePostDetailView: View {
     private func loadedLayout(_ detail: PulsePostDetailContent) -> some View {
         PulsePostDetailLoadedContent(
             detail: detail,
+            commentsState: viewModel.commentsState,
             composerText: Binding(
                 get: { viewModel.composerText },
                 set: { viewModel.composerText = $0 }
@@ -218,6 +219,8 @@ public struct PulsePostDetailView: View {
 @MainActor
 public struct PulsePostDetailLoadedContent: View {
     private let detail: PulsePostDetailContent
+    /// Opened from the feed's copy: the thread is still loading (or failed).
+    private let commentsState: CommentsLoadState
     @Binding private var composerText: String
     private let isSendingComment: Bool
     private let replyingToName: String?
@@ -241,6 +244,7 @@ public struct PulsePostDetailLoadedContent: View {
 
     public init(
         detail: PulsePostDetailContent,
+        commentsState: CommentsLoadState = .loaded,
         composerText: Binding<String>,
         isSendingComment: Bool,
         replyingToName: String? = nil,
@@ -262,6 +266,7 @@ public struct PulsePostDetailLoadedContent: View {
         onRefresh: (@Sendable () async -> Void)? = nil
     ) {
         self.detail = detail
+        self.commentsState = commentsState
         _composerText = composerText
         self.isSendingComment = isSendingComment
         self.replyingToName = replyingToName
@@ -323,6 +328,7 @@ public struct PulsePostDetailLoadedContent: View {
                     isSending: isSendingComment,
                     onSendTap: onSendTap,
                     comments: detail.comments,
+                    commentsState: commentsState,
                     postedRecently: detail.postedWithinHour,
                     hiddenReplyCount: detail.hiddenReplyCount,
                     onShowMoreReplies: onShowMoreReplies,

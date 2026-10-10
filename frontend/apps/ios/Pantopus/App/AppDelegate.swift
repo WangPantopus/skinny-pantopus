@@ -35,11 +35,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         Self.bootstrapLogging()
-        // AsyncImage loads through URLSession.shared, whose default cache (512 KB in memory,
-        // 10 MB on disk) is too small to keep most photos and avatars, so lists downloaded
-        // them again whenever a row came back on screen.
-        URLCache.shared = URLCache(memoryCapacity: 32 * 1024 * 1024, diskCapacity: 256 * 1024 * 1024)
+        // Photos load through PantopusImagePipeline, which keeps them on the phone inside
+        // the storage limit and clears them with the cache (Instant Screens). The shared URL
+        // cache only serves the few AsyncImage left (sign-in, upload previews): memory only,
+        // and whatever earlier builds kept on disk goes now.
+        URLCache.shared.removeAllCachedResponses()
+        URLCache.shared = URLCache(memoryCapacity: 32 * 1024 * 1024, diskCapacity: 0)
         try? HomeDocumentTemporaryFiles.clearPreviousLaunch()
+        APIClient.removeLegacyDiskCache()
         MainActor.assumeIsolated {
             Observability.shared.start(environment: AppEnvironment.current)
             // Product analytics (PostHog). No-ops until POSTHOG_API_KEY is set,

@@ -3,12 +3,14 @@
 package app.pantopus.android.ui.screens.homes.settings.security
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListCallbacks
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListScreen
+import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 
 /**
  * P5.1 / A14.2 — Per-home Security toggles. Thin wrapper around
@@ -21,16 +23,19 @@ fun HomeSecurityScreen(
     viewModel: HomeSecurityViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { viewModel.load() }
+    ReportContentShown("home_privacy", state is GroupedListUiState.Loaded)
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     GroupedListScreen(
         title = viewModel.title,
         state = state,
         footerCaption = viewModel.footerCaption,
+        refreshNotice = refreshNotice,
         callbacks =
             GroupedListCallbacks(
                 onBack = onBack,
                 onToggleRow = viewModel::onToggle,
-                onRetry = viewModel::load,
+                onRetry = viewModel::refresh,
             ),
     )
 }

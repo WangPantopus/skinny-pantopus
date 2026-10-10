@@ -30,6 +30,8 @@ import { detailAddress } from '@/components/place/detail/sections';
 import PulseStreamView from './PulseStreamView';
 import PlaceShell from '../PlaceShell';
 import { usePrimaryHome } from '@/lib/primaryHome';
+import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
+import { PLACE_FRESH_MS, gatedStaleTime, placeCopyGate, useAfterRecheck } from '@/lib/householdCopy';
 
 const REDIRECT_TO = encodeURIComponent('/app/place/pulse');
 
@@ -103,20 +105,27 @@ export default function PulseStream() {
   // 2b) Supplementary: the dashboard contract gives a sharper address and
   // the tier (for the T3 verify nudge). Warm cache on tap-through; never
   // gates the stream, so a slow/failed contract still shows the pulse.
+  const myHomesQuery = useQuery({ ...sharedMyHomesQuery(), enabled: authed && !!homeId });
+  const showsCopy = placeCopyGate(myHomesQuery.data?.homes.find((home) => home.id === homeId));
   const intelQuery = useQuery({
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
     queryFn: async () => api.place.getPlaceIntelligence(homeId as string),
     enabled: authed && !!homeId,
-    staleTime: 60_000,
+    staleTime: gatedStaleTime(PLACE_FRESH_MS, showsCopy),
   });
+  // A guest's or service provider's copy is used only once the re-check answers (decision 3).
+  const { data: intelligence } = useAfterRecheck(intelQuery, showsCopy);
 
   const homeAddress = home ? [home.address, home.city].filter(Boolean).join(' · ') : undefined;
-  const address = intelQuery.data ? detailAddress(intelQuery.data.place) : homeAddress;
-  const verifyAddress = intelQuery.data?.place.label ?? homeAddress;
-  const showVerify = intelQuery.data?.tier === 'T3';
+  const address = intelligence ? detailAddress(intelligence.place) : homeAddress;
+  const verifyAddress = intelligence?.place.label ?? homeAddress;
+  const showVerify = intelligence?.tier === 'T3';
 
   // ── States ───────────────────────────────────────────────
-  if (!mounted || !authed) {
+  // Coming back shows what this tab already loaded in the first frame; the skeleton is only for
+  // nothing at all (a fresh page load starts with an empty cache, like the server).
+  const kept = pulseQuery.data !== undefined;
+  if (!kept && (!mounted || !authed)) {
     return (
       <StreamShell>
         <DetailHeader title="Today's Pulse" backHref="/app/place" />
@@ -125,7 +134,8 @@ export default function PulseStream() {
     );
   }
 
-  if (homeQuery.isError) {
+  // A failed refresh keeps the stream on screen (contract §3); errors show only with nothing to show.
+  if (homeQuery.isError && !kept) {
     return (
       <StreamShell>
         <DetailHeader title="Today's Pulse" backHref="/app/place" />
@@ -153,7 +163,7 @@ export default function PulseStream() {
     );
   }
 
-  if (homeQuery.isPending || pulseQuery.isPending) {
+  if (!kept && (homeQuery.isPending || pulseQuery.isPending)) {
     return (
       <StreamShell>
         <DetailHeader title="Today's Pulse" address={address} backHref="/app/place" />
@@ -162,7 +172,7 @@ export default function PulseStream() {
     );
   }
 
-  if (pulseQuery.isError || !pulseQuery.data) {
+  if (!pulseQuery.data) {
     // A 403 means this account can't see the place: say so, without a retry.
     const denied = (pulseQuery.error as { statusCode?: number } | null)?.statusCode === 403;
     return (
