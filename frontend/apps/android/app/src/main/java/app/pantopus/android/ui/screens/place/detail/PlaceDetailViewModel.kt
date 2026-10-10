@@ -29,6 +29,7 @@ import app.pantopus.android.ui.components.RefreshNotice
 import kotlinx.coroutines.Job
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -132,14 +133,7 @@ class PlaceDetailViewModel
         private suspend fun pickupCurrent(): Boolean =
             calendarSession.confirmCurrent() && !appLock.isLocked.value && keyguard?.isDeviceLocked == false
 
-        private fun pickupDispatchGuard(): AuthenticatedDispatchGuard =
-            AuthenticatedDispatchGuard { credentials ->
-                viewModelScope.coroutineContext.ensureActive()
-                calendarSession.requireCurrent()
-                calendarSession.requireDispatchCredentials(credentials)
-                viewModelScope.coroutineContext.ensureActive()
-                check(!appLock.isLocked.value && keyguard?.isDeviceLocked == false)
-            }
+        private fun pickupDispatchGuard(): AuthenticatedDispatchGuard = pickupGuard(viewModelScope, calendarSession, appLock, keyguard)
 
         // ─── Address calendar (Wedge v2 D6) ────────────────────
         private val _calendarBusy = MutableStateFlow(false)
@@ -1156,4 +1150,17 @@ private class PlaceDetailCopy(
         error?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.",
         denied = error is NetworkError.Forbidden,
     )
+}
+
+private fun pickupGuard(
+    scope: CoroutineScope,
+    session: HomeClaimSessionScope,
+    appLock: AppLockManager,
+    keyguard: KeyguardManager?,
+): AuthenticatedDispatchGuard = AuthenticatedDispatchGuard { credentials ->
+    scope.coroutineContext.ensureActive()
+    session.requireCurrent()
+    session.requireDispatchCredentials(credentials)
+    scope.coroutineContext.ensureActive()
+    check(!appLock.isLocked.value && keyguard?.isDeviceLocked == false)
 }
