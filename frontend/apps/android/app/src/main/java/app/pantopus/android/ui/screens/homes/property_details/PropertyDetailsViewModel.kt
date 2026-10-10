@@ -55,6 +55,8 @@ class PropertyDetailsViewModel
         /** The quiet "Couldn't refresh. Showing 3:42 PM." line when a read fails on a copy past its max shown age. */
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.propertyDetails(homeId)))
@@ -87,7 +89,7 @@ class PropertyDetailsViewModel
             read(force = false)
         }
 
-        /** Retry after an error: read now. */
+        /** Pull or Retry: read now without blanking a household copy. */
         fun refresh() {
             if (loader != null) apply() else read(force = true)
         }
@@ -95,11 +97,13 @@ class PropertyDetailsViewModel
         fun suspendContent() {
             active = false
             readGeneration += 1
+            _refreshing.value = false
             if (!gate.showsCopy) clearCopy()
             gate.leave()
         }
 
         private fun clearCopy() {
+            _refreshing.value = false
             _refreshNotice.value = null
             _state.value = PropertyDetailsUiState.Loading
         }
@@ -121,10 +125,12 @@ class PropertyDetailsViewModel
         private fun read(force: Boolean) {
             if (!active) return
             val generation = ++readGeneration
+            _refreshing.value = force && (_state.value is PropertyDetailsUiState.Clean || _state.value is PropertyDetailsUiState.Mismatch)
             if (_state.value is PropertyDetailsUiState.Error) _state.value = PropertyDetailsUiState.Loading
             viewModelScope.launch {
                 val stored = readDetails(force, generation)
                 if (generation != readGeneration) return@launch
+                _refreshing.value = false
                 _state.value =
                     stored.data?.let { projection(contentFrom(it.home)) }
                         ?: PropertyDetailsUiState.Error("Couldn't load property details. Pull to retry.")
