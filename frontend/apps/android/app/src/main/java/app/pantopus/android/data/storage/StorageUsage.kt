@@ -1,6 +1,9 @@
 package app.pantopus.android.data.storage
 
+import android.app.usage.StorageStatsManager
 import android.content.Context
+import android.os.Process
+import android.os.storage.StorageManager
 import app.pantopus.android.data.store.SavedCopies
 import app.pantopus.android.data.store.ScreenStore
 import coil.annotation.ExperimentalCoilApi
@@ -33,6 +36,8 @@ class StorageUsage
             val photos: Long,
             val savedPages: Long,
             val drafts: Long,
+            /** Android's cache accounting, including caches outside the two folders this screen clears. */
+            val systemCache: Long = 0L,
         ) {
             val total: Long get() = photos + savedPages + drafts
 
@@ -47,6 +52,7 @@ class StorageUsage
                     photos = imageBytes(),
                     savedPages = runCatching { saved.sizeBytes() }.getOrDefault(0L),
                     drafts = DRAFT_FOLDERS.sumOf { folderBytes(File(context.noBackupFilesDir, it)) },
+                    systemCache = systemCacheBytes(),
                 )
             }
 
@@ -66,17 +72,22 @@ class StorageUsage
         }
 
         /**
-         * A lower limit takes effect at once: photos over what it leaves them are cleared now (Coil sizes its cache from
-         * the limit at the next launch, least recently used first from then on).
+         * A lower limit takes effect now, including images downloaded afterwards in the same process.
          */
         @OptIn(ExperimentalCoilApi::class)
         suspend fun fitImages(limitBytes: Long) {
             withContext(Dispatchers.IO) {
-                if (imageBytes() <= ImageDiskCache.photoBudget(limitBytes)) return@withContext
-                runCatching { context.imageLoader.diskCache?.clear() }
+                runCatching { (context.imageLoader.diskCache as? ImageDiskCache)?.setLimit(limitBytes) }
                     .onFailure { Timber.w(it, "A lower storage limit could not clear the image cache") }
             }
         }
+
+        /** Querying our own UID requires no usage-access permission; folder sizes remain the clearable breakdown. */
+        private fun systemCacheBytes(): Long =
+            runCatching {
+                val manager = context.getSystemService(StorageStatsManager::class.java)
+                manager.queryStatsForUid(StorageManager.UUID_DEFAULT, Process.myUid()).cacheBytes
+            }.getOrDefault(0L)
 
         @OptIn(ExperimentalCoilApi::class)
         private fun imageBytes(): Long = runCatching { context.imageLoader.diskCache?.size ?: 0L }.getOrDefault(0L)
