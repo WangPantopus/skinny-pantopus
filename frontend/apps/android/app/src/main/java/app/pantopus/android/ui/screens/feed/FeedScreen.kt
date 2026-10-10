@@ -358,6 +358,7 @@ fun FeedScreen(
                             onReadingPosition = viewModel::readingPosition,
                             onTapPost = {
                                 app.pantopus.android.core.perf.ScreenTiming.navigationTapped("post")
+                                viewModel.seedPostForOpen(it)
                                 onOpenPost(it)
                             },
                             onTapReaction = viewModel::tapReaction,

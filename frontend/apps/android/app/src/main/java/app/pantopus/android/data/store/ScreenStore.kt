@@ -254,6 +254,21 @@ class ScreenStore
             }
         }
 
+        /** A list item tapped now can seed a detail's first frame. It stays in the same bounded, wiped memory store. */
+        fun <T : Any> seed(
+            key: StoreKey<T>,
+            data: T,
+        ) {
+            val account = accountId() ?: return
+            synchronized(slots) {
+                val slot = slotLocked(key, account)
+                if (slot.state.value.data != null || slot.state.value.failure?.code in listOf(401, 403, 404)) return
+                // A seed is never fresh or saved. A read already in flight may still replace it with the complete reply.
+                slot.stale = true
+                slot.state.value = Stored(data)
+            }
+        }
+
         /**
          * Own edit (contract §6): the server's reply to a save becomes the entry, counted as read now. The old ETag no
          * longer names it, so the next read after the window asks without one.
