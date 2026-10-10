@@ -61,6 +61,7 @@ data class FeedQuery(
 
 /** Wraps [PostsApi] in the [NetworkResult] taxonomy. */
 @Singleton
+@Suppress("TooManyFunctions") // One wrapper per existing post endpoint; keep the shared store and mutations together.
 class PostsRepository
     @Inject
     constructor(
