@@ -70,7 +70,7 @@ fun MyHomesListScreen(
     onOpenWaitingRoom: ((String) -> Unit)? = null,
     viewModel: MyHomesListViewModel = hiltViewModel(),
 ) {
-    RefreshOnStoreChange(viewModel::load)
+    RefreshOnStoreChange(viewModel::recheck)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("my_homes", state.showsContent())
     val banner by viewModel.banner.collectAsStateWithLifecycle()
