@@ -196,25 +196,14 @@ fun MembersListScreen(
         )
     }
 
-    approveTarget?.let { (requestId, _) ->
-        AlertDialog(
-            onDismissRequest = { approveTarget = null },
-            title = { Text("Send invitation") },
-            text = { Text("This will create a personal invitation for them to accept in the app.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.approveAccessRequest(requestId)
-                        approveTarget = null
-                    },
-                    modifier = Modifier.testTag("membersList_approveRequestConfirm"),
-                ) { Text("Approve") }
-            },
-            dismissButton = {
-                TextButton(onClick = { approveTarget = null }) { Text("Cancel") }
-            },
-        )
-    }
+    ApproveMemberRequestDialog(
+        target = approveTarget,
+        onApprove = { requestId ->
+            viewModel.approveAccessRequest(requestId)
+            approveTarget = null
+        },
+        onDismiss = { approveTarget = null },
+    )
 
     declineTarget?.let { (requestId, name, identity) ->
         AlertDialog(
@@ -236,16 +225,7 @@ fun MembersListScreen(
         )
     }
 
-    actionError?.let { message ->
-        AlertDialog(
-            onDismissRequest = { viewModel.clearActionError() },
-            title = { Text("Something went wrong") },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = { viewModel.clearActionError() }) { Text("OK") }
-            },
-        )
-    }
+    MemberActionErrorDialog(message = actionError, onDismiss = viewModel::clearActionError)
 }
 
 /**
@@ -315,4 +295,42 @@ private fun ChangeMemberRoleDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
+}
+
+
+@Composable
+private fun ApproveMemberRequestDialog(
+    target: Pair<String, String>?,
+    onApprove: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    target?.let { (requestId, _) ->
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Send invitation") },
+            text = { Text("This will create a personal invitation for them to accept in the app.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { onApprove(requestId) },
+                    modifier = Modifier.testTag("membersList_approveRequestConfirm"),
+                ) { Text("Approve") }
+            },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun MemberActionErrorDialog(
+    message: String?,
+    onDismiss: () -> Unit,
+) {
+    message?.let {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Something went wrong") },
+            text = { Text(it) },
+            confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+        )
+    }
 }
