@@ -310,11 +310,12 @@ class HouseholdTasksListViewModel
 
         /** An explicit authority refusal wins before any task copy is used. */
         private suspend fun readTasks(fromCopy: Boolean): Stored<GetHomeTasksResponse> {
-            val refusal = gate?.checkForRead(!fromCopy) {
-                clearContent()
-                memberNames = emptyMap()
-                _state.value = ListOfRowsUiState.Loading
-            }
+            val refusal =
+                gate?.checkForRead(!fromCopy) {
+                    clearContent()
+                    memberNames = emptyMap()
+                    _state.value = ListOfRowsUiState.Loading
+                }
             if (refusal != null) return Stored(failure = refusal)
             val stored = access.listStored(force = !fromCopy || !showsCopy)
             return if (!showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
