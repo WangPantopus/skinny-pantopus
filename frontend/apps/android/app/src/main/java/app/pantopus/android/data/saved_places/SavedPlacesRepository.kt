@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.store.asResult
@@ -40,8 +41,13 @@ class SavedPlacesRepository
 
         fun todayCopy(id: String): Stored<PlaceIntelligence> = store.peek(StoreKeys.savedPlaceToday(id))
 
-        suspend fun todayStored(id: String, force: Boolean = false): Stored<PlaceIntelligence> =
-            store.read(StoreKeys.savedPlaceToday(id), force) { etag -> conditionalApiCall { api.todayConditional(id, etag) } }
+        suspend fun todayStored(id: String, force: Boolean = false): Stored<PlaceIntelligence> {
+            val copy = todayCopy(id)
+            val checkAlerts = !copy.isFresh(StoreKind.TODAY_ALERTS) || copy.failure != null
+            return store.read(StoreKeys.savedPlaceToday(id), force || checkAlerts) { etag ->
+                conditionalApiCall { api.todayConditional(id, etag) }
+            }
+        }
 
         suspend fun today(id: String): NetworkResult<PlaceIntelligence> =
             todayStored(id).let { it.data?.let { data -> NetworkResult.Success(data) } ?: it.asResult() }

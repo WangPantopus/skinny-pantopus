@@ -63,6 +63,7 @@ import app.pantopus.android.data.api.services.UnlistedApi
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
 import okhttp3.ResponseBody
 import javax.inject.Inject
@@ -137,10 +138,14 @@ class PlaceRepository
         suspend fun todayStored(
             homeId: String,
             force: Boolean = false,
-        ): Stored<PlaceIntelligence> =
-            store.read(StoreKeys.today(homeId), force) { etag ->
+        ): Stored<PlaceIntelligence> {
+            val copy = todayCopy(homeId)
+            // This reply bundles alerts with Today: their five-minute check uses the same conditional request.
+            val checkAlerts = !copy.isFresh(StoreKind.TODAY_ALERTS) || copy.failure != null
+            return store.read(StoreKeys.today(homeId), force || checkAlerts) { etag ->
                 conditionalApiCall { placeApi.intelligenceConditional(homeId, StoreKeys.todaySectionsQuery, etag) }
             }
+        }
 
         /**
          * A home's Place (the dashboard, every section) through the screens' store: fresh for 10 minutes. [persist]: the
@@ -165,7 +170,10 @@ class PlaceRepository
         fun forgetPlace(homeId: String) = store.remove(StoreKeys.place(homeId))
 
         /** True while the home's stored Today is fresh and no topic marked it out of date (coming back reads nothing). */
-        fun todayIsCurrent(homeId: String): Boolean = store.isCurrent(StoreKeys.today(homeId))
+        fun todayIsCurrent(homeId: String): Boolean =
+            store.isCurrent(StoreKeys.today(homeId)) && todayCopy(homeId).let {
+                it.isFresh(StoreKind.TODAY_ALERTS) && it.failure == null
+            }
 
         /** The home's stored Today as it is now (memory or the phone's saved copy), without a request. */
         fun todayCopy(homeId: String): Stored<PlaceIntelligence> = store.peek(StoreKeys.today(homeId))

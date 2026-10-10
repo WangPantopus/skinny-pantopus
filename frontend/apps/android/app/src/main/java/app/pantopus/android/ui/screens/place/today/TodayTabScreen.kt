@@ -136,7 +136,7 @@ fun TodayTabScreen(
                                 pilotEvents = viewModel.pilotEvents,
                                 radonContext = viewModel.radonContext,
                                 onOpenBallot = onOpenPlace?.let { open -> { viewModel.homeId?.let(open) } },
-                                alertsCheck = alertsCheck(age, refreshing),
+                                alertsCheck = alertsCheck(age, refreshing, current.refreshFailed),
                                 radonMemory = viewModel.radonMemory,
                             )
                         }
@@ -157,9 +157,10 @@ fun TodayTabScreen(
 private fun alertsCheck(
     ageMs: Long,
     refreshing: Boolean,
+    refreshFailed: Boolean,
 ): TodayAlertsCheck =
     when {
-        ageMs <= TODAY_ALERTS_MAX_SHOWN_AGE_MS -> TodayAlertsCheck.CURRENT
+        !refreshFailed && ageMs <= TODAY_ALERTS_MAX_SHOWN_AGE_MS -> TodayAlertsCheck.CURRENT
         refreshing -> TodayAlertsCheck.CHECKING
         else -> TodayAlertsCheck.UNAVAILABLE
     }

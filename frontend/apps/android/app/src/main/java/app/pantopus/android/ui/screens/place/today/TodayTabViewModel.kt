@@ -194,13 +194,21 @@ class TodayTabViewModel
             if (id == null) {
                 val saved = savedPlacesRepository.listCopy()?.savedPlaces?.firstOrNull() ?: return
                 val copy = savedPlacesRepository.todayCopy(saved.id)
-                copy.data?.let { _state.value = TodayTabUiState.Loaded(it, savedPlace = saved, fetchedAt = copy.fetchedAt) }
+                copy.data?.let {
+                    _state.value =
+                        TodayTabUiState.Loaded(
+                            it, savedPlace = saved, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null,
+                        )
+                }
                 return
             }
             val copy = repo.todayCopy(id)
             val data = copy.data ?: return
             homeId = id
-            _state.value = TodayTabUiState.Loaded(data, calendarHomeId = id, fetchedAt = copy.fetchedAt)
+            _state.value =
+                TodayTabUiState.Loaded(
+                    data, calendarHomeId = id, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null,
+                )
         }
 
         /**
@@ -222,7 +230,7 @@ class TodayTabViewModel
                 homeId = null
                 _state.value = TodayTabUiState.Loading
             }
-            _refreshing.value = true
+            _refreshing.value = force && shown is TodayTabUiState.Loaded
             if (force) radonMemory.readAgain()
             loadJob =
                 viewModelScope.launch {
@@ -320,7 +328,12 @@ class TodayTabViewModel
                 return
             }
             val copy = savedPlacesRepository.todayCopy(place.id)
-            copy.data?.let { _state.value = TodayTabUiState.Loaded(it, savedPlace = place, fetchedAt = copy.fetchedAt) }
+            copy.data?.let {
+                _state.value =
+                    TodayTabUiState.Loaded(
+                        it, savedPlace = place, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null,
+                    )
+            }
             val result = savedPlacesRepository.todayStored(place.id, force)
             if (!current(version)) return
             val intelligence = result.data
