@@ -249,7 +249,12 @@ class ScreenStore
             }
             return { data ->
                 synchronized(slots) {
-                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) put(key, data)
+                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {
+                        val markedMeanwhile = ticket.marks != slot.marks
+                        put(key, data)
+                        // Another device's change during this save still needs a read, just as during a GET.
+                        if (markedMeanwhile) slot.stale = true
+                    }
                 }
             }
         }
