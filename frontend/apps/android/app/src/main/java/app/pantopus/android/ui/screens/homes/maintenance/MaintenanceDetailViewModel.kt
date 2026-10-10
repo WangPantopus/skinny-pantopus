@@ -150,7 +150,7 @@ class MaintenanceDetailViewModel
         }
 
         fun delete() {
-            if (_isMutating.value) return
+            if (!active || _state.value !is MaintenanceDetailUiState.Loaded || _isMutating.value) return
             _isMutating.value = true
             _actionError.value = null
             viewModelScope.launch {
