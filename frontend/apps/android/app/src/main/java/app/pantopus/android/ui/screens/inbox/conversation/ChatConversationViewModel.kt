@@ -286,6 +286,7 @@ class ChatConversationViewModel
         // 30s fallback refresh while the socket is down — started by the
         // connectionState collector, cancelled on connect / teardown.
         private var fallbackPollJob: Job? = null
+        private var catchUpJob: Job? = null
 
         // The attachment download in flight; a second tap waits for it.
         private var openAttachmentJob: Job? = null
@@ -1373,6 +1374,7 @@ class ChatConversationViewModel
             presenceOfflineJob?.cancel()
             reactionRefetchJob?.cancel()
             fallbackPollJob?.cancel()
+            catchUpJob?.cancel()
             typingUserJob?.cancel()
             typingStoppedJob?.cancel()
             typingClearJob?.cancel()
@@ -1387,6 +1389,7 @@ class ChatConversationViewModel
             presenceOfflineJob = null
             reactionRefetchJob = null
             fallbackPollJob = null
+            catchUpJob = null
             typingUserJob = null
             typingStoppedJob = null
             typingClearJob = null
@@ -1462,7 +1465,7 @@ class ChatConversationViewModel
                         if (initial) prefetchDirectRoomIfNeeded()
                     }
                     is NetworkResult.Failure -> {
-                        if (response.error is NetworkError.Forbidden || response.error == NetworkError.NotFound || response.error == NetworkError.Unauthorized) {
+                        if (historyAccessEnded(response.error)) {
                             refuseHistory(response.error)
                         } else if (initial && !keepMessages) {
                             _state.value = ChatConversationUiState.Error(response.error.message)
@@ -1676,8 +1679,11 @@ class ChatConversationViewModel
             if (connectionJob == null) {
                 connectionJob =
                     viewModelScope.launch {
+                        var connectedBefore = false
                         socket.connectionState.collect { state ->
                             if (state == SocketManager.ConnectionState.Connected) {
+                                if (connectedBefore) catchUpMessages()
+                                connectedBefore = true
                                 stopFallbackPolling()
                                 joinedRoomIds.clear()
                                 joinActiveRoomsIfPossible()
@@ -1829,6 +1835,41 @@ class ChatConversationViewModel
             typingClearJob = null
             _isCounterpartyTyping.value = false
         }
+
+        /** Reconnect fills the gap after the newest held message, without replacing the reading position. */
+        private fun catchUpMessages() {
+            val after = messages.maxByOrNull { it.createdAt }?.createdAt ?: return
+            if (catchUpJob?.isActive == true || mode is ChatThreadMode.Ai) return
+            val generation = historyGeneration
+            val target = mode
+            val user = currentUserId
+            val topic = _selectedTopicId.value
+            catchUpJob = viewModelScope.launch {
+                var before: String? = null
+                do {
+                    val result = when (target) {
+                        is ChatThreadMode.Room -> repo.roomMessages(target.id, before = before, after = after)
+                        is ChatThreadMode.Person -> repo.conversationMessages(target.otherUserId, before = before, after = after, topicId = topic)
+                        ChatThreadMode.Ai -> return@launch
+                    }
+                    if (generation != historyGeneration || target != mode || user != currentUserId || topic != _selectedTopicId.value) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            mergeBackfill(result.data.messages)
+                            val cursor = result.data.nextCursor
+                            before = cursor.takeIf { result.data.hasMore == true && it != before && result.data.messages.isNotEmpty() }
+                        }
+                        is NetworkResult.Failure -> {
+                            if (historyAccessEnded(result.error)) refuseHistory(result.error)
+                            before = null
+                        }
+                    }
+                } while (before != null)
+            }
+        }
+
+        private fun historyAccessEnded(error: NetworkError): Boolean =
+            error is NetworkError.Forbidden || error == NetworkError.NotFound || error == NetworkError.Unauthorized
 
         private fun joinActiveRoomsIfPossible() {
             if (socket.connectionState.value != SocketManager.ConnectionState.Connected) return
