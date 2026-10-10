@@ -64,20 +64,22 @@ class HomeTaskAccess(
     /** A read now; the confirmed reply also becomes the screens' stored copy. */
     suspend fun list(): GetHomeTasksResponse {
         requireCurrent()
+        val remember = repository.homeTasksWriter(homeId)
         val response = repository.getHomeTasks(homeId, serverSession?.sessionScope, dispatchGuard).taskValue()
         requireCurrent()
         accept(response)
-        repository.rememberHomeTasks(homeId, response)
+        remember(response)
         return response
     }
 
     /** A read now; the confirmed reply also becomes the screens' stored copy. */
     suspend fun read(taskId: String): HomeTaskDto {
         requireCurrent()
+        val remember = repository.homeTaskWriter(homeId, taskId)
         val response = repository.getHomeTask(homeId, taskId, serverSession?.sessionScope, dispatchGuard).taskValue()
         requireCurrent()
         bind(response.taskSession)
-        return exact(response.task, taskId).also { repository.rememberHomeTask(homeId, taskId, response) }
+        return exact(response.task, taskId).also { remember(response) }
     }
 
     /**
