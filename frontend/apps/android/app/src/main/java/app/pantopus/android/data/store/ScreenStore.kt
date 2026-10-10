@@ -108,6 +108,13 @@ class ScreenStore
                 stale = true
                 marks++
             }
+
+            /** An evicted slot cannot finish a queued disk write after a newer slot has refused the same key. */
+            fun retire() {
+                edits++
+                persist = false
+                inFlight?.cancel()
+            }
         }
 
         /** What a read captured when it started (see [settle]). */
@@ -252,8 +259,7 @@ class ScreenStore
             val account = accountId() ?: return
             synchronized(slots) {
                 slots.remove("$account|${key.id}")?.let { slot ->
-                    slot.edits++
-                    slot.inFlight?.cancel()
+                    slot.retire()
                     slot.state.value = Stored()
                 }
             }
@@ -269,7 +275,7 @@ class ScreenStore
             synchronized(slots) {
                 generation++
                 slots.values.forEach { slot ->
-                    slot.inFlight?.cancel()
+                    slot.retire()
                     slot.state.value = Stored()
                 }
                 slots.clear()
@@ -280,7 +286,11 @@ class ScreenStore
 
         /** Contract §6: when the phone warns about memory, keep only what screens are showing. */
         fun trimToVisible() {
-            synchronized(slots) { slots.values.removeAll { it.removable } }
+            synchronized(slots) {
+                slots.values.removeAll { slot ->
+                    slot.removable.also { if (it) slot.retire() }
+                }
+            }
         }
 
         private fun slotLocked(
@@ -294,7 +304,10 @@ class ScreenStore
             while (iterator.hasNext()) {
                 val candidate = iterator.next()
                 val overLimit = now - candidate.lastUsed > IDLE_MS || slots.size > MAX_ENTRIES
-                if (candidate !== slot && overLimit && candidate.removable) iterator.remove()
+                if (candidate !== slot && overLimit && candidate.removable) {
+                    candidate.retire()
+                    iterator.remove()
+                }
             }
             return slot
         }
