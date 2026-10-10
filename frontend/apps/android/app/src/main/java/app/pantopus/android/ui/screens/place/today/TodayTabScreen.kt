@@ -43,6 +43,7 @@ import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.place.components.placeCard
@@ -79,6 +80,7 @@ fun TodayTabScreen(
     val preferenceError by viewModel.preferenceError.collectAsStateWithLifecycle()
     // Coming back keeps what's on screen; the view model reads again only once it is out of date.
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    RefreshOnStoreChange(viewModel::load)
     // Pull to refresh, like iOS's Today tab (`.refreshable`): it always reads now, with the pull indicator
     // over the content instead of placeholders. The indicator shows only for a pull, not the first load.
     var pulled by remember { mutableStateOf(false) }

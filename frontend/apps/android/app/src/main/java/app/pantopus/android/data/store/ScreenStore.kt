@@ -21,6 +21,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -73,6 +75,14 @@ class ScreenStore
         // Guards the saved copy: a write checks the generation and the entry's edits under it, and a wipe or a delete
         // runs under it, so a write queued before them can't put a copy back afterwards.
         private val diskLock = Any()
+
+        private val _changes = MutableStateFlow(0L)
+
+        /**
+         * Moves whenever a topic or a kind marks entries out of date (contract §8): screens on show read again, and a
+         * read answers the entries nobody marked without a request.
+         */
+        val changes: StateFlow<Long> = _changes.asStateFlow()
 
         private class Slot(
             val key: StoreKey<*>,
@@ -206,6 +216,7 @@ class ScreenStore
          */
         fun markStale(topic: String) {
             synchronized(slots) { slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() } }
+            _changes.update { it + 1 }
         }
 
         /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
@@ -274,6 +285,7 @@ class ScreenStore
         /** Marks every entry of [kinds] out of date, e.g. the household ones after a socket reconnect. */
         fun markStale(kinds: Set<StoreKind>) {
             synchronized(slots) { slots.values.forEach { if (it.key.kind in kinds) it.markStaleLocked() } }
+            _changes.update { it + 1 }
         }
 
         /** Drops one entry, e.g. after the item was deleted. */
