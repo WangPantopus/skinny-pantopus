@@ -237,11 +237,12 @@ class MyHomesListViewModel
                 store.remove(StoreKeys.myHomes)
                 entries = emptyList()
             }
-            _state.value = if (entries.isEmpty()) {
-                ListOfRowsUiState.Loading
-            } else {
-                ListOfRowsUiState.Loaded(listOf(RowSection(id = "my-homes", rows = entries.map { rowFor(it, generation) })))
-            }
+            _state.value =
+                if (entries.isEmpty()) {
+                    ListOfRowsUiState.Loading
+                } else {
+                    ListOfRowsUiState.Loaded(listOf(RowSection(id = "my-homes", rows = entries.map { rowFor(it, generation) })))
+                }
             _banner.value = null
             _pendingEvent.value = null
             _actionError.value = null
@@ -277,11 +278,12 @@ class MyHomesListViewModel
                         _refreshing.value = false
                         _refreshNotice.value =
                             RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
-                        val homes = stored.data?.homes?.takeUnless { rows ->
-                            val rejectedCopy = stored.failure != null && rows.any { !it.showsCopyBeforeRecheck }
-                            if (rejectedCopy) store.remove(StoreKeys.myHomes)
-                            rejectedCopy
-                        }
+                        val homes =
+                            stored.data?.homes?.takeUnless { rows ->
+                                val rejectedCopy = stored.failure != null && rows.any { !it.showsCopyBeforeRecheck }
+                                if (rejectedCopy) store.remove(StoreKeys.myHomes)
+                                rejectedCopy
+                            }
                         when {
                             homes == null -> {
                                 entries = emptyList()

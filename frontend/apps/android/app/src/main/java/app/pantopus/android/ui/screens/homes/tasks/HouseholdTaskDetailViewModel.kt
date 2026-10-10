@@ -117,10 +117,11 @@ class HouseholdTaskDetailViewModel
         }
 
         private suspend fun readTaskStored(fromCopy: Boolean): Stored<HomeTaskResponse> {
-            val refusal = gate?.checkForRead(!fromCopy) {
-                memberNames = null
-                _state.value = HouseholdTaskDetailState()
-            }
+            val refusal =
+                gate?.checkForRead(!fromCopy) {
+                    memberNames = null
+                    _state.value = HouseholdTaskDetailState()
+                }
             if (refusal != null) return Stored(failure = refusal)
             val stored = access.readStored(taskId, force = !fromCopy || !showsCopy)
             return if (!showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored

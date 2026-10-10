@@ -49,7 +49,6 @@ fun HomeIssuesListScreen(
     var reporting by remember { mutableStateOf(false) }
     var dismissTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-
     LaunchedEffect(pendingEvent) {
         when (val event = pendingEvent) {
             HomeIssuesEvent.OpenReport -> {

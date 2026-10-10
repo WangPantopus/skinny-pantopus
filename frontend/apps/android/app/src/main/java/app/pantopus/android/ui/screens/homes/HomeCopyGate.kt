@@ -30,9 +30,10 @@ class HomeCopyGate(
     keys: List<StoreKey<*>>,
 ) {
     private val keys: List<StoreKey<*>> =
-        keys + listOf(
-            HomeStoreKeys.access(homeId), HomeStoreKeys.detail(homeId), HomeStoreKeys.me(homeId), StoreKeys.homeDashboard(homeId),
-        )
+        keys +
+            listOf(
+                HomeStoreKeys.access(homeId), HomeStoreKeys.detail(homeId), HomeStoreKeys.me(homeId), StoreKeys.homeDashboard(homeId),
+            )
 
     /** The last known access is a household one: copies may show before the re-check, and they stay stored. */
     private var allowsCopy: Boolean = householdAccess(access.storedAuthority(homeId))
@@ -122,19 +123,21 @@ fun HomeCopyLifecycle(
     val currentPause by rememberUpdatedState(pause)
     DisposableEffect(owner) {
         var active = false
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> if (!active) {
-                    active = true
-                    currentLoad()
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME ->
+                        if (!active) {
+                            active = true
+                            currentLoad()
+                        }
+                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                        active = false
+                        currentPause()
+                    }
+                    else -> Unit
                 }
-                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
-                    active = false
-                    currentPause()
-                }
-                else -> Unit
             }
-        }
         owner.lifecycle.addObserver(observer)
         onDispose {
             owner.lifecycle.removeObserver(observer)

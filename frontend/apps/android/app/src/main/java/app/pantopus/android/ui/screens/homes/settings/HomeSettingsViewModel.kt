@@ -300,7 +300,10 @@ class HomeSettingsViewModel
             }
         }
 
-        private suspend fun readAll(force: Boolean, generation: Long): SettingsReads {
+        private suspend fun readAll(
+            force: Boolean,
+            generation: Long,
+        ): SettingsReads {
             val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
             if (refusal != null) return SettingsReads(Stored(failure = refusal), Stored(), Stored())
             if (generation != readGeneration) return SettingsReads(Stored(), Stored(), Stored())

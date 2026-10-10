@@ -500,7 +500,10 @@ class MembersListViewModel
             }
         }
 
-        private suspend fun readAll(force: Boolean, generation: Long): MembersReads {
+        private suspend fun readAll(
+            force: Boolean,
+            generation: Long,
+        ): MembersReads {
             val refusal = gate.checkForRead(force) { if (generation == readGeneration) retireSnapshot() }
             if (refusal != null) {
                 return MembersReads(null, Stored(failure = refusal), emptyList<PendingInviteDto>() to null, emptyList(), emptyList())
@@ -524,7 +527,6 @@ class MembersListViewModel
                 val rows = if (!gate.showsCopy && roster.failure != null) Stored<OccupantsResponse>(failure = roster.failure) else roster
                 MembersReads(me, rows, invitations.await(), requests.await(), audit.await())
             }
-
         }
 
         private fun publish(reads: MembersReads) {
