@@ -956,7 +956,8 @@ class PulseFeedViewModel
             if (_state.value !is PulseFeedUiState.Loaded ||
                 error is NetworkError.Forbidden ||
                 error == NetworkError.NotFound ||
-                error == NetworkError.Unauthorized) {
+                error == NetworkError.Unauthorized
+            ) {
                 loadedPosts = emptyList()
                 _state.value = PulseFeedUiState.Error(message)
             } else if (isRefresh) {

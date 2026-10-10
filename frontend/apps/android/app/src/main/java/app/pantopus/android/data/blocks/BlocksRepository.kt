@@ -35,10 +35,11 @@ class BlocksRepository
          */
         suspend fun blocked(): NetworkResult<UserBlocksResponse> = safeApiCall { api.blocked() }
 
-        private fun <T> NetworkResult<T>.changed(): NetworkResult<T> = also {
-            if (it is NetworkResult.Success) {
-                store.markEdited(StoreTopics.PROFILE_ME)
-                store.markEdited(StoreTopics.POSTS)
+        private fun <T> NetworkResult<T>.changed(): NetworkResult<T> =
+            also {
+                if (it is NetworkResult.Success) {
+                    store.markEdited(StoreTopics.PROFILE_ME)
+                    store.markEdited(StoreTopics.POSTS)
+                }
             }
-        }
     }

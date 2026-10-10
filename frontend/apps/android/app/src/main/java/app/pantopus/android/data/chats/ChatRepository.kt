@@ -14,18 +14,18 @@ import app.pantopus.android.data.api.models.chats.ReactToChatMessageResponse
 import app.pantopus.android.data.api.models.chats.SendChatMessageBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
-import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.net.mapFresh
-import app.pantopus.android.data.store.asResult
+import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.ChatApi
 import app.pantopus.android.data.store.ScreenStore
-import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreKey
+import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.data.store.asResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
@@ -70,7 +70,10 @@ class ChatRepository
         private fun <T> NetworkResult<T>.chatsChanged(): NetworkResult<T> =
             also { if (it is NetworkResult.Success) store.markEdited(StoreTopics.CHATS) }
 
-        suspend fun unifiedConversations(limit: Int = 100, force: Boolean = false): NetworkResult<UnifiedConversationsResponse> {
+        suspend fun unifiedConversations(
+            limit: Int = 100,
+            force: Boolean = false,
+        ): NetworkResult<UnifiedConversationsResponse> {
             val stored = conversationsStored(force)
             return stored.data?.let { NetworkResult.Success(it.copy(conversations = it.conversations.take(limit))) } ?: stored.asResult()
         }
@@ -91,9 +94,10 @@ class ChatRepository
                     .forgetRefusedHistory(StoreKeys.roomMessages(roomId, HISTORY_LIMIT))
             }
             val count = limit.coerceIn(1, HISTORY_LIMIT)
-            val stored = store.read(StoreKeys.roomMessages(roomId, count), force) { etag ->
-                conditionalApiCall { api.roomMessagesConditional(roomId, count, etag) }.mapFresh(::boundedHistory)
-            }
+            val stored =
+                store.read(StoreKeys.roomMessages(roomId, count), force) { etag ->
+                    conditionalApiCall { api.roomMessagesConditional(roomId, count, etag) }.mapFresh(::boundedHistory)
+                }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
@@ -112,14 +116,17 @@ class ChatRepository
                     .forgetRefusedHistory(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT))
             }
             val count = limit.coerceIn(1, HISTORY_LIMIT)
-            val stored = store.read(StoreKeys.conversationMessages(otherUserId, topicId, count), force) { etag ->
-                conditionalApiCall { api.conversationMessagesConditional(otherUserId, count, topicId, etag) }.mapFresh(::boundedHistory)
-            }
+            val stored =
+                store.read(StoreKeys.conversationMessages(otherUserId, topicId, count), force) { etag ->
+                    conditionalApiCall { api.conversationMessagesConditional(otherUserId, count, topicId, etag) }.mapFresh(::boundedHistory)
+                }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
-        fun conversationMessagesCopy(otherUserId: String, topicId: String?): ChatMessagesResponse? =
-            store.peek(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT)).data
+        fun conversationMessagesCopy(
+            otherUserId: String,
+            topicId: String?,
+        ): ChatMessagesResponse? = store.peek(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT)).data
 
         /** Pagination and reconnect bypass the first-page store; an access refusal still retires that copy. */
         private fun NetworkResult<ChatMessagesResponse>.forgetRefusedHistory(

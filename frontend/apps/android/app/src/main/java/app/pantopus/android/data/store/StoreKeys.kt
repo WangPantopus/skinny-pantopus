@@ -1,20 +1,18 @@
 package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
+import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
 import app.pantopus.android.data.api.models.connections.SentRequestsResponse
-import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
-import app.pantopus.android.data.api.models.relationships.PendingRequestsResponse
-import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
-import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
-import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.feed.FeedPreferencesResponse
+import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
 import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
-import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
@@ -23,12 +21,14 @@ import app.pantopus.android.data.api.models.notifications.NotificationUnreadCoun
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
-import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
-import app.pantopus.android.data.api.models.profile.PublicProfileDto
-import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
+import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
+import app.pantopus.android.data.api.models.profile.PublicProfileDto
+import app.pantopus.android.data.api.models.relationships.PendingRequestsResponse
+import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
+import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.users.InviteCodeDto
@@ -60,35 +60,60 @@ object StoreTopics {
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
 @Suppress("TooManyFunctions") // Declarative endpoint keys form the single audited cache allowlist.
 object StoreKeys {
-    fun relationships(status: String?, limit: Int = 50, offset: Int = 0) = StoreKey<RelationshipsListResponse>(
-        "api/relationships", mapOf("status" to status, "limit" to limit.toString(), "offset" to offset.toString()),
-        kind = StoreKind.PEOPLE, topics = setOf(StoreTopics.PROFILE_ME),
+    fun relationships(
+        status: String?,
+        limit: Int = 50,
+        offset: Int = 0,
+    ) = StoreKey<RelationshipsListResponse>(
+        "api/relationships",
+        mapOf("status" to status, "limit" to limit.toString(), "offset" to offset.toString()),
+        kind = StoreKind.PEOPLE,
+        topics = setOf(StoreTopics.PROFILE_ME),
     )
-    val pendingConnections = StoreKey<PendingRequestsResponse>(
-        "api/relationships/requests/pending", kind = StoreKind.PEOPLE, topics = setOf(StoreTopics.PROFILE_ME),
-    )
-    val sentConnections = StoreKey<SentRequestsResponse>(
-        "api/relationships/requests/sent", kind = StoreKind.PEOPLE, topics = setOf(StoreTopics.PROFILE_ME),
-    )
-    val blockedConnections = StoreKey<BlockedRelationshipsResponse>(
-        "api/relationships/blocked", kind = StoreKind.PEOPLE, topics = setOf(StoreTopics.PROFILE_ME),
-    )
+
+    val pendingConnections =
+        StoreKey<PendingRequestsResponse>(
+            "api/relationships/requests/pending",
+            kind = StoreKind.PEOPLE,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
+    val sentConnections =
+        StoreKey<SentRequestsResponse>(
+            "api/relationships/requests/sent",
+            kind = StoreKind.PEOPLE,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
+    val blockedConnections =
+        StoreKey<BlockedRelationshipsResponse>(
+            "api/relationships/blocked",
+            kind = StoreKind.PEOPLE,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
 
     /** Search privacy preferences are copied in memory and removed after a PATCH. */
-    val privacySettings = StoreKey<PrivacySettingsResponse>(
-        "api/privacy/settings", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME),
-    )
+    val privacySettings =
+        StoreKey<PrivacySettingsResponse>(
+            "api/privacy/settings",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.PROFILE_ME),
+        )
 
     /** Private bookmarks share one memory copy; household/Today signals include SavedPlace changes. */
-    val savedPlaces = StoreKey<SavedPlacesListResponse>(
-        "api/saved-places", kind = StoreKind.YOU, topics = setOf(StoreTopics.HOMES, StoreTopics.TODAY),
-    )
+    val savedPlaces =
+        StoreKey<SavedPlacesListResponse>(
+            "api/saved-places",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.HOMES, StoreTopics.TODAY),
+        )
 
     /** Public Today facts for the viewer's saved place; a deleted bookmark refuses the copy. */
-    fun savedPlaceToday(id: String) = StoreKey<PlaceIntelligence>(
-        "api/saved-places/$id/today", kind = StoreKind.TODAY, topics = setOf(StoreTopics.TODAY, "place:$id"),
-        type = PlaceIntelligence::class.java,
-    )
+    fun savedPlaceToday(id: String) =
+        StoreKey<PlaceIntelligence>(
+            "api/saved-places/$id/today",
+            kind = StoreKind.TODAY,
+            topics = setOf(StoreTopics.TODAY, "place:$id"),
+            type = PlaceIntelligence::class.java,
+        )
 
     /** My Homes: one source for every screen that lists the viewer's homes. */
     val myHomes =
@@ -178,39 +203,66 @@ object StoreKeys {
             type = FeedResponse::class.java,
         )
 
-    fun publicProfile(identifier: String, byUsername: Boolean = false) = StoreKey<PublicProfileDto>(
-        "api/users/${if (byUsername) "username" else "id"}/$identifier", kind = StoreKind.PEOPLE,
+    fun publicProfile(
+        identifier: String,
+        byUsername: Boolean = false,
+    ) = StoreKey<PublicProfileDto>(
+        "api/users/${if (byUsername) "username" else "id"}/$identifier",
+        kind = StoreKind.PEOPLE,
         topics = setOf("profile:$identifier", StoreTopics.PROFILE_ME, StoreTopics.CHATS),
     )
 
-    fun userPosts(userId: String, limit: Int, includeArchived: Boolean) = StoreKey<MyPostsResponse>(
-        "api/posts/user/$userId", mapOf("limit" to limit.toString(), "include_archived" to includeArchived.takeIf { it }?.toString()),
-        kind = StoreKind.POST, topics = setOf(StoreTopics.POSTS, "profile:$userId"),
+    fun userPosts(
+        userId: String,
+        limit: Int,
+        includeArchived: Boolean,
+    ) = StoreKey<MyPostsResponse>(
+        "api/posts/user/$userId",
+        mapOf("limit" to limit.toString(), "include_archived" to includeArchived.takeIf { it }?.toString()),
+        kind = StoreKind.POST,
+        topics = setOf(StoreTopics.POSTS, "profile:$userId"),
     )
 
-    fun savedPosts(limit: Int) = StoreKey<SavedPostsResponse>(
-        "api/posts/saved", mapOf("limit" to limit.toString()),
-        kind = StoreKind.POST, topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
-    )
+    fun savedPosts(limit: Int) =
+        StoreKey<SavedPostsResponse>(
+            "api/posts/saved",
+            mapOf("limit" to limit.toString()),
+            kind = StoreKind.POST,
+            topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
+        )
 
-    val feedPreferences = StoreKey<FeedPreferencesResponse>(
-        "api/posts/feed-preferences", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME),
-        type = FeedPreferencesResponse::class.java,
-    )
+    val feedPreferences =
+        StoreKey<FeedPreferencesResponse>(
+            "api/posts/feed-preferences",
+            kind = StoreKind.YOU,
+            topics = setOf(StoreTopics.PROFILE_ME),
+            type = FeedPreferencesResponse::class.java,
+        )
 
     /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */
     fun post(postId: String) =
         StoreKey<PostDetailResponse>("api/posts/$postId", kind = StoreKind.POST, topics = setOf("post:$postId", StoreTopics.POSTS))
 
     /** Message history is memory only: no Moshi type means these keys can never be saved. */
-    fun roomMessages(roomId: String, limit: Int) = StoreKey<ChatMessagesResponse>(
-        "api/chat/rooms/$roomId/messages", mapOf("limit" to limit.toString()), kind = StoreKind.CONVERSATION,
+    fun roomMessages(
+        roomId: String,
+        limit: Int,
+    ) = StoreKey<ChatMessagesResponse>(
+        "api/chat/rooms/$roomId/messages",
+        mapOf("limit" to limit.toString()),
+        kind = StoreKind.CONVERSATION,
         topics = setOf("chat:$roomId", StoreTopics.CHATS),
     )
 
-    fun conversationMessages(otherId: String, topicId: String?, limit: Int) = StoreKey<ChatMessagesResponse>(
-        "api/chat/conversations/$otherId/messages", mapOf("limit" to limit.toString(), "topicId" to topicId),
-        kind = StoreKind.CONVERSATION, topics = setOf("chat:*", StoreTopics.CHATS),
+    fun conversationMessages(
+        otherId: String,
+        topicId: String?,
+        limit: Int,
+    ) = StoreKey<ChatMessagesResponse>(
+        "api/chat/conversations/$otherId/messages",
+        mapOf("limit" to limit.toString(), "topicId" to topicId),
+        kind = StoreKind.CONVERSATION,
+        topics = setOf("chat:*", StoreTopics.CHATS),
     )
 
     /**

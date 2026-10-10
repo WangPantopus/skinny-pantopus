@@ -7,11 +7,11 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.feed.FeedPreferencesDto
 import app.pantopus.android.data.api.models.feed.FeedPreferencesUpdateRequest
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.store.StoreKind
-import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.feed.FeedActionsRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -80,15 +80,18 @@ class FeedPreferencesViewModel
                     when (result) {
                         is NetworkResult.Success -> _state.value = FeedPreferencesUiState.Loaded(result.data.preferences)
                         is NetworkResult.Failure -> {
-                            val refused = result.error is NetworkError.Forbidden ||
-                                result.error == NetworkError.NotFound ||
-                                result.error == NetworkError.Unauthorized
+                            val refused =
+                                result.error is NetworkError.Forbidden ||
+                                    result.error == NetworkError.NotFound ||
+                                    result.error == NetworkError.Unauthorized
                             if (refused || _state.value !is FeedPreferencesUiState.Loaded) {
                                 _state.value = FeedPreferencesUiState.Error(result.error.displayMessage("Couldn't load preferences."))
                             }
                         }
                     }
-                } finally { loading = false }
+                } finally {
+                    loading = false
+                }
             }
         }
 

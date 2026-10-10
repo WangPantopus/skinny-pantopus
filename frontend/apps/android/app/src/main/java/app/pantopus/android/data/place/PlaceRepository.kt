@@ -171,9 +171,10 @@ class PlaceRepository
 
         /** True while the home's stored Today is fresh and no topic marked it out of date (coming back reads nothing). */
         fun todayIsCurrent(homeId: String): Boolean =
-            store.isCurrent(StoreKeys.today(homeId)) && todayCopy(homeId).let {
-                it.isFresh(StoreKind.TODAY_ALERTS) && it.failure == null
-            }
+            store.isCurrent(StoreKeys.today(homeId)) &&
+                todayCopy(homeId).let {
+                    it.isFresh(StoreKind.TODAY_ALERTS) && it.failure == null
+                }
 
         /** The home's stored Today as it is now (memory or the phone's saved copy), without a request. */
         fun todayCopy(homeId: String): Stored<PlaceIntelligence> = store.peek(StoreKeys.today(homeId))

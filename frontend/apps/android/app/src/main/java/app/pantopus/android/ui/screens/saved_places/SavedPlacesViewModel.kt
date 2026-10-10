@@ -80,11 +80,12 @@ class SavedPlacesViewModel
                 try {
                     val stored = repository.listStored(force)
                     val data = stored.data
-                _refreshNotice.value = if (stored.showsRefreshFailure(StoreKind.YOU)) {
-                    RefreshNotice(stored.fetchedAt, ::refresh)
-                } else {
-                    null
-                }
+                    _refreshNotice.value =
+                        if (stored.showsRefreshFailure(StoreKind.YOU)) {
+                            RefreshNotice(stored.fetchedAt, ::refresh)
+                        } else {
+                            null
+                        }
                     if (data != null) {
                         items = data.savedPlaces
                         loadedAtLeastOnce = true
@@ -92,12 +93,14 @@ class SavedPlacesViewModel
                     } else if (!loadedAtLeastOnce ||
                         stored.failure is NetworkError.Forbidden ||
                         stored.failure == NetworkError.NotFound ||
-                        stored.failure == NetworkError.Unauthorized) {
+                        stored.failure == NetworkError.Unauthorized
+                    ) {
                         items = emptyList()
                         loadedAtLeastOnce = false
-                    _state.value = SavedPlacesUiState.Error(
-                        stored.failure?.displayMessage("Couldn't load saved places.") ?: "Couldn't load saved places.",
-                    )
+                        _state.value =
+                            SavedPlacesUiState.Error(
+                                stored.failure?.displayMessage("Couldn't load saved places.") ?: "Couldn't load saved places.",
+                            )
                     }
                 } finally {
                     loading = false

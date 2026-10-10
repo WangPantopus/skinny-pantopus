@@ -309,7 +309,8 @@ class MyPostsViewModel
                     is NetworkResult.Failure -> {
                         if (result.error is NetworkError.Forbidden ||
                             result.error == NetworkError.NotFound ||
-                            result.error == NetworkError.Unauthorized) {
+                            result.error == NetworkError.Unauthorized
+                        ) {
                             posts = emptyList()
                             nextPage = null
                             loadedAtLeastOnce = false
@@ -329,14 +330,15 @@ class MyPostsViewModel
         private fun replaceRefreshedHead(response: MyPostsResponse) {
             val boundary = response.posts.lastOrNull()
             val time = boundary?.createdAt?.let(::parseInstant)
-            val older = if (response.pagination?.hasMore == true && boundary != null && time != null) {
-                posts.filter { row ->
-                    val created = parseInstant(row.createdAt)
-                    created != null && (created < time || (created == time && row.id < boundary.id))
+            val older =
+                if (response.pagination?.hasMore == true && boundary != null && time != null) {
+                    posts.filter { row ->
+                        val created = parseInstant(row.createdAt)
+                        created != null && (created < time || (created == time && row.id < boundary.id))
+                    }
+                } else {
+                    emptyList()
                 }
-            } else {
-                emptyList()
-            }
             posts = (response.posts + older).distinctBy { it.id }
             if (older.isEmpty()) nextPage = nextPageAfter(response)
         }
