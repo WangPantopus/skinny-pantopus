@@ -65,11 +65,13 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     let api: APIClient
     /// Your preferences as last read or saved (You: fresh 10 minutes); see `+Copy`.
     let store: ScreenStore
+    let sessionScope: HomeClaimSessionScope
     private let saveDebounce: Duration
     private let systemAuthorization: @Sendable () async -> UNAuthorizationStatus
     /// Wire-name keys accumulated since the last flush. Merged rather
     /// than replaced so a burst of taps on different rows all persist.
     private var pendingPatch: [String: JSONValue] = [:]
+    private var pendingPatchGeneration = 0
     private var saveTask: Task<Void, Never>?
     private var saveInFlight = false
     private var saveRevision = 0
@@ -79,10 +81,12 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         saveDebounce: Duration = .milliseconds(600),
         systemAuthorization: @escaping @Sendable () async -> UNAuthorizationStatus = {
             await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        }
+        },
+        identity: (() -> String?)? = nil
     ) {
         self.api = api
         store = ScreenStore.store(for: api)
+        sessionScope = HomeClaimSessionScope(api: api, identity: identity)
         self.saveDebounce = saveDebounce
         self.systemAuthorization = systemAuthorization
         preferences = storedPreferences()
@@ -134,7 +138,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     public func setSlider(_: String, index _: Int) async {}
 
     public func toggleRow(_ rowId: String, isOn: Bool) async {
-        guard preferences != nil else { return }
+        guard preferencesScopeIsCurrent, preferences != nil else { return }
         switch rowId {
         case RowID.morningBriefing:
             preferences?.dailyBriefingEnabled = isOn
@@ -168,7 +172,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     }
 
     public func selectChip(_ rowId: String, value: String) async {
-        guard preferences != nil else { return }
+        guard preferencesScopeIsCurrent, preferences != nil else { return }
         switch rowId {
         case RowID.morningTime:
             preferences?.dailyBriefingTimeLocal = value
@@ -188,7 +192,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     }
 
     public func selectRadio(_ rowId: String) async {
-        guard preferences != nil,
+        guard preferencesScopeIsCurrent, preferences != nil,
               let option = Self.locationOptions.first(where: { $0.rowId == rowId })
         else { return }
         preferences?.locationMode = option.mode.rawValue
@@ -198,16 +202,19 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     // MARK: - Networking
 
     private func fetch(force: Bool) async {
+        guard preferencesScopeIsCurrent else { return }
         // A change made here while the read is out is newer than its reply
         // (the change's own save answers it), so that reply is dropped.
         let edits = saveRevision
+        let generation = store.generation
         do {
             let response = try await readPreferences(force: force)
-            guard edits == saveRevision else { return }
+            guard preferencesScopeIsCurrent, generation == store.generation, edits == saveRevision else { return }
             preferences = response.preferences
             state = .loaded(groups())
         } catch {
-            guard edits == saveRevision else { return }
+            guard preferencesScopeIsCurrent, generation == store.generation,
+                  edits == saveRevision, !(error is CancellationError) else { return }
             guard preferences != nil else {
                 state = .error(
                     message: (error as? APIError)?.errorDescription
@@ -225,6 +232,8 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     /// Apply locally, re-project, and (re)arm the debounce timer.
     private func enqueue(_ patch: [String: JSONValue]) {
         saveRevision += 1
+        if pendingPatchGeneration != store.generation { pendingPatch = [:] }
+        pendingPatchGeneration = store.generation
         for (key, value) in patch {
             pendingPatch[key] = value
         }
@@ -252,16 +261,27 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         saveInFlight = true
         defer { saveInFlight = false }
         while !pendingPatch.isEmpty {
+            guard preferencesScopeIsCurrent, pendingPatchGeneration == store.generation, !Task.isCancelled else {
+                pendingPatch = [:]
+                return
+            }
             let patch = pendingPatch
             let revision = saveRevision
+            let generation = pendingPatchGeneration
             pendingPatch = [:]
             do {
-                let response = try await savePreferences(patch)
+                let response = try await savePreferences(patch, generation: generation)
+                guard preferencesScopeIsCurrent, generation == store.generation else { continue }
                 guard revision == saveRevision else { continue }
                 preferences = response.preferences
                 state = .loaded(groups())
                 toast = ToastMessage(text: "Saved", kind: .success)
             } catch {
+                guard preferencesScopeIsCurrent, generation == store.generation, !(error is CancellationError) else {
+                    // A newer edit after Clear cache belongs to the new generation.
+                    // The loop checks it independently of this discarded reply.
+                    continue
+                }
                 guard revision == saveRevision else { continue }
                 toast = ToastMessage(text: "Failed to save", kind: .error)
                 await fetch(force: true)

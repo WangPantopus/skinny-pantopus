@@ -41,7 +41,8 @@ final class NotificationSettingsViewModelTests: XCTestCase {
     /// A long debounce keeps the timer from firing on its own; tests
     /// drain it with `flushPendingSaveNow()` so ordering is exact.
     private func makeViewModel() -> NotificationSettingsViewModel {
-        NotificationSettingsViewModel(api: makeAPI(), saveDebounce: .seconds(60))
+        let identity: () -> String? = { "notification-settings-tests" }
+        return NotificationSettingsViewModel(api: makeAPI(), saveDebounce: .seconds(60), identity: identity)
     }
 
     private static func prefsJSON(
