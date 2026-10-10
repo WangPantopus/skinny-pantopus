@@ -106,6 +106,9 @@ internal fun MaintenanceDetailContent(
     onDelete: () -> Unit,
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    LaunchedEffect(state) {
+        if (state !is MaintenanceDetailUiState.Loaded) showDeleteConfirm = false
+    }
     Box(modifier = Modifier.testTag("maintenanceDetail")) {
         when (state) {
             MaintenanceDetailUiState.Loading -> LoadingBody(onBack = onBack)

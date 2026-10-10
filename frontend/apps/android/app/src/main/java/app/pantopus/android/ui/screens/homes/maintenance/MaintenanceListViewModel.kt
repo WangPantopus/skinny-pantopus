@@ -203,6 +203,7 @@ class MaintenanceListViewModel
 
         private fun clearCopy() {
             tasks = null
+            _tabs.value = initialTabs()
             _banner.value = null
             _refreshing.value = false
             _refreshNotice.value = null
