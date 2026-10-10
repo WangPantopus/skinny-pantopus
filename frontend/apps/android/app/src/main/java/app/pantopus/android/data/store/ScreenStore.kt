@@ -53,6 +53,7 @@ private const val IDLE_MS = 30 * 60 * 1000L
  * Sensitive replies (contract §5) never enter the store: their screens keep calling the repository directly.
  */
 @Singleton
+@Suppress("TooManyFunctions") // Read, write, invalidation and eviction share the same account/generation lock.
 class ScreenStore
     @Inject
     constructor(
