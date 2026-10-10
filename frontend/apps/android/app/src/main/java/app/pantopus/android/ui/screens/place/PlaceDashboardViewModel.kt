@@ -100,6 +100,10 @@ class PlaceDashboardViewModel
             }
         }
 
+        /** Founder decision 3: My Homes says the viewer is an owner or household role here, with open-ended access. */
+        private fun householdViewer(homeId: String): Boolean =
+            homesRepo.myHomesCopy()?.homes?.firstOrNull { it.id == homeId }?.showsCopyBeforeRecheck == true
+
         /**
          * Founder decision 3: a stored copy shows before the re-check only to owners and household roles with
          * open-ended access (and to the person whose own private setup it is), as My Homes and the reply describe them.
@@ -108,8 +112,7 @@ class PlaceDashboardViewModel
             homeId: String,
             copy: PlaceIntelligence,
         ): Boolean {
-            val home = homesRepo.myHomesCopy()?.homes?.firstOrNull { it.id == homeId } ?: return false
-            return copy.viewer?.role != NONRESIDENT && home.showsCopyBeforeRecheck
+            return copy.viewer?.role != NONRESIDENT && householdViewer(homeId)
         }
 
         private fun read(
@@ -120,7 +123,7 @@ class PlaceDashboardViewModel
             _refreshing.value = force && _state.value is PlaceDashboardUiState.Loaded
             readJob =
                 viewModelScope.launch {
-                    val stored = repo.placeStored(id, force)
+                    val stored = repo.placeStored(id, force, persist = householdViewer(id))
                     if (homeId != id) return@launch
                     _refreshing.value = false
                     publish(stored)
