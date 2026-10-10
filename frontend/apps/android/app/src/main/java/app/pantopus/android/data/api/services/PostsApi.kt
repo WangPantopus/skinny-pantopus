@@ -161,6 +161,12 @@ interface PostsApi {
         @Query("offset") offset: Int = 0,
     ): SavedPostsResponse
 
+    @GET("api/posts/saved")
+    suspend fun savedPostsConditional(
+        @Query("limit") limit: Int,
+        @Header("If-None-Match") etag: String?,
+    ): Response<SavedPostsResponse>
+
     /** `DELETE /api/posts/:id` — author-only. Route `backend/routes/posts.js:2483`. */
     @DELETE("api/posts/{id}")
     suspend fun deletePost(

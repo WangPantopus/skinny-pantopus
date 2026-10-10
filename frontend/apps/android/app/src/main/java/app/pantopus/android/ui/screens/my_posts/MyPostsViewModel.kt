@@ -120,13 +120,7 @@ class MyPostsViewModel
         private var composeHandler: () -> Unit = {}
         private var editPostHandler: (MyPostDto) -> Unit = {}
 
-        init {
-            viewModelScope.launch {
-                postsRefresh.ticks.collect {
-                    refresh()
-                }
-            }
-        }
+        val postChanges = postsRefresh.ticks
 
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()

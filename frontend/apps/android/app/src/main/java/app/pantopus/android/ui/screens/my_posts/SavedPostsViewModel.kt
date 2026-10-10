@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
@@ -48,7 +51,11 @@ class SavedPostsViewModel
         private val _toastMessage = MutableStateFlow<String?>(null)
         val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
 
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
         private var posts: List<MyPostDto> = emptyList()
+        private var loading = false
         private var nextOffset: Int? = null
         private var loadedOnce = false
         private var loadingMore = false
@@ -63,15 +70,32 @@ class SavedPostsViewModel
             openPostHandler = onOpenPost
         }
 
-        /** Every visit to the tab re-reads it, so posts saved elsewhere since show up. */
-        fun load() {
+        /** A return uses the shared first-page copy while it is fresh. */
+        fun load() = read(force = false)
+
+        fun refresh() = read(force = true)
+
+        private fun read(force: Boolean) {
+            if (loading || loadingMore || removing.isNotEmpty()) return
+            loading = true
             val gen = ++generation
-            loadingMore = false
             loadMoreFailed = false
-            if (!loadedOnce) _state.value = ListOfRowsUiState.Loading
+            if (!loadedOnce) {
+                postsRepo.savedPostsCopy(PAGE_SIZE).data?.let { copy ->
+                    posts = copy.posts
+                    nextOffset = nextOffsetAfter(copy)
+                    loadedOnce = true
+                    applyState()
+                }
+                if (!loadedOnce) _state.value = ListOfRowsUiState.Loading
+            }
+            val depth = (nextOffset ?: posts.size).coerceIn(PAGE_SIZE, MAX_REFRESH_DEPTH)
             viewModelScope.launch {
-                val result = postsRepo.savedPosts(limit = PAGE_SIZE, offset = 0)
+                val result = postsRepo.savedPosts(limit = depth, force = force)
                 if (gen != generation) return@launch
+                loading = false
+                val copy = postsRepo.savedPostsCopy(depth)
+                _refreshNotice.value = if (copy.showsRefreshFailure(StoreKind.POST)) RefreshNotice(copy.fetchedAt, ::refresh) else null
                 when (result) {
                     is NetworkResult.Success -> {
                         posts = result.data.posts
@@ -79,9 +103,18 @@ class SavedPostsViewModel
                         loadedOnce = true
                         applyState()
                     }
-                    is NetworkResult.Failure ->
-                        // A failed read is not an empty list: keep what's shown, or say so.
-                        if (loadedOnce) applyState() else _state.value = ListOfRowsUiState.Error(LOAD_FAILED)
+                    is NetworkResult.Failure -> {
+                        if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) {
+                            posts = emptyList()
+                            nextOffset = null
+                            loadedOnce = false
+                            _state.value = ListOfRowsUiState.Error(LOAD_FAILED)
+                        } else if (loadedOnce) {
+                            applyState()
+                        } else {
+                            _state.value = ListOfRowsUiState.Error(LOAD_FAILED)
+                        }
+                    }
                 }
             }
         }
@@ -89,7 +122,7 @@ class SavedPostsViewModel
         /** Footer reached: append the next page of saves. A failed page keeps the rows and offers Try again. */
         fun loadMoreIfNeeded() {
             val offset = nextOffset ?: return
-            if (loadingMore) return
+            if (loading || loadingMore) return
             val gen = generation
             loadingMore = true
             loadMoreFailed = false
@@ -204,6 +237,7 @@ class SavedPostsViewModel
         companion object {
             /** Saves per page of `GET /api/posts/saved`. */
             const val PAGE_SIZE = 50
+            const val MAX_REFRESH_DEPTH = 200
             const val LOAD_FAILED = "Couldn't load your saved posts."
             const val LOAD_MORE_FAILED = "Couldn't load more saved posts."
 
