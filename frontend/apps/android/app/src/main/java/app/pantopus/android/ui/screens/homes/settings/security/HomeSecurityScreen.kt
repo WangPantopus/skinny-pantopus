@@ -25,7 +25,7 @@ fun HomeSecurityScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_privacy", state is GroupedListUiState.Loaded)
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     GroupedListScreen(
         title = viewModel.title,
         state = state,

@@ -66,7 +66,7 @@ fun MaintenanceDetailScreen(
     onEdit: () -> Unit,
     viewModel: MaintenanceDetailViewModel = hiltViewModel(),
 ) {
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_maintenance_entry", state is MaintenanceDetailUiState.Loaded)
     val isMutating by viewModel.isMutating.collectAsStateWithLifecycle()

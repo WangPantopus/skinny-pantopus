@@ -61,7 +61,7 @@ fun HomeSettingsScreen(
     val rename by viewModel.rename.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     LaunchedEffect(navigation) {
         navigation?.let {
             viewModel.consumeNavigation()
