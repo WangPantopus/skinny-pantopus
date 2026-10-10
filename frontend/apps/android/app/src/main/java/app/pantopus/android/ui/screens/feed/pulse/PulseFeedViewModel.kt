@@ -926,14 +926,15 @@ class PulseFeedViewModel
             }
         }
 
-        /**
-         * Puts a first page on screen. [inPlace] (a quiet read of the query already on screen, with later pages loaded
-         * below): the rows on screen take the server's counts and edits in place and the pages below stay.
-         */
+        /** Copy only the card the reader tapped, synchronously and within the shared store's lifetime. */
         fun seedPostForOpen(postId: String) {
             loadedPosts.firstOrNull { it.id == postId }?.let(repo::seedDetail)
         }
 
+        /**
+         * Puts a first page on screen. [inPlace] (a quiet read of the query already on screen, with later pages loaded
+         * below): the rows on screen take the server's counts and edits in place and the pages below stay.
+         */
         private fun applyFirstPage(
             response: FeedResponse,
             area: FeedArea,
