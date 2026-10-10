@@ -146,6 +146,14 @@ interface PostsApi {
         @Query("include_archived") includeArchived: Boolean? = null,
     ): MyPostsResponse
 
+    @GET("api/posts/user/{userId}")
+    suspend fun userPostsConditional(
+        @Path("userId") userId: String,
+        @Query("limit") limit: Int,
+        @Query("include_archived") includeArchived: Boolean?,
+        @Header("If-None-Match") etag: String?,
+    ): Response<MyPostsResponse>
+
     /** `GET /api/posts/saved` — the viewer's saved posts they can still open (offset paging over saves). */
     @GET("api/posts/saved")
     suspend fun savedPosts(

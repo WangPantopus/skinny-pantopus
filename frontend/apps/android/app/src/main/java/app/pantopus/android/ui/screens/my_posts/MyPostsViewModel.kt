@@ -16,9 +16,12 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.feed.FeedCursor
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
@@ -232,16 +235,19 @@ class MyPostsViewModel
             nowProvider = provider
         }
 
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
         fun load() {
-            if (_state.value is ListOfRowsUiState.Loaded && loadedAtLeastOnce) return
-            reload()
+            if (loadingMore) return
+            reload(force = false)
         }
 
         fun refresh() {
             // Refresh requeries the wire (active posts only); wipe the local
             // archive overrides so the UI doesn't show stale optimistic state.
             localArchiveOverrides.clear()
-            reload()
+            reload(force = true)
         }
 
         fun selectTab(id: String) {
@@ -269,7 +275,7 @@ class MyPostsViewModel
             }
         }
 
-        private fun reload() {
+        private fun reload(force: Boolean) {
             val generation = ++fetchGeneration
             // No paging off the old cursor while the list is being replaced.
             loadingMore = true
@@ -282,12 +288,22 @@ class MyPostsViewModel
                 applyState()
                 return
             }
-            if (!loadedAtLeastOnce) _state.value = ListOfRowsUiState.Loading
+            if (!loadedAtLeastOnce) {
+                postsRepo.userPostsCopy(userId, PAGE_SIZE, includeArchived = true).data?.let { copy ->
+                    posts = copy.posts
+                    nextPage = nextPageAfter(copy)
+                    loadedAtLeastOnce = true
+                    applyState()
+                }
+                if (!loadedAtLeastOnce) _state.value = ListOfRowsUiState.Loading
+            }
             // Keep the rows already paged in (bounded) rather than collapsing
             // the list to its first page on every refresh.
             val depth = posts.size.coerceIn(PAGE_SIZE, MAX_REFRESH_DEPTH)
             viewModelScope.launch {
-                val result = postsRepo.userPosts(userId, depth, includeArchived = true)
+                val result = postsRepo.userPosts(userId, depth, includeArchived = true, force = force)
+                val copy = postsRepo.userPostsCopy(userId, depth, includeArchived = true)
+                _refreshNotice.value = if (copy.showsRefreshFailure(StoreKind.POST)) RefreshNotice(copy.fetchedAt, ::refresh) else null
                 if (generation != fetchGeneration) return@launch
                 loadingMore = false
                 when (result) {
@@ -298,7 +314,12 @@ class MyPostsViewModel
                         applyState()
                     }
                     is NetworkResult.Failure -> {
-                        if (loadedAtLeastOnce) {
+                        if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) {
+                            posts = emptyList()
+                            nextPage = null
+                            loadedAtLeastOnce = false
+                            _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                        } else if (loadedAtLeastOnce) {
                             // Keep the list; resume any paging this reload interrupted.
                             applyState()
                         } else {

@@ -18,6 +18,7 @@ import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
+import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
@@ -150,6 +151,11 @@ object StoreKeys {
             kind = StoreKind.NEARBY,
             topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
         )
+
+    fun userPosts(userId: String, limit: Int, includeArchived: Boolean) = StoreKey<MyPostsResponse>(
+        "api/posts/user/$userId", mapOf("limit" to limit.toString(), "include_archived" to includeArchived.takeIf { it }?.toString()),
+        kind = StoreKind.POST, topics = setOf(StoreTopics.POSTS, "profile:$userId"),
+    )
 
     /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */
     fun post(postId: String) =

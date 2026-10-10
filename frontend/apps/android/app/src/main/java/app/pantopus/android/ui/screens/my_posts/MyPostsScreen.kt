@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
@@ -69,6 +71,7 @@ fun MyPostsScreen(
     savedViewModel: SavedPostsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val topBarAction by viewModel.topBarAction.collectAsStateWithLifecycle()
     val fab by viewModel.fab.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
@@ -88,9 +91,14 @@ fun MyPostsScreen(
             onCompose = onCompose,
             onEditPost = onEditPost,
         )
-        viewModel.load()
         savedViewModel.bindCallbacks(onOpenPost = onOpenPost)
     }
+
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    RefreshOnStoreChange(viewModel::load)
 
     // Every visit to the Saved tab re-reads it, so posts saved elsewhere since show up.
     LaunchedEffect(onSaved) {
@@ -113,6 +121,7 @@ fun MyPostsScreen(
 
     Box(modifier = Modifier.fillMaxSize().testTag(MY_POSTS_TAG)) {
         ListOfRowsScreen(
+            refreshNotice = refreshNotice.takeUnless { onSaved },
             title = "My posts",
             state = if (onSaved) savedState else state,
             onRefresh = { if (onSaved) savedViewModel.load() else viewModel.refresh() },
