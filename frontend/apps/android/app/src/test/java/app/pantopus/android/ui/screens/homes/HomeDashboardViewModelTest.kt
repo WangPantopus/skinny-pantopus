@@ -30,11 +30,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeDashboardRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.store.Stored
-import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -91,7 +89,7 @@ class HomeDashboardViewModelTest {
         coEvery { intelligenceRepo.propertyValue(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
         coEvery { intelligenceRepo.billTrends(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
         // The screens' store hands back what the endpoints answered (Instant Screens).
-        every { intelligenceRepo.rememberChecklist(any(), any()) } just Runs
+        every { intelligenceRepo.checklistWriter(any()) } returns {}
         coEvery { authority.readStored(any()) } coAnswers { Stored(authority.read(), fetchedAt = System.currentTimeMillis()) }
         coEvery { authority.readTasksStored(any()) } coAnswers { Stored(authority.readTasks(), fetchedAt = System.currentTimeMillis()) }
         coEvery { repo.detailStored(any(), any()) } coAnswers { repo.detail(firstArg()).stored() }

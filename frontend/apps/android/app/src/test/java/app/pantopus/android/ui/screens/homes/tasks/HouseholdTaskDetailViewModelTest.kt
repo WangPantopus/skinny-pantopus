@@ -15,6 +15,7 @@ import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixt
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +37,11 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HouseholdTaskDetailViewModelTest {
-    private val repository = mockk<HomeTasksRepository>(relaxUnitFun = true)
+    private val repository =
+        mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
+            every { homeTasksWriter(any()) } returns {}
+            every { homeTaskWriter(any(), any()) } returns {}
+        }
     private val identity = HomeClaimScopeTestFixture()
     private val server = HomeTaskSessionDto("user-1", "home", "a".repeat(64))
     private val task = HomeTaskDto("task", "home", "chore", "Private title", capabilities = HomeTaskCapabilitiesDto(true, true, true))

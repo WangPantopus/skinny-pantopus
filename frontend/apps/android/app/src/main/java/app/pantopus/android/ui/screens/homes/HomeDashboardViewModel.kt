@@ -276,6 +276,8 @@ class HomeDashboardViewModel
 
         private val _pendingChecklistItemIds = MutableStateFlow<Set<String>>(emptySet())
         private val checklistOriginals = mutableMapOf<String, SeasonalChecklistItemDto>()
+        private var checklistNeedsReconcile = false
+        private var checklistRevision = 0L
         private val _checklistActionError = MutableStateFlow<String?>(null)
         val checklistActionError: StateFlow<String?> = _checklistActionError.asStateFlow()
 
@@ -351,8 +353,9 @@ class HomeDashboardViewModel
          */
         fun suspendContent() {
             if (!visible) return
-            checklistOriginals.values.toList().forEach { applyChecklistItem(it, remember = false) }
+            checklistOriginals.values.toList().forEach { applyChecklistItem(it) }
             checklistOriginals.clear()
+            checklistNeedsReconcile = false
             _pendingChecklistItemIds.value = emptySet()
             _checklistActionError.value = null
             generation += 1
@@ -388,6 +391,7 @@ class HomeDashboardViewModel
             _billTrends.value = HomeIntelligenceCardState.Loading
             _pendingChecklistItemIds.value = emptySet()
             checklistOriginals.clear()
+            checklistNeedsReconcile = false
             _checklistActionError.value = null
             _refreshing.value = false
             _state.value = HomeDashboardUiState.Loading
@@ -842,10 +846,13 @@ class HomeDashboardViewModel
             val original = (checklist.items + checklist.carryover?.items.orEmpty()).firstOrNull { it.id == itemId } ?: return
             if (original.isResolved) return
             val revision = generation
+            checklistRevision += 1
+            val remember = intelligenceRepo.checklistWriter(homeId)
+            checklistNeedsReconcile = checklistNeedsReconcile || _pendingChecklistItemIds.value.isNotEmpty()
             checklistOriginals[itemId] = original
             _checklistActionError.value = null
             _pendingChecklistItemIds.value = _pendingChecklistItemIds.value + itemId
-            applyChecklistItem(original.copy(status = status), remember = false)
+            applyChecklistItem(original.copy(status = status))
             try {
                 authorize(revision)
                 val updated = intelligenceRepo.updateSeasonalChecklistItem(homeId, itemId, status).homeValue()
@@ -855,6 +862,8 @@ class HomeDashboardViewModel
                 }
                 checklistOriginals.remove(itemId)
                 applyChecklistItem(updated)
+                // This callback was captured before the write. Only confirmed rows may enter the shared copy.
+                _checklist.value.valueOrNull()?.let { remember(it.replacingItems(checklistOriginals)) }
                 loadHealthScore()
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -862,19 +871,29 @@ class HomeDashboardViewModel
                 if (error.code in listOf(401, 403, 404)) {
                     retireAccess(revision)
                 } else if (current(revision)) {
-                    applyChecklistItem(original, remember = false)
+                    applyChecklistItem(original)
                     _checklistActionError.value = error.displayMessage("Couldn't confirm that task update. Try again.")
                 }
             } catch (_: Throwable) {
                 if (current(revision)) {
-                    applyChecklistItem(original, remember = false)
+                    applyChecklistItem(original)
                     _checklistActionError.value = "Couldn't confirm that task update. Try again."
                 }
             } finally {
-                if (revision == generation) {
-                    checklistOriginals.remove(itemId)
-                    _pendingChecklistItemIds.value = _pendingChecklistItemIds.value - itemId
-                }
+                finishChecklistWrite(itemId, revision)
+            }
+        }
+
+        private suspend fun finishChecklistWrite(
+            itemId: String,
+            revision: Long,
+        ) {
+            if (revision != generation) return
+            checklistOriginals.remove(itemId)
+            _pendingChecklistItemIds.value = _pendingChecklistItemIds.value - itemId
+            if (_pendingChecklistItemIds.value.isEmpty() && checklistNeedsReconcile) {
+                checklistNeedsReconcile = false
+                reconcileChecklist()
             }
         }
 
@@ -883,20 +902,29 @@ class HomeDashboardViewModel
          * and recompute progress the same way the backend does
          * (`home.js:7526`).
          */
-        private fun applyChecklistItem(
-            updated: SeasonalChecklistItemDto,
-            remember: Boolean = true,
-        ) {
+        private fun applyChecklistItem(updated: SeasonalChecklistItemDto) {
             val current = _checklist.value.valueOrNull() ?: return
-            val spliced = current.replacingItems(mapOf(updated.id to updated))
-            _checklist.value = HomeIntelligenceCardState.Loaded(spliced)
-            // Own edit (contract §3): a return shows the confirmed change, not the copy from before it.
-            if (remember) rememberConfirmedChecklist(spliced)
+            _checklist.value = HomeIntelligenceCardState.Loaded(current.replacingItems(mapOf(updated.id to updated)))
         }
 
-        private fun rememberConfirmedChecklist(shown: SeasonalChecklistDto) {
-            // A different row may still be pending; only confirmed rows enter the shared copy.
-            intelligenceRepo.rememberChecklist(homeId, shown.replacingItems(checklistOriginals))
+        /** Overlapping writes can supersede each other's store tickets; reconcile once the batch has finished. */
+        private suspend fun reconcileChecklist() {
+            val revision = checklistRevision
+            val reconciled =
+                storedCard(
+                    listOf("home.view"),
+                    {
+                        val stored = intelligenceRepo.seasonalChecklistStored(homeId, force = true)
+                        // A failed recheck must not replace our confirmed edits with the older shared copy.
+                        if (stored.failure != null) Stored<SeasonalChecklistDto>(failure = stored.failure) else stored
+                    },
+                ) { HomeIntelligenceValidation.checklist(it, homeId) }
+            if (revision != checklistRevision) return
+            if (reconciled is HomeIntelligenceCardState.Loaded) {
+                _checklist.value = reconciled
+            } else if (reconciled != null && _checklistActionError.value == null) {
+                _checklistActionError.value = "Couldn't refresh the checklist. Try again."
+            }
         }
 
         // ── Projection ──────────────────────────────────────────────
@@ -906,47 +934,15 @@ class HomeDashboardViewModel
             if (!can("home.view") || dashboardData == null) return
             _state.value =
                 HomeDashboardUiState.Loaded(
-                    content(
-                        address = detail.address ?: detail.name ?: "Home",
-                        verified = detail.ownershipStatus == "verified" || detail.owners.any { it.ownerStatus == "verified" },
-                        isVerifiedOwner = detail.ownershipStatus == "verified",
-                        securityBanner =
-                            securityBanner(detail.securityState, detail.claimWindowEndsAt, can("ownership.manage")),
+                    HomeDashboardProjection.content(
+                        detail = detail,
+                        dashboard = dashboardData,
+                        access = accessData,
+                        health = _healthScore.value.valueOrNull(),
+                        can = ::can,
+                        securityBanner = securityBanner(detail.securityState, detail.claimWindowEndsAt, can("ownership.manage")),
                     ),
                 )
-        }
-
-        private fun content(
-            address: String,
-            verified: Boolean,
-            isVerifiedOwner: Boolean,
-            securityBanner: HomeSecurityBannerContent?,
-        ): HomeDashboardContent {
-            val counts = dashboardData?.counts
-            return HomeDashboardContent(
-                address = address,
-                verified = verified,
-                isVerifiedOwner = isVerifiedOwner,
-                stats =
-                    HomeDashboardProjection.stats(counts).filter {
-                        can(
-                            when (it.id) {
-                                "packages" -> "packages.view"
-                                "bills" -> "finance.view"
-                                else -> "tasks.view"
-                            },
-                        )
-                    },
-                quickActions = HomeDashboardProjection.quickActions(counts, accessData),
-                tabs = HomeDashboardProjection.gatedTabs(accessData),
-                overview =
-                    HomeDashboardProjection.overview(
-                        dashboard = dashboardData,
-                        health = _healthScore.value.valueOrNull(),
-                    ),
-                attentionSummary = null,
-                securityBanner = securityBanner,
-            )
         }
 
         companion object {
@@ -972,57 +968,67 @@ class HomeDashboardViewModel
                 // owner (members, or a seller right after a transfer).
                 canInviteCoOwner: Boolean = true,
             ): HomeSecurityBannerContent? =
-                when (state) {
-                    "claim_window" -> {
-                        val date = HomeOwnershipSecurityViewModel.formattedDate(claimWindowEndsAt)
-                        HomeSecurityBannerContent(
-                            state = state,
-                            icon = PantopusIcon.Clock,
-                            title = "Claim Window Active",
-                            body =
-                                if (date != null) {
-                                    "Co-owners can verify ownership until $date."
-                                } else {
-                                    "Co-owners can verify ownership while the window is open."
-                                },
-                            ctaLabel = if (canInviteCoOwner) "Invite Co-Owner" else null,
-                            action = if (canInviteCoOwner) HomeSecurityBannerAction.InviteCoOwner else HomeSecurityBannerAction.NoAction,
-                        )
-                    }
-                    "review_required" ->
-                        HomeSecurityBannerContent(
-                            state = state,
-                            icon = PantopusIcon.Shield,
-                            title = "Review Required",
-                            body = "New owner claims require manual review.",
-                            ctaLabel = "Learn Why",
-                            action = HomeSecurityBannerAction.OpenSecuritySettings,
-                        )
-                    "disputed" ->
-                        HomeSecurityBannerContent(
-                            state = state,
-                            icon = PantopusIcon.AlertTriangle,
-                            title = "Verification dispute active",
-                            body = "Some sensitive actions are temporarily restricted.",
-                            ctaLabel = "View Details",
-                            action = HomeSecurityBannerAction.OpenSecuritySettings,
-                        )
-                    "frozen" ->
-                        // RN renders a "Contact support" label with no
-                        // handler (`HomeStatusBanner.tsx:68-72`); we ship
-                        // the copy without a dead button rather than a
-                        // control that does nothing.
-                        HomeSecurityBannerContent(
-                            state = state,
-                            icon = PantopusIcon.Lock,
-                            title = "Home protections enabled",
-                            body = "Some actions require support.",
-                            ctaLabel = null,
-                            action = HomeSecurityBannerAction.NoAction,
-                        )
-                    else -> null
-                }
+                homeSecurityBanner(state, claimWindowEndsAt, canInviteCoOwner)
         }
+    }
+
+/** The existing security banner projection; kept outside the stateful view model. */
+private fun homeSecurityBanner(
+    state: String?,
+    claimWindowEndsAt: String?,
+    // Drops the claim window's CTA for viewers who can't invite an
+    // owner (members, or a seller right after a transfer).
+    canInviteCoOwner: Boolean = true,
+): HomeSecurityBannerContent? =
+    when (state) {
+        "claim_window" -> {
+            val date = HomeOwnershipSecurityViewModel.formattedDate(claimWindowEndsAt)
+            HomeSecurityBannerContent(
+                state = state,
+                icon = PantopusIcon.Clock,
+                title = "Claim Window Active",
+                body =
+                    if (date != null) {
+                        "Co-owners can verify ownership until $date."
+                    } else {
+                        "Co-owners can verify ownership while the window is open."
+                    },
+                ctaLabel = if (canInviteCoOwner) "Invite Co-Owner" else null,
+                action = if (canInviteCoOwner) HomeSecurityBannerAction.InviteCoOwner else HomeSecurityBannerAction.NoAction,
+            )
+        }
+        "review_required" ->
+            HomeSecurityBannerContent(
+                state = state,
+                icon = PantopusIcon.Shield,
+                title = "Review Required",
+                body = "New owner claims require manual review.",
+                ctaLabel = "Learn Why",
+                action = HomeSecurityBannerAction.OpenSecuritySettings,
+            )
+        "disputed" ->
+            HomeSecurityBannerContent(
+                state = state,
+                icon = PantopusIcon.AlertTriangle,
+                title = "Verification dispute active",
+                body = "Some sensitive actions are temporarily restricted.",
+                ctaLabel = "View Details",
+                action = HomeSecurityBannerAction.OpenSecuritySettings,
+            )
+        "frozen" ->
+            // RN renders a "Contact support" label with no
+            // handler (`HomeStatusBanner.tsx:68-72`); we ship
+            // the copy without a dead button rather than a
+            // control that does nothing.
+            HomeSecurityBannerContent(
+                state = state,
+                icon = PantopusIcon.Lock,
+                title = "Home protections enabled",
+                body = "Some actions require support.",
+                ctaLabel = null,
+                action = HomeSecurityBannerAction.NoAction,
+            )
+        else -> null
     }
 
 /** A stored read's data, kept even when its refresh failed; no data rethrows the failure. */
