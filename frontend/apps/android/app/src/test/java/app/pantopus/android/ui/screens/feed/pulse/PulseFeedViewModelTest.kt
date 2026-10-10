@@ -81,7 +81,7 @@ class PulseFeedViewModelTest {
         every { repo.feedFirstPageCopy(any()) } returns null
         every { repo.feedFirstPageIsCurrent(any()) } returns false
         // Each card stands in for its post (the post detail's first frame).
-        every { repo.seedDetails(any()) } just Runs
+        every { repo.seedDetail(any()) } just Runs
     }
 
     private fun page(response: FeedResponse) = Stored(response, fetchedAt = System.currentTimeMillis())
