@@ -327,10 +327,12 @@ class EditProfileViewModel
                         if (!isDirty) seedProfile(result.data.user)
                     }
                     is NetworkResult.Failure -> {
-                        if (_state.value !is EditProfileUiState.Loaded) _state.value =
-                            EditProfileUiState.Error(
-                                result.error.message.ifBlank { "Couldn't load profile." },
-                            )
+                        if (_state.value !is EditProfileUiState.Loaded) {
+                            _state.value =
+                                EditProfileUiState.Error(
+                                    result.error.message.ifBlank { "Couldn't load profile." },
+                                )
+                        }
                     }
                 }
             }

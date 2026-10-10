@@ -3,15 +3,15 @@ package app.pantopus.android.data.connections
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
 import app.pantopus.android.data.api.models.connections.SentRequestsResponse
 import app.pantopus.android.data.api.models.relationships.RelationshipActionEcho
+import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.ConnectionsApi
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.store.asResult
-import app.pantopus.android.data.api.net.conditionalApiCall
-import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.api.net.safeApiCall
-import app.pantopus.android.data.api.services.ConnectionsApi
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -60,7 +60,9 @@ class ConnectionsRepository
          * `backend/routes/relationships.js:522`.
          */
         suspend fun unblock(id: String): NetworkResult<RelationshipActionEcho> = safeApiCall { api.unblock(id) }.changed()
-        private fun <T> NetworkResult<T>.changed(): NetworkResult<T> = also {
-            if (it is NetworkResult.Success) store.markStale(StoreTopics.PROFILE_ME)
-        }
+
+        private fun <T> NetworkResult<T>.changed(): NetworkResult<T> =
+            also {
+                if (it is NetworkResult.Success) store.markStale(StoreTopics.PROFILE_ME)
+            }
     }

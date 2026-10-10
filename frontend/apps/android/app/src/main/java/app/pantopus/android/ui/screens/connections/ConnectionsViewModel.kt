@@ -21,11 +21,11 @@ import app.pantopus.android.data.api.models.relationships.PendingRequestDto
 import app.pantopus.android.data.api.models.relationships.RelationshipDto
 import app.pantopus.android.data.api.models.relationships.RelationshipUserDto
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.store.StoreKind
-import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.connections.ConnectionsRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBackground
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBadgeSize
@@ -400,8 +400,9 @@ class ConnectionsViewModel
                 val sentOk = sentDeferred.await()
                 val blockedOk = blockedDeferred.await()
                 loading = false
-                val staleFailure = listOf(repo.listCopy("accepted"), repo.pendingCopy(), connectionsRepo.sentCopy(), connectionsRepo.blockedCopy())
-                    .firstOrNull { it.showsRefreshFailure(StoreKind.PEOPLE) }
+                val staleFailure =
+                    listOf(repo.listCopy("accepted"), repo.pendingCopy(), connectionsRepo.sentCopy(), connectionsRepo.blockedCopy())
+                        .firstOrNull { it.showsRefreshFailure(StoreKind.PEOPLE) }
                 _refreshNotice.value = staleFailure?.let { RefreshNotice(it.fetchedAt, ::refresh) }
                 if (!loadedOnce && !acceptedOk && !pendingOk && !sentOk && !blockedOk) {
                     _state.value =

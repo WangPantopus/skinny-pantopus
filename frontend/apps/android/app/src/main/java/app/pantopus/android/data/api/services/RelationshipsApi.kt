@@ -6,9 +6,9 @@ import app.pantopus.android.data.api.models.relationships.PendingRequestsRespons
 import app.pantopus.android.data.api.models.relationships.RelationshipActionEcho
 import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
 import retrofit2.Response
-import retrofit2.http.Header
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -39,12 +39,16 @@ interface RelationshipsApi {
 
     @GET("api/relationships")
     suspend fun listConditional(
-        @Query("status") status: String?, @Query("limit") limit: Int, @Query("offset") offset: Int,
+        @Query("status") status: String?,
+        @Query("limit") limit: Int,
+        @Query("offset") offset: Int,
         @Header("If-None-Match") etag: String?,
     ): Response<RelationshipsListResponse>
 
     @GET("api/relationships/requests/pending")
-    suspend fun pendingRequestsConditional(@Header("If-None-Match") etag: String?): Response<PendingRequestsResponse>
+    suspend fun pendingRequestsConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<PendingRequestsResponse>
 
     /**
      * `POST /api/relationships/requests` — send a connection request

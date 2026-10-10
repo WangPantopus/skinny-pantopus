@@ -429,7 +429,11 @@ fun PulsePostDetailLoadedContent(
                     onAvatarTap = { onOpenProfile(content.post.userId) },
                 )
                 if (actionPending) {
-                    Text("Pending", color = PantopusColors.appTextSecondary, modifier = Modifier.padding(horizontal = Spacing.s4).testTag("postActionPending"))
+                    Text(
+                        "Pending",
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.padding(horizontal = Spacing.s4).testTag("postActionPending"),
+                    )
                 }
             }
         },

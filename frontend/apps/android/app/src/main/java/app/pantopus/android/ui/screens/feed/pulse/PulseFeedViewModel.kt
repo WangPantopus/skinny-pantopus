@@ -557,9 +557,10 @@ class PulseFeedViewModel
             viewModelScope.launch {
                 try {
                     when (val result = repo.toggleLike(postId, liked = toggled)) {
-                        is NetworkResult.Success -> putOverride(postId) {
-                            it.copy(hasReacted = result.data.liked, likeCount = result.data.likeCount)
-                        }
+                        is NetworkResult.Success ->
+                            putOverride(postId) {
+                                it.copy(hasReacted = result.data.liked, likeCount = result.data.likeCount)
+                            }
                         is NetworkResult.Failure -> {
                             putOverride(postId) { it.copy(hasReacted = original, likeCount = originalCount) }
                             _toastMessage.value = "Couldn't update your reaction. Try again."
@@ -948,7 +949,10 @@ class PulseFeedViewModel
             }
         }
 
-        private fun showAreaFailure(error: NetworkError, isRefresh: Boolean) {
+        private fun showAreaFailure(
+            error: NetworkError,
+            isRefresh: Boolean,
+        ) {
             val message = error.displayMessage("Couldn't load your viewing area. Try again.")
             if (_state.value !is PulseFeedUiState.Loaded || error is NetworkError.Forbidden || error == NetworkError.NotFound) {
                 loadedPosts = emptyList()

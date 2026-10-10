@@ -30,8 +30,15 @@ class ProfileRepository
         private val store: ScreenStore,
     ) {
         /** `GET /api/users/id/:id` — route `backend/routes/users.js:2041`. */
-        suspend fun publicProfile(id: String, force: Boolean = false): NetworkResult<PublicProfileDto> {
-            val stored = store.read(StoreKeys.publicProfile(id), force) { etag -> conditionalApiCall { api.publicProfileConditional(id, etag) } }
+        suspend fun publicProfile(
+            id: String,
+            force: Boolean = false,
+        ): NetworkResult<PublicProfileDto> {
+            val stored =
+                store.read(
+                    StoreKeys.publicProfile(id),
+                    force,
+                ) { etag -> conditionalApiCall { api.publicProfileConditional(id, etag) } }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
