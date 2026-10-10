@@ -18,6 +18,10 @@ only after the verified baseline is adopted.
 The backend job also checks Following activity against disposable PostgreSQL
 and PostgREST containers with synthetic fixtures. This tests real filtering,
 ordering, and per-Beacon limits without accessing the application database.
+The query contracts reuse local digest-pinned PostgreSQL/PostgREST images first,
+then try two public registries for the same digest if a pull is throttled. Both
+registries failing remains a failed check; no contract is skipped. PostgreSQL
+17's image is pinned alongside PostgREST 14 so a fallback cannot change versions.
 
 ## Mobile checks
 
