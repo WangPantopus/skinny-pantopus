@@ -31,6 +31,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.findFragmentActivity
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
@@ -56,6 +57,7 @@ fun SettingsIndexScreen(
     var confirmSignOut by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.load() }
+    RefreshOnStoreChange(viewModel::load)
     LaunchedEffect(navigation) {
         navigation?.let {
             viewModel.consumeNavigation()
@@ -130,6 +132,7 @@ fun NotificationSettingsScreen(
     }
 
     LaunchedEffect(Unit) { viewModel.load() }
+    RefreshOnStoreChange(viewModel::load)
     LaunchedEffect(toast) {
         toast?.let {
             toastController.show(it)

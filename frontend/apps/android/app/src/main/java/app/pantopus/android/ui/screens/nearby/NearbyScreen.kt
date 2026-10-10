@@ -46,6 +46,7 @@ import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -86,6 +87,7 @@ fun NearbyScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("nearby", state is NearbyUiState.Loaded)
     LaunchedEffect(Unit) { viewModel.load() }
+    RefreshOnStoreChange(viewModel::load)
     NearbyContent(state, onClaim, onOpenPulse, onOpenBeacons, onOpenConnections, onOpenMarketplace, onOpenTasks, viewModel::refresh)
 }
 
