@@ -936,22 +936,28 @@ class HomeDashboardViewModel
                 )
             _checklist.value = HomeIntelligenceCardState.Loaded(spliced)
             // Own edit (contract §3): a return shows the confirmed change, not the copy from before it.
-            if (remember) {
-                // A different row may still be pending; only confirmed rows enter the shared copy.
-                val confirmed = spliced.copy(
-                    items = spliced.items.map { checklistOriginals[it.id] ?: it },
-                    carryover = spliced.carryover?.let { block -> block.copy(items = block.items.map { checklistOriginals[it.id] ?: it }) },
+            if (remember) rememberConfirmedChecklist(spliced)
+        }
+
+        private fun rememberConfirmedChecklist(shown: SeasonalChecklistDto) {
+            // A different row may still be pending; only confirmed rows enter the shared copy.
+            val items = shown.items.map { checklistOriginals[it.id] ?: it }
+            val completed = items.count { it.isResolved }
+            val confirmed =
+                shown.copy(
+                    items = items,
+                    progress =
+                        SeasonalChecklistProgressDto(
+                            total = items.size,
+                            completed = completed,
+                            percentage = HomeDashboardProjection.percentage(completed, items.size),
+                        ),
+                    carryover =
+                        shown.carryover?.let { block ->
+                            block.copy(items = block.items.map { checklistOriginals[it.id] ?: it })
+                        },
                 )
-                val done = confirmed.items.count { it.isResolved }
-                intelligenceRepo.rememberChecklist(
-                    homeId,
-                    confirmed.copy(progress = SeasonalChecklistProgressDto(
-                        total = confirmed.items.size,
-                        completed = done,
-                        percentage = HomeDashboardProjection.percentage(done, confirmed.items.size),
-                    )),
-                )
-            }
+            intelligenceRepo.rememberChecklist(homeId, confirmed)
         }
 
         // ── Projection ──────────────────────────────────────────────
