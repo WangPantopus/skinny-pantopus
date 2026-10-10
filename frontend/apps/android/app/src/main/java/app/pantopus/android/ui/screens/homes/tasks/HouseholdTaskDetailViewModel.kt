@@ -12,7 +12,9 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -27,6 +29,8 @@ data class HouseholdTaskDetailState(
     val task: HomeTaskDto? = null,
     val loading: Boolean = true,
     val busy: Boolean = false,
+    val refreshing: Boolean = false,
+    val refreshNotice: RefreshNotice? = null,
     val error: String? = null,
     val deleted: Boolean = false,
     /** "you", a member's name, or the short "Member 1A2B" label; null when nobody is assigned. */
@@ -76,7 +80,7 @@ class HouseholdTaskDetailViewModel
 
         fun resume() {
             active = true
-            reload()
+            read(force = false)
         }
 
         fun pause() {
@@ -85,6 +89,7 @@ class HouseholdTaskDetailViewModel
             work?.cancel()
             work = null
             inFlight = false
+            _state.value = _state.value.copy(busy = false, refreshing = false)
             // Founder decision 3: owners and household roles keep the task on screen while away; anyone else blanks.
             if (!showsCopy) _state.value = HouseholdTaskDetailState()
             gate?.leave()
@@ -95,25 +100,27 @@ class HouseholdTaskDetailViewModel
          * its row in the stored list), and the store answers a fresh copy without a request or revalidates an older
          * one. "Reload task" after an error reads now. Actions keep reading the task now before they act.
          */
-        fun reload() {
+        fun reload() = read(force = true)
+
+        private fun read(force: Boolean) {
             if (inFlight || !active) return
-            val retry = _state.value.error != null
             if (_state.value.task == null && showsCopy) access.storedTask(taskId)?.let(::show)
             if (_state.value.task == null) _state.value = HouseholdTaskDetailState()
-            runAction({ readTask(force = retry) }) { task ->
-                show(task)
+            runAction(
+                { readTaskStored(fromCopy = showsCopy && !force) },
+                refreshing = force && _state.value.task != null,
+            ) { stored ->
+                show(stored.data?.task ?: throw (stored.failure ?: NetworkError.NotFound))
+                _state.value =
+                    _state.value.copy(
+                        refreshNotice = RefreshNotice(stored.fetchedAt, ::reload).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) },
+                    )
                 finishArrival()
             }
         }
 
         override fun onCleared() {
             gate?.leave()
-        }
-
-        private suspend fun readTask(force: Boolean): HomeTaskDto {
-            val fromCopy = showsCopy && !force
-            val stored = readTaskStored(fromCopy)
-            return stored.data?.task ?: throw (stored.failure ?: NetworkError.NotFound)
         }
 
         private suspend fun readTaskStored(fromCopy: Boolean): Stored<HomeTaskResponse> {
@@ -195,6 +202,7 @@ class HouseholdTaskDetailViewModel
 
         private fun <T> runAction(
             action: suspend () -> T,
+            refreshing: Boolean = false,
             publish: (T) -> Unit,
         ) {
             if (!active || inFlight || _state.value.deleted) return
@@ -204,7 +212,7 @@ class HouseholdTaskDetailViewModel
             }
             inFlight = true
             val revision = ++generation
-            _state.value = _state.value.copy(busy = true, error = null)
+            _state.value = _state.value.copy(busy = true, refreshing = refreshing, error = null)
             work =
                 viewModelScope.launch {
                     try {
@@ -221,7 +229,7 @@ class HouseholdTaskDetailViewModel
                     } finally {
                         if (revision == generation) {
                             inFlight = false
-                            _state.value = _state.value.copy(busy = false)
+                            _state.value = _state.value.copy(busy = false, refreshing = false)
                         }
                     }
                 }

@@ -17,6 +17,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
+import app.pantopus.android.ui.components.RefreshFailedLine
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -68,24 +70,31 @@ fun HouseholdTaskDetailScreen(
             TopAppBar(title = { Text("Task") }, navigationIcon = { TextButton(onClick = onBack) { Text("Back") } })
         },
     ) { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(20.dp).verticalScroll(rememberScrollState()).testTag("homeTaskDetail"),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+        PullToRefreshBox(
+            isRefreshing = state.refreshing,
+            onRefresh = viewModel::reload,
+            modifier = Modifier.fillMaxSize().padding(padding),
         ) {
-            if (state.loading) CircularProgressIndicator()
-            state.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error)
-                TextButton(onClick = viewModel::reload, enabled = !state.busy) { Text("Reload task") }
-            }
-            state.task?.let { task ->
-                HouseholdTaskReadOnlyContent(task, state.assignee)
-                TextButton(onClick = recurrenceViewModel.controller::show, enabled = !state.busy) { Text("Repeat schedule") }
-                TextButton(onClick = mediaViewModel.controller::show, enabled = !state.busy) { Text("Private attachments") }
-                // Launch cut #4 (Open Gigs): publishing a household task as an open Gig is hidden.
-                if (task.capabilities?.canEdit == true && LaunchFeatures.openGigs) {
-                    TextButton(onClick = gigViewModel.controller::show, enabled = !state.busy) { Text("Review Gig publication") }
+            Column(
+                Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()).testTag("homeTaskDetail"),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                if (state.loading) CircularProgressIndicator()
+                state.refreshNotice?.let { RefreshFailedLine(it) }
+                state.error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = viewModel::reload, enabled = !state.busy) { Text("Reload task") }
                 }
-                TaskDetailActions(state, { viewModel.edit(onEdit) }, viewModel::complete) { confirmDelete = true }
+                state.task?.let { task ->
+                    HouseholdTaskReadOnlyContent(task, state.assignee)
+                    TextButton(onClick = recurrenceViewModel.controller::show, enabled = !state.busy) { Text("Repeat schedule") }
+                    TextButton(onClick = mediaViewModel.controller::show, enabled = !state.busy) { Text("Private attachments") }
+                    // Launch cut #4 (Open Gigs): publishing a household task as an open Gig is hidden.
+                    if (task.capabilities?.canEdit == true && LaunchFeatures.openGigs) {
+                        TextButton(onClick = gigViewModel.controller::show, enabled = !state.busy) { Text("Review Gig publication") }
+                    }
+                    TaskDetailActions(state, { viewModel.edit(onEdit) }, viewModel::complete) { confirmDelete = true }
+                }
             }
         }
     }
