@@ -125,7 +125,8 @@ class PropertyDetailsViewModel
         private fun read(force: Boolean) {
             if (!active) return
             val generation = ++readGeneration
-            _refreshing.value = force && (_state.value is PropertyDetailsUiState.Clean || _state.value is PropertyDetailsUiState.Mismatch)
+            _refreshing.value =
+                force && (_state.value is PropertyDetailsUiState.Clean || _state.value is PropertyDetailsUiState.Mismatch)
             if (_state.value is PropertyDetailsUiState.Error) _state.value = PropertyDetailsUiState.Loading
             viewModelScope.launch {
                 val stored = readDetails(force, generation)
