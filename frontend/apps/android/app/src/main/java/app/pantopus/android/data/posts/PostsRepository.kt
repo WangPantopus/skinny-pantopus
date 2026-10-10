@@ -31,7 +31,6 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.PostsApi
-import app.pantopus.android.data.store.ScreenSeeds
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
@@ -67,7 +66,6 @@ class PostsRepository
     constructor(
         private val api: PostsApi,
         private val store: ScreenStore,
-        private val seeds: ScreenSeeds,
     ) {
         /** `GET /api/posts/feed`. */
         suspend fun feed(
@@ -154,15 +152,11 @@ class PostsRepository
          * The post's stored copy or, without one, its feed card standing in for it (`fetchedAt` 0: never fresh, and no
          * comments yet), without a request.
          */
-        fun detailCopy(id: String): Stored<PostDetailResponse> {
-            val stored = store.peek(StoreKeys.post(id))
-            if (stored.data != null) return stored
-            return seeds.get(StoreKeys.post(id))?.let { Stored(it) } ?: stored
-        }
+        fun detailCopy(id: String): Stored<PostDetailResponse> = store.peek(StoreKeys.post(id))
 
-        /** The feed's cards stand in for their posts until each post's own read answers (a post opens at once). */
-        fun seedDetails(posts: List<FeedPost>) {
-            posts.forEach { post -> post.detailSeed()?.let { seeds.put(StoreKeys.post(post.id), it) } }
+        /** Called synchronously for the tapped feed card; no asynchronous feed reply can write a detail preview. */
+        fun seedDetail(post: FeedPost) {
+            post.detailSeed()?.let { store.seed(StoreKeys.post(post.id), it) }
         }
 
         /** `POST /api/posts/:id/like`: sets the like to [liked], the state the person chose (a re-send can't flip it back). */
