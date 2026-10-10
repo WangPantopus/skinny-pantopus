@@ -883,14 +883,20 @@ class HomeDashboardViewModel
                     _checklistActionError.value = "Couldn't confirm that task update. Try again."
                 }
             } finally {
-                if (revision == generation) {
-                    checklistOriginals.remove(itemId)
-                    _pendingChecklistItemIds.value = _pendingChecklistItemIds.value - itemId
-                    if (_pendingChecklistItemIds.value.isEmpty() && checklistNeedsReconcile) {
-                        checklistNeedsReconcile = false
-                        reconcileChecklist()
-                    }
-                }
+                finishChecklistWrite(itemId, revision)
+            }
+        }
+
+        private suspend fun finishChecklistWrite(
+            itemId: String,
+            revision: Long,
+        ) {
+            if (revision != generation) return
+            checklistOriginals.remove(itemId)
+            _pendingChecklistItemIds.value = _pendingChecklistItemIds.value - itemId
+            if (_pendingChecklistItemIds.value.isEmpty() && checklistNeedsReconcile) {
+                checklistNeedsReconcile = false
+                reconcileChecklist()
             }
         }
 
@@ -931,47 +937,15 @@ class HomeDashboardViewModel
             if (!can("home.view") || dashboardData == null) return
             _state.value =
                 HomeDashboardUiState.Loaded(
-                    content(
-                        address = detail.address ?: detail.name ?: "Home",
-                        verified = detail.ownershipStatus == "verified" || detail.owners.any { it.ownerStatus == "verified" },
-                        isVerifiedOwner = detail.ownershipStatus == "verified",
-                        securityBanner =
-                            securityBanner(detail.securityState, detail.claimWindowEndsAt, can("ownership.manage")),
+                    HomeDashboardProjection.content(
+                        detail = detail,
+                        dashboard = dashboardData,
+                        access = accessData,
+                        health = _healthScore.value.valueOrNull(),
+                        can = ::can,
+                        securityBanner = securityBanner(detail.securityState, detail.claimWindowEndsAt, can("ownership.manage")),
                     ),
                 )
-        }
-
-        private fun content(
-            address: String,
-            verified: Boolean,
-            isVerifiedOwner: Boolean,
-            securityBanner: HomeSecurityBannerContent?,
-        ): HomeDashboardContent {
-            val counts = dashboardData?.counts
-            return HomeDashboardContent(
-                address = address,
-                verified = verified,
-                isVerifiedOwner = isVerifiedOwner,
-                stats =
-                    HomeDashboardProjection.stats(counts).filter {
-                        can(
-                            when (it.id) {
-                                "packages" -> "packages.view"
-                                "bills" -> "finance.view"
-                                else -> "tasks.view"
-                            },
-                        )
-                    },
-                quickActions = HomeDashboardProjection.quickActions(counts, accessData),
-                tabs = HomeDashboardProjection.gatedTabs(accessData),
-                overview =
-                    HomeDashboardProjection.overview(
-                        dashboard = dashboardData,
-                        health = _healthScore.value.valueOrNull(),
-                    ),
-                attentionSummary = null,
-                securityBanner = securityBanner,
-            )
         }
 
         companion object {
