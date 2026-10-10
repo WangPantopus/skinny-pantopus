@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +73,7 @@ import app.pantopus.android.ui.theme.Spacing
  * screen isn't built yet (Log package, Add mail, etc.) and receives the
  * human-readable action label.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeDashboardScreen(
     onBack: () -> Unit,
@@ -132,6 +135,7 @@ fun HomeDashboardScreen(
     val billSharing by viewModel.billSharing.collectAsStateWithLifecycle()
     val pendingChecklistItemIds by viewModel.pendingChecklistItemIds.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(viewModel, lifecycleOwner) {
@@ -365,7 +369,11 @@ fun HomeDashboardScreen(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = viewModel::refresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
         when (val current = state) {
             HomeDashboardUiState.Loading -> LoadingLayout(onBack = onBack)
             is HomeDashboardUiState.Loaded ->
