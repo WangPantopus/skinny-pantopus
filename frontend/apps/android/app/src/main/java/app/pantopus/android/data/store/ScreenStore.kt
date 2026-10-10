@@ -271,13 +271,13 @@ class ScreenStore
             return slot
         }
 
-        /** Deletes an entry's saved copy off the caller's thread (access ended, the entry was removed). */
+        /** Remove the saved entry before returning, so an immediate relaunch cannot restore refused or edited data. */
         private fun deleteSaved(
             keyId: String,
             account: String? = accountId(),
         ) {
             if (account == null) return
-            scope.launch { synchronized(diskLock) { saved.delete(account, keyId) } }
+            synchronized(diskLock) { saved.delete(account, keyId) }
         }
 
         /** A new entry starts from its saved copy on the phone, when there is a usable one (contract §6 "Read"). */
@@ -366,7 +366,7 @@ class ScreenStore
                                 }
                             }
                         is NetworkResult.Failure ->
-                            if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) {
+                            if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) {
                                 // Access ended: the entry goes at once, from the phone too, and the screen shows
                                 // the server's answer.
                                 slot.etag = null
