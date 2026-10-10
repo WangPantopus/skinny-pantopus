@@ -172,13 +172,10 @@ class ChatRepository
         ): NetworkResult<ReactToChatMessageResponse> =
             safeApiCall { api.reactToMessage(messageId, ReactToChatMessageBody(reaction, reacted)) }
 
-        suspend fun markRoomRead(roomId: String): NetworkResult<Unit> = safeApiCall { api.markRoomRead(roomId) }.readCountChanged()
+        suspend fun markRoomRead(roomId: String): NetworkResult<Unit> = safeApiCall { api.markRoomRead(roomId) }.chatsChanged()
 
         suspend fun markConversationRead(otherUserId: String): NetworkResult<Unit> =
-            safeApiCall { api.markConversationRead(otherUserId) }.readCountChanged()
-
-        private fun <T> NetworkResult<T>.readCountChanged(): NetworkResult<T> =
-            also { if (it is NetworkResult.Success) store.markStale(StoreTopics.CHATS_LIST) }
+            safeApiCall { api.markConversationRead(otherUserId) }.chatsChanged()
 
         suspend fun conversationTopics(otherUserId: String): NetworkResult<ConversationTopicsResponse> =
             safeApiCall { api.conversationTopics(otherUserId) }

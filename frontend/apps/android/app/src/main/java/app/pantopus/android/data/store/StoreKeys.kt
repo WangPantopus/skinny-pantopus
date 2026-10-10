@@ -44,7 +44,6 @@ object StoreTopics {
 
     /** The viewer's conversation list: a chat created or left, a message sent or read. */
     const val CHATS = "chats"
-    const val CHATS_LIST = "chats:list"
 
     /** Client-only: the viewer posted, edited or deleted a post, so the feeds' first pages go out of date. */
     const val POSTS = "posts"
@@ -195,13 +194,13 @@ object StoreKeys {
 
     /** Message history is memory only: no Moshi type means these keys can never be saved. */
     fun roomMessages(roomId: String, limit: Int) = StoreKey<ChatMessagesResponse>(
-        "api/chat/rooms/$roomId/messages", mapOf("limit" to limit.toString()), kind = StoreKind.MESSAGES_LIST,
+        "api/chat/rooms/$roomId/messages", mapOf("limit" to limit.toString()), kind = StoreKind.CONVERSATION,
         topics = setOf("chat:$roomId", StoreTopics.CHATS),
     )
 
     fun conversationMessages(otherId: String, topicId: String?, limit: Int) = StoreKey<ChatMessagesResponse>(
         "api/chat/conversations/$otherId/messages", mapOf("limit" to limit.toString(), "topicId" to topicId),
-        kind = StoreKind.MESSAGES_LIST, topics = setOf("chat:*", StoreTopics.CHATS),
+        kind = StoreKind.CONVERSATION, topics = setOf("chat:*", StoreTopics.CHATS),
     )
 
     /**
@@ -213,7 +212,7 @@ object StoreKeys {
             "api/chat/unified-conversations",
             mapOf("limit" to "100"),
             kind = StoreKind.MESSAGES_LIST,
-            topics = setOf(StoreTopics.CHATS, StoreTopics.CHATS_LIST),
+            topics = setOf(StoreTopics.CHATS),
             type = UnifiedConversationsResponse::class.java,
         )
 
@@ -266,7 +265,7 @@ object StoreKeys {
         StoreKey<HubResponse>(
             "api/hub",
             kind = StoreKind.HOMES,
-            topics = setOf(StoreTopics.HOMES, StoreTopics.NOTIFICATIONS, StoreTopics.CHATS, StoreTopics.CHATS_LIST, StoreTopics.TODAY, StoreTopics.PROFILE_ME),
+            topics = setOf(StoreTopics.HOMES, StoreTopics.NOTIFICATIONS, StoreTopics.CHATS, StoreTopics.TODAY, StoreTopics.PROFILE_ME),
         )
 
     /** The Hub's Today card (kind Today: fresh 10 minutes; a reply that says it failed keeps the last copy). */
