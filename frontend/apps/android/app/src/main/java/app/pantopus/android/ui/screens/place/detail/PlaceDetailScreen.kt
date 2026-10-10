@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +21,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import app.pantopus.android.ui.components.RefreshOnStoreChange
+import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.data.api.models.place.PlaceBand
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionAccess
@@ -50,6 +54,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
  * the group's sections in the designed detail layouts. Parity twin of
  * iOS `PlaceDetailView`.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaceDetailScreen(
     onBack: () -> Unit,
@@ -57,7 +62,13 @@ fun PlaceDetailScreen(
     viewModel: PlaceDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { viewModel.load() }
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { viewModel.suspendContent() }
+    }
+    RefreshOnStoreChange(viewModel::load)
     // A locked section's "Verify address" opens the same verify sheet as the dashboard.
     var showVerify by remember { mutableStateOf(false) }
     val verify: (() -> Unit)? = onStartVerify?.let { { showVerify = true } }
@@ -68,6 +79,8 @@ fun PlaceDetailScreen(
             address = (state as? PlaceDetailUiState.Loaded)?.intelligence?.place?.let { placeDetailAddress(it) }.orEmpty(),
             onBack = onBack,
         )
+        refreshNotice?.let { RefreshFailedLine(it) }
+        PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
         when (val current = state) {
             PlaceDetailUiState.Loading -> PlaceDetailSkeleton()
             is PlaceDetailUiState.Error ->
@@ -102,6 +115,7 @@ fun PlaceDetailScreen(
                     }
                 }
         }
+    }
     }
     if (showVerify && onStartVerify != null) {
         PlaceVerifySheet(
