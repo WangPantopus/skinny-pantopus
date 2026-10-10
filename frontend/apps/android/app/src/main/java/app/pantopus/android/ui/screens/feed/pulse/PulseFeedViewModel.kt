@@ -317,13 +317,8 @@ class PulseFeedViewModel
         private val viewerId: String?
             get() = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
-        init {
-            viewModelScope.launch {
-                postsRefresh.ticks.collect {
-                    refresh()
-                }
-            }
-        }
+        /** The screen collects own-post events only while visible; hidden feeds wait for their next entry. */
+        val postChanges = postsRefresh.ticks
 
         /** Wire location coordinates from the host before the first load. */
         fun configureLocation(

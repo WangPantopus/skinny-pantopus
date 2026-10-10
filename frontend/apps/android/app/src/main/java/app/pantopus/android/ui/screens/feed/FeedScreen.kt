@@ -67,6 +67,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
@@ -159,6 +162,12 @@ fun FeedScreen(
     // List / Map segment — mirrors RN `FeedHeader.tsx:35-52`.
     var viewMode by remember { mutableStateOf(FeedViewMode.List) }
 
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(viewModel, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.postChanges.collect { viewModel.load() }
+        }
+    }
     var configured by remember { mutableStateOf(false) }
     LifecycleResumeEffect(configured) {
         if (configured) viewModel.load()
