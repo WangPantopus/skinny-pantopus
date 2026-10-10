@@ -7,6 +7,7 @@ import android.os.SystemClock
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.net.Conditional
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
@@ -422,8 +423,7 @@ class ScreenStore
                             }
                         is NetworkResult.Failure ->
                             if (
-                                result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound ||
-                                result.error == NetworkError.Unauthorized
+                                result.error.refusesStoredCopy
                             ) {
                                 // Access ended: the entry goes at once, from the phone too, and the screen shows
                                 // the server's answer.

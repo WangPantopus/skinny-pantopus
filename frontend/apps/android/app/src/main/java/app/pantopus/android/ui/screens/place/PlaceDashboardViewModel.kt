@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.notifications.personalBellCount
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
@@ -169,10 +170,10 @@ class PlaceDashboardViewModel
                 // The move-in date (the movers card) rides on the intelligence.
                 data != null -> _state.value = PlaceDashboardUiState.Loaded(data, data.moveInDate)
                 // Access ended (contract §3): the store dropped the copy, and the server's answer shows.
-                failure is NetworkError.Forbidden || failure == NetworkError.NotFound || failure == NetworkError.Unauthorized ->
+                failure.refusesStoredCopy ->
                     _state.value =
                         PlaceDashboardUiState.Error(
-                            failure.displayMessage("Couldn't load your dashboard."),
+                            failure?.displayMessage("Couldn't load your dashboard.") ?: DASHBOARD_FAILED,
                             denied = failure is NetworkError.Forbidden,
                             unavailable = true,
                         )
