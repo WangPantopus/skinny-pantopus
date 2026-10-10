@@ -33,6 +33,7 @@ import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeF
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,8 +95,13 @@ class PlaceDetailViewModel
             PlaceDetailGroup.fromSlug(savedStateHandle[PLACE_DETAIL_SLUG_KEY])
                 ?: PlaceDetailGroup.TODAY
 
-        private val _state = MutableStateFlow<PlaceDetailUiState>(PlaceDetailUiState.Loading)
+        private val copy = PlaceDetailCopy(repo, homesRepo, homeId, group, viewModelScope)
+        private val _state = copy.state
         val state: StateFlow<PlaceDetailUiState> = _state.asStateFlow()
+        val refreshing = copy.refreshing.asStateFlow()
+        val refreshNotice = copy.refreshNotice.asStateFlow()
+        private val visible: Boolean get() = copy.visible
+        private val pageGeneration: Long get() = copy.generation
 
         private val _pickupPrimerHomeId = MutableStateFlow<String?>(null)
         override val pickupPrimerHomeId = _pickupPrimerHomeId.asStateFlow()
@@ -221,87 +227,18 @@ class PlaceDetailViewModel
             }
         }
 
-        private var readJob: Job? = null
-        private var visible = true
-        private var pageGeneration = 0L
-        private val _refreshing = MutableStateFlow(false)
-        val refreshing = _refreshing.asStateFlow()
-        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
-        val refreshNotice = _refreshNotice.asStateFlow()
+        fun load() = copy.load()
 
-        private fun householdViewer(): Boolean =
-            homesRepo.myHomesCopy()?.homes?.any { it.id == homeId && it.showsCopyBeforeRecheck } == true
-
-        // These pages contain private verification/financial panels; they always reopen with a re-check.
-        private val sensitiveGroup: Boolean get() = group == PlaceDetailGroup.IDENTITY || group == PlaceDetailGroup.MONEY
-
-        fun load() {
-            visible = true
-            read(force = false)
-        }
-
-        fun refresh() = read(force = true)
+        fun refresh() = copy.refresh()
 
         fun suspendContent() {
             if (!visible) return
-            visible = false
-            pageGeneration++
-            readJob?.cancel()
-            _refreshing.value = false
+            copy.pause()
             _letters.value = ResidencyLetterUiState.Loading
             _claims.value = ResidencyClaimsUiState.Loading
             _rateWatch.value = RateWatchUiState.Loading
             _rentReport.value = RealRentUiState.Loading
             _claimLinkToCopy.value = null
-            if (!householdViewer() || sensitiveGroup) {
-                _state.value = PlaceDetailUiState.Loading
-                _refreshNotice.value = null
-            }
-            if (!householdViewer()) repo.forgetPlace(homeId)
-        }
-
-        private fun read(force: Boolean) {
-            if (readJob?.isActive == true || !visible) return
-            val household = householdViewer()
-            if (_state.value !is PlaceDetailUiState.Loaded) {
-                val copy = repo.placeCopy(homeId)?.takeIf { household && !sensitiveGroup && !it.nonResidentViewer }
-                _state.value = copy?.let { PlaceDetailUiState.Loaded(it) } ?: PlaceDetailUiState.Loading
-            }
-            _refreshing.value = force && _state.value is PlaceDetailUiState.Loaded
-            val generation = pageGeneration
-            readJob = viewModelScope.launch {
-                val homes = homesRepo.myHomesStored(force || !household)
-                if (!visible || generation != pageGeneration) return@launch
-                val canKeep = householdViewer()
-                if (!canKeep) {
-                    repo.forgetPlace(homeId)
-                    _state.value = PlaceDetailUiState.Loading
-                }
-                val stored = when {
-                    homes.data?.homes?.none { it.id == homeId } != false ->
-                        Stored(failure = homes.failure ?: NetworkError.NotFound)
-                    !canKeep && homes.failure != null -> Stored(failure = homes.failure)
-                    else -> repo.placeStored(homeId, force || !canKeep || sensitiveGroup, persist = canKeep)
-                }
-                if (!visible || generation != pageGeneration) return@launch
-                val data = stored.data.takeUnless { (sensitiveGroup || !canKeep) && stored.failure != null }
-                _refreshing.value = false
-                _refreshNotice.value =
-                    if (stored.showsRefreshFailure(StoreKind.PLACE)) RefreshNotice(stored.fetchedAt, ::refresh) else null
-                when {
-                    data != null -> _state.value = PlaceDetailUiState.Loaded(data)
-                    stored.failure.refusesStoredCopy -> {
-                            _state.value = PlaceDetailUiState.Error(
-                                stored.failure?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.",
-                                denied = stored.failure is NetworkError.Forbidden,
-                            )
-                    }
-                        _state.value !is PlaceDetailUiState.Loaded ->
-                            _state.value = PlaceDetailUiState.Error(
-                                stored.failure?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.",
-                            )
-                }
-            }
         }
 
         // ── Residency letters (Identity detail, T4) ──────────────
@@ -924,14 +861,7 @@ class PlaceDetailViewModel
              * not do it for them, and the confirmation must not imply we
              * did.
              */
-            internal fun removalSavedMessage(status: UnlistedRemovalStatus): String =
-                when (status) {
-                    UnlistedRemovalStatus.TODO -> "Marked as still to do."
-                    UnlistedRemovalStatus.REQUESTED -> "Noted — you've sent the request."
-                    UnlistedRemovalStatus.CONFIRMED -> "Noted — you've confirmed the removal."
-                    UnlistedRemovalStatus.RELISTED -> "Noted — the site has put you back."
-                    UnlistedRemovalStatus.UNKNOWN -> "Saved."
-                }
+            internal fun removalSavedMessage(status: UnlistedRemovalStatus): String = removalStatusMessage(status)
 
             /** Whatever the viewer typed, refused in their own terms. */
             internal const val RENT_AMOUNT_MESSAGE = "Enter the amount you pay each month, like 2150."
@@ -944,8 +874,6 @@ class PlaceDetailViewModel
              */
             internal const val VERIFICATION_REQUIRED_MESSAGE =
                 "Verify your address to add your rent — a benchmark is only real if the people in it live there."
-
-            private const val FORBIDDEN_CODE = 403
 
 
             /**
@@ -976,15 +904,7 @@ class PlaceDetailViewModel
              * 400 already does instead of the shared client's canned
              * "You don't have permission to do that."
              */
-            internal fun rentWriteMessage(
-                error: NetworkError,
-                fallback: String,
-            ): String =
-                when {
-                    error is NetworkError.Forbidden -> VERIFICATION_REQUIRED_MESSAGE
-                    error.code == FORBIDDEN_CODE -> error.displayMessage(VERIFICATION_REQUIRED_MESSAGE)
-                    else -> error.displayMessage(fallback)
-                }
+            internal fun rentWriteMessage(error: NetworkError, fallback: String): String = rentFailureMessage(error, fallback)
         }
     }
 
@@ -1126,4 +1046,114 @@ private fun parsedBedrooms(raw: String): Int? {
     // refused (null = omit) rather than reinterpreted.
     val n = trimmed.toIntOrNull() ?: return null
     return if (n in 0..MAX_BEDROOMS) n else null
+}
+
+
+private fun removalStatusMessage(status: UnlistedRemovalStatus): String =
+    when (status) {
+        UnlistedRemovalStatus.TODO -> "Marked as still to do."
+        UnlistedRemovalStatus.REQUESTED -> "Noted — you've sent the request."
+        UnlistedRemovalStatus.CONFIRMED -> "Noted — you've confirmed the removal."
+        UnlistedRemovalStatus.RELISTED -> "Noted — the site has put you back."
+        UnlistedRemovalStatus.UNKNOWN -> "Saved."
+    }
+
+private fun rentFailureMessage(
+    error: NetworkError,
+    fallback: String,
+): String =
+    when {
+        error is NetworkError.Forbidden -> PlaceDetailViewModel.VERIFICATION_REQUIRED_MESSAGE
+        error.code == java.net.HttpURLConnection.HTTP_FORBIDDEN -> error.displayMessage(PlaceDetailViewModel.VERIFICATION_REQUIRED_MESSAGE)
+        else -> error.displayMessage(fallback)
+    }
+
+
+/** Role-aware Place read state; the view model owns the page's independent forms and sensitive panels. */
+private class PlaceDetailCopy(
+    private val repo: PlaceRepository,
+    private val homes: HomesRepository,
+    private val homeId: String,
+    private val group: PlaceDetailGroup,
+    private val scope: CoroutineScope,
+) {
+    val state = MutableStateFlow<PlaceDetailUiState>(PlaceDetailUiState.Loading)
+    val refreshing = MutableStateFlow(false)
+    val refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+    var visible = true
+        private set
+    var generation = 0L
+        private set
+    private var readJob: Job? = null
+    private val sensitive: Boolean get() = group == PlaceDetailGroup.IDENTITY || group == PlaceDetailGroup.MONEY
+
+    fun load() {
+        visible = true
+        read(force = false)
+    }
+
+    fun refresh() = read(force = true)
+
+    fun pause() {
+        if (!visible) return
+        visible = false
+        generation++
+        readJob?.cancel()
+        refreshing.value = false
+        if (!household() || sensitive) {
+            state.value = PlaceDetailUiState.Loading
+            refreshNotice.value = null
+        }
+        if (!household()) repo.forgetPlace(homeId)
+    }
+
+    private fun household(): Boolean = homes.myHomesCopy()?.homes?.any { it.id == homeId && it.showsCopyBeforeRecheck } == true
+
+    private fun current(version: Long): Boolean = visible && generation == version
+
+    private fun read(force: Boolean) {
+        if (readJob?.isActive == true || !visible) return
+        if (state.value !is PlaceDetailUiState.Loaded) {
+            val stored = repo.placeCopy(homeId)?.takeIf { household() && !sensitive && !it.nonResidentViewer }
+            state.value = stored?.let { PlaceDetailUiState.Loaded(it) } ?: PlaceDetailUiState.Loading
+        }
+        refreshing.value = force && state.value is PlaceDetailUiState.Loaded
+        val version = generation
+        readJob = scope.launch {
+            val stored = readAuthorized(force, version)
+            if (!current(version)) return@launch
+            refreshing.value = false
+            refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.PLACE) }
+            publish(stored)
+        }
+    }
+
+    private suspend fun readAuthorized(force: Boolean, version: Long): Stored<PlaceIntelligence> {
+        val access = homes.myHomesStored(force || !household())
+        if (!current(version)) return Stored()
+        val keep = household()
+        if (!keep) {
+            repo.forgetPlace(homeId)
+            state.value = PlaceDetailUiState.Loading
+        }
+        return when {
+            access.data?.homes?.none { it.id == homeId } != false -> Stored(failure = access.failure ?: NetworkError.NotFound)
+            !keep && access.failure != null -> Stored(failure = access.failure)
+            else -> repo.placeStored(homeId, force || !keep || sensitive, persist = keep)
+        }
+    }
+
+    private fun publish(stored: Stored<PlaceIntelligence>) {
+        val data = stored.data.takeUnless { (sensitive || !household()) && stored.failure != null }
+        when {
+            data != null -> state.value = PlaceDetailUiState.Loaded(data)
+            stored.failure.refusesStoredCopy -> state.value = failure(stored.failure)
+            state.value !is PlaceDetailUiState.Loaded -> state.value = failure(stored.failure)
+        }
+    }
+
+    private fun failure(error: NetworkError?): PlaceDetailUiState.Error = PlaceDetailUiState.Error(
+        error?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.",
+        denied = error is NetworkError.Forbidden,
+    )
 }
