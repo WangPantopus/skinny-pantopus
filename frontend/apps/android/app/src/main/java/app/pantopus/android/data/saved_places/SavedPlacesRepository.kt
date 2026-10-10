@@ -50,8 +50,8 @@ class SavedPlacesRepository
 
         private fun <T> NetworkResult<T>.changed(): NetworkResult<T> = also {
             if (it is NetworkResult.Success) {
-                store.markStale(StoreTopics.HOMES)
-                store.markStale(StoreTopics.TODAY)
+                store.markEdited(StoreTopics.HOMES)
+                store.markEdited(StoreTopics.TODAY)
             }
         }
     }

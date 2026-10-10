@@ -293,7 +293,7 @@ class PostsRepository
 
         /** An own post created, edited, deleted or archived: every feed's stored first page goes out of date. */
         private fun markPostsChanged(result: NetworkResult<*>) {
-            if (result is NetworkResult.Success) store.markStale(StoreTopics.POSTS)
+            if (result is NetworkResult.Success) store.markEdited(StoreTopics.POSTS)
         }
 
         /** An own action on a post (a like, a comment, a save, a repost): its stored copy goes out of date. */
@@ -301,7 +301,10 @@ class PostsRepository
             postId: String,
             result: NetworkResult<*>,
         ) {
-            if (result is NetworkResult.Success) store.markStale("post:$postId")
+            if (result is NetworkResult.Success) {
+                store.markEdited("post:$postId")
+                store.markEdited(StoreTopics.POSTS)
+            }
         }
     }
 

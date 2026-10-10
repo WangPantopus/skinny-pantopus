@@ -35,7 +35,7 @@ class PrivacyRepository
             }.also {
                 if (it is NetworkResult.Success) {
                     store.remove(StoreKeys.privacySettings)
-                    store.markStale(StoreTopics.PROFILE_ME)
+                    store.markEdited(StoreTopics.PROFILE_ME)
                 }
             }
 

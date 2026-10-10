@@ -53,7 +53,7 @@ class ProfileRepository
 
         /** `PATCH /api/users/profile` — route `backend/routes/users.js:2052`. */
         suspend fun updateProfile(body: ProfileUpdateRequest): NetworkResult<ProfileUpdateResponse> =
-            safeApiCall { api.updateProfile(body) }.also { if (it is NetworkResult.Success) store.markStale(StoreTopics.PROFILE_ME) }
+            safeApiCall { api.updateProfile(body) }.also { if (it is NetworkResult.Success) store.markEdited(StoreTopics.PROFILE_ME) }
 
         /**
          * `PUT /api/users/skills` — replace the caller's whole skill
@@ -62,7 +62,7 @@ class ProfileRepository
          */
         suspend fun updateSkills(skills: List<String>): NetworkResult<UpdateSkillsResponse> =
             safeApiCall { api.updateSkills(UpdateSkillsRequest(skills = skills)) }
-                .also { if (it is NetworkResult.Success) store.markStale(StoreTopics.PROFILE_ME) }
+                .also { if (it is NetworkResult.Success) store.markEdited(StoreTopics.PROFILE_ME) }
 
         /**
          * `GET /api/users/username-availability?username=` — can the signed-in person change their

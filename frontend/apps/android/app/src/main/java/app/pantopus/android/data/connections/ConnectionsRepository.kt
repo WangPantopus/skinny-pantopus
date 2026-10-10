@@ -61,6 +61,6 @@ class ConnectionsRepository
          */
         suspend fun unblock(id: String): NetworkResult<RelationshipActionEcho> = safeApiCall { api.unblock(id) }.changed()
         private fun <T> NetworkResult<T>.changed(): NetworkResult<T> = also {
-            if (it is NetworkResult.Success) store.markStale(StoreTopics.PROFILE_ME)
+            if (it is NetworkResult.Success) store.markEdited(StoreTopics.PROFILE_ME)
         }
     }

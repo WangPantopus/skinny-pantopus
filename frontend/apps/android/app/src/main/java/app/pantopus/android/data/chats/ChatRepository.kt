@@ -65,7 +65,7 @@ class ChatRepository
         fun conversationsChanged() = store.markStale(StoreTopics.CHATS)
 
         /** An own edit to a conversation (contract §8: a message sent or read, a chat created): the list reads again. */
-        private fun <T> NetworkResult<T>.chatsChanged(): NetworkResult<T> = also { if (it is NetworkResult.Success) conversationsChanged() }
+        private fun <T> NetworkResult<T>.chatsChanged(): NetworkResult<T> = also { if (it is NetworkResult.Success) store.markEdited(StoreTopics.CHATS) }
 
         suspend fun unifiedConversations(limit: Int = 100, force: Boolean = false): NetworkResult<UnifiedConversationsResponse> {
             val stored = conversationsStored(force)

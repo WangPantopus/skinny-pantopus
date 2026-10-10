@@ -80,6 +80,6 @@ class RelationshipsRepository
          */
         suspend fun reject(id: String): NetworkResult<RelationshipActionEcho> = safeApiCall { api.reject(id) }.changed()
         private fun <T> NetworkResult<T>.changed(): NetworkResult<T> = also {
-            if (it is NetworkResult.Success) store.markStale(StoreTopics.PROFILE_ME)
+            if (it is NetworkResult.Success) store.markEdited(StoreTopics.PROFILE_ME)
         }
     }

@@ -108,6 +108,7 @@ class PulsePostDetailViewModel
         private val _savePending = MutableStateFlow(false)
         val savePending: StateFlow<Boolean> = _savePending.asStateFlow()
 
+        private var reactionRevision = 0L
         private var composerRevision = 0L
         private var pendingComment: PostCommentRequest? = null
         private val _composerText = MutableStateFlow("")
@@ -253,6 +254,7 @@ class PulsePostDetailViewModel
             val loaded = _state.value as? PulsePostDetailUiState.Loaded ?: return
             if (!kind.isBackendWired || _likePending.value) return
             _likePending.value = true
+            reactionRevision++
             val initialReactions = loaded.content.reactions
             val wasOn = initialReactions.userReaction == PostReactionKind.Helpful
             if (wasOn) _selectedReactionEmoji.value = null
@@ -293,6 +295,8 @@ class PulsePostDetailViewModel
                 }
                 } finally {
                     _likePending.value = false
+                    reactionRevision++
+                    load()
                 }
             }
         }
@@ -382,6 +386,7 @@ class PulsePostDetailViewModel
         fun toggleSave() {
             if (_savePending.value) return
             _savePending.value = true
+            reactionRevision++
             val before = _isSaved.value
             _isSaved.value = !before
             viewModelScope.launch {
@@ -399,6 +404,8 @@ class PulsePostDetailViewModel
                 }
                 } finally {
                     _savePending.value = false
+                    reactionRevision++
+                    load()
                 }
             }
         }
@@ -474,9 +481,12 @@ class PulsePostDetailViewModel
          * you) shows its answer.
          */
         private suspend fun fetch(force: Boolean) {
+            val revision = reactionRevision
             val stored = repo.detailStored(postId, force)
             val failure = stored.failure
             val gone = failure == NetworkError.NotFound || failure is NetworkError.Forbidden || failure == NetworkError.Unauthorized
+            // Refusals always clear content; an older read cannot undo a pending or just-confirmed tap.
+            if (!gone && (revision != reactionRevision || _likePending.value || _savePending.value)) return
             val detail = stored.data
             if (detail != null && !gone) {
                 _commentsLoading.value = false

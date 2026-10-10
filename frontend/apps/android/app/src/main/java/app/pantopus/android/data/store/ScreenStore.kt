@@ -203,6 +203,22 @@ class ScreenStore
             _changes.update { it + 1 }
         }
 
+        /** An own write without a full replacement: retire earlier reads and saved copies before revalidation. */
+        fun markEdited(topic: String) {
+            synchronized(slots) {
+                slots.values.filter { it.key.matches(topic) }.forEach { slot ->
+                    slot.edits++
+                    slot.markStaleLocked()
+                    slot.etag = null
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    deleteSaved(slot.key.id)
+                }
+            }
+            _changes.update { it + 1 }
+        }
+
         /**
          * Own edit (contract §6): the server's reply to a save becomes the entry, counted as read now. The old ETag no
          * longer names it, so the next read after the window asks without one.
@@ -283,13 +299,13 @@ class ScreenStore
             return slot
         }
 
-        /** Deletes an entry's saved copy off the caller's thread (access ended, the entry was removed). */
+        /** Remove the saved entry before returning, so an immediate relaunch cannot restore refused or edited data. */
         private fun deleteSaved(
             keyId: String,
             account: String? = accountId(),
         ) {
             if (account == null) return
-            scope.launch { synchronized(diskLock) { saved.delete(account, keyId) } }
+            synchronized(diskLock) { saved.delete(account, keyId) }
         }
 
         /** A new entry starts from its saved copy on the phone, when there is a usable one (contract §6 "Read"). */
@@ -378,7 +394,7 @@ class ScreenStore
                                 }
                             }
                         is NetworkResult.Failure ->
-                            if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) {
+                            if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) {
                                 // Access ended: the entry goes at once, from the phone too, and the screen shows
                                 // the server's answer.
                                 slot.etag = null

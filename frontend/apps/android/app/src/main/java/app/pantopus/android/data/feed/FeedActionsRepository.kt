@@ -93,11 +93,11 @@ class FeedActionsRepository
             safeApiCall { api.updateFeedPreferences(body) }.also { result ->
                 if (result is NetworkResult.Success) {
                     store.remove(StoreKeys.feedPreferences)
-                    store.markStale(StoreTopics.PROFILE_ME)
-                    store.markStale(StoreTopics.POSTS)
+                    store.markEdited(StoreTopics.PROFILE_ME)
+                    store.markEdited(StoreTopics.POSTS)
                 }
             }
 
         private fun <T> NetworkResult<T>.feedChanged(): NetworkResult<T> =
-            also { if (it is NetworkResult.Success) store.markStale(StoreTopics.POSTS) }
+            also { if (it is NetworkResult.Success) store.markEdited(StoreTopics.POSTS) }
     }

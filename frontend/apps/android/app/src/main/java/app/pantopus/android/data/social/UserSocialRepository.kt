@@ -48,7 +48,7 @@ class UserSocialRepository
         suspend fun relationship(userId: String): NetworkResult<UserRelationshipDto> = safeApiCall { api.relationship(userId) }
 
         private fun <T> NetworkResult<T>.changed(): NetworkResult<T> = also {
-            if (it is NetworkResult.Success) store.markStale(StoreTopics.PROFILE_ME)
+            if (it is NetworkResult.Success) store.markEdited(StoreTopics.PROFILE_ME)
         }
 
         companion object {
