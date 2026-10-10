@@ -137,8 +137,9 @@ class PlaceRepository
         suspend fun todayStored(
             homeId: String,
             force: Boolean = false,
+            persist: Boolean = false,
         ): Stored<PlaceIntelligence> =
-            store.read(StoreKeys.today(homeId), force) { etag ->
+            store.read(StoreKeys.today(homeId), force, persist) { etag ->
                 conditionalApiCall { placeApi.intelligenceConditional(homeId, StoreKeys.todaySectionsQuery, etag) }
             }
 
@@ -163,6 +164,9 @@ class PlaceRepository
 
         /** Drops the stored Place (a viewer whose copy may not be kept, leaving the screen). */
         fun forgetPlace(homeId: String) = store.remove(StoreKeys.place(homeId))
+
+        /** Home-linked Today includes household calendar data, so temporary access leaves no saved copy. */
+        fun forgetToday(homeId: String) = store.remove(StoreKeys.today(homeId))
 
         /** True while the home's stored Today is fresh and no topic marked it out of date (coming back reads nothing). */
         fun todayIsCurrent(homeId: String): Boolean = store.isCurrent(StoreKeys.today(homeId))
