@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.PantopusColors
@@ -92,6 +93,7 @@ fun OwnersListScreen(
     onBack: () -> Unit,
     viewModel: OwnersListViewModel = hiltViewModel(),
 ) {
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_owners", state.showsContent())
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
@@ -104,7 +106,6 @@ fun OwnersListScreen(
     val refreshAfterTransfer = rememberRefreshAfterTransfer { viewModel.refresh() }
 
     LaunchedEffect(Unit) {
-        viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenOwnersListViewed)
     }
 

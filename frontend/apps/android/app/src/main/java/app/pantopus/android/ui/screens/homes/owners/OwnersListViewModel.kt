@@ -92,6 +92,7 @@ class OwnersListViewModel
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.owners(homeId), HomeStoreKeys.me(homeId)))
         private var readGeneration = 0L
+        private var active = true
 
         /** Pull to refresh is reading while the rows stay (Instant Screens): the pull indicator only. */
         private val _refreshing = MutableStateFlow(false)
@@ -115,11 +116,18 @@ class OwnersListViewModel
         private val _removalError = MutableStateFlow<String?>(null)
         val removalError: StateFlow<String?> = _removalError.asStateFlow()
 
+        /** The viewer's last known access (a copy's too): enough to show the roster. */
         private val _access = MutableStateFlow<HomeAccessDto?>(null)
-        val access: StateFlow<HomeAccessDto?> = _access.asStateFlow()
+
+        /**
+         * Invite, transfer and remove wait until this visit's access read confirms them; a copy's access only shows
+         * the roster (as on iOS).
+         */
+        private val _confirmedAccess = MutableStateFlow<HomeAccessDto?>(null)
+        val access: StateFlow<HomeAccessDto?> = _confirmedAccess.asStateFlow()
 
         private val canManageOwnership: Boolean
-            get() = _access.value?.can("ownership.manage") == true
+            get() = _confirmedAccess.value?.can("ownership.manage") == true
 
         /** Cached roster — preserves backend ordering and drives
          *  optimistic-remove rollback. */
@@ -130,6 +138,7 @@ class OwnersListViewModel
          * answers a fresh copy without a request or revalidates an older one quietly.
          */
         fun load() {
+            active = true
             if (_access.value == null && gate.showsCopy) showStoredCopy()
             reload(force = false)
         }
@@ -138,6 +147,23 @@ class OwnersListViewModel
         fun refresh() {
             _refreshing.value = _access.value != null
             reload(force = true)
+        }
+
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            _confirmedAccess.value = null
+            if (!gate.showsCopy) clearCopy()
+            gate.leave()
+        }
+
+        private fun clearCopy() {
+            owners = emptyList()
+            _access.value = null
+            _confirmedAccess.value = null
+            _refreshing.value = false
+            _refreshNotice.value = null
+            _state.value = ListOfRowsUiState.Loading
         }
 
         override fun onCleared() {
@@ -239,29 +265,35 @@ class OwnersListViewModel
         }
 
         private fun reload(force: Boolean) {
+            if (!active) return
+            _confirmedAccess.value = null
             val generation = ++readGeneration
             if (_access.value == null) _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
-                val fromCopy = gate.showsCopy && !force
-                var reads = readAll(fromCopy)
-                // Household access ended meanwhile: whatever came from a copy is read again now.
-                if (fromCopy && !gate.showsCopy) reads = readAll(fromCopy = false)
+                val reads = readAll(force, generation)
                 if (generation != readGeneration) return@launch
                 _refreshing.value = false
                 publish(reads.first, reads.second)
             }
         }
 
-        /** The roster and the viewer's access, read side by side with the access re-check. */
-        private suspend fun readAll(fromCopy: Boolean): Pair<Stored<OwnersResponse>, Stored<HomeAccessDto>> =
-            coroutineScope {
-                val force = !fromCopy
-                val recheck = async { gate.recheck(force) }
-                val roster = async { repo.listStored(homeId, force) }
-                val access = async { adminRepo.myAccessStored(homeId, force) }
-                recheck.await()
-                roster.await() to access.await()
+        /** An authority refusal clears the roster before another read could return a fallback copy. */
+        private suspend fun readAll(
+            force: Boolean,
+            generation: Long,
+        ): Pair<Stored<OwnersResponse>, Stored<HomeAccessDto>> {
+            val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (refusal != null) return Stored<OwnersResponse>(failure = refusal) to Stored(failure = refusal)
+            if (generation != readGeneration) return Stored<OwnersResponse>() to Stored()
+            return coroutineScope {
+                val readNow = force || !gate.showsCopy
+                val roster = async { repo.listStored(homeId, readNow) }
+                val access = async { adminRepo.myAccessStored(homeId, readNow) }
+                val stored = roster.await()
+                val rows = if (!gate.showsCopy && stored.failure != null) Stored<OwnersResponse>(failure = stored.failure) else stored
+                rows to access.await()
             }
+        }
 
         private fun publish(
             roster: Stored<OwnersResponse>,
@@ -272,11 +304,15 @@ class OwnersListViewModel
             when {
                 list != null && viewer != null -> {
                     _access.value = viewer
+                    // Confirmed = the server answered for this access within the Homes window (a fresh copy or this read);
+                    // an older copy kept after a failed re-read (offline) shows the roster but confirms nothing.
+                    _confirmedAccess.value = viewer.takeIf { access.isFresh(StoreKind.HOMES) }
                     owners = list.owners
                     applyState()
                 }
                 list != null -> {
                     _access.value = null
+                    _confirmedAccess.value = null
                     _state.value =
                         ListOfRowsUiState.Error(
                             (access.failure ?: NetworkError.NotFound).displayMessage("Couldn't load owner permissions."),
@@ -284,6 +320,7 @@ class OwnersListViewModel
                 }
                 roster.failure is NetworkError.Forbidden -> {
                     _access.value = null
+                    _confirmedAccess.value = null
                     // Not (or no longer) an owner, e.g. right after transferring
                     // the Home: a retry can't change that, so say so plainly.
                     _state.value =
@@ -295,6 +332,7 @@ class OwnersListViewModel
                 }
                 else -> {
                     _access.value = null
+                    _confirmedAccess.value = null
                     _state.value =
                         ListOfRowsUiState.Error((roster.failure ?: NetworkError.NotFound).displayMessage("Couldn't load the list."))
                 }
