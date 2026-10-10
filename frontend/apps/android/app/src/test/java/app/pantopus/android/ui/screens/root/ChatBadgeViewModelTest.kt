@@ -34,6 +34,8 @@ class ChatBadgeViewModelTest {
         every { socket.eventsOf(any()) } returns emptyFlow()
         every { socket.connectionState } returns MutableStateFlow(SocketManager.ConnectionState.Disconnected)
         every { preferences.mutedKeys() } returns emptySet()
+        // No saved list on the phone in these tests.
+        every { repo.conversationsCopy() } returns null
     }
 
     @After fun tearDown() {
