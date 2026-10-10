@@ -39,8 +39,6 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -276,6 +274,7 @@ class HouseholdTasksListViewModel
                 memberNames = emptyMap()
                 _state.value = ListOfRowsUiState.Loading
             }
+            gate?.leave()
         }
 
         /** Pull to refresh and Retry: read now. */
@@ -296,9 +295,7 @@ class HouseholdTasksListViewModel
                 viewModelScope.launch {
                     taskAttempt(revision) {
                         val fromCopy = showsCopy && !force
-                        var stored = readTasks(fromCopy)
-                        // Household access ended meanwhile: whatever came from a copy is read again now.
-                        if (fromCopy && !showsCopy) stored = readTasks(fromCopy = false)
+                        val stored = readTasks(fromCopy)
                         if (!current(revision)) return@taskAttempt
                         _refreshing.value = false
                         val result = stored.data ?: throw (stored.failure ?: NetworkError.NotFound)
@@ -311,14 +308,17 @@ class HouseholdTasksListViewModel
                 }
         }
 
-        /** The task list, read side by side with the access re-check; checked like a direct read. */
-        private suspend fun readTasks(fromCopy: Boolean): Stored<GetHomeTasksResponse> =
-            coroutineScope {
-                val recheck = async { gate?.recheck(!fromCopy) }
-                val list = async { access.listStored(force = !fromCopy) }
-                recheck.await()
-                list.await()
+        /** An explicit authority refusal wins before any task copy is used. */
+        private suspend fun readTasks(fromCopy: Boolean): Stored<GetHomeTasksResponse> {
+            val refusal = gate?.checkForRead(!fromCopy) {
+                clearContent()
+                memberNames = emptyMap()
+                _state.value = ListOfRowsUiState.Loading
             }
+            if (refusal != null) return Stored(failure = refusal)
+            val stored = access.listStored(force = !fromCopy || !showsCopy)
+            return if (!showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
+        }
 
         private fun showStoredCopy() {
             val stored = access.storedList() ?: return

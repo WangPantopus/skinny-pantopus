@@ -7,16 +7,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
+import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -87,6 +87,7 @@ class HouseholdTaskDetailViewModel
             inFlight = false
             // Founder decision 3: owners and household roles keep the task on screen while away; anyone else blanks.
             if (!showsCopy) _state.value = HouseholdTaskDetailState()
+            gate?.leave()
         }
 
         /**
@@ -111,19 +112,19 @@ class HouseholdTaskDetailViewModel
 
         private suspend fun readTask(force: Boolean): HomeTaskDto {
             val fromCopy = showsCopy && !force
-            var stored = readTaskStored(fromCopy)
-            // Household access ended meanwhile: whatever came from a copy is read again now.
-            if (fromCopy && !showsCopy) stored = readTaskStored(fromCopy = false)
+            val stored = readTaskStored(fromCopy)
             return stored.data?.task ?: throw (stored.failure ?: NetworkError.NotFound)
         }
 
-        private suspend fun readTaskStored(fromCopy: Boolean) =
-            coroutineScope {
-                val recheck = async { gate?.recheck(!fromCopy) }
-                val task = async { access.readStored(taskId, force = !fromCopy) }
-                recheck.await()
-                task.await()
+        private suspend fun readTaskStored(fromCopy: Boolean): Stored<HomeTaskResponse> {
+            val refusal = gate?.checkForRead(!fromCopy) {
+                memberNames = null
+                _state.value = HouseholdTaskDetailState()
             }
+            if (refusal != null) return Stored(failure = refusal)
+            val stored = access.readStored(taskId, force = !fromCopy || !showsCopy)
+            return if (!showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
+        }
 
         /** Only this exact current account's task arrival can be completed. */
         fun finishArrival() {
