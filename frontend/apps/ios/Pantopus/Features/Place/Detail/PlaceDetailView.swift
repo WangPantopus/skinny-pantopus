@@ -31,7 +31,7 @@ struct PlaceDetailView: View {
         .task { await viewModel.load() }
         // The home or today's conditions changed: the open page re-reads, its copy staying shown.
         .refreshesOnStoreChange(
-            affects: { viewModel.isAffected(by: $0) },
+            affects: viewModel.isAffected(by:),
             onBackground: viewModel.discardTemporaryCopy
         ) { await viewModel.refreshIfStale() }
         .onDisappear { viewModel.discardTemporaryCopy() }
