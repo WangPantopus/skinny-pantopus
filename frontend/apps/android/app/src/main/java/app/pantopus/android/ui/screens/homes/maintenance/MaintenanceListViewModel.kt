@@ -5,12 +5,14 @@ package app.pantopus.android.ui.screens.homes.maintenance
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.homes.GetHomeMaintenanceResponse
 import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
@@ -31,8 +33,6 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -158,6 +158,7 @@ class MaintenanceListViewModel
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.maintenance(homeId)))
         private var readGeneration = 0L
+        private var active = true
         private var onOpenTask: (String) -> Unit = {}
         private var onAddTask: () -> Unit = {}
         private var onOpenIssues: (() -> Unit)? = null
@@ -181,6 +182,7 @@ class MaintenanceListViewModel
          * deleted from the form or the detail marked the copy out of date, so the return reads it again.
          */
         fun load() {
+            active = true
             if (tasks == null && gate.showsCopy) repo.storedMaintenance(homeId)?.let { applySuccess(it.tasks) }
             read(force = false)
         }
@@ -191,18 +193,33 @@ class MaintenanceListViewModel
             read(force = true)
         }
 
+        /** No presentation or pending read survives a guest/expiring screen leaving the foreground. */
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            if (!gate.showsCopy) clearCopy()
+            gate.leave()
+        }
+
+        private fun clearCopy() {
+            tasks = null
+            _tabs.value = initialTabs()
+            _banner.value = null
+            _refreshing.value = false
+            _refreshNotice.value = null
+            _state.value = ListOfRowsUiState.Loading
+        }
+
         override fun onCleared() {
             gate.leave()
         }
 
         private fun read(force: Boolean) {
+            if (!active) return
             val generation = ++readGeneration
             if (tasks == null) _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
-                val fromCopy = gate.showsCopy && !force
-                var stored = readLog(force = !fromCopy)
-                // Household access ended meanwhile: whatever came from a copy is read again now.
-                if (fromCopy && !gate.showsCopy) stored = readLog(force = true)
+                val stored = readLog(force, generation)
                 if (generation != readGeneration) return@launch
                 _refreshing.value = false
                 val loaded = stored.data
@@ -218,13 +235,17 @@ class MaintenanceListViewModel
             }
         }
 
-        private suspend fun readLog(force: Boolean) =
-            coroutineScope {
-                val recheck = async { gate.recheck(force) }
-                val log = async { repo.getHomeMaintenanceStored(homeId, force) }
-                recheck.await()
-                log.await()
-            }
+        private suspend fun readLog(
+            force: Boolean,
+            generation: Long,
+        ): Stored<GetHomeMaintenanceResponse> {
+            val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (refusal != null) return Stored(failure = refusal)
+            if (generation != readGeneration) return Stored()
+            val stored = repo.getHomeMaintenanceStored(homeId, force || !gate.showsCopy)
+            // Guests cannot fall back to a previous visit's data after a failed forced read.
+            return if (!gate.showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
+        }
 
         fun selectTab(id: String) {
             _selectedTab.value = id
