@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
+import app.pantopus.android.data.storage.StorageUsage
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
@@ -43,6 +44,7 @@ class SettingsViewModelsTest {
     private val privacy: PrivacyRepository = mockk()
     private val auth: AuthRepository = mockk()
     private val profile: ProfileRepository = mockk()
+    private val storage: StorageUsage = mockk()
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -55,6 +57,8 @@ class SettingsViewModelsTest {
         coEvery { profile.ownProfile() } returns NetworkResult.Failure(NetworkError.NotFound)
         // The index reads the profile through the screens' store; here it reads the stubbed profile.
         every { profile.ownProfileCopy() } returns null
+        // Storage & data's size on the This phone row.
+        coEvery { storage.measure() } returns StorageUsage.Sizes(photos = 0L, savedPages = 0L, drafts = 0L)
         coEvery { profile.ownProfileStored(any()) } coAnswers {
             when (val result = profile.ownProfile()) {
                 is NetworkResult.Success -> Stored(result.data, fetchedAt = System.currentTimeMillis())
@@ -121,11 +125,11 @@ class SettingsViewModelsTest {
     @Test fun index_load_produces_all_expected_groups() =
         runTest {
             coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(emptyList()))
-            val vm = SettingsIndexViewModel(auth, privacy, profile)
+            val vm = SettingsIndexViewModel(auth, privacy, profile, storage)
             vm.load()
             val state = vm.state.value as GroupedListUiState.Loaded
             assertEquals(
-                listOf("account", "security", "privacy", "notifications", "payments", "support", "session"),
+                listOf("account", "security", "privacy", "notifications", "thisPhone", "payments", "support", "session"),
                 state.groups.map { it.id },
             )
             assertNull(state.groups.last().overline)
@@ -138,7 +142,7 @@ class SettingsViewModelsTest {
         runTest {
             coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(emptyList()))
             coEvery { profile.ownProfile() } returns NetworkResult.Success(profileResponse(verified = true))
-            val vm = SettingsIndexViewModel(auth, privacy, profile)
+            val vm = SettingsIndexViewModel(auth, privacy, profile, storage)
             vm.load()
             val control = verificationControl(vm.state.value as GroupedListUiState.Loaded)
             assertEquals(
@@ -151,7 +155,7 @@ class SettingsViewModelsTest {
         runTest {
             coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(emptyList()))
             coEvery { profile.ownProfile() } returns NetworkResult.Success(profileResponse(verified = false))
-            val vm = SettingsIndexViewModel(auth, privacy, profile)
+            val vm = SettingsIndexViewModel(auth, privacy, profile, storage)
             vm.load()
             val control = verificationControl(vm.state.value as GroupedListUiState.Loaded)
             assertEquals(
@@ -165,7 +169,7 @@ class SettingsViewModelsTest {
             coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(emptyList()))
             coEvery { profile.ownProfile() } returns
                 NetworkResult.Success(profileResponse(verified = true, visibility = "private"))
-            val vm = SettingsIndexViewModel(auth, privacy, profile)
+            val vm = SettingsIndexViewModel(auth, privacy, profile, storage)
             vm.load()
             val row =
                 (vm.state.value as GroupedListUiState.Loaded)
@@ -184,7 +188,7 @@ class SettingsViewModelsTest {
         runTest {
             coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(emptyList()))
             coEvery { profile.ownProfile() } returns NetworkResult.Failure(NetworkError.NotFound)
-            val vm = SettingsIndexViewModel(auth, privacy, profile)
+            val vm = SettingsIndexViewModel(auth, privacy, profile, storage)
             vm.load()
             assertEquals(RowControl.Chevron, verificationControl(vm.state.value as GroupedListUiState.Loaded))
         }

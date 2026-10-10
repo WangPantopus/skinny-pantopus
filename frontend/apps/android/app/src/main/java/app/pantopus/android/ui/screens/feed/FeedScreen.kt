@@ -115,6 +115,10 @@ fun FeedScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
+    app.pantopus.android.core.perf.ReportContentShown(
+        "pulse",
+        state is PulseFeedUiState.Loaded || state is PulseFeedUiState.Empty,
+    )
     val activeIntent by viewModel.activeIntent.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
@@ -330,7 +334,11 @@ fun FeedScreen(
                     is PulseFeedUiState.Loaded ->
                         PopulatedFrame(
                             state = s,
-                            onTapPost = onOpenPost,
+                            onTapPost = {
+                                app.pantopus.android.core.perf.ScreenTiming.navigationTapped("post")
+                                viewModel.seedPostForOpen(it)
+                                onOpenPost(it)
+                            },
                             onTapReaction = viewModel::tapReaction,
                             isRefreshing = isRefreshing,
                             onRefresh = viewModel::refresh,

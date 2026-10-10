@@ -2,6 +2,7 @@ package app.pantopus.android.ui.screens.root
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatRepository
@@ -32,6 +33,8 @@ class ChatBadgeViewModel
         private var serverTotalUnread: Int = 0
 
         init {
+            // A cold start shows the saved list's count at once (Instant Screens); the read below confirms it.
+            repo.conversationsCopy()?.let(::show)
             refresh()
             subscribeToSocket()
             subscribeToListSnapshots()
@@ -48,48 +51,53 @@ class ChatBadgeViewModel
                         Timber.w("Chat badge refresh failed: the Messages list is unavailable")
                         return@launch
                     }
-                serverTotalUnread = response.totalUnread ?: response.conversations.sumOf { it.totalUnread }
-                val conversations = response.conversations
-                val mutedKeys = preferences.mutedKeys()
-                val rows =
-                    conversations.map { dto ->
-                        val isRoom = dto.type == "room"
-                        val rowId =
-                            if (isRoom) {
-                                dto.id ?: dto.gigId ?: dto.homeId ?: "room"
-                            } else {
-                                dto.otherParticipantId ?: "person"
-                            }
-                        val storageKey =
-                            if (isRoom) {
-                                ChatConversationPreferences.roomKey(rowId)
-                            } else {
-                                ChatConversationPreferences.personKey(rowId)
-                            }
-                        app.pantopus.android.ui.screens.inbox.chat.ConversationRowContent(
-                            id = rowId,
-                            variant =
-                                if (isRoom) {
-                                    app.pantopus.android.ui.screens.inbox.chat.ConversationRowVariant.Group()
-                                } else {
-                                    app.pantopus.android.ui.screens.inbox.chat.ConversationRowVariant.Dm
-                                },
-                            displayName = rowId,
-                            initials = "?",
-                            avatarUrl = null,
-                            identityChip = null,
-                            verified = false,
-                            preview = "",
-                            timeLabel = "",
-                            unread = dto.totalUnread,
-                            pinned = false,
-                            topicKinds = emptySet(),
-                            storageKey = storageKey,
-                            isMuted = storageKey in mutedKeys,
-                        )
-                    }
-                applyAdjustedUnread(rows)
+                show(response)
             }
+        }
+
+        /** Projects a list reply onto the badge: the list's own unread total, adjusted for muted rows. */
+        private fun show(response: UnifiedConversationsResponse) {
+            serverTotalUnread = response.totalUnread ?: response.conversations.sumOf { it.totalUnread }
+            val conversations = response.conversations
+            val mutedKeys = preferences.mutedKeys()
+            val rows =
+                conversations.map { dto ->
+                    val isRoom = dto.type == "room"
+                    val rowId =
+                        if (isRoom) {
+                            dto.id ?: dto.gigId ?: dto.homeId ?: "room"
+                        } else {
+                            dto.otherParticipantId ?: "person"
+                        }
+                    val storageKey =
+                        if (isRoom) {
+                            ChatConversationPreferences.roomKey(rowId)
+                        } else {
+                            ChatConversationPreferences.personKey(rowId)
+                        }
+                    app.pantopus.android.ui.screens.inbox.chat.ConversationRowContent(
+                        id = rowId,
+                        variant =
+                            if (isRoom) {
+                                app.pantopus.android.ui.screens.inbox.chat.ConversationRowVariant.Group()
+                            } else {
+                                app.pantopus.android.ui.screens.inbox.chat.ConversationRowVariant.Dm
+                            },
+                        displayName = rowId,
+                        initials = "?",
+                        avatarUrl = null,
+                        identityChip = null,
+                        verified = false,
+                        preview = "",
+                        timeLabel = "",
+                        unread = dto.totalUnread,
+                        pinned = false,
+                        topicKinds = emptySet(),
+                        storageKey = storageKey,
+                        isMuted = storageKey in mutedKeys,
+                    )
+                }
+            applyAdjustedUnread(rows)
         }
 
         private fun subscribeToSocket() {
