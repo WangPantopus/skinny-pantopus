@@ -213,7 +213,12 @@ fun PulsePostCard(
                 onToggleRepost = onToggleRepost,
             )
             if (content.likePending || content.savePending) {
-                Text("Pending", fontSize = 11.sp, color = PantopusColors.appTextSecondary, modifier = Modifier.testTag("pulsePostPending_${content.id}"))
+                Text(
+                    "Pending",
+                    fontSize = 11.sp,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = Modifier.testTag("pulsePostPending_${content.id}"),
+                )
             }
         }
     }

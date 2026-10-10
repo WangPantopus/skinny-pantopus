@@ -22,11 +22,11 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.connections.ConnectionsRepository
-import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
 import app.pantopus.android.data.social.UserSocialRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.ProfileTab
 import io.mockk.coEvery
 import io.mockk.coVerify

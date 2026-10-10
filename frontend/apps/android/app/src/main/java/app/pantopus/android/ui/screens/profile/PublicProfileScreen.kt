@@ -31,16 +31,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import app.pantopus.android.ui.components.RefreshFailedLine
-import app.pantopus.android.ui.components.RefreshOnStoreChange
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.BeaconIdentity
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.screens.profile.tabs.ProfileGigReviewsSection
@@ -146,73 +146,73 @@ fun PublicProfileScreen(
         Column(Modifier.fillMaxSize()) {
             refreshNotice?.let { RefreshFailedLine(it, Modifier.padding(horizontal = Spacing.s4)) }
             Box(Modifier.weight(1f)) {
-        when (val s = state) {
-            PublicProfileUiState.Loading -> LoadingLayout(onBack = onBack)
-            is PublicProfileUiState.Error -> ErrorLayout(message = s.message, onRetry = { viewModel.refresh() }, onBack = onBack)
-            is PublicProfileUiState.Loaded -> {
-                val content = s.content
-                val neighbor = content.neighbor
-                if (content.kind == PublicProfileKind.Local && neighbor != null) {
-                    LocalProfileLoadedFrame(
-                        content = content,
-                        neighbor = neighbor,
-                        selectedTab = selectedLocalTab,
-                        connectState = connectState,
-                        onBack = onBack,
-                        onSelectTab = { viewModel.selectLocalTab(it) },
-                        onMessage = { onOpenMessages(content.profile) },
-                        onConnect = { viewModel.connect() },
-                        onOverflow = { viewModel.setShowOverflow(true) },
-                        follow =
-                            ProfileFollowState(
-                                canFollow = canFollow,
-                                isFollowing = isFollowing,
-                                isInFlight = isFollowInFlight,
-                                relationshipLoaded = relationshipLoaded,
-                            ),
-                        connection = connection,
-                        onFollow = { viewModel.follow() },
-                        onOpenGig = onOpenGig,
-                        onOpenProfile = onOpenProfile,
-                        postsLoadFailed = postsLoadFailed,
-                        onRetryPosts = { viewModel.refresh() },
-                    )
-                } else {
-                    PublicProfileLoadedFrame(
-                        content = content,
-                        selectedTab = selectedTab,
-                        connectState = connectState,
-                        onBack = onBack,
-                        onSelectTab = { viewModel.selectTab(it) },
-                        follow =
-                            ProfileFollowState(
-                                canFollow = canFollow,
-                                isFollowing = isFollowing,
-                                isInFlight = isFollowInFlight,
-                                relationshipLoaded = relationshipLoaded,
-                            ),
-                        connection = connection,
-                        onFollow = { viewModel.follow() },
-                        onMessage = { onOpenMessages(content.profile) },
-                        onConnect = { viewModel.connect() },
-                        onOverflow = { viewModel.setShowOverflow(true) },
-                        onUnlock = { post -> viewModel.unlockBroadcast(post.targetTierRank) },
-                        onOpenInsights = onOpenInsights,
-                        onEditPersona = onEditPersona,
-                        onComposeBroadcast = onComposeBroadcast,
-                        profileUserId = content.profile.id,
-                        onOpenGig = onOpenGig,
-                        onOpenProfile = onOpenProfile,
-                        receivedReviews = {
-                            // Launch cut #3 (Marketplace): no "Marketplace reviews" section.
-                            if (LaunchFeatures.marketplace) {
-                                ReceivedTransactionReviewsSection(userId = content.profile.id)
-                            }
-                        },
-                    )
+                when (val s = state) {
+                    PublicProfileUiState.Loading -> LoadingLayout(onBack = onBack)
+                    is PublicProfileUiState.Error -> ErrorLayout(message = s.message, onRetry = { viewModel.refresh() }, onBack = onBack)
+                    is PublicProfileUiState.Loaded -> {
+                        val content = s.content
+                        val neighbor = content.neighbor
+                        if (content.kind == PublicProfileKind.Local && neighbor != null) {
+                            LocalProfileLoadedFrame(
+                                content = content,
+                                neighbor = neighbor,
+                                selectedTab = selectedLocalTab,
+                                connectState = connectState,
+                                onBack = onBack,
+                                onSelectTab = { viewModel.selectLocalTab(it) },
+                                onMessage = { onOpenMessages(content.profile) },
+                                onConnect = { viewModel.connect() },
+                                onOverflow = { viewModel.setShowOverflow(true) },
+                                follow =
+                                    ProfileFollowState(
+                                        canFollow = canFollow,
+                                        isFollowing = isFollowing,
+                                        isInFlight = isFollowInFlight,
+                                        relationshipLoaded = relationshipLoaded,
+                                    ),
+                                connection = connection,
+                                onFollow = { viewModel.follow() },
+                                onOpenGig = onOpenGig,
+                                onOpenProfile = onOpenProfile,
+                                postsLoadFailed = postsLoadFailed,
+                                onRetryPosts = { viewModel.refresh() },
+                            )
+                        } else {
+                            PublicProfileLoadedFrame(
+                                content = content,
+                                selectedTab = selectedTab,
+                                connectState = connectState,
+                                onBack = onBack,
+                                onSelectTab = { viewModel.selectTab(it) },
+                                follow =
+                                    ProfileFollowState(
+                                        canFollow = canFollow,
+                                        isFollowing = isFollowing,
+                                        isInFlight = isFollowInFlight,
+                                        relationshipLoaded = relationshipLoaded,
+                                    ),
+                                connection = connection,
+                                onFollow = { viewModel.follow() },
+                                onMessage = { onOpenMessages(content.profile) },
+                                onConnect = { viewModel.connect() },
+                                onOverflow = { viewModel.setShowOverflow(true) },
+                                onUnlock = { post -> viewModel.unlockBroadcast(post.targetTierRank) },
+                                onOpenInsights = onOpenInsights,
+                                onEditPersona = onEditPersona,
+                                onComposeBroadcast = onComposeBroadcast,
+                                profileUserId = content.profile.id,
+                                onOpenGig = onOpenGig,
+                                onOpenProfile = onOpenProfile,
+                                receivedReviews = {
+                                    // Launch cut #3 (Marketplace): no "Marketplace reviews" section.
+                                    if (LaunchFeatures.marketplace) {
+                                        ReceivedTransactionReviewsSection(userId = content.profile.id)
+                                    }
+                                },
+                            )
+                        }
+                    }
                 }
-            }
-        }
             }
         }
         toast?.let { message ->

@@ -18,8 +18,8 @@ import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
 import app.pantopus.android.data.social.UserSocialRepository
 import app.pantopus.android.data.store.StoreKind
-import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.ProfileReviewCard
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.ProfileStatCell
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.ProfileTab
@@ -357,7 +357,16 @@ class PublicProfileViewModel
                 profileCopy().data?.let { profile ->
                     userId = profile.id
                     profileKind = derivedKind(profile)
-                    val feed = if (profileKind == PublicProfileKind.Local) posts.userPostsCopy(profile.id, 50, includeArchived = false).data?.posts.orEmpty().map(::project) else emptyList()
+                    val feed =
+                        if (profileKind == PublicProfileKind.Local) {
+                            posts.userPostsCopy(
+                                profile.id,
+                                50,
+                                includeArchived = false,
+                            ).data?.posts.orEmpty().map(::project)
+                        } else {
+                            emptyList()
+                        }
                     _state.value = PublicProfileUiState.Loaded(build(profile, profileKind, feed))
                 }
             }
@@ -372,9 +381,10 @@ class PublicProfileViewModel
 
         private fun profileIdentifier(): String = userId.takeIf { UserSocialRepository.isUuid(it) } ?: routeIdentifier.trim()
 
-        private fun profileCopy() = profileIdentifier().let { identifier ->
-            if (UserSocialRepository.isUuid(identifier)) repo.publicProfileCopy(identifier) else social.publicProfileCopy(identifier)
-        }
+        private fun profileCopy() =
+            profileIdentifier().let { identifier ->
+                if (UserSocialRepository.isUuid(identifier)) repo.publicProfileCopy(identifier) else social.publicProfileCopy(identifier)
+            }
 
         fun selectTab(tab: ProfileTab) {
             _selectedTab.value = tab
@@ -807,7 +817,10 @@ class PublicProfileViewModel
          * whole profile: the feed stays empty and [postsLoadFailed] makes it
          * offer Try again rather than the design's "Quiet for now" state.
          */
-        private suspend fun loadUserPosts(id: String, force: Boolean): List<PublicProfilePost> =
+        private suspend fun loadUserPosts(
+            id: String,
+            force: Boolean,
+        ): List<PublicProfilePost> =
             when (val result = posts.userPosts(id, force = force)) {
                 is NetworkResult.Success -> {
                     _postsLoadFailed.value = false

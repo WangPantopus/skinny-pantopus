@@ -203,14 +203,18 @@ class PostsRepository
             if (cursorCreatedAt != null || cursorId != null) {
                 return safeApiCall { api.userPosts(userId, limit, cursorCreatedAt, cursorId, includeArchived.takeIf { it }) }
             }
-            val stored = store.read(StoreKeys.userPosts(userId, limit, includeArchived), force) { etag ->
-                conditionalApiCall { api.userPostsConditional(userId, limit, includeArchived.takeIf { it }, etag) }
-            }
+            val stored =
+                store.read(StoreKeys.userPosts(userId, limit, includeArchived), force) { etag ->
+                    conditionalApiCall { api.userPostsConditional(userId, limit, includeArchived.takeIf { it }, etag) }
+                }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
-        fun userPostsCopy(userId: String, limit: Int, includeArchived: Boolean): Stored<MyPostsResponse> =
-            store.peek(StoreKeys.userPosts(userId, limit, includeArchived))
+        fun userPostsCopy(
+            userId: String,
+            limit: Int,
+            includeArchived: Boolean,
+        ): Stored<MyPostsResponse> = store.peek(StoreKeys.userPosts(userId, limit, includeArchived))
 
         /** `GET /api/posts/saved` — My posts' Saved tab. */
         suspend fun savedPosts(

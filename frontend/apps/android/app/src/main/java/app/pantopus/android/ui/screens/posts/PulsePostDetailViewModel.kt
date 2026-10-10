@@ -267,32 +267,32 @@ class PulsePostDetailViewModel
 
             viewModelScope.launch {
                 try {
-                when (val result = repo.toggleLike(postId, liked = !wasOn)) {
-                    is NetworkResult.Success -> {
-                        val reconciled =
-                            optimistic.copy(
-                                helpful = result.data.likeCount,
-                                userReaction = if (result.data.liked) PostReactionKind.Helpful else null,
-                            )
-                        _state.update { current ->
-                            (current as? PulsePostDetailUiState.Loaded)?.let {
-                                PulsePostDetailUiState.Loaded(it.content.copy(reactions = reconciled))
-                            } ?: current
-                        }
-                        // Lists showing this post (the Pulse feed) refetch, so their card isn't left stale.
-                        postsRefresh.notifyPostsDidChange()
-                    }
-                    is NetworkResult.Failure -> {
-                        _toastMessage.value = "Couldn't update your reaction"
-                        _state.update { current ->
-                            (current as? PulsePostDetailUiState.Loaded)?.let {
-                                PulsePostDetailUiState.Loaded(
-                                    it.content.copy(reactions = initialReactions),
+                    when (val result = repo.toggleLike(postId, liked = !wasOn)) {
+                        is NetworkResult.Success -> {
+                            val reconciled =
+                                optimistic.copy(
+                                    helpful = result.data.likeCount,
+                                    userReaction = if (result.data.liked) PostReactionKind.Helpful else null,
                                 )
-                            } ?: current
+                            _state.update { current ->
+                                (current as? PulsePostDetailUiState.Loaded)?.let {
+                                    PulsePostDetailUiState.Loaded(it.content.copy(reactions = reconciled))
+                                } ?: current
+                            }
+                            // Lists showing this post (the Pulse feed) refetch, so their card isn't left stale.
+                            postsRefresh.notifyPostsDidChange()
+                        }
+                        is NetworkResult.Failure -> {
+                            _toastMessage.value = "Couldn't update your reaction"
+                            _state.update { current ->
+                                (current as? PulsePostDetailUiState.Loaded)?.let {
+                                    PulsePostDetailUiState.Loaded(
+                                        it.content.copy(reactions = initialReactions),
+                                    )
+                                } ?: current
+                            }
                         }
                     }
-                }
                 } finally {
                     _likePending.value = false
                     reactionRevision++
@@ -391,17 +391,17 @@ class PulsePostDetailViewModel
             _isSaved.value = !before
             viewModelScope.launch {
                 try {
-                when (val result = repo.toggleSave(postId, saved = !before)) {
-                    is NetworkResult.Success -> {
-                        _isSaved.value = result.data.saved
-                        // A stale card's next tap would undo this save: lists showing the post refetch.
-                        postsRefresh.notifyPostsDidChange()
+                    when (val result = repo.toggleSave(postId, saved = !before)) {
+                        is NetworkResult.Success -> {
+                            _isSaved.value = result.data.saved
+                            // A stale card's next tap would undo this save: lists showing the post refetch.
+                            postsRefresh.notifyPostsDidChange()
+                        }
+                        is NetworkResult.Failure -> {
+                            _isSaved.value = before
+                            _toastMessage.value = "Couldn't update the bookmark"
+                        }
                     }
-                    is NetworkResult.Failure -> {
-                        _isSaved.value = before
-                        _toastMessage.value = "Couldn't update the bookmark"
-                    }
-                }
                 } finally {
                     _savePending.value = false
                     reactionRevision++

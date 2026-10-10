@@ -14,13 +14,13 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.connections.ConnectionsRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.theme.PantopusIcon
-import app.pantopus.android.data.store.Stored
-import io.mockk.every
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

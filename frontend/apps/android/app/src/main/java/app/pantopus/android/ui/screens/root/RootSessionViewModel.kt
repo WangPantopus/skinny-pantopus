@@ -12,17 +12,17 @@ import app.pantopus.android.data.neighborhood.NeighborhoodRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.ui.screens.place.today.primaryHomeId
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -54,28 +54,30 @@ class RootSessionViewModel
             }
         }
 
-        private fun mayPrefetch(): Boolean = runCatching {
-            val network = context.getSystemService(ConnectivityManager::class.java)
-            network.activeNetwork != null && !network.isActiveNetworkMetered &&
-                network.restrictBackgroundStatus == ConnectivityManager.RESTRICT_BACKGROUND_STATUS_DISABLED
-        }.getOrDefault(false)
+        private fun mayPrefetch(): Boolean =
+            runCatching {
+                val network = context.getSystemService(ConnectivityManager::class.java)
+                network.activeNetwork != null && !network.isActiveNetworkMetered &&
+                    network.restrictBackgroundStatus == ConnectivityManager.RESTRICT_BACKGROUND_STATUS_DISABLED
+            }.getOrDefault(false)
 
-        private suspend fun warmTabs() = coroutineScope {
-            launch {
-                val response = homes.myHomesStored().data ?: return@launch
-                val homeId = primaryHomeId(response)
-                if (!mayPrefetch()) return@launch
-                if (homeId != null) {
-                    place.todayStored(homeId)
-                } else {
-                    val savedId = savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.id ?: return@launch
-                    if (mayPrefetch()) savedPlaces.todayStored(savedId)
+        private suspend fun warmTabs() =
+            coroutineScope {
+                launch {
+                    val response = homes.myHomesStored().data ?: return@launch
+                    val homeId = primaryHomeId(response)
+                    if (!mayPrefetch()) return@launch
+                    if (homeId != null) {
+                        place.todayStored(homeId)
+                    } else {
+                        val savedId = savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.id ?: return@launch
+                        if (mayPrefetch()) savedPlaces.todayStored(savedId)
+                    }
                 }
+                launch { if (mayPrefetch()) nearby.meterStored() }
+                launch { if (mayPrefetch()) nearby.cellsStored() }
+                launch { if (mayPrefetch()) chats.conversationsStored() }
             }
-            launch { if (mayPrefetch()) nearby.meterStored() }
-            launch { if (mayPrefetch()) nearby.cellsStored() }
-            launch { if (mayPrefetch()) chats.conversationsStored() }
-        }
 
         /** The drawer's "<name> · Your profile": the person's name, or a username they chose; never a made-up one. */
         val currentHandle: StateFlow<String> =

@@ -479,11 +479,12 @@ class PrivacySettingsViewModel
             viewModelScope.launch {
                 try {
                     when (val result = privacy.settings(force)) {
-                        is NetworkResult.Success -> if (!searchPrivacySaving) {
-                            searchVisibility = result.data.settings.searchVisibility ?: "everyone"
-                            findableByName = result.data.settings.findableByName ?: false
-                            searchPrivacyLoadFailed = false
-                        }
+                        is NetworkResult.Success ->
+                            if (!searchPrivacySaving) {
+                                searchVisibility = result.data.settings.searchVisibility ?: "everyone"
+                                findableByName = result.data.settings.findableByName ?: false
+                                searchPrivacyLoadFailed = false
+                            }
                         is NetworkResult.Failure -> searchPrivacyLoadFailed = true
                     }
                     rebuild()

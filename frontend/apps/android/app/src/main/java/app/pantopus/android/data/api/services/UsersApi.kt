@@ -66,7 +66,10 @@ interface UsersApi {
     ): PublicProfileDto
 
     @GET("api/users/id/{id}")
-    suspend fun publicProfileConditional(@Path("id") id: String, @Header("If-None-Match") etag: String?): Response<PublicProfileDto>
+    suspend fun publicProfileConditional(
+        @Path("id") id: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<PublicProfileDto>
 
     /** `GET /api/users/:id/stats` — route `backend/routes/users.js:2787`. */
     @GET("api/users/{id}/stats")

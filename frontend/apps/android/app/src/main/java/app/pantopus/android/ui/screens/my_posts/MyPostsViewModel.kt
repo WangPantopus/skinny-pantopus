@@ -20,10 +20,10 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
-import app.pantopus.android.data.store.StoreKind
-import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder

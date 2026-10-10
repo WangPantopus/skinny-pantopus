@@ -3,14 +3,14 @@ package app.pantopus.android.data.privacy
 import app.pantopus.android.data.api.models.settings.PrivacyBlocksResponse
 import app.pantopus.android.data.api.models.settings.PrivacySettingsResponse
 import app.pantopus.android.data.api.models.settings.PrivacySettingsUpdate
+import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.PrivacyApi
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.asResult
-import app.pantopus.android.data.api.net.conditionalApiCall
-import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.api.net.safeApiCall
-import app.pantopus.android.data.api.services.PrivacyApi
 import javax.inject.Inject
 import javax.inject.Singleton
 
