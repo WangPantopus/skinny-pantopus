@@ -502,8 +502,12 @@ class MembersListViewModel
 
         private suspend fun readAll(force: Boolean, generation: Long): MembersReads {
             val refusal = gate.checkForRead(force) { if (generation == readGeneration) retireSnapshot() }
-            if (refusal != null) return MembersReads(null, Stored(failure = refusal), emptyList<PendingInviteDto>() to null, emptyList(), emptyList())
-            if (generation != readGeneration) return MembersReads(null, Stored(), emptyList<PendingInviteDto>() to null, emptyList(), emptyList())
+            if (refusal != null) {
+                return MembersReads(null, Stored(failure = refusal), emptyList<PendingInviteDto>() to null, emptyList(), emptyList())
+            }
+            if (generation != readGeneration) {
+                return MembersReads(null, Stored(), emptyList<PendingInviteDto>() to null, emptyList(), emptyList())
+            }
             return coroutineScope {
                 val readNow = force || !gate.showsCopy
                 val meRead = async { adminRepo.myAccessStored(homeId, readNow) }
