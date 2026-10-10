@@ -24,6 +24,7 @@ import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
 import kotlinx.coroutines.Job
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
@@ -242,6 +243,7 @@ class PlaceDetailViewModel
         fun refresh() = read(force = true)
 
         fun suspendContent() {
+            if (!visible) return
             visible = false
             pageGeneration++
             readJob?.cancel()
@@ -266,19 +268,28 @@ class PlaceDetailViewModel
                 _state.value = copy?.let { PlaceDetailUiState.Loaded(it) } ?: PlaceDetailUiState.Loading
             }
             _refreshing.value = force && _state.value is PlaceDetailUiState.Loaded
+            val generation = pageGeneration
             readJob = viewModelScope.launch {
-                homesRepo.myHomesStored()
+                val homes = homesRepo.myHomesStored(force || !household)
+                if (!visible || generation != pageGeneration) return@launch
                 val canKeep = householdViewer()
                 if (!canKeep) {
                     repo.forgetPlace(homeId)
                     _state.value = PlaceDetailUiState.Loading
                 }
-                val stored = repo.placeStored(homeId, force || !canKeep || sensitiveGroup, persist = canKeep)
+                val stored = when {
+                    homes.data?.homes?.none { it.id == homeId } != false ->
+                        Stored(failure = homes.failure ?: NetworkError.NotFound)
+                    !canKeep && homes.failure != null -> Stored(failure = homes.failure)
+                    else -> repo.placeStored(homeId, force || !canKeep || sensitiveGroup, persist = canKeep)
+                }
+                if (!visible || generation != pageGeneration) return@launch
+                val data = stored.data.takeUnless { (sensitiveGroup || !canKeep) && stored.failure != null }
                 _refreshing.value = false
                 _refreshNotice.value =
                     if (stored.showsRefreshFailure(StoreKind.PLACE)) RefreshNotice(stored.fetchedAt, ::refresh) else null
                 when {
-                    stored.data != null -> _state.value = PlaceDetailUiState.Loaded(stored.data)
+                    data != null -> _state.value = PlaceDetailUiState.Loaded(data)
                     stored.failure.refusesStoredCopy -> {
                             _state.value = PlaceDetailUiState.Error(
                                 stored.failure?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.",
