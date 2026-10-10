@@ -96,16 +96,44 @@ extension View {
 private struct RefreshOnStoreChange: ViewModifier {
     let affects: (Notification) -> Bool
     let action: @MainActor () async -> Void
-    @State private var isOnScreen = false
+    @State private var probe = WindowProbe()
 
     func body(content: Content) -> some View {
         content
-            .onAppear { isOnScreen = true }
-            .onDisappear { isOnScreen = false }
+            .background(WindowProbeView(probe: probe))
             .onReceive(NotificationCenter.default.publisher(for: .screenStoreChanged)) { note in
-                guard isOnScreen, affects(note) else { return }
+                guard probe.isOnScreen, affects(note) else { return }
                 Task { await action() }
             }
+    }
+}
+
+/// Whether a screen is really showing. `onAppear`/`onDisappear` can't tell:
+/// SwiftUI re-fires `onAppear` for a view two screens under the top of a
+/// stack with no matching `onDisappear`. UIKit takes covered screens (and
+/// unselected tabs) out of the window, so a view in the window is showing.
+@MainActor
+private final class WindowProbe {
+    weak var view: UIView?
+
+    var isOnScreen: Bool {
+        view?.window != nil
+    }
+}
+
+private struct WindowProbeView: UIViewRepresentable {
+    let probe: WindowProbe
+
+    func makeUIView(context _: Context) -> UIView {
+        let view = UIView()
+        view.isHidden = true
+        view.isUserInteractionEnabled = false
+        probe.view = view
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context _: Context) {
+        probe.view = view
     }
 }
 

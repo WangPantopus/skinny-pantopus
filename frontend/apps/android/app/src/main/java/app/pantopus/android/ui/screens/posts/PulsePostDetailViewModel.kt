@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.posts
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.posts.PostCommentDto
 import app.pantopus.android.data.api.models.posts.PostCommentRequest
 import app.pantopus.android.data.api.models.posts.PostDetailDto
@@ -133,6 +134,10 @@ class PulsePostDetailViewModel
         private val _isReposted = MutableStateFlow(false)
         val isReposted: StateFlow<Boolean> = _isReposted.asStateFlow()
 
+        /** The post shows from its feed card (Instant Screens) and its comments are still loading. */
+        private val _commentsLoading = MutableStateFlow(false)
+        val commentsLoading: StateFlow<Boolean> = _commentsLoading.asStateFlow()
+
         /** Emoji chosen from the long-press popover (session-local). */
         private val _selectedReactionEmoji = MutableStateFlow<String?>(null)
         val selectedReactionEmoji: StateFlow<String?> = _selectedReactionEmoji.asStateFlow()
@@ -164,9 +169,20 @@ class PulsePostDetailViewModel
             get() = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
         init {
+            showStoredCopy()
             viewModelScope.launch {
                 postsRefresh.ticks.collect { refetchInPlace() }
             }
+        }
+
+        /** The stored post, or its feed card, in the first frame (Instant Screens); the read follows in [load]. */
+        private fun showStoredCopy() {
+            val copy = repo.detailCopy(postId)
+            val post = copy.data?.post ?: return
+            _isSaved.value = post.userHasSaved
+            _isReposted.value = post.userHasReposted
+            _commentsLoading.value = copy.fetchedAt == 0L
+            _state.value = PulsePostDetailUiState.Loaded(rebuildContent(post))
         }
 
         fun openOverflowMenu() {
@@ -177,21 +193,20 @@ class PulsePostDetailViewModel
             _showsOverflowMenu.value = false
         }
 
-        /** First-load entry. */
+        /** Entry and every return: reads only when the stored post is out of date (1 minute) or a card stood in. */
         fun load() {
-            if (_state.value is PulsePostDetailUiState.Loaded) return
-            refresh()
+            viewModelScope.launch { fetch(force = false) }
         }
 
-        /** Pull-to-refresh / retry. */
+        /** Retry: reads now; the skeleton only when nothing is on screen. */
         fun refresh() {
-            _state.value = PulsePostDetailUiState.Loading
-            viewModelScope.launch { fetch() }
+            if (_state.value !is PulsePostDetailUiState.Loaded) _state.value = PulsePostDetailUiState.Loading
+            viewModelScope.launch { fetch(force = true) }
         }
 
-        /** Refetch without dropping to the loading state (pull-to-refresh). */
+        /** Refetch without dropping to the loading state (pull-to-refresh, a post changed elsewhere). */
         suspend fun refetchInPlace() {
-            fetch()
+            fetch(force = true)
         }
 
         fun setComposerText(text: String) {
@@ -324,7 +339,7 @@ class PulsePostDetailViewModel
         fun deleteComment(commentId: String) {
             viewModelScope.launch {
                 when (repo.deleteComment(postId, commentId)) {
-                    is NetworkResult.Success -> fetch()
+                    is NetworkResult.Success -> fetch(force = true)
                     is NetworkResult.Failure -> _toastMessage.value = "Couldn't delete the comment"
                 }
             }
@@ -414,7 +429,7 @@ class PulsePostDetailViewModel
                             _composerText.value = ""
                             _replyTarget.value = null
                         }
-                        fetch()
+                        fetch(force = true)
                     }
                     is NetworkResult.Failure -> {
                         _toastMessage.value = "Couldn't post your comment"
@@ -437,26 +452,37 @@ class PulsePostDetailViewModel
             }
         }
 
-        private suspend fun fetch() {
-            when (val result = repo.detail(postId)) {
-                is NetworkResult.Success -> {
-                    _isSaved.value = result.data.post.userHasSaved
-                    _isReposted.value = result.data.post.userHasReposted
-                    _state.value = PulsePostDetailUiState.Loaded(rebuildContent(result.data.post))
-                }
-                is NetworkResult.Failure -> {
-                    val gone = result.error == NetworkError.NotFound || result.error == NetworkError.Forbidden
-                    val wasGone = (_state.value as? PulsePostDetailUiState.Error)?.retryable == false
-                    _state.value =
-                        PulsePostDetailUiState.Error(
-                            message = friendlyMessage(result.error),
-                            retryable = !gone,
-                        )
-                    // Gone (deleted, or no longer visible to you): a list still showing its card refetches without it.
-                    // Only on the way into this state: this screen refetches on the same signal.
-                    if (gone && !wasGone) postsRefresh.notifyPostsDidChange()
-                }
+        /**
+         * Reads the post through the screens' store. A failed read keeps what's on screen (the stored post, or the
+         * feed card with a note that the comments didn't load); the server's refusal (deleted, or no longer visible to
+         * you) shows its answer.
+         */
+        private suspend fun fetch(force: Boolean) {
+            val stored = repo.detailStored(postId, force)
+            val failure = stored.failure
+            val gone = failure == NetworkError.NotFound || failure is NetworkError.Forbidden
+            val detail = stored.data
+            if (detail != null && !gone) {
+                _commentsLoading.value = false
+                _isSaved.value = detail.post.userHasSaved
+                _isReposted.value = detail.post.userHasReposted
+                _state.value = PulsePostDetailUiState.Loaded(rebuildContent(detail.post))
+                if (failure != null && force) _toastMessage.value = friendlyMessage(failure)
+                return
             }
+            if (failure == null) return
+            if (!gone && _state.value is PulsePostDetailUiState.Loaded) {
+                // Only the feed card is on screen.
+                _commentsLoading.value = false
+                _toastMessage.value = "Couldn't load the comments. Pull down to try again."
+                return
+            }
+            val wasGone = (_state.value as? PulsePostDetailUiState.Error)?.retryable == false
+            _commentsLoading.value = false
+            _state.value = PulsePostDetailUiState.Error(message = friendlyMessage(failure), retryable = !gone)
+            // Gone (deleted, or no longer visible to you): a list still showing its card refetches without it.
+            // Only on the way into this state: this screen refetches on the same signal.
+            if (gone && !wasGone) postsRefresh.notifyPostsDidChange()
         }
 
         /**
@@ -466,6 +492,8 @@ class PulsePostDetailViewModel
          * `LaunchedEffect` so the card never blocks (or fails) the post itself.
          */
         fun loadNearbyProviders() {
+            // Launch cuts #6/#4 hide the card (business discovery and broad provider search): nothing is asked for it.
+            if (!(LaunchFeatures.businessDirectory && LaunchFeatures.openGigs)) return
             viewModelScope.launch { fetchNearbyProviders() }
         }
 

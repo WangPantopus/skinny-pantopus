@@ -21,10 +21,13 @@ import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.sports.SportsRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.feed.FeedSurface
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +63,10 @@ class PulseFeedViewModelTest {
 
     // No area chosen: the feed falls back to the device location (none here).
     private val viewingLocation: ViewingLocationRepository =
-        mockk { coEvery { current() } returns NetworkResult.Success(ViewingLocationPayload()) }
+        mockk {
+            coEvery { current(any()) } returns NetworkResult.Success(ViewingLocationPayload())
+            every { currentCopy() } returns null
+        }
 
     // Sports lane — only queried once the Sports topic is selected.
     private val sportsRepo: SportsRepository =
@@ -71,7 +77,14 @@ class PulseFeedViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // The first page reads through the screens' store (Instant Screens); no copies before the first read here.
+        every { repo.feedFirstPageCopy(any()) } returns null
+        every { repo.feedFirstPageIsCurrent(any()) } returns false
+        // Each card stands in for its post (the post detail's first frame).
+        every { repo.seedDetails(any()) } just Runs
     }
+
+    private fun page(response: FeedResponse) = Stored(response, fetchedAt = System.currentTimeMillis())
 
     @After fun tearDown() {
         Dispatchers.resetMain()
@@ -82,8 +95,8 @@ class PulseFeedViewModelTest {
         runTest {
             for (origin in listOf("curator", "user", "system", "unknown", null)) {
                 val vm = makeVm()
-                coEvery { repo.feed(any(), any(), any(), any()) } returns
-                    NetworkResult.Success(
+                coEvery { repo.feedFirstPageStored(any(), any()) } returns
+                    page(
                         FeedResponse(
                             posts =
                                 listOf(
@@ -107,8 +120,8 @@ class PulseFeedViewModelTest {
     fun seededSystemFact_doesNotProjectCuratorChip() =
         runTest {
             val vm = makeVm()
-            coEvery { repo.feed(any(), any(), any(), any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.feedFirstPageStored(any(), any()) } returns
+                page(
                     FeedResponse(
                         posts = listOf(askPost().copy(origin = "system", isSeeded = true)),
                         pagination = FeedPagination(hasMore = false),
@@ -125,8 +138,8 @@ class PulseFeedViewModelTest {
     fun load_projectsMediaUrlsPreferringThumbnails() =
         runTest {
             val vm = makeVm()
-            coEvery { repo.feed(any(), any(), any(), any()) } returns
-                NetworkResult.Success(
+            coEvery { repo.feedFirstPageStored(any(), any()) } returns
+                page(
                     FeedResponse(
                         posts =
                             listOf(
@@ -147,14 +160,14 @@ class PulseFeedViewModelTest {
     fun selectIntent_whileALoadIsInFlight_refetchesAndKeepsTheLatest() =
         runTest {
             val vm = makeVm()
-            val firstLoad = CompletableDeferred<NetworkResult<FeedResponse>>()
+            val firstLoad = CompletableDeferred<Stored<FeedResponse>>()
             coEvery {
-                repo.feed(any(), any(), any(), null, any(), any(), any(), any(), any(), any())
+                repo.feedFirstPageStored(match { it.postType == null }, any())
             } coAnswers { firstLoad.await() }
             coEvery {
-                repo.feed(any(), any(), any(), "recommendation", any(), any(), any(), any(), any(), any())
+                repo.feedFirstPageStored(match { it.postType == "recommendation" }, any())
             } returns
-                NetworkResult.Success(
+                page(
                     FeedResponse(
                         posts = listOf(askPost(id = "rec1").copy(postType = "recommendation")),
                         pagination = FeedPagination(hasMore = false),
@@ -164,13 +177,13 @@ class PulseFeedViewModelTest {
             vm.load() // All: still loading
             vm.selectIntent(PulseIntent.Recommend) // tapped during that load (C-17)
             firstLoad.complete(
-                NetworkResult.Success(
+                page(
                     FeedResponse(posts = listOf(askPost(id = "all1")), pagination = FeedPagination(hasMore = false)),
                 ),
             )
 
             // The tap refetched, and the late All response didn't overwrite it.
-            coVerify(exactly = 2) { repo.feed(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+            coVerify(exactly = 2) { repo.feedFirstPageStored(any(), any()) }
             val loaded = vm.state.value as PulseFeedUiState.Loaded
             assertEquals(listOf("rec1"), loaded.rows.map { it.id })
             assertEquals(PulseIntent.Recommend, vm.activeIntent.value)
@@ -224,8 +237,8 @@ class PulseFeedViewModelTest {
         runTest {
             for (status in listOf("none", "verified")) {
                 val post = askPost().let { it.copy(creator = it.creator?.copy(credential = FeedAuthorCredential(status))) }
-                coEvery { repo.feed("personas", null, null, null, 20) } returns
-                    NetworkResult.Success(FeedResponse(listOf(post), FeedPagination(null, false)))
+                coEvery { repo.feedFirstPageStored(match { it.surface == "personas" }, any()) } returns
+                    page(FeedResponse(listOf(post), FeedPagination(null, false)))
                 val vm = makeVm()
                 vm.configureSurface(FeedSurface.Beacons)
                 vm.load()
@@ -237,8 +250,8 @@ class PulseFeedViewModelTest {
     @Test fun load_with_posts_transitions_loaded() =
         runTest {
             coEvery {
-                repo.feed("place", null, null, null, 20)
-            } returns NetworkResult.Success(FeedResponse(listOf(askPost()), FeedPagination(null, false)))
+                repo.feedFirstPageStored(match { it.surface == "place" && it.postType == null }, any())
+            } returns page(FeedResponse(listOf(askPost()), FeedPagination(null, false)))
             val vm = makeVm()
             vm.load()
             val loaded = vm.state.value as PulseFeedUiState.Loaded
@@ -250,8 +263,8 @@ class PulseFeedViewModelTest {
     @Test fun load_empty_transitions_empty() =
         runTest {
             coEvery {
-                repo.feed("place", null, null, null, 20)
-            } returns NetworkResult.Success(FeedResponse(emptyList(), null))
+                repo.feedFirstPageStored(match { it.surface == "place" && it.postType == null }, any())
+            } returns page(FeedResponse(emptyList(), null))
             val vm = makeVm()
             vm.load()
             assertTrue(vm.state.value is PulseFeedUiState.Empty)
@@ -260,8 +273,8 @@ class PulseFeedViewModelTest {
     @Test fun load_failure_transitions_error() =
         runTest {
             coEvery {
-                repo.feed("place", null, null, null, 20)
-            } returns NetworkResult.Failure(NetworkError.Server(500, null))
+                repo.feedFirstPageStored(match { it.surface == "place" && it.postType == null }, any())
+            } returns Stored(failure = NetworkError.Server(500, null))
             val vm = makeVm()
             vm.load()
             assertTrue(vm.state.value is PulseFeedUiState.Error)
@@ -270,11 +283,11 @@ class PulseFeedViewModelTest {
     @Test fun select_intent_refetches_with_post_type() =
         runTest {
             coEvery {
-                repo.feed("place", null, null, null, 20)
-            } returns NetworkResult.Success(FeedResponse(listOf(askPost()), null))
+                repo.feedFirstPageStored(match { it.surface == "place" && it.postType == null }, any())
+            } returns page(FeedResponse(listOf(askPost()), null))
             coEvery {
-                repo.feed("place", null, null, "event", 20)
-            } returns NetworkResult.Success(FeedResponse(emptyList(), null))
+                repo.feedFirstPageStored(match { it.surface == "place" && it.postType == "event" }, any())
+            } returns page(FeedResponse(emptyList(), null))
             val vm = makeVm()
             vm.load()
             vm.selectIntent(PulseIntent.Event)
@@ -285,8 +298,8 @@ class PulseFeedViewModelTest {
     @Test fun tap_reaction_optimistically_increments_and_reconciles() =
         runTest {
             coEvery {
-                repo.feed("place", null, null, null, 20)
-            } returns NetworkResult.Success(FeedResponse(listOf(askPost()), null))
+                repo.feedFirstPageStored(match { it.surface == "place" && it.postType == null }, any())
+            } returns page(FeedResponse(listOf(askPost()), null))
             coEvery { repo.toggleLike("p1", any()) } returns
                 NetworkResult.Success(PostLikeResponse(message = "ok", liked = true, likeCount = 13))
             val vm = makeVm()
@@ -300,8 +313,8 @@ class PulseFeedViewModelTest {
     @Test fun tap_reaction_rolls_back_on_failure() =
         runTest {
             coEvery {
-                repo.feed("place", null, null, null, 20)
-            } returns NetworkResult.Success(FeedResponse(listOf(askPost()), null))
+                repo.feedFirstPageStored(match { it.surface == "place" && it.postType == null }, any())
+            } returns page(FeedResponse(listOf(askPost()), null))
             coEvery { repo.toggleLike("p1", any()) } returns NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = makeVm()
             vm.load()

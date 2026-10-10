@@ -36,6 +36,9 @@ class PantopusApplication :
     override fun onCreate() {
         super.onCreate()
         HomeDocumentTemporaryFiles.clearPreviousLaunch(cacheDir)
+        // Earlier builds kept API replies (door codes, wallet, profile) in an OkHttp disk cache until sign-out.
+        // The API client no longer caches; delete what an update left behind, off the main thread.
+        Thread { File(cacheDir, LEGACY_HTTP_CACHE_DIR).deleteRecursively() }.start()
 
         // Workstream 1.4 — persist pre-auth deep links across process death.
         PendingDeepLinkStore.init(this)
@@ -80,12 +83,20 @@ class PantopusApplication :
      * Sized per the P13 budget (`docs/perf_budgets.md`). One process-wide
      * loader keeps avatar / discovery / mailbox imagery from re-decoding
      * during fast scrolls.
+     *
+     * Images use the main client's interceptors, which send the bearer only
+     * to the API origin (chat photos at `/api/chat/files/:id` need it; other
+     * hosts get no credentials). Neither client has an HTTP cache: Coil's
+     * disk cache above keeps the image bytes, and API replies stay off disk.
      */
     override fun newImageLoader(): ImageLoader {
         val okHttp =
             EntryPointAccessors
                 .fromApplication(this, CoilNetworkEntryPoint::class.java)
                 .okHttpClient()
+                .newBuilder()
+                .cache(null)
+                .build()
         return ImageLoader
             .Builder(this)
             .okHttpClient(okHttp)
@@ -113,5 +124,6 @@ class PantopusApplication :
     private companion object {
         const val IMAGE_CACHE_MEMORY_PERCENT = 0.15
         const val IMAGE_CACHE_DISK_PERCENT = 0.02
+        const val LEGACY_HTTP_CACHE_DIR = "pantopus-http"
     }
 }

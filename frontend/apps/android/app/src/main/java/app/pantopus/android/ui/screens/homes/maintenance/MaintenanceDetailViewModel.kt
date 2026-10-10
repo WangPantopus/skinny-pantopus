@@ -8,11 +8,17 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.analytics.AnalyticsResult
+import app.pantopus.android.data.api.models.homes.GetHomeMaintenanceResponse
 import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +52,7 @@ class MaintenanceDetailViewModel
     constructor(
         private val repo: HomesRepository,
         private val draftStore: MaintenanceDraftStore,
+        gates: HomeCopyGateFactory,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private val homeId: String =
@@ -69,26 +76,62 @@ class MaintenanceDetailViewModel
         private val _event = MutableStateFlow<MaintenanceDetailEvent?>(null)
         val event: StateFlow<MaintenanceDetailEvent?> = _event.asStateFlow()
 
+        /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
+        private val gate = gates.create(homeId, listOf(HomeStoreKeys.maintenance(homeId)))
+        private var readGeneration = 0L
+
+        /**
+         * Screen entry and every return (Instant Screens): the entry shows at once from the log the list stored, and
+         * the store answers a fresh copy without a request or revalidates an older one quietly.
+         */
         fun load() {
-            _state.value = MaintenanceDetailUiState.Loading
+            if (_state.value !is MaintenanceDetailUiState.Loaded && gate.showsCopy) repo.storedMaintenance(homeId)?.let(::show)
+            read(force = false)
+        }
+
+        /** Retry: read now. */
+        fun refresh() = read(force = true)
+
+        override fun onCleared() {
+            gate.leave()
+        }
+
+        private fun read(force: Boolean) {
+            val generation = ++readGeneration
+            if (_state.value !is MaintenanceDetailUiState.Loaded) _state.value = MaintenanceDetailUiState.Loading
             viewModelScope.launch {
-                when (val result = repo.getHomeMaintenance(homeId)) {
-                    is NetworkResult.Success -> {
-                        val task = result.data.tasks.firstOrNull { it.id == taskId }
-                        _state.value =
-                            if (task == null) {
-                                MaintenanceDetailUiState.Error("This maintenance entry is no longer available.")
-                            } else {
-                                MaintenanceDetailUiState.Loaded(task = task, draft = draftStore.draft(taskId))
-                            }
-                    }
-                    is NetworkResult.Failure ->
-                        _state.value = MaintenanceDetailUiState.Error(result.error.displayMessage("Couldn't load this entry."))
+                val fromCopy = gate.showsCopy && !force
+                var stored = readLog(force = !fromCopy)
+                // Household access ended meanwhile: whatever came from a copy is read again now.
+                if (fromCopy && !gate.showsCopy) stored = readLog(force = true)
+                if (generation != readGeneration) return@launch
+                val loaded = stored.data
+                if (loaded != null) {
+                    show(loaded)
+                } else {
+                    val failure = stored.failure ?: NetworkError.NotFound
+                    _state.value = MaintenanceDetailUiState.Error(failure.displayMessage("Couldn't load this entry."))
                 }
             }
         }
 
-        fun refresh() = load()
+        private suspend fun readLog(force: Boolean) =
+            coroutineScope {
+                val recheck = async { gate.recheck(force) }
+                val log = async { repo.getHomeMaintenanceStored(homeId, force) }
+                recheck.await()
+                log.await()
+            }
+
+        private fun show(log: GetHomeMaintenanceResponse) {
+            val task = log.tasks.firstOrNull { it.id == taskId }
+            _state.value =
+                if (task == null) {
+                    MaintenanceDetailUiState.Error("This maintenance entry is no longer available.")
+                } else {
+                    MaintenanceDetailUiState.Loaded(task = task, draft = draftStore.draft(taskId))
+                }
+        }
 
         fun delete() {
             if (_isMutating.value) return

@@ -4,7 +4,8 @@ function handler(method, path) {
   return home.stack.find(l => l.route?.path === path && l.route.methods[method]).route.stack.at(-1).handle;
 }
 function response() {
-  return { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
+  return { statusCode: 200, headers: {}, status(code) { this.statusCode = code; return this; },
+    set(name, value) { this.headers[name] = value; return this; }, json(body) { this.body = body; return this; } };
 }
 beforeEach(() => { db.resetTables(); jest.clearAllMocks(); });
 

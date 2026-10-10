@@ -17,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.PantopusColors
 
@@ -35,6 +37,7 @@ fun HomeIssuesListScreen(
     viewModel: HomeIssuesListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_issues", state.showsContent())
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
     val banner by viewModel.banner.collectAsStateWithLifecycle()
@@ -80,6 +83,8 @@ fun HomeIssuesListScreen(
             fab = viewModel.fab(),
             onBack = onBack,
             banner = banner,
+            refreshing = viewModel.refreshing.collectAsStateWithLifecycle().value,
+            refreshNotice = viewModel.refreshNotice.collectAsStateWithLifecycle().value,
         )
     }
 
