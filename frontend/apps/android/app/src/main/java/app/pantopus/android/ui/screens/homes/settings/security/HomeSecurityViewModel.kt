@@ -164,17 +164,19 @@ class HomeSecurityViewModel
             rowId: String,
             isOn: Boolean,
         ) {
-            if (_state.value !is GroupedListUiState.Loaded || isSaving || !_toggles.containsKey(rowId)) return
+            if (!active || _state.value !is GroupedListUiState.Loaded || isSaving || !_toggles.containsKey(rowId)) return
             val previous = _toggles[rowId] ?: return
             saveError = null
             // Optimistic flip.
             _toggles[rowId] = isOn
             isSaving = true
             _state.value = GroupedListUiState.Loaded(groups())
+            val generation = readGeneration
             viewModelScope.launch {
                 var failed = false
                 try {
                     val result = repository.updatePrivacy(homeId, requestFor(rowId, isOn))
+                    if (!active || generation != readGeneration) return@launch
                     if (result is NetworkResult.Failure) {
                         // Roll back the single key.
                         failed = true
@@ -183,13 +185,14 @@ class HomeSecurityViewModel
                     }
                 } finally {
                     isSaving = false
-                    _state.value = GroupedListUiState.Loaded(groups())
+                    if (active && generation == readGeneration) {
+                        _state.value = GroupedListUiState.Loaded(groups())
+                    } else if (active) {
+                        refresh()
+                    }
                 }
                 // Reads that landed while saving were set aside: after a failed save, show the server's row, read now.
-                if (failed) {
-                    repository.getPrivacyStored(homeId, force = true).data?.let { applyServer(it.privacy) }
-                    _state.value = GroupedListUiState.Loaded(groups())
-                }
+                if (failed) refresh()
             }
         }
 
