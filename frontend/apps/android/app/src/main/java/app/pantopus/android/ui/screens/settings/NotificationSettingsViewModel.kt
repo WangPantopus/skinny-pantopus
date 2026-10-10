@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.QuietHoursPatch
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
@@ -212,6 +213,7 @@ class NotificationSettingsViewModel
 
         private suspend fun fetch(force: Boolean) {
             val stored = repository.preferencesStored(force)
+            if (clearRefusedPreferences(stored.failure)) return
             val data = stored.data
             when {
                 // A local change still saving wins over a copy read meanwhile; the save publishes the server's row.
@@ -228,8 +230,24 @@ class NotificationSettingsViewModel
          * since (that change is sent next, and its reply is published).
          */
         private suspend fun rollBackToServer() {
-            val server = repository.preferencesStored(force = true).data ?: return
+            val stored = repository.preferencesStored(force = true)
+            if (clearRefusedPreferences(stored.failure)) return
+            val server = stored.data ?: return
             if (pendingPatch.isEmpty) publish(server)
+        }
+
+        private fun clearRefusedPreferences(error: NetworkError?): Boolean {
+            val refused = error is NetworkError.Forbidden || error == NetworkError.NotFound || error == NetworkError.Unauthorized
+            if (!refused) return false
+            preferences = null
+            pendingPatch = NotificationPreferencesPatch()
+            saveRevision++
+            saveJob?.cancel()
+            saveJob = null
+            _footerCaption.value = null
+            _refreshNotice.value = null
+            _state.value = GroupedListUiState.Error(error?.message ?: "Couldn't load preferences.")
+            return true
         }
 
         /** Apply locally, re-project, and (re)arm the debounce timer. */
