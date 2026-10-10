@@ -7,6 +7,7 @@ import android.os.SystemClock
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.net.Conditional
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
@@ -237,19 +238,25 @@ class ScreenStore
         /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
         fun <T : Any> writer(key: StoreKey<T>): (T) -> Unit {
             val account = accountId() ?: return {}
-            val (slot, ticket) = synchronized(slots) {
-                val slot = slotLocked(key, account)
-                slot.edits++
-                slot.etag = null
-                slot.markStaleLocked()
-                slot.inFlight?.cancel()
-                slot.inFlight = null
-                slot.state.value = slot.state.value.copy(refreshing = false)
-                slot to Ticket(generation, identity(account), slot.edits, slot.marks)
-            }
+            val (slot, ticket) =
+                synchronized(slots) {
+                    val slot = slotLocked(key, account)
+                    slot.edits++
+                    slot.etag = null
+                    slot.markStaleLocked()
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    slot to Ticket(generation, identity(account), slot.edits, slot.marks)
+                }
             return { data ->
                 synchronized(slots) {
-                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) put(key, data)
+                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {
+                        val markedMeanwhile = ticket.marks != slot.marks
+                        put(key, data)
+                        // Another device's change during this save still needs a read, just as during a GET.
+                        if (markedMeanwhile) slot.stale = true
+                    }
                 }
             }
         }
@@ -262,7 +269,7 @@ class ScreenStore
             val account = accountId() ?: return
             synchronized(slots) {
                 val slot = slotLocked(key, account)
-                if (slot.state.value.data != null || slot.state.value.failure?.code in listOf(401, 403, 404)) return
+                if (slot.state.value.data != null || slot.state.value.failure.refusesStoredCopy) return
                 // A seed is never fresh or saved. A read already in flight may still replace it with the complete reply.
                 slot.stale = true
                 slot.state.value = Stored(data)
@@ -461,8 +468,7 @@ class ScreenStore
                             }
                         is NetworkResult.Failure ->
                             if (
-                                result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound ||
-                                result.error == NetworkError.Unauthorized
+                                result.error.refusesStoredCopy
                             ) {
                                 // Access ended: the entry goes at once, from the phone too, and the screen shows
                                 // the server's answer.

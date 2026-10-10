@@ -9,8 +9,8 @@ import app.pantopus.android.data.api.models.chats.UnifiedConversationDto
 import app.pantopus.android.data.api.models.relationships.RelationshipDto
 import app.pantopus.android.data.api.models.relationships.RelationshipUserDto
 import app.pantopus.android.data.api.models.users.UserSearchResultDto
-import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.chats.ChatRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
@@ -98,7 +98,11 @@ class NewMessageViewModel
             }
             loading = true
             viewModelScope.launch {
-                try { fetchInitial(force) } finally { loading = false }
+                try {
+                    fetchInitial(force)
+                } finally {
+                    loading = false
+                }
             }
         }
 
@@ -170,7 +174,8 @@ class NewMessageViewModel
                         false
                     }
                 }
-            if (!connectionsOk && !recentsOk && accepted.isEmpty() && recents.isEmpty()) {
+            val nothingToShow = accepted.isEmpty() && recents.isEmpty()
+            if (!connectionsOk && !recentsOk && nothingToShow) {
                 _state.value = NewMessageUiState.Error("Couldn't load contacts. Try again.")
                 return
             }

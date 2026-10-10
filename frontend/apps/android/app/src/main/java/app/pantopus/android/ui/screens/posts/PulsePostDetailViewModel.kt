@@ -486,7 +486,8 @@ class PulsePostDetailViewModel
             val failure = stored.failure
             val gone = failure == NetworkError.NotFound || failure is NetworkError.Forbidden || failure == NetworkError.Unauthorized
             // Refusals always clear content; an older read cannot undo a pending or just-confirmed tap.
-            if (!gone && (revision != reactionRevision || _likePending.value || _savePending.value)) return
+            val editInFlight = _likePending.value || _savePending.value
+            if (!gone && (revision != reactionRevision || editInFlight)) return
             val detail = stored.data
             if (detail != null && !gone) {
                 _commentsLoading.value = false

@@ -5,10 +5,12 @@ import android.net.ConnectivityManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.identity.MadeUpUsername
+import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.chats.ChatRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.neighborhood.NeighborhoodRepository
+import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.ui.screens.place.today.primaryHomeId
@@ -39,8 +41,11 @@ class RootSessionViewModel
         private val nearby: NeighborhoodRepository,
         private val chats: ChatRepository,
         private val savedPlaces: SavedPlacesRepository,
+        network: NetworkMonitor,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
+        val isOnline: StateFlow<Boolean> = network.isOnline
+
         init {
             viewModelScope.launch {
                 // A sign-out or account change cancels the old account's warm-up, including its child requests.
@@ -68,7 +73,9 @@ class RootSessionViewModel
                     val homeId = primaryHomeId(response)
                     if (!mayPrefetch()) return@launch
                     if (homeId != null) {
-                        place.todayStored(homeId)
+                        if (response.homes.firstOrNull { it.id == homeId }?.showsCopyBeforeRecheck == true) {
+                            place.todayStored(homeId, persist = true)
+                        }
                     } else {
                         val savedId = savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.id ?: return@launch
                         if (mayPrefetch()) savedPlaces.todayStored(savedId)

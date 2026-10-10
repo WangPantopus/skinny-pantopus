@@ -11,10 +11,10 @@ import app.pantopus.android.data.api.models.feed.FeedSeededDismissResponse
 import app.pantopus.android.data.api.models.feed.FeedSolveResponse
 import app.pantopus.android.data.api.models.feed.MutedEntitiesResponse
 import retrofit2.Response
-import retrofit2.http.Header
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.HTTP
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -26,6 +26,8 @@ import retrofit2.http.Path
  * card overflow menu and the Pulse preferences sheet own this whole
  * cluster (hide / mute / not-helpful / solve / seeded-dismiss / prefs).
  */
+// The conditional preferences read is the same endpoint with an ETag response.
+@Suppress("TooManyFunctions")
 interface FeedActionsApi {
     /**
      * `POST /api/posts/hide/:id` — hides a single post from the signed-in
@@ -110,7 +112,9 @@ interface FeedActionsApi {
     suspend fun feedPreferences(): FeedPreferencesResponse
 
     @GET("api/posts/feed-preferences")
-    suspend fun feedPreferencesConditional(@Header("If-None-Match") etag: String?): Response<FeedPreferencesResponse>
+    suspend fun feedPreferencesConditional(
+        @Header("If-None-Match") etag: String?,
+    ): Response<FeedPreferencesResponse>
 
     /**
      * `PUT /api/posts/feed-preferences` — partial update; only the keys

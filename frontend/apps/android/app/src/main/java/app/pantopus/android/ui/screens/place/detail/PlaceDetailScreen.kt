@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -20,12 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import app.pantopus.android.ui.components.RefreshOnStoreChange
-import app.pantopus.android.ui.components.RefreshFailedLine
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.place.PlaceBand
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionAccess
@@ -34,6 +32,8 @@ import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.place.PlaceDeniedState
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
@@ -81,41 +81,41 @@ fun PlaceDetailScreen(
         )
         refreshNotice?.let { RefreshFailedLine(it) }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
-        when (val current = state) {
-            PlaceDetailUiState.Loading -> PlaceDetailSkeleton()
-            is PlaceDetailUiState.Error ->
-                if (current.denied) {
-                    PlaceDeniedState()
-                } else {
-                    ErrorState(message = current.message, onRetry = viewModel::refresh)
-                }
-            is PlaceDetailUiState.Loaded ->
-                if (current.intelligence.leavesOut(viewModel.group)) {
-                    // The server leaves out what doesn't apply to this viewer;
-                    // a link to it gets a straight answer, not empty cards.
-                    PlaceNotForViewerState(group = viewModel.group, role = current.intelligence.viewer?.role, onBack = onBack)
-                } else {
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp),
-                    ) {
-                        // Guests and service providers can't verify this address: no verify action.
-                        val detailVerify = verify.takeUnless { current.intelligence.nonResidentViewer }
-                        CompositionLocalProvider(
-                            LocalPlaceDetailRetry provides viewModel::refresh,
-                            LocalPlaceDetailVerify provides detailVerify,
-                            LocalPlaceDetailVerifiesFirst provides current.intelligence.verifiesFirst,
-                        ) {
-                            GroupContent(group = viewModel.group, intel = current.intelligence, viewModel = viewModel, onBack = onBack)
-                        }
-                        Spacer(modifier = Modifier.height(40.dp))
+            when (val current = state) {
+                PlaceDetailUiState.Loading -> PlaceDetailSkeleton()
+                is PlaceDetailUiState.Error ->
+                    if (current.denied) {
+                        PlaceDeniedState()
+                    } else {
+                        ErrorState(message = current.message, onRetry = viewModel::refresh)
                     }
-                }
+                is PlaceDetailUiState.Loaded ->
+                    if (current.intelligence.leavesOut(viewModel.group)) {
+                        // The server leaves out what doesn't apply to this viewer;
+                        // a link to it gets a straight answer, not empty cards.
+                        PlaceNotForViewerState(group = viewModel.group, role = current.intelligence.viewer?.role, onBack = onBack)
+                    } else {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 16.dp),
+                        ) {
+                            // Guests and service providers can't verify this address: no verify action.
+                            val detailVerify = verify.takeUnless { current.intelligence.nonResidentViewer }
+                            CompositionLocalProvider(
+                                LocalPlaceDetailRetry provides viewModel::refresh,
+                                LocalPlaceDetailVerify provides detailVerify,
+                                LocalPlaceDetailVerifiesFirst provides current.intelligence.verifiesFirst,
+                            ) {
+                                GroupContent(group = viewModel.group, intel = current.intelligence, viewModel = viewModel, onBack = onBack)
+                            }
+                            Spacer(modifier = Modifier.height(40.dp))
+                        }
+                    }
+            }
         }
-    }
     }
     if (showVerify && onStartVerify != null) {
         PlaceVerifySheet(

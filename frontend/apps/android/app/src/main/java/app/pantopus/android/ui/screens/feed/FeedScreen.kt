@@ -1152,18 +1152,7 @@ private fun PopulatedFrame(
         ) {
             items(items = state.rows, key = { it.id }) { row ->
                 LaunchedEffect(row.id) { onRowAppeared(row.id) }
-                val seeded = row.actions.isSeeded
-                PulsePostCard(
-                    content = row,
-                    // A cold-start tip isn't a post: there's no page to open (its X dismisses it).
-                    onTap = if (seeded) null else ({ onTapPost(row.id) }),
-                    onPrimaryReaction = { onTapReaction(row.id) },
-                    onRSVP = if (row.attendees == null) null else ({ onTapReaction(row.id) }),
-                    onOverflow = if (seeded) null else ({ rowActions.onOverflow(row.id) }),
-                    onDismissSeeded = if (seeded) ({ rowActions.onDismissSeeded(row.id) }) else null,
-                    onToggleSave = if (seeded) null else ({ rowActions.onToggleSave(row.id) }),
-                    onToggleRepost = if (seeded) null else ({ rowActions.onToggleRepost(row.id) }),
-                )
+                FeedPostRow(row, onTapPost, onTapReaction, rowActions)
             }
             if (isLoadingMore) {
                 item {
@@ -1288,3 +1277,24 @@ private val LOCATION_PERMISSIONS =
 private fun hasLocationPermission(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+@Composable
+private fun FeedPostRow(
+    row: PulsePostCardContent,
+    onTapPost: (String) -> Unit,
+    onTapReaction: (String) -> Unit,
+    rowActions: PulseFeedRowActions,
+) {
+    val seeded = row.actions.isSeeded
+    PulsePostCard(
+        content = row,
+        // A cold-start tip isn't a post: there's no page to open (its X dismisses it).
+        onTap = if (seeded) null else ({ onTapPost(row.id) }),
+        onPrimaryReaction = { onTapReaction(row.id) },
+        onRSVP = if (row.attendees == null) null else ({ onTapReaction(row.id) }),
+        onOverflow = if (seeded) null else ({ rowActions.onOverflow(row.id) }),
+        onDismissSeeded = if (seeded) ({ rowActions.onDismissSeeded(row.id) }) else null,
+        onToggleSave = if (seeded) null else ({ rowActions.onToggleSave(row.id) }),
+        onToggleRepost = if (seeded) null else ({ rowActions.onToggleRepost(row.id) }),
+    )
+}
