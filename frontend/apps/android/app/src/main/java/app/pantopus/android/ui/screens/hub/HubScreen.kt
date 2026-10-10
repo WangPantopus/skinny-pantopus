@@ -32,10 +32,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.core.perf.ReportContentShown
-import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.hub.sections.HubActionStrip
 import app.pantopus.android.ui.screens.hub.sections.HubDiscoveryRail
 import app.pantopus.android.ui.screens.hub.sections.HubFirstRunHero
