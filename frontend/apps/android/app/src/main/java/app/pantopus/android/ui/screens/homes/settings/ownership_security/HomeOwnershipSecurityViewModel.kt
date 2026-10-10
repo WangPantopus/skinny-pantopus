@@ -184,7 +184,7 @@ class HomeOwnershipSecurityViewModel
         @Suppress("ReturnCount")
         fun onSelectRadio(rowId: String) {
             val current = policy ?: return
-            if (isSaving) return
+            if (!active || isSaving) return
 
             val request: UpdateHomeOwnershipSecurityRequest
             when {
@@ -220,8 +220,15 @@ class HomeOwnershipSecurityViewModel
             isSaving = true
             saveError = null
             _state.value = GroupedListUiState.Loaded(groups(current))
+            val generation = readGeneration
             viewModelScope.launch {
-                when (val result = repository.updateSecurity(homeId, request)) {
+                val result = repository.updateSecurity(homeId, request)
+                if (!active || generation != readGeneration) {
+                    isSaving = false
+                    if (active) refresh()
+                    return@launch
+                }
+                when (result) {
                     is NetworkResult.Success -> {
                         val body = result.data
                         if (body.requiresOwnerApproval) {

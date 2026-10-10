@@ -255,7 +255,7 @@ class HomeSettingsViewModel
          */
         fun saveRenaming() {
             val current = _rename.value
-            if (!current.canEdit || current.isSaving) return
+            if (!active || !current.canEdit || current.isSaving) return
             val trimmed = current.draft.trim()
             if (trimmed == currentName) {
                 _rename.update { it.copy(isRenaming = false, error = null) }
@@ -268,8 +268,15 @@ class HomeSettingsViewModel
                 return
             }
             _rename.update { it.copy(isSaving = true, error = null) }
+            val generation = readGeneration
             viewModelScope.launch {
-                when (val result = homeSettingsRepository.updateHome(homeId, UpdateHomeRequest(name = trimmed))) {
+                val result = homeSettingsRepository.updateHome(homeId, UpdateHomeRequest(name = trimmed))
+                if (!active || generation != readGeneration) {
+                    _rename.update { it.copy(isSaving = false) }
+                    if (active) refresh()
+                    return@launch
+                }
+                when (result) {
                     is NetworkResult.Success -> {
                         _rename.update { it.copy(isSaving = false, isRenaming = false, error = null) }
                         refresh()
