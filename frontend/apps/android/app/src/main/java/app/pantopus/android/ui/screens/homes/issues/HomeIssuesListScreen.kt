@@ -97,24 +97,13 @@ fun HomeIssuesListScreen(
     }
 
     dismissTarget?.let { (issueId, title) ->
-        AlertDialog(
-            onDismissRequest = { dismissTarget = null },
-            title = { Text("Dismiss issue?") },
-            text = { Text("“$title” will be moved to History. You can still see it there.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.dismissIssue(issueId)
-                        dismissTarget = null
-                    },
-                    modifier = Modifier.testTag("homeIssues_dismissConfirm"),
-                ) {
-                    Text("Dismiss", color = PantopusColors.error)
-                }
+        DismissIssueDialog(
+            title = title,
+            onConfirm = {
+                viewModel.dismissIssue(issueId)
+                dismissTarget = null
             },
-            dismissButton = {
-                TextButton(onClick = { dismissTarget = null }) { Text("Cancel") }
-            },
+            onDismiss = { dismissTarget = null },
         )
     }
 
@@ -128,4 +117,23 @@ fun HomeIssuesListScreen(
             },
         )
     }
+}
+
+@Composable
+private fun DismissIssueDialog(
+    title: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Dismiss issue?") },
+        text = { Text("“$title” will be moved to History. You can still see it there.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm, modifier = Modifier.testTag("homeIssues_dismissConfirm")) {
+                Text("Dismiss", color = PantopusColors.error)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
