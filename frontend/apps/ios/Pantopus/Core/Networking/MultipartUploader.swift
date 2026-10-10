@@ -75,12 +75,19 @@ public final class MultipartUploader: @unchecked Sendable {
     /// body + HTTP response so each caller keeps its own status-code
     /// mapping. If a 401 survives the refresh, the user is signed out before
     /// returning so the caller's `case 401` maps to `.unauthorized` uniformly.
+    @MainActor
     private func performUpload(
         to url: URL,
         boundary: String,
         body: Data,
         headers: [String: String] = [:]
     ) async throws -> (Data, HTTPURLResponse) {
+        let sessionOwner = auth
+        let generation = sessionOwner.requestSessionGeneration
+        let checkSession: @MainActor () throws -> Void = { [self] in
+            guard auth === sessionOwner else { throw CancellationError() }
+            try sessionOwner.requireRequestSession(generation)
+        }
         func makeRequest(token: String?, deviceId: String?) -> URLRequest {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -101,32 +108,39 @@ public final class MultipartUploader: @unchecked Sendable {
         // Proactive refresh (< 120 s left) so long uploads don't start with a
         // token that expires mid-flight and cost a full replay.
         var didAttemptRefresh = false
-        if await auth.isAccessTokenExpiringSoon {
+        try checkSession()
+        if sessionOwner.isAccessTokenExpiringSoon {
             didAttemptRefresh = true
-            if await auth.refreshIfPossible() == .authRejected {
-                await auth.handleUnauthorized()
+            let outcome = await sessionOwner.refreshIfPossible()
+            try checkSession()
+            if outcome == .authRejected {
+                await sessionOwner.handleUnauthorized()
                 throw APIError.unauthorized
             }
         }
 
-        let deviceId = await auth.deviceId
-        let token = await auth.accessToken
+        let deviceId = sessionOwner.deviceId
+        let token = sessionOwner.accessToken
         var (data, response) = try await session.upload(for: makeRequest(token: token, deviceId: deviceId), from: body)
+        try checkSession()
         guard var http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
 
         if http.statusCode == 401, !didAttemptRefresh {
-            switch await auth.refreshIfPossible() {
+            let outcome = await sessionOwner.refreshIfPossible()
+            try checkSession()
+            switch outcome {
             case .rotated:
-                let refreshed = await auth.accessToken
+                let refreshed = sessionOwner.accessToken
                 (data, response) = try await session.upload(for: makeRequest(token: refreshed, deviceId: deviceId), from: body)
+                try checkSession()
                 guard let retryHTTP = response as? HTTPURLResponse else { throw APIError.invalidResponse }
                 http = retryHTTP
                 // If the replay still 401s, the just-rotated token is rejected.
                 if http.statusCode == 401 {
-                    await auth.handleUnauthorized()
+                    await sessionOwner.handleUnauthorized()
                 }
             case .authRejected:
-                await auth.handleUnauthorized()
+                await sessionOwner.handleUnauthorized()
             case .transient:
                 // Network/server blip during refresh — don't sign out. Surface a
                 // transport error (parity with APIClient) instead of a
@@ -136,7 +150,7 @@ public final class MultipartUploader: @unchecked Sendable {
         } else if http.statusCode == 401 {
             // Pre-flight refresh already rotated the token and the server
             // still refused it — the session is gone.
-            await auth.handleUnauthorized()
+            await sessionOwner.handleUnauthorized()
         }
         return (data, http)
     }

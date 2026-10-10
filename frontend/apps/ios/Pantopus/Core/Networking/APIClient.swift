@@ -283,10 +283,18 @@ final class APIClient: @unchecked Sendable {
 
     // MARK: - Retry loop
 
+    @MainActor
     // swiftlint:disable:next cyclomatic_complexity
     private func executeWithRetry(
         _ endpoint: Endpoint, includingForbidden: Bool = false, includingNotFound: Bool = false
     ) async throws -> DataResponse {
+        let sessionOwner = auth
+        let generation = sessionOwner.requestSessionGeneration
+        let checkSession: @MainActor () throws -> Void = { [self] in
+            guard endpoint.authenticated else { return }
+            guard auth === sessionOwner else { throw CancellationError() }
+            try sessionOwner.requireRequestSession(generation)
+        }
         let shouldRetry = endpoint.method.isIdempotent
         var attempt = 0
         // One silent token refresh per request. On a 401 for an authenticated
@@ -303,43 +311,40 @@ final class APIClient: @unchecked Sendable {
         // renew it *before* sending, so a cold start never pays the 401 tax.
         // Never for the refresh endpoint itself (single-flight recursion) and
         // never for unauthenticated calls.
-        if endpoint.authenticated, await auth.isAccessTokenExpiringSoon {
+        try checkSession()
+        if endpoint.authenticated, sessionOwner.isAccessTokenExpiringSoon {
             didAttemptRefresh = true
-            if await auth.refreshIfPossible() == .authRejected {
+            let outcome = await sessionOwner.refreshIfPossible()
+            try checkSession()
+            if outcome == .authRejected {
                 // The session is dead server-side; the request would 401
                 // anyway. End it now with the reason the refresh reported.
-                await auth.handleUnauthorized()
+                await sessionOwner.handleUnauthorized()
                 throw APIError.unauthorized
             }
         }
         while true {
-            // Rebuild each iteration so a refreshed access token is picked up.
-            let request = try await buildRequest(
-                for: endpoint,
-                extraHeaders: stepUpToken.map { [Self.stepUpHeader: $0] } ?? [:]
-            )
-            if let dispatchGuard = endpoint.dispatchGuard {
-                try await MainActor.run {
-                    try dispatchGuard()
-                    if endpoint.authenticated {
-                        let currentAuthorization = auth.accessToken.map { "Bearer \($0)" }
-                        guard request.value(forHTTPHeaderField: "Authorization") == currentAuthorization else { throw CancellationError() }
-                    }
-                }
-            }
+            try checkSession()
+            let request = try await scopedRequest(endpoint, stepUpToken: stepUpToken, checkSession: checkSession)
             do {
-                return try await executeOnce(
+                let response = try await executeOnce(
                     request, endpoint: endpoint, includingForbidden: includingForbidden, includingNotFound: includingNotFound
                 )
+                try checkSession()
+                return response
             } catch let signal as StepUpRequiredSignal {
+                try checkSession()
                 guard endpoint.authenticated, !didAttemptStepUp else { throw APIError.forbidden() }
                 didAttemptStepUp = true
-                guard let token = await auth.obtainStepUpToken(purpose: signal.purpose, methods: signal.methods) else {
+                let token = await sessionOwner.obtainStepUpToken(purpose: signal.purpose, methods: signal.methods)
+                try checkSession()
+                guard let token else {
                     throw APIError.forbidden()
                 }
                 stepUpToken = token
                 continue
             } catch let error as APIError {
+                try checkSession()
                 switch error {
                 case .unauthorized where endpoint.verifiesCredential:
                     // The *presented credential* (a password for step-up /
@@ -349,12 +354,14 @@ final class APIClient: @unchecked Sendable {
                     throw error
                 case .unauthorized where endpoint.authenticated && !didAttemptRefresh:
                     didAttemptRefresh = true
-                    switch await auth.refreshIfPossible() {
+                    let outcome = await sessionOwner.refreshIfPossible()
+                    try checkSession()
+                    switch outcome {
                     case .rotated:
                         continue
                     case .authRejected:
                         // Refresh token expired/revoked — end the session.
-                        await auth.handleUnauthorized()
+                        await sessionOwner.handleUnauthorized()
                         throw error
                     case .transient:
                         // Couldn't refresh due to a network/server blip. Do NOT
@@ -366,7 +373,7 @@ final class APIClient: @unchecked Sendable {
                     // Unauthenticated endpoint (login/refresh/…) or refresh
                     // already tried and the replay still 401'd.
                     if endpoint.authenticated {
-                        await auth.handleUnauthorized()
+                        await sessionOwner.handleUnauthorized()
                     }
                     throw error
                 default:
@@ -382,6 +389,26 @@ final class APIClient: @unchecked Sendable {
                 }
             }
         }
+    }
+
+    /// Build each attempt with the rotated token, then recheck its opening session
+    /// before dispatch. Auth decisions and their guards run on the same actor.
+    @MainActor
+    private func scopedRequest(
+        _ endpoint: Endpoint, stepUpToken: String?, checkSession: @MainActor () throws -> Void
+    ) async throws -> URLRequest {
+        let request = try await buildRequest(
+            for: endpoint, extraHeaders: stepUpToken.map { [Self.stepUpHeader: $0] } ?? [:]
+        )
+        try checkSession()
+        if let dispatchGuard = endpoint.dispatchGuard {
+            try dispatchGuard()
+            if endpoint.authenticated {
+                let currentAuthorization = auth.accessToken.map { "Bearer \($0)" }
+                guard request.value(forHTTPHeaderField: "Authorization") == currentAuthorization else { throw CancellationError() }
+            }
+        }
+        return request
     }
 
     /// Internal signal thrown by `executeOnce` for a 403 whose body is
