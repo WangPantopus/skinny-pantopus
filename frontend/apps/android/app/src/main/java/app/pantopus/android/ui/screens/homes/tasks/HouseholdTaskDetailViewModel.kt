@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection.HTTP_FORBIDDEN
+import java.net.HttpURLConnection.HTTP_NOT_FOUND
+import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
 import javax.inject.Inject
 
 data class HouseholdTaskDetailState(
@@ -227,18 +229,7 @@ class HouseholdTaskDetailViewModel
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: NetworkError) {
-                        if (current(revision)) {
-                            val original = completionOriginal
-                            if (original != null && error.code !in listOf(401, 403, 404)) {
-                                _state.value = _state.value.copy(
-                                    task = original,
-                                    error = error.displayMessage("Couldn't confirm the task change. Try again."),
-                                )
-                            } else {
-                                gate?.invalidate()
-                                deny(error.displayMessage("Could not refresh task access. Try again."))
-                            }
-                        }
+                        if (current(revision)) reportNetworkFailure(error)
                     } catch (error: IllegalStateException) {
                         reportCurrentFailure(revision, error)
                     } catch (error: IllegalArgumentException) {
@@ -251,6 +242,20 @@ class HouseholdTaskDetailViewModel
                         }
                     }
                 }
+        }
+
+        private fun reportNetworkFailure(error: NetworkError) {
+            val original = completionOriginal
+            val refused = error.code in listOf(HTTP_UNAUTHORIZED, HTTP_FORBIDDEN, HTTP_NOT_FOUND)
+            if (original != null && !refused) {
+                _state.value = _state.value.copy(
+                    task = original,
+                    error = error.displayMessage("Couldn't confirm the task change. Try again."),
+                )
+            } else {
+                if (refused) gate?.invalidate()
+                deny(error.displayMessage("Could not refresh task access. Try again."))
+            }
         }
 
         private fun reportCurrentFailure(

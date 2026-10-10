@@ -485,7 +485,7 @@ class HouseholdTasksListViewModel
                         rollbackCompletion()
                         _actionError.value = error.displayMessage("Couldn't confirm the task change. Try again.")
                     } else {
-                        gate?.invalidate()
+                        if (error.code in listOf(401, 403, 404)) gate?.invalidate()
                         fail(error.displayMessage("Could not refresh task access. Try again."))
                     }
                 }
