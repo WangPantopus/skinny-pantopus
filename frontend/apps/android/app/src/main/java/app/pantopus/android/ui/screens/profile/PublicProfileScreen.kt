@@ -32,6 +32,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.BeaconIdentity
 import app.pantopus.android.ui.components.EmptyState
@@ -86,6 +89,7 @@ fun PublicProfileScreen(
     usernameShare: UsernameShareViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val usernameShareForm by usernameShare.form.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val selectedLocalTab by viewModel.selectedLocalTab.collectAsStateWithLifecycle()
@@ -119,7 +123,11 @@ fun PublicProfileScreen(
             }
         }
     }
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    RefreshOnStoreChange(viewModel::load)
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -135,6 +143,9 @@ fun PublicProfileScreen(
                 .background(PantopusColors.appBg)
                 .testTag("publicProfile"),
     ) {
+        Column(Modifier.fillMaxSize()) {
+            refreshNotice?.let { RefreshFailedLine(it, Modifier.padding(horizontal = Spacing.s4)) }
+            Box(Modifier.weight(1f)) {
         when (val s = state) {
             PublicProfileUiState.Loading -> LoadingLayout(onBack = onBack)
             is PublicProfileUiState.Error -> ErrorLayout(message = s.message, onRetry = { viewModel.refresh() }, onBack = onBack)
@@ -200,6 +211,8 @@ fun PublicProfileScreen(
                         },
                     )
                 }
+            }
+        }
             }
         }
         toast?.let { message ->

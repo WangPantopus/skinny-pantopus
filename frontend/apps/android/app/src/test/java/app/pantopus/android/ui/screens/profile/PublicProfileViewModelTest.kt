@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.connections.ConnectionsRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
@@ -67,11 +68,14 @@ class PublicProfileViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        every { repo.publicProfileCopy(any()) } returns Stored()
+        every { social.publicProfileCopy(any()) } returns Stored()
+        every { posts.userPostsCopy(any(), any(), any()) } returns Stored()
         // The launch cut hides the persona chip and the Gigs count; these tests pin them.
         LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         // Local-kind profiles pull `GET /api/posts/user/:id`; default the
         // stub to an empty feed and let individual tests override it.
-        coEvery { posts.userPosts(any(), any()) } returns
+        coEvery { posts.userPosts(any(), any(), any(), any(), any(), any()) } returns
             NetworkResult.Success(MyPostsResponse(emptyList()))
     }
 
@@ -124,7 +128,7 @@ class PublicProfileViewModelTest {
 
     @Test fun load_happy_path() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             val vm = makeVm()
             vm.load()
             val loaded = vm.state.value as PublicProfileUiState.Loaded
@@ -138,18 +142,18 @@ class PublicProfileViewModelTest {
 
     @Test fun tab_switching_does_not_refetch() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             val vm = makeVm()
             vm.load()
             vm.selectTab(ProfileTab.Reviews)
             vm.selectTab(ProfileTab.Gigs)
-            coVerify(exactly = 1) { repo.publicProfile(ROUTE_ID) }
+            coVerify(exactly = 1) { repo.publicProfile(ROUTE_ID, any()) }
             assertEquals(ProfileTab.Gigs, vm.selectedTab.value)
         }
 
     @Test fun empty_reviews_state() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns
                 NetworkResult.Success(profile(verified = false, reviews = emptyList(), rating = 0.0, gigs = 0))
             val vm = makeVm()
             vm.load()
@@ -160,7 +164,7 @@ class PublicProfileViewModelTest {
 
     @Test fun not_found_emits_friendly_message() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Failure(NetworkError.NotFound)
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Failure(NetworkError.NotFound)
             val vm = makeVm()
             vm.load()
             val errorState = vm.state.value as PublicProfileUiState.Error
@@ -169,7 +173,7 @@ class PublicProfileViewModelTest {
 
     @Test fun connect_sends_request_and_marks_succeeded() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { relationships.sendRequest("u1", null) } returns
                 NetworkResult.Success(ConnectionRequestResponse(message = "ok"))
             val vm = makeVm()
@@ -181,7 +185,7 @@ class PublicProfileViewModelTest {
 
     @Test fun connect_failure_surfaces_toast() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { relationships.sendRequest("u1", null) } returns
                 NetworkResult.Failure(NetworkError.Forbidden)
             val vm = makeVm()
@@ -208,7 +212,7 @@ class PublicProfileViewModelTest {
                 )
             poses.forEach { (edge, label, tappable) ->
                 signedInAs("viewer")
-                coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+                coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
                 coEvery { social.relationship("u1") } returns
                     NetworkResult.Success(UserRelationshipDto(relationship = edge.apiValue, following = false))
                 val vm = makeVm()
@@ -223,7 +227,7 @@ class PublicProfileViewModelTest {
 
     @Test fun connect_control_is_hidden_for_a_signed_out_viewer() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             val vm = makeVm()
             vm.load()
             assertFalse(vm.canFollow.value)
@@ -234,7 +238,7 @@ class PublicProfileViewModelTest {
     @Test fun connect_is_inert_while_a_request_is_outstanding() =
         runTest {
             signedInAs("viewer")
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { social.relationship("u1") } returns
                 NetworkResult.Success(UserRelationshipDto(relationship = "pending_sent", following = false))
             val vm = makeVm()
@@ -247,7 +251,7 @@ class PublicProfileViewModelTest {
     @Test fun connect_on_an_inbound_request_accepts_it() =
         runTest {
             signedInAs("viewer")
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { social.relationship("u1") } returns
                 NetworkResult.Success(UserRelationshipDto(relationship = "pending_received", following = false))
             coEvery { relationships.pendingRequests() } returns
@@ -269,7 +273,7 @@ class PublicProfileViewModelTest {
     @Test fun connect_on_a_connected_edge_confirms_before_removing_it() =
         runTest {
             signedInAs("viewer")
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { social.relationship("u1") } returns
                 NetworkResult.Success(UserRelationshipDto(relationship = "connected", following = true))
             val vm = makeVm()
@@ -285,7 +289,7 @@ class PublicProfileViewModelTest {
     @Test fun blocking_drops_the_connect_control() =
         runTest {
             signedInAs("viewer")
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { social.relationship("u1") } returns
                 NetworkResult.Success(UserRelationshipDto(relationship = "none", following = false))
             coEvery { blocks.block("u1") } returns NetworkResult.Success(Unit)
@@ -299,7 +303,7 @@ class PublicProfileViewModelTest {
 
     @Test fun block_succeeds_and_emits_toast() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { blocks.block("u1") } returns NetworkResult.Success(Unit)
             val vm = makeVm()
             vm.load()
@@ -310,7 +314,7 @@ class PublicProfileViewModelTest {
 
     @Test fun overflow_flag_toggles() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             val vm = makeVm()
             vm.load()
             assertFalse(vm.showOverflow.value)
@@ -322,7 +326,7 @@ class PublicProfileViewModelTest {
 
     @Test fun profile_without_residency_is_persona_kind() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile(residency = null))
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile(residency = null))
             val vm = makeVm()
             vm.load()
             val loaded = vm.state.value as PublicProfileUiState.Loaded
@@ -333,7 +337,7 @@ class PublicProfileViewModelTest {
 
     @Test fun profile_with_verified_residency_is_local_kind() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns
                 NetworkResult.Success(profile(residency = mapOf("verified" to true, "address" to "412 Elm St")))
             val vm = makeVm()
             vm.load()
@@ -352,7 +356,7 @@ class PublicProfileViewModelTest {
      */
     @Test fun follow_does_not_use_username_as_beacon_handle() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             val vm = makeVm()
             vm.load()
             vm.follow()
@@ -369,28 +373,28 @@ class PublicProfileViewModelTest {
     @Test fun handle_route_resolves_through_username_endpoint() =
         runTest {
             routeIdentifier = "@mariak"
-            coEvery { social.publicProfileByUsername("@mariak") } returns
+            coEvery { social.publicProfileByUsername("@mariak", any()) } returns
                 NetworkResult.Success(profile())
             val vm = makeVm()
             vm.load()
             assertTrue(vm.state.value is PublicProfileUiState.Loaded)
-            coVerify(exactly = 1) { social.publicProfileByUsername("@mariak") }
-            coVerify(exactly = 0) { repo.publicProfile(any()) }
+            coVerify(exactly = 1) { social.publicProfileByUsername("@mariak", any()) }
+            coVerify(exactly = 0) { repo.publicProfile(any(), any()) }
         }
 
     @Test fun uuid_route_still_resolves_through_id_endpoint() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             val vm = makeVm()
             vm.load()
-            coVerify(exactly = 1) { repo.publicProfile(ROUTE_ID) }
-            coVerify(exactly = 0) { social.publicProfileByUsername(any()) }
+            coVerify(exactly = 1) { repo.publicProfile(ROUTE_ID, any()) }
+            coVerify(exactly = 0) { social.publicProfileByUsername(any(), any()) }
         }
 
     @Test fun follow_uses_plain_follow_endpoint_for_ordinary_neighbor() =
         runTest {
             signedInAs("viewer")
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { social.relationship("u1") } returns
                 NetworkResult.Success(UserRelationshipDto(relationship = "none", following = false))
             coEvery { social.follow("u1") } returns
@@ -410,7 +414,7 @@ class PublicProfileViewModelTest {
     @Test fun follow_toggles_to_unfollow_when_already_following() =
         runTest {
             signedInAs("viewer")
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { social.relationship("u1") } returns
                 NetworkResult.Success(UserRelationshipDto(relationship = "none", following = true))
             coEvery { social.unfollow("u1") } returns
@@ -428,7 +432,7 @@ class PublicProfileViewModelTest {
     @Test fun own_profile_has_no_follow_affordance() =
         runTest {
             signedInAs("u1")
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             val vm = makeVm()
             vm.load()
             assertFalse(vm.canFollow.value)
@@ -441,7 +445,7 @@ class PublicProfileViewModelTest {
 
     @Test fun local_profile_projects_user_posts_onto_the_feed() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns
                 NetworkResult.Success(profile(residency = mapOf("verified" to true)))
             coEvery { posts.userPosts("u1", any()) } returns
                 NetworkResult.Success(
@@ -488,7 +492,7 @@ class PublicProfileViewModelTest {
 
     @Test fun local_profile_post_failure_degrades_to_empty_feed() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns
                 NetworkResult.Success(profile(residency = mapOf("verified" to true)))
             coEvery { posts.userPosts("u1", any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
@@ -501,28 +505,28 @@ class PublicProfileViewModelTest {
 
     @Test fun persona_profile_does_not_fetch_user_posts() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile(residency = null))
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile(residency = null))
             val vm = makeVm()
             vm.load()
-            coVerify(exactly = 0) { posts.userPosts(any(), any()) }
+            coVerify(exactly = 0) { posts.userPosts(any(), any(), any(), any(), any(), any()) }
             assertTrue((vm.state.value as PublicProfileUiState.Loaded).content.posts.isEmpty())
         }
 
     @Test fun local_tab_defaults_to_posts_and_switches_without_refetch() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns
                 NetworkResult.Success(profile(residency = mapOf("verified" to true)))
             val vm = makeVm()
             vm.load()
             assertEquals(LocalProfileTab.Posts, vm.selectedLocalTab.value)
             vm.selectLocalTab(LocalProfileTab.About)
             assertEquals(LocalProfileTab.About, vm.selectedLocalTab.value)
-            coVerify(exactly = 1) { repo.publicProfile(ROUTE_ID) }
+            coVerify(exactly = 1) { repo.publicProfile(ROUTE_ID, any()) }
         }
 
     @Test fun unlock_broadcast_without_beacon_handle_stays_closed() =
         runTest {
-            coEvery { repo.publicProfile(ROUTE_ID) } returns NetworkResult.Success(profile())
+            coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             val vm = makeVm()
             vm.load()
             vm.unlockBroadcast(2)

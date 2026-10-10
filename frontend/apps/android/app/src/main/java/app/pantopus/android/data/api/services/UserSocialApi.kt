@@ -3,6 +3,8 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.users.FollowActionResponse
 import app.pantopus.android.data.api.models.users.UserRelationshipDto
+import retrofit2.Response
+import retrofit2.http.Header
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -28,6 +30,12 @@ interface UserSocialApi {
     suspend fun publicProfileByUsername(
         @Path("username") username: String,
     ): PublicProfileDto
+
+    @GET("api/users/username/{username}")
+    suspend fun publicProfileByUsernameConditional(
+        @Path("username") username: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<PublicProfileDto>
 
     /**
      * `POST /api/users/:id/follow` — follow an ordinary user. 400 when
