@@ -32,10 +32,17 @@ export default function useViewerHome() {
   const home = query.data?.home ?? null;
 
   const viewerHome = useMemo<ViewerHome | null>(() => {
-    // PostGIS stores as [lng, lat]
-    const coordinates = home?.location?.coordinates;
-    if (!home || !coordinates) return null;
-    const [lng, lat] = coordinates;
+    // Home list endpoints return a parsed point; older replies used GeoJSON.
+    const location = home?.location as {
+      latitude?: number;
+      longitude?: number;
+      coordinates?: [number, number];
+    } | null | undefined;
+    const lat = location?.latitude ?? location?.coordinates?.[1];
+    const lng = location?.longitude ?? location?.coordinates?.[0];
+    if (!home || typeof lat !== 'number' || typeof lng !== 'number'
+      || !Number.isFinite(lat) || !Number.isFinite(lng)
+      || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
     return { homeId: home.id, lat, lng, address: home.address, city: home.city, state: home.state };
   }, [home]);
 
