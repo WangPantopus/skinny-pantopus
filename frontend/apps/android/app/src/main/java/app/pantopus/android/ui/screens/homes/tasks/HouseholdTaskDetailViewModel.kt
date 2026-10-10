@@ -27,6 +27,7 @@ data class HouseholdTaskDetailState(
     val task: HomeTaskDto? = null,
     val loading: Boolean = true,
     val busy: Boolean = false,
+    val pendingCompletion: Boolean = false,
     val error: String? = null,
     val deleted: Boolean = false,
     /** "you", a member's name, or the short "Member 1A2B" label; null when nobody is assigned. */
@@ -60,6 +61,7 @@ class HouseholdTaskDetailViewModel
         private var inFlight = false
         private var active = true
         private var work: Job? = null
+        private var completionOriginal: HomeTaskDto? = null
 
         /** Members' names by user id; null until read. Empty when the viewer may not list members. */
         private var memberNames: Map<String, String>? = null
@@ -85,6 +87,8 @@ class HouseholdTaskDetailViewModel
             work?.cancel()
             work = null
             inFlight = false
+            completionOriginal?.let { _state.value = _state.value.copy(task = it, pendingCompletion = false, busy = false) }
+            completionOriginal = null
             // Founder decision 3: owners and household roles keep the task on screen while away; anyone else blanks.
             if (!showsCopy) _state.value = HouseholdTaskDetailState()
             gate?.leave()
@@ -135,7 +139,10 @@ class HouseholdTaskDetailViewModel
         fun complete() {
             val current = _state.value.task ?: return
             if (current.capabilities?.canComplete != true) return
-            runAction({ access.complete(taskId, current.status != "done") }) { task -> show(task) }
+            runAction(
+                { access.complete(taskId, current.status != "done") },
+                optimistic = current.copy(status = if (current.status == "done") "open" else "done"),
+            ) { task -> show(task) }
         }
 
         fun delete() {
@@ -195,6 +202,7 @@ class HouseholdTaskDetailViewModel
 
         private fun <T> runAction(
             action: suspend () -> T,
+            optimistic: HomeTaskDto? = null,
             publish: (T) -> Unit,
         ) {
             if (!active || inFlight || _state.value.deleted) return
@@ -204,7 +212,13 @@ class HouseholdTaskDetailViewModel
             }
             inFlight = true
             val revision = ++generation
-            _state.value = _state.value.copy(busy = true, error = null)
+            completionOriginal = _state.value.task.takeIf { optimistic != null }
+            _state.value = _state.value.copy(
+                task = optimistic ?: _state.value.task,
+                pendingCompletion = optimistic != null,
+                busy = true,
+                error = null,
+            )
             work =
                 viewModelScope.launch {
                     try {
@@ -213,7 +227,18 @@ class HouseholdTaskDetailViewModel
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: NetworkError) {
-                        if (current(revision)) deny(error.displayMessage("Could not refresh task access. Try again."))
+                        if (current(revision)) {
+                            val original = completionOriginal
+                            if (original != null && error.code !in listOf(401, 403, 404)) {
+                                _state.value = _state.value.copy(
+                                    task = original,
+                                    error = error.displayMessage("Couldn't confirm the task change. Try again."),
+                                )
+                            } else {
+                                gate?.invalidate()
+                                deny(error.displayMessage("Could not refresh task access. Try again."))
+                            }
+                        }
                     } catch (error: IllegalStateException) {
                         reportCurrentFailure(revision, error)
                     } catch (error: IllegalArgumentException) {
@@ -221,7 +246,8 @@ class HouseholdTaskDetailViewModel
                     } finally {
                         if (revision == generation) {
                             inFlight = false
-                            _state.value = _state.value.copy(busy = false)
+                            completionOriginal = null
+                            _state.value = _state.value.copy(busy = false, pendingCompletion = false)
                         }
                     }
                 }
@@ -242,6 +268,7 @@ class HouseholdTaskDetailViewModel
             memberNames = null
             generation++
             inFlight = false
+            completionOriginal = null
             _state.value = HouseholdTaskDetailState(loading = false, error = message)
         }
     }
