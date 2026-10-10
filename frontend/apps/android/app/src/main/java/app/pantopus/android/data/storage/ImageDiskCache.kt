@@ -27,64 +27,77 @@ class ImageDiskCache private constructor(
     override val maxSize: Long get() = synchronized(lock) { budget }
 
     /** Coil's capacity is immutable; an increase uses the larger capacity at next launch. */
-    fun setLimit(limitBytes: Long) = synchronized(lock) {
-        val next = photoBudget(limitBytes).coerceAtMost(delegate.maxSize)
-        if (next < budget) clear()
-        budget = next
-    }
-
-    override fun clear() = synchronized(lock) {
-        generation++
-        recent.clear()
-        delegate.clear()
-    }
-
-    override fun openSnapshot(key: String): DiskCache.Snapshot? = synchronized(lock) {
-        delegate.openSnapshot(key)?.let { snapshot ->
-            if (snapshot.data.toFile().length() == 0L) {
-                snapshot.close()
-                delegate.remove(key)
-                null
-            } else {
-                recent[key] = Unit
-                snapshot.data.toFile().setLastModified(System.currentTimeMillis())
-                wrapSnapshot(key, snapshot)
-            }
-        }
-    }
-
-    override fun openEditor(key: String): DiskCache.Editor? = synchronized(lock) {
-        delegate.openEditor(key)?.let { wrapEditor(key, it) }
-    }
-
-    private fun wrapSnapshot(key: String, snapshot: DiskCache.Snapshot): DiskCache.Snapshot =
-        object : DiskCache.Snapshot by snapshot {
-            override fun closeAndOpenEditor(): DiskCache.Editor? = synchronized(lock) {
-                snapshot.closeAndOpenEditor()?.let { wrapEditor(key, it) }
-            }
+    fun setLimit(limitBytes: Long) =
+        synchronized(lock) {
+            val next = photoBudget(limitBytes).coerceAtMost(delegate.maxSize)
+            if (next < budget) clear()
+            budget = next
         }
 
-    private fun wrapEditor(key: String, editor: DiskCache.Editor): DiskCache.Editor {
-        val started = generation
-        return object : DiskCache.Editor by editor {
-            override fun commit() = synchronized(lock) {
-                if (started != generation) {
-                    // clear() can already have detached this editor from Coil's journal.
-                    runCatching { editor.abort() }
-                    Unit
-                } else if (editor.data.toFile().length() == 0L) {
-                    editor.abort()
+    override fun clear() =
+        synchronized(lock) {
+            generation++
+            recent.clear()
+            delegate.clear()
+        }
+
+    override fun openSnapshot(key: String): DiskCache.Snapshot? =
+        synchronized(lock) {
+            delegate.openSnapshot(key)?.let { snapshot ->
+                if (snapshot.data.toFile().length() == 0L) {
+                    snapshot.close()
+                    delegate.remove(key)
+                    null
                 } else {
-                    editor.commit()
                     recent[key] = Unit
-                    trim()
+                    snapshot.data.toFile().setLastModified(System.currentTimeMillis())
+                    wrapSnapshot(key, snapshot)
                 }
             }
+        }
 
-            override fun commitAndOpenSnapshot(): DiskCache.Snapshot? = synchronized(lock) {
-                commit()
-                if (started == generation) openSnapshot(key) else null
-            }
+    override fun openEditor(key: String): DiskCache.Editor? =
+        synchronized(lock) {
+            delegate.openEditor(key)?.let { wrapEditor(key, it) }
+        }
+
+    private fun wrapSnapshot(
+        key: String,
+        snapshot: DiskCache.Snapshot,
+    ): DiskCache.Snapshot =
+        object : DiskCache.Snapshot by snapshot {
+            override fun closeAndOpenEditor(): DiskCache.Editor? =
+                synchronized(lock) {
+                    snapshot.closeAndOpenEditor()?.let { wrapEditor(key, it) }
+                }
+        }
+
+    private fun wrapEditor(
+        key: String,
+        editor: DiskCache.Editor,
+    ): DiskCache.Editor {
+        val started = generation
+        return object : DiskCache.Editor by editor {
+            override fun commit() =
+                synchronized(lock) {
+                    if (started != generation) {
+                        // clear() can already have detached this editor from Coil's journal.
+                        runCatching { editor.abort() }
+                        Unit
+                    } else if (editor.data.toFile().length() == 0L) {
+                        editor.abort()
+                    } else {
+                        editor.commit()
+                        recent[key] = Unit
+                        trim()
+                    }
+                }
+
+            override fun commitAndOpenSnapshot(): DiskCache.Snapshot? =
+                synchronized(lock) {
+                    commit()
+                    if (started == generation) openSnapshot(key) else null
+                }
         }
     }
 
@@ -100,7 +113,11 @@ class ImageDiskCache private constructor(
     companion object {
         const val DIRECTORY = "image_cache"
 
-        fun build(context: Context, limitBytes: Long, now: Long = System.currentTimeMillis()): ImageDiskCache {
+        fun build(
+            context: Context,
+            limitBytes: Long,
+            now: Long = System.currentTimeMillis(),
+        ): ImageDiskCache {
             val directory = File(context.cacheDir, DIRECTORY)
             sweep(directory, now)
             return ImageDiskCache(DiskCache.Builder().directory(directory).maxSizeBytes(photoBudget(limitBytes)).build())
@@ -108,7 +125,10 @@ class ImageDiskCache private constructor(
 
         fun photoBudget(limitBytes: Long): Long = (limitBytes - SAVED_PAGES_MAX_BYTES).coerceAtLeast(1L)
 
-        private fun sweep(directory: File, now: Long) {
+        private fun sweep(
+            directory: File,
+            now: Long,
+        ) {
             val files = directory.listFiles()?.filter { it.isFile && it.name !in JOURNAL_FILES } ?: return
             files.groupBy { it.name.substringBefore('.') }.values
                 .filter { entry -> entry.all { now - it.lastModified() > UNUSED_MS } }
