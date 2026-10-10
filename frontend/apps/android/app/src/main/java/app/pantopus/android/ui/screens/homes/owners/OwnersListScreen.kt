@@ -94,7 +94,7 @@ fun OwnersListScreen(
     onBack: () -> Unit,
     viewModel: OwnersListViewModel = hiltViewModel(),
 ) {
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_owners", state.showsContent())
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()

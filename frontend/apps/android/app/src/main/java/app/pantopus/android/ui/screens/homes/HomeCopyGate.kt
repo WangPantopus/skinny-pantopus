@@ -127,8 +127,10 @@ class HomeCopyGateFactory
 fun HomeCopyLifecycle(
     load: () -> Unit,
     pause: () -> Unit,
+    observeStoreChanges: Boolean = false,
 ) {
-    RefreshOnStoreChange(load)
+    // Other consumers may install a targeted observer of their own.
+    if (observeStoreChanges) RefreshOnStoreChange(load)
     val owner = LocalLifecycleOwner.current
     val currentLoad by rememberUpdatedState(load)
     val currentPause by rememberUpdatedState(pause)

@@ -38,7 +38,7 @@ fun HomeIssuesListScreen(
     onBack: (() -> Unit)? = null,
     viewModel: HomeIssuesListViewModel = hiltViewModel(),
 ) {
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_issues", state.showsContent())
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
