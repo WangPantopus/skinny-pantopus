@@ -261,6 +261,23 @@ class ScreenStore
             }
         }
 
+        /** Capture before a direct sensitive read: its refusal cannot erase a newer account's safe summary. */
+        fun remover(key: StoreKey<*>): () -> Unit {
+            val account = accountId() ?: return {}
+            val (slot, ticket) =
+                synchronized(slots) {
+                    val slot = slotLocked(key, account)
+                    slot to Ticket(generation, identity(account), slot.edits, slot.marks)
+                }
+            return {
+                synchronized(slots) {
+                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {
+                        remove(key)
+                    }
+                }
+            }
+        }
+
         /** A list item tapped now can seed a detail's first frame. It stays in the same bounded, wiped memory store. */
         fun <T : Any> seed(
             key: StoreKey<T>,
