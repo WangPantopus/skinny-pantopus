@@ -471,6 +471,9 @@ class HomeDashboardViewModel
             refresh(force = false)
         }
 
+        /** A visible-screen signal re-reads only the entries the store marked out of date. */
+        fun recheck() = refresh(force = false)
+
         /** Pull to refresh and Retry: read now. */
         fun refresh() = refresh(force = true)
 
