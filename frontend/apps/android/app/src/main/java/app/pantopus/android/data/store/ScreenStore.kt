@@ -182,7 +182,7 @@ class ScreenStore
                     if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
                     val running = slot.inFlight?.takeIf { it.isActive }
                     if (running != null) return@synchronized slot to running
-                    val ticket = Ticket(generation, identity(), slot.edits, slot.marks)
+                    val ticket = Ticket(generation, identity(account), slot.edits, slot.marks)
                     val etag = slot.etag.takeIf { current.data != null }
                     slot.state.value = current.copy(refreshing = true)
                     val job = scope.async { settle(slot, fetchSafely(fetch, etag), ticket) }
@@ -208,10 +208,20 @@ class ScreenStore
 
         /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
         fun <T : Any> writer(key: StoreKey<T>): (T) -> Unit {
-            val captured = synchronized(slots) { generation to identity() }
+            val account = accountId() ?: return {}
+            val (slot, ticket) = synchronized(slots) {
+                val slot = slotLocked(key, account)
+                slot.edits++
+                slot.etag = null
+                slot.markStaleLocked()
+                slot.inFlight?.cancel()
+                slot.inFlight = null
+                slot.state.value = slot.state.value.copy(refreshing = false)
+                slot to Ticket(generation, identity(account), slot.edits, slot.marks)
+            }
             return { data ->
                 synchronized(slots) {
-                    if (captured.first == generation && captured.second != null && captured.second == identity()) put(key, data)
+                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) put(key, data)
                 }
             }
         }
@@ -437,7 +447,8 @@ class ScreenStore
         private fun accountId(): String? = (auth.get().state.value as? AuthRepository.State.SignedIn)?.user?.id
 
         /** Server, account and session marker: never a token, never logged. */
-        private fun identity(): String? = accountId()?.let { "${BuildConfig.PANTOPUS_API_BASE_URL}|$it|${tokens.sessionMarker()}" }
+        private fun identity(account: String? = accountId()): String? =
+            account?.let { "${BuildConfig.PANTOPUS_API_BASE_URL}|$it|${tokens.sessionMarker()}" }
 
         private companion object {
             const val LOAD_FACTOR = 0.75f
