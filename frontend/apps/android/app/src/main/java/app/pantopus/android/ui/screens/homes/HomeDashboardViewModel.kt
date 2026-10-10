@@ -842,7 +842,7 @@ class HomeDashboardViewModel
             if (currency == _billCurrency.value || currency !in _billCurrencies.value) return
             _billCurrency.value = currency
             _billTrends.value = HomeIntelligenceCardState.Loading
-            viewModelScope.launch { loadBillTrends(force = false) }
+            viewModelScope.launch { loadBillTrends() }
         }
 
         private suspend fun updateChecklistItem(
