@@ -1440,7 +1440,13 @@ class ChatConversationViewModel
                 val response =
                     when (val target = mode) {
                         is ChatThreadMode.Room -> repo.roomMessages(target.id, before, force = force)
-                        is ChatThreadMode.Person -> repo.conversationMessages(target.otherUserId, before, topicId = requestedTopicId, force = force)
+                        is ChatThreadMode.Person ->
+                            repo.conversationMessages(
+                                target.otherUserId,
+                                before,
+                                topicId = requestedTopicId,
+                                force = force,
+                            )
                         ChatThreadMode.Ai -> return@launch
                     }
                 // The topic changed while this page was in flight (the opening topic
@@ -1491,11 +1497,12 @@ class ChatConversationViewModel
 
         /** The newest hundred server messages, held only in the account-scoped memory store. */
         private fun showHistoryCopy(): Boolean {
-            val copy = when (val target = mode) {
-                is ChatThreadMode.Room -> repo.roomMessagesCopy(target.id)
-                is ChatThreadMode.Person -> repo.conversationMessagesCopy(target.otherUserId, _selectedTopicId.value)
-                ChatThreadMode.Ai -> null
-            } ?: return false
+            val copy =
+                when (val target = mode) {
+                    is ChatThreadMode.Room -> repo.roomMessagesCopy(target.id)
+                    is ChatThreadMode.Person -> repo.conversationMessagesCopy(target.otherUserId, _selectedTopicId.value)
+                    ChatThreadMode.Ai -> null
+                } ?: return false
             messages = copy.messages.toMutableList()
             hasMore = copy.hasMore ?: false
             oldestCursor = copy.nextCursor ?: paginationCursor(messages.firstOrNull())
@@ -1844,28 +1851,30 @@ class ChatConversationViewModel
             val target = mode
             val user = currentUserId
             val topic = _selectedTopicId.value
-            catchUpJob = viewModelScope.launch {
-                var before: String? = null
-                do {
-                    val result = when (target) {
-                        is ChatThreadMode.Room -> repo.roomMessages(target.id, before = before, after = after)
-                        is ChatThreadMode.Person -> repo.conversationMessages(target.otherUserId, before = before, after = after, topicId = topic)
-                        ChatThreadMode.Ai -> return@launch
-                    }
-                    if (generation != historyGeneration || target != mode || user != currentUserId || topic != _selectedTopicId.value) return@launch
-                    when (result) {
-                        is NetworkResult.Success -> {
-                            mergeBackfill(result.data.messages)
-                            val cursor = result.data.nextCursor
-                            before = cursor.takeIf { result.data.hasMore == true && it != before && result.data.messages.isNotEmpty() }
+            catchUpJob =
+                viewModelScope.launch {
+                    var before: String? = null
+                    do {
+                        val result =
+                            when (target) {
+                                is ChatThreadMode.Room -> repo.roomMessages(target.id, before = before, after = after)
+                                is ChatThreadMode.Person -> repo.conversationMessages(target.otherUserId, before = before, after = after, topicId = topic)
+                                ChatThreadMode.Ai -> return@launch
+                            }
+                        if (generation != historyGeneration || target != mode || user != currentUserId || topic != _selectedTopicId.value) return@launch
+                        when (result) {
+                            is NetworkResult.Success -> {
+                                mergeBackfill(result.data.messages)
+                                val cursor = result.data.nextCursor
+                                before = cursor.takeIf { result.data.hasMore == true && it != before && result.data.messages.isNotEmpty() }
+                            }
+                            is NetworkResult.Failure -> {
+                                if (historyAccessEnded(result.error)) refuseHistory(result.error)
+                                before = null
+                            }
                         }
-                        is NetworkResult.Failure -> {
-                            if (historyAccessEnded(result.error)) refuseHistory(result.error)
-                            before = null
-                        }
-                    }
-                } while (before != null)
-            }
+                    } while (before != null)
+                }
         }
 
         private fun historyAccessEnded(error: NetworkError): Boolean =

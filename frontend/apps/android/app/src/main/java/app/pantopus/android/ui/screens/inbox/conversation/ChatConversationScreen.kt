@@ -2593,74 +2593,74 @@ internal fun PopulatedFrame(
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().testTag("chatConversationContent"),
-        contentPadding = PaddingValues(horizontal = Spacing.s3, vertical = Spacing.s3),
-    ) {
-        item(key = "chat_pagination_top_spacer") {
-            Spacer(modifier = Modifier.size(1.dp))
-        }
-        // A15.5's "Auto-welcome · free" card is omitted: no persona
-        // welcome-message exists on the wire, and the design's copy is
-        // fixture identity.
-        // A15.3: the `.ai-welcome` capability card doubles as the AI
-        // thread's pinned system message at the top of the timeline.
-        if (conversationMode == ChatConversationMode.AiAssistant && aiPrompts.isNotEmpty()) {
-            item(key = "ai_welcome_card") {
-                AiWelcomeCard(
-                    prompts = aiPrompts,
-                    onCapabilityTap = onCapabilityTap,
-                    modifier = Modifier.padding(bottom = Spacing.s3),
-                )
-            }
-        }
-        items(items = rows, key = { it.rowId }) { row ->
-            when (row) {
-                is ChatTimelineRow.DayDivider -> DayDividerRow(label = row.divider.label)
-                is ChatTimelineRow.TopicDivider -> TopicDividerRow(label = row.label)
-                is ChatTimelineRow.BroadcastReference -> BroadcastReferenceCard(reference = row.reference)
-                is ChatTimelineRow.Bubble ->
-                    BubbleRow(
-                        content = row.content,
-                        incomingInitials = incomingInitials,
-                        onLockedAction = onLockedAction,
-                        onLongPress = { onBubbleLongPress(row.content) },
-                        isSelected = selectedMessageIds.contains(row.content.id),
-                        onTap = { onBubbleTap(row.content) },
-                        onUseAIDraft = onUseAIDraft,
-                        onOpenGig = onOpenGig,
-                        onOpenListing = onOpenListing,
-                        onOpenLocation = onOpenLocation,
-                        onRetry = {
-                            if (row.content.id.startsWith("client_")) onRetry(row.content.id)
-                        },
-                        onReact = { reaction -> onReact(row.content.id, reaction) },
-                        linkPreviews = linkPreviews,
-                        onResolveLink = onResolveLink,
-                        onOpenUrl = onOpenUrl,
-                        onOpenPhotos = onOpenPhotos.takeIf { selectedMessageIds.isEmpty() },
-                        onOpenAttachment = onOpenAttachment.takeIf { selectedMessageIds.isEmpty() },
-                    )
-            }
-        }
-    }
-    if (newMessageCount > 0) {
-        TextButton(
-            onClick = {
-                newMessageCount = 0
-                scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
-            },
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.s2)
-                .clip(RoundedCornerShape(Radii.pill)).background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
-                .testTag("chatNewMessages"),
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().testTag("chatConversationContent"),
+            contentPadding = PaddingValues(horizontal = Spacing.s3, vertical = Spacing.s3),
         ) {
-            Text(if (newMessageCount == 1) "1 new message ↓" else "$newMessageCount new messages ↓", color = PantopusColors.appText)
+            item(key = "chat_pagination_top_spacer") {
+                Spacer(modifier = Modifier.size(1.dp))
+            }
+            // A15.5's "Auto-welcome · free" card is omitted: no persona
+            // welcome-message exists on the wire, and the design's copy is
+            // fixture identity.
+            // A15.3: the `.ai-welcome` capability card doubles as the AI
+            // thread's pinned system message at the top of the timeline.
+            if (conversationMode == ChatConversationMode.AiAssistant && aiPrompts.isNotEmpty()) {
+                item(key = "ai_welcome_card") {
+                    AiWelcomeCard(
+                        prompts = aiPrompts,
+                        onCapabilityTap = onCapabilityTap,
+                        modifier = Modifier.padding(bottom = Spacing.s3),
+                    )
+                }
+            }
+            items(items = rows, key = { it.rowId }) { row ->
+                when (row) {
+                    is ChatTimelineRow.DayDivider -> DayDividerRow(label = row.divider.label)
+                    is ChatTimelineRow.TopicDivider -> TopicDividerRow(label = row.label)
+                    is ChatTimelineRow.BroadcastReference -> BroadcastReferenceCard(reference = row.reference)
+                    is ChatTimelineRow.Bubble ->
+                        BubbleRow(
+                            content = row.content,
+                            incomingInitials = incomingInitials,
+                            onLockedAction = onLockedAction,
+                            onLongPress = { onBubbleLongPress(row.content) },
+                            isSelected = selectedMessageIds.contains(row.content.id),
+                            onTap = { onBubbleTap(row.content) },
+                            onUseAIDraft = onUseAIDraft,
+                            onOpenGig = onOpenGig,
+                            onOpenListing = onOpenListing,
+                            onOpenLocation = onOpenLocation,
+                            onRetry = {
+                                if (row.content.id.startsWith("client_")) onRetry(row.content.id)
+                            },
+                            onReact = { reaction -> onReact(row.content.id, reaction) },
+                            linkPreviews = linkPreviews,
+                            onResolveLink = onResolveLink,
+                            onOpenUrl = onOpenUrl,
+                            onOpenPhotos = onOpenPhotos.takeIf { selectedMessageIds.isEmpty() },
+                            onOpenAttachment = onOpenAttachment.takeIf { selectedMessageIds.isEmpty() },
+                        )
+                }
+            }
+        }
+        if (newMessageCount > 0) {
+            TextButton(
+                onClick = {
+                    newMessageCount = 0
+                    scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
+                },
+                modifier =
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.s2)
+                        .clip(RoundedCornerShape(Radii.pill)).background(PantopusColors.appSurface)
+                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
+                        .testTag("chatNewMessages"),
+            ) {
+                Text(if (newMessageCount == 1) "1 new message ↓" else "$newMessageCount new messages ↓", color = PantopusColors.appText)
+            }
         }
     }
-    }
-
 }
 
 @Composable

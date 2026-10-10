@@ -672,8 +672,9 @@ class NotificationsViewModel
             reset: Boolean,
             keepTail: Boolean = false,
         ) {
-            val refusal = pages.mapNotNull { it.second as? NetworkResult.Failure }
-                .firstOrNull { it.error is NetworkError.Forbidden || it.error == NetworkError.NotFound || it.error == NetworkError.Unauthorized }
+            val refusal =
+                pages.mapNotNull { it.second as? NetworkResult.Failure }
+                    .firstOrNull { it.error is NetworkError.Forbidden || it.error == NetworkError.NotFound || it.error == NetworkError.Unauthorized }
             if (refusal != null) {
                 notifications.clear()
                 offsets.clear()
@@ -710,7 +711,11 @@ class NotificationsViewModel
                     }
                     is NetworkResult.Failure -> {
                         failure = result
-                        if (keepTail) incoming.addAll(notifications.filter { context == UNSCOPED || (it.context ?: NotificationContext.PERSONAL) == context })
+                        if (keepTail) {
+                            incoming.addAll(
+                                notifications.filter { context == UNSCOPED || (it.context ?: NotificationContext.PERSONAL) == context },
+                            )
+                        }
                     }
                 }
             }
@@ -758,11 +763,12 @@ class NotificationsViewModel
             val previous = notifications.filter { context == UNSCOPED || (it.context ?: NotificationContext.PERSONAL) == context }
             val boundary = body.notifications.lastOrNull()?.createdAt?.let(::parseInstant)
             val more = body.hasMore ?: (body.notifications.size >= pageSize)
-            val retained = if (more && boundary != null) {
-                previous.filter { row -> (parseInstant(row.createdAt) ?: Instant.EPOCH) <= boundary }
-            } else {
-                emptyList()
-            }
+            val retained =
+                if (more && boundary != null) {
+                    previous.filter { row -> (parseInstant(row.createdAt) ?: Instant.EPOCH) <= boundary }
+                } else {
+                    emptyList()
+                }
             val merged = merge(visible, retained)
             offsets[context] = maxOf(body.notifications.size, (offsets[context] ?: 0) + merged.size - previous.size)
             return merged
@@ -838,20 +844,25 @@ class NotificationsViewModel
                     onDelete = ::requestDelete,
                     onTap = ::handleTap,
                 ).map { section ->
-                    section.copy(rows = section.rows.map { row ->
-                        if (row.id in pendingReads) {
-                            row.copy(
-                                chips = row.chips.orEmpty() + RowChip(
-                                    "Pending",
-                                    tint = RowChip.Tint.Status(StatusChipVariant.Neutral),
-                                ),
-                                wrapChips = true,
-                                destructiveAction = null,
-                            )
-                        } else {
-                            row
-                        }
-                    })
+                    section.copy(
+                        rows =
+                            section.rows.map { row ->
+                                if (row.id in pendingReads) {
+                                    row.copy(
+                                        chips =
+                                            row.chips.orEmpty() +
+                                                RowChip(
+                                                    "Pending",
+                                                    tint = RowChip.Tint.Status(StatusChipVariant.Neutral),
+                                                ),
+                                        wrapChips = true,
+                                        destructiveAction = null,
+                                    )
+                                } else {
+                                    row
+                                }
+                            },
+                    )
                 }
             _state.value =
                 ListOfRowsUiState.Loaded(

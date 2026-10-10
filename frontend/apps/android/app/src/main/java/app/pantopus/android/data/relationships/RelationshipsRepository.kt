@@ -5,15 +5,15 @@ import app.pantopus.android.data.api.models.relationships.ConnectionRequestRespo
 import app.pantopus.android.data.api.models.relationships.PendingRequestsResponse
 import app.pantopus.android.data.api.models.relationships.RelationshipActionEcho
 import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
+import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.RelationshipsApi
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.store.asResult
-import app.pantopus.android.data.api.net.conditionalApiCall
-import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.api.net.safeApiCall
-import app.pantopus.android.data.api.services.RelationshipsApi
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,13 +36,20 @@ class RelationshipsRepository
             force: Boolean = false,
         ): NetworkResult<RelationshipsListResponse> {
             if (offset != 0) return safeApiCall { api.list(status = status, limit = limit, offset = offset) }
-            val stored = store.read(StoreKeys.relationships(status, limit, offset), force) { etag ->
-                conditionalApiCall { api.listConditional(status, limit, offset, etag) }
-            }
+            val stored =
+                store.read(StoreKeys.relationships(status, limit, offset), force) { etag ->
+                    conditionalApiCall { api.listConditional(status, limit, offset, etag) }
+                }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
-        fun listCopy(status: String?, limit: Int = 50): Stored<RelationshipsListResponse> = store.peek(StoreKeys.relationships(status, limit))
+        fun listCopy(
+            status: String?,
+            limit: Int = 50,
+        ): Stored<RelationshipsListResponse> =
+            store.peek(
+                StoreKeys.relationships(status, limit),
+            )
 
         /**
          * `GET /api/relationships/requests/pending` — list pending
@@ -50,7 +57,11 @@ class RelationshipsRepository
          * `backend/routes/relationships.js:669`.
          */
         suspend fun pendingRequests(force: Boolean = false): NetworkResult<PendingRequestsResponse> {
-            val stored = store.read(StoreKeys.pendingConnections, force) { etag -> conditionalApiCall { api.pendingRequestsConditional(etag) } }
+            val stored =
+                store.read(
+                    StoreKeys.pendingConnections,
+                    force,
+                ) { etag -> conditionalApiCall { api.pendingRequestsConditional(etag) } }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
@@ -79,7 +90,9 @@ class RelationshipsRepository
          * inbound request. Route `backend/routes/relationships.js:295`.
          */
         suspend fun reject(id: String): NetworkResult<RelationshipActionEcho> = safeApiCall { api.reject(id) }.changed()
-        private fun <T> NetworkResult<T>.changed(): NetworkResult<T> = also {
-            if (it is NetworkResult.Success) store.markEdited(StoreTopics.PROFILE_ME)
-        }
+
+        private fun <T> NetworkResult<T>.changed(): NetworkResult<T> =
+            also {
+                if (it is NetworkResult.Success) store.markEdited(StoreTopics.PROFILE_ME)
+            }
     }

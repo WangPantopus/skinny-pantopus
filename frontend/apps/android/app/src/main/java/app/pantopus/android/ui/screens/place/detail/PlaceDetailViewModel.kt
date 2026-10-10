@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.security.AppLockManager
+import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.place.BlockInviteRecipient
 import app.pantopus.android.data.api.models.place.FridgeCardItem
@@ -21,17 +22,16 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomesRepository
-import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
-import app.pantopus.android.data.store.StoreKind
-import app.pantopus.android.ui.components.RefreshNotice
-import kotlinx.coroutines.Job
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -227,7 +227,8 @@ class PlaceDetailViewModel
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice = _refreshNotice.asStateFlow()
 
-        private fun householdViewer(): Boolean = homesRepo.myHomesCopy()?.homes?.any { it.id == homeId && it.showsCopyBeforeRecheck } == true
+        private fun householdViewer(): Boolean =
+            homesRepo.myHomesCopy()?.homes?.any { it.id == homeId && it.showsCopyBeforeRecheck } == true
 
         // These pages contain private verification/financial panels; they always reopen with a re-check.
         private val sensitiveGroup: Boolean get() = group == PlaceDetailGroup.IDENTITY || group == PlaceDetailGroup.MONEY
@@ -264,24 +265,25 @@ class PlaceDetailViewModel
                 _state.value = copy?.let { PlaceDetailUiState.Loaded(it) } ?: PlaceDetailUiState.Loading
             }
             _refreshing.value = force && _state.value is PlaceDetailUiState.Loaded
-            readJob = viewModelScope.launch {
-                homesRepo.myHomesStored()
-                val canKeep = householdViewer()
-                if (!canKeep) {
-                    repo.forgetPlace(homeId)
-                    _state.value = PlaceDetailUiState.Loading
-                }
-                val stored = repo.placeStored(homeId, force || !canKeep || sensitiveGroup, persist = canKeep)
-                _refreshing.value = false
-                _refreshNotice.value = if (stored.showsRefreshFailure(StoreKind.PLACE)) RefreshNotice(stored.fetchedAt, ::refresh) else null
-                when {
-                    stored.data != null -> _state.value = PlaceDetailUiState.Loaded(stored.data)
-                    stored.failure is NetworkError.Forbidden || stored.failure == NetworkError.NotFound || stored.failure == NetworkError.Unauthorized -> {
-                        _state.value = PlaceDetailUiState.Error(stored.failure.displayMessage("Couldn't load this place."), denied = stored.failure is NetworkError.Forbidden)
+            readJob =
+                viewModelScope.launch {
+                    homesRepo.myHomesStored()
+                    val canKeep = householdViewer()
+                    if (!canKeep) {
+                        repo.forgetPlace(homeId)
+                        _state.value = PlaceDetailUiState.Loading
                     }
-                    _state.value !is PlaceDetailUiState.Loaded -> _state.value = PlaceDetailUiState.Error(stored.failure?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.")
+                    val stored = repo.placeStored(homeId, force || !canKeep || sensitiveGroup, persist = canKeep)
+                    _refreshing.value = false
+                    _refreshNotice.value = if (stored.showsRefreshFailure(StoreKind.PLACE)) RefreshNotice(stored.fetchedAt, ::refresh) else null
+                    when {
+                        stored.data != null -> _state.value = PlaceDetailUiState.Loaded(stored.data)
+                        stored.failure is NetworkError.Forbidden || stored.failure == NetworkError.NotFound || stored.failure == NetworkError.Unauthorized -> {
+                            _state.value = PlaceDetailUiState.Error(stored.failure.displayMessage("Couldn't load this place."), denied = stored.failure is NetworkError.Forbidden)
+                        }
+                        _state.value !is PlaceDetailUiState.Loaded -> _state.value = PlaceDetailUiState.Error(stored.failure?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.")
+                    }
                 }
-            }
         }
 
         // ── Residency letters (Identity detail, T4) ──────────────
@@ -618,8 +620,10 @@ class PlaceDetailViewModel
                 // typo into an apparent feature outage with no way back.
                 when (val r = repo.setRecordWatch(homeId, month.trim())) {
                     is NetworkResult.Success -> {
-                        if (generation == pageGeneration && visible) _rateWatch.value =
-                            r.data.watch?.let { RateWatchUiState.Loaded(it) } ?: RateWatchUiState.None
+                        if (generation == pageGeneration && visible) {
+                            _rateWatch.value =
+                                r.data.watch?.let { RateWatchUiState.Loaded(it) } ?: RateWatchUiState.None
+                        }
                     }
                     is NetworkResult.Failure ->
                         _watchSaveError.value = r.error.displayMessage("Couldn't save the watch.")
@@ -721,8 +725,10 @@ class PlaceDetailViewModel
                 when (val r = repo.setRentReport(homeId, amount, parseBedrooms(bedrooms))) {
                     is NetworkResult.Success -> {
                         _isEditingRent.value = false
-                        if (generation == pageGeneration && visible) _rentReport.value =
-                            r.data.report?.let { RealRentUiState.Loaded(it) } ?: RealRentUiState.None
+                        if (generation == pageGeneration && visible) {
+                            _rentReport.value =
+                                r.data.report?.let { RealRentUiState.Loaded(it) } ?: RealRentUiState.None
+                        }
                         // The block band now includes this figure, so the
                         // section's own progress/standing is stale.
                         refreshIntelligenceQuietly()

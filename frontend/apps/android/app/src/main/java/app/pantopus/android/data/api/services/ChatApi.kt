@@ -81,14 +81,17 @@ interface ChatApi {
 
     @GET("api/chat/rooms/{roomId}/messages")
     suspend fun roomMessagesConditional(
-        @Path("roomId") roomId: String, @Query("limit") limit: Int,
+        @Path("roomId") roomId: String,
+        @Query("limit") limit: Int,
         @Header("If-None-Match") etag: String?,
     ): Response<ChatMessagesResponse>
 
     @GET("api/chat/conversations/{otherUserId}/messages")
     suspend fun conversationMessagesConditional(
-        @Path("otherUserId") otherUserId: String, @Query("limit") limit: Int,
-        @Query("topicId") topicId: String?, @Header("If-None-Match") etag: String?,
+        @Path("otherUserId") otherUserId: String,
+        @Query("limit") limit: Int,
+        @Query("topicId") topicId: String?,
+        @Header("If-None-Match") etag: String?,
     ): Response<ChatMessagesResponse>
 
     /**

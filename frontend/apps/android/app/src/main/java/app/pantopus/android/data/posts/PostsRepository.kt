@@ -223,9 +223,10 @@ class PostsRepository
             force: Boolean = false,
         ): NetworkResult<SavedPostsResponse> {
             if (offset != 0) return safeApiCall { api.savedPosts(limit, offset) }
-            val stored = store.read(StoreKeys.savedPosts(limit), force) { etag ->
-                conditionalApiCall { api.savedPostsConditional(limit, etag) }
-            }
+            val stored =
+                store.read(StoreKeys.savedPosts(limit), force) { etag ->
+                    conditionalApiCall { api.savedPostsConditional(limit, etag) }
+                }
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
