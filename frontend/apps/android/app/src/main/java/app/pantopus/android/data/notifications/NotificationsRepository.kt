@@ -55,6 +55,9 @@ class NotificationsRepository
             return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
         }
 
+        /** The stored unread count as it is now (a screen's first frame), without a request. */
+        fun unreadCountCopy(): NotificationUnreadCountResponse? = store.peek(StoreKeys.notificationsUnreadCount).data
+
         /** One zone's first page through the screens' store (fresh 30 seconds; [force] reads now). Later pages use [list]. */
         suspend fun firstPageStored(
             limit: Int,
