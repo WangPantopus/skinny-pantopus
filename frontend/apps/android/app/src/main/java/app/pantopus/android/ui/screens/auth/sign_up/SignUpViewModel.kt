@@ -437,8 +437,12 @@ class SignUpViewModel
          */
         fun submit() {
             val snapshot = _uiState.value
+            if (snapshot.isSubmitting) return
             val errors = snapshot.validateAll()
-            update { it.copy(fieldErrors = errors, topLevelError = null, hasAttemptedSubmit = true) }
+            // Terms feedback is beside the checkbox; other validation uses the
+            // existing revealed banner as well as each field's inline error.
+            val error = if (snapshot.agreedToTerms) errors.values.firstOrNull()?.let { AuthError.ServerError(it) } else null
+            update { it.copy(fieldErrors = errors, topLevelError = error, hasAttemptedSubmit = true) }
             if (errors.isNotEmpty() || !snapshot.agreedToTerms) return
 
             update { it.copy(isSubmitting = true) }
