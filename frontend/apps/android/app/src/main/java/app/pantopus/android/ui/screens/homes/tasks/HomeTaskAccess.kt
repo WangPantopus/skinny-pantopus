@@ -82,45 +82,53 @@ class HomeTaskAccess(
 
     /**
      * [list] through the screens' store (Instant Screens): a fresh copy answers without a request, an older one is
-     * revalidated, [force] reads now. A copy is checked like a reply.
+     * revalidated, [force] reads now. A reply this read fetched binds the session; a copy is only checked.
      */
     suspend fun listStored(force: Boolean): Stored<GetHomeTasksResponse> {
         requireCurrent()
+        val asked = System.currentTimeMillis()
         val stored = repository.getHomeTasksStored(homeId, serverSession?.sessionScope, dispatchGuard, force)
         requireCurrent()
-        stored.data?.let(::accept)
+        stored.data?.let { if (stored.fetchedAt >= asked) accept(it) else checkCopy(it) }
         return stored
     }
 
-    /** [read] through the screens' store; a copy is checked like a reply. */
+    /** [read] through the screens' store. A reply this read fetched binds the session; a copy is only checked. */
     suspend fun readStored(
         taskId: String,
         force: Boolean,
     ): Stored<HomeTaskResponse> {
         requireCurrent()
+        val asked = System.currentTimeMillis()
         val stored = repository.getHomeTaskStored(homeId, taskId, serverSession?.sessionScope, dispatchGuard, force)
         requireCurrent()
         stored.data?.let { response ->
-            bind(response.taskSession)
+            if (stored.fetchedAt >= asked) bind(response.taskSession) else verify(response.taskSession)
             exact(response.task, taskId)
         }
         return stored
     }
 
-    /** The stored list without a request, when it checks out like a reply; null otherwise. */
-    fun storedList(): GetHomeTasksResponse? = repository.storedHomeTasks(homeId)?.takeIf { runCatching { accept(it) }.isSuccess }
+    /** The stored list without a request, when it checks out like a reply (shown only, never bound); null otherwise. */
+    fun storedList(): GetHomeTasksResponse? = repository.storedHomeTasks(homeId)?.takeIf { runCatching { checkCopy(it) }.isSuccess }
 
     /** The stored task without a request (its own copy, else its row in the stored list), when it checks out. */
     fun storedTask(taskId: String): HomeTaskDto? =
         runCatching {
             repository.storedHomeTask(homeId, taskId)?.let { response ->
-                bind(response.taskSession)
+                verify(response.taskSession)
                 exact(response.task, taskId)
             } ?: storedList()?.tasks?.firstOrNull { it.id == taskId }
         }.getOrNull()
 
     private fun accept(response: GetHomeTasksResponse) {
         bind(response.taskSession)
+        response.tasks.forEach { exact(it, it.id) }
+    }
+
+    /** [accept] for a copy: the same checks, nothing bound. */
+    private fun checkCopy(response: GetHomeTasksResponse) {
+        verify(response.taskSession)
         response.tasks.forEach { exact(it, it.id) }
     }
 
@@ -200,10 +208,18 @@ class HomeTaskAccess(
     }
 
     private fun bind(received: HomeTaskSessionDto?) {
-        check(received != null && received.homeId == homeId && received.actorId == session.actorId) { TASK_SESSION_CHANGED }
-        check(received.sessionScope.matches(Regex("^[a-f0-9]{64}$"))) { TASK_SESSION_CHANGED }
+        verify(received)
         check(serverSession == null || received == serverSession) { TASK_SESSION_CHANGED }
         serverSession = received
+    }
+
+    /**
+     * What [bind] checks, without binding. A copy is shown, never bound: a session without a registry row has a task
+     * scope that changes with every token refresh, so a copy's scope can be older than the next reply's.
+     */
+    private fun verify(received: HomeTaskSessionDto?) {
+        check(received != null && received.homeId == homeId && received.actorId == session.actorId) { TASK_SESSION_CHANGED }
+        check(received.sessionScope.matches(Regex("^[a-f0-9]{64}$"))) { TASK_SESSION_CHANGED }
     }
 
     private fun exact(

@@ -134,6 +134,7 @@ fun HomeDashboardScreen(
     val billCurrencies by viewModel.billCurrencies.collectAsStateWithLifecycle()
     val billSharing by viewModel.billSharing.collectAsStateWithLifecycle()
     val pendingChecklistItemIds by viewModel.pendingChecklistItemIds.collectAsStateWithLifecycle()
+    val checklistActionError by viewModel.checklistActionError.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
@@ -341,6 +342,7 @@ fun HomeDashboardScreen(
                 onRetry = viewModel::refreshHealthScore,
             )
         }
+        checklistActionError?.let { Text(it, color = PantopusColors.error, style = PantopusTextStyle.caption) }
         SeasonalChecklistCard(
             state = checklist,
             pendingItemIds = pendingChecklistItemIds,
