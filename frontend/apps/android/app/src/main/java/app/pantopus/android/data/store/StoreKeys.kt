@@ -172,6 +172,7 @@ object StoreKeys {
             ),
             kind = StoreKind.NEARBY,
             topics = setOf(StoreTopics.POSTS, StoreTopics.PROFILE_ME),
+            type = FeedResponse::class.java,
         )
 
     fun publicProfile(identifier: String, byUsername: Boolean = false) = StoreKey<PublicProfileDto>(
