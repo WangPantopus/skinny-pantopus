@@ -87,24 +87,44 @@ extension View {
     /// that concern this screen (topics, or kinds after a reconnect).
     func refreshesOnStoreChange(
         affects: @escaping (Notification) -> Bool = { _ in true },
+        onBackground: (@MainActor () -> Bool)? = nil,
         perform action: @escaping @MainActor () async -> Void
     ) -> some View {
-        modifier(RefreshOnStoreChange(affects: affects, action: action))
+        modifier(RefreshOnStoreChange(affects: affects, onBackground: onBackground, action: action))
     }
 }
 
 private struct RefreshOnStoreChange: ViewModifier {
     let affects: (Notification) -> Bool
+    /// Clears temporary-access content and returns whether resuming needs a re-check.
+    let onBackground: (@MainActor () -> Bool)?
     let action: @MainActor () async -> Void
     @State private var probe = WindowProbe()
+    @State private var recheckOnResume = false
 
     func body(content: Content) -> some View {
         content
-            .background(WindowProbeView(probe: probe))
+            .background(WindowProbeView(probe: probe, onAttach: resumeIfNeeded))
             .onReceive(NotificationCenter.default.publisher(for: .screenStoreChanged)) { note in
-                guard probe.isOnScreen, affects(note) else { return }
+                guard probe.isOnScreen, UIApplication.shared.applicationState == .active, affects(note) else { return }
                 Task { await action() }
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                // Clear before the app snapshot and even if UIKit already
+                // detached this retained screen from its window.
+                recheckOnResume = onBackground?() ?? false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                resumeIfNeeded()
+            }
+    }
+
+    private func resumeIfNeeded() {
+        // UIKit may reattach a retained screen after didBecomeActive. Keep
+        // the pending re-check until both conditions hold; hidden screens wait.
+        guard recheckOnResume, probe.isOnScreen, UIApplication.shared.applicationState == .active else { return }
+        recheckOnResume = false
+        Task { await action() }
     }
 }
 
@@ -123,17 +143,34 @@ private final class WindowProbe {
 
 private struct WindowProbeView: UIViewRepresentable {
     let probe: WindowProbe
+    let onAttach: @MainActor () -> Void
 
-    func makeUIView(context _: Context) -> UIView {
-        let view = UIView()
+    func makeUIView(context _: Context) -> WindowProbeUIView {
+        let view = WindowProbeUIView()
         view.isHidden = true
         view.isUserInteractionEnabled = false
+        view.onAttach = onAttach
         probe.view = view
         return view
     }
 
-    func updateUIView(_ view: UIView, context _: Context) {
+    func updateUIView(_ view: WindowProbeUIView, context _: Context) {
         probe.view = view
+        view.onAttach = onAttach
+    }
+}
+
+private final class WindowProbeUIView: UIView {
+    var onAttach: (@MainActor () -> Void)?
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window != nil else { return }
+        // Run after SwiftUI's update, never mutate its state during attachment.
+        Task { @MainActor [weak self] in
+            guard let self, window != nil else { return }
+            onAttach?()
+        }
     }
 }
 

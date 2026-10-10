@@ -17,7 +17,8 @@ import Foundation
 
 /// One saved store entry: the reply's bytes and what the store knew about them.
 struct SavedScreenEntry: Codable {
-    static let currentSchema = 1
+    /// Earlier copies did not account for HomeOccupancy.access_end_at.
+    static let currentSchema = 2
 
     let schema: Int
     let build: String
@@ -50,6 +51,9 @@ final class ScreenStoreDisk: @unchecked Sendable {
         self.root = root ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Pantopus/Saved", isDirectory: true)
         build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+        // Remove older unsafe copies even when an offline access gate stops
+        // their screen from asking for them. Reads also reject old schemas.
+        queue.async { [self] in removeObsoleteCopies() }
     }
 
     // MARK: - Names
@@ -136,6 +140,17 @@ final class ScreenStoreDisk: @unchecked Sendable {
     }
 
     // MARK: - Private
+
+    private func removeObsoleteCopies() {
+        for file in files() {
+            guard let bytes = try? Data(contentsOf: file.url) else { continue }
+            if let saved = try? Self.decoder.decode(SavedScreenEntry.self, from: bytes),
+               saved.schema == SavedScreenEntry.currentSchema { continue }
+            try? FileManager.default.removeItem(at: file.url)
+            let folder = file.url.deletingLastPathComponent().lastPathComponent
+            lock.withLock { _ = index[folder]?.remove(file.url.lastPathComponent) }
+        }
+    }
 
     private func names(in folder: String) -> Set<String> {
         lock.withLock {
