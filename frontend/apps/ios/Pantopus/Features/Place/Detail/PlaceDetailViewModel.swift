@@ -43,6 +43,7 @@ final class PlaceDetailViewModel {
     private var fallbackRequested = false
     private let sessionScope: HomeClaimSessionScope
     private let api: APIClient
+    private var copyRevision = 0
 
     init(
         homeId: String,
@@ -132,16 +133,23 @@ final class PlaceDetailViewModel {
         return false
     }
 
+    @discardableResult
+    func discardTemporaryCopy() -> Bool {
+        guard !PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) else { return false }
+        copyRevision += 1
+        state = .loading
+        loadedAt = nil
+        fallbackRequested = false
+        fallbackCalendar = nil
+        return true
+    }
+
     /// A failed fetch keeps loaded content on screen (a pull to refresh says
     /// so in a toast). A refusal (403 or 404) replaces it with the server's
     /// answer, and with nothing loaded the error shows.
     private func fetch(quietly: Bool, force: Bool) async {
-        if !PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) {
-            state = .loading
-            loadedAt = nil
-            fallbackRequested = false
-            fallbackCalendar = nil
-        }
+        discardTemporaryCopy()
+        let revision = copyRevision
         let hadFallback = fallbackCalendar != nil
         do {
             let snapshot = try await PlaceStoreReads.load(
@@ -152,6 +160,7 @@ final class PlaceDetailViewModel {
                 force: force
             )
             try Task.checkCancellation()
+            guard revision == copyRevision else { return }
             refreshFailureMessage = nil
             show(snapshot)
             // A refresh asks for the fallback calendar again; the shown one
@@ -163,6 +172,7 @@ final class PlaceDetailViewModel {
         } catch is CancellationError {
             return
         } catch {
+            guard revision == copyRevision, !Task.isCancelled else { return }
             let apiError = error as? APIError
             if case .loaded = state, !Self.isRefusal(apiError),
                PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) {

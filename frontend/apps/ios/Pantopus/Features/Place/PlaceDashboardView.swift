@@ -74,13 +74,15 @@ struct PlaceDashboardView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .task(id: isActive) {
-            guard isActive else { return }
+            guard isActive else { viewModel.discardTemporaryCopy()
+                return
+            }
             await viewModel.load()
             // Also on coming back from the notifications list, so a read bell loses its dot.
             await viewModel.refreshUnread()
         }
         .refreshable { await viewModel.refresh() }
-        .refreshesOnStoreChange { if isActive { await viewModel.load() } }
+        .refreshesOnStoreChange(onBackground: viewModel.discardTemporaryCopy) { if isActive { await viewModel.load() } }
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .sheet(isPresented: $showSwitcher) {
             PlaceSwitcherSheet(

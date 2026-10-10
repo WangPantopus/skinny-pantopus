@@ -87,22 +87,35 @@ extension View {
     /// that concern this screen (topics, or kinds after a reconnect).
     func refreshesOnStoreChange(
         affects: @escaping (Notification) -> Bool = { _ in true },
+        onBackground: (@MainActor () -> Bool)? = nil,
         perform action: @escaping @MainActor () async -> Void
     ) -> some View {
-        modifier(RefreshOnStoreChange(affects: affects, action: action))
+        modifier(RefreshOnStoreChange(affects: affects, onBackground: onBackground, action: action))
     }
 }
 
 private struct RefreshOnStoreChange: ViewModifier {
     let affects: (Notification) -> Bool
+    /// Clears temporary-access content and returns whether resuming needs a re-check.
+    let onBackground: (@MainActor () -> Bool)?
     let action: @MainActor () async -> Void
     @State private var probe = WindowProbe()
+    @State private var recheckOnResume = false
 
     func body(content: Content) -> some View {
         content
             .background(WindowProbeView(probe: probe))
             .onReceive(NotificationCenter.default.publisher(for: .screenStoreChanged)) { note in
-                guard probe.isOnScreen, affects(note) else { return }
+                guard probe.isOnScreen, UIApplication.shared.applicationState == .active, affects(note) else { return }
+                Task { await action() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                guard probe.isOnScreen else { return }
+                recheckOnResume = onBackground?() ?? false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                guard recheckOnResume, probe.isOnScreen else { return }
+                recheckOnResume = false
                 Task { await action() }
             }
     }

@@ -90,6 +90,7 @@ final class ScreenStore {
         observedAccount = Self.account(of: auth ?? AuthManager.shared)
         observeAccount()
         observeLifecycle()
+        if disk != nil { WidgetSnapshotStore.shared.removeLegacyToday() }
     }
 
     /// The store a screen reads through: the shared one for the app's client,
@@ -455,6 +456,7 @@ extension ScreenStore {
         if let disk {
             disk.removeAll()
             PantopusImagePipeline.shared.removeAll()
+            WidgetSnapshotStore.shared.clearToday()
         }
     }
 

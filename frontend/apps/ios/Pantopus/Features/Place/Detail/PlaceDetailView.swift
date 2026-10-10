@@ -30,7 +30,11 @@ struct PlaceDetailView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.load() }
         // The home or today's conditions changed: the open page re-reads, its copy staying shown.
-        .refreshesOnStoreChange(affects: { viewModel.isAffected(by: $0) }, perform: { await viewModel.refreshIfStale() })
+        .refreshesOnStoreChange(
+            affects: { viewModel.isAffected(by: $0) },
+            onBackground: viewModel.discardTemporaryCopy
+        ) { await viewModel.refreshIfStale() }
+        .onDisappear { viewModel.discardTemporaryCopy() }
         .sheet(isPresented: $viewModel.showVerify) {
             PlaceVerifySheet(
                 address: verifyAddress,

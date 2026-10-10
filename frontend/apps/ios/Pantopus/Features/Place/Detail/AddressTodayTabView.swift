@@ -39,7 +39,10 @@ struct AddressTodayTabView: View {
         .task(id: resolveKey) {
             if rootTabs.selected == .today { await resolveHome() }
         }
-        .refreshesOnStoreChange { if rootTabs.selected == .today { await resolveHome() } }
+        .refreshesOnStoreChange(onBackground: discardTemporaryPlace) { if rootTabs.selected == .today { await resolveHome() } }
+        .onChange(of: rootTabs.selected) { _, tab in
+            if tab != .today { discardTemporaryPlace() }
+        }
         .accessibilityIdentifier("addressTodayTab")
     }
 
@@ -49,6 +52,17 @@ struct AddressTodayTabView: View {
 
     private var currentUserID: String? {
         if case let .signedIn(user) = auth.state { user.id } else { nil }
+    }
+
+    @discardableResult
+    private func discardTemporaryPlace() -> Bool {
+        if let detail, PlaceStoreReads.allowsCopy(homeId: detail.homeId, savedPlaceId: detail.savedPlaceId) { return false }
+        detail?.discardTemporaryCopy()
+        resolveID = UUID()
+        detail = nil
+        resolved = false
+        WidgetSnapshotStore.shared.clearToday()
+        return true
     }
 
     private var header: some View {
@@ -165,12 +179,14 @@ struct AddressTodayTabView: View {
         // changed. The first visit, a retry after a failure and another
         // account start blank.
         let userID = currentUserID
-        let quiet = resolved && !loadFailed && resolvedUserID == userID
+        let canKeep = detail.map { PlaceStoreReads.allowsCopy(homeId: $0.homeId, savedPlaceId: $0.savedPlaceId) } ?? false
+        let quiet = resolved && !loadFailed && resolvedUserID == userID && canKeep
         if !quiet {
             resolved = false
             loadFailed = false
             detail = nil
             savedPlace = nil
+            WidgetSnapshotStore.shared.clearToday()
         }
         resolvedUserID = userID
         let requestID = UUID()
@@ -290,6 +306,11 @@ private struct AddressTodayLoaded: View {
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { scrollFrame = $0 }
                     // The home-screen widget shows what Today just showed for this place.
                     .task(id: WidgetSource(intel: intel, fallback: viewModel.fallbackCalendar)) {
+                        guard scope.isCurrent,
+                              PlaceStoreReads.allowsCopy(homeId: viewModel.homeId, savedPlaceId: viewModel.savedPlaceId) else {
+                            WidgetSnapshotStore.shared.clearToday()
+                            return
+                        }
                         WidgetSnapshotStore.shared.writeToday(TodayWidgetSnapshot(intel: intel, viewModel: viewModel))
                     }
                     .onChange(of: morningVisible) { _, visible in

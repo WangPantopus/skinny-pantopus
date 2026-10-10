@@ -52,6 +52,23 @@ public final class WidgetSnapshotStore: WidgetSnapshotStoring {
         WidgetCenter.shared.reloadTimelines(ofKind: TodayWidgetSnapshotContract.widgetKind)
     }
 
+    /// Earlier snapshots did not check expiring household access.
+    func removeLegacyToday() {
+        guard !isSuppressed,
+              let defaults = UserDefaults(suiteName: GigWidgetSnapshotContract.appGroupId),
+              defaults.object(forKey: TodayWidgetSnapshotContract.legacySnapshotKey) != nil else { return }
+        defaults.removeObject(forKey: TodayWidgetSnapshotContract.legacySnapshotKey)
+        WidgetCenter.shared.reloadTimelines(ofKind: TodayWidgetSnapshotContract.widgetKind)
+    }
+
+    func clearToday() {
+        guard !isSuppressed,
+              let defaults = UserDefaults(suiteName: GigWidgetSnapshotContract.appGroupId) else { return }
+        defaults.removeObject(forKey: TodayWidgetSnapshotContract.snapshotKey)
+        defaults.removeObject(forKey: TodayWidgetSnapshotContract.legacySnapshotKey)
+        WidgetCenter.shared.reloadTimelines(ofKind: TodayWidgetSnapshotContract.widgetKind)
+    }
+
     /// Sign-out: the home-screen widgets must not keep showing the last
     /// account's place, dates and nearby tasks. Without a snapshot they ask
     /// to open the app.
@@ -61,6 +78,7 @@ public final class WidgetSnapshotStore: WidgetSnapshotStoring {
         else { return }
         defaults.removeObject(forKey: GigWidgetSnapshotContract.snapshotKey)
         defaults.removeObject(forKey: TodayWidgetSnapshotContract.snapshotKey)
+        defaults.removeObject(forKey: TodayWidgetSnapshotContract.legacySnapshotKey)
         WidgetCenter.shared.reloadTimelines(ofKind: GigWidgetSnapshotContract.widgetKind)
         WidgetCenter.shared.reloadTimelines(ofKind: TodayWidgetSnapshotContract.widgetKind)
     }
