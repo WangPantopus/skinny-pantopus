@@ -256,6 +256,8 @@ class NotificationsViewModel
         private var hasMore = false
         private var loading = false
         private var quietRefreshPending = false
+        private val pendingReads = mutableSetOf<String>()
+        private var markingAllRead = false
         private var notifications: MutableList<NotificationDto> = mutableListOf()
 
         /** Bumped by every reload so a late page from the previous tab or zone is dropped. */
@@ -394,7 +396,7 @@ class NotificationsViewModel
 
         /** A live signal or return refreshes the first page quietly, preserving older rows and the reading position. */
         fun refreshIfNeeded() {
-            if (loading) {
+            if (loading || pendingReads.isNotEmpty() || markingAllRead) {
                 quietRefreshPending = true
                 return
             }
@@ -444,53 +446,67 @@ class NotificationsViewModel
 
         private fun markReadCurrent(id: String) {
             val target = notifications.firstOrNull { it.id == id } ?: return
-            if (!mayOpenTask(target)) return
-            if (target.isRead == true) return
-            val previous = notifications.toList()
-            val previousCount = _unreadCount.value
-            notifications =
-                notifications.map { if (it.id == id) it.copy(isRead = true) else it }.toMutableList()
-            _unreadCount.value = (previousCount - 1).coerceAtLeast(0)
+            if (!mayOpenTask(target) || target.isRead == true || markingAllRead || !pendingReads.add(id)) return
+            val generation = fetchGeneration
+            notifications = notifications.map { if (it.id == id) it.copy(isRead = true) else it }.toMutableList()
+            _unreadCount.value = (_unreadCount.value - 1).coerceAtLeast(0)
             applyState()
             viewModelScope.launch {
-                if (!confirmTaskScope(target)) return@launch
-                when (repo.markRead(id)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        if (!confirmTaskScope(target)) return@launch
-                        notifications = previous.toMutableList()
-                        _unreadCount.value = previousCount
-                        applyState()
+                try {
+                    if (!confirmTaskScope(target)) return@launch
+                    when (repo.markRead(id)) {
+                        is NetworkResult.Success -> Unit
+                        is NetworkResult.Failure -> {
+                            if (!confirmTaskScope(target)) return@launch
+                            // Restore this action only: another read or a newly arrived row must survive the failure.
+                            notifications = notifications.map { if (it.id == id) it.copy(isRead = false) else it }.toMutableList()
+                            if (generation == fetchGeneration) _unreadCount.value++
+                            _toast.value = ToastMessage("Couldn't mark as read. Try again.", ToastKind.Error)
+                        }
                     }
+                } finally {
+                    pendingReads.remove(id)
+                    finishReadAction()
                 }
             }
         }
 
-        /**
-         * Sweep every unread row — same optimistic + rollback pattern.
-         *
-         * Scoped to the active zone so "Mark all read" in the Personal
-         * zone never silently clears the Beacon stream (RN
-         * `src/app/notifications.tsx:206-214`).
-         */
+        /** Mark the current zone read at once, keeping other in-flight actions and new arrivals intact. */
         fun markAllRead() {
-            if (_unreadCount.value == 0) return
-            val previous = notifications.toList()
+            if (_unreadCount.value == 0 || markingAllRead || pendingReads.isNotEmpty()) return
+            val targets = notifications.filter { it.isRead != true }.map { it.id }.toSet()
             val previousCount = _unreadCount.value
+            val generation = fetchGeneration
             val contexts = activeContexts()
-            notifications = notifications.map { it.copy(isRead = true) }.toMutableList()
+            markingAllRead = true
+            pendingReads.addAll(targets)
+            notifications = notifications.map { if (it.id in targets) it.copy(isRead = true) else it }.toMutableList()
             _unreadCount.value = 0
             applyState()
             viewModelScope.launch {
-                when (repo.markAllRead(contexts)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        notifications = previous.toMutableList()
-                        _unreadCount.value = previousCount
-                        applyState()
-                        _toast.value = ToastMessage("Couldn't mark all as read. Try again.", ToastKind.Error)
+                try {
+                    when (repo.markAllRead(contexts)) {
+                        is NetworkResult.Success -> Unit
+                        is NetworkResult.Failure -> {
+                            notifications = notifications.map { if (it.id in targets) it.copy(isRead = false) else it }.toMutableList()
+                            if (generation == fetchGeneration) _unreadCount.value += previousCount
+                            _toast.value = ToastMessage("Couldn't mark all as read. Try again.", ToastKind.Error)
+                        }
                     }
+                } finally {
+                    pendingReads.removeAll(targets)
+                    markingAllRead = false
+                    finishReadAction()
                 }
+            }
+        }
+
+        private fun finishReadAction() {
+            // An access refusal owns the empty/error state; completing a write must not republish its old rows.
+            if (_state.value is ListOfRowsUiState.Loaded || _state.value is ListOfRowsUiState.Empty) applyState()
+            if (quietRefreshPending && pendingReads.isEmpty() && !markingAllRead) {
+                quietRefreshPending = false
+                refreshIfNeeded()
             }
         }
 
@@ -722,6 +738,9 @@ class NotificationsViewModel
             if (!keepTail || !hadLaterPages) hasMore = anyMore
             _unreadCount.value =
                 if (sawUnreadCount) scopedUnread else notifications.count { it.isRead != true }
+            val pendingUnread = notifications.count { it.id in pendingReads && it.isRead != true }
+            notifications = notifications.map { if (it.id in pendingReads) it.copy(isRead = true) else it }.toMutableList()
+            _unreadCount.value = (_unreadCount.value - pendingUnread).coerceAtLeast(0)
             revealZoneStripIfAudienceSeen()
             applyState()
         }
@@ -814,7 +833,18 @@ class NotificationsViewModel
                     zone = timeZone,
                     onDelete = ::requestDelete,
                     onTap = ::handleTap,
-                )
+                ).map { section ->
+                    section.copy(rows = section.rows.map { row ->
+                        if (row.id in pendingReads) {
+                            row.copy(
+                                chips = row.chips.orEmpty() + RowChip("Pending", tint = RowChip.Tint.Status(StatusChipVariant.Neutral)),
+                                wrapChips = true,
+                            )
+                        } else {
+                            row
+                        }
+                    })
+                }
             _state.value =
                 ListOfRowsUiState.Loaded(
                     sections = sections,
@@ -865,8 +895,8 @@ class NotificationsViewModel
             TopBarAction(
                 icon = PantopusIcon.Check,
                 contentDescription = "Mark all read",
-                label = "Mark all read",
-                isEnabled = enabled,
+                label = if (markingAllRead) "Pending" else "Mark all read",
+                isEnabled = enabled && !markingAllRead && pendingReads.isEmpty(),
                 onClick = { markAllRead() },
             )
 
