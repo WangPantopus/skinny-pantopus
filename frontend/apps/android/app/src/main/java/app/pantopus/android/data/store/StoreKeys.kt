@@ -5,6 +5,9 @@ import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
+import app.pantopus.android.data.api.models.hub.HubResponse
+import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
@@ -37,6 +40,9 @@ object StoreTopics {
 
     /** The viewer's list of homes: a home added, claimed, verified, left or deleted. */
     const val HOMES = "homes"
+
+    /** Today: a task, pickup day, calendar or briefing change (contract §8). */
+    const val TODAY = "today"
 }
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
@@ -184,6 +190,33 @@ object StoreKeys {
             kind = StoreKind.NOTIFICATIONS,
             topics = setOf(StoreTopics.NOTIFICATIONS),
         )
+
+    /**
+     * The Hub (the Place tab without a home): its overview, kind Homes (fresh 2 minutes), in memory only: the reply
+     * carries bill status items and recent notifications, which are never saved on the phone. A name saved, a home, a
+     * notification, a chat or Today changing marks it.
+     */
+    val hubOverview =
+        StoreKey<HubResponse>(
+            "api/hub",
+            kind = StoreKind.HOMES,
+            topics = setOf(StoreTopics.HOMES, StoreTopics.NOTIFICATIONS, StoreTopics.CHATS, StoreTopics.TODAY, StoreTopics.PROFILE_ME),
+        )
+
+    /** The Hub's Today card (kind Today: fresh 10 minutes; a reply that says it failed keeps the last copy). */
+    val hubToday = StoreKey<HubTodayResponse>("api/hub/today", kind = StoreKind.TODAY, topics = setOf(StoreTopics.TODAY))
+
+    /** The Hub's Discover rail for one filter tab (kind Nearby: fresh 2 minutes). */
+    fun hubDiscovery(filter: String) =
+        StoreKey<HubDiscoveryResponse>(
+            "api/hub/discovery",
+            mapOf("filter" to filter, "limit" to HUB_DISCOVERY_LIMIT.toString()),
+            kind = StoreKind.NEARBY,
+            topics = setOf(StoreTopics.HOMES),
+        )
+
+    /** How many Discover cards the Hub asks for. */
+    const val HUB_DISCOVERY_LIMIT = 10
 
     /** The first page of one notifications list (a zone's context, all or unread); later pages are never stored. */
     fun notificationsFirstPage(

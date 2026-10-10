@@ -47,3 +47,21 @@ inline fun <A, B> NetworkResult<Conditional<A>>.mapFresh(transform: (A) -> B): N
             }
         is NetworkResult.Failure -> this
     }
+
+@PublishedApi
+internal const val HTTP_BAD_GATEWAY = 502
+
+/**
+ * Contract §6: a 200 whose body says it failed (the Hub's Today `{today: null, error}`) is a failed read, so the store
+ * keeps the copy it holds and marks the failure instead of replacing it with the empty reply. A 304 and failures pass
+ * through unchanged.
+ */
+inline fun <T> NetworkResult<Conditional<T>>.failIf(failed: (T) -> Boolean): NetworkResult<Conditional<T>> =
+    when (this) {
+        is NetworkResult.Success ->
+            when (val reply = data) {
+                is Conditional.Fresh -> if (failed(reply.data)) NetworkResult.Failure(NetworkError.Server(HTTP_BAD_GATEWAY, null)) else this
+                Conditional.NotModified -> this
+            }
+        is NetworkResult.Failure -> this
+    }
