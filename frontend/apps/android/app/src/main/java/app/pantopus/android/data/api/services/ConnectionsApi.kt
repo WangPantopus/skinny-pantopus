@@ -3,6 +3,8 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
 import app.pantopus.android.data.api.models.connections.SentRequestsResponse
 import app.pantopus.android.data.api.models.relationships.RelationshipActionEcho
+import retrofit2.Response
+import retrofit2.http.Header
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -35,6 +37,12 @@ interface ConnectionsApi {
      */
     @GET("api/relationships/blocked")
     suspend fun blocked(): BlockedRelationshipsResponse
+
+    @GET("api/relationships/requests/sent")
+    suspend fun sentRequestsConditional(@Header("If-None-Match") etag: String?): Response<SentRequestsResponse>
+
+    @GET("api/relationships/blocked")
+    suspend fun blockedConditional(@Header("If-None-Match") etag: String?): Response<BlockedRelationshipsResponse>
 
     /**
      * `DELETE /api/relationships/:id` — disconnect an accepted

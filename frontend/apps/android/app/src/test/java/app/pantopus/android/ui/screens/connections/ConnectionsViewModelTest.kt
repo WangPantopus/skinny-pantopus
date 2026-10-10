@@ -18,6 +18,8 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.theme.PantopusIcon
+import app.pantopus.android.data.store.Stored
+import io.mockk.every
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -49,9 +51,13 @@ class ConnectionsViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        coEvery { connectionsRepo.sentRequests() } returns
+        every { repo.listCopy(any(), any()) } returns Stored()
+        every { repo.pendingCopy() } returns Stored()
+        every { connectionsRepo.sentCopy() } returns Stored()
+        every { connectionsRepo.blockedCopy() } returns Stored()
+        coEvery { connectionsRepo.sentRequests(any()) } returns
             NetworkResult.Success(SentRequestsResponse(requests = emptyList()))
-        coEvery { connectionsRepo.blocked() } returns
+        coEvery { connectionsRepo.blocked(any()) } returns
             NetworkResult.Success(BlockedRelationshipsResponse(blocked = emptyList()))
     }
 
@@ -124,8 +130,8 @@ class ConnectionsViewModelTest {
     @Test
     fun load_empty_transitions_to_empty_all_tab() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(emptyAccepted)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(emptyPending)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(emptyAccepted)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(emptyPending)
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
             val state = vm.state.value
@@ -138,8 +144,8 @@ class ConnectionsViewModelTest {
     @Test
     fun load_populated_transitions_to_loaded() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
             val state = vm.state.value
@@ -154,13 +160,13 @@ class ConnectionsViewModelTest {
             // Error is reserved for "nothing loaded at all". Since the Sent
             // and Blocked tabs landed, that means all four fetches must fail —
             // any one succeeding still gives the user a usable screen.
-            coEvery { repo.list(any(), any(), any()) } returns
+            coEvery { repo.list(any(), any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
-            coEvery { repo.pendingRequests() } returns
+            coEvery { repo.pendingRequests(any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
-            coEvery { connectionsRepo.sentRequests() } returns
+            coEvery { connectionsRepo.sentRequests(any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
-            coEvery { connectionsRepo.blocked() } returns
+            coEvery { connectionsRepo.blocked(any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
@@ -170,9 +176,9 @@ class ConnectionsViewModelTest {
     @Test
     fun one_fetch_failing_still_shows_pending_data() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns
+            coEvery { repo.list(any(), any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
             // All tab is empty because accepted fetch failed.
@@ -191,8 +197,8 @@ class ConnectionsViewModelTest {
     @Test
     fun tabs_expose_all_neighbors_pending_with_counts() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
             val tabs = vm.tabs.value
@@ -212,8 +218,8 @@ class ConnectionsViewModelTest {
     @Test
     fun neighbors_tab_filters_out_users_without_city() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
             vm.selectTab(ConnectionsTab.NEIGHBORS)
@@ -227,8 +233,8 @@ class ConnectionsViewModelTest {
     @Test
     fun empty_pending_shows_mailbox_empty_copy() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(emptyPending)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(emptyPending)
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
             vm.selectTab(ConnectionsTab.PENDING)
@@ -243,8 +249,8 @@ class ConnectionsViewModelTest {
     @Test
     fun search_filters_accepted_by_name() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
             vm.updateSearch("david")
@@ -258,8 +264,8 @@ class ConnectionsViewModelTest {
     @Test
     fun search_filters_pending_by_city() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
             vm.updateSearch("burnside")
@@ -276,8 +282,8 @@ class ConnectionsViewModelTest {
     @Test
     fun accept_optimistically_removes_pending_and_bumps_all() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             coEvery { repo.accept("req1") } returns NetworkResult.Success(RelationshipActionEcho())
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
@@ -291,8 +297,8 @@ class ConnectionsViewModelTest {
     @Test
     fun accept_rolls_back_on_failure() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             coEvery { repo.accept("req1") } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = ConnectionsViewModel(repo, connectionsRepo)
@@ -307,8 +313,8 @@ class ConnectionsViewModelTest {
     @Test
     fun reject_optimistically_removes_pending() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             coEvery { repo.reject("req1") } returns NetworkResult.Success(RelationshipActionEcho())
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             vm.load()
@@ -321,8 +327,8 @@ class ConnectionsViewModelTest {
     @Test
     fun reject_rolls_back_on_failure() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             coEvery { repo.reject("req1") } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = ConnectionsViewModel(repo, connectionsRepo)
@@ -377,8 +383,8 @@ class ConnectionsViewModelTest {
     @Test
     fun message_cta_fires_on_message_callback() =
         runTest {
-            coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
-            coEvery { repo.pendingRequests() } returns NetworkResult.Success(pendingOne)
+            coEvery { repo.list(any(), any(), any(), any()) } returns NetworkResult.Success(acceptedTwo)
+            coEvery { repo.pendingRequests(any()) } returns NetworkResult.Success(pendingOne)
             val vm = ConnectionsViewModel(repo, connectionsRepo)
             var captured: ConnectionsChatTarget? = null
             vm.onMessage = { target -> captured = target }

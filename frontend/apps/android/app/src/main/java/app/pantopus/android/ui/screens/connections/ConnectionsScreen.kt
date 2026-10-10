@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.PantopusColors
 
@@ -36,6 +38,7 @@ fun ConnectionsScreen(
     viewModel: ConnectionsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val topBarAction by viewModel.topBarAction.collectAsStateWithLifecycle()
@@ -48,12 +51,18 @@ fun ConnectionsScreen(
         viewModel.onFindPeople = onFindPeople
         viewModel.onOpenProfile = onOpenProfile
         viewModel.onOpenBlockedUsers = onOpenBlockedUsers
-        viewModel.load()
     }
+
+    LifecycleResumeEffect(Unit) {
+        viewModel.load()
+        onPauseOrDispose { }
+    }
+    RefreshOnStoreChange(viewModel::load)
 
     Box(modifier = Modifier.fillMaxSize().testTag(CONNECTIONS_TAG)) {
         ListOfRowsScreen(
             title = "Connections",
+            refreshNotice = refreshNotice,
             state = state,
             onRefresh = { viewModel.refresh() },
             onEndReached = {},

@@ -1,6 +1,10 @@
 package app.pantopus.android.data.store
 
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
+import app.pantopus.android.data.api.models.connections.SentRequestsResponse
+import app.pantopus.android.data.api.models.relationships.RelationshipsListResponse
+import app.pantopus.android.data.api.models.relationships.PendingRequestsResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
@@ -51,6 +55,20 @@ object StoreTopics {
 
 /** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
 object StoreKeys {
+    fun relationships(status: String?, limit: Int = 50, offset: Int = 0) = StoreKey<RelationshipsListResponse>(
+        "api/relationships", mapOf("status" to status, "limit" to limit.toString(), "offset" to offset.toString()),
+        kind = StoreKind.PEOPLE, topics = setOf(StoreTopics.PROFILE_ME),
+    )
+    val pendingConnections = StoreKey<PendingRequestsResponse>(
+        "api/relationships/requests/pending", kind = StoreKind.PEOPLE, topics = setOf(StoreTopics.PROFILE_ME),
+    )
+    val sentConnections = StoreKey<SentRequestsResponse>(
+        "api/relationships/requests/sent", kind = StoreKind.PEOPLE, topics = setOf(StoreTopics.PROFILE_ME),
+    )
+    val blockedConnections = StoreKey<BlockedRelationshipsResponse>(
+        "api/relationships/blocked", kind = StoreKind.PEOPLE, topics = setOf(StoreTopics.PROFILE_ME),
+    )
+
     /** Search privacy preferences are copied in memory and removed after a PATCH. */
     val privacySettings = StoreKey<PrivacySettingsResponse>(
         "api/privacy/settings", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME),

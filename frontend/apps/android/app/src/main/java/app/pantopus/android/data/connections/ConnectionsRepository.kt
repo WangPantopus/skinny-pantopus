@@ -3,6 +3,12 @@ package app.pantopus.android.data.connections
 import app.pantopus.android.data.api.models.connections.BlockedRelationshipsResponse
 import app.pantopus.android.data.api.models.connections.SentRequestsResponse
 import app.pantopus.android.data.api.models.relationships.RelationshipActionEcho
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreTopics
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.data.store.asResult
+import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.ConnectionsApi
@@ -19,28 +25,42 @@ class ConnectionsRepository
     @Inject
     constructor(
         private val api: ConnectionsApi,
+        private val store: ScreenStore,
     ) {
         /**
          * `GET /api/relationships/requests/sent` — outbound pending
          * requests. Route `backend/routes/relationships.js:698`.
          */
-        suspend fun sentRequests(): NetworkResult<SentRequestsResponse> = safeApiCall { api.sentRequests() }
+        suspend fun sentRequests(force: Boolean = false): NetworkResult<SentRequestsResponse> {
+            val stored = store.read(StoreKeys.sentConnections, force) { etag -> conditionalApiCall { api.sentRequestsConditional(etag) } }
+            return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
+        }
+
+        fun sentCopy(): Stored<SentRequestsResponse> = store.peek(StoreKeys.sentConnections)
 
         /**
          * `GET /api/relationships/blocked` — people the viewer blocked.
          * Route `backend/routes/relationships.js:727`.
          */
-        suspend fun blocked(): NetworkResult<BlockedRelationshipsResponse> = safeApiCall { api.blocked() }
+        suspend fun blocked(force: Boolean = false): NetworkResult<BlockedRelationshipsResponse> {
+            val stored = store.read(StoreKeys.blockedConnections, force) { etag -> conditionalApiCall { api.blockedConditional(etag) } }
+            return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
+        }
+
+        fun blockedCopy(): Stored<BlockedRelationshipsResponse> = store.peek(StoreKeys.blockedConnections)
 
         /**
          * `DELETE /api/relationships/:id` — disconnect an accepted
          * relationship. Route `backend/routes/relationships.js:578`.
          */
-        suspend fun disconnect(id: String): NetworkResult<RelationshipActionEcho> = safeApiCall { api.disconnect(id) }
+        suspend fun disconnect(id: String): NetworkResult<RelationshipActionEcho> = safeApiCall { api.disconnect(id) }.changed()
 
         /**
          * `POST /api/relationships/:id/unblock` — lift a block. Route
          * `backend/routes/relationships.js:522`.
          */
-        suspend fun unblock(id: String): NetworkResult<RelationshipActionEcho> = safeApiCall { api.unblock(id) }
+        suspend fun unblock(id: String): NetworkResult<RelationshipActionEcho> = safeApiCall { api.unblock(id) }.changed()
+        private fun <T> NetworkResult<T>.changed(): NetworkResult<T> = also {
+            if (it is NetworkResult.Success) store.markStale(StoreTopics.PROFILE_ME)
+        }
     }
