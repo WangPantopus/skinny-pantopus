@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.theme.PantopusColors
@@ -36,6 +37,7 @@ fun HomeIssuesListScreen(
     onBack: (() -> Unit)? = null,
     viewModel: HomeIssuesListViewModel = hiltViewModel(),
 ) {
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_issues", state.showsContent())
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
@@ -47,7 +49,6 @@ fun HomeIssuesListScreen(
     var reporting by remember { mutableStateOf(false) }
     var dismissTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    LaunchedEffect(Unit) { viewModel.load() }
 
     LaunchedEffect(pendingEvent) {
         when (val event = pendingEvent) {

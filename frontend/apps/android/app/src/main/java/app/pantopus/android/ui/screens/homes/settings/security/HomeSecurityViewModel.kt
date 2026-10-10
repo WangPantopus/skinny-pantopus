@@ -21,8 +21,6 @@ import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListRow
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,12 +83,14 @@ class HomeSecurityViewModel
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.privacy(homeId)))
         private var readGeneration = 0L
+        private var active = true
 
         /**
          * Screen entry and every return (Instant Screens): owners and household roles see the stored toggles at once,
          * and the store answers a fresh copy without a request or revalidates an older one quietly.
          */
         fun load() {
+            active = true
             saveError = null
             if (_state.value !is GroupedListUiState.Loaded && gate.showsCopy) repository.storedPrivacy(homeId)?.let(::show)
             read(force = false)
@@ -99,18 +99,29 @@ class HomeSecurityViewModel
         /** Retry: read now. */
         fun refresh() = read(force = true)
 
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            if (!gate.showsCopy) clearCopy()
+            gate.leave()
+        }
+
+        private fun clearCopy() {
+            _refreshNotice.value = null
+            _toggles.clear()
+            _state.value = GroupedListUiState.Loading
+        }
+
         override fun onCleared() {
             gate.leave()
         }
 
         private fun read(force: Boolean) {
+            if (!active) return
             val generation = ++readGeneration
             if (_state.value !is GroupedListUiState.Loaded) _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
-                val fromCopy = gate.showsCopy && !force
-                var stored = readPrivacy(force = !fromCopy)
-                // Household access ended meanwhile: whatever came from a copy is read again now.
-                if (fromCopy && !gate.showsCopy) stored = readPrivacy(force = true)
+                val stored = readPrivacy(force, generation)
                 if (generation != readGeneration) return@launch
                 val data = stored.data
                 when {
@@ -126,13 +137,16 @@ class HomeSecurityViewModel
             }
         }
 
-        private suspend fun readPrivacy(force: Boolean): Stored<HomePrivacyResponse> =
-            coroutineScope {
-                val recheck = async { gate.recheck(force) }
-                val privacy = async { repository.getPrivacyStored(homeId, force) }
-                recheck.await()
-                privacy.await()
-            }
+        private suspend fun readPrivacy(
+            force: Boolean,
+            generation: Long,
+        ): Stored<HomePrivacyResponse> {
+            val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (refusal != null) return Stored(failure = refusal)
+            if (generation != readGeneration) return Stored()
+            val stored = repository.getPrivacyStored(homeId, force || !gate.showsCopy)
+            return if (!gate.showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
+        }
 
         private fun show(response: HomePrivacyResponse) {
             applyServer(response.privacy)

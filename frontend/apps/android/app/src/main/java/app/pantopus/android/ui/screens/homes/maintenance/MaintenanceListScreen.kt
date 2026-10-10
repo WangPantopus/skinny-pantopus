@@ -15,6 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 
@@ -31,6 +32,7 @@ fun MaintenanceListScreen(
     onOpenIssues: (() -> Unit)? = null,
     viewModel: MaintenanceListViewModel = hiltViewModel(),
 ) {
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("home_maintenance", state.showsContent())
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
@@ -48,7 +50,6 @@ fun MaintenanceListScreen(
             onAddTask = onAddTask,
             onOpenIssues = onOpenIssues,
         )
-        viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenHomeMaintenanceViewed)
     }
 

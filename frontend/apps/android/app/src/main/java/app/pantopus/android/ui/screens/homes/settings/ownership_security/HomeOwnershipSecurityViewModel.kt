@@ -23,8 +23,6 @@ import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,6 +90,7 @@ class HomeOwnershipSecurityViewModel
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.security(homeId)))
         private var readGeneration = 0L
+        private var active = true
 
         /** Last loaded policy block. Null until the first successful fetch. */
         var policy: HomeOwnershipSecurityDto? = null
@@ -108,6 +107,7 @@ class HomeOwnershipSecurityViewModel
          * and the store answers a fresh copy without a request or revalidates an older one quietly.
          */
         fun load() {
+            active = true
             saveError = null
             if (policy == null && gate.showsCopy) repository.storedSecurity(homeId)?.let(::show)
             read(force = false)
@@ -116,18 +116,30 @@ class HomeOwnershipSecurityViewModel
         /** Retry, and after a saved change: read now. */
         fun refresh() = read(force = true)
 
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            if (!gate.showsCopy) clearCopy()
+            gate.leave()
+        }
+
+        private fun clearCopy() {
+            _refreshNotice.value = null
+            policy = null
+            _banner.value = null
+            _state.value = GroupedListUiState.Loading
+        }
+
         override fun onCleared() {
             gate.leave()
         }
 
         private fun read(force: Boolean) {
+            if (!active) return
             val generation = ++readGeneration
             if (policy == null) _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
-                val fromCopy = gate.showsCopy && !force
-                var stored = readSecurity(force = !fromCopy)
-                // Household access ended meanwhile: whatever came from a copy is read again now.
-                if (fromCopy && !gate.showsCopy) stored = readSecurity(force = true)
+                val stored = readSecurity(force, generation)
                 if (generation != readGeneration) return@launch
                 val data = stored.data
                 when {
@@ -145,13 +157,16 @@ class HomeOwnershipSecurityViewModel
             }
         }
 
-        private suspend fun readSecurity(force: Boolean): Stored<HomeOwnershipSecurityResponse> =
-            coroutineScope {
-                val recheck = async { gate.recheck(force) }
-                val security = async { repository.getSecurityStored(homeId, force) }
-                recheck.await()
-                security.await()
-            }
+        private suspend fun readSecurity(
+            force: Boolean,
+            generation: Long,
+        ): Stored<HomeOwnershipSecurityResponse> {
+            val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (refusal != null) return Stored(failure = refusal)
+            if (generation != readGeneration) return Stored()
+            val stored = repository.getSecurityStored(homeId, force || !gate.showsCopy)
+            return if (!gate.showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
+        }
 
         private fun show(response: HomeOwnershipSecurityResponse) {
             policy = response.security

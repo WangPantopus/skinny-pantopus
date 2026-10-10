@@ -148,6 +148,7 @@ open class HomeIssuesListViewModel
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.issues(homeId), HomeStoreKeys.me(homeId)))
         private var readGeneration = 0L
+        private var active = true
 
         private var issues: List<HomeIssueDto>? = null
         private var pendingCreate: Pair<CreateHomeIssueRequest, String>? = null
@@ -173,6 +174,7 @@ open class HomeIssuesListViewModel
          * and the store answers a fresh copy without a request or revalidates an older one quietly.
          */
         fun load() {
+            active = true
             if (issues == null && gate.showsCopy) showStoredCopy()
             read(force = false)
         }
@@ -183,11 +185,30 @@ open class HomeIssuesListViewModel
             read(force = true)
         }
 
+        /** Guest and expiring copies disappear as soon as the screen leaves the foreground. */
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            if (!gate.showsCopy) clearCopy()
+            gate.leave()
+        }
+
+        private fun clearCopy() {
+            issues = null
+            access = null
+            accessConfirmed = false
+            _banner.value = null
+            _refreshing.value = false
+            _refreshNotice.value = null
+            _state.value = ListOfRowsUiState.Loading
+        }
+
         override fun onCleared() {
             gate.leave()
         }
 
         private fun read(force: Boolean) {
+            if (!active) return
             if (issues == null) _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch { fetch(force) }
         }
@@ -285,11 +306,9 @@ open class HomeIssuesListViewModel
         // MARK: - Fetch + render
 
         private suspend fun fetch(force: Boolean) {
+            if (!active) return
             val generation = ++readGeneration
-            val fromCopy = gate.showsCopy && !force
-            var reads = readAll(force = !fromCopy)
-            // Household access ended meanwhile: whatever came from a copy is read again now.
-            if (fromCopy && !gate.showsCopy) reads = readAll(force = true)
+            val reads = readAll(force, generation)
             if (generation != readGeneration) return
             _refreshing.value = false
             val (stored, me) = reads
@@ -311,15 +330,23 @@ open class HomeIssuesListViewModel
             _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
         }
 
-        /** The issues and the viewer's access, read side by side with the access re-check. */
-        private suspend fun readAll(force: Boolean): Pair<Stored<HomeIssuesResponse>, Stored<HomeAccessDto>> =
-            coroutineScope {
-                val recheck = async { gate.recheck(force) }
-                val loaded = async { repo.getHomeIssuesStored(homeId, force) }
-                val me = async { adminRepo.myAccessStored(homeId, force) }
-                recheck.await()
-                loaded.await() to me.await()
+        /** Refused or changed authority clears the old presentation before starting the content reads. */
+        private suspend fun readAll(
+            force: Boolean,
+            generation: Long,
+        ): Pair<Stored<HomeIssuesResponse>, Stored<HomeAccessDto>> {
+            val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (refusal != null) return Stored<HomeIssuesResponse>(failure = refusal) to Stored(failure = refusal)
+            if (generation != readGeneration) return Stored<HomeIssuesResponse>() to Stored()
+            return coroutineScope {
+                val readNow = force || !gate.showsCopy
+                val loaded = async { repo.getHomeIssuesStored(homeId, readNow) }
+                val me = async { adminRepo.myAccessStored(homeId, readNow) }
+                val stored = loaded.await()
+                val rows = if (!gate.showsCopy && stored.failure != null) Stored<HomeIssuesResponse>(failure = stored.failure) else stored
+                rows to me.await()
             }
+        }
 
         private fun publish(loaded: List<HomeIssueDto>) {
             issues = loaded
