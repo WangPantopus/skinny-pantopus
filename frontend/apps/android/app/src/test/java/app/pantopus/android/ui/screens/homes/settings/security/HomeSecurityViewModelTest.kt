@@ -46,6 +46,7 @@ class HomeSecurityViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { gates.create(any(), any()).checkForRead(any(), any()) } returns null
         // Default: GET returns the balanced fixture; PATCH succeeds.
         coEvery { repository.getPrivacyStored(any(), any()) } returns stored(privacyResponse())
         coEvery { repository.updatePrivacy(any(), any()) } returns NetworkResult.Success(privacyResponse())
