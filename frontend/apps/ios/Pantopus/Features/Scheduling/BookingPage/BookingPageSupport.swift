@@ -111,7 +111,7 @@ struct BookingPageAvatar: View {
     var body: some View {
         Group {
             if let imageURLString, let url = URL(string: imageURLString) {
-                AsyncImage(url: url) { phase in
+                CachedAsyncImage(url: url) { phase in
                     if case let .success(image) = phase {
                         image.resizable().scaledToFill()
                     } else {

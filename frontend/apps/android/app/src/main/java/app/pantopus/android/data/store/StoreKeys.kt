@@ -1,0 +1,174 @@
+package app.pantopus.android.data.store
+
+import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
+import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
+import app.pantopus.android.data.api.models.homedashboard.HomeDashboardResponse
+import app.pantopus.android.data.api.models.homes.MyHomesResponse
+import app.pantopus.android.data.api.models.hub.NotificationPreferences
+import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
+import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
+import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
+import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
+import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
+import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
+import app.pantopus.android.data.api.models.users.InviteCodeDto
+import app.pantopus.android.data.api.models.users.InviteProgressDto
+import app.pantopus.android.data.api.models.users.ProfileResponse
+
+/** Change topics (contract §8) that more than one key or repository names. */
+object StoreTopics {
+    /** The viewer's notifications: one created, read or deleted. */
+    const val NOTIFICATIONS = "notifications"
+
+    /** The viewer's own profile and settings (a name, username or photo saved, here or on another device). */
+    const val PROFILE_ME = "profile:me"
+
+    /** The viewer's conversation list: a chat created or left, a message sent or read. */
+    const val CHATS = "chats"
+
+    /** The viewer's list of homes: a home added, claimed, verified, left or deleted. */
+    const val HOMES = "homes"
+}
+
+/** The store's keys, one per endpoint and parameters it caches, with their kind and change topics (contract §4, §8). */
+object StoreKeys {
+    /** My Homes: one source for every screen that lists the viewer's homes. */
+    val myHomes = StoreKey<MyHomesResponse>("api/homes/my-homes", kind = StoreKind.HOMES, topics = setOf(StoreTopics.HOMES))
+
+    /**
+     * The sections the Today tab renders (contract §8 "Today on the phones"): weather and its sky, air, alerts, the
+     * sun, "Good day to…", radon, the address calendar, the home and block for the sky drawing, and the ballot card.
+     */
+    val TODAY_SECTIONS: List<PlaceSectionId> =
+        listOf(
+            PlaceSectionId.WEATHER,
+            PlaceSectionId.AIR_QUALITY,
+            PlaceSectionId.ALERTS,
+            PlaceSectionId.SUNRISE_SUNSET,
+            PlaceSectionId.GOOD_DAY_TO,
+            PlaceSectionId.LEAD_RADON,
+            PlaceSectionId.ADDRESS_CALENDAR,
+            PlaceSectionId.YOUR_HOME,
+            PlaceSectionId.BLOCK_DENSITY,
+            PlaceSectionId.CIVIC_ELECTION,
+        )
+
+    /** `?sections=` as the server reads it. */
+    val todaySectionsQuery: String = TODAY_SECTIONS.joinToString(",") { it.raw }
+
+    /** The viewer's notification and briefing preferences (their own settings). */
+    val notificationPreferences =
+        StoreKey<NotificationPreferences>("api/hub/preferences", kind = StoreKind.YOU, topics = setOf("profile:me"))
+
+    /** Support Trains the viewer organizes or helps with (first page), for My trains and Invitations. */
+    val mySupportTrains =
+        StoreKey<SupportTrainsListResponse>(
+            "api/activities/support-trains/me/support-trains",
+            mapOf("limit" to "20", "offset" to "0"),
+            kind = StoreKind.SUPPORT_TRAINS,
+            topics = setOf("supporttrain:*"),
+        )
+
+    /** Support Trains near [latitude], [longitude] (rounded with [roundCoordinate] before they get here). */
+    fun nearbySupportTrains(
+        latitude: Double,
+        longitude: Double,
+    ) = StoreKey<SupportTrainsNearbyResponse>(
+        "api/activities/support-trains/nearby",
+        mapOf("latitude" to latitude.toString(), "longitude" to longitude.toString(), "limit" to "40"),
+        kind = StoreKind.SUPPORT_TRAINS,
+        topics = setOf("supporttrain:*"),
+    )
+
+    /** Three decimals (about 110 m): a key, and the request it names, for a nearby search. */
+    fun roundCoordinate(value: Double): Double = kotlin.math.round(value * COORDINATE_SCALE) / COORDINATE_SCALE
+
+    private const val COORDINATE_SCALE = 1000.0
+
+    /**
+     * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30
+     * seconds, shared by the Messages tab and its badge. Message history never enters the store (founder decision 7).
+     */
+    val conversations =
+        StoreKey<UnifiedConversationsResponse>(
+            "api/chat/unified-conversations",
+            mapOf("limit" to "100"),
+            kind = StoreKind.MESSAGES_LIST,
+            topics = setOf(StoreTopics.CHATS),
+        )
+
+    /**
+     * A home's Place for the viewer's role (the Place dashboard): every section, kind Place. A claim, verification or
+     * household change marks it through `homes`, `home:` and `place:`.
+     */
+    fun place(homeId: String) =
+        StoreKey<PlaceIntelligence>(
+            "api/homes/$homeId/intelligence",
+            mapOf("ballot" to "1"),
+            kind = StoreKind.PLACE,
+            topics = setOf("place:$homeId", "home:$homeId", StoreTopics.HOMES),
+        )
+
+    /**
+     * The Nearby tab's density meter and map cells (contract §4 "Nearby": fresh 2 minutes). They follow the viewer's
+     * place, so a home added, left or verified marks them through `homes`.
+     */
+    val neighborhoodMeter =
+        StoreKey<NeighborhoodMeter>("api/neighborhood/meter", kind = StoreKind.NEARBY, topics = setOf(StoreTopics.HOMES))
+    val neighborhoodCells =
+        StoreKey<NeighborhoodCells>("api/neighborhood/cells", kind = StoreKind.NEARBY, topics = setOf(StoreTopics.HOMES))
+
+    /** The bell's unread count (kind Notifications: fresh 30 seconds, never saved on the phone). */
+    val notificationsUnreadCount =
+        StoreKey<NotificationUnreadCountResponse>(
+            "api/notifications/unread-count",
+            kind = StoreKind.NOTIFICATIONS,
+            topics = setOf(StoreTopics.NOTIFICATIONS),
+        )
+
+    /** The first page of one notifications list (a zone's context, all or unread); later pages are never stored. */
+    fun notificationsFirstPage(
+        limit: Int,
+        unreadOnly: Boolean?,
+        context: String?,
+    ) = StoreKey<NotificationsListResponse>(
+        "api/notifications",
+        mapOf("limit" to "$limit", "offset" to "0", "unread" to unreadOnly?.toString(), "context" to context),
+        kind = StoreKind.NOTIFICATIONS,
+        topics = setOf(StoreTopics.NOTIFICATIONS),
+    )
+
+    /** The viewer's own profile (contract §4 "You": fresh 10 minutes). */
+    val ownProfile = StoreKey<ProfileResponse>("api/users/profile", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** The businesses the viewer belongs to (the You tab's Business card). */
+    val myBusinesses =
+        StoreKey<MyBusinessesResponse>("api/businesses/my-businesses", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /** The viewer's invite progress and invite code (the You tab's invite card). */
+    val inviteProgress =
+        StoreKey<InviteProgressDto>("api/users/me/invite-progress", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+    val inviteCode = StoreKey<InviteCodeDto>("api/users/me/invite-code", kind = StoreKind.YOU, topics = setOf(StoreTopics.PROFILE_ME))
+
+    /**
+     * A home's dashboard (household data: counts, members, recent activity), kind Homes. Shown from a copy only to
+     * owners and household roles (founder decision 3); callers check `MyHome.showsCopyBeforeRecheck` first.
+     */
+    fun homeDashboard(homeId: String) =
+        StoreKey<HomeDashboardResponse>(
+            "api/homes/$homeId/dashboard",
+            kind = StoreKind.HOMES,
+            topics = setOf("home:$homeId", StoreTopics.HOMES),
+        )
+
+    /** A home's Today: [TODAY_SECTIONS] of its Place intelligence. */
+    fun today(homeId: String) =
+        StoreKey<PlaceIntelligence>(
+            "api/homes/$homeId/intelligence",
+            mapOf("ballot" to "1", "sections" to todaySectionsQuery),
+            kind = StoreKind.TODAY,
+            topics = setOf("today", "home:$homeId", "place:$homeId"),
+        )
+}

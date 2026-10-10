@@ -25,6 +25,9 @@ import PlaceDashboardView from './PlaceDashboardView';
 import PlaceDashboardSkeleton from './PlaceDashboardSkeleton';
 import PlaceShell from './PlaceShell';
 import SetupBanner from '@/components/hub/SetupBanner';
+import { usePrimaryHome } from '@/lib/primaryHome';
+import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
+import { PLACE_FRESH_MS, gatedStaleTime, showsPlaceCopy, useAfterRecheck } from '@/lib/householdCopy';
 
 const REDIRECT_TO = encodeURIComponent('/app/place');
 
@@ -76,22 +79,12 @@ export default function PlaceDashboard() {
   const setupSteps = hubQuery.data?.setup?.steps ?? [];
 
   // 1) Resolve the resident's primary home (the default place).
-  const homeQuery = useQuery({
-    queryKey: queryKeys.placePrimaryHome(),
-    queryFn: async () => api.homes.getPrimaryHome(),
-    enabled: authed,
-    staleTime: 60_000,
-  });
+  const homeQuery = usePrimaryHome({ enabled: authed });
 
   // 1b) The resident's full list of places — powers the multi-home
   // switcher. Supplementary: it never gates the dashboard, so if it
   // fails the dashboard still renders (without the switch affordance).
-  const myHomesQuery = useQuery({
-    queryKey: queryKeys.placeMyHomes(),
-    queryFn: async () => api.homes.getMyHomes(),
-    enabled: authed,
-    staleTime: 60_000,
-  });
+  const myHomesQuery = useQuery({ ...sharedMyHomesQuery(), enabled: authed });
 
   // The resident's own private setup is their place too until they share a
   // household: the server answers it with public readings only (tier T1).
@@ -130,15 +123,21 @@ export default function PlaceDashboard() {
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
     queryFn: async () => api.place.getPlaceIntelligence(homeId as string),
     enabled: authed && !!homeId,
-    staleTime: 60_000,
+    staleTime: gatedStaleTime(PLACE_FRESH_MS, showsPlaceCopy),
   });
+  // A guest's or service provider's copy shows only once the re-check answers (decision 3).
+  const { data: intelligence, waiting: intelWaiting } = useAfterRecheck(intelQuery, showsPlaceCopy);
 
   // ── States ───────────────────────────────────────────────
-  if (!mounted || !authed) {
+  // Coming back to Place shows what this tab already loaded in the first frame; the skeleton is
+  // only for nothing at all (a fresh page load starts with an empty cache, like the server).
+  const kept = intelligence !== undefined;
+  if (!kept && (!mounted || !authed)) {
     return <Shell><PlaceDashboardSkeleton /></Shell>;
   }
 
-  if (homeQuery.isError) {
+  // A failed refresh keeps the place on screen (contract §3); errors show only with nothing to show.
+  if (homeQuery.isError && !kept) {
     return (
       <Shell>
         <ErrorState message="We couldn't load your place. Check your connection and try again." onRetry={() => homeQuery.refetch()} />
@@ -157,11 +156,11 @@ export default function PlaceDashboard() {
     );
   }
 
-  if (homeQuery.isPending || intelQuery.isPending) {
+  if (!kept && (homeQuery.isPending || intelQuery.isPending || intelWaiting)) {
     return <Shell><PlaceDashboardSkeleton /></Shell>;
   }
 
-  if (intelQuery.isError || !intelQuery.data) {
+  if (!intelligence) {
     // A 403 means this account can't see the place (e.g. ?home= from another
     // account): not a connection problem, and a retry can't change it.
     const denied = (intelQuery.error as { statusCode?: number } | null)?.statusCode === 403;
@@ -177,7 +176,7 @@ export default function PlaceDashboard() {
   }
 
   return (
-    <Shell hidden={placeSlugsNotForViewer(intelQuery.data)}>
+    <Shell hidden={placeSlugsNotForViewer(intelligence)}>
       {/* Hub absorption (Phase 1 follow-up): the setup checklist lives on the
           place page now, in wedge order (claim → verify → profile). */}
       {setupSteps.length > 0 && !setupSteps.every((s) => s.done) ? (
@@ -185,7 +184,7 @@ export default function PlaceDashboard() {
       ) : null}
       <div className="mb-4"><button className="text-sm text-primary-700 dark:text-primary-300" onClick={() => router.push('/app/place?savedPlace=all')}>Saved address previews</button></div>
       <PlaceDashboardView
-        intelligence={intelQuery.data}
+        intelligence={intelligence}
         homeId={homeId as string}
         onOpenSection={(slug) => router.push(`/app/place/${slug}${placeHomeQuery(linkHomeId)}`)}
         onOpenPulse={() => router.push(`/app/place/pulse${placeHomeQuery(linkHomeId)}`)}

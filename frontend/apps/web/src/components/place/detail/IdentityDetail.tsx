@@ -27,6 +27,7 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { failureMessage } from '@/components/home/share/shareFailure';
 import { queryKeys } from '@/lib/query-keys';
+import { launchFeatures } from '@/lib/featureFlags';
 import { detailAddress } from './sections';
 import {
   StateProgramSection,
@@ -255,14 +256,17 @@ function IssuedLetterCard({ letter, homeId }: { letter: ResidencyLetter; homeId:
         >
           {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} strokeWidth={2.25} />} PDF
         </button>
-        <button
-          type="button"
-          onClick={onMail}
-          disabled={mailing || inactive}
-          className="flex-1 h-10 rounded-[10px] border-[1.5px] border-app-border bg-app-surface text-app-text text-[13.5px] font-semibold flex items-center justify-center gap-1.5 hover:bg-app-hover transition disabled:opacity-50"
-        >
-          <Mailbox size={15} strokeWidth={2} /> {mailing ? 'Sending…' : 'Mail'}
-        </button>
+        {/* Launch cut #10 (Mailbox): no copy to the hidden mailbox. */}
+        {launchFeatures.mailbox && (
+          <button
+            type="button"
+            onClick={onMail}
+            disabled={mailing || inactive}
+            className="flex-1 h-10 rounded-[10px] border-[1.5px] border-app-border bg-app-surface text-app-text text-[13.5px] font-semibold flex items-center justify-center gap-1.5 hover:bg-app-hover transition disabled:opacity-50"
+          >
+            <Mailbox size={15} strokeWidth={2} /> {mailing ? 'Sending…' : 'Mail'}
+          </button>
+        )}
         {!inactive && (
           <button
             type="button"

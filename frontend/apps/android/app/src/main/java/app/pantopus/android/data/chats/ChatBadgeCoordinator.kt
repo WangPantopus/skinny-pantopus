@@ -26,4 +26,9 @@ class ChatBadgeCoordinator
         ) {
             _snapshot.value = ChatBadgeSnapshot(serverTotalUnread, rows)
         }
+
+        /** Sign-out: the last account's unread total and conversation rows go. */
+        fun reset() {
+            _snapshot.value = ChatBadgeSnapshot()
+        }
     }

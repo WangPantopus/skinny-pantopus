@@ -1,6 +1,7 @@
 package app.pantopus.android.ui.screens.place
 
 import androidx.compose.ui.graphics.Color
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.place.AirQualityCategory
 import app.pantopus.android.data.api.models.place.BenchmarkComparison
 import app.pantopus.android.data.api.models.place.ExemptionFilingStatus
@@ -495,14 +496,15 @@ object PlacePresentation {
     // ── the Band-D "Locked until you verify" group (T3 → T4) ───
 
     val verifyLockedItems: List<PlaceVerifyLockedItem> =
-        listOf(
+        listOfNotNull(
             PlaceVerifyLockedItem(PantopusIcon.MessageCircle, "Neighbor messaging", "Verify your address to message neighbors."),
             PlaceVerifyLockedItem(PantopusIcon.BadgeCheck, "Verified badge", "Verify your address to get your verified badge."),
+            // Launch cut #10 (Mailbox): verifying doesn't open a mailbox while it is off.
             PlaceVerifyLockedItem(
                 PantopusIcon.Mailbox,
                 "Your mailbox",
                 "Verify your address for your mailbox — packages, civic notices, and permits.",
-            ),
+            ).takeIf { LaunchFeatures.mailbox },
         )
 
     // ── Today's Pulse derivation (the hero) ────────────────────

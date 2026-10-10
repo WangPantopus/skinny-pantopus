@@ -68,6 +68,7 @@ async function collectInternalContext(userId, homeId = null) {
   // Launch cut #7 (Household extras): bills and the family calendar stay out of
   // the Hub Today card and the briefings for the first launch.
   const householdExtras = isLaunchFeatureEnabled('household_extras');
+  const mailbox = isLaunchFeatureEnabled('mailbox');
   // The service-role query bypasses RLS. Active membership and an explicit
   // Hub anchor never substitute for the bills route's finance read permission.
   const financeAccess = hasHomes && householdExtras
@@ -108,7 +109,9 @@ async function collectInternalContext(userId, homeId = null) {
             .map(({ id, title, start_at, end_at, event_type }) => ({ id, title, start_at, end_at, event_type })) }))
       : Promise.resolve({ data: [] }),
 
-    unreadMail: supabaseAdmin
+    // Launch cut #10 (Mailbox): no mail in the Hub Today card or the briefings
+    // while the mailbox is off.
+    unreadMail: !mailbox ? Promise.resolve({ count: 0 }) : supabaseAdmin
       .from('Mail')
       .select('id', { count: 'exact', head: true })
       .eq('recipient_user_id', userId)
@@ -116,7 +119,7 @@ async function collectInternalContext(userId, homeId = null) {
       .eq('archived', false)
       .is('deleted_at', null),
 
-    urgentMail: supabaseAdmin
+    urgentMail: !mailbox ? Promise.resolve({ count: 0 }) : supabaseAdmin
       .from('Mail')
       .select('id', { count: 'exact', head: true })
       .eq('recipient_user_id', userId)

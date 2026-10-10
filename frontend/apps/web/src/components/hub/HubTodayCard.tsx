@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { HubToday } from '@pantopus/types';
+import { withoutLaunchCutTodayRows } from '@/lib/featureFlags';
 
 interface HubTodayCardProps {
   today: HubToday | null;
@@ -90,7 +91,7 @@ function freshnessLabel(fetchedAt: string): string {
 
 // ── Component ───────────────────────────────────────────────────
 
-export function HubTodayCard({ today, loading }: HubTodayCardProps) {
+export function HubTodayCard({ today: briefing, loading }: HubTodayCardProps) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
 
@@ -109,7 +110,8 @@ export function HubTodayCard({ today, loading }: HubTodayCardProps) {
     );
   }
 
-  if (!today || today.display_mode === 'hidden') return null;
+  if (!briefing || briefing.display_mode === 'hidden') return null;
+  const today = withoutLaunchCutTodayRows(briefing);
 
   const { weather, aqi, alerts, signals, seasonal, location, summary, display_mode } = today;
   const minimalSummary = summary.trim() || weather?.condition_label || 'View details';

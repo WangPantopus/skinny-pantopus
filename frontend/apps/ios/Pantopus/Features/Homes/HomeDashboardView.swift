@@ -203,8 +203,16 @@ struct HomeDashboardView: View {
         .task { await viewModel.activate(ifCurrent: viewModel.activationRevision) }
         .onDisappear { isVisible = false
             showsInviteOwner = false
-            viewModel.suspend()
+            // A sub-screen on top: an owner's or household member's dashboard
+            // stays as it was and is re-checked on return (decision 3).
+            viewModel.suspend(keepingCopy: true)
         }
+        .refreshFailureToast($viewModel.refreshFailureMessage)
+        // Someone changed this Home (a task, a member, access): re-check now,
+        // the copy staying on screen for owners and household roles.
+        .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.home(homeId), kind: .homes) }, perform: {
+            await viewModel.refresh()
+        })
         .onChange(of: scenePhase) { _, phase in
             guard isVisible else { return }
             if phase == .active {
@@ -284,6 +292,9 @@ struct HomeDashboardView: View {
             },
             body: {
                 VStack(spacing: Spacing.s4) {
+                    if let notice = viewModel.staleNotice {
+                        RefreshNotice(text: notice) { Task { await viewModel.refresh() } }
+                    }
                     if let security = content.securityBanner {
                         HomeSecurityStatusBanner(content: security) {
                             handleSecurityBannerCTA(security.action)
@@ -314,8 +325,8 @@ struct HomeDashboardView: View {
                                         onOpenPropertyDetails: { if viewModel.can("home.view") { onOpenPropertyDetails?(homeId) } },
                                         onOpenIssues: viewModel.can("maintenance.view")
                                             ? onOpenIssues.map { openIssues in { openIssues(homeId) } } : nil,
-                                        canViewActivity: viewModel.can("security.manage"),
-                                        canViewEmergency: viewModel.can("sensitive.view")
+                                        canViewActivity: viewModel.shows("security.manage"),
+                                        canViewEmergency: viewModel.shows("sensitive.view")
                                     )
                                 }
                             }
@@ -359,7 +370,7 @@ struct HomeDashboardView: View {
         SeasonalChecklistCard(
             state: viewModel.checklist,
             pendingItemIds: viewModel.pendingChecklistItemIds,
-            canEdit: viewModel.canEditChecklist,
+            canEdit: viewModel.checklistEditable,
             changeFailed: viewModel.checklistChangeFailed,
             onComplete: { itemId in Task { await viewModel.completeChecklistItem(itemId) } },
             onSkip: { itemId in Task { await viewModel.skipChecklistItem(itemId) } },

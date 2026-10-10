@@ -27,10 +27,12 @@ const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 // Launch cuts #3 (Marketplace) and #4 (Open Gigs): while they are hidden, the
 // chat assistant neither offers nor drafts listings or open tasks (their
 // drafts would lead to hidden composers). The drafting code itself stays.
+// Launch cut #10 (Mailbox): it doesn't read or summarize mail either.
 function launchScopedChatTools() {
   return toolDefinitions.filter((tool) => {
     if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
     if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
+    if (['get_mail_item', 'summarize_mail_item'].includes(tool.name)) return isLaunchFeatureEnabled('mailbox');
     return true;
   });
 }
@@ -39,6 +41,7 @@ function launchScopedChatInstructions() {
   const hidden = [];
   if (!isLaunchFeatureEnabled('open_gigs')) hidden.push('posting tasks (gigs) for neighbors to bid on');
   if (!isLaunchFeatureEnabled('marketplace')) hidden.push('marketplace listings (selling, giving away, renting or wanted items)');
+  if (!isLaunchFeatureEnabled('mailbox')) hidden.push('the mailbox (received mail, Mail Day, the vault)');
   if (!hidden.length) return prompts.CHAT_AGENT_SYSTEM;
   return `${prompts.CHAT_AGENT_SYSTEM}
 

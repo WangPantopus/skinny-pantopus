@@ -8,9 +8,11 @@ import app.pantopus.android.data.api.models.homes.HomeAuditLogResponse
 import app.pantopus.android.data.api.models.homes.HomeVerificationAccessDto
 import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestActionResponse
 import app.pantopus.android.data.api.models.homes.HouseholdAccessRequestsResponse
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -24,6 +26,7 @@ import retrofit2.http.Query
  * its own service; all three share the Retrofit instance provided by
  * `di/NetworkModule.kt`.
  */
+@Suppress("TooManyFunctions")
 interface HomeAdminApi {
     /**
      * `DELETE /api/homes/:id` — route `backend/routes/home.js:3191`.
@@ -48,6 +51,13 @@ interface HomeAdminApi {
     suspend fun myAccess(
         @Path("id") homeId: String,
     ): HomeAccessDto
+
+    /** [myAccess] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/me")
+    suspend fun myAccessConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeAccessDto>
 
     /**
      * `GET /api/homes/:id/me` — same route
@@ -77,6 +87,13 @@ interface HomeAdminApi {
         @Query("offset") offset: Int = 0,
     ): HomeAuditLogResponse
 
+    /** The first page of [auditLog] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/audit-log?limit=50&offset=0")
+    suspend fun auditLogConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HomeAuditLogResponse>
+
     /**
      * `POST /api/homes/:id/members/:userId/role` — route
      * `backend/routes/homeIam.js:212`.
@@ -104,6 +121,13 @@ interface HomeAdminApi {
         @Path("id") homeId: String,
         @Query("status") status: String = "pending",
     ): HouseholdAccessRequestsResponse
+
+    /** Pending [householdAccessRequests] for the screens' store: a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/household-access-requests?status=pending")
+    suspend fun householdAccessRequestsConditional(
+        @Path("id") homeId: String,
+        @Header("If-None-Match") etag: String?,
+    ): Response<HouseholdAccessRequestsResponse>
 
     /**
      * `POST /api/homes/:id/household-access-requests/:requestId/approve`

@@ -198,9 +198,14 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
     // MARK: - Dependencies
 
     private let api: APIClient
+    /// The lists as last read (Other people: fresh 5 minutes, not saved on
+    /// the phone). Coming back inside the window shows them with no request;
+    /// your own changes here and on profiles mark them out of date.
+    private let store: ScreenStore
     private let onMessage: @MainActor (ConnectionsChatTarget) -> Void
     private let onFindPeople: @MainActor () -> Void
     private let onOpenProfile: @MainActor (String) -> Void
+    private let onOpenBlockedUsers: @MainActor () -> Void
     private let now: @Sendable () -> Date
     private let calendar: Calendar
     private let timeZone: TimeZone
@@ -217,6 +222,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         onMessage: @escaping @MainActor (ConnectionsChatTarget) -> Void = { _ in },
         onFindPeople: @escaping @MainActor () -> Void = {},
         onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
+        onOpenBlockedUsers: @escaping @MainActor () -> Void = {},
         now: @escaping @Sendable () -> Date = { Date() },
         calendar: Calendar = .current,
         timeZone: TimeZone = .current
@@ -226,21 +232,46 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         self.onMessage = onMessage
         self.onFindPeople = onFindPeople
         self.onOpenProfile = onOpenProfile
+        self.onOpenBlockedUsers = onOpenBlockedUsers
         self.now = now
         self.calendar = calendar
         self.timeZone = timeZone
+        store = ScreenStore.store(for: api)
+        showStoredCopy()
     }
 
     // MARK: - ListOfRowsDataSource
 
+    /// Showing the screen: the lists as last read at once, then a quiet
+    /// re-read of whichever is out of date.
     public func load() async {
-        if loadedOnce { return }
-        state = .loading
-        await fetchAll()
+        if !loadedOnce { state = .loading }
+        await fetchAll(force: false)
     }
 
     public func refresh() async {
-        await fetchAll()
+        await fetchAll(force: true)
+    }
+
+    /// The store's copies of the lists, if it holds the accepted list.
+    private func showStoredCopy() {
+        guard let copy = store.peek(RelationshipsEndpoints.list(status: "accepted"), as: RelationshipsListResponse.self)
+        else { return }
+        accepted = copy.value.relationships
+        pending = store.peek(RelationshipsEndpoints.pending, as: PendingRequestsResponse.self)?.value.requests ?? []
+        sent = store.peek(ConnectionsEndpoints.sentRequests, as: SentRequestsResponse.self)?.value.requests ?? []
+        blocked = store.peek(ConnectionsEndpoints.blocked, as: BlockedRelationshipsResponse.self)?.value.blocked ?? []
+        loadedOnce = true
+        rebuild()
+    }
+
+    /// Your change went through: the next showing reads the lists again.
+    private func listsChanged() {
+        store.markStale(topics: [ScreenTopic.connections])
+    }
+
+    private func read<Value: Decodable & Sendable>(_ endpoint: Endpoint, as type: Value.Type, force: Bool) async throws -> Value {
+        try await store.load(endpoint, as: type, kind: .otherPeople, topics: [ScreenTopic.connections], force: force).value
     }
 
     public func loadMoreIfNeeded() async {
@@ -285,6 +316,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             let _: RelationshipActionEcho = try await api.request(
                 RelationshipsEndpoints.accept(id: requestId)
             )
+            listsChanged()
         } catch {
             pending = previousPending
             accepted = previousAccepted
@@ -302,6 +334,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             let _: RelationshipActionEcho = try await api.request(
                 RelationshipsEndpoints.reject(id: requestId)
             )
+            listsChanged()
         } catch {
             pending = previousPending
             rebuild()
@@ -343,6 +376,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             let _: RelationshipActionEcho = try await api.request(
                 ConnectionsEndpoints.disconnect(id: relationshipId)
             )
+            listsChanged()
         } catch {
             accepted = previous
             rebuild()
@@ -360,6 +394,7 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             let _: RelationshipActionEcho = try await api.request(
                 ConnectionsEndpoints.unblock(id: relationshipId)
             )
+            listsChanged()
         } catch {
             blocked = previous
             rebuild()
@@ -368,11 +403,11 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
 
     // MARK: - Fetching
 
-    private func fetchAll() async {
-        async let acceptedTask = fetchAccepted()
-        async let pendingTask = fetchPending()
-        async let sentTask = fetchSent()
-        async let blockedTask = fetchBlocked()
+    private func fetchAll(force: Bool) async {
+        async let acceptedTask = fetchAccepted(force: force)
+        async let pendingTask = fetchPending(force: force)
+        async let sentTask = fetchSent(force: force)
+        async let blockedTask = fetchBlocked(force: force)
         let (acceptedResult, pendingResult) = await (acceptedTask, pendingTask)
         let (sentResult, blockedResult) = await (sentTask, blockedTask)
         if !acceptedResult, !pendingResult, !sentResult, !blockedResult {
@@ -386,11 +421,9 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         rebuild()
     }
 
-    private func fetchSent() async -> Bool {
+    private func fetchSent(force: Bool) async -> Bool {
         do {
-            let response: SentRequestsResponse = try await api.request(
-                ConnectionsEndpoints.sentRequests
-            )
+            let response = try await read(ConnectionsEndpoints.sentRequests, as: SentRequestsResponse.self, force: force)
             sent = response.requests
             return true
         } catch {
@@ -398,11 +431,9 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         }
     }
 
-    private func fetchBlocked() async -> Bool {
+    private func fetchBlocked(force: Bool) async -> Bool {
         do {
-            let response: BlockedRelationshipsResponse = try await api.request(
-                ConnectionsEndpoints.blocked
-            )
+            let response = try await read(ConnectionsEndpoints.blocked, as: BlockedRelationshipsResponse.self, force: force)
             blocked = response.blocked
             return true
         } catch {
@@ -410,10 +441,12 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         }
     }
 
-    private func fetchAccepted() async -> Bool {
+    private func fetchAccepted(force: Bool) async -> Bool {
         do {
-            let response: RelationshipsListResponse = try await api.request(
-                RelationshipsEndpoints.list(status: "accepted")
+            let response = try await read(
+                RelationshipsEndpoints.list(status: "accepted"),
+                as: RelationshipsListResponse.self,
+                force: force
             )
             accepted = response.relationships
             return true
@@ -422,11 +455,9 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         }
     }
 
-    private func fetchPending() async -> Bool {
+    private func fetchPending(force: Bool) async -> Bool {
         do {
-            let response: PendingRequestsResponse = try await api.request(
-                RelationshipsEndpoints.pending
-            )
+            let response = try await read(RelationshipsEndpoints.pending, as: PendingRequestsResponse.self, force: force)
             pending = response.requests
             return true
         } catch {
@@ -516,10 +547,17 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
                 subcopy: "Requests you send will appear here until accepted or declined."
             )
         case ConnectionsTab.blocked:
+            // This tab lists blocked connections only; a block from a profile or a chat
+            // lives in Settings → Blocked users (as on the web), so say so and link there.
             ListOfRowsState.EmptyContent(
                 icon: .ban,
-                headline: "No blocked users",
-                subcopy: "People you block stop seeing your posts and can't message you.",
+                headline: "No blocked connections",
+                subcopy: "People you blocked from their profile or a chat are in Blocked users, "
+                    + "where you can unblock them.",
+                ctaTitle: "Open Blocked users",
+                onCTA: { [weak self] in
+                    Task { @MainActor in self?.onOpenBlockedUsers() }
+                },
                 tint: Theme.Color.appSurfaceSunken,
                 accent: Theme.Color.appTextSecondary
             )

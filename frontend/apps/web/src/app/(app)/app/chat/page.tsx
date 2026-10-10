@@ -17,6 +17,8 @@ import { queryKeys } from '@/lib/query-keys';
 import type { UnifiedConversationItem, ConversationTopic, Relationship, RelationshipUser, User } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
+import { fetchMe } from '@/lib/me';
+import { conversationsQuery as conversationsListQuery, type ConversationsReply } from '@/lib/conversations';
 
 type IncomingChatMessage = {
   room_id?: string;
@@ -28,12 +30,7 @@ type IncomingChatMessage = {
   sender?: { id?: string };
 };
 
-type ConversationsResponse = Awaited<ReturnType<typeof api.chat.getUnifiedConversations>>;
-
-// TODO: Add cursor pagination (50/page) when the backend supports it.
-// Today `getUnifiedConversations` only accepts a `limit` param and returns
-// everything up to that limit; we request `limit: 200` to match prior behavior.
-const CONVERSATIONS_LIMIT = 200;
+type ConversationsResponse = ConversationsReply;
 
 type NewChatPerson = { id: string; name: string; handle: string; avatar?: string | null };
 
@@ -134,11 +131,7 @@ export default function ChatListPage() {
 
   // ── Conversations via useQuery ─────────────────────────────
   const conversationsKey = queryKeys.conversations();
-  const conversationsQuery = useQuery<ConversationsResponse>({
-    queryKey: conversationsKey,
-    queryFn: () => api.chat.getUnifiedConversations({ limit: CONVERSATIONS_LIMIT }),
-    staleTime: 30_000,
-  });
+  const conversationsQuery = useQuery<ConversationsResponse>(conversationsListQuery());
 
   const conversations = useMemo<UnifiedConversationItem[]>(
     () => conversationsQuery.data?.conversations ?? [],
@@ -218,7 +211,7 @@ export default function ChatListPage() {
     let cancelled = false;
     (async () => {
       try {
-        const me = await api.users.getMyProfile();
+        const me = await fetchMe();
         if (!cancelled) setCurrentUserId(String(me?.id || ''));
       } catch {}
     })();
@@ -348,11 +341,13 @@ export default function ChatListPage() {
       }));
     }
 
+    // Only unread conversations need a read receipt here; the conversation also
+    // marks itself read once it loads.
     if (conv._type === 'room') {
-      void api.chat.markMessagesAsRead(String(conv.id)).catch(() => {});
+      if (unread > 0) void api.chat.markMessagesAsRead(String(conv.id)).catch(() => {});
       router.push(`/app/chat/${conv.id}`);
     } else {
-      void api.chat.markConversationAsRead(String(conv.other_participant_id)).catch(() => {});
+      if (unread > 0) void api.chat.markConversationAsRead(String(conv.other_participant_id)).catch(() => {});
       router.push(`/app/chat/conversation/${conv.other_participant_id}`);
     }
   };

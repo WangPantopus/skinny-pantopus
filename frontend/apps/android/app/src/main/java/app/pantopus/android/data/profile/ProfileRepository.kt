@@ -10,8 +10,13 @@ import app.pantopus.android.data.api.models.users.UserSearchResponse
 import app.pantopus.android.data.api.models.users.UserStatsDto
 import app.pantopus.android.data.api.models.users.UsernameAvailabilityDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.UsersApi
+import app.pantopus.android.data.store.ScreenStore
+import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreTopics
+import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,6 +26,7 @@ class ProfileRepository
     @Inject
     constructor(
         private val api: UsersApi,
+        private val store: ScreenStore,
     ) {
         /** `GET /api/users/id/:id` — route `backend/routes/users.js:2041`. */
         suspend fun publicProfile(id: String): NetworkResult<PublicProfileDto> = safeApiCall { api.publicProfile(id) }
@@ -28,9 +34,19 @@ class ProfileRepository
         /** `GET /api/users/profile` — route `backend/routes/users.js:1962`. */
         suspend fun ownProfile(): NetworkResult<ProfileResponse> = safeApiCall { api.profile() }
 
+        /** The viewer's profile through the screens' store (fresh 10 minutes; [force] reads now). */
+        suspend fun ownProfileStored(force: Boolean = false): Stored<ProfileResponse> =
+            store.read(StoreKeys.ownProfile, force) { etag -> conditionalApiCall { api.profileConditional(etag) } }
+
+        /** The stored profile as it is now, without a request. */
+        fun ownProfileCopy(): ProfileResponse? = store.peek(StoreKeys.ownProfile).data
+
+        /** True while the stored profile is fresh and no topic marked it out of date. */
+        fun ownProfileIsCurrent(): Boolean = store.isCurrent(StoreKeys.ownProfile)
+
         /** `PATCH /api/users/profile` — route `backend/routes/users.js:2052`. */
         suspend fun updateProfile(body: ProfileUpdateRequest): NetworkResult<ProfileUpdateResponse> =
-            safeApiCall { api.updateProfile(body) }
+            safeApiCall { api.updateProfile(body) }.also { if (it is NetworkResult.Success) store.markStale(StoreTopics.PROFILE_ME) }
 
         /**
          * `PUT /api/users/skills` — replace the caller's whole skill

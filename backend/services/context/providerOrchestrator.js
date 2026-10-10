@@ -19,7 +19,10 @@ const { getRecentBriefings } = require('./briefingHistoryService');
 const { getLocalUpdateContext } = require('./localUpdateProvider');
 const addressCalendarService = require('../addressCalendarService');
 const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
-const { buildTomorrowWeatherIntro, buildTomorrowPickupSignal, selectEveningSignal } = require('./eveningBriefingService');
+const syncChangedService = require('../syncChangedService');
+const {
+  buildTomorrowWeatherIntro, buildTomorrowPickupSignal, selectEveningSignal, getLocalDateKey,
+} = require('./eveningBriefingService');
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -141,28 +144,71 @@ const EMPTY_HUB_RESULT = {
 
 // ── Hub Today ───────────────────────────────────────────────────────
 
-// ── In-memory cache for getHubToday (per-user, short TTL) ──────────────
-// Keyed by user AND shape: the `detail` payload is a strict superset of
-// the Hub card's, so serving one for the other would either leak forecast
-// weight into the Hub card or starve Place of the arrays it needs.
-const _hubTodayCache = new Map(); // Map<cacheKey, { result, expiresAt }>
+// ── In-memory memo for getHubToday (per user, short TTL) ───────────────
+// Keyed by user, shape and place: the `detail` payload is a strict superset
+// of the Hub card's, so serving one for the other would either leak forecast
+// weight into the Hub card or starve Place of the arrays it needs; and the
+// key holds the resolved home (or geohash for a place without one) and that
+// place's local date, so a new home anchor, a moved viewing location or local
+// midnight never serves another place's or day's copy.
+//
+// Household rows (tasks, the household's pickup days) require current
+// authority on each read. They are memoized only while the database change
+// signal is live (services/syncChangedService.js): every task, membership,
+// permission, pickup-day, home and preference write, from any process,
+// announces itself there and bumps the generations below, which retires every
+// entry computed before it. Without the signal only public context is kept.
+const _hubTodayCache = new Map(); // Map<cacheKey, { result, expiresAt, generations, household }>
 const HUB_TODAY_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 const HUB_TODAY_CACHE_MAX = 200;
+const _homeGenerations = new Map();
+const _userGenerations = new Map();
+const GENERATION_MAX = 50_000;
+let _globalGeneration = 0;
 
-function hubCacheKey(userId, detail, geohash) {
-  const base = detail ? `${userId}:detail` : String(userId);
-  // An explicit-coordinates payload is about a PLACE, not the user's
-  // resolved location — keyed by geohash5 so a user flipping between two
-  // homes never gets one home's forecast served for the other.
-  return geohash ? `${base}@${geohash}` : base;
+function bumpGeneration(map, id) {
+  const key = String(id).toLowerCase();
+  if (!map.has(key) && map.size >= GENERATION_MAX) {
+    map.clear();
+    _globalGeneration += 1;
+  }
+  map.set(key, (map.get(key) || 0) + 1);
+}
+
+syncChangedService.onChange((change) => {
+  // Role templates apply to every home.
+  if (change.t === 'HomeRolePermission') _globalGeneration += 1;
+  if (typeof change.h === 'string') bumpGeneration(_homeGenerations, change.h);
+  if (typeof change.u === 'string') bumpGeneration(_userGenerations, change.u);
+});
+
+function memoGenerations(userId, homeId) {
+  return [
+    syncChangedService.currentEpoch(),
+    _globalGeneration,
+    homeId ? _homeGenerations.get(String(homeId).toLowerCase()) || 0 : 0,
+    _userGenerations.get(String(userId).toLowerCase()) || 0,
+  ].join('.');
+}
+
+function hubMemoKey(userId, detail, location) {
+  const place = [location.source, location.homeId || '', location.geohash || ''].join(',');
+  return `${userId}|${detail ? 'detail' : 'card'}|${place}|${getLocalDateKey(new Date(), location.timezone)}`;
+}
+
+function memoIsCurrent(memo, userId, homeId) {
+  if (Date.now() >= memo.expiresAt || isLaunchFeatureEnabled('household_extras')) return false;
+  if (memo.household && !syncChangedService.isLive()) return false;
+  return memo.generations === memoGenerations(userId, homeId);
 }
 
 function clearHubTodayCache(userId) {
-  if (userId) {
-    _hubTodayCache.delete(hubCacheKey(userId, false));
-    _hubTodayCache.delete(hubCacheKey(userId, true));
-  } else {
+  if (!userId) {
     _hubTodayCache.clear();
+    return;
+  }
+  for (const key of [..._hubTodayCache.keys()]) {
+    if (key.startsWith(`${userId}|`)) _hubTodayCache.delete(key);
   }
 }
 
@@ -203,17 +249,6 @@ async function fetchAddressCalendar(location, userId) {
 async function getHubToday(userId, options = {}) {
   const detail = options.detail === true;
   const atLocation = options.atLocation ? locationFromCoordinates(options.atLocation) : null;
-  const cacheKey = hubCacheKey(userId, detail, atLocation && atLocation.geohash);
-
-  // Check in-memory cache first
-  const cached = _hubTodayCache.get(cacheKey);
-  if (cached) {
-    if (!isLaunchFeatureEnabled('household_extras') && Date.now() < cached.expiresAt) {
-      return cached.result;
-    }
-    _hubTodayCache.delete(cacheKey); // evict expired entry
-  }
-
   const startMs = Date.now();
 
   try {
@@ -221,7 +256,8 @@ async function getHubToday(userId, options = {}) {
   const partialFailures = [];
   let cacheHits = 0;
 
-  // 1. Resolve location — an explicit anchor wins outright.
+  // 1. Resolve location — an explicit anchor wins outright. It comes before
+  // the memo, which is keyed by the place it resolves to.
   const location = atLocation || await resolveLocation(userId);
 
   if (location.source === 'none') {
@@ -231,6 +267,15 @@ async function getHubToday(userId, options = {}) {
       meta: { ...EMPTY_HUB_RESULT.meta, total_latency_ms: Date.now() - startMs },
     };
   }
+
+  const memoKey = hubMemoKey(userId, detail, location);
+  const memo = _hubTodayCache.get(memoKey);
+  if (memo) {
+    if (memoIsCurrent(memo, userId, location.homeId)) return memo.result;
+    _hubTodayCache.delete(memoKey); // evict an expired or retired entry
+  }
+  // Taken before any read: a change heard while this payload is built retires it.
+  const generations = memoGenerations(userId, location.homeId);
 
   const { latitude, longitude } = location;
 
@@ -455,12 +500,17 @@ async function getHubToday(userId, options = {}) {
     });
   }
 
-  // Household records require current authority on each read. Preserve the
-  // short memo for public context only; provider caches remain unchanged.
-  if (!isLaunchFeatureEnabled('household_extras') && !internal.bills_due?.length
-    && !internal.tasks_due?.length && !internal.calendar_events?.length
-    && !(location.homeId && addressCalendar)) {
-    _hubTodayCache.set(cacheKey, { result, expiresAt: Date.now() + HUB_TODAY_CACHE_TTL_MS });
+  // Household records require current authority on each read: they are
+  // memoized only while every write that could change them is heard (see the
+  // memo above). Mail and active tasks you're part of aren't signalled, so a
+  // payload holding them stays unmemoized. Provider caches remain unchanged.
+  const household = Boolean(internal.bills_due?.length || internal.tasks_due?.length
+    || internal.calendar_events?.length || (location.homeId && addressCalendar));
+  const signalled = syncChangedService.isLive() && !isLaunchFeatureEnabled('mailbox') && !internal.active_gigs?.length;
+  // A payload with a provider that didn't answer isn't kept: the apps' Retry (and the next read) asks again
+  // instead of getting the same failure back for the memo's lifetime.
+  if (!isLaunchFeatureEnabled('household_extras') && partialFailures.length === 0 && (!household || signalled)) {
+    _hubTodayCache.set(memoKey, { result, expiresAt: Date.now() + HUB_TODAY_CACHE_TTL_MS, generations, household });
   }
   if (_hubTodayCache.size > HUB_TODAY_CACHE_MAX) {
     const firstKey = _hubTodayCache.keys().next().value;

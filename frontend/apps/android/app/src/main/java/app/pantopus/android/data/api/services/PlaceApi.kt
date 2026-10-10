@@ -5,9 +5,11 @@ import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -36,6 +38,14 @@ interface PlaceApi {
         @Path("id") homeId: String,
         @Query("sections") sections: String? = null,
     ): PlaceIntelligence
+
+    /** [intelligence] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
+    @GET("api/homes/{id}/intelligence?ballot=1")
+    suspend fun intelligenceConditional(
+        @Path("id") homeId: String,
+        @Query("sections") sections: String?,
+        @Header("If-None-Match") etag: String?,
+    ): Response<PlaceIntelligence>
 
     /**
      * The anonymous, address-only T0 preview — no account required,

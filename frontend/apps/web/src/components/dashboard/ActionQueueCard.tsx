@@ -6,6 +6,7 @@ import * as api from '@pantopus/api';
 import type { User, GigListItem } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 import { openFeedComposer } from '@/lib/feedComposerEvents';
+import { fetchMe } from '@/lib/me';
 
 type Priority = 'high' | 'medium' | 'low';
 
@@ -77,13 +78,14 @@ export default function ActionQueueCard() {
     const failures: Failed = {};
     setLoadingStripeStatus(true);
     Promise.all([
-      api.users.getMyProfile().then(setUser).catch((err) => {
+      fetchMe().then(setUser).catch((err) => {
         console.warn('[ActionQueueCard] Failed to load profile:', err?.message);
         failures.profile = true;
       }),
       // The viewer's own open tasks. The public list (`getGigs`) leaves the
       // viewer's tasks out, so deadline / no-offer items could never appear.
-      api.gigs.getMyGigs({ limit: 100, status: ['open'] }).then((r) => setGigs((r?.gigs || []) as GigListItem[])).catch((err) => {
+      // Launch cut #4 (Open Gigs): nobody posts open tasks, so they are not loaded.
+      Promise.resolve(launchFeatures.openGigs ? api.gigs.getMyGigs({ limit: 100, status: ['open'] }) : { gigs: [] }).then((r) => setGigs((r?.gigs || []) as GigListItem[])).catch((err) => {
         console.warn('[ActionQueueCard] Failed to load gigs:', err?.message);
         failures.gigs = true;
         setGigs([]);

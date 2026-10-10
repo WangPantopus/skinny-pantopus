@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { buildUserProfileShareUrl, chosenUsername } from '@pantopus/utils';
 import type { UserProfile, User, GigListItem, Review } from '@pantopus/types';
@@ -26,6 +27,8 @@ import {
 import type { PortfolioEntry } from '@/components/profile/public/tabs/PortfolioTab';
 import { launchFeatures } from '@/lib/featureFlags';
 import UsernamePrompt, { markAskedForUsername, shouldAskForUsername } from '@/components/profile/UsernamePrompt';
+import { fetchMe } from '@/lib/me';
+import { queryKeys } from '@/lib/query-keys';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
@@ -64,6 +67,12 @@ function toPortfolioEntries(files: Array<Record<string, any>> | undefined): Port
   }));
 }
 
+// Other people's profiles (Instant Screens contract §4): what a person shares (portfolio, posts, reviews) and
+// your pending review of them stay fresh in this session's memory for 5 minutes, so coming back shows them at
+// once and asks again only after that, or after your own follow, connection, block or review. Your relationship
+// and block list are read on every visit, as in the apps: they decide which actions show.
+const PEOPLE_FRESH_MS = 5 * 60 * 1000;
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function normalizeProfileIdentifier(value: unknown): string {
@@ -87,7 +96,22 @@ interface PublicProfileClientProps {
 
 export default function PublicProfileClient({ username, initialProfile }: PublicProfileClientProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const profileIdentifier = normalizeProfileIdentifier(username);
+  // What you saw of this person last time, for the first frame.
+  const [kept] = useState(() => {
+    const id = initialProfile?.id;
+    return id ? {
+      portfolio: queryClient.getQueryData(queryKeys.personPortfolio(id)),
+      posts: queryClient.getQueryData(queryKeys.personPosts(id)),
+      reviews: queryClient.getQueryData(queryKeys.personReviews(id)),
+    } : {};
+  });
+  const read = useCallback((queryKey, queryFn) =>
+    queryClient.fetchQuery({ queryKey, queryFn, staleTime: PEOPLE_FRESH_MS }), [queryClient]);
+  const forgetPerson = useCallback((id) => {
+    if (id) void queryClient.invalidateQueries({ queryKey: queryKeys.person(id) });
+  }, [queryClient]);
 
   const [profile, setProfile] = useState<PublicProfileData | null>(initialProfile);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -98,10 +122,10 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [userGigs, setUserGigs] = useState<GigListItem[]>([]);
   const [gigsLoading, setGigsLoading] = useState(false);
   // null until the portfolio has loaded.
-  const [portfolio, setPortfolio] = useState<PortfolioEntry[] | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioEntry[] | null>(() => kept.portfolio ? toPortfolioEntries(kept.portfolio.files) : null);
   const [portfolioFailed, setPortfolioFailed] = useState(false);
   const portfolioRequested = useRef<string | null>(null);
-  const [userPosts, setUserPosts] = useState<Record<string, unknown>[]>([]);
+  const [userPosts, setUserPosts] = useState<Record<string, unknown>[]>(() => kept.posts?.posts || []);
   // Posts are requested once per profile, reviews once per profile and viewer (the pending-review
   // check needs the viewer); the tab effect re-runs on every profile or portfolio update.
   const postsRequested = useRef<string | null>(null);
@@ -113,14 +137,18 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [usernamePromptOpen, setUsernamePromptOpen] = useState(false);
 
   // Reviews state
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviews, setReviews] = useState<Review[]>(() => kept.reviews?.reviews || []);
   const [reviewsLoading, setReviewsLoading] = useState(false);
-  const [reviewStats, setReviewStats] = useState<{ average: number; total: number }>({ average: 0, total: 0 });
+  const [reviewStats, setReviewStats] = useState<{ average: number; total: number }>(() => ({
+    average: kept.reviews?.average_rating || 0, total: kept.reviews?.total || 0,
+  }));
   const [pendingReview, setPendingReview] = useState<PendingReviewStub | null>(null);
 
   // Relationship state
   const [followState, setFollowState] = useState(false);
   const [connectionState, setConnectionState] = useState<RelationshipState>('none');
+  // The viewer's own block (UserBlock) of this person: the menu offers Unblock instead of Block.
+  const [blockedByMe, setBlockedByMe] = useState(false);
   // Connect shows only once the relationship is read, as in the apps: a failed read never offers it.
   const [connectionKnown, setConnectionKnown] = useState(false);
   // True when the viewer's personal block list could not be read: Follow
@@ -148,7 +176,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     try {
       const token = getAuthToken();
       if (token) {
-        const userData = await api.users.getMyProfile();
+        const userData = await fetchMe();
         if (!current()) return null;
         setCurrentUser(userData);
         return userData;
@@ -233,7 +261,9 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     setConnectionKnown(false);
     try {
       const { blocked } = await api.blocks.getBlockedUsers();
-      if ((blocked || []).some((entry) => entry.user_id === profile.id)) {
+      const blockedHere = (blocked || []).some((entry) => entry.user_id === profile.id);
+      setBlockedByMe(blockedHere);
+      if (blockedHere) {
         setConnectionState('blocked');
         setFollowState(false);
         return;
@@ -270,17 +300,19 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
   const loadPortfolio = useCallback(async () => {
     if (!profile?.id || portfolioRequested.current === profile.id) return;
-    portfolioRequested.current = profile.id;
+    const id = profile.id;
+    portfolioRequested.current = id;
     setPortfolioFailed(false);
     try {
-      const res = await api.files.getPortfolio(profile.id);
+      const res = await read(queryKeys.personPortfolio(id), () => api.files.getPortfolio(id));
       setPortfolio(toPortfolioEntries(res.files as unknown as Array<Record<string, any>>));
     } catch (err) {
       console.error('Failed to load portfolio:', err);
-      setPortfolioFailed(true);
+      // A failed refresh keeps what's shown; with nothing kept (or a refusal, which drops the copy) it says so.
+      if (queryClient.getQueryData(queryKeys.personPortfolio(id)) === undefined) { setPortfolio(null); setPortfolioFailed(true); }
       portfolioRequested.current = null; // the next visit to the tab tries again
     }
-  }, [profile?.id]);
+  }, [profile?.id, read, queryClient]);
 
   const loadUserPosts = useCallback(async () => {
     if (!profile?.id) return;
@@ -288,24 +320,27 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       setUserPosts([]);
       return;
     }
-    setPostsLoading(true);
+    const id = profile.id;
+    const key = queryKeys.personPosts(id);
+    if (queryClient.getQueryData(key) === undefined) setPostsLoading(true);
     try {
-      const res = await api.posts.getUserPosts(profile.id, { limit: 20 });
+      const res = await read(key, () => api.posts.getUserPosts(id, { limit: 20 }));
       setUserPosts((res.posts || []) as unknown as Record<string, unknown>[]);
     } catch (err) {
       console.error('Failed to load user posts:', err);
-      setUserPosts([]);
+      if (queryClient.getQueryData(key) === undefined) setUserPosts([]);
       postsRequested.current = null; // the next visit to the tab tries again
     } finally {
       setPostsLoading(false);
     }
-  }, [profile?.id]);
+  }, [profile?.id, read, queryClient]);
 
   const loadReviews = useCallback(async () => {
     if (!profile?.id) return;
-    setReviewsLoading(true);
+    const id = profile.id;
+    if (queryClient.getQueryData(queryKeys.personReviews(id)) === undefined) setReviewsLoading(true);
     try {
-      const res = await api.reviews.getUserReviews(profile.id, { limit: 50 });
+      const res = await read(queryKeys.personReviews(id), () => api.reviews.getUserReviews(id, { limit: 50 }));
       setReviews((res.reviews || []) as unknown as Review[]);
       setReviewStats({
         average: res.average_rating || 0,
@@ -320,7 +355,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
     if (currentUser && currentUser.id !== profile?.id) {
       try {
-        const pendingRes = await api.reviews.getPendingReviews();
+        const pendingRes = await read(queryKeys.myPendingReviews(), () => api.reviews.getPendingReviews());
         const match = (pendingRes.pending || []).find(
           (p: PendingReviewStub) => p.reviewee_id === profile.id
         );
@@ -329,7 +364,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         // ignore
       }
     }
-  }, [profile?.id, currentUser]);
+  }, [profile?.id, currentUser, read, queryClient]);
 
   useEffect(() => {
     // Server-rendered initialProfile is already in state; only refetch
@@ -347,7 +382,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     if (launchFeatures.openGigs && profile && ['overview', 'missions', 'activity'].includes(activeTab) && userGigs.length === 0) {
       loadUserGigs();
     }
-    if (profile && ['overview', 'portfolio', 'insights'].includes(activeTab) && portfolio === null) {
+    if (profile && ['overview', 'portfolio', 'insights'].includes(activeTab) && portfolioRequested.current !== profile.id) {
       loadPortfolio();
     }
     if (profile && ['overview', 'activity'].includes(activeTab) && postsRequested.current !== profile.id) {
@@ -382,6 +417,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         setFollowState(true);
         setProfile((p) => p ? { ...p, followers_count: (p.followers_count || 0) + 1 } : p);
       }
+      forgetPerson(profile!.id);
       loadUserPosts();
     } catch (err: unknown) {
       console.error('Follow error:', err);
@@ -424,6 +460,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         await api.relationships.disconnect(relationship.id);
         if (current()) setConnectionState('none');
       }
+      forgetPerson(targetId);
     } catch (err: unknown) {
       if (current()) toast.error(err instanceof Error && err.message ? err.message : 'Couldn\u2019t update this connection. Try again.');
     } finally {
@@ -467,7 +504,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
    * `backend/services/blockService.js` reads to refuse direct messages.
    * It is deliberately NOT the trust-graph block
    * (`POST /api/relationships/block-user`), which does not gate messaging.
-   * The block is liftable from Settings -> Blocked Users.
+   * The block is liftable from this profile's menu (Unblock) or Settings -> Blocked Users.
    */
   const handleBlock = async () => {
     if (!currentUser) { router.push('/login'); return; }
@@ -490,16 +527,53 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     setActionLoading(true);
     try {
       await api.blocks.blockUser(targetId);
+      forgetPerson(targetId);
       if (!current()) return;
       // Mirrors the native clients: the connection edge drops to `blocked`
       // on the same success, which hides the Connect / Follow row.
       setConnectionState('blocked');
       setFollowState(false);
+      setBlockedByMe(true);
       toast.success(`${fullName} blocked`);
     } catch (err: unknown) {
       if (!current()) return;
       console.error('Block error:', err);
       toast.error('Couldn\'t block this user');
+    } finally {
+      if (current()) { pendingBlock.current = false; setActionLoading(false); }
+    }
+  };
+
+  /** Lifts the viewer's own block, as Settings → Blocked users does, then reads the relationship and posts again. */
+  const handleUnblock = async () => {
+    if (!currentUser) { router.push('/login'); return; }
+    if (pendingBlock.current) return;
+    pendingBlock.current = true;
+    const current = captureAction();
+    const targetId = profile!.id;
+    const yes = await confirmStore.open({
+      title: 'Unblock user',
+      description:
+        `Unblock ${fullName}? You'll be able to see each other's posts and message each other again. ` +
+        `They aren't notified.`,
+      confirmLabel: 'Unblock',
+    });
+    if (!current()) return;
+    if (!yes) { pendingBlock.current = false; return; }
+
+    setActionLoading(true);
+    try {
+      await api.blocks.unblockUser(targetId);
+      forgetPerson(targetId);
+      if (!current()) return;
+      setBlockedByMe(false);
+      toast.success(`${fullName} unblocked`);
+      await loadRelationshipStatus();
+      loadUserPosts();
+    } catch (err: unknown) {
+      if (!current()) return;
+      console.error('Unblock error:', err);
+      toast.error('Couldn\'t unblock this user');
     } finally {
       if (current()) { pendingBlock.current = false; setActionLoading(false); }
     }
@@ -636,7 +710,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     : (connectionState === 'connected' ? 'follower' : 'public');
 
   const showOwnerOnly = effectiveViewer === 'owner';
-  // Someone you blocked can't be messaged (the block says so); Settings unblocks.
+  // Someone you blocked can't be messaged (the block says so); the menu or Settings unblocks.
   const canMessage = connectionState !== 'blocked';
 
   const trustBadges = [
@@ -717,6 +791,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         onRequestHire={handleRequestHire}
         onShare={handleShare}
         onBlock={handleBlock}
+        onUnblock={blockedByMe ? handleUnblock : undefined}
         onReport={handleReport}
       />
 
@@ -771,6 +846,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
             isOwnProfile={isOwnProfile}
             onReviewSubmitted={() => {
               setPendingReview(null);
+              forgetPerson(profile.id);
+              void queryClient.invalidateQueries({ queryKey: queryKeys.myPendingReviews() });
               loadReviews();
               loadProfile();
             }}

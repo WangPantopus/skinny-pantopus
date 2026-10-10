@@ -9,6 +9,9 @@
 //  on its own. Parity twin of Android's `TodayTabScreen`.
 //
 
+// Keeping Today's content on return (Instant Screens) pushed this past 500 lines.
+// swiftlint:disable file_length
+
 import SwiftUI
 
 struct AddressTodayTabView: View {
@@ -20,6 +23,8 @@ struct AddressTodayTabView: View {
     @State private var detail: PlaceDetailViewModel?
     @State private var savedPlace: SavedPlaceDTO?
     @State private var resolveID = UUID()
+    /// The account the shown place was resolved for. Another account starts blank.
+    @State private var resolvedUserID: String?
 
     init(onAddHome: @escaping () -> Void) {
         self.onAddHome = onAddHome
@@ -34,12 +39,16 @@ struct AddressTodayTabView: View {
         .task(id: resolveKey) {
             if rootTabs.selected == .today { await resolveHome() }
         }
+        .refreshesOnStoreChange { if rootTabs.selected == .today { await resolveHome() } }
         .accessibilityIdentifier("addressTodayTab")
     }
 
     private var resolveKey: String {
-        let userID: String? = if case let .signedIn(user) = auth.state { user.id } else { nil }
-        return "\(rootTabs.selected)|\(userID ?? "")"
+        "\(rootTabs.selected)|\(currentUserID ?? "")"
+    }
+
+    private var currentUserID: String? {
+        if case let .signedIn(user) = auth.state { user.id } else { nil }
     }
 
     private var header: some View {
@@ -151,16 +160,27 @@ struct AddressTodayTabView: View {
     private func resolveHome() async {
         // Resolve on every appearance so saving/removing a private address
         // after visiting Today cannot leave the previous no-place result latched.
-        resolved = false
-        loadFailed = false
-        detail = nil
-        savedPlace = nil
+        // Coming back keeps what's on screen (Instant Screens): the primary
+        // place is re-checked quietly and the screen switches only when it
+        // changed. The first visit, a retry after a failure and another
+        // account start blank.
+        let userID = currentUserID
+        let quiet = resolved && !loadFailed && resolvedUserID == userID
+        if !quiet {
+            resolved = false
+            loadFailed = false
+            detail = nil
+            savedPlace = nil
+        }
+        resolvedUserID = userID
         let requestID = UUID()
         resolveID = requestID
         let scope = HomeClaimSessionScope(api: .shared)
         do {
             try scope.requireCurrent()
-            let response: MyHomesResponse = try await APIClient.shared.request(HomesEndpoints.myHomes())
+            // The store answers at once while its copy is fresh and asks the
+            // server only when it is out of date.
+            let response = try await HomesStoreReads.myHomes().value
             try Task.checkCancellation()
             try scope.requireCurrent()
             guard resolveID == requestID else { return }
@@ -170,15 +190,23 @@ struct AddressTodayTabView: View {
             let id = response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
                 ?? response.sharedHomes.first?.id ?? privateHome?.id
             if let id {
-                detail = PlaceDetailViewModel(homeId: id, group: .today)
+                if detail?.homeId != id || detail?.savedPlaceId != nil {
+                    detail = PlaceDetailViewModel(homeId: id, group: .today)
+                }
+                savedPlace = nil
             } else {
-                let saved: SavedPlacesListResponse = try await APIClient.shared.request(SavedPlacesEndpoints.list())
+                let saved = try await HomesStoreReads.savedPlaces().value
                 try Task.checkCancellation()
                 try scope.requireCurrent()
                 guard resolveID == requestID else { return }
                 if let place = saved.savedPlaces.first {
                     savedPlace = place
-                    detail = PlaceDetailViewModel(homeId: "", group: .today, savedPlaceId: place.id)
+                    if detail?.savedPlaceId != place.id {
+                        detail = PlaceDetailViewModel(homeId: "", group: .today, savedPlaceId: place.id)
+                    }
+                } else {
+                    detail = nil
+                    savedPlace = nil
                 }
             }
         } catch is CancellationError {
@@ -186,7 +214,8 @@ struct AddressTodayTabView: View {
             return
         } catch {
             guard scope.isCurrent, resolveID == requestID else { return }
-            loadFailed = true
+            // A failed quiet re-check keeps the place on screen.
+            if !quiet { loadFailed = true }
         }
         resolved = true
     }
@@ -285,11 +314,14 @@ private struct AddressTodayLoaded: View {
                 }
             }
         }
+        .refreshFailureToast($viewModel.refreshFailureMessage)
         .task {
             guard scope.isCurrent else { sessionChanged = true
                 return
             }
-            await viewModel.load()
+            // Coming back shows the last copy; the store fetches it again
+            // quietly once out of date (Today: 10 minutes, and at midnight).
+            await viewModel.refreshIfStale()
             guard scope.isCurrent else { sessionChanged = true
                 return
             }

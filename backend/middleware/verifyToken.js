@@ -4,6 +4,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const csrfProtection = require('./csrfProtection');
 const logger = require('../utils/logger');
 const authSessionService = require('../services/authSessionService');
+const { verifyAccessToken } = require('../services/accessTokenVerifier');
 
 // ============ IN-MEMORY ROLE CACHE (AUTH-3.4) ============
 // Caches User.role lookups to reduce DB queries per request.
@@ -134,22 +135,25 @@ const verifyToken = async (req, res, next) => {
       return res.status(401).json({ error: 'No token provided' });
     }
 
-    // Verify token with Supabase
-    const { data, error } = await supabase.auth.getUser(token);
+    // Verify the token on this server (signature, expiry, audience, issuer, and a session our registry
+    // knows); Supabase's getUser decides whatever that can't (services/accessTokenVerifier.js).
+    const verified = await verifyAccessToken(token, { authClient: supabase });
 
     // Supabase Auth didn't answer (its rate limit, shared by everyone on hosted; a 5xx; the
     // network): the token wasn't checked, so nothing gets through. A 401 here would blame the
     // person and send every client to /refresh at once, spending the app-wide refresh limit,
     // so say busy as /refresh does; the session stays as it is.
-    if (error && authSessionService.isAuthServiceBusy(error)) {
+    if (!verified.ok && verified.reason === 'busy') {
+      const { error } = verified;
       logger.warn('auth.verify_unavailable', { ip: req.ip, method: req._authMethod, status: error.status, name: error.name });
       return res.status(503).json({ error: 'Could not verify this session right now. Please try again.', code: 'AUTH_UNAVAILABLE' });
     }
 
-    if (error || !data.user) {
+    if (!verified.ok) {
       logger.warn('auth.token_invalid', { ip: req.ip, method: req._authMethod });
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
+    const data = { user: verified.user };
 
     // Fetch user role + account type (+ sessions_valid_after watermark) —
     // check cache first (AUTH-3.4)
@@ -190,7 +194,7 @@ const verifyToken = async (req, res, next) => {
 
     // Persistent login (design §6.4): session_id / iat / aal from the JWT,
     // AuthSession revocation (15-s cache) and the sessions_valid_after
-    // watermark. Additive — getUser above remains the authority.
+    // watermark, on every request however the token was verified above.
     const policy = await checkSessionPolicy(token, { userId: data.user.id, sessionsValidAfter });
     req.session = policy.session;
     if (!policy.ok) {
@@ -208,7 +212,7 @@ const verifyToken = async (req, res, next) => {
     req.user = {
       id: data.user.id,
       email: data.user.email,
-      emailConfirmed: data.user.email_confirmed_at !== null,
+      emailConfirmed: data.user.emailConfirmed,
       role: userRole,
       accountType: userAccountType,
     };
@@ -216,6 +220,7 @@ const verifyToken = async (req, res, next) => {
     logger.debug('auth.token_verified', {
       user_id: data.user.id,
       method: req._authMethod,
+      via: verified.via,
       latency_ms: Date.now() - startMs,
     });
 

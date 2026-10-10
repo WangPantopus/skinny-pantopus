@@ -1,5 +1,12 @@
+import React from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useHomeData } from '../../src/hooks/useHomeData';
+
+// As in the app, the hook keeps the dashboard's copy in the session's query cache.
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+);
 
 const mockAccess = jest.fn();
 const mockDashboard = jest.fn();
@@ -32,7 +39,7 @@ test('owner pointers and owner role do not restore denied permission buttons', a
     isOwner: false, role_base: 'owner', permissions: ['home.view'],
   }, members: [], counts: { tasks_open: 0, issues_open: 0, bills_due: 0, packages_expected: 0,
     documents: 0, events_upcoming: 0, members_active: 0, pets: 0 }, today: { next_events: [], tasks_due: [] } });
-  const { result } = renderHook(() => useHomeData('home'));
+  const { result } = renderHook(() => useHomeData('home'), { wrapper });
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.myAccess.isOwner).toBe(false);
   expect(result.current.can('home.view')).toBe(true);
@@ -42,7 +49,7 @@ test('owner pointers and owner role do not restore denied permission buttons', a
 test('missing access information never turns an empty permission list into a grant', async () => {
   mockAccess.mockRejectedValue(new Error('Unavailable'));
   mockDashboard.mockResolvedValue({ home: { id: 'home', owner_id: 'owner' } });
-  const { result } = renderHook(() => useHomeData('home'));
+  const { result } = renderHook(() => useHomeData('home'), { wrapper });
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.can('home.edit')).toBe(false);
 });

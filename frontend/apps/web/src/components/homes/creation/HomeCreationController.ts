@@ -4,6 +4,7 @@ import { HOME_CREATE_UUID, validHomeCreationInput, type HomeCreationDraft, type 
   type HomeCreationInput, type HomeCreationOutcome } from './homeCreationModel';
 import { validHomeRequestOutcome, projectHomeRequestOutcome, sameHomeRequestDecision, validHomeResidencyInput,
   type HomeResidencyInput } from './homeResidencySubmissionModel';
+import { fetchMe } from '@/lib/me';
 
 export const HOME_CREATE_UNKNOWN = 'The result is not confirmed. Your original request is kept. Check its status, retry it, or confirm cancellation.';
 type Store = Pick<PendingHomeCreationStore, 'load' | 'save' | 'clear'>;
@@ -34,7 +35,7 @@ export class HomeCreationController {
 
   async open(storeForActor: (actor: string) => Store = actor => new PendingHomeCreationStore(this.origin, actor)) {
     this.requireCurrent();
-    const profile = await api.users.getMyProfile();
+    const profile = await fetchMe();
     this.requireCurrent();
     if (!HOME_CREATE_UUID.test(profile?.id || '')) throw new Error('Your account could not be verified. Reopen this form.');
     this.actorId = profile.id;

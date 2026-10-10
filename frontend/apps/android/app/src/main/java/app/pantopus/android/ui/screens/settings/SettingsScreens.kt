@@ -111,6 +111,7 @@ fun NotificationSettingsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val footer by viewModel.footerCaption.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val toastController = remember { ToastController() }
     val shownToast by toastController.current.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -140,6 +141,7 @@ fun NotificationSettingsScreen(
             title = viewModel.title,
             state = state,
             footerCaption = footer,
+            refreshNotice = refreshNotice,
             // Parity with iOS `NotificationSettingsViewModel.banner`.
             banner =
                 if (notificationsBlocked) {

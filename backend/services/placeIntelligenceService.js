@@ -46,7 +46,7 @@ const { getSystemsLedger } = require('./homeSystemsService');
 const nfipPremiumService = require('./nfipPremiumService');
 const exemptionCheckService = require('./exemptionCheckService');
 const realRentService = require('./realRentService');
-const { locationFromCoordinates } = require('./context/locationResolver');
+const { locationFromCoordinates, inferTimezone } = require('./context/locationResolver');
 
 const HOME_SELECT =
   'id, owner_id, address, address2, city, state, zipcode, map_center_lat, map_center_lng, year_built, sq_ft, bedrooms, bathrooms, lot_sq_ft, home_type, move_in_date';
@@ -152,6 +152,12 @@ function homeLatLng(home) {
   const lng = Number(home.map_center_lng);
   if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
   return null;
+}
+
+// The Home's IANA time zone from its coordinates (the same inference Today uses), or null without them.
+function placeTimeZone(home) {
+  const ll = homeLatLng(home);
+  return ll ? inferTimezone(ll.lat, ll.lng, null) : null;
 }
 
 // ── Provider value → contract union mappers (best-effort) ────
@@ -1131,15 +1137,22 @@ function buildPlaceRef(home, privacy) {
  *                                   Guests and service providers never get Ballot fields.
  * @returns {Promise<object|null>} The PlaceIntelligence response, or null if the home is missing.
  */
-async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false }) {
-  // Owner-only sections depend on whether the viewer's ownership is still
-  // pending; read it alongside the Home.
-  const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
-  const { data: home, error } = await supabaseAdmin
+// The Home row this response is composed from. The route starts it alongside
+// its access check (one round trip fewer) and uses it only once access holds.
+function readHome(homeId) {
+  return Promise.resolve(supabaseAdmin
     .from('Home')
     .select(HOME_SELECT)
     .eq('id', homeId)
-    .maybeSingle();
+    .maybeSingle())
+    .catch((error) => ({ data: null, error }));
+}
+
+async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false, homeRead = null }) {
+  // Owner-only sections depend on whether the viewer's ownership is still
+  // pending; read it alongside the Home.
+  const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
+  const { data: home, error } = await (homeRead || readHome(homeId));
 
   if (error || !home) {
     if (error) logger.warn('placeIntelligence: home fetch failed', { homeId, error: error.message });
@@ -1240,6 +1253,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
     // Same gate as the Home detail it replaces for the movers card (home.view):
     // a private setup or another account's Home gets null.
     moveInDate: access && access.hasAccess ? home.move_in_date || null : null,
+    timeZone: placeTimeZone(home),
     regionSupported: true,
     sections,
   });
@@ -1267,6 +1281,7 @@ async function composeSavedPlaceToday(place) {
   return serializePlaceIntelligence({
     place: { label: place.label, line1: place.label, city: place.city, state: place.state },
     tier: 'T1',
+    timeZone: anchor.timezone,
     sections: sections.flat(),
   });
 }
@@ -1274,6 +1289,7 @@ async function composeSavedPlaceToday(place) {
 module.exports = {
   composeSavedPlaceToday,
   composeHomeIntelligence,
+  readHome,
   composeTodayForPoint,
   // Exported for unit testing.
   resolveTier,

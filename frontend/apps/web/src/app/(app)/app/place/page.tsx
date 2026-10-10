@@ -18,6 +18,7 @@ import SavedPlaceContext from '@/components/place/SavedPlaceContext';
 import PlaceDashboardSkeleton from '@/components/place/PlaceDashboardSkeleton';
 import VerifiedSuccess from '@/components/place/VerifiedSuccess';
 import { PlaceHomeContext, placeHomeParam } from '@/components/archetypes/place';
+import { refreshMe } from '@/lib/me';
 
 function PlaceRoute() {
   const router = useRouter();
@@ -32,8 +33,10 @@ function PlaceRoute() {
     return (
       <VerifiedSuccess
         onContinue={() => {
-          // Refetch the now-verified tier (T4) before showing the dashboard.
+          // Refetch the now-verified tier (T4) before showing the dashboard,
+          // and your profile, whose residency summary changed.
           queryClient.invalidateQueries({ queryKey: ['place'] });
+          void refreshMe();
           router.replace('/app/place');
         }}
       />

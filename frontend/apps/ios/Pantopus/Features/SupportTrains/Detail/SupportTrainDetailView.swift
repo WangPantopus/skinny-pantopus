@@ -68,10 +68,13 @@ public struct SupportTrainDetailView: View {
         .accessibilityIdentifier("supportTrainDetail")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .task { await viewModel.load() }
+        // Someone took or left a slot (`supporttrain:{id}`): the open train re-reads.
+        .refreshesOnStoreChange(affects: { viewModel.isAffected(by: $0) }, perform: { await viewModel.refreshFromSignal() })
         .overlay(alignment: .bottom) { toastOverlay }
-        .sheet(item: $viewModel.reserveSelection) { selection in
+        .refreshFailureToast($viewModel.refreshFailureMessage)
+        .sheet(item: $viewModel.reserveSelection, onDismiss: { viewModel.dismissReserve() }, content: { selection in
             reserveSheet(selection)
-        }
+        })
         .alert(
             "Leave this slot?",
             isPresented: Binding(
@@ -225,6 +228,7 @@ public struct SupportTrainDetailView: View {
                 .padding(.bottom, Spacing.s6)
             }
             .background(Theme.Color.appBg)
+            .refreshable { await viewModel.refresh() }
 
             if content.typeDates.slotsTotal > 0, hasDock(content.dock) {
                 dock(content.dock)

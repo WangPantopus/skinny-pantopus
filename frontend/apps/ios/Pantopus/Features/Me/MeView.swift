@@ -47,6 +47,8 @@ public struct MeView: View {
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .sheet(item: $systemSheet) { request in request.makeView() }
             .task { await viewModel.load() }
+            // Your profile changed on another device (`profile:me`).
+            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.profileMe) }, perform: { await viewModel.refresh() })
             // A saved name or username changes the header.
             .onReceive(NotificationCenter.default.publisher(for: .pantopusProfileDidChange)) { _ in
                 Task { await viewModel.refresh() }

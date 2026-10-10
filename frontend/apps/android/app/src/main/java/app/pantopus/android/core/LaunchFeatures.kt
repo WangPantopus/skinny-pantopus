@@ -36,6 +36,12 @@ enum class LaunchFeature(
 
     /** 9. Support Train gift funds: no app can take a contribution yet. */
     GIFT_FUNDS("gift_funds"),
+
+    /**
+     * 10. Mailbox (founder decision, 2026-10-09): received mail, My Mail Day, the vault, vacation hold, mail search
+     * and mail notifications. While it is off the Mail tab is Messages. Address verification by postcard stays.
+     */
+    MAILBOX("mailbox"),
 }
 
 /**
@@ -64,6 +70,7 @@ object LaunchFeatures {
     val householdExtras: Boolean get() = isEnabled(LaunchFeature.HOUSEHOLD_EXTRAS)
     val mailExtras: Boolean get() = isEnabled(LaunchFeature.MAIL_EXTRAS)
     val giftFunds: Boolean get() = isEnabled(LaunchFeature.GIFT_FUNDS)
+    val mailbox: Boolean get() = isEnabled(LaunchFeature.MAILBOX)
 
     /** Parses a comma-separated key list ("all" enables every feature). */
     fun parse(raw: String?): Set<LaunchFeature> {

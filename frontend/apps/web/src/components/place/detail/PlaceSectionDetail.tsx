@@ -18,6 +18,7 @@ import { getAuthToken } from '@pantopus/api';
 import { MapPinned } from 'lucide-react';
 import type { PlaceGroup, PlaceViewer } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
+import { useMe } from '@/lib/me';
 import ErrorState from '@/components/ui/ErrorState';
 import EmptyState from '@/components/ui/EmptyState';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
@@ -31,6 +32,9 @@ import BlockDetail from './BlockDetail';
 import MoneyDetail from './MoneyDetail';
 import CivicDetail from './CivicDetail';
 import IdentityDetail from './IdentityDetail';
+import { usePrimaryHome } from '@/lib/primaryHome';
+import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
+import { PLACE_FRESH_MS, gatedStaleTime, showsPlaceCopy, useAfterRecheck } from '@/lib/householdCopy';
 
 function DetailShell({ section, hidden, children }: { section: string; hidden?: string[]; children: React.ReactNode }) {
   return <PlaceShell active={section} hidden={hidden}>{children}</PlaceShell>;
@@ -94,23 +98,13 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
   const authed = mounted && !!getAuthToken();
   const valid = !!meta;
 
-  const homeQuery = useQuery({
-    queryKey: queryKeys.placePrimaryHome(),
-    queryFn: async () => api.homes.getPrimaryHome(),
-    enabled: authed && valid,
-    staleTime: 60_000,
-  });
+  const homeQuery = usePrimaryHome({ enabled: authed && valid });
 
   // The switcher's place (?home=) when there is one, else the primary home,
   // else the resident's own private setup (as on the overview).
   const switchedHome = useContext(PlaceHomeContext);
   const noSharedHome = homeQuery.isSuccess && !homeQuery.data?.home && !switchedHome;
-  const myHomesQuery = useQuery({
-    queryKey: queryKeys.placeMyHomes(),
-    queryFn: async () => api.homes.getMyHomes(),
-    enabled: authed && valid && noSharedHome,
-    staleTime: 60_000,
-  });
+  const myHomesQuery = useQuery({ ...sharedMyHomesQuery(), enabled: authed && valid && noSharedHome });
   const privateSetupId = (myHomesQuery.data?.homes ?? []).find((h) => h.access_kind === 'private_setup')?.id ?? null;
   const homeId = switchedHome ?? homeQuery.data?.home?.id ?? privateSetupId;
 
@@ -127,16 +121,13 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
     queryFn: async () => api.place.getPlaceIntelligence(homeId as string),
     enabled: authed && valid && !!homeId,
-    staleTime: 60_000,
+    staleTime: gatedStaleTime(PLACE_FRESH_MS, showsPlaceCopy),
   });
+  // A guest's or service provider's copy shows only once the re-check answers (decision 3).
+  const { data: shownIntelligence, waiting: intelWaiting } = useAfterRecheck(intelQuery, showsPlaceCopy);
 
   // Resident name is only needed by the Identity detail.
-  const userQuery = useQuery({
-    queryKey: ['users', 'me', 'profile'],
-    queryFn: async () => api.users.getMyProfile(),
-    enabled: authed && valid && section === 'identity',
-    staleTime: 5 * 60_000,
-  });
+  const userQuery = useMe({ enabled: authed && valid && section === 'identity' });
 
   // ── Unknown section ───────────────────────────────────────
   if (!valid) {
@@ -156,7 +147,10 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     );
   }
 
-  if (!mounted || !authed) {
+  // Coming back shows what this tab already loaded in the first frame; the skeleton is only for
+  // nothing at all (a fresh page load starts with an empty cache, like the server).
+  const kept = shownIntelligence !== undefined;
+  if (!kept && (!mounted || !authed)) {
     return (
       <DetailShell section={section}>
         <DetailHeader title={meta.title} />
@@ -165,7 +159,8 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     );
   }
 
-  if (homeQuery.isError) {
+  // A failed refresh keeps the section on screen (contract §3); errors show only with nothing to show.
+  if (homeQuery.isError && !kept) {
     return (
       <DetailShell section={section}>
         <DetailHeader title={meta.title} />
@@ -226,7 +221,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     );
   }
 
-  if (homeQuery.isPending || intelQuery.isPending) {
+  if (!kept && (homeQuery.isPending || intelQuery.isPending || intelWaiting)) {
     return (
       <DetailShell section={section}>
         <DetailHeader title={meta.title} />
@@ -235,7 +230,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     );
   }
 
-  if (intelQuery.isError || !intelQuery.data) {
+  if (!shownIntelligence) {
     // A 403 means this account can't see the place: say so, without a retry.
     const denied = (intelQuery.error as { statusCode?: number } | null)?.statusCode === 403;
     return (
@@ -252,7 +247,7 @@ export default function PlaceSectionDetail({ section }: { section: string }) {
     );
   }
 
-  const intelligence = intelQuery.data;
+  const intelligence = shownIntelligence;
   const residentName = userQuery.data?.name || userQuery.data?.firstName || '';
   const hidden = placeSlugsNotForViewer(intelligence);
 

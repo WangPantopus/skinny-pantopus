@@ -26,7 +26,7 @@ Last checked: 2026-10-08 by L4.
 | `pantopus.app` | The zone is on Cloudflare with no records, so `pantopus.app`, `api.pantopus.app` and `staging.api.pantopus.app` don't resolve. |
 | April store apps | App Store "Pantopus" (`com.pantopus.app`, version 1.5.0 from May 12) and Google Play `com.pantopus.app`: the Expo app from the older repository. The live website links to both. Their API host was set in Expo's build settings (the old guides used `https://api.pantopus.com`); it can't be read from here. |
 | New native apps | iOS `app.pantopus.ios`, Android `app.pantopus.android`: different app IDs from the April apps, so they're new store listings (decision D2). Not uploaded anywhere yet. |
-| Supabase | The April production project, a testing project, and `Pantopus-staging` (Free), reset to the canonical migrations on October 7 (S2). No production project yet (P2A). |
+| Supabase | The April production project and new `pantopus-production` project (`falmvysvndmwtfxsrxek`) are in the founder's `Pantopus` Free organization. The new project is healthy in Oregon; all 148 canonical migrations were applied and verified on October 9, and the private `home-documents` bucket is configured. Auth transfer, the two 100 MB buckets, the S3 key and managed daily backups are pending. `Pantopus-staging` is separate and was reset to the canonical migrations on October 7 (S2). A separate production organization is optional billing isolation. |
 | GitHub | `staging` has its secrets and variables and releases from `dev` (S5, S6). `production` has `BACKEND_DEPLOY_ENABLED=false` and `DB_MIGRATIONS_ENABLED=false` and no secrets, so each master push ends with "Backend deployment is disabled". `ios-release` and `android-release` have no secrets. |
 | AWS Lambdas | Staging stack `pantopus-seeder-staging` (October 7). The stack (`pantopus-seeder/deploy/template.yaml`) carries the seeder and the briefing, home-reminder, weather-alert, mail and job-trigger functions. **The April production stack `pantopus-seeder-production` (last deployed May 3) still runs** (checked October 8): its 14 EventBridge schedules read the April database through the secret `pantopus/seeder/production` every 5 to 15 minutes and send through `api.pantopus.com`, which answers 522, so nothing reaches anyone. At 01:00Z on October 8 its evening briefing tried three April users and failed. Pause it before P1 (start of section 3); P8 turns it into the production stack. The April `pantopus-seeder-dev` stack is inert: its functions were deleted in April, so its ten schedules have nothing to run. |
 
@@ -55,22 +55,18 @@ Each has a default that the steps below follow until you change it here.
   The alternative, shipping the native apps as updates to `com.pantopus.app`,
   means changing the native app IDs, push setup and signing; L4 doesn't
   recommend it this close to the pilot.
-- [ ] **D3 Production database.** Open (October 6): the founder asked whether April users must sign up again. With a new project they do, or L4 can prepare a rehearsed script that copies only their logins (email and password hash) into it, without the old Trains; the founder runs it, since it touches real people's data. Default (L4's recommendation): **a new
-  production Supabase project** built from the canonical migrations, exactly as
-  staging is. Keep the April project untouched and paused as an archive; the
-  April users (friends) sign up again in the new app. The alternative is to
-  adopt the April project (keeps their accounts and meal trains, but needs a
-  backup, a local rehearsal of the September forward-upgrade SQL on a copy of
-  real data, and a maintenance window; section P2B).
+- [x] **D3 Production database.** Decided October 8: create a new production
+  Supabase project from the canonical migrations and transfer April users'
+  logins and matching app profiles after an isolated rehearsal. Preserve the
+  Auth identities needed for email, Google and Apple sign-in; leave April's
+  Homes, Trains and other product data in the old project. The founder runs
+  the reviewed production import. See [the Auth transfer runbook](production-auth-transfer.md).
 - [x] **D4 Payments during the pilot.** Decided October 6, as recommended. Default: production uses Stripe **test**
   keys until you activate live payments; no pilot journey takes money. Pilot
   store builds then carry the matching `pk_test_` key (L4 adjusts the Android
   release guard, which demands `pk_live_`). A real card fails in test mode
   instead of being charged.
-- [x] **D5 Postcards.** Decided October 6, as recommended. Production won't start without Lob live settings:
-  `LOB_ENV=live`, a live key, the webhook secret and a real return address
-  (`LOB_FROM_*`; the defaults are a placeholder San Francisco address). Default:
-  provide them before production (step P5). Staging uses Lob test mode.
+- [x] **D5 Postcards.** Updated by the founder October 9: defer Lob, Google Address Validation and Smarty setup for the first public web release. Set `DEFER_ADDRESS_PROVIDER_SETUP=true` in the production backend only. Missing providers stay unavailable; no mock postcard may be sent or reported as sent. New address validation, Add Home without a fresh cached validation, and mail verification/invitations will fail until the providers are configured. When enabling Lob, provide `LOB_ENV=live`, a `live_` key, its webhook secret and a real return address (`LOB_FROM_*`; the defaults are a placeholder San Francisco address), then remove the deferral switch. Staging still requires its test providers.
 - [ ] **D6 Email.** Open (October 6): the founder is checking which email service is already paid for; use that one if it does SMTP. Default: Postmark SMTP for backend email and for Supabase
   Auth email, sending from `pantopus.com` with SPF, DKIM and DMARC.
 - [x] **D7 Error monitoring.** Decided October 6, as recommended. Default: off. Sentry and PostHog keys are optional
@@ -416,26 +412,91 @@ production one and switches the schedules back on.
 **Check:** `curl -sI https://api.pantopus.com/` shows a valid certificate
 (after P6 the health check answers).
 
-### P2A. Production database: new project (default, founder)
+### P2A. Production database: new project (founder)
 
-1. Supabase → New project `pantopus-production`, **Pro** plan, region
-   `us-west-2` (Oregon, next to the server). Turn on daily backups (included in
-   Pro); point-in-time recovery is optional.
-2. On the Mac, with the `sb` alias from S2. Nothing should be connected to a
-   new project yet; if a production backend or worker already points at it
-   (from an earlier attempt), stop it first as in S2.
+1. The founder created `pantopus-production` (`falmvysvndmwtfxsrxek`) in
+   `us-west-2` (Oregon, next to the server). It is currently empty in the
+   existing `Pantopus` Free organization. It can stay there. If the founder
+   wants the April archive to remain on Free after the production upgrade,
+   transfer the new project to a separate organization first; Supabase plans
+   apply to the whole organization. **Before transferring April logins or
+   sending production traffic, upgrade the organization holding the new project
+   to Pro and confirm daily backups are available.** The two planned 100 MB
+   Storage buckets also require Pro: Supabase's Free global upload limit cannot
+   exceed 50 MB. Set the global Storage file-size limit to at least 100 MB
+   before setting those bucket limits.
+   Point-in-time recovery is optional.
+2. From a dedicated production worktree based on the latest `master`, after its
+   CI is green, use the CLI version pinned in S2. Do not relink the staging
+   checkout. The Mac's saved CLI login is for staging. The founder creates a
+   production Supabase access token and puts it and the new project's database
+   password in a private `0600` file outside the repository, as
+   `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`; never paste either into
+   chat or a command argument. Scope the token to `pantopus-production` only,
+   with Read access to Project Settings, API Keys, API Key Secrets, and
+   Database → Connection Pooling; leave all other permissions off. The last
+   permission lets the CLI discover the IPv4 pooler endpoint on networks
+   without IPv6. The environment token overrides the saved
+   staging login. The founder loads that file only in this terminal session.
+   Nothing should be connected to the new project yet; if a production backend
+   or worker already points at it, stop it first. Verify that the linked ref is
+   exactly `falmvysvndmwtfxsrxek` and review the dry-run migration list before
+   the founder runs the push. `--skip-vault` prevents an unrelated Vault update.
    ```bash
-   sb link --project-ref <production ref>
-   sb db push --linked --dry-run   # lists every migration in supabase/migrations
-   sb db push --linked
+   alias sb='npx --yes supabase@2.116.0'
+   set -a
+   source ~/.config/pantopus/hosted-secrets/supabase-prod-cli.env
+   set +a
+   : "${SUPABASE_ACCESS_TOKEN:?missing production token}"
+   : "${SUPABASE_DB_PASSWORD:?missing production database password}"
+   sb link --project-ref falmvysvndmwtfxsrxek
+   test "$(cat supabase/.temp/project-ref)" = falmvysvndmwtfxsrxek
+   test -s supabase/.temp/pooler-url
+   sb db push --linked --skip-vault --dry-run
+   # Founder only, after checking the dry run and project ref:
+   sb db push --linked --skip-vault
+   sb migration list --linked
+   unset SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD
    ```
-3. Storage buckets and the S3 access key as in S2.
-4. Keep the April project as it is (pause it; don't delete it).
-5. Supabase's daily backups cover the database only, not uploaded files. Set
+   Stop if either `test` fails or the dry run cannot connect; the project must
+   be linked to the expected ref through its IPv4 pooler before any push.
+   Never use `db reset --linked` or `--include-seed` on production.
+3. Storage buckets and the S3 access key as in S2. The private 25 MB
+   `home-documents` bucket can be created on Free. For the 100 MB private
+   `gig-completion` and public `pantopus-uploads` buckets, upgrade first and
+   verify the global Storage limit; do not silently substitute 50 MB limits.
+   See [Supabase's file limits](https://supabase.com/docs/guides/storage/uploads/file-limits).
+4. Transfer April logins and matching app profiles only after the private
+   export and isolated rehearsal in [the Auth transfer runbook](production-auth-transfer.md).
+   Check matching IDs, email/password and OAuth sign-in, and new-app access
+   before pointing the API at the project. The founder runs the reviewed import.
+5. Keep the April project available until the login transfer and sign-in checks
+   pass; don't delete it. A project in a Pro organization cannot be paused, so
+   keeping both projects in `Pantopus` will also keep the April archive active
+   and billed for its compute. Decide its long-term archive placement later.
+6. Supabase's daily backups cover the database only, not uploaded files. Set
    up the file backup in Appendix C before the first household signs up.
 
-**Check:** as in S2: `sb db push --linked --dry-run` reports nothing to
+**Check:** as in S2: `sb db push --linked --skip-vault --dry-run` reports nothing to
 push, and the three buckets exist with the right privacy.
+
+**Schema status, October 9:** the founder applied the 148 migrations to
+`falmvysvndmwtfxsrxek` from the dedicated production worktree. Read-only
+verification found 148 matching local and remote migration versions, no
+local-only or remote-only versions, and no pending migration in a fresh dry run.
+The two 100 MB Storage buckets, S3 access key, Auth transfer and backup
+upgrade remain to be done.
+
+**Plan decision, October 9:** stay on Free for now. Defer the two 100 MB
+buckets and April login import until the founder chooses to upgrade. The
+private 25 MB `home-documents` bucket can be prepared on Free. Do not point
+production traffic at the new project while existing logins remain only in
+the April project.
+
+**Storage status, October 9:** the founder created `home-documents`. A
+read-only Storage API check confirmed it is private with a 26,214,400-byte
+(25 MiB) file-size limit. `gig-completion` and `pantopus-uploads` are absent,
+as planned.
 
 ### P2B. Production database: adopt the April project (only if D3 says so)
 
@@ -481,13 +542,14 @@ Write `~/pantopus/.env.prod` as in S4 from `hosted-secrets/production.env` and
 Appendix A's production column. **First move the June file aside**
 (`mv .env.prod .env.prod.june-2026`): the deploy reads `.env.prod` for the new
 containers, and none of the June settings (old database, old keys) may carry
-over. Then run S4's checks against `.env.prod`, including the Smarty lookup.
+over. Then run S4's checks against `.env.prod`; skip the Smarty lookup only
+while `DEFER_ADDRESS_PROVIDER_SETUP=true` and Smarty keys are absent.
 
 ### P6. GitHub `production` environment and first release (founder)
 
 Only after P1 to P5: the release needs the server's address, a database with
-every migration, Auth, and `.env.prod` (production startup refuses to run
-without the live Lob settings, D5). Same secrets as S5 with production values
+every migration, Auth, and `.env.prod` (use the explicit provider deferral in
+D5 if the live keys are not ready). Same secrets as S5 with production values
 (the production project's ref and database password); variables
 `BACKEND_API_BIND=127.0.0.1:8000`, `SUPABASE_SESSION_POOLER_HOST` from the
 production project's **Connect** dialog and `DB_MIGRATIONS_ENABLED=true` (P2A's
@@ -513,8 +575,9 @@ containers are healthy on the server.
   `https://api.pantopus.com/api/webhooks/stripe`, events as listed in
   `backend/stripe/stripeWebhooks.js`; put its signing secret in
   `STRIPE_WEBHOOK_SECRET`.
-- Lob (live): webhook `https://api.pantopus.com/api/v1/webhooks/lob`; its
-  secret in `LOB_WEBHOOK_SECRET`.
+- Lob (live, when mail is enabled): webhook
+  `https://api.pantopus.com/api/v1/webhooks/lob`; its secret in
+  `LOB_WEBHOOK_SECRET`.
 
 ### P8. Production scheduled jobs (founder runs, L4 prepared)
 
@@ -706,8 +769,9 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `TRUST_PROXY` | `1` | `1` (or `2` behind Cloudflare's proxy, P1) | |
 | `INTERNAL_API_KEY`, `CSRF_SECRET`, `STEP_UP_SECRET`, `LOCATION_JITTER_SECRET`, `EMAIL_INBOUND_HMAC_SECRET`, `HOME_POSTCARD_CODE_KEYS_JSON`, `HOME_POSTCARD_CODE_ACTIVE_KEY` | gen | gen | `hosted-secrets/` |
 | `EDGE_PROXY_SECRET` | gen | gen | `hosted-secrets/`; the same value goes into Vercel (S7, P9) |
-| `GOOGLE_ADDRESS_VALIDATION_API_KEY`, `GOOGLE_PLACES_API_KEY` | required | required | Google Cloud (restrict to the server's IP) |
-| `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | required | Smarty (subscription must be active; S4 checks it) |
+| `GOOGLE_ADDRESS_VALIDATION_API_KEY`, `GOOGLE_PLACES_API_KEY` | required | deferred for first web release | Google Cloud (restrict to the server's IP) |
+| `SMARTY_AUTH_ID`, `SMARTY_AUTH_TOKEN` | required | deferred for first web release | Smarty (subscription must be active; S4 checks it) |
+| `DEFER_ADDRESS_PROVIDER_SETUP` | unset | `true` until the live Google, Smarty and Lob settings are ready; then remove | production-only startup switch, D5 |
 | `MAPBOX_ACCESS_TOKEN` | required | required | Mapbox secret token |
 | `ATTOM_API_KEY` | optional | required for property facts | ATTOM |
 | `AIRNOW_API_KEY` | required for air quality | required for air quality | free AirNow key; without it the air section says it couldn't load. Also goes in the Lambda secret (S8) |
@@ -715,10 +779,10 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `OPENAI_API_KEY` | required for AI features | required for AI features | OpenAI project with a budget cap |
 | `OPENAI_CHAT_MODEL`, `OPENAI_DRAFT_MODEL` | `gpt-6-luna` | `gpt-6-luna` | the model the streams verify against locally (a reasoning model: code paths pass `max_completion_tokens`, no custom `temperature`) |
 | `PROPERTY_SUGGESTIONS_LLM_MODEL`, `MAGIC_TASK_AI_MODEL` | unset | unset | their defaults (`gpt-4o-mini`, `gpt-4o`) match how those calls are written; a reasoning model there rejects `max_tokens`/`temperature` |
-| `LOB_ENV` | `test` | `live` | D5 |
-| `LOB_API_KEY` | `test_…` | `live_…` | Lob |
-| `LOB_WEBHOOK_SECRET` | Lob test webhook | Lob live webhook | Lob → Webhooks |
-| `LOB_FROM_NAME`, `LOB_FROM_ADDRESS_LINE1`, `LOB_FROM_CITY`, `LOB_FROM_STATE`, `LOB_FROM_ZIP` | test address | real return address | D5 |
+| `LOB_ENV` | `test` | `live` when Lob is enabled | D5 |
+| `LOB_API_KEY` | `test_…` | deferred; `live_…` when enabled | Lob |
+| `LOB_WEBHOOK_SECRET` | Lob test webhook | deferred; live webhook secret when enabled | Lob → Webhooks |
+| `LOB_FROM_NAME`, `LOB_FROM_ADDRESS_LINE1`, `LOB_FROM_CITY`, `LOB_FROM_STATE`, `LOB_FROM_ZIP` | test address | real return address before enabling mail | D5 |
 | `STRIPE_SECRET_KEY` | `sk_test_…` (required) | per D4 | Stripe |
 | `STRIPE_PUBLISHABLE_KEY` | `pk_test_…` | per D4 | Stripe |
 | `STRIPE_WEBHOOK_SECRET` | test endpoint's `whsec_…` | per D4 | Stripe → Webhooks (P7) |
@@ -735,9 +799,12 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `LAUNCH_FEATURES` | empty | empty | launch cuts stay off |
 | `HOUSEHOLD_CLAIM_V2_READ_PATHS`, `HOUSEHOLD_CLAIM_PARALLEL_SUBMISSION`, `HOUSEHOLD_CLAIM_CHALLENGE_FLOW`, `HOUSEHOLD_CLAIM_ADMIN_COMPARE` | `true` | `true` | the ownership-claim behaviour the apps were verified against locally (a second claimant on a Home gets a parallel claim, not a refusal); unset, all four default to `false`, the older claim path |
 
-Startup refuses a production process without `CSRF_SECRET`, `STEP_UP_SECRET`,
-the Google, Smarty and Lob keys, `LOB_WEBHOOK_SECRET` and the right `LOB_ENV`,
-and refuses staging without test Lob and Stripe keys.
+Startup still requires `CSRF_SECRET` and `STEP_UP_SECRET`. By default it also
+requires Google, Smarty and live Lob settings. Only the explicit production
+deferral permits those providers to be absent; a configured Lob sender still
+requires its live key, `LOB_ENV=live` and webhook secret. Staging still requires
+test Lob and Stripe keys. Provider deferral does not cover other production
+settings such as Supabase, SMTP or payment configuration.
 
 ## Appendix B. Costs (prices checked September 22, 2026)
 

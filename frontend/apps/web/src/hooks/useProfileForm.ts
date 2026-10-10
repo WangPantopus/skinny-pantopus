@@ -7,6 +7,7 @@ import { getAuthToken } from '@pantopus/api';
 import type { ProfileFormData, User } from '@pantopus/types';
 import { extractApiError, extractFieldErrors } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
+import { fetchMe, peekMe, setMe, type Me } from '@/lib/me';
 
 /** Server messages for rejected fields, keyed like the form. */
 export type FieldErrors = Partial<Record<keyof ProfileFormData, string>>;
@@ -99,24 +100,58 @@ export interface UseProfileFormReturn {
   saveProfile: (e?: React.FormEvent) => Promise<void>;
 }
 
+/** The form's fields for a profile as the server returns it. */
+function profileFormData(userData: Me): ProfileFormData {
+  const sl = userData.socialLinks || userData.social_links || {};
+  return {
+    // A username the server made up shows as an empty field ("Choose a username").
+    username: userData.usernameIsGenerated ? '' : (userData.username || ''),
+    firstName: userData.firstName || '',
+    middleName: userData.middleName || userData.middle_name || '',
+    lastName: userData.lastName || '',
+    bio: userData.bio || '',
+    tagline: userData.tagline || '',
+    dateOfBirth: toDateInputValue(userData.dateOfBirth || userData.date_of_birth),
+    phoneNumber: userData.phoneNumber || userData.phone_number || '',
+    address: userData.address || '',
+    city: userData.city || '',
+    state: (userData.state || '').toUpperCase(),
+    zipcode: userData.zipcode || '',
+    website: sl.website || userData.website || '',
+    linkedin: sl.linkedin || userData.linkedin || '',
+    twitter: sl.twitter || userData.twitter || '',
+    instagram: sl.instagram || userData.instagram || '',
+    facebook: sl.facebook || userData.facebook || '',
+  };
+}
+
 export function useProfileForm(): UseProfileFormReturn {
   const router = useRouter();
-  const [form, dispatch] = useReducer(formReducer, INITIAL_FORM);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // The profile this session already loaded fills the form in the first frame (lib/me.ts); the
+  // read below then only replaces it while you haven't changed anything.
+  const [kept] = useState(() => peekMe() ?? null);
+  const [form, dispatch] = useReducer(formReducer, kept ? profileFormData(kept) : INITIAL_FORM);
+  const [user, setUser] = useState<User | null>(kept as User | null);
+  const [loading, setLoading] = useState(!kept);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   // Non-form-field state that still lives here
-  const [skills, setSkills] = useState<string[]>([]);
+  const [skills, setSkills] = useState<string[]>(kept?.skills || []);
   const [newSkill, setNewSkill] = useState('');
-  const [addressVerified, setAddressVerified] = useState(false);
-  const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
+  const [addressVerified, setAddressVerified] = useState(!!kept?.address_verified);
+  const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(kept ? (kept.profilePicture || kept.profile_picture_url || null) : null);
 
   // Track initial form snapshot for isDirty
-  const initialSnapshot = useRef<ProfileFormData>(INITIAL_FORM);
+  const initialSnapshot = useRef<ProfileFormData>(kept ? profileFormData(kept) : INITIAL_FORM);
   const isDirty = JSON.stringify(form) !== JSON.stringify(initialSnapshot.current);
+  const shown = useRef(!!kept);
+  const formRef = useRef(form);
+  formRef.current = form;
+  const skillsRef = useRef(skills);
+  skillsRef.current = skills;
+  const shownSkills = useRef(skills);
 
   const setField = useCallback((field: keyof ProfileFormData, value: string) => {
     dispatch({ type: 'SET_FIELD', field, value });
@@ -140,7 +175,8 @@ export function useProfileForm(): UseProfileFormReturn {
   }, []);
 
   const loadProfile = useCallback(async () => {
-    setLoading(true);
+    // A form already on screen reads again quietly.
+    if (!shown.current) setLoading(true);
     setLoadError(null);
     try {
       const token = getAuthToken();
@@ -149,35 +185,20 @@ export function useProfileForm(): UseProfileFormReturn {
         return;
       }
 
-      const userData = await api.users.getMyProfile();
+      const userData = await fetchMe();
       setUser(userData);
+      // Your typing wins over a newer copy: it replaces only an unchanged form.
+      const untouched = JSON.stringify(formRef.current) === JSON.stringify(initialSnapshot.current)
+        && JSON.stringify(skillsRef.current) === JSON.stringify(shownSkills.current);
+      shown.current = true;
+      if (!untouched) return;
 
-      const sl = userData.socialLinks || userData.social_links || {};
-      const loaded: ProfileFormData = {
-        // A username the server made up shows as an empty field ("Choose a username").
-        username: userData.usernameIsGenerated ? '' : (userData.username || ''),
-        firstName: userData.firstName || '',
-        middleName: userData.middleName || userData.middle_name || '',
-        lastName: userData.lastName || '',
-        bio: userData.bio || '',
-        tagline: userData.tagline || '',
-        dateOfBirth: toDateInputValue(userData.dateOfBirth || userData.date_of_birth),
-        phoneNumber: userData.phoneNumber || userData.phone_number || '',
-        address: userData.address || '',
-        city: userData.city || '',
-        state: (userData.state || '').toUpperCase(),
-        zipcode: userData.zipcode || '',
-        website: sl.website || userData.website || '',
-        linkedin: sl.linkedin || userData.linkedin || '',
-        twitter: sl.twitter || userData.twitter || '',
-        instagram: sl.instagram || userData.instagram || '',
-        facebook: sl.facebook || userData.facebook || '',
-      };
-
+      const loaded = profileFormData(userData);
       dispatch({ type: 'RESET', data: loaded });
       initialSnapshot.current = loaded;
 
       setSkills(userData.skills || []);
+      shownSkills.current = userData.skills || [];
       setAddressVerified(!!userData.address_verified);
       setProfilePictureUrl(userData.profilePicture || userData.profile_picture_url || null);
     } catch (err) {
@@ -251,10 +272,12 @@ export function useProfileForm(): UseProfileFormReturn {
         return;
       }
 
-      await api.users.updateProfile(updates as Record<string, unknown>);
+      const { user: saved } = await api.users.updateProfile(updates as Record<string, unknown>);
+      setMe(saved);
       profileSaved = true;
       initialSnapshot.current = { ...form };
-      await api.users.updateSkills(skills);
+      const savedSkills = await api.users.updateSkills(skills);
+      setMe({ skills: savedSkills?.skills ?? skills });
       toast.success('Profile updated successfully');
       router.push('/app/profile');
     } catch (err: unknown) {

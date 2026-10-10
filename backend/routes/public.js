@@ -857,6 +857,9 @@ router.get('/residency-claims/:code', async (req, res) => {
 // on unknown codes.
 // ============================================================
 router.get('/fridge-cards/:code', async (req, res) => {
+  // Without this the holder's browser keeps the medical details on disk, and a revoked card would not be pulled
+  // from it.
+  res.set('Cache-Control', 'no-store');
   try {
     const fridgeCardService = require('../services/fridgeCardService');
     const result = await fridgeCardService.getCardByCode(req.params.code);

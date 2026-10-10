@@ -18,10 +18,12 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.routing.HomeTaskNotificationRoute
 import app.pantopus.android.data.api.models.notifications.NotificationDto
+import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.notifications.NotificationsRepository
+import app.pantopus.android.data.store.asResult
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
@@ -284,6 +286,10 @@ class NotificationsViewModel
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
 
+        /** A pull or Retry is reading while the rows stay: the pull indicator only. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
         private val _openGig = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
         /** A gig row's task, opened on top of this list so Back returns here. */
@@ -358,7 +364,7 @@ class NotificationsViewModel
             if (_zone.value == next && !becomesScoped) return
             _zone.value = next
             zoneWasChosen = true
-            reload()
+            reload(force = false)
         }
 
         private val _selectedTab = MutableStateFlow(NotificationsTab.ALL)
@@ -368,14 +374,17 @@ class NotificationsViewModel
             MutableStateFlow<TopBarAction?>(makeTopBarAction(enabled = false))
         val topBarAction: StateFlow<TopBarAction?> = _topBarAction.asStateFlow()
 
-        /** Initial load. Idempotent — re-running won't refetch when already loaded. */
+        /**
+         * Initial load. Idempotent — re-running won't refetch when already loaded. A first entry shows the stored
+         * first pages at once (Instant Screens) and reads them again when they are out of date.
+         */
         fun load() {
             if (_state.value is ListOfRowsUiState.Loaded && notifications.isNotEmpty()) return
-            reload()
+            reload(force = false)
         }
 
-        /** Pull-to-refresh / retry. */
-        fun refresh() = reload()
+        /** Pull-to-refresh / retry: reads now, with the rows kept under the pull indicator. */
+        fun refresh() = reload(force = true)
 
         /** Called when the list nears the bottom — fetches the next page.
          *  After a failed page only [retryLoadMore] asks again. */
@@ -396,7 +405,7 @@ class NotificationsViewModel
         fun selectTab(id: String) {
             if (_selectedTab.value == id) return
             _selectedTab.value = id
-            reload()
+            reload(force = false)
         }
 
         /**
@@ -539,20 +548,43 @@ class NotificationsViewModel
             applyState()
         }
 
-        private fun reload() {
+        /**
+         * [force]: a pull or Retry, which keeps the rows on screen under the pull indicator. Otherwise (entry, a tab or
+         * zone switch) the stored first pages show at once when they are all there, and the skeleton only when not.
+         */
+        private fun reload(force: Boolean) {
             // A tab or zone switch mid-load must refetch with the new filter:
             // retire the running request instead of skipping this one.
             fetchGeneration++
             loading = false
             loadMoreError = null
-            _state.value = ListOfRowsUiState.Loading
-            notifications = mutableListOf()
-            offsets = mutableMapOf()
-            hasMore = false
-            fetchPage(reset = true)
+            val keepRows = force && _state.value is ListOfRowsUiState.Loaded
+            if (!keepRows) {
+                notifications = mutableListOf()
+                offsets = mutableMapOf()
+                hasMore = false
+                if (!showStoredFirstPages()) _state.value = ListOfRowsUiState.Loading
+            }
+            _refreshing.value = keepRows
+            fetchPage(reset = true, force = force)
         }
 
-        private fun fetchPage(reset: Boolean) {
+        /** The stored first page of every active context, shown before any request; false when one is missing. */
+        private fun showStoredFirstPages(): Boolean {
+            val unreadOnly = _selectedTab.value == NotificationsTab.UNREAD
+            val pages =
+                (activeContexts() ?: listOf(UNSCOPED)).map { context ->
+                    val copy = repo.firstPageCopy(pageSize, unreadOnly, context.takeIf { it != UNSCOPED }) ?: return false
+                    context to (NetworkResult.Success(copy) as NetworkResult<NotificationsListResponse>)
+                }
+            publishPages(pages, reset = true)
+            return true
+        }
+
+        private fun fetchPage(
+            reset: Boolean,
+            force: Boolean = false,
+        ) {
             if (loading) return
             loading = true
             if (reset) offsets = mutableMapOf()
@@ -563,67 +595,87 @@ class NotificationsViewModel
             // `personal` + `platform` the way RN does.
             val contexts = activeContexts() ?: listOf(UNSCOPED)
             viewModelScope.launch {
-                val incoming = mutableListOf<NotificationDto>()
-                var anyMore = false
-                var scopedUnread = 0
-                var sawUnreadCount = false
-                var failure: NetworkResult.Failure? = null
-                for (context in contexts) {
-                    val result =
-                        repo.list(
-                            limit = pageSize,
-                            offset = offsets[context] ?: 0,
-                            unreadOnly = unreadOnly,
-                            context = context.takeIf { it != UNSCOPED },
-                        )
-                    // A reload since this request started owns the list, offsets
-                    // and loading flag now; drop this late page.
-                    if (generation != fetchGeneration) return@launch
-                    when (result) {
-                        is NetworkResult.Success -> {
-                            val body = result.data
-                            // Launch cut: rows of features hidden for the first launch never
-                            // enter the list, nor count as unread; paging keeps server offsets.
-                            val visible = body.notifications.filter(::isLaunchVisible)
-                            incoming.addAll(visible)
-                            offsets[context] = (offsets[context] ?: 0) + body.notifications.size
-                            anyMore = anyMore || (body.hasMore ?: (body.notifications.size >= pageSize))
-                            body.unreadCount?.let {
-                                val hiddenUnread = (body.notifications - visible.toSet()).count { row -> row.isRead != true }
-                                scopedUnread += (it - hiddenUnread).coerceAtLeast(0)
-                                sawUnreadCount = true
+                val pages =
+                    contexts.map { context ->
+                        val scope = context.takeIf { it != UNSCOPED }
+                        // The first page goes through the screens' store; later pages never do.
+                        val result =
+                            if (reset) {
+                                repo.firstPageStored(pageSize, unreadOnly, scope, force).let { stored ->
+                                    stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
+                                }
+                            } else {
+                                repo.list(limit = pageSize, offset = offsets[context] ?: 0, unreadOnly = unreadOnly, context = scope)
                             }
-                        }
-                        is NetworkResult.Failure -> failure = result
+                        // A reload since this request started owns the list, offsets
+                        // and loading flag now; drop this late page.
+                        if (generation != fetchGeneration) return@launch
+                        context to result
                     }
-                }
                 loading = false
-                val failed = failure
-                if (failed != null && incoming.isEmpty()) {
-                    if (reset) {
+                _refreshing.value = false
+                publishPages(pages, reset)
+            }
+        }
+
+        private fun publishPages(
+            pages: List<Pair<String, NetworkResult<NotificationsListResponse>>>,
+            reset: Boolean,
+        ) {
+            val incoming = mutableListOf<NotificationDto>()
+            var anyMore = false
+            var scopedUnread = 0
+            var sawUnreadCount = false
+            var failure: NetworkResult.Failure? = null
+            for ((context, result) in pages) {
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val body = result.data
+                        // Launch cut: rows of features hidden for the first launch never
+                        // enter the list, nor count as unread; paging keeps server offsets.
+                        val visible = body.notifications.filter(::isLaunchVisible)
+                        incoming.addAll(visible)
+                        offsets[context] = (offsets[context] ?: 0) + body.notifications.size
+                        anyMore = anyMore || (body.hasMore ?: (body.notifications.size >= pageSize))
+                        body.unreadCount?.let {
+                            val hiddenUnread = (body.notifications - visible.toSet()).count { row -> row.isRead != true }
+                            scopedUnread += (it - hiddenUnread).coerceAtLeast(0)
+                            sawUnreadCount = true
+                        }
+                    }
+                    is NetworkResult.Failure -> failure = result
+                }
+            }
+            val failed = failure
+            if (failed != null && incoming.isEmpty()) {
+                when {
+                    // A failed refresh keeps the rows on screen (Instant Screens contract §3).
+                    reset && _state.value is ListOfRowsUiState.Loaded -> applyState()
+                    reset -> {
                         _state.value =
                             ListOfRowsUiState.Error(failed.error.displayMessage("Couldn't load the list."))
                         _topBarAction.value = makeTopBarAction(enabled = _unreadCount.value > 0)
-                    } else {
+                    }
+                    else -> {
                         // A later page failed: keep the rows and offer Try again
                         // instead of an endless spinner.
                         loadMoreError = failed.error.displayMessage("Couldn't load more notifications.")
                         applyState()
                     }
-                    return@launch
                 }
-                notifications =
-                    if (reset) {
-                        sortedByRecency(incoming).toMutableList()
-                    } else {
-                        merge(notifications, incoming).toMutableList()
-                    }
-                hasMore = anyMore
-                _unreadCount.value =
-                    if (sawUnreadCount) scopedUnread else notifications.count { it.isRead != true }
-                revealZoneStripIfAudienceSeen()
-                applyState()
+                return
             }
+            notifications =
+                if (reset) {
+                    sortedByRecency(incoming).toMutableList()
+                } else {
+                    merge(notifications, incoming).toMutableList()
+                }
+            hasMore = anyMore
+            _unreadCount.value =
+                if (sawUnreadCount) scopedUnread else notifications.count { it.isRead != true }
+            revealZoneStripIfAudienceSeen()
+            applyState()
         }
 
         /**

@@ -16,6 +16,7 @@ import app.pantopus.android.data.auth.InMemorySharedPreferences
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.place.launch.LaunchStep
 import app.pantopus.android.ui.screens.place.launch.PlaceLaunchViewModel
 import io.mockk.coEvery
@@ -65,6 +66,8 @@ class PlaceArrivalTest {
         every { auth.state } returns signedIn
         coEvery { places.publicPreview(any()) } returns NetworkResult.Failure(NetworkError.Server(503, null))
         coEvery { homes.myHomes() } returns NetworkResult.Failure(NetworkError.Server(503, null))
+        // The Place landing reads the shared My Homes copy through the store.
+        coEvery { homes.myHomesStored(any()) } returns Stored(failure = NetworkError.Server(503, null))
     }
 
     @After fun tearDown() {

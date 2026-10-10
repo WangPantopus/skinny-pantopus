@@ -2681,6 +2681,8 @@ router.post('/refresh', refreshLimiter, refreshDpop, async (req, res) => {
  * Get current user's profile
  */
 router.get('/profile', verifyToken, async (req, res) => {
+  // Email, phone, date of birth and address are never kept in a device's HTTP cache.
+  res.set('Cache-Control', 'private, no-store');
   try {
     const userId = req.user.id;
 
@@ -5789,6 +5791,8 @@ router.post(
           eventType: 'lockdown',
         });
         clearAuthCookies(res);
+        // This browser's saved data goes with the session (Instant Screens contract §5).
+        res.set('Clear-Site-Data', '"storage"');
         logger.info('Logout (global) completed', { userId, revoked: result.revoked });
         return res.json({ success: true, revoked: result.revoked });
       } catch (err) {
@@ -5799,6 +5803,8 @@ router.post(
 
     // scope === 'local'
     clearAuthCookies(res);
+    // This browser's saved data goes with the session (Instant Screens contract §5).
+    res.set('Clear-Site-Data', '"storage"');
 
     const accessToken = getLogoutAccessToken(req);
 

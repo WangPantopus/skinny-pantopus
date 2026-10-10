@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useState, useRef } from 'react';
 import * as api from '@pantopus/api';
+import { refreshMe } from '@/lib/me';
 
 interface ProfilePictureUploadProps {
   currentUrl?: string | null;
@@ -44,6 +45,7 @@ export default function ProfilePictureUpload({
     setUploading(true);
     try {
       const result = await api.upload.uploadProfilePicture(file);
+      void refreshMe();
       onUploaded(result.url);
     } catch (err: unknown) {
       console.error('Profile picture upload failed:', err);

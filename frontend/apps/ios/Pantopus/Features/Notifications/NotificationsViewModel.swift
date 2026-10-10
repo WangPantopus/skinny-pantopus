@@ -304,6 +304,9 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     // MARK: - Dependencies
 
     private let api: APIClient
+    /// The screen store (Instant Screens): each zone's first page shows its
+    /// stored copy at once and is re-read once out of date (30 seconds).
+    private let store: ScreenStore
     private let taskScope: HomeClaimSessionScope
     private let taskActorId: String?
     private let onSelect: @MainActor (NotificationDTO) -> Void
@@ -360,6 +363,8 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
         self.now = now
         self.calendar = calendar
         self.timeZone = timeZone
+        store = ScreenStore.store(for: api)
+        showStoredFirstPage()
     }
 
     // MARK: - Zone switching
@@ -392,13 +397,15 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
 
     // MARK: - ListOfRowsDataSource
 
+    /// Showing the list: the stored first page at once (a skeleton only
+    /// without one), then a quiet re-read once it is out of date.
     public func load() async {
-        state = .loading
+        if !state.showsContent { state = .loading }
         await fetch(reset: true)
     }
 
     public func refresh() async {
-        await fetch(reset: true)
+        await fetch(reset: true, force: true)
     }
 
     public func loadMoreIfNeeded() async {
@@ -432,10 +439,12 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             let _: NotificationActionEcho = try await api.request(
                 NotificationsEndpoints.markRead(id: id)
             )
+            store.markStale(topics: [ScreenTopic.notifications])
         } catch {
             notifications = previous
             unreadCount = previousUnread
             rebuild()
+            actionFailure = "Couldn't mark it as read. Try again."
         }
     }
 
@@ -455,6 +464,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             let _: NotificationActionEcho = try await api.request(
                 NotificationsEndpoints.markAllRead(contexts: activeContexts)
             )
+            store.markStale(topics: [ScreenTopic.notifications])
         } catch {
             notifications = previous
             unreadCount = previousCount
@@ -495,8 +505,10 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             let _: NotificationActionEcho = try await api.request(
                 NotificationsEndpoints.delete(id: id)
             )
+            store.markStale(topics: [ScreenTopic.notifications])
         } catch APIError.notFound {
             // Already deleted (say on another device): the row stays gone.
+            store.markStale(topics: [ScreenTopic.notifications])
         } catch {
             notifications = previous
             unreadCount = previousUnread
@@ -519,6 +531,8 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
         if useScopedZones, !zone.matches(context: dto.context) { return }
         notifications.insert(dto, at: 0)
         if dto.isRead != true { unreadCount += 1 }
+        // The row is here now; stored first pages re-read on the next showing.
+        store.markStale(topics: [ScreenTopic.notifications])
         rebuild()
     }
 
@@ -534,7 +548,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
 
     // MARK: - Fetching
 
-    private func fetch(reset: Bool) async {
+    private func fetch(reset: Bool, force: Bool = false) async {
         if reset {
             loadGeneration &+= 1
             loadMoreError = nil
@@ -542,7 +556,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
         }
         let generation = loadGeneration
         loadingPage = true
-        await fetchPage(reset: reset, generation: generation)
+        await fetchPage(reset: reset, generation: generation, force: force)
         // A late page from an older load must not clear the current load's guard.
         if generation == loadGeneration { loadingPage = false }
     }
@@ -550,7 +564,7 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     /// Pull one page for the active zone. The result is applied only while
     /// `generation` is still current: switching All/Unread/Read or the zone
     /// mid-request must not show the old filter's rows (UX inventory S3-48).
-    private func fetchPage(reset: Bool, generation: Int) async {
+    private func fetchPage(reset: Bool, generation: Int, force: Bool) async {
         let unreadOnly = selectedTab == NotificationsTab.unread
         do {
             let contexts = activeContexts ?? [""]
@@ -560,13 +574,11 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
             var scopedUnread = 0
             var sawUnreadCount = false
             for context in contexts {
-                let response: NotificationsListResponse = try await api.request(
-                    NotificationsEndpoints.list(
-                        limit: pageSize,
-                        offset: nextOffsets[context] ?? 0,
-                        unreadOnly: unreadOnly,
-                        context: context.isEmpty ? nil : context
-                    )
+                let response = try await page(
+                    context: context,
+                    offset: nextOffsets[context] ?? 0,
+                    unreadOnly: unreadOnly,
+                    force: force
                 )
                 incoming.append(contentsOf: response.notifications)
                 nextOffsets[context] = (nextOffsets[context] ?? 0) + response.notifications.count
@@ -591,16 +603,67 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
                 : notifications.filter { $0.isRead != true }.count
             revealZoneStripIfAudienceSeen()
             rebuild()
+        } catch is CancellationError {
+            return
         } catch {
             guard generation == loadGeneration else { return }
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load notifications."
-            if reset {
+            if reset, state.showsContent, !ScreenStore.isRefusal(error) {
+                // The rows stay; a pull to refresh says it failed.
+                if force { actionFailure = "Couldn't refresh notifications. \(message)" }
+            } else if reset {
                 state = .error(message: message)
             } else {
                 // A later page failed: keep the rows; Try again asks for it again.
                 loadMoreError = "Couldn't load more notifications. \(message)"
             }
         }
+    }
+
+    private func pageEndpoint(context: String, offset: Int, unreadOnly: Bool) -> Endpoint {
+        NotificationsEndpoints.list(
+            limit: pageSize,
+            offset: offset,
+            unreadOnly: unreadOnly,
+            context: context.isEmpty ? nil : context
+        )
+    }
+
+    /// The first page of a zone is a store entry; later pages are not.
+    private func page(context: String, offset: Int, unreadOnly: Bool, force: Bool) async throws -> NotificationsListResponse {
+        let endpoint = pageEndpoint(context: context, offset: offset, unreadOnly: unreadOnly)
+        guard offset == 0 else { return try await api.request(endpoint) }
+        return try await store.load(
+            endpoint,
+            as: NotificationsListResponse.self,
+            kind: .notifications,
+            topics: [ScreenTopic.notifications],
+            force: force
+        ).value
+    }
+
+    /// The stored first page of every context in view, in the first frame.
+    private func showStoredFirstPage() {
+        let unreadOnly = selectedTab == NotificationsTab.unread
+        var incoming: [NotificationDTO] = []
+        var nextOffsets: [String: Int] = [:]
+        var anyMore = false
+        var unread = 0
+        for context in activeContexts ?? [""] {
+            guard let copy = store.peek(
+                pageEndpoint(context: context, offset: 0, unreadOnly: unreadOnly),
+                as: NotificationsListResponse.self
+            )?.value else { return }
+            incoming.append(contentsOf: copy.notifications)
+            nextOffsets[context] = copy.notifications.count
+            anyMore = anyMore || (copy.hasMore ?? false)
+            unread += copy.unreadCount ?? copy.notifications.filter { $0.isRead != true }.count
+        }
+        offsets = nextOffsets
+        notifications = Self.sortedByRecency(incoming.filter(Self.isAvailableAtLaunch))
+        hasMore = anyMore
+        unreadCount = unread
+        rebuild()
     }
 
     /// Reveal the Personal / Audience strip once the unscoped list has

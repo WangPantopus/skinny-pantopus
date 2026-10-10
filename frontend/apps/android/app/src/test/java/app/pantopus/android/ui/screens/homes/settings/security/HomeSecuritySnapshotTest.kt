@@ -56,6 +56,7 @@ class HomeSecuritySnapshotTest {
             HomeSecurityViewModel(
                 // setVariant drives the seed synchronously; the repo is unused here.
                 repository = mockk(relaxed = true),
+                gates = mockk(relaxed = true),
                 savedStateHandle = SavedStateHandle(mapOf(HOME_SECURITY_HOME_ID_KEY to "home-1")),
             )
         vm.setVariant(variant)

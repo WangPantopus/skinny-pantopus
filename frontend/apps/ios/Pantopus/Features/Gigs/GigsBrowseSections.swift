@@ -199,7 +199,7 @@ struct GigRailCard: View {
                     // the gig has one; the glyph tile shows while loading
                     // and stays as the no-photo fallback.
                     if let imageUrl = content.imageUrl, let url = URL(string: imageUrl) {
-                        AsyncImage(url: url) { image in
+                        CachedAsyncImage(url: url) { image in
                             image.resizable().aspectRatio(contentMode: .fill)
                         } placeholder: {
                             Color.clear

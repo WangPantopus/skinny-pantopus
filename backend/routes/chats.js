@@ -32,6 +32,7 @@ const {
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const rateLimit = require('express-rate-limit');
+const { pipeline } = require('stream/promises');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 const CHAT_DELETED_REDACT_DAYS = Math.max(parseInt(process.env.CHAT_DELETED_REDACT_DAYS || '180', 10) || 180, 1);
 const REDACTED_DELETED_MESSAGE = '[deleted message]';
@@ -344,6 +345,83 @@ function getVisibleMessagePreview(message) {
     return message.message.substring(0, 100);
   }
   return getAttachmentPreviewLabel(message.attachments || []);
+}
+
+// ── message:new ──────────────────────────────────────────────────────
+// Each active member hears a new message on all their devices, with what their
+// conversation list needs to update the row in place (Instant Screens contract
+// §8): `other_user_id` for a person-to-person chat (direct and task rooms, which
+// the lists merge into one row per person), `preview`, and `unread_for` where
+// the server knows that row's unread count exactly. A recipient's person row
+// just gains one; the sender's own devices never count their message, and when
+// their row isn't certain `other_user_id` stays out so the list reloads. Nobody
+// outside the room's active members hears it.
+
+// The sender's unread count on their row for `otherUserId`: every open direct and
+// task room the two share, as the unified list adds them up, without the room
+// just written to (the sender's own message is never unread to them).
+async function personRowUnread(userId, otherUserId, sentRoomId) {
+  const { data: mine, error } = await supabaseAdmin
+    .from('ChatParticipant')
+    .select('room_id, unread_count, room:room_id!inner(id, type, gig_id)')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .in('room.type', ['direct', 'gig']);
+  if (error || !Array.isArray(mine)) throw new Error(error?.message || 'rooms unavailable');
+  const candidates = mine.filter((row) => String(row.room_id) !== String(sentRoomId));
+  if (candidates.length === 0) return 0;
+  const [{ data: shared, error: sharedError }, closed] = await Promise.all([
+    supabaseAdmin
+      .from('ChatParticipant')
+      .select('room_id')
+      .eq('user_id', otherUserId)
+      .eq('is_active', true)
+      .in('room_id', candidates.map((row) => row.room_id)),
+    closedGigRoomIds(candidates.map((row) => row.room), userId),
+  ]);
+  if (sharedError || !Array.isArray(shared)) throw new Error(sharedError?.message || 'rooms unavailable');
+  const sharedIds = new Set(shared.map((row) => String(row.room_id)));
+  return candidates
+    .filter((row) => sharedIds.has(String(row.room_id)) && !closed.has(String(row.room_id)))
+    .reduce((sum, row) => sum + (Number(row.unread_count) || 0), 0);
+}
+
+async function emitNewMessage(io, { room, message, actorUserId, identityUserId }) {
+  const { connectedUsers } = require('../socket/chatSocketio');
+  const { data: members, error } = await supabaseAdmin
+    .from('ChatParticipant')
+    .select('user_id, unread_count')
+    .eq('room_id', room.id)
+    .eq('is_active', true);
+  if (error || !Array.isArray(members)) throw new Error(error?.message || 'members unavailable');
+  const actor = String(actorUserId);
+  const identity = String(identityUserId);
+  const others = members.filter((row) => ![actor, identity].includes(String(row.user_id)));
+  // Leftover members of an assigned task's room hear nothing, as with its pushes and badges.
+  const recipients = new Set(await gigRoomRecipients(room, others.map((row) => String(row.user_id))));
+  const personChat = room.type === 'direct' || room.type === 'gig';
+  const base = { ...message };
+  const preview = getVisibleMessagePreview(message);
+  if (typeof preview === 'string') base.preview = preview;
+  const emitTo = (userId, payload) => {
+    for (const socketId of connectedUsers.get(userId) || []) io.to(socketId).emit('message:new', payload);
+  };
+  for (const row of others) {
+    const userId = String(row.user_id);
+    if (!recipients.has(userId)) continue;
+    emitTo(userId, personChat
+      ? { ...base, other_user_id: identity }
+      : { ...base, unread_for: Number(row.unread_count) || 0 });
+  }
+  let own = base;
+  if (!personChat) {
+    own = { ...base, unread_for: 0 };
+  } else if (identity === actor && recipients.size === 1) {
+    const [counterpart] = recipients;
+    const unread = await personRowUnread(actor, counterpart, room.id).catch(() => null);
+    if (unread !== null) own = { ...base, other_user_id: counterpart, unread_for: unread };
+  }
+  emitTo(actor, own);
 }
 
 async function resolveRoomPreviewMap(roomPreviews, requestId, logContext) {
@@ -1879,7 +1957,13 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     // Strip actor_user_id from broadcast — it's internal business data.
     const io = req.app.get('io');
     if (io) {
-      io.to(roomId).emit('message:new', serializeChatMessageForViewer(message));
+      const broadcast = serializeChatMessageForViewer(message);
+      emitNewMessage(io, { room, message: broadcast, actorUserId: userId, identityUserId: senderUserId })
+        .catch((emitError) => {
+          // Without the members, the room still hears it as before (the lists reload).
+          logger.warn('message_new_personal_failed', { requestId, roomId, error: emitError.message });
+          io.to(roomId).emit('message:new', broadcast);
+        });
     }
 
     const sideEffectStamp = new Date().toISOString();
@@ -2412,6 +2496,13 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { limit = 100 } = req.query;
     const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
+    // Only what's new (Instant Screens contract §8): `since` (an ISO time) keeps the rows with a message, a read
+    // mark, a new room or topic activity after it. `total` and `totalUnread` still count every row.
+    const sinceRaw = typeof req.query.since === 'string' ? req.query.since.trim() : '';
+    const sinceMs = sinceRaw ? Date.parse(sinceRaw) : null;
+    if (sinceRaw && (!/^\d{4}-\d{2}-\d{2}T/.test(sinceRaw) || !Number.isFinite(sinceMs))) {
+      return res.status(400).json({ error: 'invalid since' });
+    }
 
     // Step 1: Get all rooms the user participates in (active only)
     const { data: myParticipants, error: partErr } = await supabaseAdmin
@@ -2569,7 +2660,21 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       return tb - ta;
     });
 
-    const visibleConversations = conversations.slice(0, lim);
+    let listed = conversations;
+    if (sinceMs !== null) {
+      const newer = (value) => Boolean(value) && Date.parse(value) > sinceMs;
+      const participantByRoom = new Map(roomList.map((p) => [String(p.room_id), p]));
+      const roomChanged = (roomId) => {
+        const p = participantByRoom.get(String(roomId));
+        return newer(convMsgByRoom[roomId]?.created_at) || newer(p?.last_read_at)
+          || newer(p?.room?.updated_at) || newer(p?.room?.created_at);
+      };
+      listed = conversations.filter((conv) => (conv._type === 'room'
+        ? roomChanged(conv.id)
+        : (conv.room_ids || []).some(roomChanged) || (conv.topics || []).some((t) => newer(t.last_activity_at))));
+    }
+
+    const visibleConversations = listed.slice(0, lim);
     const visibleRoomIds = [];
     for (const conv of visibleConversations) {
       if (conv._type === 'room') {
@@ -2886,6 +2991,9 @@ router.get('/messages/:messageId/reactions', verifyToken, async (req, res) => {
 
 // Allow auth token via query param for contexts where headers can't be set
 // (e.g. React Native <Image source={{ uri }}> or <a href> downloads).
+// The chat image types an upload accepts (s3Service ALLOWED_IMAGE_TYPES; never SVG): served from this API.
+const STREAMED_CHAT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/heic', 'image/heif']);
+
 function tokenFromQuery(req, _res, next) {
   if (!req.headers.authorization && !req.cookies?.pantopus_access && req.query.token) {
     req.headers.authorization = `Bearer ${req.query.token}`;
@@ -2935,17 +3043,40 @@ router.get('/files/:fileId', tokenFromQuery, verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to access this file' });
     }
 
-    // Generate a 15-minute signed URL and redirect
-    const signedUrl = await s3Service.getPresignedDownloadUrl(file.file_path, 900);
-
-    // Update access tracking (fire-and-forget)
-    supabaseAdmin
+    const trackAccess = () => supabaseAdmin
       .from('File')
       .update({ access_count: (file.access_count || 0) + 1, last_accessed_at: new Date().toISOString() })
       .eq('id', fileId)
       .then(() => {})
       .catch(() => {});
 
+    // Photos are served here, under this stable address, after the same membership check: a chat file's
+    // bytes never change under its id, so the apps' image caches keep it (private, a year, immutable) and a
+    // repeat ask answers 304. A browser signed in by cookie keeps no copy on disk (Instant Screens contract §5).
+    if (STREAMED_CHAT_IMAGE_TYPES.has(file.mime_type)) {
+      res.set('Cache-Control', req._authMethod === 'cookie' ? 'private, no-store' : 'private, max-age=31536000, immutable');
+      res.set('ETag', `"chat-file-${file.id}"`);
+      if (req.fresh) return res.status(304).end();
+      let object;
+      try {
+        object = await s3Service.getObjectStream(file.file_path);
+      } catch (storageErr) {
+        if (storageErr?.name === 'NoSuchKey' || storageErr?.$metadata?.httpStatusCode === 404) {
+          return res.status(404).json({ error: 'File not found' });
+        }
+        throw storageErr;
+      }
+      res.type(file.mime_type);
+      if (Number.isSafeInteger(object.contentLength)) res.set('Content-Length', String(object.contentLength));
+      trackAccess();
+      return pipeline(object.body, res).catch((streamErr) => {
+        logger.warn('Chat file stream ended early', { requestId: req.requestId, fileId, error: streamErr.message });
+      });
+    }
+
+    // Videos and documents: a 15-minute signed link (range requests, never cached automatically).
+    const signedUrl = await s3Service.getPresignedDownloadUrl(file.file_path, 900);
+    trackAccess();
     res.redirect(302, signedUrl);
   } catch (err) {
     logger.error('Chat file download error', { requestId: req.requestId, userId: req.user?.id, fileId: req.params.fileId, error: err.message });

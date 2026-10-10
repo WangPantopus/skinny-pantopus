@@ -18,6 +18,9 @@ import UnifiedFAB, { routeHasFab } from '@/components/UnifiedFAB';
 import dynamic from 'next/dynamic';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { setMe, useMe } from '@/lib/me';
+import { primaryHomeQuery } from '@/lib/primaryHome';
+import { conversationsQuery } from '@/lib/conversations';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { identityCopy } from '@/lib/identityLabels';
 
@@ -41,6 +44,8 @@ import FloatingPromoModal from '@/components/ui/FloatingPromoModal';
 import NamePrompt from '@/components/profile/NamePrompt';
 import { toast } from '@/components/ui/toast-store';
 import useViewerHome from '@/hooks/useViewerHome';
+import { useTabScroll } from '@/hooks/useTabScroll';
+import { useSyncChanged } from '@/hooks/useSyncChanged';
 import usePromoTriggers from '@/hooks/usePromoTriggers';
 import { prefetchHomeTiles } from '@/utils/tilePrefetch';
 import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated } from '@/lib/feedComposerEvents';
@@ -122,7 +127,6 @@ function sidebarReducer(s: SidebarState, a: SidebarAction): SidebarState {
 
 // ── App-shell reducer ──────────────────────────────────────────
 type AppShellState = {
-  user: User | null;
   discoverQuery: string;
   activeListings: number;
   composerOpen: boolean;
@@ -130,12 +134,10 @@ type AppShellState = {
   feedPosting: boolean;
   mounted: boolean;
 };
-type AppShellAction = { type: 'SET_USER'; value: User | null } | { type: 'SET_DISCOVER_QUERY'; value: string } | { type: 'SET_ACTIVE_LISTINGS'; value: number } | { type: 'SET_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_POSTING'; value: boolean } | { type: 'SET_MOUNTED'; value: boolean };
+type AppShellAction = { type: 'SET_DISCOVER_QUERY'; value: string } | { type: 'SET_ACTIVE_LISTINGS'; value: number } | { type: 'SET_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_COMPOSER_OPEN'; value: boolean } | { type: 'SET_FEED_POSTING'; value: boolean } | { type: 'SET_MOUNTED'; value: boolean };
 
 function appShellReducer(s: AppShellState, a: AppShellAction): AppShellState {
   switch (a.type) {
-    case 'SET_USER':
-      return { ...s, user: a.value };
     case 'SET_DISCOVER_QUERY':
       return { ...s, discoverQuery: a.value };
     case 'SET_ACTIVE_LISTINGS':
@@ -154,7 +156,6 @@ function appShellReducer(s: AppShellState, a: AppShellAction): AppShellState {
 }
 
 const INITIAL_APP_STATE: AppShellState = {
-  user: null,
   discoverQuery: '',
   activeListings: 0,
   composerOpen: false,
@@ -175,6 +176,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  // Each tab's page opens again where you left it.
+  useTabScroll(pathname);
+  // Live change signals mark what this session keeps out of date (contract §8).
+  useSyncChanged();
 
   // ── Responsive ────────────────────────────────────────────
   const { isMdUp, isLgUp } = useBreakpoints();
@@ -190,10 +195,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }));
   const { collapsed, mobileOpen, hoverExpanded } = sidebarState;
 
-  // ── App state (useReducer: user, discoverQuery, activeListings,
+  // ── App state (useReducer: discoverQuery, activeListings,
   //    composerOpen, feedComposerOpen, feedPosting, mounted) ──
   const [appState, appDispatch] = useReducer(appShellReducer, INITIAL_APP_STATE);
-  const { user, discoverQuery, composerOpen, feedComposerOpen, feedPosting, mounted } = appState;
+  const { discoverQuery, composerOpen, feedComposerOpen, feedPosting, mounted } = appState;
 
   useEffect(() => {
     appDispatch({ type: 'SET_MOUNTED', value: true });
@@ -227,17 +232,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false });
   }, [pathname]);
 
-  // ── User fetch ────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = getAuthToken();
-        if (!token) return;
-        const u = await api.users.getMyProfile();
-        appDispatch({ type: 'SET_USER', value: u });
-      } catch {}
-    })();
-  }, []);
+  // ── You: the shared profile entry (lib/me.ts) ─────────────
+  const { data: me } = useMe({ enabled: mounted && !!getAuthToken() });
+  const user: User | null = me ?? null;
 
   // ── Tile prefetch for home area ──────────────────────────────
   const { viewerHome } = useViewerHome();
@@ -593,7 +590,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* Four-tab IA on phone-width web: Place · Today · Nearby · Mail as a
+      {/* Four-tab IA on phone-width web: Place · Today · Nearby · Messages as a
           bottom bar (the sidebar carries it at md+). Business context keeps
           its own navigation. */}
       {showMobileTabs && <MobileTabBar unread={chatUnread} />}
@@ -610,8 +607,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         user={user}
         onOpenChange={setNamePromptOpen}
         onSaved={(saved) => {
-          appDispatch({ type: 'SET_USER', value: user ? { ...user, ...saved } : saved });
-          // The Hub greeting and profile pages read the name from their own queries.
+          setMe(saved);
+          // The Hub greeting and public profile pages read the name from their own queries.
           queryClient.invalidateQueries({ queryKey: queryKeys.hub() });
           queryClient.invalidateQueries({ queryKey: ['profile'] });
         }}
@@ -690,11 +687,7 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
   // intelligence query key needs the home id, not known on hover).
   const prefetchPlace = useCallback(() => {
     router.prefetch('/app/place');
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.placePrimaryHome(),
-      queryFn: () => api.homes.getPrimaryHome(),
-      staleTime: PREFETCH_STALE,
-    });
+    queryClient.prefetchQuery(primaryHomeQuery());
   }, [router, queryClient]);
 
   // Today — the briefing tab; the query key is known ahead of time.
@@ -711,15 +704,11 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
     router.prefetch('/app/nearby');
   }, [router]);
 
-  // Mail — the mailbox plus the Messages inbox (chat lives inside Mail).
+  // Messages — the conversation list (the mailbox too, while Mailbox is on).
   const prefetchMail = useCallback(() => {
-    router.prefetch('/app/mailbox');
+    if (launchFeatures.mailbox) router.prefetch('/app/mailbox');
     router.prefetch('/app/chat');
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.conversations(),
-      queryFn: () => api.chat.getUnifiedConversations({ limit: 200 }),
-      staleTime: PREFETCH_STALE,
-    });
+    queryClient.prefetchQuery(conversationsQuery());
   }, [router, queryClient]);
 
   // Scheduling hub — the hub query key needs the active owner (resolved client-side
@@ -742,16 +731,19 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, on
 
   return (
     <div className="space-y-0.5">
-      {/* Four-tab IA (wedge Phase 1.5): Place · Today · Nearby · Mail —
+      {/* Four-tab IA (wedge Phase 1.5): Place · Today · Nearby · Messages —
           every tab alive at zero density. Today is the briefing; Nearby is
           social discovery at /app/nearby (Pulse / Beacons / Marketplace /
-          Tasks open behind its meter); Mail holds the mailbox AND the
-          Messages inbox (chat routes stay at /app/chat). Hub and the my-x
-          screens keep their routes (deep links resolve) but leave the nav. */}
+          Tasks open behind its meter); Messages is the conversation list at
+          /app/chat (launch cut #10: while Mailbox is on, the tab is Mail and
+          holds the mailbox too). Hub and the my-x screens keep their routes
+          (deep links resolve) but leave the nav. */}
       <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place') || isActive('/app/hub')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
       <SidebarItem icon={NavIcons.today} label="Today" active={startsWith('/app/today') || startsWith('/app/hub/today')} onClick={() => go('/app/today')} onPrefetch={prefetchToday} showLabel={showLabels} testId="sidebar-today" />
       <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/connections') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/nearby')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
-      <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox') || startsWith('/app/chat')} onClick={() => go('/app/mailbox?scope=personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />
+      {launchFeatures.mailbox
+        ? <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox') || startsWith('/app/chat')} onClick={() => go('/app/mailbox?scope=personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />
+        : <SidebarItem icon={NavIcons.messages} label="Messages" active={startsWith('/app/chat')} onClick={() => go('/app/chat')} onPrefetch={prefetchMail} showLabel={showLabels} count={chatUnread} testId="sidebar-mail" />}
       {/* Launch cut #5 (Public scheduling): the Scheduling entry is hidden. */}
       {webFeatureFlags.scheduling && launchFeatures.publicScheduling ? <SidebarItem icon={NavIcons.scheduling} label="Scheduling" active={startsWith('/app/scheduling')} onClick={() => go('/app/scheduling')} onPrefetch={prefetchScheduling} showLabel={showLabels} testId="sidebar-scheduling" /> : null}
       {/* Launch cut #1 (Beacon): Audience and My Beacon are hidden (My Beacon is also #2). */}
@@ -799,16 +791,19 @@ function HomeSidebarContent({ homeId, currentTab, showLabels, onNavigate }: { ho
       {/* Launch cut #7 (Household extras): Bills and Packages are hidden. */}
       {launchFeatures.householdExtras ? <SidebarItem icon={HomeIcons.bills} label="Bills" active={isTabActive('bills')} onClick={() => goTab('bills')} accent="emerald" showLabel={showLabels} /> : null}
       <SidebarItem icon={HomeIcons.members} label="Members" active={isTabActive('members')} onClick={() => goTab('members')} accent="emerald" showLabel={showLabels} />
-      <SidebarItem
-        icon={HomeIcons.mailbox}
-        label="Mailbox"
-        onClick={() => {
-          router.push(`/app/mailbox?scope=home&homeId=${homeId}`);
-          onNavigate();
-        }}
-        accent="emerald"
-        showLabel={showLabels}
-      />
+      {/* Launch cut #10 (Mailbox): the home's mailbox is hidden. */}
+      {launchFeatures.mailbox ? (
+        <SidebarItem
+          icon={HomeIcons.mailbox}
+          label="Mailbox"
+          onClick={() => {
+            router.push(`/app/mailbox?scope=home&homeId=${homeId}`);
+            onNavigate();
+          }}
+          accent="emerald"
+          showLabel={showLabels}
+        />
+      ) : null}
       {/* Launch cuts #5 + #7: the Home scheduling hub is hidden. */}
       {webFeatureFlags.scheduling && launchFeatures.publicScheduling && launchFeatures.householdExtras ? (
         <SidebarItem

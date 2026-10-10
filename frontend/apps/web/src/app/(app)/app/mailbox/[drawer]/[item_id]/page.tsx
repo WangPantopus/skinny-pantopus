@@ -22,6 +22,7 @@ import FamilyMailParty from '@/components/mailbox/FamilyMailParty';
 import CertifiedMailDetail from '@/components/mailbox/CertifiedMailDetail';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername } from '@pantopus/utils';
+import { fetchMe } from '@/lib/me';
 
 /**
  * Mail item detail page — right pane on desktop, full page on mobile.
@@ -56,7 +57,7 @@ export default function ItemDetailPage() {
   const [currentUserName, setCurrentUserName] = useState('');
   useEffect(() => {
     let cancelled = false;
-    api.users.getMyProfile().then(u => {
+    fetchMe().then(u => {
       if (cancelled) return;
       setCurrentUserId(u.id);
       setCurrentUserName(u.name || chosenUsername(u.username) || 'You');

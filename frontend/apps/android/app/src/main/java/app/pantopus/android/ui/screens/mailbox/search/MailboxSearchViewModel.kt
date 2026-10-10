@@ -43,6 +43,10 @@ class MailboxSearchViewModel
         private val _isLoading = MutableStateFlow(true)
         val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+        /** True when the mailbox couldn't be read: the empty state says so instead of "No matching mail". */
+        private val _loadFailed = MutableStateFlow(false)
+        val loadFailed: StateFlow<Boolean> = _loadFailed.asStateFlow()
+
         private var corpus: List<MailItem> = emptyList()
         private var loaded = false
         private var onOpenMail: (String) -> Unit = {}
@@ -52,28 +56,33 @@ class MailboxSearchViewModel
         }
 
         /** Fetch the corpus once; repeat calls are no-ops so typing
-         *  doesn't trigger refetches. */
+         *  doesn't trigger refetches. After a failed read the next call tries again. */
         fun load() {
             if (loaded) return
             _isLoading.value = true
             viewModelScope.launch {
-                corpus =
-                    when (
-                        val result =
-                            repo.list(
-                                viewed = null,
-                                archived = false,
-                                starred = null,
-                                limit = CORPUS_LIMIT,
-                                offset = 0,
-                            )
-                    ) {
-                        is NetworkResult.Success -> result.data.mail
-                        // The shell has no error phase; an unreachable
-                        // mailbox simply yields no matches.
-                        is NetworkResult.Failure -> emptyList()
+                when (
+                    val result =
+                        repo.list(
+                            viewed = null,
+                            archived = false,
+                            starred = null,
+                            limit = CORPUS_LIMIT,
+                            offset = 0,
+                        )
+                ) {
+                    is NetworkResult.Success -> {
+                        corpus = result.data.mail
+                        _loadFailed.value = false
+                        loaded = true
                     }
-                loaded = true
+                    // The shell has no error phase: no results, and the empty
+                    // state says the mailbox couldn't be read.
+                    is NetworkResult.Failure -> {
+                        corpus = emptyList()
+                        _loadFailed.value = true
+                    }
+                }
                 _isLoading.value = false
                 recompute()
             }

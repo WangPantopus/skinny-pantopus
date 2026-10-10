@@ -394,6 +394,13 @@ enum PlacePresentation {
 
     // ── envelope status → card state ───────────────────────────
 
+    /// What a section in error says, and its retry button. A failed or
+    /// out-of-date alerts check reads "Alerts unavailable · Retry", never
+    /// "no alerts" (Instant Screens contract section 4).
+    static func errorWording(for id: PlaceSectionID) -> (title: String, retry: String) {
+        id == .alerts ? ("Alerts unavailable", "Retry") : ("Couldn't load this", "Try again")
+    }
+
     static func cardState(_ env: PlaceSectionEnvelope) -> PlaceSectionCardState {
         switch env.status {
         case .ready, .partial: .loaded
@@ -470,7 +477,12 @@ struct PlaceVerifyLockedItem: Identifiable {
 extension PlacePresentation {
     /// Trust/identity tools shown locked on the claimed (T3) dashboard,
     /// routing to address verification. Port of VERIFY_LOCKED_SECTIONS.
-    static let verifyLockedItems: [PlaceVerifyLockedItem] = [
+    /// Launch cut #10 (Mailbox): no mailbox promise while it is off.
+    static var verifyLockedItems: [PlaceVerifyLockedItem] {
+        allVerifyLockedItems.filter { LaunchFeatures.mailbox || $0.title != "Your mailbox" }
+    }
+
+    private static let allVerifyLockedItems: [PlaceVerifyLockedItem] = [
         .init(
             icon: .messageCircle,
             title: "Neighbor messaging",

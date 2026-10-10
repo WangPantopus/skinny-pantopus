@@ -1,7 +1,20 @@
-import { getTileUrl } from '@/components/map/constants';
+import { getTileUrl, TILE_CACHE_NAME } from '@/components/map/constants';
 
 const SESSION_KEY = 'pantopus-tiles-prefetched';
-const CACHE_NAME = 'pantopus-map-tiles-v1';
+
+/**
+ * Forget every cached tile (they show where the person lives and looked) and
+ * let the next account's home prefetch run. Called when an account's session ends.
+ */
+export function clearCachedMapTiles(): void {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // sessionStorage unavailable — nothing was stored there
+  }
+  if (typeof caches === 'undefined') return;
+  caches.delete(TILE_CACHE_NAME).catch(() => {});
+}
 
 /**
  * Convert lat/lng to slippy-map tile coordinates at a given zoom level.
@@ -43,7 +56,7 @@ export function prefetchHomeTiles(lat: number, lng: number): void {
     : (cb: () => void) => setTimeout(cb, 200);
 
   schedule(async () => {
-    const cache = await caches.open(CACHE_NAME).catch(() => null);
+    const cache = await caches.open(TILE_CACHE_NAME).catch(() => null);
     if (!cache) return;
 
     for (const z of zoomLevels) {

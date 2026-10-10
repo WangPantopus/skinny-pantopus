@@ -5,7 +5,7 @@ package app.pantopus.android.ui.screens.inbox.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.chats.UnifiedConversationDto
-import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatRepository
@@ -16,7 +16,6 @@ import app.pantopus.android.ui.screens.root.badgeUnreadCount
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,27 +72,25 @@ class ChatListViewModel
         private var badgeJob: Job? = null
         private var messageJob: Job? = null
 
+        /**
+         * Tab entry and every return (Instant Screens): the stored list shows at once and is read again only when
+         * it is out of date (30 seconds, or a message sent, read or arrived). Back from a conversation, which
+         * covers the list and whose teardown() stopped the socket listeners: listen again, so the conversation
+         * just read and the messages that arrived meanwhile show (as on iOS).
+         */
         fun load() {
-            if (_state.value is ChatListUiState.Loaded) {
-                // Back from a conversation, which covers the list and whose
-                // teardown() stopped the socket listeners: listen again and
-                // merge a fresh read, so the conversation just read and the
-                // messages that arrived meanwhile show (as on iOS).
-                subscribeToSockets()
-                fetch(keepRowsOnFailure = true)
-                return
-            }
-            fetch()
+            if (_state.value !is ChatListUiState.Loaded) repo.conversationsCopy()?.let(::show)
             subscribeToSockets()
+            fetch(force = false)
         }
 
         /**
-         * Pull-to-refresh and the error frame's Try again. The rows stay while
+         * Pull-to-refresh and the error frame's Try again: read now. The rows stay while
          * the list is re-read, so it can't go stale if the live connection drops.
          */
         fun refresh() {
             _refreshing.value = true
-            fetch()
+            fetch(force = true)
         }
 
         fun selectFilter(filter: ChatFilter) {
@@ -134,34 +131,27 @@ class ChatListViewModel
 
         // MARK: - Fetch
 
-        /** [keepRowsOnFailure]: a failed background re-read leaves a loaded list on screen. */
-        private fun fetch(keepRowsOnFailure: Boolean = false) {
+        /** Reads the list through the store; a failed read keeps the rows on screen (the store keeps its copy too). */
+        private fun fetch(force: Boolean) {
             viewModelScope.launch {
-                val conversationsDeferred = async { repo.unifiedConversations() }
-                val statsDeferred = async { repo.stats() }
-                val conversationsResult = conversationsDeferred.await()
-                val statsResult = statsDeferred.await()
+                val stored = repo.conversationsStored(force)
                 _refreshing.value = false
-
-                val response =
-                    (conversationsResult as? NetworkResult.Success)?.data
-                        ?: run {
-                            if (keepRowsOnFailure && _state.value is ChatListUiState.Loaded) return@launch
-                            val message =
-                                (conversationsResult as? NetworkResult.Failure)
-                                    ?.error?.message
-                                    ?: "Couldn't load conversations."
-                            _state.value = ChatListUiState.Error(message)
-                            return@launch
-                        }
-                val stats = (statsResult as? NetworkResult.Success)?.data?.stats
-                loadPreferences()
-                serverTotalUnread =
-                    stats?.totalUnread ?: response.totalUnread ?: response.conversations.sumOf { it.totalUnread }
-                allRows = response.conversations.map { project(it, mutedKeys) }
-                applyFilter()
-                publishBadgeSnapshot()
+                val response = stored.data
+                when {
+                    response != null -> show(response)
+                    _state.value is ChatListUiState.Loaded || _state.value == ChatListUiState.Empty -> Unit
+                    else -> _state.value = ChatListUiState.Error(stored.failure?.message ?: "Couldn't load conversations.")
+                }
             }
+        }
+
+        /** Projects a list reply: rows, the unread total (the list's own `totalUnread`) and the tab badge. */
+        private fun show(response: UnifiedConversationsResponse) {
+            loadPreferences()
+            serverTotalUnread = response.totalUnread ?: response.conversations.sumOf { it.totalUnread }
+            allRows = response.conversations.map { project(it, mutedKeys) }
+            applyFilter()
+            publishBadgeSnapshot()
         }
 
         private fun publishBadgeSnapshot() {
@@ -262,7 +252,8 @@ class ChatListViewModel
             val targetId = otherUserId ?: roomId ?: return
             val index = allRows.indexOfFirst { it.id == targetId }
             if (index < 0) {
-                fetch()
+                // A conversation the list doesn't have yet: read it now.
+                fetch(force = true)
                 return
             }
             val original = allRows[index]

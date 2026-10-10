@@ -314,6 +314,10 @@ public final class PublicProfileViewModel {
     /// `POST /api/users/:userId/block`.
     public private(set) var blockState: PublicProfileActionState = .idle
 
+    /// True while this account's own block (`UserBlock`) of the person is in
+    /// place: the overflow offers Unblock instead of Block.
+    public private(set) var isBlockedByViewer: Bool = false
+
     /// Drives the privacy handshake sheet for Persona follow/unlock.
     public var showFollowHandshake: Bool = false
     public var handshakePreselectedTierRank: Int?
@@ -352,6 +356,11 @@ public final class PublicProfileViewModel {
     private var profileKind: PublicProfileKind = .persona
     private let currentUserId: String?
     private let client: APIClient
+    /// The screen store (Instant Screens, "Other people": fresh 5 minutes,
+    /// not saved on the phone). The profile and its posts come from it; the
+    /// relationship and block checks that gate Follow and Connect are read
+    /// fresh every time.
+    private let store: ScreenStore
     private let logger = Logger(label: "app.pantopus.ios.PublicProfile")
 
     init(
@@ -363,6 +372,8 @@ public final class PublicProfileViewModel {
         resolvedUserId = userId
         self.currentUserId = currentUserId
         self.client = client
+        store = ScreenStore.store(for: client)
+        showStoredCopy()
     }
 
     /// The signed-in user, so `isOwner` (and the owner chrome behind it)
@@ -375,13 +386,35 @@ public final class PublicProfileViewModel {
         return nil
     }
 
+    /// Opening the profile: the store's copy at once (Follow and Connect wait
+    /// for the relationship read), re-read once out of date.
     public func load() async {
-        state = .loading
-        await fetch()
+        if case .loaded = state {} else { state = .loading }
+        await fetch(force: false)
     }
 
     public func refresh() async {
-        await fetch()
+        await fetch(force: true)
+    }
+
+    /// Reopening a profile seen in the last few minutes shows it at once.
+    private func showStoredCopy() {
+        guard let profile = store.peek(profileEndpoint, as: PublicProfile.self)?.value else { return }
+        resolvedUserId = profile.id
+        let kind = derivedKind(from: profile)
+        profileKind = kind
+        let posts = kind == .local
+            ? store.peek(PostsEndpoints.userPosts(userId: profile.id), as: MyPostsResponse.self)?.value.posts.map { project(post: $0) }
+            : []
+        guard let posts else { return }
+        state = .loaded(build(from: profile, kind: kind, posts: posts))
+    }
+
+    /// A follow, connection or block changed this profile's counts and edges:
+    /// the next opening reads it again, and so do your connection lists.
+    private func profileChanged() {
+        store.remove(profileEndpoint)
+        store.markStale(topics: [ScreenTopic.connections])
     }
 
     // MARK: - Connect control (relationship-aware)
@@ -439,6 +472,7 @@ public final class PublicProfileViewModel {
             )
             connectState = .succeeded
             connection = .pendingSent
+            profileChanged()
             toastMessage = "Connection request sent"
         } catch let error as APIError {
             let message = friendlyMessage(for: error)
@@ -477,6 +511,7 @@ public final class PublicProfileViewModel {
             )
             connectState = .succeeded
             connection = .connected
+            profileChanged()
             toastMessage = "Connected"
         } catch let error as APIError {
             let message = friendlyMessage(for: error)
@@ -514,6 +549,7 @@ public final class PublicProfileViewModel {
             )
             connectState = .idle
             connection = .none
+            profileChanged()
             toastMessage = "Connection removed"
         } catch let error as APIError {
             let message = friendlyMessage(for: error)
@@ -628,10 +664,14 @@ public final class PublicProfileViewModel {
                 as: EmptyResponse.self
             )
             blockState = .succeeded
+            // Blocked lists, the profile's block count and chats change.
+            ScreenStore.shared.markStale(topics: [ScreenTopic.profileMe, ScreenTopic.chats])
             // RN flips `connectionState` to 'blocked' on the same success,
             // which is what drops the Connect / Follow row
             // (`src/app/user/[id].tsx:322`).
             connection = .blocked
+            isBlockedByViewer = true
+            profileChanged()
             toastMessage = "User blocked"
         } catch let error as APIError {
             let message = friendlyMessage(for: error)
@@ -645,9 +685,38 @@ public final class PublicProfileViewModel {
         }
     }
 
-    private func fetch() async {
+    /// Lift this account's own block (`DELETE /api/users/:userId/block`,
+    /// blocks.js:105), as Settings → Blocked users does, then load the profile
+    /// again so posts, Follow and Connect come back.
+    public func unblock() async {
+        guard blockState != .inFlight else { return }
+        blockState = .inFlight
         do {
-            let profile = try await client.request(profileEndpoint, as: PublicProfile.self)
+            _ = try await client.request(
+                BlocksEndpoints.unblock(userId: resolvedUserId),
+                as: EmptyResponse.self
+            )
+            blockState = .idle
+            isBlockedByViewer = false
+            connection = .none
+            toastMessage = "User unblocked"
+            profileChanged()
+            await fetch(force: true)
+        } catch let error as APIError {
+            let message = friendlyMessage(for: error)
+            blockState = .failed(message: message)
+            toastMessage = message
+            logger.warning("Unblock failed: \(error)")
+        } catch {
+            blockState = .failed(message: "Something went wrong")
+            toastMessage = "Couldn't unblock this user"
+            logger.warning("Unblock failed: \(error)")
+        }
+    }
+
+    private func fetch(force: Bool) async {
+        do {
+            let profile = try await store.load(profileEndpoint, as: PublicProfile.self, kind: .otherPeople, force: force).value
             resolvedUserId = profile.id
             let kind = derivedKind(from: profile)
             profileKind = kind
@@ -657,11 +726,18 @@ public final class PublicProfileViewModel {
             // empty list on purpose: that endpoint returns plain posts, not
             // tier-gated broadcasts, and feeding them into the broadcast
             // card would invent a visibility chip the API never sent.
-            let posts = kind == .local ? await loadUserPosts(id: profile.id) : []
+            let posts = kind == .local ? await loadUserPosts(id: profile.id, force: force) : []
             state = .loaded(build(from: profile, kind: kind, posts: posts))
             await loadRelationship(id: profile.id)
+        } catch is CancellationError {
+            return
         } catch let error as APIError {
             logger.warning("Profile load failed: \(error)")
+            // A failed refresh keeps the profile on screen; gone or hidden shows the server's answer.
+            if case .loaded = state, !ScreenStore.isRefusal(error) {
+                if force { toastMessage = friendlyMessage(for: error) }
+                return
+            }
             state = .error(message: friendlyMessage(for: error))
         } catch {
             logger.warning("Profile load failed: \(error)")
@@ -712,7 +788,8 @@ public final class PublicProfileViewModel {
                     BlocksEndpoints.blocked,
                     as: UserBlocksResponse.self
                 )
-                if personal.blocked.contains(where: { $0.userId == id }) {
+                isBlockedByViewer = personal.blocked.contains { $0.userId == id }
+                if isBlockedByViewer {
                     canFollow = false
                     isFollowing = false
                     connection = .blocked
@@ -766,6 +843,7 @@ public final class PublicProfileViewModel {
                 : UserSocialEndpoints.follow(userId: resolvedUserId)
             let response = try await client.request(endpoint, as: UserFollowResponse.self)
             isFollowing = response.following ?? !wasFollowing
+            profileChanged()
             toastMessage = isFollowing ? "Following" : "Unfollowed"
         } catch let error as APIError {
             logger.warning("Follow toggle failed: \(error)")
@@ -797,12 +875,14 @@ public final class PublicProfileViewModel {
     /// `components/profile/PostsTab` fetch. A failure doesn't fail the whole
     /// profile: the feed stays empty and `postsLoadFailed` makes it offer
     /// Try again rather than the design's "Quiet for now" state.
-    private func loadUserPosts(id: String) async -> [PublicProfilePost] {
+    private func loadUserPosts(id: String, force: Bool) async -> [PublicProfilePost] {
         do {
-            let response = try await client.request(
+            let response = try await store.load(
                 PostsEndpoints.userPosts(userId: id),
-                as: MyPostsResponse.self
-            )
+                as: MyPostsResponse.self,
+                kind: .otherPeople,
+                force: force
+            ).value
             postsLoadFailed = false
             return response.posts.map { project(post: $0) }
         } catch {

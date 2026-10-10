@@ -3,6 +3,7 @@ import { validateResidencyProgress } from '../residencyProgressModel';
 import { PendingPostalStore, type PostalSnapshot } from './PendingPostalStore';
 import { postalUUID, validMailingAddress, validPostalOutcome, projectPostalOutcome, validatePostalStatus,
   type MailingAddress, type PostalDraft, type PostalOutcome, type PostalStatus } from './postcardModel';
+import { fetchMe } from '@/lib/me';
 
 type Store = Pick<PendingPostalStore, 'load' | 'save' | 'clear'>;
 const UNKNOWN = 'We couldn’t confirm the result. Your last attempt is kept: check again, try again, or discard it.';
@@ -35,7 +36,7 @@ export class PostalController {
   async open(storeForActor: (actor: string) => Store = actor => new PendingPostalStore(this.origin, actor, this.homeId)) {
     this.requireCurrent();
     if (!postalUUID(this.homeId)) throw new Error('The selected Home could not be checked.');
-    const profile = await api.users.getMyProfile(); this.requireCurrent();
+    const profile = await fetchMe(); this.requireCurrent();
     if (!postalUUID(profile?.id)) throw new Error('Your account could not be checked.');
     this.actorId = profile.id;
     this.store = storeForActor(profile.id);

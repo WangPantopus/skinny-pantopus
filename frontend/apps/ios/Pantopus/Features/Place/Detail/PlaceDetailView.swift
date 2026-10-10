@@ -29,6 +29,8 @@ struct PlaceDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.load() }
+        // The home or today's conditions changed: the open page re-reads, its copy staying shown.
+        .refreshesOnStoreChange(affects: { viewModel.isAffected(by: $0) }, perform: { await viewModel.refreshIfStale() })
         .sheet(isPresented: $viewModel.showVerify) {
             PlaceVerifySheet(
                 address: verifyAddress,
@@ -178,6 +180,7 @@ extension PlaceDetailViewModel {
         let reading = isLive ? PlacePresentation.reading(for: env) : PlaceSectionReading()
         // "Try again" on a section that failed to load re-reads this page.
         let retry: () -> Void = { Task { await self.refresh() } }
+        let wording = PlacePresentation.errorWording(for: env.id)
         PlaceSectionCard(
             icon: cfg.icon,
             title: cfg.title,
@@ -190,7 +193,9 @@ extension PlaceDetailViewModel {
             sparkline: false,
             inline: false,
             onTap: nil,
-            onRetry: retry
+            onRetry: retry,
+            errorTitle: wording.title,
+            retryTitle: wording.retry
         )
     }
 }

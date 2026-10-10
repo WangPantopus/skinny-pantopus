@@ -4,6 +4,7 @@ import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatchJsonAdapter
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
+import app.pantopus.android.data.api.net.ApiOrigin
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.services.HomeTasksApi
@@ -11,6 +12,7 @@ import app.pantopus.android.data.api.services.NotificationPreferencesApi
 import app.pantopus.android.data.api.services.PlaceApi
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.data.homes.HomeTasksRepository
+import app.pantopus.android.data.store.ScreenStore
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -67,8 +69,8 @@ class AuthInterceptorsTest {
     private fun client(): OkHttpClient =
         OkHttpClient
             .Builder()
-            .addInterceptor(DeviceIdentityInterceptor(identity))
-            .addInterceptor(AuthInterceptor(storage, lazyRepo))
+            .addInterceptor(DeviceIdentityInterceptor(identity, ApiOrigin(server.url("/"))))
+            .addInterceptor(AuthInterceptor(storage, lazyRepo, ApiOrigin(server.url("/"))))
             .addNetworkInterceptor(AuthenticatedDispatchGuardInterceptor(storage))
             .addInterceptor(StepUpInterceptor(registry))
             .build()
@@ -186,6 +188,7 @@ class AuthInterceptorsTest {
                 Retrofit.Builder().baseUrl(server.url("/"))
                     .client(client()).addConverterFactory(MoshiConverterFactory.create(moshi))
                     .build().create(HomeTasksApi::class.java),
+                mockk<ScreenStore>(relaxed = true),
             )
         for (operation in listOf("list", "create", "edit", "delete")) {
             var credentials = starting

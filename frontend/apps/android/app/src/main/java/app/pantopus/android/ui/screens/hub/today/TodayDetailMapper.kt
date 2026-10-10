@@ -43,10 +43,11 @@ object TodayDetailMapper {
         val alerts = payload?.alerts ?: emptyList()
         val hasAlert = alerts.isNotEmpty()
         val storedSignals = briefing?.signalsSnapshot ?: emptyList()
-        // Launch cut #7 (Household extras): bill-due and home-calendar signals are hidden.
+        // Launch cut #7 (Household extras): bill-due and home-calendar signals are hidden; #10 (Mailbox): urgent mail.
         val rawSignals =
             (if (storedSignals.isEmpty()) (payload?.signals ?: emptyList()) else storedSignals)
                 .filter { LaunchFeatures.householdExtras || it.kind !in HOUSEHOLD_EXTRAS_SIGNAL_KINDS }
+                .filter { LaunchFeatures.mailbox || it.kind != MAILBOX_SIGNAL_KIND }
         val signals = rawSignals.map { signal(it) }
         val label = payload?.location?.label ?: "Today"
         val storedSummary = briefing?.summaryText?.takeIf { it.isNotEmpty() }
@@ -243,6 +244,9 @@ object TodayDetailMapper {
 
     /** Launch cut #7 (Household extras): signal kinds of bill management and the home calendar. */
     private val HOUSEHOLD_EXTRAS_SIGNAL_KINDS: Set<String?> = setOf("bill_due", "calendar")
+
+    /** The briefing's "N urgent mail" signal, which opens the mailbox. */
+    private const val MAILBOX_SIGNAL_KIND = "mail"
 
     private const val SHARE_FALLBACK = "Today's Pantopus briefing — ${InviteLinks.DOWNLOAD_URL}"
 

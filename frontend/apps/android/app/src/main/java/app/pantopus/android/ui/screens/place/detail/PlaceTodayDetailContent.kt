@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,6 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -90,6 +92,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.net.HttpURLConnection.HTTP_FORBIDDEN
 import java.time.Instant
 import java.time.LocalDate
@@ -114,11 +117,55 @@ private const val RADON_REMINDER_DAYS = 14L
 private const val RADON_DISMISS_DAYS = 30L
 
 /**
+ * What the radon and first-use cards last knew, per home, for one screen's lifetime: a card built again (coming back
+ * to the tab, the app returning from the background) starts from it while it is read again, so it doesn't grow from
+ * "One thing…" to "Two things…" a moment after showing.
+ */
+class RadonTodayMemory {
+    internal val byHome = mutableMapOf<String, RadonSnapshot>()
+
+    /** Reads Today forced (pull to refresh, Retry): each one reads the household's tasks again as well. */
+    var forcedReads by mutableIntStateOf(0)
+        private set
+
+    fun readAgain() {
+        forcedReads++
+    }
+}
+
+internal data class RadonSnapshot(
+    val task: HomeTaskDto?,
+    val canCreate: Boolean,
+    val loaded: Boolean,
+    val firstUseDismissed: Boolean,
+    val dismissedUntil: Long,
+    /** When the tasks were read (wall clock). */
+    val readAt: Long,
+)
+
+/** Contract §4 "Homes and household": a household's tasks are fresh for 2 minutes. */
+private const val RADON_TASKS_FRESH_MS = 2 * 60 * 1000L
+
+/** How current the alert check on screen is (contract §4, Today alerts). */
+enum class TodayAlertsCheck {
+    /** Checked within the last 30 minutes: show the alerts, or the all-clear. */
+    CURRENT,
+
+    /** Older, and being read again now. */
+    CHECKING,
+
+    /** Older, and the last read failed: never shown as "no alerts". */
+    UNAVAILABLE,
+}
+
+/**
  * [onOpenBallot] takes the Ballot P0 card's "Open your ballot" to the
- * Place card; without it the button is left out.
+ * Place card; without it the button is left out. [alertsCheck] replaces the
+ * alerts with an honest line once the check on screen is out of date.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
+@Suppress("LongParameterList")
 fun PlaceTodayDetailContent(
     intel: PlaceIntelligence,
     viewModel: AddressCalendarActions? = null,
@@ -126,10 +173,12 @@ fun PlaceTodayDetailContent(
     pilotEvents: PilotEvents? = null,
     radonContext: (suspend () -> Unit)? = null,
     onOpenBallot: (() -> Unit)? = null,
+    alertsCheck: TodayAlertsCheck = TodayAlertsCheck.CURRENT,
+    radonMemory: RadonTodayMemory? = null,
 ) {
     val homeState =
         if (radonFactory != null && pilotEvents != null && radonContext != null) {
-            rememberHomeTodayState(intel, viewModel, radonFactory, pilotEvents, radonContext)
+            rememberHomeTodayState(intel, viewModel, radonFactory, pilotEvents, radonContext, radonMemory)
         } else {
             null
         }
@@ -181,7 +230,7 @@ fun PlaceTodayDetailContent(
         }
         if (homeState.sheet != null) RadonTaskSheet(homeState)
     }
-    TodayAirAlertsSunSections(intel)
+    TodayAirAlertsSunSections(intel, alertsCheck)
 }
 
 /**
@@ -279,6 +328,42 @@ private fun AlertsCard(active: List<PlaceWeatherAlert>) {
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             active.forEach { AlertRow(it) }
+        }
+    }
+}
+
+/** An alert check past its max shown age: being read again, or "Alerts unavailable · Retry". */
+@Composable
+private fun AlertsOutOfDateCard(checking: Boolean) {
+    val onRetry = LocalPlaceDetailRetry.current
+    PlaceDetailCard(modifier = Modifier.testTag("todayAlertsOutOfDate")) {
+        Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    if (checking) "Checking for alerts…" else "Alerts unavailable",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appText,
+                )
+                Text(
+                    if (checking) "The last check is more than 30 minutes old." else "Couldn't check for alerts just now.",
+                    fontSize = 13.sp,
+                    color = PantopusColors.appTextMuted,
+                )
+            }
+            if (!checking && onRetry != null) {
+                Text(
+                    "Retry",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.primary600,
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(role = Role.Button, onClick = onRetry)
+                            .padding(horizontal = 10.dp, vertical = 12.dp),
+                )
+            }
         }
     }
 }
@@ -478,8 +563,9 @@ private fun UpcomingEvents(
     }
 }
 
-// Home UI preferences are separate from credential and management-token stores.
-private val android.content.Context.homeTodayPreferences by preferencesDataStore(name = "home_today")
+// Home UI preferences are separate from credential and management-token stores. Sign-out clears
+// them (AccountDeviceData), so one DataStore instance serves both.
+internal val android.content.Context.homeTodayPreferences by preferencesDataStore(name = "home_today")
 
 internal object RadonToday {
     fun selected(tasks: List<HomeTaskDto>): HomeTaskDto? {
@@ -555,6 +641,7 @@ private class RadonTodayState(
     private val events: PilotEvents,
     private val preferences: DataStore<Preferences>,
     val hasRadon: Boolean,
+    private val memory: RadonTodayMemory?,
 ) {
     val lifetime = CoroutineScope(parent.coroutineContext + Job(parent.coroutineContext[Job]))
     private var active = true
@@ -580,6 +667,23 @@ private class RadonTodayState(
 
     /** The viewer can't read the household's tasks (e.g. a guest): the card isn't theirs to answer. */
     var noTaskAccess by mutableStateOf(false)
+
+    init {
+        // Start from what the card showed last time; load() reads it again.
+        memory?.byHome?.get(homeId)?.let { last ->
+            task = last.task
+            canCreate = last.canCreate
+            loaded = last.loaded
+            firstUseDismissed = last.firstUseDismissed
+            dismissedUntil = last.dismissedUntil
+            preferencesLoaded = true
+        }
+    }
+
+    private fun keepSnapshot(readAt: Long = memory?.byHome?.get(homeId)?.readAt ?: 0L) {
+        memory?.byHome?.set(homeId, RadonSnapshot(task, canCreate, loaded, firstUseDismissed, dismissedUntil, readAt))
+    }
+
     val hidden get() = noTaskAccess || (task == null && dismissedUntil > Instant.now().toEpochMilli())
 
     private suspend fun requireCurrent() {
@@ -594,7 +698,8 @@ private class RadonTodayState(
         lifetime.cancel()
     }
 
-    suspend fun load() {
+    /** Reads the card's preferences and the home's tasks; [force] reads the tasks even inside their fresh window. */
+    suspend fun load(force: Boolean = false) {
         try {
             requireCurrent()
             val saved = preferences.data.first()
@@ -602,7 +707,15 @@ private class RadonTodayState(
             firstUseDismissed = saved[booleanPreferencesKey("firstUse.dismissed.$homeId")] ?: false
             dismissedUntil = saved[longPreferencesKey("radonCard.dismissedUntil.$homeId")] ?: 0L
             preferencesLoaded = true
-            if (!hasRadon) return
+            if (!hasRadon) {
+                keepSnapshot()
+                return
+            }
+            val readAt = memory?.byHome?.get(homeId)?.readAt ?: 0L
+            if (!force && loaded && System.currentTimeMillis() - readAt in 0 until RADON_TASKS_FRESH_MS) {
+                keepSnapshot()
+                return
+            }
             val response = coordinator.access.list()
             requireCurrent()
             checkNotNull(response.collectionCapabilities)
@@ -610,6 +723,7 @@ private class RadonTodayState(
             canCreate = response.collectionCapabilities.canCreate
             loaded = true
             error = null
+            keepSnapshot(readAt = System.currentTimeMillis())
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: NetworkError) {
@@ -620,6 +734,8 @@ private class RadonTodayState(
             canCreate = false
             noTaskAccess = failure.code == HTTP_FORBIDDEN
             error = if (noTaskAccess) null else "Couldn't check your home's radon tasks. Try again."
+            // Access ended or the read failed: nothing stale is shown next time.
+            memory?.byHome?.remove(homeId)
         } catch (_: Exception) {
             if (runCatching { requireCurrent() }.isFailure) return
             loaded = false
@@ -686,7 +802,7 @@ private class RadonTodayState(
             requireCurrent()
             sheet = null
             retained = null
-            load()
+            load(force = true)
             requireCurrent()
             if (kind != "change") {
                 events.send(
@@ -710,31 +826,50 @@ private class RadonTodayState(
         }
     }
 
-    suspend fun hideFirstUse() {
-        requireCurrent()
-        preferences.edit { it[booleanPreferencesKey("firstUse.dismissed.$homeId")] = true }
-        requireCurrent()
-        firstUseDismissed = true
-    }
+    suspend fun hideFirstUse() =
+        whileCurrent {
+            preferences.edit { it[booleanPreferencesKey("firstUse.dismissed.$homeId")] = true }
+            requireCurrent()
+            firstUseDismissed = true
+            keepSnapshot()
+        }
 
-    suspend fun clearRadonDismissal() {
-        requireCurrent()
-        preferences.edit { it.remove(longPreferencesKey("radonCard.dismissedUntil.$homeId")) }
-        requireCurrent()
-        dismissedUntil = 0L
-    }
+    suspend fun clearRadonDismissal() =
+        whileCurrent {
+            preferences.edit { it.remove(longPreferencesKey("radonCard.dismissedUntil.$homeId")) }
+            requireCurrent()
+            dismissedUntil = 0L
+            keepSnapshot()
+        }
 
-    suspend fun dismiss() {
-        requireCurrent()
-        val until = Instant.now().atZone(ZoneId.systemDefault()).plusDays(RADON_DISMISS_DAYS).toInstant().toEpochMilli()
-        preferences.edit { it[longPreferencesKey("radonCard.dismissedUntil.$homeId")] = until }
-        requireCurrent()
-        dismissedUntil = until
-        events.send(
-            PilotEvents.Event.SuggestionDecision,
-            mapOf("suggestion" to "radon_test", "decision" to "not_now"),
-            coordinator.access.actorId,
-        )
+    suspend fun dismiss() =
+        whileCurrent {
+            val until = Instant.now().atZone(ZoneId.systemDefault()).plusDays(RADON_DISMISS_DAYS).toInstant().toEpochMilli()
+            preferences.edit { it[longPreferencesKey("radonCard.dismissedUntil.$homeId")] = until }
+            requireCurrent()
+            dismissedUntil = until
+            keepSnapshot()
+            events.send(
+                PilotEvents.Event.SuggestionDecision,
+                mapOf("suggestion" to "radon_test", "decision" to "not_now"),
+                coordinator.access.actorId,
+            )
+        }
+
+    /**
+     * Runs a card action that has no error line of its own. When the card no longer belongs to what's on screen (the
+     * home changed, the session ended, the app or phone locked), the guard refuses and the tap does nothing, instead
+     * of the refusal escaping into the card's scope and closing the app.
+     */
+    private suspend fun whileCurrent(action: suspend () -> Unit) {
+        try {
+            requireCurrent()
+            action()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (refused: IllegalStateException) {
+            Timber.w(refused, "radon card action skipped: the card is no longer current")
+        }
     }
 }
 
@@ -745,6 +880,7 @@ private fun rememberHomeTodayState(
     factory: HomeTaskCreationFactory,
     events: PilotEvents,
     contextGuard: suspend () -> Unit,
+    memory: RadonTodayMemory?,
 ): RadonTodayState? {
     val homeId = actions?.calendarHomeId ?: return null
     val hasRadon = intel.section(PlaceSectionId.LEAD_RADON)?.leadRadon?.radonZone in 1..3
@@ -754,7 +890,7 @@ private fun rememberHomeTodayState(
     var paused by remember(homeId) { mutableStateOf(false) }
     val state =
         remember(homeId, intel, epoch) {
-            RadonTodayState(homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon)
+            RadonTodayState(homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon, memory)
         }
     DisposableEffect(state) { onDispose { state.close() } }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
@@ -767,7 +903,10 @@ private fun rememberHomeTodayState(
             epoch++
         }
     }
-    LaunchedEffect(state) { state.load() }
+    // A pull (or Retry) reads the tasks now; otherwise the card's 2-minute window decides.
+    val forcedReads = memory?.forcedReads ?: 0
+    val forcedAtStart = remember(state) { forcedReads }
+    LaunchedEffect(state, forcedReads) { state.load(force = forcedReads != forcedAtStart) }
     return state
 }
 
@@ -988,7 +1127,10 @@ private fun HomeFirstUseCard(
 }
 
 @Composable
-private fun TodayAirAlertsSunSections(intel: PlaceIntelligence) {
+private fun TodayAirAlertsSunSections(
+    intel: PlaceIntelligence,
+    alertsCheck: TodayAlertsCheck,
+) {
     intel.section(PlaceSectionId.AIR_QUALITY)?.let { env ->
         PlaceDetailSectionLabel("Air quality")
         val data = env.airQuality
@@ -1003,7 +1145,9 @@ private fun TodayAirAlertsSunSections(intel: PlaceIntelligence) {
         PlaceDetailSectionLabel("Alerts")
         // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
         val data = env.alerts
-        if (data != null && env.isLive()) {
+        if (alertsCheck != TodayAlertsCheck.CURRENT) {
+            AlertsOutOfDateCard(checking = alertsCheck == TodayAlertsCheck.CHECKING)
+        } else if (data != null && env.isLive()) {
             AlertsCard(data.active)
             PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, "live")
         } else {

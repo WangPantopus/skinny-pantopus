@@ -59,6 +59,9 @@ interface WidgetSnapshotStore {
     /** Last written payload, or null when nothing was ever stored. */
     fun read(): WidgetSnapshotData?
 
+    /** Sign-out: forget the rows; placed widgets ask to open the app. */
+    fun clear()
+
     companion object {
         const val MAX_TASKS: Int = 10
     }
@@ -102,6 +105,11 @@ class WidgetSnapshotStoreImpl
                 prefs.edit().putString(KEY_SNAPSHOT, payload.toString()).apply()
                 requestWidgetUpdate()
             }.onFailure { Timber.w(it, "Failed to write widget snapshot") }
+        }
+
+        override fun clear() {
+            prefs.edit().remove(KEY_SNAPSHOT).commit()
+            requestWidgetUpdate()
         }
 
         override fun read(): WidgetSnapshotData? {

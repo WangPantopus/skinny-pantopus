@@ -92,14 +92,19 @@ final class PlaceDashboardViewModel {
         self.onOpenNotifications = onOpenNotifications
     }
 
+    /// Showing the dashboard: the store's copy at once (another screen may
+    /// have loaded it), then a quiet refresh only when it is out of date.
     func load() async {
-        if case .loaded = state, !reloadPending { return }
-        if reloadPending { state = .loading }
+        if case .loaded = state {} else if let copy = PlaceStoreReads.peek(homeId: homeId) {
+            apply(copy.value)
+        }
+        let force = reloadPending
         reloadPending = false
-        await fetch()
+        await fetch(force: force)
     }
 
-    /// Home tools can change the privacy projection while this view is retained.
+    /// Home tools can change the privacy projection while this view is
+    /// retained: the next showing re-reads it, keeping the dashboard on screen.
     func reloadOnReturn() {
         reloadPending = true
     }
@@ -108,7 +113,7 @@ final class PlaceDashboardViewModel {
         isRefreshing = true
         defer { isRefreshing = false }
         async let unread: Void = refreshUnread()
-        await fetch()
+        await fetch(force: true)
         await unread
     }
 
@@ -116,31 +121,49 @@ final class PlaceDashboardViewModel {
     /// example after the user read their notifications). A failed read
     /// keeps the last count.
     func refreshUnread() async {
-        guard let unread: NotificationUnreadCountResponse = try? await api.request(NotificationsEndpoints.unreadCount)
-        else { return }
+        // The store's count (Notifications: 30 seconds; reading notifications marks it out of date).
+        guard let unread = try? await ScreenStore.store(for: api).load(
+            NotificationsEndpoints.unreadCount,
+            as: NotificationUnreadCountResponse.self,
+            kind: .notifications,
+            topics: [ScreenTopic.notifications]
+        ).value else { return }
         unreadCount = unread.personalBellCount
     }
 
-    private func fetch() async {
+    private func fetch(force: Bool) async {
         do {
-            let intelligence: PlaceIntelligence = try await api.request(
-                PlaceEndpoints.intelligence(homeId: homeId)
-            )
-            // The move-in date rides on the intelligence (it used to need the
-            // whole Home detail, a 403 for a private setup). A failed refresh
-            // keeps the last value, so the card does not blink out.
-            moveInDate = intelligence.moveInDate
-            accessDenied = false
-            state = .loaded(intelligence)
+            let snapshot = try await PlaceStoreReads.load(homeId: homeId, kind: .place, force: force)
+            apply(snapshot.value)
+        } catch is CancellationError {
+            return
         } catch {
-            let message = (error as? APIError)?.errorDescription ?? "Couldn't load your place."
-            if case .loaded = state {
-                // Keep the dashboard on screen; a failed refresh only toasts.
-                refreshFailureMessage = message
-            } else {
-                if case .forbidden = error as? APIError { accessDenied = true } else { accessDenied = false }
+            let apiError = error as? APIError
+            let message = apiError?.errorDescription ?? "Couldn't load your place."
+            switch apiError {
+            case .forbidden, .notFound:
+                // Access ended: the store dropped its copy; show the server's answer.
+                if case .forbidden = apiError { accessDenied = true } else { accessDenied = false }
                 state = .error(message: message)
+            default:
+                if case .loaded = state {
+                    // Keep the dashboard on screen; a failed refresh only toasts.
+                    if force { refreshFailureMessage = message }
+                } else {
+                    accessDenied = false
+                    state = .error(message: message)
+                }
             }
         }
+    }
+
+    private func apply(_ intelligence: PlaceIntelligence) {
+        if case let .loaded(shown) = state, shown == intelligence { return }
+        // The move-in date rides on the intelligence (it used to need the
+        // whole Home detail, a 403 for a private setup). A failed refresh
+        // keeps the last value, so the card does not blink out.
+        moveInDate = intelligence.moveInDate
+        accessDenied = false
+        state = .loaded(intelligence)
     }
 }

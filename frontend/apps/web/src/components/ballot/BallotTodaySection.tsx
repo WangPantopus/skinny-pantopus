@@ -19,19 +19,14 @@ import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import { queryKeys } from '@/lib/query-keys';
 import { ballotCardData } from './BallotCard';
 import BallotTodayCard, { hasBallotToday } from './BallotTodayCard';
+import { usePrimaryHome } from '@/lib/primaryHome';
 
 /** The Ballot P0 card data for the primary home, or null (flag off, no home, nothing to show, a failure). */
 export function useBallotToday(enabled = true): PlaceBallotElectionData | null {
   const flag = useFeatureFlagState('ballot_p0', { enabled });
   const allowed = enabled && flag.enabled;
 
-  const homeQuery = useQuery({
-    queryKey: queryKeys.placePrimaryHome(),
-    queryFn: async () => api.homes.getPrimaryHome(),
-    enabled: allowed,
-    staleTime: 60_000,
-    retry: false,
-  });
+  const homeQuery = usePrimaryHome({ enabled: allowed, retry: false });
   const homeId = homeQuery.data?.home?.id ?? null;
 
   const ballotQuery = useQuery({

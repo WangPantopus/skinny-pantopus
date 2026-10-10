@@ -65,7 +65,8 @@ export default function StatusStrip({
   if (!setupDone) {
     neutralPills.push({ id: 'n-setup', icon: <Zap className="w-4 h-4" />, label: `Finish setup (${setupCompleted}/${setupTotal})`, route: '/app/profile/edit', severity: 'neutral' });
   }
-  if (hasHome && activeHomeId) {
+  // Launch cut #10 (Mailbox): no "Check mailbox".
+  if (launchFeatures.mailbox && hasHome && activeHomeId) {
     neutralPills.push({ id: 'n-mailbox', icon: <Mail className="w-4 h-4" />, label: 'Check mailbox', route: `/app/mailbox?scope=home&homeId=${activeHomeId}`, severity: 'neutral' });
   }
   neutralPills.push({ id: 'n-invite', icon: <Handshake className="w-4 h-4" />, label: 'Invite a friend', route: '/app/connections', severity: 'neutral' });

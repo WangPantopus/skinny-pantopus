@@ -104,7 +104,13 @@ struct JustMovedCard: View {
         let target: PlaceDetailGroup?
     }
 
-    private static let steps: [Step] = [
+    /// Launch cut #10 (Mailbox): returning the previous resident's mail opens
+    /// My mail day, so that step waits for the mailbox.
+    private static var steps: [Step] {
+        allSteps.filter { $0.id != .mail || LaunchFeatures.mailbox }
+    }
+
+    private static let allSteps: [Step] = [
         Step(id: .pickup, icon: .trash2, label: "Set your pickup day", payoff: "Reminders the night before, every week", target: .today),
         Step(
             id: .mail,

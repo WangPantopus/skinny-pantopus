@@ -6,6 +6,7 @@ import { validInvitationSession, validRemovalInput, validateRemovalContext, vali
   type RemovalInput, type RemovalSession, type RemovalContext, type RemovalDraft, type RemovalOutcome } from './removalModel';
 import { invitationUUID as uuid } from '../../homes/invitations/invitationDecisionModel';
 import { chosenUsername } from '@pantopus/utils';
+import { fetchMe } from '@/lib/me';
 
 type Store = Pick<PendingRemovalStore, 'load' | 'save' | 'clear'>;
 export const removalBase = '/api/homes/member-removals';
@@ -50,7 +51,7 @@ export class RemovalController {
     if (!validInvitationSession(response.data?.session)) throw new Error('Your signed-in session could not be checked.');
     this.session = response.data.session;
     let profile: Awaited<ReturnType<typeof api.users.getMyProfile>> | null = null;
-    try { profile = await api.users.getMyProfile(); } catch (error) { this.authenticationFailure(error); }
+    try { profile = await fetchMe(); } catch (error) { this.authenticationFailure(error); }
     this.requireCurrent();
     if (profile && profile.id !== this.session.actor_id) { this.retire(); throw new Error('Your account changed. Reload to continue.'); }
     this.accountLabel = profile?.name || chosenUsername(profile?.username) || 'Your current account';

@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
+const compression = require('compression');
 const fs = require('fs');
 const dotenvPath = fs.existsSync('.env') ? '.env' : '.env.dev';
 require('dotenv').config({ path: dotenvPath });
@@ -199,9 +200,18 @@ app.use(cors(corsOptions));
 app.use(helmet());
 
 // The answer to a write is never reusable, and sign-in, refresh, reset-password, OAuth and resume answers carry
-// tokens: without this, iOS's disk cache keeps them. A route that sets its own Cache-Control keeps it.
+// tokens: without this, iOS's disk cache keeps them. A read sent with an account's credentials (the apps' Bearer,
+// the web's access cookie) answers with that account's data, such as door codes, fridge cards, the wallet or the
+// profile; without a Cache-Control, HTTP caches on the phone and in the browser keep a copy on disk.
+// A route that sets its own Cache-Control keeps it, and Express's ETag is unchanged.
+// cookieParser runs later, so the access cookie is read from the raw header.
+const ACCESS_COOKIE = /(?:^|;\s*)pantopus_access=/;
 app.use('/api', (req, res, next) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') res.setHeader('Cache-Control', 'no-store');
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    if (req.headers.authorization || ACCESS_COOKIE.test(req.headers.cookie || '')) res.setHeader('Cache-Control', 'private, no-store');
+  } else if (req.method !== 'OPTIONS') {
+    res.setHeader('Cache-Control', 'no-store');
+  }
   next();
 });
 
@@ -235,6 +245,13 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '20mb' }));
 
 // Cookie parsing (AUTH-3.3) — after body parsers, after webhook routes
 app.use(cookieParser());
+
+// Compress JSON answers over 1 KB for clients that accept it (the apps' HTTP stacks and browsers do, and decompress
+// transparently). Only JSON: event streams must flush as they go, and files keep their own encoding.
+const JSON_TYPE = /^application\/(?:[\w.+-]+\+)?json\b/i;
+app.use(compression({
+  filter: (req, res) => JSON_TYPE.test(String(res.getHeader('Content-Type') || '')) && compression.filter(req, res),
+}));
 
 // NOTE: CSRF protection is applied per-route AFTER verifyToken (which
 // sets req._authMethod). See verifyToken.js for the combined middleware.
@@ -610,6 +627,7 @@ const gracefulShutdown = async (signal) => {
   await stopPgBoss().catch((err) => {
     logger.error('[pg-boss] Error during shutdown:', { error: err.message });
   });
+  await require('./services/syncChangedService').stop();
 
   server.close(() => {
     logger.info('HTTP server closed');

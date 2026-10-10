@@ -6,10 +6,13 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { skipForLaunchCut } = require('../utils/featureFlags');
 
 const FLAG_THRESHOLD = 3; // 3+ concerned reactions triggers review
 
 async function communityModeration() {
+  // Launch cut #10 (Mailbox): mailbox jobs don't run while the mailbox is off.
+  if (skipForLaunchCut('mailbox', 'communityModeration')) return;
   logger.info('[CommunityMod] Starting community moderation check');
 
   // Find items with 3+ concerned reactions

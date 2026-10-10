@@ -14,12 +14,11 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-
-const CACHE_NAME = 'pantopus-map-tiles-v1';
+import { TILE_CACHE_NAME } from './constants';
 
 function openTileCache(): Promise<Cache | null> {
   if (typeof caches === 'undefined') return Promise.resolve(null);
-  return caches.open(CACHE_NAME).catch(() => null);
+  return caches.open(TILE_CACHE_NAME).catch(() => null);
 }
 
 /**

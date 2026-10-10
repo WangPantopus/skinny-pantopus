@@ -304,6 +304,8 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                     request: ChangeMemberRoleRequest(roleBase: role.rawValue)
                 )
             )
+            // The Home's kept copies (dashboard, settings, lists) are out of date (Instant Screens).
+            ScreenStore.store(for: api).markStale(topics: [ScreenTopic.home(homeId)])
             await fetch()
         } catch {
             actionError = (error as? APIError)?.errorDescription

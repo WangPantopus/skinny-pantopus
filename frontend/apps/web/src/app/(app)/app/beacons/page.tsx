@@ -6,16 +6,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { BeaconFollowingItem } from '@pantopus/types';
 import { webFeatureFlags } from '@/lib/featureFlags';
+import { useMe } from '@/lib/me';
 
 export default function BeaconsPage() {
   const client = useQueryClient();
-  const viewer = useQuery({
-    queryKey: ['beacons', 'viewer'],
-    queryFn: () => api.users.getMyProfile(),
-    staleTime: 0,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
+  const viewer = useMe();
   useEffect(
     () =>
       api.onTokenChange(() => {
@@ -23,7 +18,7 @@ export default function BeaconsPage() {
       }),
     [client],
   );
-  if (viewer.isPending || viewer.isFetching)
+  if (viewer.isPending)
     return (
       <p role="status" className="p-6">
         Loading Beacons…

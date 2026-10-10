@@ -61,11 +61,10 @@ export default function MailboxNav({ composeSlot }: MailboxNavProps) {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Fetch drawer metadata (live counts, 30s polling)
-  const { data: drawers } = useDrawerMeta({ refetchInterval: 30_000 });
-
-  // Counter items for badge
-  const { data: counterItems } = useCounterItems({ refetchInterval: 30_000 });
+  // Drawer metadata and Counter items for the badges. No polling: they
+  // refresh when they go stale and when mail actions invalidate them.
+  const { data: drawers } = useDrawerMeta();
+  const { data: counterItems } = useCounterItems();
   const counterCount = counterItems?.length ?? 0;
 
   const isActive = (href: string, matchPrefix?: string) => {

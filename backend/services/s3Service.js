@@ -62,9 +62,18 @@ function buildPutObjectParams(baseParams) {
   return baseParams;
 }
 
+// Every key is new for its bytes (a timestamp and random part, or a content hash), so a file never changes under
+// its key: a client keeps it for a year without asking again. Chat files are private (served to room members
+// through GET /api/chat/files/:id); everything else uploaded here is public. Before October 9 objects carried no
+// cache metadata, so clients revalidated each view, and local Supabase storage answers a conditional GET with 200
+// and an empty body (Android chat photos went blank from the second view).
+const PUBLIC_IMMUTABLE = 'public, max-age=31536000, immutable';
+const PRIVATE_IMMUTABLE = 'private, max-age=31536000, immutable';
+
 async function uploadToS3(buffer, key, contentType, objectMetadata) {
   const cmd = new PutObjectCommand(
     buildPutObjectParams({ Bucket: S3_BUCKET, Key: key, Body: buffer, ContentType: contentType,
+      CacheControl: key.startsWith('chat/') ? PRIVATE_IMMUTABLE : PUBLIC_IMMUTABLE,
       ...(objectMetadata ? { Metadata: objectMetadata } : {}) })
   );
   await s3Client.send(cmd);
@@ -381,6 +390,12 @@ async function getPresignedDownloadUrl(key, expiresIn = 3600) {
   return getSignedUrl(s3Client, new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }), { expiresIn });
 }
 
+// An object's bytes as a stream, for the API to serve under its own address.
+async function getObjectStream(key, bucket = S3_BUCKET) {
+  const response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  return { body: response.Body, contentLength: response.ContentLength };
+}
+
 async function getObjectAsString(key, bucket = S3_BUCKET) {
   const response = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   if (!response.Body) return '';
@@ -417,6 +432,6 @@ module.exports = {
   uploadPrivateGigCompletionFile, downloadPrivateGigCompletionFile, removePrivateGigCompletionFile,
   createPrivateGigCompletionFile, readAuthorizedGigCompletionFile,
   uploadHomeTaskMedia, uploadReviewMedia, uploadListingMedia, uploadGeneral,
-  deleteFromS3, getPresignedDownloadUrl, getObjectAsString, getPresignedUploadUrl,
+  deleteFromS3, getPresignedDownloadUrl, getObjectStream, getObjectAsString, getPresignedUploadUrl,
   ALL_ALLOWED_TYPES, ALLOWED_IMAGE_TYPES, ALLOWED_VIDEO_TYPES, ALLOWED_DOC_TYPES, MAX_FILE_SIZES,
 };
