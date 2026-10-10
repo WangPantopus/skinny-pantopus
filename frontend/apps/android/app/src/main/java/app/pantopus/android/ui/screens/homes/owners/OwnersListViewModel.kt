@@ -127,11 +127,11 @@ class OwnersListViewModel
         val access: StateFlow<HomeAccessDto?> = confirmedAccess.asStateFlow()
 
         private val canManageOwnership: Boolean
-            get() = confirmedAccess.value?.can("ownership.manage") == true
+            get() = active && !removingOwner && confirmedAccess.value?.can("ownership.manage") == true
 
-        /** Cached roster — preserves backend ordering and drives
-         *  optimistic-remove rollback. */
+        /** Cached roster, preserving backend ordering. Access changes wait for confirmation. */
         private var owners: List<OwnerDto> = emptyList()
+        private var removingOwner = false
 
         /**
          * Screen entry and every return (Instant Screens): owners see the stored roster at once, and the store
@@ -236,26 +236,26 @@ class OwnersListViewModel
          */
         fun handleInviteCompleted() = reload(force = true)
 
-        /** Optimistic remove + rollback on failure. */
+        /** Ownership changes never appear confirmed before the server accepts them (contract §3). */
         fun removeOwner(ownerId: String) {
-            if (!canManageOwnership) return
+            if (!canManageOwnership || owners.none { it.id == ownerId }) return
             val revision = readGeneration
-            val previous = owners
-            if (previous.none { it.id == ownerId }) return
             _removalError.value = null
-            owners = previous.filter { it.id != ownerId }
-            applyState()
+            removingOwner = true
             viewModelScope.launch {
-                when (repo.remove(homeId, ownerId)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        if (!active || revision != readGeneration) return@launch
-                        owners = previous
-                        applyState()
-                        _removalError.value =
-                            "We couldn't confirm the owner removal. " +
-                            "Refresh owners to check the current access before trying again."
+                try {
+                    val result = repo.remove(homeId, ownerId)
+                    if (!active || revision != readGeneration) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> owners = owners.filter { it.id != ownerId }
+                        is NetworkResult.Failure ->
+                            _removalError.value =
+                                "We couldn't confirm the owner removal. " +
+                                "Refresh owners to check the current access before trying again."
                     }
+                } finally {
+                    removingOwner = false
+                    if (active && revision == readGeneration) applyState()
                 }
             }
         }
@@ -310,7 +310,7 @@ class OwnersListViewModel
                     _access.value = viewer
                     // Confirmed = the server answered for this access within the Homes window (a fresh copy or this read);
                     // an older copy kept after a failed re-read (offline) shows the roster but confirms nothing.
-                    confirmedAccess.value = viewer.takeIf { access.isFresh(StoreKind.HOMES) }
+                    confirmedAccess.value = viewer.takeIf { access.failure == null && access.isFresh(StoreKind.HOMES) }
                     owners = list.owners
                     applyState()
                 }

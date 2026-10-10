@@ -29,6 +29,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -348,14 +349,16 @@ class OwnersListViewModelTest {
     // MARK: - Mutations
 
     @Test
-    fun remove_owner_optimistically_drops_row() =
+    fun remove_owner_waits_for_confirmation_before_dropping_row() =
         runTest {
             coEvery { repo.list("home_1") } returns NetworkResult.Success(OwnersResponse(owners = threeOwners))
-            coEvery { repo.remove("home_1", "o2") } returns
-                NetworkResult.Success(RemoveOwnerResponse(message = "Owner removed"))
+            val pending = CompletableDeferred<NetworkResult<RemoveOwnerResponse>>()
+            coEvery { repo.remove("home_1", "o2") } coAnswers { pending.await() }
             val vm = makeVm()
             vm.load()
             vm.removeOwner("o2")
+            assertEquals(3, (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows.size)
+            pending.complete(NetworkResult.Success(RemoveOwnerResponse(message = "Owner removed")))
             val loaded = vm.state.value as ListOfRowsUiState.Loaded
             assertEquals(2, loaded.sections.first().rows.size)
             assertNull(loaded.sections.first().rows.firstOrNull { it.id == "o2" })
@@ -363,7 +366,7 @@ class OwnersListViewModelTest {
         }
 
     @Test
-    fun remove_failure_rolls_back() =
+    fun remove_failure_keeps_the_roster() =
         runTest {
             coEvery { repo.list("home_1") } returns NetworkResult.Success(OwnersResponse(owners = threeOwners))
             coEvery { repo.remove("home_1", "o2") } returns
