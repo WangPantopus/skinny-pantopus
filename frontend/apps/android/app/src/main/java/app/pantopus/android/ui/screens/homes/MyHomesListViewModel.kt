@@ -261,6 +261,11 @@ class MyHomesListViewModel
             if (!visible) read(force = false)
         }
 
+        /** A change signal while visible bypasses the duplicate-entry guard and reads quietly. */
+        fun recheck() {
+            if (visible) read(force = false)
+        }
+
         /** Pull to refresh, Retry and after a delete: read now. */
         fun refresh() = read(force = true)
 
