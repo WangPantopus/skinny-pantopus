@@ -119,19 +119,21 @@ fun HomeCopyLifecycle(
     val currentPause by rememberUpdatedState(pause)
     DisposableEffect(owner) {
         var active = false
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> if (!active) {
-                    active = true
-                    currentLoad()
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME ->
+                        if (!active) {
+                            active = true
+                            currentLoad()
+                        }
+                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                        active = false
+                        currentPause()
+                    }
+                    else -> Unit
                 }
-                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
-                    active = false
-                    currentPause()
-                }
-                else -> Unit
             }
-        }
         owner.lifecycle.addObserver(observer)
         onDispose {
             owner.lifecycle.removeObserver(observer)
