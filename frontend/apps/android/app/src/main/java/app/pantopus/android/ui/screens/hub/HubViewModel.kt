@@ -19,6 +19,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigExtrasRepository
 import app.pantopus.android.data.hub.HubRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -165,6 +167,9 @@ class HubViewModel
         /** True only while a pull or Retry reads with the hub on screen; a return never shows the indicator. */
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
         init {
             showStoredCopies()
         }
@@ -261,6 +266,7 @@ class HubViewModel
         ) {
             readAtVersion = ProfileChanges.version.value
             val overview = repo.overviewStored(forceOverview)
+            _refreshNotice.value = RefreshNotice(overview.fetchedAt, ::refresh).takeIf { overview.showsRefreshFailure(StoreKind.HOMES) }
             val hub = overview.data
             if (hub == null) {
                 val failure = overview.failure
@@ -270,12 +276,20 @@ class HubViewModel
             }
             val filter = _discoveryFilter.value.queryValue
             val generation = discoveryGeneration
-            val (today, discovery) =
+            val (todayRead, discoveryRead) =
                 coroutineScope {
-                    val todayJob = async { repo.todayStored(force).data }
-                    val discoveryJob = async { repo.discoveryStored(filter, force).data }
+                    val todayJob = async { repo.todayStored(force) }
+                    val discoveryJob = async { repo.discoveryStored(filter, force) }
                     todayJob.await() to discoveryJob.await()
                 }
+            val today = todayRead.data
+            val discovery = discoveryRead.data
+            if (_refreshNotice.value == null && todayRead.showsRefreshFailure(StoreKind.TODAY)) {
+                _refreshNotice.value = RefreshNotice(todayRead.fetchedAt, ::refresh)
+            }
+            if (_refreshNotice.value == null && discoveryRead.showsRefreshFailure(StoreKind.NEARBY)) {
+                _refreshNotice.value = RefreshNotice(discoveryRead.fetchedAt, ::refresh)
+            }
             // S5 — the per-firewall unread split powers the megaphone shortcut; a failure just hides it.
             val unread = (notificationsRepo.unreadCount() as? NetworkResult.Success)?.data
             // Launch cut #4 (Open Gigs) hides the rebook cards, so nothing is asked for them.
