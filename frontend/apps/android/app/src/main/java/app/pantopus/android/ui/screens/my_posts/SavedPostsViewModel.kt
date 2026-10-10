@@ -120,9 +120,8 @@ class SavedPostsViewModel
             }
         }
 
-        /** Keep later pages below the newest bookmark returned; changes in the head shift the next save offset. */
+        /** Keep later pages below the newest bookmark returned, then resume from the server's current save offset. */
         private fun replaceRefreshedHead(response: SavedPostsResponse) {
-            val previousSize = posts.size
             val boundary = response.posts.lastOrNull()?.savedAt?.let { MyPostsViewModel.parseInstant(it) }
             val refreshedIds = response.posts.mapTo(HashSet()) { it.id }
             val older = if (response.pagination?.hasMore == true && boundary != null) {
@@ -133,11 +132,9 @@ class SavedPostsViewModel
                 emptyList()
             }
             posts = (response.posts + older).distinctBy { it.id }
-            nextOffset = if (older.isEmpty()) {
-                nextOffsetAfter(response)
-            } else {
-                nextOffset?.let { maxOf(response.pagination?.nextOffset ?: 0, it + posts.size - previousSize) }
-            }
+            // Offsets count raw saves, including posts hidden by the visibility check. A visible-row delta cannot
+            // adjust them safely; paging rechecks the retained tail and skips duplicates until it reaches new rows.
+            nextOffset = nextOffsetAfter(response)
         }
 
         /** Footer reached: append the next page of saves. A failed page keeps the rows and offers Try again. */
@@ -151,15 +148,19 @@ class SavedPostsViewModel
                 val result = postsRepo.savedPosts(limit = PAGE_SIZE, offset = offset)
                 if (gen != generation) return@launch
                 loadingMore = false
+                var addedRows = false
                 when (result) {
                     is NetworkResult.Success -> {
                         val seen = posts.mapTo(HashSet()) { it.id }
-                        posts = posts + result.data.posts.filter { it.id !in seen }
+                        val fresh = result.data.posts.filter { it.id !in seen }
+                        addedRows = fresh.isNotEmpty()
+                        posts = posts + fresh
                         nextOffset = nextOffsetAfter(result.data)
                     }
                     is NetworkResult.Failure -> loadMoreFailed = true
                 }
                 applyState()
+                if (result is NetworkResult.Success && !addedRows && nextOffset != offset) loadMoreIfNeeded()
             }
         }
 
