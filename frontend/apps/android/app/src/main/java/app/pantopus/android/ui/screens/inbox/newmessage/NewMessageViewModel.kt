@@ -170,7 +170,8 @@ class NewMessageViewModel
                         false
                     }
                 }
-            if (!connectionsOk && !recentsOk && accepted.isEmpty() && recents.isEmpty()) {
+            val nothingToShow = accepted.isEmpty() && recents.isEmpty()
+            if (!connectionsOk && !recentsOk && nothingToShow) {
                 _state.value = NewMessageUiState.Error("Couldn't load contacts. Try again.")
                 return
             }

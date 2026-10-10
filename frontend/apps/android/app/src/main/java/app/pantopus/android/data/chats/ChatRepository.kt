@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.chats.SendChatMessageResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.net.mapFresh
@@ -127,7 +128,7 @@ class ChatRepository
         ): NetworkResult<ChatMessagesResponse> =
             also {
                 if (it is NetworkResult.Failure &&
-                    (it.error is NetworkError.Forbidden || it.error == NetworkError.NotFound || it.error == NetworkError.Unauthorized)
+                    (it.error.refusesStoredCopy)
                 ) {
                     store.remove(key)
                 }

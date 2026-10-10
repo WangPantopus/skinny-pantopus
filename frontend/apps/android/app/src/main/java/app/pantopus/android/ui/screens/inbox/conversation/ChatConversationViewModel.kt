@@ -1408,16 +1408,22 @@ class ChatConversationViewModel
          * replaces what it covers; older pages the reader loaded and rows newer than the page (a send that landed
          * meanwhile) stay. A failed quiet read keeps the thread as it is.
          */
+        private data class HistoryReadContext(
+            val generation: Long,
+            val mode: ChatThreadMode,
+            val user: String?,
+            val topicId: String?,
+        )
+
+        private fun historyContext() = HistoryReadContext(historyGeneration, mode, currentUserId, _selectedTopicId.value)
+
         private fun fetch(
             initial: Boolean,
             before: String? = null,
             quiet: Boolean = false,
             force: Boolean = false,
         ) {
-            val requestedGeneration = historyGeneration
-            val requestedMode = mode
-            val requestedUser = currentUserId
-            val requestedTopicId = _selectedTopicId.value
+            val context = historyContext()
             val copied = initial && !quiet && showHistoryCopy()
             val keepMessages = quiet || copied
             viewModelScope.launch {
@@ -1438,44 +1444,49 @@ class ChatConversationViewModel
                     return@launch
                 }
                 val response =
-                    when (val target = mode) {
+                    when (val target = context.mode) {
                         is ChatThreadMode.Room -> repo.roomMessages(target.id, before, force = force)
                             is ChatThreadMode.Person ->
-                                repo.conversationMessages(target.otherUserId, before, topicId = requestedTopicId, force = force)
+                                repo.conversationMessages(target.otherUserId, before, topicId = context.topicId, force = force)
                         ChatThreadMode.Ai -> return@launch
                     }
                 // The topic changed while this page was in flight (the opening topic
                 // resolves alongside the first fetch); the fetch for it owns the thread.
-                if (requestedGeneration != historyGeneration ||
-                    requestedTopicId != _selectedTopicId.value ||
-                    requestedMode != mode ||
-                    requestedUser != currentUserId) return@launch
-                when (response) {
-                    is NetworkResult.Success -> {
-                        historyRefusal = null
-                        val keptOlder = placePage(response.data.messages, keepMessages)
-                        retireConfirmedSends(response.data.messages)
-                        updateActiveRooms(response.data)
-                        // Older pages kept under a quiet read keep their own cursor.
-                        if (!keptOlder) {
-                            hasMore = response.data.hasMore ?: false
-                            oldestCursor =
-                                response.data.nextCursor
-                                    ?: paginationCursor(messages.firstOrNull())
-                        }
-                        rebuild()
-                        joinActiveRoomsIfPossible()
-                        scheduleMarkRead()
-                        if (initial) prefetchDirectRoomIfNeeded()
+                if (context != historyContext()) return@launch
+                publishHistoryPage(response, keepMessages, initial)
+            }
+        }
+
+        private fun publishHistoryPage(
+            response: NetworkResult<ChatMessagesResponse>,
+            keepMessages: Boolean,
+            initial: Boolean,
+        ) {
+            when (response) {
+                is NetworkResult.Success -> {
+                    historyRefusal = null
+                    val keptOlder = placePage(response.data.messages, keepMessages)
+                    retireConfirmedSends(response.data.messages)
+                    updateActiveRooms(response.data)
+                    // Older pages kept under a quiet read keep their own cursor.
+                    if (!keptOlder) {
+                        hasMore = response.data.hasMore ?: false
+                        oldestCursor =
+                            response.data.nextCursor
+                                ?: paginationCursor(messages.firstOrNull())
                     }
-                    is NetworkResult.Failure -> {
-                        if (historyAccessEnded(response.error)) {
-                            refuseHistory(response.error)
-                        } else if (initial && !keepMessages) {
-                            _state.value = ChatConversationUiState.Error(response.error.message)
-                        } else {
-                            Timber.w("chat refresh or pagination failed: ${response.error.message}")
-                        }
+                    rebuild()
+                    joinActiveRoomsIfPossible()
+                    scheduleMarkRead()
+                    if (initial) prefetchDirectRoomIfNeeded()
+                }
+                is NetworkResult.Failure -> {
+                    if (historyAccessEnded(response.error)) {
+                        refuseHistory(response.error)
+                    } else if (initial && !keepMessages) {
+                        _state.value = ChatConversationUiState.Error(response.error.message)
+                    } else {
+                        Timber.w("chat refresh or pagination failed: ${response.error.message}")
                     }
                 }
             }
@@ -1844,10 +1855,9 @@ class ChatConversationViewModel
         private fun catchUpMessages() {
             val after = messages.maxByOrNull { it.createdAt }?.createdAt ?: return
             if (catchUpJob?.isActive == true || mode is ChatThreadMode.Ai) return
-            val generation = historyGeneration
-            val target = mode
-            val user = currentUserId
-            val topic = _selectedTopicId.value
+            val context = historyContext()
+            val target = context.mode
+            val topic = context.topicId
             catchUpJob = viewModelScope.launch {
                 var before: String? = null
                 do {
@@ -1857,10 +1867,7 @@ class ChatConversationViewModel
                             repo.conversationMessages(target.otherUserId, before = before, after = after, topicId = topic)
                         ChatThreadMode.Ai -> return@launch
                     }
-                    if (generation != historyGeneration ||
-                        target != mode ||
-                        user != currentUserId ||
-                        topic != _selectedTopicId.value) return@launch
+                    if (context != historyContext()) return@launch
                     when (result) {
                         is NetworkResult.Success -> {
                             mergeBackfill(result.data.messages)

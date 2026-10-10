@@ -26,6 +26,8 @@ import retrofit2.http.Path
  * card overflow menu and the Pulse preferences sheet own this whole
  * cluster (hide / mute / not-helpful / solve / seeded-dismiss / prefs).
  */
+// The conditional preferences read is the same endpoint with an ETag response.
+@Suppress("TooManyFunctions")
 interface FeedActionsApi {
     /**
      * `POST /api/posts/hide/:id` — hides a single post from the signed-in

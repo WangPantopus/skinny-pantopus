@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.UnlistedProfile
 import app.pantopus.android.data.api.models.place.UnlistedRemovalStatus
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
@@ -274,14 +275,13 @@ class PlaceDetailViewModel
                 }
                 val stored = repo.placeStored(homeId, force || !canKeep || sensitiveGroup, persist = canKeep)
                 _refreshing.value = false
-                _refreshNotice.value = if (stored.showsRefreshFailure(StoreKind.PLACE)) RefreshNotice(stored.fetchedAt, ::refresh) else null
+                _refreshNotice.value =
+                    if (stored.showsRefreshFailure(StoreKind.PLACE)) RefreshNotice(stored.fetchedAt, ::refresh) else null
                 when {
                     stored.data != null -> _state.value = PlaceDetailUiState.Loaded(stored.data)
-                    stored.failure is NetworkError.Forbidden ||
-                        stored.failure == NetworkError.NotFound ||
-                        stored.failure == NetworkError.Unauthorized -> {
+                    stored.failure.refusesStoredCopy -> {
                             _state.value = PlaceDetailUiState.Error(
-                                stored.failure.displayMessage("Couldn't load this place."),
+                                stored.failure?.displayMessage("Couldn't load this place.") ?: "Couldn't load this place.",
                                 denied = stored.failure is NetworkError.Forbidden,
                             )
                     }
@@ -936,8 +936,6 @@ class PlaceDetailViewModel
 
             private const val FORBIDDEN_CODE = 403
 
-            /** Above this the figure is not a monthly rent, it is a typo. */
-            private val MAX_RENT_DOLLARS = BigDecimal.valueOf(Int.MAX_VALUE.toLong())
 
             /**
              * "$2,400", "2,400", "2400" and "2400.50" all name the same
@@ -951,34 +949,14 @@ class PlaceDetailViewModel
              * the decimal separator stays and is honoured, and anything
              * that is not a number at all is refused out loud.
              */
-            internal fun parseMonthlyRent(raw: String): Int? {
-                val cleaned = raw.filter { it.isDigit() || it == '.' }
-                if (cleaned.none { it.isDigit() }) return null
-                // "1.2.3" and "" are not numbers — refuse them out loud
-                // rather than sending some other figure than the one on
-                // screen.
-                val value = cleaned.toBigDecimalOrNull() ?: return null
-                val dollars = value.setScale(0, RoundingMode.HALF_UP)
-                val plausible = dollars > BigDecimal.ZERO && dollars <= MAX_RENT_DOLLARS
-                return if (plausible) dollars.toInt() else null
-            }
+            internal fun parseMonthlyRent(raw: String): Int? = parsedMonthlyRent(raw)
 
             /**
              * Blank means "use the home's own bedroom count" — the
              * server's documented fallback — so an empty field is
              * omitted, never sent as zero, which would mean STUDIO.
              */
-            internal fun parseBedrooms(raw: String): Int? {
-                val trimmed = raw.trim()
-                if (trimmed.isEmpty()) return null
-                // Parsed as a WHOLE number, never digit-filtered. Stripping
-                // non-digits turned "2.5" into 25, which the server clamps
-                // to 10 — a resident's rent silently joined the 10-bedroom
-                // cohort. A bedroom count that is not a plain integer is
-                // refused (null = omit) rather than reinterpreted.
-                val n = trimmed.toIntOrNull() ?: return null
-                return if (n in 0..MAX_BEDROOMS) n else null
-            }
+            internal fun parseBedrooms(raw: String): Int? = parsedBedrooms(raw)
 
             /**
              * A write failure in the resident's own terms. 403 carries
@@ -1111,3 +1089,30 @@ fun PlaceIntelligence.sectionsFor(group: PlaceDetailGroup): List<PlaceSectionEnv
 
 /** Find a single section across the payload. */
 fun PlaceIntelligence.section(id: PlaceSectionId): PlaceSectionEnvelope? = groups.flatMap { it.sections }.firstOrNull { it.sectionId == id }
+
+/** Above this the figure is not a monthly rent, it is a typo. */
+private val MAX_RENT_DOLLARS = BigDecimal.valueOf(Int.MAX_VALUE.toLong())
+
+private fun parsedMonthlyRent(raw: String): Int? {
+    val cleaned = raw.filter { it.isDigit() || it == '.' }
+    if (cleaned.none { it.isDigit() }) return null
+    // "1.2.3" and "" are not numbers — refuse them out loud
+    // rather than sending some other figure than the one on
+    // screen.
+    val value = cleaned.toBigDecimalOrNull() ?: return null
+    val dollars = value.setScale(0, RoundingMode.HALF_UP)
+    val plausible = dollars > BigDecimal.ZERO && dollars <= MAX_RENT_DOLLARS
+    return if (plausible) dollars.toInt() else null
+}
+
+private fun parsedBedrooms(raw: String): Int? {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return null
+    // Parsed as a WHOLE number, never digit-filtered. Stripping
+    // non-digits turned "2.5" into 25, which the server clamps
+    // to 10 — a resident's rent silently joined the 10-bedroom
+    // cohort. A bedroom count that is not a plain integer is
+    // refused (null = omit) rather than reinterpreted.
+    val n = trimmed.toIntOrNull() ?: return null
+    return if (n in 0..MAX_BEDROOMS) n else null
+}

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
@@ -90,9 +91,7 @@ class SavedPlacesViewModel
                         loadedAtLeastOnce = true
                         rebuild()
                     } else if (!loadedAtLeastOnce ||
-                        stored.failure is NetworkError.Forbidden ||
-                        stored.failure == NetworkError.NotFound ||
-                        stored.failure == NetworkError.Unauthorized) {
+                        stored.failure.refusesStoredCopy) {
                         items = emptyList()
                         loadedAtLeastOnce = false
                     _state.value = SavedPlacesUiState.Error(

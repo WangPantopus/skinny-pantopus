@@ -268,7 +268,7 @@ class ScreenStore
             val account = accountId() ?: return
             synchronized(slots) {
                 val slot = slotLocked(key, account)
-                if (slot.state.value.data != null || slot.state.value.failure?.code in listOf(401, 403, 404)) return
+                if (slot.state.value.data != null || slot.state.value.failure.refusesStoredCopy) return
                 // A seed is never fresh or saved. A read already in flight may still replace it with the complete reply.
                 slot.stale = true
                 slot.state.value = Stored(data)

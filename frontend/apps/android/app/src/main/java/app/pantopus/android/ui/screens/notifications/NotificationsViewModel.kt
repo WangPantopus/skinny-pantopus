@@ -449,7 +449,8 @@ class NotificationsViewModel
 
         private fun markReadCurrent(id: String) {
             val target = notifications.firstOrNull { it.id == id } ?: return
-            if (!mayOpenTask(target) || target.isRead == true || markingAllRead || !pendingReads.add(id)) return
+            if (!mayOpenTask(target) || target.isRead == true || markingAllRead) return
+            if (!pendingReads.add(id)) return
             val generation = fetchGeneration
             notifications = notifications.map { if (it.id == id) it.copy(isRead = true) else it }.toMutableList()
             _unreadCount.value = (_unreadCount.value - 1).coerceAtLeast(0)

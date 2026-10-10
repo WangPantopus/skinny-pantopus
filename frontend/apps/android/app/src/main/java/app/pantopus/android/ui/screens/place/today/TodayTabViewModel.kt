@@ -366,9 +366,7 @@ class TodayTabViewModel
             val places = saved.data
             if (places == null) {
                 val samePlace = _state.value.takeIf { it == TodayTabUiState.NoPlace || (it as? TodayTabUiState.Loaded)?.savedPlace != null }
-                _state.value = if (saved.failure is NetworkError.Forbidden ||
-                    saved.failure == NetworkError.NotFound ||
-                    saved.failure == NetworkError.Unauthorized) {
+                _state.value = if (saved.failure.refusesStoredCopy) {
                     TodayTabUiState.Error(saved.failure.sentence("Couldn't load your place."))
                 } else {
                     samePlace.afterFailedRead(saved.failure.sentence("Couldn't load your place."))
@@ -392,16 +390,14 @@ class TodayTabViewModel
             val intelligence = result.data
             if (intelligence == null) {
                 val samePlace = _state.value.takeIf { (it as? TodayTabUiState.Loaded)?.savedPlace?.id == place.id }
-                _state.value = if (result.failure is NetworkError.Forbidden ||
-                    result.failure == NetworkError.NotFound ||
-                    result.failure == NetworkError.Unauthorized) {
+                _state.value = if (result.failure.refusesStoredCopy) {
                     TodayTabUiState.Error(result.failure.sentence("Couldn't load today."))
                 } else {
                     samePlace.afterFailedRead(result.failure.sentence("Couldn't load today."))
                 }
-                return
+            } else {
+                loadSavedToday(version, place, intelligence, result.fetchedAt, result.failure != null)
             }
-            loadSavedToday(version, place, intelligence, result.fetchedAt, result.failure != null)
         }
 
         private suspend fun loadSavedToday(
