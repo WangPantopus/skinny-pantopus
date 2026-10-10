@@ -1027,7 +1027,6 @@ class HomeDashboardViewModel
         }
     }
 
-
 /** A stored read's data, kept even when its refresh failed; no data rethrows the failure. */
 private fun <T : Any> Stored<T>.value(): T = data ?: throw (failure ?: NetworkError.NotFound)
 
@@ -1072,11 +1071,12 @@ private fun SeasonalChecklistDto.replacingItems(replacements: Map<String, Season
     val completed = updatedItems.count { it.isResolved }
     return copy(
         items = updatedItems,
-        progress = SeasonalChecklistProgressDto(
-            total = updatedItems.size,
-            completed = completed,
-            percentage = HomeDashboardProjection.percentage(completed, updatedItems.size),
-        ),
+        progress =
+            SeasonalChecklistProgressDto(
+                total = updatedItems.size,
+                completed = completed,
+                percentage = HomeDashboardProjection.percentage(completed, updatedItems.size),
+            ),
         carryover = carryover?.let { block -> block.copy(items = block.items.map { replacements[it.id] ?: it }) },
     )
 }
