@@ -37,12 +37,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.StatusChip
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -64,13 +66,14 @@ fun MaintenanceDetailScreen(
     onEdit: () -> Unit,
     viewModel: MaintenanceDetailViewModel = hiltViewModel(),
 ) {
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    ReportContentShown("home_maintenance_entry", state is MaintenanceDetailUiState.Loaded)
     val isMutating by viewModel.isMutating.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
     val event by viewModel.event.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
-        viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenMaintenanceDetailViewed)
     }
 
@@ -103,6 +106,9 @@ internal fun MaintenanceDetailContent(
     onDelete: () -> Unit,
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    LaunchedEffect(state) {
+        if (state !is MaintenanceDetailUiState.Loaded) showDeleteConfirm = false
+    }
     Box(modifier = Modifier.testTag("maintenanceDetail")) {
         when (state) {
             MaintenanceDetailUiState.Loading -> LoadingBody(onBack = onBack)

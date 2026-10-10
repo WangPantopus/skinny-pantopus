@@ -7,26 +7,33 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
+import app.pantopus.android.data.api.models.homes.HomeTaskResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.StoreKind
+import app.pantopus.android.data.store.Stored
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection.HTTP_FORBIDDEN
+import java.net.HttpURLConnection.HTTP_NOT_FOUND
+import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
 import javax.inject.Inject
 
 data class HouseholdTaskDetailState(
     val task: HomeTaskDto? = null,
     val loading: Boolean = true,
     val busy: Boolean = false,
+    val pendingCompletion: Boolean = false,
+    val refreshing: Boolean = false,
+    val refreshNotice: RefreshNotice? = null,
     val error: String? = null,
     val deleted: Boolean = false,
     /** "you", a member's name, or the short "Member 1A2B" label; null when nobody is assigned. */
@@ -60,6 +67,7 @@ class HouseholdTaskDetailViewModel
         private var inFlight = false
         private var active = true
         private var work: Job? = null
+        private var completionOriginal: HomeTaskDto? = null
 
         /** Members' names by user id; null until read. Empty when the viewer may not list members. */
         private var memberNames: Map<String, String>? = null
@@ -76,7 +84,7 @@ class HouseholdTaskDetailViewModel
 
         fun resume() {
             active = true
-            reload()
+            read(force = false)
         }
 
         fun pause() {
@@ -85,8 +93,12 @@ class HouseholdTaskDetailViewModel
             work?.cancel()
             work = null
             inFlight = false
+            completionOriginal?.let { _state.value = _state.value.copy(task = it, pendingCompletion = false, busy = false) }
+            completionOriginal = null
+            _state.value = _state.value.copy(busy = false, refreshing = false)
             // Founder decision 3: owners and household roles keep the task on screen while away; anyone else blanks.
             if (!showsCopy) _state.value = HouseholdTaskDetailState()
+            gate?.leave()
         }
 
         /**
@@ -94,13 +106,21 @@ class HouseholdTaskDetailViewModel
          * its row in the stored list), and the store answers a fresh copy without a request or revalidates an older
          * one. "Reload task" after an error reads now. Actions keep reading the task now before they act.
          */
-        fun reload() {
+        fun reload() = read(force = true)
+
+        private fun read(force: Boolean) {
             if (inFlight || !active) return
-            val retry = _state.value.error != null
             if (_state.value.task == null && showsCopy) access.storedTask(taskId)?.let(::show)
             if (_state.value.task == null) _state.value = HouseholdTaskDetailState()
-            runAction({ readTask(force = retry) }) { task ->
-                show(task)
+            runAction(
+                { readTaskStored(fromCopy = showsCopy && !force) },
+                refreshing = force && _state.value.task != null,
+            ) { stored ->
+                show(stored.data?.task ?: throw (stored.failure ?: NetworkError.NotFound))
+                _state.value =
+                    _state.value.copy(
+                        refreshNotice = RefreshNotice(stored.fetchedAt, ::reload).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) },
+                    )
                 finishArrival()
             }
         }
@@ -109,21 +129,16 @@ class HouseholdTaskDetailViewModel
             gate?.leave()
         }
 
-        private suspend fun readTask(force: Boolean): HomeTaskDto {
-            val fromCopy = showsCopy && !force
-            var stored = readTaskStored(fromCopy)
-            // Household access ended meanwhile: whatever came from a copy is read again now.
-            if (fromCopy && !showsCopy) stored = readTaskStored(fromCopy = false)
-            return stored.data?.task ?: throw (stored.failure ?: NetworkError.NotFound)
+        private suspend fun readTaskStored(fromCopy: Boolean): Stored<HomeTaskResponse> {
+            val refusal =
+                gate?.checkForRead(!fromCopy) {
+                    memberNames = null
+                    _state.value = HouseholdTaskDetailState()
+                }
+            if (refusal != null) return Stored(failure = refusal)
+            val stored = access.readStored(taskId, force = !fromCopy || !showsCopy)
+            return if (!showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
         }
-
-        private suspend fun readTaskStored(fromCopy: Boolean) =
-            coroutineScope {
-                val recheck = async { gate?.recheck(!fromCopy) }
-                val task = async { access.readStored(taskId, force = !fromCopy) }
-                recheck.await()
-                task.await()
-            }
 
         /** Only this exact current account's task arrival can be completed. */
         fun finishArrival() {
@@ -133,7 +148,10 @@ class HouseholdTaskDetailViewModel
         fun complete() {
             val current = _state.value.task ?: return
             if (current.capabilities?.canComplete != true) return
-            runAction({ access.complete(taskId, current.status != "done") }) { task -> show(task) }
+            runAction(
+                { access.complete(taskId, current.status != "done") },
+                optimistic = current.copy(status = if (current.status == "done") "open" else "done"),
+            ) { task -> show(task) }
         }
 
         fun delete() {
@@ -193,6 +211,8 @@ class HouseholdTaskDetailViewModel
 
         private fun <T> runAction(
             action: suspend () -> T,
+            optimistic: HomeTaskDto? = null,
+            refreshing: Boolean = false,
             publish: (T) -> Unit,
         ) {
             if (!active || inFlight || _state.value.deleted) return
@@ -202,7 +222,15 @@ class HouseholdTaskDetailViewModel
             }
             inFlight = true
             val revision = ++generation
-            _state.value = _state.value.copy(busy = true, error = null)
+            completionOriginal = _state.value.task.takeIf { optimistic != null }
+            _state.value =
+                _state.value.copy(
+                    task = optimistic ?: _state.value.task,
+                    pendingCompletion = optimistic != null,
+                    busy = true,
+                    refreshing = refreshing,
+                    error = null,
+                )
             work =
                 viewModelScope.launch {
                     try {
@@ -211,7 +239,7 @@ class HouseholdTaskDetailViewModel
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: NetworkError) {
-                        if (current(revision)) deny(error.displayMessage("Could not refresh task access. Try again."))
+                        if (current(revision)) reportNetworkFailure(error)
                     } catch (error: IllegalStateException) {
                         reportCurrentFailure(revision, error)
                     } catch (error: IllegalArgumentException) {
@@ -219,10 +247,26 @@ class HouseholdTaskDetailViewModel
                     } finally {
                         if (revision == generation) {
                             inFlight = false
-                            _state.value = _state.value.copy(busy = false)
+                            completionOriginal = null
+                            _state.value = _state.value.copy(busy = false, refreshing = false, pendingCompletion = false)
                         }
                     }
                 }
+        }
+
+        private fun reportNetworkFailure(error: NetworkError) {
+            val original = completionOriginal
+            val refused = error.code in listOf(HTTP_UNAUTHORIZED, HTTP_FORBIDDEN, HTTP_NOT_FOUND)
+            if (original != null && !refused) {
+                _state.value =
+                    _state.value.copy(
+                        task = original,
+                        error = error.displayMessage("Couldn't confirm the task change. Try again."),
+                    )
+            } else {
+                if (refused) gate?.invalidate()
+                deny(error.displayMessage("Could not refresh task access. Try again."))
+            }
         }
 
         private fun reportCurrentFailure(
@@ -240,6 +284,7 @@ class HouseholdTaskDetailViewModel
             memberNames = null
             generation++
             inFlight = false
+            completionOriginal = null
             _state.value = HouseholdTaskDetailState(loading = false, error = message)
         }
     }
