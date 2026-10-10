@@ -123,6 +123,10 @@ fun FeedScreen(
     app.pantopus.android.ui.components.RefreshOnStoreChange(viewModel::load)
     val newPostCount by viewModel.newPostCount.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    app.pantopus.android.core.perf.ReportContentShown(
+        "pulse",
+        state is PulseFeedUiState.Loaded || state is PulseFeedUiState.Empty,
+    )
     val activeIntent by viewModel.activeIntent.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
@@ -352,7 +356,10 @@ fun FeedScreen(
                             newPostCount = newPostCount,
                             onShowNewPosts = viewModel::showNewPosts,
                             onReadingPosition = viewModel::readingPosition,
-                            onTapPost = onOpenPost,
+                            onTapPost = {
+                                app.pantopus.android.core.perf.ScreenTiming.navigationTapped("post")
+                                onOpenPost(it)
+                            },
                             onTapReaction = viewModel::tapReaction,
                             isRefreshing = isRefreshing,
                             onRefresh = viewModel::refresh,

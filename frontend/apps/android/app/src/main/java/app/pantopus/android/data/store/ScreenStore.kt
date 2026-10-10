@@ -44,7 +44,7 @@ private const val IDLE_MS = 30 * 60 * 1000L
  * - **One request per key:** concurrent reads share the one in flight, which finishes even if the screen that
  *   started it leaves, so the next visit finds the reply.
  * - **Conditional:** a read sends the stored ETag; a 304 keeps the copy and counts it as checked now.
- * - **Failures:** a 403 or 404 deletes the entry, so the screen shows the server's answer; any other failure keeps
+ * - **Failures:** a 401, 403 or 404 deletes the entry, so the screen shows the server's answer; other failures keep
  *   the copy and marks it.
  * - **Late replies are dropped:** a reply that lands after [wipe], or after the account or session changed, never
  *   writes into the new state (generation number plus the account and session marker captured at the start).
@@ -394,7 +394,10 @@ class ScreenStore
                                 }
                             }
                         is NetworkResult.Failure ->
-                            if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound || result.error == NetworkError.Unauthorized) {
+                            if (
+                                result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound ||
+                                result.error == NetworkError.Unauthorized
+                            ) {
                                 // Access ended: the entry goes at once, from the phone too, and the screen shows
                                 // the server's answer.
                                 slot.etag = null
