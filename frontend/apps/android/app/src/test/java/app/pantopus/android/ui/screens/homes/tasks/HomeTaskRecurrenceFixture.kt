@@ -33,10 +33,11 @@ internal class HomeTaskRecurrenceFixture {
             it.storedAccount = actor
         }
     val server = HomeTaskSessionDto(actor, home, "a".repeat(64))
-    val repository = mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
-        every { homeTasksWriter(any()) } returns {}
-        every { homeTaskWriter(any(), any()) } returns {}
-    }
+    val repository =
+        mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
+            every { homeTasksWriter(any()) } returns {}
+            every { homeTaskWriter(any(), any()) } returns {}
+        }
     val store = RecurrenceMemoryStore()
     var task = HomeTaskDto(taskId, home, "chore", "Private recurrence source", dueAt = stamp, updatedAt = stamp)
     var state = HomeTaskRecurrenceState(true, home, taskId, true, stamp, 0, server)

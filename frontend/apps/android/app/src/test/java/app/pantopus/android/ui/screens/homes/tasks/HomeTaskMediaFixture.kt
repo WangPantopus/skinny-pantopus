@@ -28,10 +28,11 @@ internal class HomeTaskMediaFixture {
     val identity = HomeClaimScopeTestFixture()
     val server = HomeTaskSessionDto("user-1", home, "a".repeat(64))
     val repository = mockk<HomeTaskMediaRepository>()
-    val tasks = mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
-        every { homeTasksWriter(any()) } returns {}
-        every { homeTaskWriter(any(), any()) } returns {}
-    }
+    val tasks =
+        mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
+            every { homeTasksWriter(any()) } returns {}
+            every { homeTaskWriter(any(), any()) } returns {}
+        }
     val bytes = "Private task file — original".toByteArray()
     val pending = PendingTaskMediaUpload(uploadId, "住所-é.txt", "text/plain", bytes)
     val record = HomeTaskMediaDto(uploadId, home, task, "user-1", pending.serverFilename, "text/plain", bytes.size.toLong(), "ready", true)

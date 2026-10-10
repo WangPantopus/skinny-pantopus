@@ -21,8 +21,8 @@ import app.pantopus.android.data.homes.HomeTasksRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import io.mockk.coEvery
-import io.mockk.every
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,10 +41,11 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeTaskAccessTest {
-    private val repository = mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
-        every { homeTasksWriter(any()) } returns {}
-        every { homeTaskWriter(any(), any()) } returns {}
-    }
+    private val repository =
+        mockk<HomeTasksRepository>(relaxUnitFun = true).apply {
+            every { homeTasksWriter(any()) } returns {}
+            every { homeTaskWriter(any(), any()) } returns {}
+        }
     private val identity = HomeClaimScopeTestFixture()
     private lateinit var scope: CoroutineScope
     private lateinit var access: HomeTaskAccess
