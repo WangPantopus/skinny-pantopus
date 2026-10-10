@@ -15,6 +15,7 @@ import app.pantopus.android.data.api.models.chats.SendChatMessageBody
 import app.pantopus.android.data.api.models.chats.SendChatMessageResponse
 import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.net.mapFresh
@@ -22,6 +23,7 @@ import app.pantopus.android.data.store.asResult
 import app.pantopus.android.data.api.services.ChatApi
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
+import app.pantopus.android.data.store.StoreKey
 import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
 import kotlinx.coroutines.Dispatchers
@@ -84,7 +86,10 @@ class ChatRepository
             limit: Int = HISTORY_LIMIT,
             force: Boolean = false,
         ): NetworkResult<ChatMessagesResponse> {
-            if (before != null || after != null) return safeApiCall { api.roomMessages(roomId, limit, before, after) }
+            if (before != null || after != null) {
+                return safeApiCall { api.roomMessages(roomId, limit, before, after) }
+                    .forgetRefusedHistory(StoreKeys.roomMessages(roomId, HISTORY_LIMIT))
+            }
             val count = limit.coerceIn(1, HISTORY_LIMIT)
             val stored = store.read(StoreKeys.roomMessages(roomId, count), force) { etag ->
                 conditionalApiCall { api.roomMessagesConditional(roomId, count, etag) }.mapFresh(::boundedHistory)
@@ -102,7 +107,10 @@ class ChatRepository
             topicId: String? = null,
             force: Boolean = false,
         ): NetworkResult<ChatMessagesResponse> {
-            if (before != null || after != null) return safeApiCall { api.conversationMessages(otherUserId, limit, before, after, topicId) }
+            if (before != null || after != null) {
+                return safeApiCall { api.conversationMessages(otherUserId, limit, before, after, topicId) }
+                    .forgetRefusedHistory(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT))
+            }
             val count = limit.coerceIn(1, HISTORY_LIMIT)
             val stored = store.read(StoreKeys.conversationMessages(otherUserId, topicId, count), force) { etag ->
                 conditionalApiCall { api.conversationMessagesConditional(otherUserId, count, topicId, etag) }.mapFresh(::boundedHistory)
@@ -112,6 +120,18 @@ class ChatRepository
 
         fun conversationMessagesCopy(otherUserId: String, topicId: String?): ChatMessagesResponse? =
             store.peek(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT)).data
+
+        /** Pagination and reconnect bypass the first-page store; an access refusal still retires that copy. */
+        private fun NetworkResult<ChatMessagesResponse>.forgetRefusedHistory(
+            key: StoreKey<ChatMessagesResponse>,
+        ): NetworkResult<ChatMessagesResponse> =
+            also {
+                if (it is NetworkResult.Failure &&
+                    (it.error is NetworkError.Forbidden || it.error == NetworkError.NotFound || it.error == NetworkError.Unauthorized)
+                ) {
+                    store.remove(key)
+                }
+            }
 
         private fun boundedHistory(response: ChatMessagesResponse): ChatMessagesResponse {
             if (response.messages.size <= HISTORY_LIMIT) return response
