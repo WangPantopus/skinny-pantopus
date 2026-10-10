@@ -611,6 +611,7 @@ private fun SeasonalRow(
         }
 
         Column(modifier = Modifier.weight(1f)) {
+            if (isPending) Text("Pending", style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
             Text(
                 text = item.title,
                 style = PantopusTextStyle.small,
