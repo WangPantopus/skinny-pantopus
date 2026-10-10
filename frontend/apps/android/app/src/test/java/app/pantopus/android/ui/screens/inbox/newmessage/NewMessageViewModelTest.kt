@@ -15,7 +15,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.chats.ChatRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
+import io.mockk.every
 import io.mockk.coEvery
+import app.pantopus.android.data.store.Stored
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -49,6 +51,8 @@ class NewMessageViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        every { relationshipsRepo.listCopy(any(), any()) } returns Stored()
+        every { chatRepo.conversationsCopy() } returns null
     }
 
     @After
@@ -134,8 +138,8 @@ class NewMessageViewModelTest {
     @Test
     fun load_populatesBothSections() =
         runTest {
-            coEvery { relationshipsRepo.list(status = "accepted") } returns NetworkResult.Success(acceptedFixture)
-            coEvery { chatRepo.unifiedConversations(limit = 50) } returns NetworkResult.Success(unifiedFixture)
+            coEvery { relationshipsRepo.list(status = "accepted", force = any()) } returns NetworkResult.Success(acceptedFixture)
+            coEvery { chatRepo.unifiedConversations(limit = 50, force = any()) } returns NetworkResult.Success(unifiedFixture)
             val viewModel = makeVM()
             viewModel.load()
             runCurrent()
@@ -153,9 +157,9 @@ class NewMessageViewModelTest {
     @Test
     fun load_allEmpty_flipsToEmpty() =
         runTest {
-            coEvery { relationshipsRepo.list(status = "accepted") } returns
+            coEvery { relationshipsRepo.list(status = "accepted", force = any()) } returns
                 NetworkResult.Success(RelationshipsListResponse(relationships = emptyList()))
-            coEvery { chatRepo.unifiedConversations(limit = 50) } returns
+            coEvery { chatRepo.unifiedConversations(limit = 50, force = any()) } returns
                 NetworkResult.Success(UnifiedConversationsResponse(conversations = emptyList()))
             val viewModel = makeVM()
             viewModel.load()
@@ -166,9 +170,9 @@ class NewMessageViewModelTest {
     @Test
     fun load_bothFail_flipsToError() =
         runTest {
-            coEvery { relationshipsRepo.list(status = "accepted") } returns
+            coEvery { relationshipsRepo.list(status = "accepted", force = any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
-            coEvery { chatRepo.unifiedConversations(limit = 50) } returns
+            coEvery { chatRepo.unifiedConversations(limit = 50, force = any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val viewModel = makeVM()
             viewModel.load()
@@ -179,9 +183,9 @@ class NewMessageViewModelTest {
     @Test
     fun load_onlyConnectionsFails_keepsRecent() =
         runTest {
-            coEvery { relationshipsRepo.list(status = "accepted") } returns
+            coEvery { relationshipsRepo.list(status = "accepted", force = any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
-            coEvery { chatRepo.unifiedConversations(limit = 50) } returns NetworkResult.Success(unifiedFixture)
+            coEvery { chatRepo.unifiedConversations(limit = 50, force = any()) } returns NetworkResult.Success(unifiedFixture)
             val viewModel = makeVM()
             viewModel.load()
             runCurrent()
@@ -196,8 +200,8 @@ class NewMessageViewModelTest {
     @Test
     fun search_filtersConnectionsByName() =
         runTest {
-            coEvery { relationshipsRepo.list(status = "accepted") } returns NetworkResult.Success(acceptedFixture)
-            coEvery { chatRepo.unifiedConversations(limit = 50) } returns NetworkResult.Success(unifiedFixture)
+            coEvery { relationshipsRepo.list(status = "accepted", force = any()) } returns NetworkResult.Success(acceptedFixture)
+            coEvery { chatRepo.unifiedConversations(limit = 50, force = any()) } returns NetworkResult.Success(unifiedFixture)
             // UnconfinedTestDispatcher skips the 280ms debounce — the
             // directory fetch fires synchronously. Stub it with no
             // matches so the All-verified section stays hidden and the
@@ -221,9 +225,9 @@ class NewMessageViewModelTest {
     @Test
     fun search_runsDirectoryFetchAfterDebounce() =
         runTest {
-            coEvery { relationshipsRepo.list(status = "accepted") } returns
+            coEvery { relationshipsRepo.list(status = "accepted", force = any()) } returns
                 NetworkResult.Success(RelationshipsListResponse(relationships = emptyList()))
-            coEvery { chatRepo.unifiedConversations(limit = 50) } returns
+            coEvery { chatRepo.unifiedConversations(limit = 50, force = any()) } returns
                 NetworkResult.Success(UnifiedConversationsResponse(conversations = emptyList()))
             coEvery { profileRepo.search(query = "Reyes", limit = 20) } returns NetworkResult.Success(searchFixture)
             val viewModel = makeVM()
@@ -246,8 +250,8 @@ class NewMessageViewModelTest {
     @Test
     fun search_shortQuery_keepsAllVerifiedHidden() =
         runTest {
-            coEvery { relationshipsRepo.list(status = "accepted") } returns NetworkResult.Success(acceptedFixture)
-            coEvery { chatRepo.unifiedConversations(limit = 50) } returns
+            coEvery { relationshipsRepo.list(status = "accepted", force = any()) } returns NetworkResult.Success(acceptedFixture)
+            coEvery { chatRepo.unifiedConversations(limit = 50, force = any()) } returns
                 NetworkResult.Success(UnifiedConversationsResponse(conversations = emptyList()))
             val viewModel = makeVM()
             viewModel.load()
@@ -315,8 +319,8 @@ class NewMessageViewModelTest {
     @Test
     fun tapRow_emitsDestination() =
         runTest {
-            coEvery { relationshipsRepo.list(status = "accepted") } returns NetworkResult.Success(acceptedFixture)
-            coEvery { chatRepo.unifiedConversations(limit = 50) } returns
+            coEvery { relationshipsRepo.list(status = "accepted", force = any()) } returns NetworkResult.Success(acceptedFixture)
+            coEvery { chatRepo.unifiedConversations(limit = 50, force = any()) } returns
                 NetworkResult.Success(UnifiedConversationsResponse(conversations = emptyList()))
             val viewModel = makeVM()
             viewModel.load()

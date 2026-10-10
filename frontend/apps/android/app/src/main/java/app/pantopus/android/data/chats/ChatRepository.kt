@@ -67,8 +67,10 @@ class ChatRepository
         /** An own edit to a conversation (contract §8: a message sent or read, a chat created): the list reads again. */
         private fun <T> NetworkResult<T>.chatsChanged(): NetworkResult<T> = also { if (it is NetworkResult.Success) conversationsChanged() }
 
-        suspend fun unifiedConversations(limit: Int = 100): NetworkResult<UnifiedConversationsResponse> =
-            safeApiCall { api.unifiedConversations(limit) }
+        suspend fun unifiedConversations(limit: Int = 100, force: Boolean = false): NetworkResult<UnifiedConversationsResponse> {
+            val stored = conversationsStored(force)
+            return stored.data?.let { NetworkResult.Success(it.copy(conversations = it.conversations.take(limit))) } ?: stored.asResult()
+        }
 
         suspend fun stats(): NetworkResult<ChatStatsResponse> = safeApiCall { api.stats() }
 

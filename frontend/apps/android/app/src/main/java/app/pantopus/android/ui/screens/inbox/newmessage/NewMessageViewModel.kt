@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.relationships.RelationshipDto
 import app.pantopus.android.data.api.models.relationships.RelationshipUserDto
 import app.pantopus.android.data.api.models.users.UserSearchResultDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.chats.ChatRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.relationships.RelationshipsRepository
@@ -72,18 +73,33 @@ class NewMessageViewModel
         private var recents: List<UnifiedConversationDto> = emptyList()
         private var verifiedResults: List<UserSearchResultDto> = emptyList()
         private var loadedOnce: Boolean = false
+        private var loading = false
         private var searchJob: Job? = null
         private var searchSequence: Int = 0
         private var searchFailed: Boolean = false
 
-        fun load() {
-            if (loadedOnce) return
-            _state.value = NewMessageUiState.Loading
-            viewModelScope.launch { fetchInitial() }
-        }
+        fun load() = read(force = false)
 
-        fun refresh() {
-            viewModelScope.launch { fetchInitial() }
+        fun refresh() = read(force = true)
+
+        private fun read(force: Boolean) {
+            if (loading) return
+            if (!loadedOnce) {
+                val connections = relationshipsRepo.listCopy("accepted").data
+                val chats = chatRepo.conversationsCopy()
+                if (connections != null || chats != null) {
+                    accepted = connections?.relationships.orEmpty()
+                    recents = chats?.conversations.orEmpty().filter { (it.type ?: "conversation") == "conversation" }.take(10)
+                    loadedOnce = true
+                    rebuild()
+                } else {
+                    _state.value = NewMessageUiState.Loading
+                }
+            }
+            loading = true
+            viewModelScope.launch {
+                try { fetchInitial(force) } finally { loading = false }
+            }
         }
 
         fun updateSearch(value: String) {
@@ -120,11 +136,11 @@ class NewMessageViewModel
 
         // MARK: - Fetch
 
-        private suspend fun fetchInitial() {
+        private suspend fun fetchInitial(force: Boolean) {
             val connectionsDeferred =
-                viewModelScope.async { relationshipsRepo.list(status = "accepted") }
+                viewModelScope.async { relationshipsRepo.list(status = "accepted", force = force) }
             val recentsDeferred =
-                viewModelScope.async { chatRepo.unifiedConversations(limit = 50) }
+                viewModelScope.async { chatRepo.unifiedConversations(limit = 50, force = force) }
             val connectionsRes = connectionsDeferred.await()
             val recentsRes = recentsDeferred.await()
             val connectionsOk =
@@ -134,6 +150,7 @@ class NewMessageViewModel
                         true
                     }
                     is NetworkResult.Failure -> {
+                        if (accessEnded(connectionsRes.error)) accepted = emptyList()
                         Timber.w("NewMessage connections fetch failed: %s", connectionsRes.error)
                         false
                     }
@@ -148,17 +165,21 @@ class NewMessageViewModel
                         true
                     }
                     is NetworkResult.Failure -> {
+                        if (accessEnded(recentsRes.error)) recents = emptyList()
                         Timber.w("NewMessage recents fetch failed: %s", recentsRes.error)
                         false
                     }
                 }
-            if (!connectionsOk && !recentsOk) {
+            if (!connectionsOk && !recentsOk && accepted.isEmpty() && recents.isEmpty()) {
                 _state.value = NewMessageUiState.Error("Couldn't load contacts. Try again.")
                 return
             }
             loadedOnce = true
             rebuild()
         }
+
+        private fun accessEnded(error: NetworkError): Boolean =
+            error is NetworkError.Forbidden || error == NetworkError.NotFound || error == NetworkError.Unauthorized
 
         // MARK: - Search
 
