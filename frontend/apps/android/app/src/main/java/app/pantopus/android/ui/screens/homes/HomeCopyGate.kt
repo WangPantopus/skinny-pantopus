@@ -11,8 +11,10 @@ import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthority
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.homes.HomeDashboardAccessRepository
 import app.pantopus.android.data.store.HomeStoreKeys
+import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKey
+import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 
@@ -30,9 +32,19 @@ class HomeCopyGate(
 ) {
     private val keys: List<StoreKey<*>> = keys + HomeStoreKeys.access(homeId)
 
+    private val keys: List<StoreKey<*>> =
+        keys +
+            listOf(
+                HomeStoreKeys.access(homeId), HomeStoreKeys.detail(homeId), HomeStoreKeys.me(homeId), StoreKeys.homeDashboard(homeId),
+            )
+
     /** The last known access is a household one: copies may show before the re-check, and they stay stored. */
-    var showsCopy: Boolean = householdAccess(access.storedAuthority(homeId))
-        private set
+    private var allowsCopy: Boolean = householdAccess(access.storedAuthority(homeId))
+    var showsCopy: Boolean
+        get() = allowsCopy && householdAccess(access.storedAuthority(homeId))
+        private set(value) {
+            allowsCopy = value
+        }
 
     /**
      * Re-checks the viewer's access through the store, alongside the screen's own reads. [force] for pull to refresh
@@ -56,7 +68,8 @@ class HomeCopyGate(
         clear: () -> Unit,
     ): NetworkError? {
         val checked = recheck(force)
-        if (!showsCopy) {
+        val refused = checked.failure is NetworkError.Forbidden || checked.failure == NetworkError.NotFound
+        if (refused || !showsCopy) {
             invalidate()
             clear()
         }
