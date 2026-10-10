@@ -17,6 +17,8 @@ import app.pantopus.android.data.api.models.chats.UnifiedConversationsResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.net.mapFresh
+import app.pantopus.android.data.store.asResult
 import app.pantopus.android.data.api.services.ChatApi
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
@@ -35,9 +37,11 @@ private const val CHAT_FILE_MAX_BYTES = 100L * 1024 * 1024
 
 /** The Messages list's first page (the route's default). */
 private const val CONVERSATIONS_LIMIT = 100
+private const val HISTORY_LIMIT = 100
 
 /** Wraps the chat endpoints in the [NetworkResult] taxonomy. */
 @Singleton
+@Suppress("TooManyFunctions") // Existing chat endpoint wrappers and their bounded memory copies share one repository.
 class ChatRepository
     @Inject
     constructor(
@@ -74,16 +78,45 @@ class ChatRepository
             roomId: String,
             before: String? = null,
             after: String? = null,
-            limit: Int = 60,
-        ): NetworkResult<ChatMessagesResponse> = safeApiCall { api.roomMessages(roomId, limit, before, after) }
+            limit: Int = HISTORY_LIMIT,
+            force: Boolean = false,
+        ): NetworkResult<ChatMessagesResponse> {
+            if (before != null || after != null) return safeApiCall { api.roomMessages(roomId, limit, before, after) }
+            val count = limit.coerceIn(1, HISTORY_LIMIT)
+            val stored = store.read(StoreKeys.roomMessages(roomId, count), force) { etag ->
+                conditionalApiCall { api.roomMessagesConditional(roomId, count, etag) }.mapFresh(::boundedHistory)
+            }
+            return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
+        }
+
+        fun roomMessagesCopy(roomId: String): ChatMessagesResponse? = store.peek(StoreKeys.roomMessages(roomId, HISTORY_LIMIT)).data
 
         suspend fun conversationMessages(
             otherUserId: String,
             before: String? = null,
             after: String? = null,
-            limit: Int = 60,
+            limit: Int = HISTORY_LIMIT,
             topicId: String? = null,
-        ): NetworkResult<ChatMessagesResponse> = safeApiCall { api.conversationMessages(otherUserId, limit, before, after, topicId) }
+            force: Boolean = false,
+        ): NetworkResult<ChatMessagesResponse> {
+            if (before != null || after != null) return safeApiCall { api.conversationMessages(otherUserId, limit, before, after, topicId) }
+            val count = limit.coerceIn(1, HISTORY_LIMIT)
+            val stored = store.read(StoreKeys.conversationMessages(otherUserId, topicId, count), force) { etag ->
+                conditionalApiCall { api.conversationMessagesConditional(otherUserId, count, topicId, etag) }.mapFresh(::boundedHistory)
+            }
+            return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
+        }
+
+        fun conversationMessagesCopy(otherUserId: String, topicId: String?): ChatMessagesResponse? =
+            store.peek(StoreKeys.conversationMessages(otherUserId, topicId, HISTORY_LIMIT)).data
+
+        private fun boundedHistory(response: ChatMessagesResponse): ChatMessagesResponse {
+            if (response.messages.size <= HISTORY_LIMIT) return response
+            val messages = response.messages.takeLast(HISTORY_LIMIT)
+            val oldest = messages.first()
+            val timestamp = oldest.createdAt.replace("+00:00", "Z").replace("+0000", "Z")
+            return response.copy(messages = messages, hasMore = true, nextCursor = "$timestamp|${oldest.id}")
+        }
 
         suspend fun createDirectChat(otherUserId: String): NetworkResult<CreateDirectChatResponse> =
             safeApiCall { api.createDirectChat(CreateDirectChatBody(otherUserId)) }.chatsChanged()
@@ -139,10 +172,13 @@ class ChatRepository
         ): NetworkResult<ReactToChatMessageResponse> =
             safeApiCall { api.reactToMessage(messageId, ReactToChatMessageBody(reaction, reacted)) }
 
-        suspend fun markRoomRead(roomId: String): NetworkResult<Unit> = safeApiCall { api.markRoomRead(roomId) }.chatsChanged()
+        suspend fun markRoomRead(roomId: String): NetworkResult<Unit> = safeApiCall { api.markRoomRead(roomId) }.readCountChanged()
 
         suspend fun markConversationRead(otherUserId: String): NetworkResult<Unit> =
-            safeApiCall { api.markConversationRead(otherUserId) }.chatsChanged()
+            safeApiCall { api.markConversationRead(otherUserId) }.readCountChanged()
+
+        private fun <T> NetworkResult<T>.readCountChanged(): NetworkResult<T> =
+            also { if (it is NetworkResult.Success) store.markStale(StoreTopics.CHATS_LIST) }
 
         suspend fun conversationTopics(otherUserId: String): NetworkResult<ConversationTopicsResponse> =
             safeApiCall { api.conversationTopics(otherUserId) }
