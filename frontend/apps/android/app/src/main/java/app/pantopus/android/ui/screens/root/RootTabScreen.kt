@@ -2565,6 +2565,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     // stays reachable (back) and is the no-home fallback;
                     // parity with the iOS HubTabRoot auto-land.
                     val placeHostVm: HomeTabHostViewModel = hiltViewModel()
+                    app.pantopus.android.ui.components.RefreshOnStoreChange(placeHostVm::resolve)
                     val placeLanding by placeHostVm.landing.collectAsStateWithLifecycle()
                     val verifyScope = rememberCoroutineScope()
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
