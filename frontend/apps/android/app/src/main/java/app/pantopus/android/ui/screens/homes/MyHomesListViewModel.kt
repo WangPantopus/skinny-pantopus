@@ -614,7 +614,6 @@ private fun homeRowTitle(
     return personal?.label ?: home.name?.takeIf(String::isNotBlank) ?: home.address?.takeIf(String::isNotBlank) ?: fallback
 }
 
-
 private fun unitLabel(home: MyHome): String? {
     if (home.accessKind == "verification") return null
     return home.address2?.trim()?.takeIf { it.isNotEmpty() }?.let { homeUnitText(it) }
