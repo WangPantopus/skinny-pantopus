@@ -320,6 +320,7 @@ class ScreenStore
             val account = accountId() ?: return
             if (data == null || !slot.persist) return
             if (!slot.key.permitsSavedCopy(data)) {
+                slot.edits++
                 slot.persist = false
                 deleteSaved(slot.key.id, account)
                 return
