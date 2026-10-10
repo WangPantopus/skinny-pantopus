@@ -489,7 +489,10 @@ class HouseholdTasksListViewModel
             }
         }
 
-        private fun handleTaskFailure(error: NetworkError, revision: Int) {
+        private fun handleTaskFailure(
+            error: NetworkError,
+            revision: Int,
+        ) {
             if (!current(revision)) return
             if (pendingOriginal != null && error.code !in listOf(401, 403, 404)) {
                 rollbackCompletion()
