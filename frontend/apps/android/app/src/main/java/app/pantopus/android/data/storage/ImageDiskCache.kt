@@ -4,6 +4,11 @@ import android.content.Context
 import app.pantopus.android.data.store.SAVED_PAGES_MAX_BYTES
 import coil.annotation.ExperimentalCoilApi
 import coil.disk.DiskCache
+import coil.intercept.Interceptor
+import coil.memory.MemoryCache
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.asContextElement
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /** Contract §6: remove images not opened in 30 days. */
@@ -21,10 +26,40 @@ class ImageDiskCache private constructor(
 ) : DiskCache by delegate {
     private val lock = Any()
     private var generation = 0L
+    private val requestGeneration = ThreadLocal<Long?>()
     private var budget = delegate.maxSize
     private val recent = LinkedHashMap<String, Unit>(16, 0.75f, true)
 
     override val maxSize: Long get() = synchronized(lock) { budget }
+
+    /** Bind the entire fetch/decode to the generation at dispatch, before a disk editor exists. */
+    fun requestInterceptor(): Interceptor = Interceptor { chain ->
+        val started = synchronized(lock) { generation }
+        withContext(requestGeneration.asContextElement(started)) {
+            val result = chain.proceed(chain.request)
+            if (synchronized(lock) { started != generation }) throw CancellationException("Image cache was cleared")
+            result
+        }
+    }
+
+    /** Coil writes memory after decoding, so that final write needs the same generation check as disk. */
+    fun guardMemoryCache(memory: MemoryCache): MemoryCache = object : MemoryCache by memory {
+        override fun set(key: MemoryCache.Key, value: MemoryCache.Value) = synchronized(lock) {
+            if (currentRequest()) memory[key] = value
+        }
+
+        override fun get(key: MemoryCache.Key): MemoryCache.Value? = synchronized(lock) {
+            if (currentRequest()) memory[key] else null
+        }
+
+        override fun clear() = synchronized(lock) {
+            generation++
+            memory.clear()
+        }
+    }
+
+    /** Called only under [lock]; direct, synchronous cache operations belong to the current generation. */
+    private fun currentRequest(): Boolean = requestGeneration.get()?.let { it == generation } ?: true
 
     /** Coil's capacity is immutable; an increase uses the larger capacity at next launch. */
     fun setLimit(limitBytes: Long) =
@@ -43,6 +78,7 @@ class ImageDiskCache private constructor(
 
     override fun openSnapshot(key: String): DiskCache.Snapshot? =
         synchronized(lock) {
+            if (!currentRequest()) return@synchronized null
             delegate.openSnapshot(key)?.let { snapshot ->
                 if (snapshot.data.toFile().length() == 0L) {
                     snapshot.close()
@@ -58,6 +94,7 @@ class ImageDiskCache private constructor(
 
     override fun openEditor(key: String): DiskCache.Editor? =
         synchronized(lock) {
+            if (!currentRequest()) return@synchronized null
             delegate.openEditor(key)?.let { wrapEditor(key, it) }
         }
 
@@ -68,6 +105,10 @@ class ImageDiskCache private constructor(
         object : DiskCache.Snapshot by snapshot {
             override fun closeAndOpenEditor(): DiskCache.Editor? =
                 synchronized(lock) {
+                    if (!currentRequest()) {
+                        snapshot.close()
+                        return@synchronized null
+                    }
                     snapshot.closeAndOpenEditor()?.let { wrapEditor(key, it) }
                 }
         }
