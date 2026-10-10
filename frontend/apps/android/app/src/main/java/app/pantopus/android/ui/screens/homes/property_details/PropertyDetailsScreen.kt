@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +51,7 @@ import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.SectionHeader
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.SourcePill
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevations
@@ -81,7 +81,7 @@ fun PropertyDetailsScreen(
     ReportContentShown("home_property_details", state is PropertyDetailsUiState.Clean || state is PropertyDetailsUiState.Mismatch)
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
 
     PropertyDetailsScreenContent(
         state = state,

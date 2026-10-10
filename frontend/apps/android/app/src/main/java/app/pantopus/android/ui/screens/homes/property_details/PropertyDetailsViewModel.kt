@@ -14,8 +14,6 @@ import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.homes.HomeCopyGateFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -61,6 +59,7 @@ class PropertyDetailsViewModel
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.propertyDetails(homeId)))
         private var readGeneration = 0L
+        private var active = true
 
         /** Preview/test constructor — injects a synchronous loader seam. */
         internal constructor(
@@ -77,6 +76,7 @@ class PropertyDetailsViewModel
          * and the store answers a fresh copy without a request or revalidates an older one quietly.
          */
         fun load() {
+            active = true
             if (loader != null) {
                 if (_state.value is PropertyDetailsUiState.Loading) apply()
                 return
@@ -90,6 +90,18 @@ class PropertyDetailsViewModel
         /** Retry after an error: read now. */
         fun refresh() {
             if (loader != null) apply() else read(force = true)
+        }
+
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            if (!gate.showsCopy) clearCopy()
+            gate.leave()
+        }
+
+        private fun clearCopy() {
+            _refreshNotice.value = null
+            _state.value = PropertyDetailsUiState.Loading
         }
 
         override fun onCleared() {
@@ -107,13 +119,11 @@ class PropertyDetailsViewModel
         }
 
         private fun read(force: Boolean) {
+            if (!active) return
             val generation = ++readGeneration
             if (_state.value is PropertyDetailsUiState.Error) _state.value = PropertyDetailsUiState.Loading
             viewModelScope.launch {
-                val fromCopy = gate.showsCopy && !force
-                var stored = readDetails(force = !fromCopy)
-                // Household access ended meanwhile: whatever came from a copy is read again now.
-                if (fromCopy && !gate.showsCopy) stored = readDetails(force = true)
+                val stored = readDetails(force, generation)
                 if (generation != readGeneration) return@launch
                 _state.value =
                     stored.data?.let { projection(contentFrom(it.home)) }
@@ -122,13 +132,16 @@ class PropertyDetailsViewModel
             }
         }
 
-        private suspend fun readDetails(force: Boolean): Stored<PropertyDetailsResponse> =
-            coroutineScope {
-                val recheck = async { gate.recheck(force) }
-                val details = async { homesRepository.propertyDetailsStored(homeId, force) }
-                recheck.await()
-                details.await()
-            }
+        private suspend fun readDetails(
+            force: Boolean,
+            generation: Long,
+        ): Stored<PropertyDetailsResponse> {
+            val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (refusal != null) return Stored(failure = refusal)
+            if (generation != readGeneration) return Stored()
+            val stored = homesRepository.propertyDetailsStored(homeId, force || !gate.showsCopy)
+            return if (!gate.showsCopy && stored.failure != null) Stored(failure = stored.failure) else stored
+        }
 
         private fun projection(content: PropertyDetailsContent): PropertyDetailsUiState =
             if (content.banner == null) {
