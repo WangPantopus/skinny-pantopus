@@ -800,6 +800,7 @@ class PulseFeedViewModel
                             if (generation != fetchGeneration) return@launch
                             val known = loadedPosts.map { it.id }.toSet()
                             loadedPosts = loadedPosts + result.data.posts.filter { it.id !in known }
+                            repo.seedDetails(result.data.posts)
                             applyPagination(result.data.pagination)
                             rebuildLoadedState()
                         }
@@ -895,6 +896,10 @@ class PulseFeedViewModel
                     val failure = stored.failure
                     when {
                         response != null -> applyFirstPage(response, area, query, inPlace = !isRefresh)
+                        failure is NetworkError.Forbidden || failure == NetworkError.NotFound -> {
+                            loadedPosts = emptyList()
+                            _state.value = PulseFeedUiState.Error(failure.displayMessageOr("Couldn't load Pulse."))
+                        }
                         // A failed read keeps the posts on screen; a pull says why.
                         _state.value is PulseFeedUiState.Loaded && query == lastQuery -> {
                             if (isRefresh) _toastMessage.value = failure.displayMessageOr("Couldn't refresh Pulse.")
@@ -902,21 +907,23 @@ class PulseFeedViewModel
                         else -> _state.value = PulseFeedUiState.Error(failure.displayMessageOr("Couldn't load Pulse."))
                     }
                 } catch (error: NetworkError) {
-                    if (generation == fetchGeneration) {
-                        val message = error.displayMessage("Couldn't load your viewing area. Try again.")
-                        // The posts on screen stay; only an empty screen shows the error.
-                        if (_state.value !is PulseFeedUiState.Loaded) {
-                            _state.value = PulseFeedUiState.Error(message)
-                        } else if (isRefresh) {
-                            _toastMessage.value = message
-                        }
-                    }
+                    if (generation == fetchGeneration) showAreaFailure(error, isRefresh)
                 } finally {
                     if (generation == fetchGeneration) {
                         loading = false
                         _isRefreshing.value = false
                     }
                 }
+            }
+        }
+
+        private fun showAreaFailure(error: NetworkError, isRefresh: Boolean) {
+            val message = error.displayMessage("Couldn't load your viewing area. Try again.")
+            if (_state.value !is PulseFeedUiState.Loaded || error is NetworkError.Forbidden || error == NetworkError.NotFound) {
+                loadedPosts = emptyList()
+                _state.value = PulseFeedUiState.Error(message)
+            } else if (isRefresh) {
+                _toastMessage.value = message
             }
         }
 
@@ -933,6 +940,8 @@ class PulseFeedViewModel
             lastArea = area
             updateFallbackAreaLabel(response.fallbackArea?.label, area)
             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
+            // Each card stands in for its post until the post's own read answers (a post opens at once).
+            repo.seedDetails(response.posts)
             if (inPlace && query == lastQuery && loadedPosts.size > response.posts.size) {
                 val refreshed = response.posts.associateBy { it.id }
                 loadedPosts = loadedPosts.map { refreshed[it.id] ?: it }
@@ -971,8 +980,8 @@ class PulseFeedViewModel
                 val stored = viewingLocation.currentCopy() ?: return null
                 stored.viewingLocation?.let { return FeedArea(it.latitude, it.longitude, it.radiusMiles, it) }
             }
-            storedCoordinates()?.let { (lat, lng) -> return FeedArea(lat, lng) }
-            return locationProvider.cachedCoordinate()?.let { FeedArea(it.latitude, it.longitude) }
+            val coordinates = storedCoordinates() ?: locationProvider.cachedCoordinate()?.let { it.latitude to it.longitude }
+            return coordinates?.let { (lat, lng) -> FeedArea(lat, lng) }
         }
 
         /** The first page's query for [area] and the current filters (coordinates rounded to about 110 m). */
