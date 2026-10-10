@@ -135,13 +135,6 @@ interface HomeDashboardApi {
         @Query("currency") currency: String = "USD",
     ): HomeBillTrendsDto
 
-    /** [billTrends] for the screens' store: a 304 means the stored copy is current. */
-    @GET("api/homes/{id}/bill-trends?format=2")
-    suspend fun billTrendsConditional(
-        @Path("id") homeId: String,
-        @Query("currency") currency: String,
-        @Header("If-None-Match") etag: String?,
-    ): Response<HomeBillTrendsDto>
 
     /** `PATCH /api/homes/:id/settings` — route `backend/routes/homeIam.js`; needs `home.edit`. */
     @PATCH("api/homes/{id}/settings")

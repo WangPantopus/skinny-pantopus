@@ -305,7 +305,6 @@ class HomeDashboardViewModel
                     HomeStoreKeys.healthScore(homeId),
                     HomeStoreKeys.seasonalChecklist(homeId),
                     HomeStoreKeys.propertyValue(homeId),
-                    HomeStoreKeys.billTrends(homeId, "USD"),
                 ),
             )
 
@@ -362,7 +361,12 @@ class HomeDashboardViewModel
             generation += 1
             visible = false
             refreshJob?.cancel()
-            if (!gate.showsCopy) clearPrivateData()
+            billReadId += 1
+            _billTrends.value = HomeIntelligenceCardState.Loading
+            if (!gate.showsCopy) {
+                clearPrivateData()
+                gate.leave()
+            }
         }
 
         override fun onCleared() {
@@ -412,6 +416,7 @@ class HomeDashboardViewModel
         private fun retireAccess(revision: Long) {
             if (!visible || generation != revision) return
             generation += 1
+            gate.invalidate()
             clearPrivateData()
             _state.value = HomeDashboardUiState.Error("Home access changed or could not be confirmed. Reload to check current access.")
         }
@@ -504,8 +509,6 @@ class HomeDashboardViewModel
                 storedCardCopy(HEALTH_PERMISSIONS, stored.healthScore) { HomeIntelligenceValidation.health(it, homeId) }
             _checklist.value = storedCardCopy(listOf("home.view"), stored.checklist) { HomeIntelligenceValidation.checklist(it, homeId) }
             _propertyValue.value = storedCardCopy(listOf("home.view"), stored.propertyValue, HomeIntelligenceValidation::property)
-            val bills = intelligenceRepo.storedBillTrends(homeId, _billCurrency.value)
-            _billTrends.value = storedCardCopy(listOf("finance.view"), bills) { HomeBillPresentation.isCurrent(it, _billCurrency.value) }
             rebuild()
         }
 
@@ -537,6 +540,8 @@ class HomeDashboardViewModel
             if (stored.data != null) return stored
             // No access: the direct read keeps the server's typed refusal (verification kind) for the limited view.
             if (stored.failure is NetworkError.Forbidden || stored.failure == NetworkError.NotFound) {
+                gate.invalidate()
+                clearPrivateData()
                 return Stored(authority.read(), fetchedAt = System.currentTimeMillis())
             }
             throw stored.failure ?: NetworkError.NotFound
@@ -553,6 +558,7 @@ class HomeDashboardViewModel
                 val openingRead = openingAuthority(fromCopy)
                 val opening = checkNotNull(openingRead.data)
                 gate.observe(opening)
+                if (!gate.showsCopy) clearPrivateData()
                 requireCurrent(revision)
                 val access = opening.sharedAccess()
                 if (access == null) {
@@ -566,7 +572,7 @@ class HomeDashboardViewModel
                 }
                 watchExpiry(opening.expiryMillis(), revision)
                 requireCurrent(revision)
-                val readNow = !fromCopy
+                val readNow = !fromCopy || !gate.showsCopy
                 val (detailRead, dashboardRead) =
                     coroutineScope {
                         val detailStored = async { repo.detailStored(homeId, readNow) }
@@ -601,12 +607,13 @@ class HomeDashboardViewModel
                     launch { loadHealthScore(readNow) }
                     launch { loadChecklist(readNow) }
                     launch { loadPropertyValue(readNow) }
-                    launch { loadBillTrends(readNow) }
+                    launch { loadBillTrends() }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
                 if (visible && revision == generation) {
+                    gate.invalidate()
                     clearPrivateData()
                     _state.value = HomeDashboardUiState.Error("Current Home information could not be confirmed. Reload to try again.")
                 }
@@ -669,7 +676,7 @@ class HomeDashboardViewModel
                 when {
                     data != null && valid(data) -> HomeIntelligenceCardState.Loaded(data)
                     data != null -> HomeIntelligenceCardState.Failed("Current Home information is unavailable. Reload this card.")
-                    stored.failure is NetworkError.Forbidden -> {
+                    stored.failure is NetworkError.Forbidden || stored.failure == NetworkError.NotFound -> {
                         retireAccess(revision)
                         null
                     }
@@ -712,11 +719,31 @@ class HomeDashboardViewModel
                 ) ?: return
         }
 
-        private suspend fun loadBillTrends(force: Boolean = true) {
+        /** Bills are sensitive: the endpoint checks access each visit, and the result lives only while open. */
+        private suspend fun authorizedBillCard(
+            work: suspend () -> NetworkResult<HomeBillTrendsDto>,
+        ): HomeIntelligenceCardState<HomeBillTrendsDto>? {
+            val revision = generation
+            if (!current(revision) || authoritySnapshot == null) return null
+            if (accessData?.can("finance.view") != true) return HomeIntelligenceCardState.Forbidden
+            val result = work()
+            if (!current(revision)) return null
+            return if (result is NetworkResult.Failure &&
+                (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound)
+            ) {
+                retireAccess(revision)
+                null
+            } else {
+                // A failed direct bill read cannot blank the household dashboard or restore an old bill amount.
+                result.toCardState()
+            }
+        }
+
+        private suspend fun loadBillTrends() {
             val readId = ++billReadId
             val currency = _billCurrency.value
             val result =
-                storedCard(listOf("finance.view"), { intelligenceRepo.billTrendsStored(homeId, currency, force) }) { true } ?: return
+                authorizedBillCard { intelligenceRepo.billTrends(homeId, currency) } ?: return
             if (readId != billReadId || currency != _billCurrency.value) return
             result.valueOrNull()?.let { data ->
                 if (HomeBillPresentation.isCurrent(data, currency)) {

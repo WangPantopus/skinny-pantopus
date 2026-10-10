@@ -73,16 +73,6 @@ open class HomeDashboardRepository
                 conditionalApiCall { api.propertyValueConditional(homeId, etag) }
             }
 
-        /** [billTrends] through the screens' store. */
-        open suspend fun billTrendsStored(
-            homeId: String,
-            currency: String,
-            force: Boolean = false,
-        ): Stored<HomeBillTrendsDto> =
-            store.read(HomeStoreKeys.billTrends(homeId, currency), force) { etag ->
-                conditionalApiCall { api.billTrendsConditional(homeId, currency, etag) }
-            }
-
         /** The stored dashboard pieces, without a request. */
         open fun storedDashboard(homeId: String): StoredDashboard =
             StoredDashboard(
@@ -97,12 +87,6 @@ open class HomeDashboardRepository
             homeId: String,
             checklist: SeasonalChecklistDto,
         ) = store.put(HomeStoreKeys.seasonalChecklist(homeId), checklist)
-
-        /** The stored bill comparison in [currency], without a request. */
-        open fun storedBillTrends(
-            homeId: String,
-            currency: String,
-        ): HomeBillTrendsDto? = store.peek(HomeStoreKeys.billTrends(homeId, currency)).data
 
         /** `GET /api/homes/:id/health-score?force=true`. */
         open suspend fun healthScore(

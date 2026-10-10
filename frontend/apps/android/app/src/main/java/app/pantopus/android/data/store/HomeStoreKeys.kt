@@ -1,6 +1,5 @@
 package app.pantopus.android.data.store
 
-import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
 import app.pantopus.android.data.api.models.homedashboard.HomeDashboardAuthorityDto
 import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
 import app.pantopus.android.data.api.models.homedashboard.HomePropertyValueDto
@@ -125,14 +124,4 @@ object HomeStoreKeys {
     fun propertyValue(homeId: String) =
         StoreKey<HomePropertyValueDto>("api/homes/$homeId/property-value", kind = StoreKind.HOMES, topics = setOf("home:$homeId"))
 
-    /** A Home's bill comparison in one currency (finance roles). */
-    fun billTrends(
-        homeId: String,
-        currency: String,
-    ) = StoreKey<HomeBillTrendsDto>(
-        "api/homes/$homeId/bill-trends",
-        mapOf("format" to "2", "currency" to currency),
-        kind = StoreKind.HOMES,
-        topics = setOf("home:$homeId"),
-    )
 }

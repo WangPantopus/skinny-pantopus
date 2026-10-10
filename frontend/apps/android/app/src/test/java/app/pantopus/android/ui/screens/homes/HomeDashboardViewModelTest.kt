@@ -101,9 +101,6 @@ class HomeDashboardViewModelTest {
             intelligenceRepo.seasonalChecklist(firstArg()).stored()
         }
         coEvery { intelligenceRepo.propertyValueStored(any(), any()) } coAnswers { intelligenceRepo.propertyValue(firstArg()).stored() }
-        coEvery { intelligenceRepo.billTrendsStored(any(), any(), any()) } coAnswers {
-            intelligenceRepo.billTrends(firstArg(), secondArg()).stored()
-        }
     }
 
     /** What the screens' store hands back for a read with this outcome. */
