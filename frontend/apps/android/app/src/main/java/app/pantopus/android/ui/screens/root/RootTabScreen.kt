@@ -2199,6 +2199,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                         .ifEmpty { "?" },
                                 verified = false,
                                 locality = null,
+                                avatarUrl = person.avatarUrl,
                             ),
                             pending.id,
                         ),
