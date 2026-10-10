@@ -236,12 +236,13 @@ class TodayTabViewModel
                 return
             }
             val copy = repo.todayCopy(id)
-            val data = copy.data ?: return
-            homeId = id
-            _state.value =
-                TodayTabUiState.Loaded(
-                    data, calendarHomeId = id, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null,
-                )
+            copy.data?.let { data ->
+                homeId = id
+                _state.value =
+                    TodayTabUiState.Loaded(
+                        data, calendarHomeId = id, fetchedAt = copy.fetchedAt, refreshFailed = copy.failure != null,
+                    )
+            }
         }
 
         /**
