@@ -328,9 +328,10 @@ class TodayTabViewModel
             val calendar = (result as? NetworkResult.Success)?.data?.calendar
             // The calendar section was down: the widget gets the dates Today now shows.
             val loaded = _state.value as? TodayTabUiState.Loaded
-            if (calendar == null || loaded == null) return calendar
-            if (mayKeepHome(id) && ::todayWidget.isInitialized) {
-                todayWidget.write(loaded.intelligence.todayWidgetSnapshot(calendar))
+            if (calendar != null && loaded != null) {
+                if (mayKeepHome(id) && ::todayWidget.isInitialized) {
+                    todayWidget.write(loaded.intelligence.todayWidgetSnapshot(calendar))
+                }
             }
             return calendar
         }
