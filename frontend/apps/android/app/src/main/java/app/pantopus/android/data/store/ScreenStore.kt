@@ -52,6 +52,7 @@ private const val IDLE_MS = 30 * 60 * 1000L
  * Sensitive replies (contract §5) never enter the store: their screens keep calling the repository directly.
  */
 @Singleton
+@Suppress("TooManyFunctions") // Keep the one store and its cache lifecycle operations together.
 class ScreenStore
     @Inject
     constructor(
@@ -223,6 +224,21 @@ class ScreenStore
                 synchronized(slots) {
                     if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) put(key, data)
                 }
+            }
+        }
+
+        /** A list item tapped now can seed a detail's first frame. It stays in the same bounded, wiped memory store. */
+        fun <T : Any> seed(
+            key: StoreKey<T>,
+            data: T,
+        ) {
+            val account = accountId() ?: return
+            synchronized(slots) {
+                val slot = slotLocked(key, account)
+                if (slot.state.value.data != null || slot.state.value.failure?.code in listOf(401, 403, 404)) return
+                // A seed is never fresh or saved. A read already in flight may still replace it with the complete reply.
+                slot.stale = true
+                slot.state.value = Stored(data)
             }
         }
 

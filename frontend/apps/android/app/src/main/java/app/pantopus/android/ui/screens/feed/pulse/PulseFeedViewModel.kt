@@ -800,7 +800,6 @@ class PulseFeedViewModel
                             if (generation != fetchGeneration) return@launch
                             val known = loadedPosts.map { it.id }.toSet()
                             loadedPosts = loadedPosts + result.data.posts.filter { it.id !in known }
-                            repo.seedDetails(result.data.posts)
                             applyPagination(result.data.pagination)
                             rebuildLoadedState()
                         }
@@ -931,6 +930,10 @@ class PulseFeedViewModel
          * Puts a first page on screen. [inPlace] (a quiet read of the query already on screen, with later pages loaded
          * below): the rows on screen take the server's counts and edits in place and the pages below stay.
          */
+        fun seedPostForOpen(postId: String) {
+            loadedPosts.firstOrNull { it.id == postId }?.let(repo::seedDetail)
+        }
+
         private fun applyFirstPage(
             response: FeedResponse,
             area: FeedArea,
@@ -940,8 +943,6 @@ class PulseFeedViewModel
             lastArea = area
             updateFallbackAreaLabel(response.fallbackArea?.label, area)
             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
-            // Each card stands in for its post until the post's own read answers (a post opens at once).
-            repo.seedDetails(response.posts)
             if (inPlace && query == lastQuery && loadedPosts.size > response.posts.size) {
                 val refreshed = response.posts.associateBy { it.id }
                 loadedPosts = loadedPosts.map { refreshed[it.id] ?: it }
