@@ -50,6 +50,11 @@ class HomeCopyGate(
     suspend fun recheck(force: Boolean): Stored<HomeDashboardAuthorityDto> =
         access.readStored(homeId, force || !showsCopy).also { showsCopy = householdAccess(it.data) }
 
+    /** A screen that reads the viewer's access itself (the dashboard) reports what it read. */
+    fun observe(authority: HomeDashboardAuthorityDto?) {
+        showsCopy = householdAccess(authority)
+    }
+
     /** An explicit access refusal retires this screen's copies before another visit can show them. */
     fun invalidate() {
         showsCopy = false
