@@ -138,11 +138,12 @@ class PlaceRepository
         suspend fun todayStored(
             homeId: String,
             force: Boolean = false,
+            persist: Boolean = false,
         ): Stored<PlaceIntelligence> {
             val copy = todayCopy(homeId)
             // This reply bundles alerts with Today: their five-minute check uses the same conditional request.
             val checkAlerts = !copy.isFresh(StoreKind.TODAY_ALERTS) || copy.failure != null
-            return store.read(StoreKeys.today(homeId), force || checkAlerts) { etag ->
+            return store.read(StoreKeys.today(homeId), force || checkAlerts, persist) { etag ->
                 conditionalApiCall { placeApi.intelligenceConditional(homeId, StoreKeys.todaySectionsQuery, etag) }
             }
         }
@@ -168,6 +169,9 @@ class PlaceRepository
 
         /** Drops the stored Place (a viewer whose copy may not be kept, leaving the screen). */
         fun forgetPlace(homeId: String) = store.remove(StoreKeys.place(homeId))
+
+        /** Home-linked Today includes household calendar data, so temporary access leaves no saved copy. */
+        fun forgetToday(homeId: String) = store.remove(StoreKeys.today(homeId))
 
         /** True while the home's stored Today is fresh and no topic marked it out of date (coming back reads nothing). */
         fun todayIsCurrent(homeId: String): Boolean =
