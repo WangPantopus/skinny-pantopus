@@ -180,7 +180,14 @@ class ScreenStore
                     val vouched = persist && key.savable
                     val unsave = slot.persist && !vouched
                     slot.persist = vouched
-                    if (unsave) deleteSaved(key.id, account)
+                    if (unsave) {
+                        // Retire queued writes and reads from the previous access decision before a later reader
+                        // can enable persistence again.
+                        slot.edits++
+                        slot.inFlight?.cancel()
+                        slot.inFlight = null
+                        deleteSaved(key.id, account)
+                    }
                     val current = slot.state.value
                     if (!force && !slot.stale && current.isFresh(key.kind)) return current.cast()
                     val running = slot.inFlight?.takeIf { it.isActive }
