@@ -31,6 +31,7 @@ class DeepLinkChatResolverViewModel
         data class LinkedPerson(
             val userId: String,
             val displayName: String,
+            val avatarUrl: String? = null,
         )
 
         suspend fun directCounterpart(roomId: String): LinkedPerson? {
@@ -48,7 +49,7 @@ class DeepLinkChatResolverViewModel
                 other?.let {
                     val id = it.userId?.takeIf(String::isNotBlank)
                     val name = it.user?.displayName?.takeIf(String::isNotBlank)
-                    if (id != null && name != null) LinkedPerson(id, name) else null
+                    if (id != null && name != null) LinkedPerson(id, name, it.user?.avatarUrl) else null
                 } ?: return null
             val blocked = (blocksRepository.blocked() as? NetworkResult.Success)?.data?.blocked ?: return null
             return person.takeUnless { linked -> blocked.any { it.userId == linked.userId } }
