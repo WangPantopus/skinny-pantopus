@@ -127,7 +127,7 @@ export default function JustMovedCard({ homeId, moveInDate, needsPickupDay = nul
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[18px] font-bold leading-[24px] -tracking-[0.015em] text-app-text text-balance">Your first week at this address</p>
-            <p className="mt-1 text-[13.5px] leading-[19px] text-app-text-strong">Five things it can do for you now, before there are neighbors to meet.</p>
+            <p className="mt-1 text-[13.5px] leading-[19px] text-app-text-strong">{total} things it can do for you now, before there are neighbors to meet.</p>
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3">

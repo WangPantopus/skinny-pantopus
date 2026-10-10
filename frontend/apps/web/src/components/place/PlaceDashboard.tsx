@@ -193,7 +193,7 @@ export default function PlaceDashboard() {
         retrying={intelQuery.isFetching}
         switchHomes={switchHomes}
         activeHomeId={homeId}
-        moveInDate={homeQuery.data?.home?.id === homeId ? homeQuery.data?.home?.move_in_date ?? null : null}
+        moveInDate={intelligence.move_in_date ?? null}
         onSwitchHome={(id) => {
           setPickedHomeId(id);
           router.replace(`/app/place${placeHomeQuery(id === homeQuery.data?.home?.id ? null : id)}`);

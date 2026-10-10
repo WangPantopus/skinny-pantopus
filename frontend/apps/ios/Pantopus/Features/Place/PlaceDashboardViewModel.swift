@@ -40,6 +40,7 @@ final class PlaceDashboardViewModel {
 
     private let api: APIClient
     private var reloadPending = false
+    private var copyRevision = 0
     let onOpenDetail: (PlaceDetailGroup) -> Void
     /// Open the full Today's Pulse stream (the hero taps here).
     let onOpenPulse: () -> Void
@@ -131,13 +132,26 @@ final class PlaceDashboardViewModel {
         unreadCount = unread.personalBellCount
     }
 
+    @discardableResult
+    func discardTemporaryCopy() -> Bool {
+        guard !PlaceStoreReads.allowsCopy(homeId: homeId) else { return false }
+        copyRevision += 1
+        state = .loading
+        moveInDate = nil
+        return true
+    }
+
     private func fetch(force: Bool) async {
+        discardTemporaryCopy()
+        let revision = copyRevision
         do {
             let snapshot = try await PlaceStoreReads.load(homeId: homeId, kind: .place, force: force)
+            guard revision == copyRevision, !Task.isCancelled else { return }
             apply(snapshot.value)
         } catch is CancellationError {
             return
         } catch {
+            guard revision == copyRevision, !Task.isCancelled else { return }
             let apiError = error as? APIError
             let message = apiError?.errorDescription ?? "Couldn't load your place."
             switch apiError {
@@ -146,7 +160,7 @@ final class PlaceDashboardViewModel {
                 if case .forbidden = apiError { accessDenied = true } else { accessDenied = false }
                 state = .error(message: message)
             default:
-                if case .loaded = state {
+                if case .loaded = state, PlaceStoreReads.allowsCopy(homeId: homeId) {
                     // Keep the dashboard on screen; a failed refresh only toasts.
                     if force { refreshFailureMessage = message }
                 } else {
