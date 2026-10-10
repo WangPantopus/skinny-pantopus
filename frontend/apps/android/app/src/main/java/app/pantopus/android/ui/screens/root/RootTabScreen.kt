@@ -1356,6 +1356,7 @@ private object ChildRoutes {
     const val CHAT_ID_KEY = "id"
     const val CHAT_NAME_KEY = "name"
     const val CHAT_INITIALS_KEY = "initials"
+    const val CHAT_AVATAR_KEY = "avatar"
     const val CHAT_VERIFIED_KEY = "verified"
     const val CHAT_IDENTITY_KEY = "identity"
     const val CHAT_LOCALITY_KEY = "locality"
@@ -1380,6 +1381,7 @@ private object ChildRoutes {
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
             "&$CHAT_INITIALS_KEY={$CHAT_INITIALS_KEY}" +
+            "&$CHAT_AVATAR_KEY={$CHAT_AVATAR_KEY}" +
             "&$CHAT_VERIFIED_KEY={$CHAT_VERIFIED_KEY}" +
             "&$CHAT_IDENTITY_KEY={$CHAT_IDENTITY_KEY}" +
             "&$CHAT_LOCALITY_KEY={$CHAT_LOCALITY_KEY}" +
@@ -1546,6 +1548,7 @@ private object ChildRoutes {
         return "chat/$kind/${enc(row.id)}?" +
             "$CHAT_NAME_KEY=${enc(row.displayName)}" +
             "&$CHAT_INITIALS_KEY=${enc(row.initials)}" +
+            "&$CHAT_AVATAR_KEY=${enc(row.avatarUrl.orEmpty())}" +
             "&$CHAT_VERIFIED_KEY=${row.verified}" +
             "&$CHAT_IDENTITY_KEY=${enc(identity)}" +
             "&$CHAT_LOCALITY_KEY=" +
@@ -1593,6 +1596,16 @@ private object ChildRoutes {
             "&$CHAT_TOPIC_TYPE_KEY=${enc(topicType ?: "")}" +
             "&$CHAT_TOPIC_REF_ID_KEY=${enc(topicRefId ?: "")}" +
             "&$CHAT_TOPIC_TITLE_KEY=${enc(topicTitle ?: "")}"
+    }
+
+    /** Keeps an already-fetched photo when a profile or link opens a person thread. */
+    fun withAvatar(
+        route: String,
+        avatarUrl: String?,
+    ): String {
+        if (avatarUrl.isNullOrBlank()) return route
+        val encoded = java.net.URLEncoder.encode(avatarUrl, "UTF-8").replace("+", "%20")
+        return "$route&$CHAT_AVATAR_KEY=$encoded"
     }
 
     /** Adds the linked room id to a person-thread route (see [CHAT_ARRIVAL_ROOM_KEY]). */
@@ -2183,22 +2196,24 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // failed read, opens the room exactly as before.
                 val person = pending.id.takeIf { it.isNotBlank() }?.let { deepLinkChatResolver.directCounterpart(it) }
                 if (person != null) {
+                    val chatRoute =
+                        ChildRoutes.chatConversationFromPicker(
+                            userId = person.userId,
+                            displayName = person.displayName,
+                            initials =
+                                person.displayName
+                                    .split(" ")
+                                    .take(2)
+                                    .mapNotNull { it.firstOrNull()?.toString() }
+                                    .joinToString("")
+                                    .uppercase()
+                                    .ifEmpty { "?" },
+                            verified = false,
+                            locality = null,
+                        )
                     navController.navigate(
                         ChildRoutes.withArrivalRoom(
-                            ChildRoutes.chatConversationFromPicker(
-                                userId = person.userId,
-                                displayName = person.displayName,
-                                initials =
-                                    person.displayName
-                                        .split(" ")
-                                        .take(2)
-                                        .mapNotNull { it.firstOrNull()?.toString() }
-                                        .joinToString("")
-                                        .uppercase()
-                                        .ifEmpty { "?" },
-                                verified = false,
-                                locality = null,
-                            ),
+                            ChildRoutes.withAvatar(chatRoute, person.avatarUrl),
                             pending.id,
                         ),
                     )
@@ -4677,14 +4692,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 // Return to the existing conversation and its unsent draft.
                                 navController.popBackStack()
                             } else {
-                                navController.navigate(
+                                val chatRoute =
                                     ChildRoutes.chatConversationFromPicker(
                                         userId = profile.id,
                                         displayName = profile.displayName,
                                         initials = initialsFromName(profile.displayName),
                                         verified = profile.residency?.get("verified") == true,
                                         locality = profile.locality,
-                                    ),
+                                    )
+                                navController.navigate(
+                                    ChildRoutes.withAvatar(chatRoute, profile.profilePictureUrl ?: profile.avatarUrl),
                                 )
                             }
                         },
@@ -4878,6 +4895,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_AVATAR_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                             navArgument(ChildRoutes.CHAT_VERIFIED_KEY) {
                                 type = NavType.StringType
                                 defaultValue = "false"
@@ -4933,6 +4954,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val id = args.getString(ChildRoutes.CHAT_ID_KEY).orEmpty()
                     val name = args.getString(ChildRoutes.CHAT_NAME_KEY).orEmpty()
                     val initials = args.getString(ChildRoutes.CHAT_INITIALS_KEY).orEmpty()
+                    val avatarUrl = args.getString(ChildRoutes.CHAT_AVATAR_KEY)?.takeIf { it.isNotBlank() }
                     val verified = args.getString(ChildRoutes.CHAT_VERIFIED_KEY) == "true"
                     val locality = args.getString(ChildRoutes.CHAT_LOCALITY_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val online = args.getString(ChildRoutes.CHAT_ONLINE_KEY) == "true"
@@ -4968,6 +4990,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     locality = locality,
                                     verified = verified,
                                     online = online,
+                                    avatarUrl = avatarUrl,
                                 )
                             else ->
                                 ChatCounterparty.Person(
@@ -4976,6 +4999,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     locality = locality,
                                     verified = verified,
                                     online = online,
+                                    avatarUrl = avatarUrl,
                                 )
                         }
                     val conversationMode: ChatConversationMode =

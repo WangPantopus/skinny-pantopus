@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -38,6 +39,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import coil.compose.AsyncImage
 
 @Composable
 fun ConversationRow(
@@ -93,7 +95,7 @@ fun ConversationRow(
 private fun Avatar(content: ConversationRowContent) {
     when (val variant = content.variant) {
         ConversationRowVariant.AiAssistant -> ChatAiAvatar(size = 44.dp)
-        ConversationRowVariant.Dm -> DmAvatar(initials = content.initials, verified = content.verified)
+        ConversationRowVariant.Dm -> DmAvatar(initials = content.initials, verified = content.verified, avatarUrl = content.avatarUrl)
         is ConversationRowVariant.Group -> GroupAvatar(content.initials, variant)
     }
 }
@@ -102,6 +104,7 @@ private fun Avatar(content: ConversationRowContent) {
 private fun DmAvatar(
     initials: String,
     verified: Boolean,
+    avatarUrl: String?,
 ) {
     Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.BottomEnd) {
         InitialsCircle(
@@ -110,6 +113,14 @@ private fun DmAvatar(
             initials = initials,
             fg = PantopusColors.primary600,
         )
+        if (!avatarUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = avatarUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(52.dp).clip(CircleShape).border(2.dp, PantopusColors.appSurface, CircleShape),
+            )
+        }
         if (verified) {
             Box(
                 modifier =

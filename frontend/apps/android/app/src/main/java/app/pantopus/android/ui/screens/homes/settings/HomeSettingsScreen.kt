@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListCallbacks
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListScreen
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
@@ -60,7 +61,7 @@ fun HomeSettingsScreen(
     val rename by viewModel.rename.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     LaunchedEffect(navigation) {
         navigation?.let {
             viewModel.consumeNavigation()

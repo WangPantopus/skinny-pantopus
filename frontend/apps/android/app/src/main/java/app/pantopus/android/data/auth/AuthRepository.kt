@@ -35,6 +35,7 @@ import app.pantopus.android.data.api.models.users.UserDto
 import app.pantopus.android.data.api.models.users.UserProfile
 import app.pantopus.android.data.api.services.AuthApi
 import app.pantopus.android.data.feed.FeedModerationStore
+import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.observability.Observability
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.push.FcmTokenProvider
@@ -211,6 +212,7 @@ class AuthRepository
         private val notifications: NotificationDispatcher,
         /** Images, widget snapshots and the account's other device-local state; sign-out clears them too. */
         private val accountDeviceData: AccountDeviceData,
+        private val network: NetworkMonitor,
     ) {
         /**
          * Outcome of a token refresh. The distinction matters: only
@@ -354,6 +356,12 @@ class AuthRepository
                 return
             }
             val cached = loadCachedUser()
+            if (cached != null && !network.isOnline.value) {
+                // Android already knows there is no connection. Open the saved session now rather than
+                // keeping its pages behind profile/refresh retries. Online requests still check the session.
+                finishSignedIn(cached, token)
+                return
+            }
             coroutineScope {
                 // Each call can wait out its timeouts and retries, so a slow or failing server once held the
                 // launch screen for a minute or more. With a cached identity the app opens on it after

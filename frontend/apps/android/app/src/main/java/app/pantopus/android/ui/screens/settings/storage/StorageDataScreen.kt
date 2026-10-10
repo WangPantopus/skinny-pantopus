@@ -234,7 +234,8 @@ private fun StorageBody(
             title = "Clear cache ($clearable)",
             onClick = onClear,
             isLoading = clearing,
-            isEnabled = (sizes?.clearable ?: 0L) > 0L,
+            // Memory-only pages and requests in flight can still need clearing when the disk is empty.
+            isEnabled = sizes != null,
             modifier = Modifier.testTag(StorageDataTags.CLEAR),
         )
         Footnote(

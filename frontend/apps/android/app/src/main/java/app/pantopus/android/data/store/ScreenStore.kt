@@ -7,8 +7,8 @@ import android.os.SystemClock
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.net.Conditional
 import app.pantopus.android.data.api.net.NetworkError
-import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -55,7 +55,7 @@ private const val IDLE_MS = 30 * 60 * 1000L
  * Sensitive replies (contract §5) never enter the store: their screens keep calling the repository directly.
  */
 @Singleton
-@Suppress("TooManyFunctions") // Keep the one store and its cache lifecycle operations together.
+@Suppress("TooManyFunctions") // Read, write, invalidation and eviction share the same account/generation lock.
 class ScreenStore
     @Inject
     constructor(
@@ -222,16 +222,17 @@ class ScreenStore
         /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
         fun <T : Any> writer(key: StoreKey<T>): (T) -> Unit {
             val account = accountId() ?: return {}
-            val (slot, ticket) = synchronized(slots) {
-                val slot = slotLocked(key, account)
-                slot.edits++
-                slot.etag = null
-                slot.markStaleLocked()
-                slot.inFlight?.cancel()
-                slot.inFlight = null
-                slot.state.value = slot.state.value.copy(refreshing = false)
-                slot to Ticket(generation, identity(account), slot.edits, slot.marks)
-            }
+            val (slot, ticket) =
+                synchronized(slots) {
+                    val slot = slotLocked(key, account)
+                    slot.edits++
+                    slot.etag = null
+                    slot.markStaleLocked()
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    slot to Ticket(generation, identity(account), slot.edits, slot.marks)
+                }
             return { data ->
                 synchronized(slots) {
                     if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {

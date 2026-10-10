@@ -44,8 +44,8 @@ import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.RefreshOnStoreChange
-import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.components.StatusChip
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.screens.place.detail.LocalPlaceDetailRetry
 import app.pantopus.android.ui.screens.place.detail.PlaceTodayDetailContent
