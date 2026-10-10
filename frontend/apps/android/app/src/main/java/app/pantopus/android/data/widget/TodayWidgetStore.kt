@@ -101,6 +101,11 @@ class TodayWidgetStoreImpl
     ) : TodayWidgetStore {
         private val prefs by lazy { appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
 
+        init {
+            // Older builds wrote temporary household snapshots too. Retire those on upgrade, even offline.
+            read()
+        }
+
         override fun write(snapshot: TodayWidgetSnapshot) {
             runCatching {
                 prefs.edit().putString(KEY_SNAPSHOT, encode(snapshot).toString()).apply()
@@ -115,13 +120,23 @@ class TodayWidgetStoreImpl
 
         override fun read(): TodayWidgetSnapshot? {
             val raw = prefs.getString(KEY_SNAPSHOT, null) ?: return null
-            return runCatching { decode(JSONObject(raw)) }
-                .onFailure { Timber.w(it, "Failed to read the Today widget snapshot") }
+            val json = runCatching { JSONObject(raw) }.getOrNull()
+            val age = json?.optLong("saved_at", 0L)?.let { System.currentTimeMillis() - it }
+            if (json?.optInt("schema") != SNAPSHOT_SCHEMA || age == null || age !in 0 until MAX_AGE_MS) {
+                clear()
+                return null
+            }
+            return runCatching { decode(json) }
+                .onFailure {
+                    clear()
+                    Timber.w(it, "Failed to read the Today widget snapshot")
+                }
                 .getOrNull()
         }
 
         private fun encode(snapshot: TodayWidgetSnapshot): JSONObject =
             JSONObject()
+                .put("schema", SNAPSHOT_SCHEMA)
                 .put("saved_at", snapshot.savedAtEpochMs)
                 .put("place", snapshot.placeLabel)
                 .put(
@@ -221,6 +236,8 @@ class TodayWidgetStoreImpl
         private companion object {
             const val PREFS_NAME = "today_widget"
             const val KEY_SNAPSHOT = "snapshot_json"
+            const val SNAPSHOT_SCHEMA = 2
+            const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
         }
     }
 
