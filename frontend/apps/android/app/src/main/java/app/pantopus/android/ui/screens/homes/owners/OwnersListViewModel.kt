@@ -310,7 +310,7 @@ class OwnersListViewModel
                     _access.value = viewer
                     // Confirmed = the server answered for this access within the Homes window (a fresh copy or this read);
                     // an older copy kept after a failed re-read (offline) shows the roster but confirms nothing.
-                    confirmedAccess.value = viewer.takeIf { access.isFresh(StoreKind.HOMES) }
+                    confirmedAccess.value = viewer.takeIf { access.failure == null && access.isFresh(StoreKind.HOMES) }
                     owners = list.owners
                     applyState()
                 }
