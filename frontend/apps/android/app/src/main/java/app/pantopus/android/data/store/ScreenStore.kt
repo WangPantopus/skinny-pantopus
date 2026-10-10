@@ -20,6 +20,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -52,6 +54,7 @@ private const val IDLE_MS = 30 * 60 * 1000L
  * Sensitive replies (contract §5) never enter the store: their screens keep calling the repository directly.
  */
 @Singleton
+@Suppress("TooManyFunctions") // Read, write, invalidation and eviction share the same account/generation lock.
 class ScreenStore
     @Inject
     constructor(
@@ -71,6 +74,14 @@ class ScreenStore
         // Guards the saved copy: a write checks the generation and the entry's edits under it, and a wipe or a delete
         // runs under it, so a write queued before them can't put a copy back afterwards.
         private val diskLock = Any()
+
+        private val _changes = MutableStateFlow(0L)
+
+        /**
+         * Moves whenever a topic or a kind marks entries out of date (contract §8): screens on show read again, and a
+         * read answers the entries nobody marked without a request.
+         */
+        val changes: StateFlow<Long> = _changes.asStateFlow()
 
         private class Slot(
             val key: StoreKey<*>,
@@ -204,6 +215,23 @@ class ScreenStore
          */
         fun markStale(topic: String) {
             synchronized(slots) { slots.values.forEach { if (it.key.matches(topic)) it.markStaleLocked() } }
+            _changes.update { it + 1 }
+        }
+
+        /** An own write without a full replacement: retire earlier reads and saved copies before revalidation. */
+        fun markEdited(topic: String) {
+            synchronized(slots) {
+                slots.values.filter { it.key.matches(topic) }.forEach { slot ->
+                    slot.edits++
+                    slot.markStaleLocked()
+                    slot.etag = null
+                    slot.inFlight?.cancel()
+                    slot.inFlight = null
+                    slot.state.value = slot.state.value.copy(refreshing = false)
+                    deleteSaved(slot.key.id)
+                }
+            }
+            _changes.update { it + 1 }
         }
 
         /** Capture before an asynchronous save, so its reply cannot populate another account or a cleared cache. */
@@ -223,6 +251,21 @@ class ScreenStore
                 synchronized(slots) {
                     if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) put(key, data)
                 }
+            }
+        }
+
+        /** A list item tapped now can seed a detail's first frame. It stays in the same bounded, wiped memory store. */
+        fun <T : Any> seed(
+            key: StoreKey<T>,
+            data: T,
+        ) {
+            val account = accountId() ?: return
+            synchronized(slots) {
+                val slot = slotLocked(key, account)
+                if (slot.state.value.data != null || slot.state.value.failure?.code in listOf(401, 403, 404)) return
+                // A seed is never fresh or saved. A read already in flight may still replace it with the complete reply.
+                slot.stale = true
+                slot.state.value = Stored(data)
             }
         }
 
@@ -251,6 +294,7 @@ class ScreenStore
         /** Marks every entry of [kinds] out of date, e.g. the household ones after a socket reconnect. */
         fun markStale(kinds: Set<StoreKind>) {
             synchronized(slots) { slots.values.forEach { if (it.key.kind in kinds) it.markStaleLocked() } }
+            _changes.update { it + 1 }
         }
 
         /** Drops one entry, e.g. after the item was deleted. */

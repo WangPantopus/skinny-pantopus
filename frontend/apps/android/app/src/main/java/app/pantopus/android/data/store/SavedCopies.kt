@@ -15,8 +15,8 @@ import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Contract §6 "Saved copy": at most 20 MB of saved pages… */
-private const val MAX_BYTES = 20L * 1024 * 1024
+/** Contract §6 "Saved copy": at most 20 MB of saved pages (photos get the rest of the storage limit)… */
+const val SAVED_PAGES_MAX_BYTES = 20L * 1024 * 1024
 
 /** …and nothing older than 7 days is read (a saved household copy is shown for at most 7 days, contract §5). */
 private const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
@@ -153,14 +153,14 @@ class SavedCopies
         /** Bytes the saved pages take now (the Storage & data screen). */
         fun sizeBytes(): Long = root.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
 
-        /** Least recently used first, until the folder fits [MAX_BYTES]. */
+        /** Least recently used first, until the folder fits [SAVED_PAGES_MAX_BYTES]. */
         private fun trim() {
             val files = root.walkBottomUp().filter { it.isFile && it.name.endsWith(".json") }.toMutableList()
             var total = files.sumOf { it.length() }
-            if (total <= MAX_BYTES) return
+            if (total <= SAVED_PAGES_MAX_BYTES) return
             files.sortBy { it.lastModified() }
             for (file in files) {
-                if (total <= MAX_BYTES) break
+                if (total <= SAVED_PAGES_MAX_BYTES) break
                 total -= file.length()
                 file.delete()
             }

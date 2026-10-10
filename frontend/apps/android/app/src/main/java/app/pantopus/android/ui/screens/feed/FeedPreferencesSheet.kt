@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.RefreshOnStoreChange
+import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.data.api.models.feed.FeedPreferencesDto
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
@@ -59,10 +61,12 @@ fun FeedPreferencesSheet(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(Unit) { viewModel.load() }
+    RefreshOnStoreChange(viewModel::load)
 
     ModalBottomSheet(
         onDismissRequest = onClose,
@@ -107,6 +111,7 @@ fun FeedPreferencesSheet(
                         .height(1.dp)
                         .background(PantopusColors.appBorderSubtle),
             )
+            refreshNotice?.let { RefreshFailedLine(it) }
             when (val s = state) {
                 is FeedPreferencesUiState.Loading -> PreferencesLoading()
                 is FeedPreferencesUiState.Error ->

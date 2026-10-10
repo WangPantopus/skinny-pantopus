@@ -95,6 +95,7 @@ class PlaceRealRentContributionTest {
         every { appLock.isLocked } returns locked
         return PlaceDetailViewModel(
             repo = repo,
+            homesRepo = mockk(relaxed = true),
             adminRepo = mockk<HomeAdminRepository>(relaxed = true),
             sessionScopes = sessions,
             preferencesRepository = preferences,

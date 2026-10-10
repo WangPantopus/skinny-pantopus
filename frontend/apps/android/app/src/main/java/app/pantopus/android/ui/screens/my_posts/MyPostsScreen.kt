@@ -31,6 +31,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
@@ -69,6 +74,7 @@ fun MyPostsScreen(
     savedViewModel: SavedPostsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val topBarAction by viewModel.topBarAction.collectAsStateWithLifecycle()
     val fab by viewModel.fab.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
@@ -79,6 +85,7 @@ fun MyPostsScreen(
     val activityFilter by viewModel.activityFilter.collectAsStateWithLifecycle()
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
     val savedState by savedViewModel.state.collectAsStateWithLifecycle()
+    val savedRefreshNotice by savedViewModel.refreshNotice.collectAsStateWithLifecycle()
     val savedToast by savedViewModel.toastMessage.collectAsStateWithLifecycle()
     val onSaved = selectedTab == MyPostsTab.SAVED
 
@@ -88,13 +95,21 @@ fun MyPostsScreen(
             onCompose = onCompose,
             onEditPost = onEditPost,
         )
-        viewModel.load()
         savedViewModel.bindCallbacks(onOpenPost = onOpenPost)
     }
 
-    // Every visit to the Saved tab re-reads it, so posts saved elsewhere since show up.
-    LaunchedEffect(onSaved) {
-        if (onSaved) savedViewModel.load()
+    LifecycleResumeEffect(onSaved) {
+        if (onSaved) savedViewModel.load() else viewModel.load()
+        onPauseOrDispose { }
+    }
+    RefreshOnStoreChange { if (onSaved) savedViewModel.load() else viewModel.load() }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle, onSaved) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.postChanges.collect {
+                if (onSaved) savedViewModel.load() else viewModel.load()
+            }
+        }
     }
 
     LaunchedEffect(savedToast) {
@@ -113,9 +128,10 @@ fun MyPostsScreen(
 
     Box(modifier = Modifier.fillMaxSize().testTag(MY_POSTS_TAG)) {
         ListOfRowsScreen(
+            refreshNotice = if (onSaved) savedRefreshNotice else refreshNotice,
             title = "My posts",
             state = if (onSaved) savedState else state,
-            onRefresh = { if (onSaved) savedViewModel.load() else viewModel.refresh() },
+            onRefresh = { if (onSaved) savedViewModel.refresh() else viewModel.refresh() },
             onEndReached = { if (onSaved) savedViewModel.loadMoreIfNeeded() else viewModel.loadMoreIfNeeded() },
             tabs = tabs + ListOfRowsTab(id = MyPostsTab.SAVED, label = "Saved"),
             selectedTab = selectedTab,

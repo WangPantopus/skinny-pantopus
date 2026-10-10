@@ -14,11 +14,14 @@ import app.pantopus.android.data.api.models.hub.HubStatusItem
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
 import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
 import app.pantopus.android.data.api.models.notifications.personalBellCount
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigExtrasRepository
 import app.pantopus.android.data.hub.HubRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.IdentityPillar
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -117,7 +120,7 @@ class HubViewModel
 
         /** Re-request the active Discover filter after a failure. */
         fun retryDiscovery() {
-            viewModelScope.launch { refreshDiscovery() }
+            viewModelScope.launch { refreshDiscovery(force = true) }
         }
 
         /**
@@ -128,17 +131,20 @@ class HubViewModel
         fun selectDiscoveryFilter(filter: HubDiscoveryFilter) {
             if (_discoveryFilter.value == filter) return
             _discoveryFilter.value = filter
-            viewModelScope.launch { refreshDiscovery() }
+            viewModelScope.launch { refreshDiscovery(force = false) }
         }
 
-        private suspend fun refreshDiscovery() {
+        /** A tab seen before shows its stored rail at once (Instant Screens); the rail's spinner only without one. */
+        private suspend fun refreshDiscovery(force: Boolean) {
             val generation = ++discoveryGeneration
-            _discoveryLoading.value = true
-            val result = repo.discovery(filter = _discoveryFilter.value.queryValue)
+            val filter = _discoveryFilter.value.queryValue
+            val copy = repo.discoveryCopy(filter)
+            if (copy != null) applyDiscovery(projectDiscovery(copy.items))
+            _discoveryLoading.value = copy == null
+            val stored = repo.discoveryStored(filter, force)
             if (generation != discoveryGeneration) return
-            _discoveryFailed.value = result !is NetworkResult.Success
-            val items = (result as? NetworkResult.Success)?.data?.items.orEmpty()
-            applyDiscovery(projectDiscovery(items))
+            _discoveryFailed.value = stored.data == null
+            applyDiscovery(projectDiscovery(stored.data?.items.orEmpty()))
             _discoveryLoading.value = false
         }
 
@@ -156,20 +162,51 @@ class HubViewModel
         /** The [ProfileChanges] version the greeting was read at. */
         private var readAtVersion = -1
 
-        /** Initial load; no-op when already populated and no name or username was saved since. */
-        fun load() {
-            if (_state.value is HubUiState.Populated && readAtVersion == ProfileChanges.version.value) return
-            refresh()
+        private val _refreshing = MutableStateFlow(false)
+
+        /** True only while a pull or Retry reads with the hub on screen; a return never shows the indicator. */
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        init {
+            showStoredCopies()
         }
 
-        /** Pull-to-refresh / retry. */
-        fun refresh() {
-            readAtVersion = ProfileChanges.version.value
-            discoveryGeneration += 1
-            _discoveryLoading.value = false
-            _state.value = HubUiState.Skeleton
-            viewModelScope.launch { fetch() }
+        /** The first frame from the screens' store when it holds the overview (Instant Screens): no skeleton then. */
+        private fun showStoredCopies() {
+            val hub = repo.overviewCopy() ?: return
+            val unread = notificationsRepo.unreadCountCopy()
+            val discovery = repo.discoveryCopy(_discoveryFilter.value.queryValue)?.items.orEmpty()
+            applyResults(hub, repo.todayCopy(), discovery, personalUnread(unread), audienceUnread(unread))
         }
+
+        /**
+         * Entry and every return: what's on screen stays, and only copies the store says are out of date are read
+         * again, quietly. A name or username saved since the last read reads the overview now.
+         */
+        fun load() {
+            if (_state.value is HubUiState.Error) _state.value = HubUiState.Skeleton
+            val profileChanged = readAtVersion >= 0 && readAtVersion != ProfileChanges.version.value
+            viewModelScope.launch { fetch(force = false, forceOverview = profileChanged) }
+        }
+
+        /** Pull-to-refresh / Retry: reads now. The skeleton shows only when nothing is on screen. */
+        fun refresh() {
+            val shown = hasContent()
+            if (!shown) _state.value = HubUiState.Skeleton
+            _refreshing.value = shown
+            viewModelScope.launch {
+                try {
+                    fetch(force = true)
+                } finally {
+                    _refreshing.value = false
+                }
+            }
+        }
+
+        private fun hasContent(): Boolean = _state.value is HubUiState.Populated || _state.value is HubUiState.FirstRun
 
         /** Persist the amber-banner dismissal and hide it from the current state. */
         fun dismissSetupBanner() {
@@ -218,49 +255,57 @@ class HubViewModel
                 )
         }
 
-        private suspend fun fetch() {
-            val hubResult = repo.overview()
-            val hub =
-                when (hubResult) {
-                    is NetworkResult.Success -> hubResult.data
-                    is NetworkResult.Failure -> {
-                        _state.value = HubUiState.Error(hubResult.error.message)
-                        return
-                    }
-                }
-
-            // Companion endpoints run in parallel *after* hub so test sequences
-            // can predict stub consumption. Failures degrade gracefully.
-            val (today, discovery) =
+        /**
+         * Reads the hub through the screens' store: [force] (pull, Retry) reads everything now; otherwise only copies
+         * that are out of date are read. The overview first: without one (and nothing on screen) the hub shows the
+         * error; a failed read with the hub on screen keeps it. Companions never blank the hub.
+         */
+        private suspend fun fetch(
+            force: Boolean,
+            forceOverview: Boolean = force,
+        ) {
+            readAtVersion = ProfileChanges.version.value
+            val overview = repo.overviewStored(forceOverview)
+            _refreshNotice.value = RefreshNotice(overview.fetchedAt, ::refresh).takeIf { overview.showsRefreshFailure(StoreKind.HOMES) }
+            val hub = overview.data
+            if (hub == null) {
+                val failure = overview.failure
+                val endsAccess = failure is NetworkError.Forbidden ||
+                    failure == NetworkError.NotFound ||
+                    failure == NetworkError.Unauthorized
+                if (!hasContent() || endsAccess) _state.value = HubUiState.Error(failure?.message ?: "Couldn't load your hub.")
+                return
+            }
+            val filter = _discoveryFilter.value.queryValue
+            val generation = discoveryGeneration
+            val (todayRead, discoveryRead) =
                 coroutineScope {
-                    val todayJob = async { (repo.today() as? NetworkResult.Success)?.data }
-                    val discoveryJob =
-                        async {
-                            (
-                                repo.discovery(filter = _discoveryFilter.value.queryValue)
-                                    as? NetworkResult.Success
-                            )?.data
-                        }
+                    val todayJob = async { repo.todayStored(force) }
+                    val discoveryJob = async { repo.discoveryStored(filter, force) }
                     todayJob.await() to discoveryJob.await()
                 }
-            _discoveryFailed.value = discovery == null
-
-            // S5 — per-firewall unread split powers the megaphone shortcut
-            // into the Beacon notification zone. Sequenced (not raced)
-            // after the companions so a stubbed test sequence stays
-            // predictable; a failure just hides the shortcut.
+            val today = todayRead.data
+            val discovery = discoveryRead.data
+            if (_refreshNotice.value == null && todayRead.showsRefreshFailure(StoreKind.TODAY)) {
+                _refreshNotice.value = RefreshNotice(todayRead.fetchedAt, ::refresh)
+            }
+            if (_refreshNotice.value == null && discoveryRead.showsRefreshFailure(StoreKind.NEARBY)) {
+                _refreshNotice.value = RefreshNotice(discoveryRead.fetchedAt, ::refresh)
+            }
+            // S5 — the per-firewall unread split powers the megaphone shortcut; a failure just hides it.
             val unread = (notificationsRepo.unreadCount() as? NetworkResult.Success)?.data
-            val audienceUnread = audienceUnread(unread)
-
-            // Rebookable helpers feed the "Jump back in" rail. Optional —
-            // an empty / failing gigs call never blanks the hub.
+            // Launch cut #4 (Open Gigs) hides the rebook cards, so nothing is asked for them.
             val rebookable =
-                (gigExtrasRepo.rebookable() as? NetworkResult.Success)
-                    ?.data
-                    ?.rebookable
-                    .orEmpty()
-
-            applyResults(hub, today, discovery?.items.orEmpty(), personalUnread(unread), audienceUnread, rebookable)
+                if (LaunchFeatures.openGigs) {
+                    (gigExtrasRepo.rebookable() as? NetworkResult.Success)?.data?.rebookable.orEmpty()
+                } else {
+                    emptyList()
+                }
+            // A filter tab tapped meanwhile owns the rail.
+            val railCurrent = generation == discoveryGeneration && filter == _discoveryFilter.value.queryValue
+            if (railCurrent) _discoveryFailed.value = discovery == null
+            val rail = if (railCurrent) discovery else repo.discoveryCopy(_discoveryFilter.value.queryValue)
+            applyResults(hub, today, rail?.items.orEmpty(), personalUnread(unread), audienceUnread(unread), rebookable)
         }
 
         /**

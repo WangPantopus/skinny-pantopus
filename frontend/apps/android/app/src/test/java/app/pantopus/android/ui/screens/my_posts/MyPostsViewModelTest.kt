@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
+import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowBodyEmphasis
@@ -58,6 +59,7 @@ class MyPostsViewModelTest {
                 ),
             )
         every { authRepo.state } returns state
+        every { postsRepo.userPostsCopy(any(), any(), any()) } returns Stored()
     }
 
     @After
@@ -97,7 +99,7 @@ class MyPostsViewModelTest {
     @Test
     fun loadEmptyTransitionsToEmpty() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = emptyList()))
             val vm = makeVM()
             vm.load()
@@ -110,7 +112,7 @@ class MyPostsViewModelTest {
     @Test
     fun loadPopulatedTransitionsToLoadedOnActiveTab() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
             coEvery { postsRepo.archivePost("p1") } returns
                 NetworkResult.Success(PostArchiveResponse(archived = true, archivedAt = fixedNow.toString()))
@@ -126,7 +128,7 @@ class MyPostsViewModelTest {
     @Test
     fun loadFailureTransitionsToErrorWhenCold() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeVM()
             vm.load()
@@ -148,7 +150,7 @@ class MyPostsViewModelTest {
     @Test
     fun wirePostWithArchivedAtLandsInArchivedTab() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     MyPostsResponse(
                         posts =
@@ -222,7 +224,7 @@ class MyPostsViewModelTest {
     @Test
     fun rowProjectionUsesPrimaryBodyEmphasisAndHeaderChips() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
             coEvery { postsRepo.archivePost("p1") } returns
                 NetworkResult.Success(PostArchiveResponse(archived = true, archivedAt = fixedNow.toString()))
@@ -246,7 +248,7 @@ class MyPostsViewModelTest {
     @Test
     fun archivedRowUsesArchivedHighlightAndRestoreCTA() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(
                     MyPostsResponse(posts = listOf(dto(id = "x1", archivedAt = "2026-05-11T10:00:00Z"))),
                 )
@@ -268,7 +270,7 @@ class MyPostsViewModelTest {
         runTest {
             // A confirmed archive tells the lists to refetch; this one then reads the post archived.
             val archivedP1 = dto(id = "p1", archivedAt = fixedNow.toString())
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returnsMany
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any(), any()) } returnsMany
                 listOf(
                     NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1")))),
                     NetworkResult.Success(MyPostsResponse(posts = listOf(archivedP1))),
@@ -292,7 +294,7 @@ class MyPostsViewModelTest {
         runTest {
             // Each confirmed change refetches the list: active, then archived, then active again.
             val archivedP1 = dto(id = "p1", archivedAt = fixedNow.toString())
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returnsMany
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any(), any()) } returnsMany
                 listOf(
                     NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1")))),
                     NetworkResult.Success(MyPostsResponse(posts = listOf(archivedP1))),
@@ -315,7 +317,7 @@ class MyPostsViewModelTest {
     fun confirmDeleteRemovesRowOnSuccess() =
         runTest {
             // The confirmed delete refetches the list, which no longer has the post.
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returnsMany
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any(), any()) } returnsMany
                 listOf(
                     NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1")))),
                     NetworkResult.Success(MyPostsResponse(posts = emptyList())),
@@ -332,7 +334,7 @@ class MyPostsViewModelTest {
     @Test
     fun confirmDeleteRollsBackOnFailure() =
         runTest {
-            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any()) } returns
+            coEvery { postsRepo.userPosts(any(), any(), any(), any(), any(), any()) } returns
                 NetworkResult.Success(MyPostsResponse(posts = listOf(dto(id = "p1"))))
             coEvery { postsRepo.deletePost("p1") } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))

@@ -137,7 +137,7 @@ class PlaceDashboardViewModel
                 // The move-in date (the movers card) rides on the intelligence.
                 data != null -> _state.value = PlaceDashboardUiState.Loaded(data, data.moveInDate)
                 // Access ended (contract §3): the store dropped the copy, and the server's answer shows.
-                failure is NetworkError.Forbidden || failure == NetworkError.NotFound ->
+                failure is NetworkError.Forbidden || failure == NetworkError.NotFound || failure == NetworkError.Unauthorized ->
                     _state.value =
                         PlaceDashboardUiState.Error(
                             failure.displayMessage("Couldn't load your dashboard."),

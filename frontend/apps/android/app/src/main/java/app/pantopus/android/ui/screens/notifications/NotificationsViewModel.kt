@@ -23,7 +23,9 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.notifications.NotificationsRepository
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.asResult
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
@@ -253,6 +255,10 @@ class NotificationsViewModel
         private val pageSize = 20
         private var hasMore = false
         private var loading = false
+        private var quietRefreshPending = false
+        private var forceRefreshPending = false
+        private val pendingReads = mutableSetOf<String>()
+        private var markingAllRead = false
         private var notifications: MutableList<NotificationDto> = mutableListOf()
 
         /** Bumped by every reload so a late page from the previous tab or zone is dropped. */
@@ -289,6 +295,9 @@ class NotificationsViewModel
         /** A pull or Retry is reading while the rows stay: the pull indicator only. */
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
         private val _openGig = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
@@ -379,8 +388,22 @@ class NotificationsViewModel
          * first pages at once (Instant Screens) and reads them again when they are out of date.
          */
         fun load() {
-            if (_state.value is ListOfRowsUiState.Loaded && notifications.isNotEmpty()) return
-            reload(force = false)
+            if (_state.value is ListOfRowsUiState.Loaded || _state.value is ListOfRowsUiState.Empty) {
+                refreshIfNeeded()
+            } else {
+                reload(force = false)
+            }
+        }
+
+        /** A live signal or return refreshes the first page quietly, preserving older rows and the reading position. */
+        fun refreshIfNeeded() {
+            if (loading || pendingReads.isNotEmpty() || markingAllRead) {
+                quietRefreshPending = true
+                return
+            }
+            val force = forceRefreshPending
+            forceRefreshPending = false
+            fetchPage(reset = true, force = force, keepTail = true)
         }
 
         /** Pull-to-refresh / retry: reads now, with the rows kept under the pull indicator. */
@@ -426,53 +449,85 @@ class NotificationsViewModel
 
         private fun markReadCurrent(id: String) {
             val target = notifications.firstOrNull { it.id == id } ?: return
-            if (!mayOpenTask(target)) return
-            if (target.isRead == true) return
-            val previous = notifications.toList()
-            val previousCount = _unreadCount.value
-            notifications =
-                notifications.map { if (it.id == id) it.copy(isRead = true) else it }.toMutableList()
-            _unreadCount.value = (previousCount - 1).coerceAtLeast(0)
+            if (!mayOpenTask(target) || target.isRead == true || markingAllRead || !pendingReads.add(id)) return
+            val generation = fetchGeneration
+            notifications = notifications.map { if (it.id == id) it.copy(isRead = true) else it }.toMutableList()
+            _unreadCount.value = (_unreadCount.value - 1).coerceAtLeast(0)
             applyState()
             viewModelScope.launch {
-                if (!confirmTaskScope(target)) return@launch
-                when (repo.markRead(id)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        if (!confirmTaskScope(target)) return@launch
-                        notifications = previous.toMutableList()
-                        _unreadCount.value = previousCount
-                        applyState()
+                try {
+                    if (!confirmTaskScope(target)) {
+                        undoPendingReads(setOf(id), generation, 1)
+                        return@launch
                     }
+                    when (repo.markRead(id)) {
+                        is NetworkResult.Success -> Unit
+                        is NetworkResult.Failure -> {
+                            // Restore this action only: another read or a newly arrived row must survive the failure.
+                            undoPendingReads(setOf(id), generation, 1)
+                            _toast.value = ToastMessage("Couldn't mark as read. Try again.", ToastKind.Error)
+                        }
+                    }
+                } finally {
+                    pendingReads.remove(id)
+                    finishReadAction()
                 }
             }
         }
 
-        /**
-         * Sweep every unread row — same optimistic + rollback pattern.
-         *
-         * Scoped to the active zone so "Mark all read" in the Personal
-         * zone never silently clears the Beacon stream (RN
-         * `src/app/notifications.tsx:206-214`).
-         */
+        /** Mark the current zone read at once, keeping other in-flight actions and new arrivals intact. */
         fun markAllRead() {
-            if (_unreadCount.value == 0) return
-            val previous = notifications.toList()
+            if (_unreadCount.value == 0 || markingAllRead || pendingReads.isNotEmpty()) return
+            val targets = notifications.filter { it.isRead != true }.map { it.id }.toSet()
             val previousCount = _unreadCount.value
+            val generation = fetchGeneration
             val contexts = activeContexts()
-            notifications = notifications.map { it.copy(isRead = true) }.toMutableList()
+            markingAllRead = true
+            pendingReads.addAll(targets)
+            notifications = notifications.map { if (it.id in targets) it.copy(isRead = true) else it }.toMutableList()
             _unreadCount.value = 0
             applyState()
             viewModelScope.launch {
-                when (repo.markAllRead(contexts)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        notifications = previous.toMutableList()
-                        _unreadCount.value = previousCount
-                        applyState()
-                        _toast.value = ToastMessage("Couldn't mark all as read. Try again.", ToastKind.Error)
+                try {
+                    when (repo.markAllRead(contexts)) {
+                        is NetworkResult.Success -> Unit
+                        is NetworkResult.Failure -> {
+                            undoPendingReads(targets, generation, previousCount)
+                            _toast.value = ToastMessage("Couldn't mark all as read. Try again.", ToastKind.Error)
+                        }
                     }
+                } finally {
+                    pendingReads.removeAll(targets)
+                    markingAllRead = false
+                    finishReadAction()
                 }
+            }
+        }
+
+        /** A rejected write cannot change a newer tab, replace new rows, or restore an access-refused list. */
+        private fun undoPendingReads(
+            ids: Set<String>,
+            generation: Int,
+            unread: Int,
+        ) {
+            if (_state.value is ListOfRowsUiState.Error) return
+            if (generation != fetchGeneration) {
+                // A pull or tab switch may have projected this still-pending action onto a newer response. Read
+                // the current filter again after the action finishes, without restoring the previous filter's rows.
+                quietRefreshPending = true
+                forceRefreshPending = true
+                return
+            }
+            notifications = notifications.map { if (it.id in ids) it.copy(isRead = false) else it }.toMutableList()
+            _unreadCount.value += unread
+        }
+
+        private fun finishReadAction() {
+            // An access refusal owns the empty/error state; completing a write must not republish its old rows.
+            if (_state.value is ListOfRowsUiState.Loaded || _state.value is ListOfRowsUiState.Empty) applyState()
+            if (quietRefreshPending && pendingReads.isEmpty() && !markingAllRead) {
+                quietRefreshPending = false
+                refreshIfNeeded()
             }
         }
 
@@ -508,8 +563,9 @@ class NotificationsViewModel
          * disappears immediately and is restored if the call fails.
          */
         fun delete(id: String) {
+            if (id in pendingReads || markingAllRead) return
+            val generation = fetchGeneration
             val target = notifications.firstOrNull { it.id == id } ?: return
-            val previous = notifications.toList()
             val previousCount = _unreadCount.value
             notifications = notifications.filterNot { it.id == id }.toMutableList()
             if (target.isRead != true) {
@@ -522,8 +578,11 @@ class NotificationsViewModel
                     is NetworkResult.Failure -> {
                         // Already deleted (say on another device): the row stays gone.
                         if (result.error == NetworkError.NotFound) return@launch
-                        notifications = previous.toMutableList()
-                        _unreadCount.value = previousCount
+                        if (generation != fetchGeneration || _state.value is ListOfRowsUiState.Error) return@launch
+                        if (notifications.none { it.id == target.id }) {
+                            notifications = sortedByRecency(notifications + target).toMutableList()
+                            if (target.isRead != true) _unreadCount.value++
+                        }
                         applyState()
                         _toast.value = ToastMessage("Couldn't delete the notification. Try again.", ToastKind.Error)
                     }
@@ -556,6 +615,7 @@ class NotificationsViewModel
             // A tab or zone switch mid-load must refetch with the new filter:
             // retire the running request instead of skipping this one.
             fetchGeneration++
+            quietRefreshPending = false
             loading = false
             loadMoreError = null
             val keepRows = force && _state.value is ListOfRowsUiState.Loaded
@@ -584,10 +644,11 @@ class NotificationsViewModel
         private fun fetchPage(
             reset: Boolean,
             force: Boolean = false,
+            keepTail: Boolean = false,
         ) {
             if (loading) return
             loading = true
-            if (reset) offsets = mutableMapOf()
+            if (reset && !keepTail) offsets = mutableMapOf()
             val generation = fetchGeneration
             val unreadOnly = _selectedTab.value == NotificationsTab.UNREAD
             // A null context means "unscoped legacy list"; the fan-out below
@@ -595,6 +656,7 @@ class NotificationsViewModel
             // `personal` + `platform` the way RN does.
             val contexts = activeContexts() ?: listOf(UNSCOPED)
             viewModelScope.launch {
+                var notice: RefreshNotice? = null
                 val pages =
                     contexts.map { context ->
                         val scope = context.takeIf { it != UNSCOPED }
@@ -602,6 +664,9 @@ class NotificationsViewModel
                         val result =
                             if (reset) {
                                 repo.firstPageStored(pageSize, unreadOnly, scope, force).let { stored ->
+                                    if (stored.showsRefreshFailure(StoreKind.NOTIFICATIONS)) {
+                                        notice = RefreshNotice(stored.fetchedAt, ::refresh)
+                                    }
                                     stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
                                 }
                             } else {
@@ -614,14 +679,33 @@ class NotificationsViewModel
                     }
                 loading = false
                 _refreshing.value = false
-                publishPages(pages, reset)
+                if (reset) _refreshNotice.value = notice
+                publishPages(pages, reset, keepTail)
+                if (quietRefreshPending) {
+                    quietRefreshPending = false
+                    refreshIfNeeded()
+                }
             }
         }
 
         private fun publishPages(
             pages: List<Pair<String, NetworkResult<NotificationsListResponse>>>,
             reset: Boolean,
+            keepTail: Boolean = false,
         ) {
+            val refusal = pages.mapNotNull { it.second as? NetworkResult.Failure }
+                .firstOrNull { it.error is NetworkError.Forbidden ||
+                    it.error == NetworkError.NotFound ||
+                    it.error == NetworkError.Unauthorized }
+            if (refusal != null) {
+                notifications.clear()
+                offsets.clear()
+                hasMore = false
+                _unreadCount.value = 0
+                _state.value = ListOfRowsUiState.Error(refusal.error.displayMessage("Couldn't load the list."))
+                return
+            }
+            val hadLaterPages = offsets.values.any { it > pageSize }
             val incoming = mutableListOf<NotificationDto>()
             var anyMore = false
             var scopedUnread = 0
@@ -634,8 +718,12 @@ class NotificationsViewModel
                         // Launch cut: rows of features hidden for the first launch never
                         // enter the list, nor count as unread; paging keeps server offsets.
                         val visible = body.notifications.filter(::isLaunchVisible)
-                        incoming.addAll(visible)
-                        offsets[context] = (offsets[context] ?: 0) + body.notifications.size
+                        if (keepTail) {
+                            incoming.addAll(refreshedHead(context, body, visible))
+                        } else {
+                            incoming.addAll(visible)
+                            offsets[context] = (offsets[context] ?: 0) + body.notifications.size
+                        }
                         anyMore = anyMore || (body.hasMore ?: (body.notifications.size >= pageSize))
                         body.unreadCount?.let {
                             val hiddenUnread = (body.notifications - visible.toSet()).count { row -> row.isRead != true }
@@ -643,7 +731,11 @@ class NotificationsViewModel
                             sawUnreadCount = true
                         }
                     }
-                    is NetworkResult.Failure -> failure = result
+                    is NetworkResult.Failure -> {
+                        failure = result
+                        if (keepTail) incoming.addAll(notifications.filter { context == UNSCOPED ||
+                            (it.context ?: NotificationContext.PERSONAL) == context })
+                    }
                 }
             }
             val failed = failure
@@ -671,11 +763,33 @@ class NotificationsViewModel
                 } else {
                     merge(notifications, incoming).toMutableList()
                 }
-            hasMore = anyMore
+            if (!keepTail || !hadLaterPages) hasMore = anyMore
             _unreadCount.value =
                 if (sawUnreadCount) scopedUnread else notifications.count { it.isRead != true }
+            val pendingUnread = notifications.count { it.id in pendingReads && it.isRead != true }
+            notifications = notifications.map { if (it.id in pendingReads) it.copy(isRead = true) else it }.toMutableList()
+            _unreadCount.value = (_unreadCount.value - pendingUnread).coerceAtLeast(0)
             revealZoneStripIfAudienceSeen()
             applyState()
+        }
+
+        /** Keep rows older than the refreshed head; rows missing inside its covered range have been removed. */
+        private fun refreshedHead(
+            context: String,
+            body: NotificationsListResponse,
+            visible: List<NotificationDto>,
+        ): List<NotificationDto> {
+            val previous = notifications.filter { context == UNSCOPED || (it.context ?: NotificationContext.PERSONAL) == context }
+            val boundary = body.notifications.lastOrNull()?.createdAt?.let(::parseInstant)
+            val more = body.hasMore ?: (body.notifications.size >= pageSize)
+            val retained = if (more && boundary != null) {
+                previous.filter { row -> (parseInstant(row.createdAt) ?: Instant.EPOCH) <= boundary }
+            } else {
+                emptyList()
+            }
+            val merged = merge(visible, retained)
+            offsets[context] = maxOf(body.notifications.size, (offsets[context] ?: 0) + merged.size - previous.size)
+            return merged
         }
 
         /**
@@ -747,7 +861,22 @@ class NotificationsViewModel
                     zone = timeZone,
                     onDelete = ::requestDelete,
                     onTap = ::handleTap,
-                )
+                ).map { section ->
+                    section.copy(rows = section.rows.map { row ->
+                        if (row.id in pendingReads) {
+                            row.copy(
+                                chips = row.chips.orEmpty() + RowChip(
+                                    "Pending",
+                                    tint = RowChip.Tint.Status(StatusChipVariant.Neutral),
+                                ),
+                                wrapChips = true,
+                                destructiveAction = null,
+                            )
+                        } else {
+                            row
+                        }
+                    })
+                }
             _state.value =
                 ListOfRowsUiState.Loaded(
                     sections = sections,
@@ -798,8 +927,8 @@ class NotificationsViewModel
             TopBarAction(
                 icon = PantopusIcon.Check,
                 contentDescription = "Mark all read",
-                label = "Mark all read",
-                isEnabled = enabled,
+                label = if (markingAllRead) "Pending" else "Mark all read",
+                isEnabled = enabled && !markingAllRead && pendingReads.isEmpty(),
                 onClick = { markAllRead() },
             )
 

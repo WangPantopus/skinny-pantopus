@@ -432,6 +432,7 @@ import app.pantopus.android.ui.screens.settings.legal.LegalIndexScreen
 import app.pantopus.android.ui.screens.settings.password.PasswordChangeScreen
 import app.pantopus.android.ui.screens.settings.payments.PaymentsScreen
 import app.pantopus.android.ui.screens.settings.security.DevicesScreen
+import app.pantopus.android.ui.screens.settings.storage.StorageDataScreen
 import app.pantopus.android.ui.screens.settings.verification.VerificationCenterScreen
 import app.pantopus.android.ui.screens.status.StatusWaitingContent
 import app.pantopus.android.ui.screens.status.StatusWaitingScreen
@@ -1690,6 +1691,9 @@ private object ChildRoutes {
 
     /** WS5.3 — GDPR data-export request (mailto until backend job ships). */
     const val SETTINGS_DATA_EXPORT = "settings/data-export"
+
+    /** Settings → This phone → Storage & data (Instant Screens contract §7). */
+    const val SETTINGS_STORAGE = "settings/storage"
     const val PROPERTY_DETAILS_HOME_ID_KEY = "homeId"
     const val PROPERTY_DETAILS = "homes/{$PROPERTY_DETAILS_HOME_ID_KEY}/property"
 
@@ -2561,6 +2565,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     // stays reachable (back) and is the no-home fallback;
                     // parity with the iOS HubTabRoot auto-land.
                     val placeHostVm: HomeTabHostViewModel = hiltViewModel()
+                    app.pantopus.android.ui.components.RefreshOnStoreChange(placeHostVm::resolve)
                     val placeLanding by placeHostVm.landing.collectAsStateWithLifecycle()
                     val verifyScope = rememberCoroutineScope()
                     var didLandPlace by rememberSaveable { mutableStateOf(false) }
@@ -5650,6 +5655,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     navController.navigate(ChildRoutes.REVIEW_CLAIMS)
                                 }
                                 SettingsRoute.DidSignOut -> navController.popBackStack()
+                                SettingsRoute.StorageData -> navController.navigate(ChildRoutes.SETTINGS_STORAGE)
                             }
                         },
                     )
@@ -5659,6 +5665,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(ChildRoutes.SETTINGS_NOTIFICATIONS) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })
+                }
+                composable(ChildRoutes.SETTINGS_STORAGE) {
+                    StorageDataScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.SETTINGS_PRIVACY) {
                     PrivacySettingsScreen(
