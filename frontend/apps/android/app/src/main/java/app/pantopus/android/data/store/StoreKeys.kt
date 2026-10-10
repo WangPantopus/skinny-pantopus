@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.notifications.NotificationUnreadCoun
 import app.pantopus.android.data.api.models.notifications.NotificationsListResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsListResponse
 import app.pantopus.android.data.api.models.support_trains.SupportTrainsNearbyResponse
 import app.pantopus.android.data.api.models.users.InviteCodeDto
@@ -128,6 +129,10 @@ object StoreKeys {
             topics = setOf(StoreTopics.POSTS),
             type = FeedResponse::class.java,
         )
+
+    /** One post and its comments (contract §4 "A post": fresh 1 minute, never saved on the phone). */
+    fun post(postId: String) =
+        StoreKey<PostDetailResponse>("api/posts/$postId", kind = StoreKind.POST, topics = setOf("post:$postId", StoreTopics.POSTS))
 
     /**
      * The Messages list (contract §4 "Messages list"): names, last-message previews and unread counts, fresh for 30

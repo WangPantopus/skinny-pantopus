@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.posts
 
+import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.posts.CommentLikeResponse
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
@@ -13,6 +14,8 @@ import app.pantopus.android.data.api.models.posts.PostCommentRequest
 import app.pantopus.android.data.api.models.posts.PostCommentsResponse
 import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostCreateResponse
+import app.pantopus.android.data.api.models.posts.PostCreatorDto
+import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.PostLikeResponse
 import app.pantopus.android.data.api.models.posts.PostLikeStateRequest
@@ -57,6 +60,7 @@ data class FeedQuery(
 
 /** Wraps [PostsApi] in the [NetworkResult] taxonomy. */
 @Singleton
+@Suppress("TooManyFunctions") // One wrapper per existing post endpoint; keep the shared store and mutations together.
 class PostsRepository
     @Inject
     constructor(
@@ -137,11 +141,30 @@ class PostsRepository
         /** `GET /api/posts/:id`. */
         suspend fun detail(id: String): NetworkResult<PostDetailResponse> = safeApiCall { api.detail(id) }
 
+        /** A post and its comments through the screens' store (contract §4 "A post": fresh 1 minute; [force] reads now). */
+        suspend fun detailStored(
+            id: String,
+            force: Boolean = false,
+        ): Stored<PostDetailResponse> =
+            store.read(StoreKeys.post(id), force) { etag -> conditionalApiCall { api.detailConditional(id, etag) } }
+
+        /**
+         * The post's stored copy or, without one, its feed card standing in for it (`fetchedAt` 0: never fresh, and no
+         * comments yet), without a request.
+         */
+        fun detailCopy(id: String): Stored<PostDetailResponse> = store.peek(StoreKeys.post(id))
+
+        /** Called synchronously for the tapped feed card; no asynchronous feed reply can write a detail preview. */
+        fun seedDetail(post: FeedPost) {
+            post.detailSeed()?.let { store.seed(StoreKeys.post(post.id), it) }
+        }
+
         /** `POST /api/posts/:id/like`: sets the like to [liked], the state the person chose (a re-send can't flip it back). */
         suspend fun toggleLike(
             id: String,
             liked: Boolean,
-        ): NetworkResult<PostLikeResponse> = safeApiCall { api.toggleLike(id, PostLikeStateRequest(liked)) }
+        ): NetworkResult<PostLikeResponse> =
+            safeApiCall { api.toggleLike(id, PostLikeStateRequest(liked)) }.also { markPostChanged(id, it) }
 
         /** `GET /api/posts/:id/comments`. */
         suspend fun comments(
@@ -154,7 +177,7 @@ class PostsRepository
         suspend fun createComment(
             id: String,
             body: PostCommentRequest,
-        ): NetworkResult<PostCommentCreateResponse> = safeApiCall { api.createComment(id, body) }
+        ): NetworkResult<PostCommentCreateResponse> = safeApiCall { api.createComment(id, body) }.also { markPostChanged(id, it) }
 
         /**
          * `GET /api/posts/user/:userId` — paged list of posts authored by a
@@ -193,20 +216,23 @@ class PostsRepository
             postId: String,
             commentId: String,
             liked: Boolean,
-        ): NetworkResult<CommentLikeResponse> = safeApiCall { api.toggleCommentLike(postId, commentId, PostLikeStateRequest(liked)) }
+        ): NetworkResult<CommentLikeResponse> =
+            safeApiCall { api.toggleCommentLike(postId, commentId, PostLikeStateRequest(liked)) }.also { markPostChanged(postId, it) }
 
         /** `DELETE /api/posts/:postId/comments/:commentId`. */
         suspend fun deleteComment(
             postId: String,
             commentId: String,
-        ): NetworkResult<PostActionAckResponse> = safeApiCall { api.deleteComment(postId, commentId) }
+        ): NetworkResult<PostActionAckResponse> =
+            safeApiCall { api.deleteComment(postId, commentId) }.also { markPostChanged(postId, it) }
 
         /** `POST /api/posts/:id/share`. */
         suspend fun share(
             id: String,
             shareType: String = "external",
             reposted: Boolean? = null,
-        ): NetworkResult<PostShareResponse> = safeApiCall { api.share(id, PostShareRequest(shareType = shareType, reposted = reposted)) }
+        ): NetworkResult<PostShareResponse> =
+            safeApiCall { api.share(id, PostShareRequest(shareType = shareType, reposted = reposted)) }.also { markPostChanged(id, it) }
 
         /** `POST /api/posts/:id/report`. */
         suspend fun report(
@@ -219,7 +245,8 @@ class PostsRepository
         suspend fun toggleSave(
             id: String,
             saved: Boolean,
-        ): NetworkResult<PostSaveResponse> = safeApiCall { api.toggleSave(id, PostSaveStateRequest(saved)) }
+        ): NetworkResult<PostSaveResponse> =
+            safeApiCall { api.toggleSave(id, PostSaveStateRequest(saved)) }.also { markPostChanged(id, it) }
 
         /** `GET /api/posts/place-eligibility`. */
         suspend fun placeEligibility(
@@ -243,4 +270,61 @@ class PostsRepository
         private fun markPostsChanged(result: NetworkResult<*>) {
             if (result is NetworkResult.Success) store.markStale(StoreTopics.POSTS)
         }
+
+        /** An own action on a post (a like, a comment, a save, a repost): its stored copy goes out of date. */
+        private fun markPostChanged(
+            postId: String,
+            result: NetworkResult<*>,
+        ) {
+            if (result is NetworkResult.Success) store.markStale("post:$postId")
+        }
     }
+
+/** A feed card as the post's stand-in: what the card shows, no comments yet. Cards without an author aren't posts. */
+private fun FeedPost.detailSeed(): PostDetailResponse? {
+    val author = userId ?: return null
+    if (isSeeded) return null
+    return PostDetailResponse(
+        PostDetailDto(
+            id = id,
+            userId = author,
+            title = title,
+            content = content.orEmpty(),
+            postType = postType,
+            postFormat = null,
+            purpose = null,
+            mediaUrls = mediaUrls,
+            mediaTypes = mediaTypes,
+            mediaThumbnails = mediaThumbnails,
+            mediaLiveUrls = mediaLiveUrls,
+            locationName = locationName,
+            createdAt = createdAt,
+            likeCount = likeCount,
+            commentCount = commentCount,
+            shareCount = shareCount,
+            creator =
+                creator?.let {
+                    PostCreatorDto(
+                        id = it.id ?: author,
+                        username = it.username,
+                        name = it.name,
+                        firstName = it.firstName,
+                        lastName = it.lastName,
+                        profilePictureUrl = it.profilePictureUrl,
+                        city = it.city,
+                        state = it.state,
+                        accountType = it.accountType,
+                        projectedDisplayName = it.authorDisplayName,
+                        handle = it.handle,
+                        avatarUrl = it.avatarUrl,
+                    )
+                },
+            userHasLiked = userHasLiked,
+            userHasSaved = userHasSaved,
+            userHasReposted = userHasReposted,
+            eventDate = eventDate,
+            eventVenue = eventVenue,
+            lostFoundType = lostFoundType,
+        ),
+    )
+}
