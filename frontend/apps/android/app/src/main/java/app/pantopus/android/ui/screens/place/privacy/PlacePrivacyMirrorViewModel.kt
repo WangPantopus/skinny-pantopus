@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import javax.inject.Inject
 
 const val PRIVACY_MIRROR_HOME_ID_KEY = "homeId"
@@ -42,14 +43,19 @@ class PlacePrivacyMirrorViewModel
         private val _state = MutableStateFlow<PrivacyMirrorUiState>(PrivacyMirrorUiState.Loading)
         val state: StateFlow<PrivacyMirrorUiState> = _state.asStateFlow()
 
-        fun load() {
-            if (_state.value is PrivacyMirrorUiState.Loaded) return
-            refresh()
+        private var readJob: Job? = null
+
+        fun load() = refresh()
+
+        fun suspendContent() {
+            readJob?.cancel()
+            _state.value = PrivacyMirrorUiState.Loading
         }
 
         fun refresh() {
+            readJob?.cancel()
             _state.value = PrivacyMirrorUiState.Loading
-            viewModelScope.launch {
+            readJob = viewModelScope.launch {
                 _state.value =
                     when (val r = repository.homeMirror(homeId)) {
                         is NetworkResult.Success -> PrivacyMirrorUiState.Loaded(r.data)

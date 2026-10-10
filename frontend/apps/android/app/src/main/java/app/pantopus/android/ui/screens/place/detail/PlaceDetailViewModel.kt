@@ -267,7 +267,10 @@ class PlaceDetailViewModel
             readJob = viewModelScope.launch {
                 homesRepo.myHomesStored()
                 val canKeep = householdViewer()
-                if (!canKeep) repo.forgetPlace(homeId)
+                if (!canKeep) {
+                    repo.forgetPlace(homeId)
+                    _state.value = PlaceDetailUiState.Loading
+                }
                 val stored = repo.placeStored(homeId, force || !canKeep || sensitiveGroup, persist = canKeep)
                 _refreshing.value = false
                 _refreshNotice.value = if (stored.showsRefreshFailure(StoreKind.PLACE)) RefreshNotice(stored.fetchedAt, ::refresh) else null
