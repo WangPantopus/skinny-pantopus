@@ -7,6 +7,7 @@ import android.os.SystemClock
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.net.Conditional
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.TokenStorage
@@ -222,7 +223,12 @@ class ScreenStore
             }
             return { data ->
                 synchronized(slots) {
-                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) put(key, data)
+                    if (ticket.generation == generation && ticket.identity == identity() && ticket.edits == slot.edits) {
+                        val markedMeanwhile = ticket.marks != slot.marks
+                        put(key, data)
+                        // Another device's change during this save still needs a read, just as during a GET.
+                        if (markedMeanwhile) slot.stale = true
+                    }
                 }
             }
         }
@@ -433,8 +439,7 @@ class ScreenStore
                             }
                         is NetworkResult.Failure ->
                             if (
-                                result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound ||
-                                result.error == NetworkError.Unauthorized
+                                result.error.refusesStoredCopy
                             ) {
                                 // Access ended: the entry goes at once, from the phone too, and the screen shows
                                 // the server's answer.
