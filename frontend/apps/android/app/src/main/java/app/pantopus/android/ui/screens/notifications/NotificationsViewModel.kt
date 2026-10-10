@@ -23,7 +23,9 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.notifications.NotificationsRepository
+import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.asResult
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
@@ -253,6 +255,7 @@ class NotificationsViewModel
         private val pageSize = 20
         private var hasMore = false
         private var loading = false
+        private var quietRefreshPending = false
         private var notifications: MutableList<NotificationDto> = mutableListOf()
 
         /** Bumped by every reload so a late page from the previous tab or zone is dropped. */
@@ -289,6 +292,9 @@ class NotificationsViewModel
         /** A pull or Retry is reading while the rows stay: the pull indicator only. */
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
         private val _openGig = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
@@ -379,8 +385,20 @@ class NotificationsViewModel
          * first pages at once (Instant Screens) and reads them again when they are out of date.
          */
         fun load() {
-            if (_state.value is ListOfRowsUiState.Loaded && notifications.isNotEmpty()) return
-            reload(force = false)
+            if (_state.value is ListOfRowsUiState.Loaded || _state.value is ListOfRowsUiState.Empty) {
+                refreshIfNeeded()
+            } else {
+                reload(force = false)
+            }
+        }
+
+        /** A live signal or return refreshes the first page quietly, preserving older rows and the reading position. */
+        fun refreshIfNeeded() {
+            if (loading) {
+                quietRefreshPending = true
+                return
+            }
+            fetchPage(reset = true, keepTail = true)
         }
 
         /** Pull-to-refresh / retry: reads now, with the rows kept under the pull indicator. */
@@ -556,6 +574,7 @@ class NotificationsViewModel
             // A tab or zone switch mid-load must refetch with the new filter:
             // retire the running request instead of skipping this one.
             fetchGeneration++
+            quietRefreshPending = false
             loading = false
             loadMoreError = null
             val keepRows = force && _state.value is ListOfRowsUiState.Loaded
@@ -584,10 +603,11 @@ class NotificationsViewModel
         private fun fetchPage(
             reset: Boolean,
             force: Boolean = false,
+            keepTail: Boolean = false,
         ) {
             if (loading) return
             loading = true
-            if (reset) offsets = mutableMapOf()
+            if (reset && !keepTail) offsets = mutableMapOf()
             val generation = fetchGeneration
             val unreadOnly = _selectedTab.value == NotificationsTab.UNREAD
             // A null context means "unscoped legacy list"; the fan-out below
@@ -595,6 +615,7 @@ class NotificationsViewModel
             // `personal` + `platform` the way RN does.
             val contexts = activeContexts() ?: listOf(UNSCOPED)
             viewModelScope.launch {
+                var notice: RefreshNotice? = null
                 val pages =
                     contexts.map { context ->
                         val scope = context.takeIf { it != UNSCOPED }
@@ -602,6 +623,9 @@ class NotificationsViewModel
                         val result =
                             if (reset) {
                                 repo.firstPageStored(pageSize, unreadOnly, scope, force).let { stored ->
+                                    if (stored.showsRefreshFailure(StoreKind.NOTIFICATIONS)) {
+                                        notice = RefreshNotice(stored.fetchedAt, ::refresh)
+                                    }
                                     stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
                                 }
                             } else {
@@ -614,14 +638,31 @@ class NotificationsViewModel
                     }
                 loading = false
                 _refreshing.value = false
-                publishPages(pages, reset)
+                if (reset) _refreshNotice.value = notice
+                publishPages(pages, reset, keepTail)
+                if (quietRefreshPending) {
+                    quietRefreshPending = false
+                    refreshIfNeeded()
+                }
             }
         }
 
         private fun publishPages(
             pages: List<Pair<String, NetworkResult<NotificationsListResponse>>>,
             reset: Boolean,
+            keepTail: Boolean = false,
         ) {
+            val refusal = pages.mapNotNull { it.second as? NetworkResult.Failure }
+                .firstOrNull { it.error is NetworkError.Forbidden || it.error == NetworkError.NotFound }
+            if (refusal != null) {
+                notifications.clear()
+                offsets.clear()
+                hasMore = false
+                _unreadCount.value = 0
+                _state.value = ListOfRowsUiState.Error(refusal.error.displayMessage("Couldn't load the list."))
+                return
+            }
+            val hadLaterPages = offsets.values.any { it > pageSize }
             val incoming = mutableListOf<NotificationDto>()
             var anyMore = false
             var scopedUnread = 0
@@ -634,8 +675,12 @@ class NotificationsViewModel
                         // Launch cut: rows of features hidden for the first launch never
                         // enter the list, nor count as unread; paging keeps server offsets.
                         val visible = body.notifications.filter(::isLaunchVisible)
-                        incoming.addAll(visible)
-                        offsets[context] = (offsets[context] ?: 0) + body.notifications.size
+                        if (keepTail) {
+                            incoming.addAll(refreshedHead(context, body, visible))
+                        } else {
+                            incoming.addAll(visible)
+                            offsets[context] = (offsets[context] ?: 0) + body.notifications.size
+                        }
                         anyMore = anyMore || (body.hasMore ?: (body.notifications.size >= pageSize))
                         body.unreadCount?.let {
                             val hiddenUnread = (body.notifications - visible.toSet()).count { row -> row.isRead != true }
@@ -643,7 +688,10 @@ class NotificationsViewModel
                             sawUnreadCount = true
                         }
                     }
-                    is NetworkResult.Failure -> failure = result
+                    is NetworkResult.Failure -> {
+                        failure = result
+                        if (keepTail) incoming.addAll(notifications.filter { context == UNSCOPED || (it.context ?: NotificationContext.PERSONAL) == context })
+                    }
                 }
             }
             val failed = failure
@@ -671,11 +719,30 @@ class NotificationsViewModel
                 } else {
                     merge(notifications, incoming).toMutableList()
                 }
-            hasMore = anyMore
+            if (!keepTail || !hadLaterPages) hasMore = anyMore
             _unreadCount.value =
                 if (sawUnreadCount) scopedUnread else notifications.count { it.isRead != true }
             revealZoneStripIfAudienceSeen()
             applyState()
+        }
+
+        /** Keep rows older than the refreshed head; rows missing inside its covered range have been removed. */
+        private fun refreshedHead(
+            context: String,
+            body: NotificationsListResponse,
+            visible: List<NotificationDto>,
+        ): List<NotificationDto> {
+            val previous = notifications.filter { context == UNSCOPED || (it.context ?: NotificationContext.PERSONAL) == context }
+            val boundary = body.notifications.lastOrNull()?.createdAt?.let(::parseInstant)
+            val more = body.hasMore ?: (body.notifications.size >= pageSize)
+            val retained = if (more && boundary != null) {
+                previous.filter { row -> (parseInstant(row.createdAt) ?: Instant.EPOCH) <= boundary }
+            } else {
+                emptyList()
+            }
+            val merged = merge(visible, retained)
+            offsets[context] = maxOf(body.notifications.size, (offsets[context] ?: 0) + merged.size - previous.size)
+            return merged
         }
 
         /**
