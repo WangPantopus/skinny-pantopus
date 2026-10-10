@@ -70,7 +70,8 @@ class HomeCopyGate(
         clear: () -> Unit,
     ): NetworkError? {
         val checked = recheck(force)
-        if (!showsCopy) {
+        val refused = checked.failure is NetworkError.Forbidden || checked.failure == NetworkError.NotFound
+        if (refused || !showsCopy) {
             invalidate()
             clear()
         }
