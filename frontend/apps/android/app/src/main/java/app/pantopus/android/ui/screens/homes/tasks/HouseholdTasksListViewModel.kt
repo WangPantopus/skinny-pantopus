@@ -442,10 +442,11 @@ class HouseholdTasksListViewModel
             work?.cancel()
             pendingOriginal = completing
             if (completing != null) {
-                val pending = completing.copy(
-                    status = if (completing.status == "done") "open" else "done",
-                    completedAt = if (completing.status == "done") null else clock().toString(),
-                )
+                val pending =
+                    completing.copy(
+                        status = if (completing.status == "done") "open" else "done",
+                        completedAt = if (completing.status == "done") null else clock().toString(),
+                    )
                 applySuccess(tasks.orEmpty().map { if (it.id == pending.id) pending else it })
             }
             work =

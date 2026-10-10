@@ -215,12 +215,13 @@ class HouseholdTaskDetailViewModel
             inFlight = true
             val revision = ++generation
             completionOriginal = _state.value.task.takeIf { optimistic != null }
-            _state.value = _state.value.copy(
-                task = optimistic ?: _state.value.task,
-                pendingCompletion = optimistic != null,
-                busy = true,
-                error = null,
-            )
+            _state.value =
+                _state.value.copy(
+                    task = optimistic ?: _state.value.task,
+                    pendingCompletion = optimistic != null,
+                    busy = true,
+                    error = null,
+                )
             work =
                 viewModelScope.launch {
                     try {
@@ -248,10 +249,11 @@ class HouseholdTaskDetailViewModel
             val original = completionOriginal
             val refused = error.code in listOf(HTTP_UNAUTHORIZED, HTTP_FORBIDDEN, HTTP_NOT_FOUND)
             if (original != null && !refused) {
-                _state.value = _state.value.copy(
-                    task = original,
-                    error = error.displayMessage("Couldn't confirm the task change. Try again."),
-                )
+                _state.value =
+                    _state.value.copy(
+                        task = original,
+                        error = error.displayMessage("Couldn't confirm the task change. Try again."),
+                    )
             } else {
                 if (refused) gate?.invalidate()
                 deny(error.displayMessage("Could not refresh task access. Try again."))
