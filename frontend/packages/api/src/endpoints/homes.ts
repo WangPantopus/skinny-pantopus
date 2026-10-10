@@ -268,6 +268,7 @@ export interface MyHomeOccupancy {
   is_active?: boolean;
   start_at?: string | null;
   end_at?: string | null;
+  access_end_at?: string | null;
   /** 'verified' lifts the place to the verified (T4) tier. */
   verification_status?: 'pending' | 'verified' | 'rejected' | 'moved_out' | string | null;
 }
@@ -310,8 +311,10 @@ export async function getMyHomes(): Promise<{ homes: MyHome[] }> {
 /**
  * Get current user's primary residence
  */
-export async function getPrimaryHome(): Promise<{ home: Home | null }> {
-  return get<{ home: Home | null }>('/api/homes/primary');
+export type PrimaryHome = Home & Pick<MyHome, 'occupancy' | 'access_kind' | 'has_home_access' | 'role_base' | 'can_delete_home'>;
+
+export async function getPrimaryHome(): Promise<{ home: PrimaryHome | null }> {
+  return get<{ home: PrimaryHome | null }>('/api/homes/primary');
 }
 
 /**
