@@ -159,6 +159,8 @@ class OwnersListViewModel
 
         private fun clearCopy() {
             owners = emptyList()
+            _pendingEvent.value = null
+            _removalError.value = null
             _access.value = null
             _confirmedAccess.value = null
             _refreshing.value = false
@@ -237,6 +239,7 @@ class OwnersListViewModel
         /** Optimistic remove + rollback on failure. */
         fun removeOwner(ownerId: String) {
             if (!canManageOwnership) return
+            val revision = readGeneration
             val previous = owners
             if (previous.none { it.id == ownerId }) return
             _removalError.value = null
@@ -246,6 +249,7 @@ class OwnersListViewModel
                 when (repo.remove(homeId, ownerId)) {
                     is NetworkResult.Success -> Unit
                     is NetworkResult.Failure -> {
+                        if (!active || revision != readGeneration) return@launch
                         owners = previous
                         applyState()
                         _removalError.value =
