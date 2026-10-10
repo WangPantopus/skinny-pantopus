@@ -2,7 +2,6 @@
 
 package app.pantopus.android.ui.screens.homes.members
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +22,7 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.screens.homes.HomeOfflineContent
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
@@ -117,7 +117,7 @@ fun MembersListScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().testTag(MEMBERS_LIST_TAG)) {
+    HomeOfflineContent(modifier = Modifier.fillMaxSize().testTag(MEMBERS_LIST_TAG)) {
         ListOfRowsScreen(
             title = "Members",
             customHeader = {

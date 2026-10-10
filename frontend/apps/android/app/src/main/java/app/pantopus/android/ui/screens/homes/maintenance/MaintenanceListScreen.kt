@@ -2,7 +2,6 @@
 
 package app.pantopus.android.ui.screens.homes.maintenance
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,6 +15,7 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
+import app.pantopus.android.ui.screens.homes.HomeOfflineContent
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 
@@ -53,7 +53,7 @@ fun MaintenanceListScreen(
         Analytics.track(AnalyticsEvent.ScreenHomeMaintenanceViewed)
     }
 
-    Box(modifier = Modifier.fillMaxSize().testTag("maintenanceList")) {
+    HomeOfflineContent(modifier = Modifier.fillMaxSize().testTag("maintenanceList")) {
         ListOfRowsScreen(
             title = "Maintenance",
             state = state,
