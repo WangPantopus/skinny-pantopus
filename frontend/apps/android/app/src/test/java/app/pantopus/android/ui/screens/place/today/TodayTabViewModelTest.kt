@@ -66,7 +66,7 @@ class TodayTabViewModelTest {
         every { homes.myHomesCopy() } returns null
         coEvery { saved.listStored(any()) } returns Stored(SavedPlacesListResponse(listOf(place)), fetchedAt = System.currentTimeMillis())
         every { saved.todayCopy(place.id) } returns Stored()
-        coEvery { saved.todayStored(place.id, any()) } returns Stored(mockk<PlaceIntelligence>(), fetchedAt = System.currentTimeMillis())
+        coEvery { saved.todayStored(place.id, any()) } returns Stored(mockk<PlaceIntelligence> { every { timeZone } returns "America/Los_Angeles" }, fetchedAt = System.currentTimeMillis())
         coEvery { hub.todayDetail() } returns
             NetworkResult.Success(HubTodayPayload(location = TodayLocationDto(source = "saved_place", latitude = 0.0, longitude = 0.0)))
         coEvery { preferences.preferences() } answers { NetworkResult.Success(stored) }
