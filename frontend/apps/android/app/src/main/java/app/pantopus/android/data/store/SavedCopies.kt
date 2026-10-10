@@ -56,17 +56,22 @@ class SavedCopies
                 if (file.extension == "tmp") {
                     file.delete()
                 } else if (file.extension == "json") {
-                    val envelope = runCatching {
-                        file.bufferedReader().use { reader -> reader.readLine()?.let { envelopes.fromJson(it) } }
-                    }.getOrNull()
+                    val envelope =
+                        runCatching {
+                            file.bufferedReader().use { reader -> reader.readLine()?.let { envelopes.fromJson(it) } }
+                        }.getOrNull()
                     if (!usable(envelope, now)) file.delete()
                 }
             }
         }
 
-        private fun usable(envelope: Envelope?, now: Long): Boolean =
-            envelope != null && envelope.schema == SCHEMA && envelope.build == build &&
-                now - envelope.fetchedAt in 0 until MAX_AGE_MS
+        private fun usable(
+            envelope: Envelope?,
+            now: Long,
+        ): Boolean {
+            if (envelope == null) return false
+            return envelope.schema == SCHEMA && envelope.build == build && now - envelope.fetchedAt in 0 until MAX_AGE_MS
+        }
 
         /** One saved entry as read back: the reply, when it was read (wall clock) and its ETag. */
         data class Copy<T>(
