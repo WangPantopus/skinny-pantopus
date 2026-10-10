@@ -83,7 +83,10 @@ export default function SettingsPage() {
   const handleLogout = async () => {
     try {
       await api.auth.logout();
-    } catch {
+    } catch (err) {
+      // A concurrent session-revoked reply can finish sign-out before this
+      // response arrives. An account switch also owns its own navigation.
+      if ((err as { code?: string } | null)?.code === 'AUTH_SESSION_CHANGED') return;
       toast.error('Could not confirm sign-out. Please try again.');
       return;
     }
