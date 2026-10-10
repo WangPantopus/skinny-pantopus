@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.hub.HubDiscoveryResponse
 import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
+import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
@@ -96,6 +97,7 @@ object StoreKeys {
             kind = StoreKind.HOMES,
             topics = setOf(StoreTopics.HOMES),
             type = MyHomesResponse::class.java,
+            saveWhen = { reply -> reply.homes.all { it.showsCopyBeforeRecheck } },
         )
 
     /**
