@@ -171,6 +171,26 @@ const sendMessageSchema = Joi.object({
   clientMessageId: Joi.string().uuid().optional(),
 });
 
+// Chat photos and files load through this API's own /api/chat/files/:id proxy, which the
+// upload returns as a relative path. iOS and Android builds before October 9 add the viewer's
+// access token to any URL whose path has that segment, whatever its host, and message
+// metadata comes from the sender: so metadata may carry that segment only as the relative
+// proxy path, never as a link to another host (checked raw and once-decoded, as clients read paths).
+const CHAT_FILE_SEGMENT = '/api/chat/files/';
+const CHAT_FILE_PROXY_PATH = /^\/api\/chat\/files\/[A-Za-z0-9_-]+(?:[?#][^\s]*)?$/;
+function hasForeignChatFileLink(value, depth = 0) {
+  if (value == null || depth > 8) return false;
+  if (typeof value === 'string') {
+    let decoded = value;
+    try { decoded = decodeURIComponent(value); } catch (_) { /* keep raw */ }
+    const mentions = value.includes(CHAT_FILE_SEGMENT) || decoded.includes(CHAT_FILE_SEGMENT);
+    return mentions && !CHAT_FILE_PROXY_PATH.test(value);
+  }
+  if (Array.isArray(value)) return value.some((item) => hasForeignChatFileLink(item, depth + 1));
+  if (typeof value === 'object') return Object.values(value).some((item) => hasForeignChatFileLink(item, depth + 1));
+  return false;
+}
+
 const createTopicSchema = Joi.object({
   topicType: Joi.string().valid('general', 'task', 'listing', 'delivery', 'home', 'business').required(),
   topicRefId: Joi.string().uuid().optional().allow(null),
@@ -1586,6 +1606,10 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     const requestId = req.requestId;
     const sendStartMs = Date.now();
     const { roomId, messageText, messageType, fileIds = [], metadata = {}, replyToId, asBusinessUserId, clientMessageId } = req.body;
+    if (hasForeignChatFileLink(metadata)) {
+      logger.warn('message_send_rejected_foreign_chat_file_link', { requestId, roomId, userId });
+      return res.status(400).json({ error: 'Photos and files in chat must be uploaded to this chat.' });
+    }
     logger.info('message_send_start', { requestId, roomId, userId, messageType });
     let senderUserId = userId;
     
