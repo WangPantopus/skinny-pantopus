@@ -5,6 +5,7 @@ import app.pantopus.android.data.homes.HomeDashboardAccessRepository
 import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKey
+import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.Stored
 import javax.inject.Inject
 
@@ -20,11 +21,19 @@ class HomeCopyGate(
     private val store: ScreenStore,
     keys: List<StoreKey<*>>,
 ) {
-    private val keys: List<StoreKey<*>> = keys + HomeStoreKeys.access(homeId)
+    private val keys: List<StoreKey<*>> =
+        keys +
+            listOf(
+                HomeStoreKeys.access(homeId), HomeStoreKeys.detail(homeId), HomeStoreKeys.me(homeId), StoreKeys.homeDashboard(homeId),
+            )
 
     /** The last known access is a household one: copies may show before the re-check, and they stay stored. */
-    var showsCopy: Boolean = householdAccess(access.storedAuthority(homeId))
-        private set
+    private var allowsCopy: Boolean = householdAccess(access.storedAuthority(homeId))
+    var showsCopy: Boolean
+        get() = allowsCopy && householdAccess(access.storedAuthority(homeId))
+        private set(value) {
+            allowsCopy = value
+        }
 
     /**
      * Re-checks the viewer's access through the store, alongside the screen's own reads. [force] for pull to refresh
@@ -32,6 +41,17 @@ class HomeCopyGate(
      */
     suspend fun recheck(force: Boolean): Stored<HomeDashboardAuthorityDto> =
         access.readStored(homeId, force || !showsCopy).also { showsCopy = householdAccess(it.data) }
+
+    /** A screen that reads the viewer's access itself (the dashboard) reports what it read. */
+    fun observe(authority: HomeDashboardAuthorityDto?) {
+        showsCopy = householdAccess(authority)
+    }
+
+    /** An explicit access refusal retires this screen's copies before another visit can show them. */
+    fun invalidate() {
+        showsCopy = false
+        keys.forEach(store::remove)
+    }
 
     /** The screen left: the entries of a viewer without household access go with it. */
     fun leave() {
