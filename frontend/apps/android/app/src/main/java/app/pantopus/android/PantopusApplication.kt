@@ -95,6 +95,7 @@ class PantopusApplication :
      * disk cache above keeps the image bytes, and API replies stay off disk.
      */
     override fun newImageLoader(): ImageLoader {
+        val disk = ImageDiskCache.build(this, StorageLimit(this).bytes)
         val okHttp =
             EntryPointAccessors
                 .fromApplication(this, CoilNetworkEntryPoint::class.java)
@@ -105,12 +106,12 @@ class PantopusApplication :
         return ImageLoader
             .Builder(this)
             .okHttpClient(okHttp)
+            .components { add(disk.requestInterceptor()) }
             .memoryCache {
-                MemoryCache
-                    .Builder(this)
-                    .maxSizePercent(IMAGE_CACHE_MEMORY_PERCENT)
-                    .build()
-            }.diskCache { ImageDiskCache.build(this, StorageLimit(this).bytes) }
+                disk.guardMemoryCache(
+                    MemoryCache.Builder(this).maxSizePercent(IMAGE_CACHE_MEMORY_PERCENT).build(),
+                )
+            }.diskCache { disk }
             .respectCacheHeaders(false)
             .crossfade(true)
             .build()
